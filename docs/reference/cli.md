@@ -26,6 +26,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
+| `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -106,14 +107,16 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
 | `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
-| `--engine` | ENGINE | walker | Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020) |
+| `--engine` | ENGINE | resolved | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) |
+| `--no-jit` | NO_JIT |  | Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as `WJ_JIT=0`); they run in the resolved engine's closures |
+| `--jit` | on\|off | on | Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
-| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow plain http:// client requests (default: the http client refuses) |
+| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`) |
 | `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
 | `--sandbox` | SANDBOX |  | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) |
 | `--allow` | EFFECT[=RESOURCE] |  | Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`, `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable) |
-| `--caps` | MODE | warn | Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate |
+| `--caps` | MODE | enforce | Interpreted runs without a [capabilities] table: `enforce` (default) stops calls outside the project directory with exit status 126 and prints the exact fix, `warn` runs them with a warning, `off` disables the gate |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -343,6 +346,20 @@ Usage: wj explain-effects [OPTIONS] <PATH>
 | `<PATH>` | PATH |  | Windjammer source file or project directory |
 | `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
 | `--json` | JSON |  | Machine-readable JSON output |
+
+## `wj caps`
+
+What the project's dependencies are known to do (per-package capabilities and the lock file)
+
+```text
+Usage: wj caps [OPTIONS] <ACTION> [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<ACTION>` | ACTION |  | `show` the effects each dependency performs and whether .wj-capabilities.lock covers them; `approve` records them in the lock file (review with `show` first) |
+| `<PATH>` | PATH |  | Project directory (default: the current directory) |
+| `--json` | JSON |  | Machine-readable JSON output (show) |
 
 ## `wj explain`
 

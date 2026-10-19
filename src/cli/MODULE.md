@@ -22,10 +22,12 @@ Compilation semantics.
 Layer `driver`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir < backend < tooling) and peers `build_utils`, `cargo_cache`, `cargo_toml`, `test_runner`. No known violations.
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
+- `path_deps::build_missing` (called by `wj build` and `wj test`): a Windjammer package linked as `path = "../pkg/build"` is built (`wj build src --no-cargo` in the package, depth first) before its dependent when `pkg/build/Cargo.toml` is missing or older than the sources; an in-progress marker makes dependency cycles terminate. Gate: `ecosystem_findings2::path_dependencies_build_before_their_dependents`.
+
 ## Entry points
 Each `cli/<cmd>.rs::execute` (src/cli/mod.rs routes). `run_dev::execute`: `wj run` policy (interpret by default,
 compiled fallback on a preflight hit, `--compiled`/`--release`, ADR-0019); `watch::watch`: `--watch` restart loop;
-`host_build::ensure`: cached host bridge library for `extern fn` (ADR-0020).
+`host_build::ensure`: cached host bridge library for `extern fn` (ADR-0020); `build_caps::prepare_for`: `wj build` stops on capability findings and returns the grant-install statement a program needs (ADR-0021); `caps::execute`: `wj caps show|approve`; `explain_effects::execute`.
 
 ## Tests
 tests/installed_binary_smoke_test.rs (installed-binary matrix), tests/cli_lint_test.rs and assert_cmd tests of the `wj` binary.

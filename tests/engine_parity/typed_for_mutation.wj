@@ -1,0 +1,24 @@
+fn main() {
+    let mut seen = 0
+    for i in 0..5 {
+        let mut k = i
+        k += 10
+        seen += k
+    }
+    let hi: i64 = 9223372036854775806
+    let mut c = 0
+    for i in hi..=9223372036854775807 {
+        c += 1
+        if i == 9223372036854775807 { println("top") }
+    }
+    let mut u: u8 = 250
+    for _ in 0..3 { u += 1 }
+    println("${seen} ${c} ${u}")
+    for k in 250..300 {
+        let v: u8 = k as u8
+        if v < 3 { println("${v}") }
+    }
+    let mut w: u8 = 0
+    for k in 0..300 { w = (k % 256) as u8 }
+    println("${w}")
+}

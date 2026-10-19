@@ -30,7 +30,6 @@
 "src/codegen/rust/statement_generation.rs" = 1
 "src/codegen/rust/stdlib_method_signatures.rs" = 2
 "src/codegen/rust/trait_derivation.rs" = 1
-"src/ir/capability_lock.rs" = 2
 "src/ir/constraint_gen.rs" = 1
 "src/ir/effects.rs" = 4
 "src/ir/explain/render.rs" = 1

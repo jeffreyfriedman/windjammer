@@ -40,6 +40,13 @@ impl Interpreter {
                     self.resolve_in(m, rest)
                 }
             }
+            Import::Both(module, item_module, name) => {
+                if rest.is_empty() {
+                    self.resolve_in(item_module, &[name.as_str()])
+                } else {
+                    self.resolve_in(module, rest)
+                }
+            }
             Import::Item(m, name) => {
                 let mut segs: Vec<&str> = name.split("::").collect();
                 segs.extend_from_slice(rest);
@@ -48,7 +55,43 @@ impl Interpreter {
         }
     }
 
+    /// The module `crate::` names from inside `module`: its dependency crate's root, else the program root.
+    pub(crate) fn crate_root_module(&self, module: usize) -> usize {
+        let mut top = module;
+        while let Some(p) = self.modules[top].parent {
+            if p == 0 {
+                break;
+            }
+            top = p;
+        }
+        if top != 0 && self.modules[top].parent == Some(0) && self.dep_crates.contains(&self.modules[top].name) {
+            top
+        } else {
+            0
+        }
+    }
+
     pub(crate) fn resolve_in(&mut self, module: usize, segs: &[&str]) -> R<Option<Resolved>> {
+        if let Some(r) = self.resolve_in_module(module, segs)? {
+            return Ok(Some(r));
+        }
+        // a function-body `use` overlay falls through to the module it was written in
+        if let Some(fb) = self.modules[module].fallback {
+            return self.resolve_in(fb, segs);
+        }
+        // `use std::log::*`: a bare name that is a function of a glob-imported std module
+        if segs.len() == 1 {
+            for g in self.modules[module].std_globs.clone() {
+                let path = format!("{g}::{}", segs[0]);
+                if self.builtins.has_function(&path) {
+                    return Ok(Some(Resolved::Builtin(path)));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn resolve_in_module(&mut self, module: usize, segs: &[&str]) -> R<Option<Resolved>> {
         if segs.is_empty() {
             return Ok(None);
         }
@@ -67,7 +110,7 @@ impl Interpreter {
                 if rest.is_empty() {
                     return Ok(None);
                 }
-                module = 0;
+                module = self.crate_root_module(module);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
             }
@@ -125,6 +168,12 @@ impl Interpreter {
         if let Some(imp) = self.modules[module].imports.get(&first).cloned() {
             if let Some(r) = self.follow_import(imp, &rest)? {
                 return Ok(Some(r));
+            }
+        }
+        // a dependency crate is named from anywhere (`wj_glob::is_match` inside another dependency)
+        if module != 0 && self.dep_crates.contains(&first) {
+            if let Some(&root) = self.modules[0].children.get(&first) {
+                return self.resolve_in(root, &rest);
             }
         }
         let is_type = self.structs.contains_key(&first)
@@ -481,6 +530,9 @@ impl Interpreter {
     pub(crate) fn call_callable(&mut self, c: &Rc<Callable>, mut args: Vec<Value>) -> R {
         match &**c {
             Callable::Closure { params, body, env, module, self_ty, tparams } => {
+                if let Some(r) = self.call_compiled_closure(c, &mut args) {
+                    return r;
+                }
                 self.depth_check()?;
                 let mut scope = Scope::new(*module);
                 scope.vars = env.clone();
@@ -622,7 +674,7 @@ impl Interpreter {
     fn call_func_run(
         &mut self,
         f: &Rc<FuncDef>,
-        mut args: Vec<Value>,
+        args: Vec<Value>,
         self_val: Option<Value>,
         targs: &[Type],
         expected: Option<Type>,
@@ -633,11 +685,23 @@ impl Interpreter {
         if self.hot.is_some() {
             self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
-        if self.engine_resolved && self_val.is_none() && targs.is_empty() {
+        if self.engine_resolved && targs.is_empty() && Self::compiled_call_ok(f, &self_val) {
             if let Some(c) = self.compiled_for(f) {
-                return self.run_compiled(f, &c, args);
+                return self.run_compiled(f, &c, args, self_val);
             }
         }
+        self.call_func_walk(f, args, self_val, targs, expected)
+    }
+
+    /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
+    pub(crate) fn call_func_walk(
+        &mut self,
+        f: &Rc<FuncDef>,
+        mut args: Vec<Value>,
+        self_val: Option<Value>,
+        targs: &[Type],
+        expected: Option<Type>,
+    ) -> R {
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
         let mut scope = Scope::new(f.module);
@@ -825,7 +889,7 @@ impl Interpreter {
         self.methods.get(&(tn, method.to_string())).cloned()
     }
 
-    fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
+    pub(crate) fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         if !has_self {
             // `fn render() -> T` written without `self` but called on an instance: the body may

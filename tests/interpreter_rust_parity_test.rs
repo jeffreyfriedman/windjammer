@@ -37,10 +37,14 @@ fn panic_line(stderr: &str) -> Option<String> {
 }
 
 fn interp(src: &str) -> Out {
+    interp_with(src, &[])
+}
+
+fn interp_with(src: &str, flags: &[&str]) -> Out {
     let d = TempDir::new().unwrap();
     let f = d.path().join("p.wj");
     fs::write(&f, src).unwrap();
-    let o = Command::new(WJ).args(["run", "--interpret", "--no-lint"]).arg(&f).output().unwrap();
+    let o = Command::new(WJ).args(["run", "--interpret", "--no-lint"]).args(flags).arg(&f).output().unwrap();
     let err = String::from_utf8_lossy(&o.stderr).to_string();
     Out { stdout: String::from_utf8_lossy(&o.stdout).to_string(), code: o.status.code().unwrap_or(-1), panic: panic_line(&err) }
 }
@@ -321,7 +325,7 @@ fn main() {
     }
 }
 "#;
-    let got = interp(src);
+    let got = interp_with(src, &["--allow", "process=cat", "--allow", "process=definitely-not-a-program-xyz"]);
     assert_eq!(got.stdout, "ping\nstate=1\ntrue\n30\ntrue\n");
 }
 

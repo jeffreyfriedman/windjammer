@@ -81,7 +81,17 @@ impl<'a> ResolvedProgram<'a> {
 
 /// Resolve every call in a multi-file program. Pure: no IO, no global state.
 pub fn resolve_program<'a>(files: &[ParsedFile<'a>]) -> ResolvedProgram<'a> {
+    resolve_program_with_crates(files, &[])
+}
+
+/// Like [`resolve_program`], with dependency crates mounted at `crate_names` (single-segment module paths):
+/// inside such a crate `crate::` names its own root.
+pub fn resolve_program_with_crates<'a>(files: &[ParsedFile<'a>], crate_names: &[String]) -> ResolvedProgram<'a> {
     let mut collected = collect::collect(files);
+    for name in crate_names {
+        let root = collected.module_for_path(std::slice::from_ref(name));
+        collected.crate_roots.insert(root);
+    }
     collected.link_impls();
     check_imports(&mut collected);
     let (calls, fn_refs) = walk::resolve_bodies(&collected);

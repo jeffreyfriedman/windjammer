@@ -401,6 +401,11 @@ impl Interpreter {
                     .ok_or_else(|| semantic(format!("no field `{}`", field))),
                 _ => Err(semantic(format!("no field `{}` on enum `{}`", field, e.ty))),
             },
+            // `mime.APPLICATION_JSON`: a constant of a standard-library module imported by name
+            Value::Func(f) if matches!(&**f, Callable::Path(p) if self.builtins.constant(&format!("{p}::{field}")).is_some()) => {
+                let Callable::Path(p) = &**f else { unreachable!() };
+                Ok(self.builtins.constant(&format!("{p}::{field}")).expect("checked"))
+            }
             other => Err(semantic(format!("no field `{}` on value of type `{}`", field, other.type_name()))),
         }
     }
@@ -446,10 +451,20 @@ impl Interpreter {
         name: &'static str,
         fields: &'static [(String, &'static Expression<'static>)],
     ) -> R {
+        self.eval_struct_literal_in(name, fields, &mut super::place::WalkerEnv)
+    }
+
+    /// `eval_struct_literal` with the field expressions evaluated by `env` (also the resolved engine's).
+    pub(crate) fn eval_struct_literal_in(
+        &mut self,
+        name: &'static str,
+        fields: &'static [(String, &'static Expression<'static>)],
+        env: &mut dyn super::place::PlaceEnv,
+    ) -> R {
         if matches!(name, "RangeFrom" | "std::ops::RangeFrom") && !self.structs.contains_key("RangeFrom") {
             // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
             return match fields {
-                [(f, ex)] if f == "start" => match self.eval(ex)? {
+                [(f, ex)] if f == "start" => match env.eval(self, ex)? {
                     Value::Int(a, t) => Ok(Value::Range(a, i128::MAX, t)),
                     other => Err(unsupported(format!("`..` range from {}", other.type_name()))),
                 },
@@ -479,7 +494,7 @@ impl Interpreter {
                         .iter()
                         .find(|(n, _)| n == fname)
                         .ok_or_else(|| semantic(format!("missing field `{}` in `{}`", fname, name)))?;
-                    let v = self.eval(ex)?;
+                    let v = env.eval(self, ex)?;
                     out.push((Rc::from(*fname), self.coerce(v, ty)?));
                 }
                 return Ok(Value::enum_val(&target, var, idx as u32, Payload::Struct(out)));
@@ -491,26 +506,26 @@ impl Interpreter {
         }
         if !self.structs.contains_key(&name) {
             if let Some(names) = self.builtins.constructible_fields(&name) {
-                return self.eval_host_struct_literal(&name, names, fields);
+                return self.eval_host_struct_literal(&name, names, fields, env);
             }
         }
-        let (decl_fields, copy) = match self.structs.get(&name) {
-            Some(d) => (d.fields.iter().map(|(n, t)| (*n, t.clone())).collect::<Vec<_>>(), d.copy),
+        let (decl_fields, copy, rc_name, rc_fields) = match self.structs.get(&name) {
+            Some(d) => (d.fields.clone(), d.copy, d.rc_name.clone(), d.rc_fields.clone()),
             None => return Err(semantic(format!("cannot find struct `{}`", name))),
         };
         let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(decl_fields.len());
-        for (fname, ty) in &decl_fields {
+        for ((fname, ty), rc_fname) in decl_fields.iter().zip(rc_fields.iter()) {
             match fields.iter().find(|(n, _)| n == fname) {
                 Some((_, ex)) => {
-                    let v = self.eval(ex)?;
-                    out.push((Rc::from(*fname), self.coerce(v, ty)?));
+                    let v = env.eval(self, ex)?;
+                    out.push((rc_fname.clone(), self.coerce(v, ty)?));
                 }
                 None => {
                     // struct update syntax `..base` is parsed as a field named ".."
                     if let Some((_, base_ex)) = fields.iter().find(|(n, _)| n == "..") {
-                        let base = self.eval(base_ex)?;
+                        let base = env.eval(self, base_ex)?;
                         let v = self.field_of(&base, fname)?;
-                        out.push((Rc::from(*fname), v));
+                        out.push((rc_fname.clone(), v));
                     } else {
                         return Err(semantic(format!("missing field `{}` in initializer of `{}`", fname, name)));
                     }
@@ -522,7 +537,7 @@ impl Interpreter {
                 return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
             }
         }
-        Ok(self.make_struct(name.as_str(), out, copy))
+        Ok(self.make_struct_named(rc_name, out, copy))
     }
 
     /// Struct literal of a host type with a fixed field list (`std::http::ServerRequest`): every field is
@@ -532,6 +547,7 @@ impl Interpreter {
         name: &str,
         names: &'static [&'static str],
         fields: &'static [(String, &'static Expression<'static>)],
+        env: &mut dyn super::place::PlaceEnv,
     ) -> R {
         let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(names.len());
         for fname in names {
@@ -539,7 +555,7 @@ impl Interpreter {
                 .iter()
                 .find(|(n, _)| n == fname)
                 .ok_or_else(|| semantic(format!("missing field `{}` in initializer of `{}`", fname, name)))?;
-            out.push((Rc::from(*fname), self.eval(ex)?));
+            out.push((Rc::from(*fname), env.eval(self, ex)?));
         }
         for (n, _) in fields {
             if !names.contains(&n.as_str()) {

@@ -1,10 +1,10 @@
 # Effects and capabilities
 
 [ADR-0021](../adr/0021-effects-and-capabilities.md) (accepted 2026-10-12; implementation staged E1-E7) decides
-this chapter. **Stage E1 is implemented:** effect inference (SPEC-EFF-001..007), grants enforced in the interpreter
-(008..011), `wj check` findings (013..016, 018..020) and `wj explain-effects`. Rules marked [PLANNED] carry an `xfail`
+this chapter. **Stages E1 and E2 (interpreter side) are implemented:** effect inference (SPEC-EFF-001..007), grants enforced in the interpreter
+(008..011), `wj check` findings (013..016, 018..020), `std::cap` values (012), per-package grants and the lock file (030), and `wj explain-effects`. Rules marked [PLANNED] carry an `xfail`
 example: the example states the intended behaviour, it is expected to fail today, and the run fails if it starts
-passing. They are the acceptance tests of the later stages (E2 `std::cap` and per-package grants; E3 replay;
+passing. They are the acceptance tests of the later stages (E2 compiled-backend guards; E3 replay;
 E4 `durable fn`; E5 code mode). `--deterministic-time` and `--sched-seed` give a virtual clock, a seeded random
 generator and reproducible interleavings (SPEC-EFF-027, SPEC-EFF-028).
 
@@ -245,11 +245,10 @@ fs.read = ["./data/**"]
 ```
 Then the run stops with exit status 126 and a message containing `capability denied: fs.read(./secret.txt)`.
 
-**SPEC-EFF-012** [PLANNED ADR-0021] `std::cap` capability values narrow a grant (`cap::net().only([...])`, `cap::fs().under(path).read_only()`); an operation through a value is checked against the value's scope. Attenuation never widens a grant, and capability values cannot be constructed outside `std::cap`.
+**SPEC-EFF-012** `std::cap` capability values narrow a grant (`cap::net().only([...])`, `cap::fs().under(path).read_only()`); an operation through a value is checked against the value's scope. Attenuation never widens a grant, and capability values cannot be constructed outside `std::cap`.
 
 <!-- example: tests/spec/effects/SPEC-EFF-012.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::cap
 fn fetch(net: cap::Net, url: string) -> bool { net.get(url).is_ok() }
 fn main() {
@@ -263,7 +262,6 @@ Manifest (`wj.toml`):
 net.connect = ["*"]
 ```
 Then the run stops with exit status 126 and a message containing `capability denied: net.connect(other.example)`.
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Static checks (`wj check`, `wj build`)
 
@@ -416,7 +414,102 @@ Manifest (`wj.toml`):
 ```
 `wj check` reports an error containing: `WJ0044: extern `native_open` has no declared effects`
 
-**SPEC-EFF-030** [PLANNED ADR-0021] An ambient sink call is checked against the grant of the package that contains the call site (for a closure, where the closure is written), never the grant of the dynamic caller. (untestable: needs a multi-package fixture; acceptance test `tests/effects_packages_test.rs`, stage E2)
+**SPEC-EFF-030** An ambient sink call is checked against the grant of the package that contains the call site (for a closure, where the closure is written), never the grant of the dynamic caller. (untestable: needs a multi-package fixture; acceptance test `tests/effects_packages_test.rs`)
+
+**SPEC-EFF-033** `console` is an effect like the others: `print`, `println`, `eprint`, `eprintln`, stdin reads and `log::*` need it. It is granted by default and costs nothing; a sandbox can revoke it (`deny = ["console"]`), and a denied print stops the run with exit status 126.
+
+<!-- example: tests/spec/effects/SPEC-EFF-033.wj -->
+```windjammer
+fn main() {
+    println("this line is never printed")
+}
+```
+Manifest (`wj.toml`):
+```toml
+[capabilities]
+deny = ["console"]
+```
+The run stops with exit status 126 and a message containing `capability denied: console`.
+
+**SPEC-EFF-034** A capability value can only be narrowed. `only(..)` on a `Net` accepts patterns the value already covers; asking for more is a `capability denied` fault, so a function handed `api` can never reach `other.example` through it.
+
+<!-- example: tests/spec/effects/SPEC-EFF-034.wj -->
+```windjammer
+use std::cap
+fn main() {
+    let api = cap::net().only(["api.example.com"])
+    let wider = api.only(["other.example"])
+    println("not reached")
+}
+```
+Manifest (`wj.toml`):
+```toml
+[capabilities]
+net.connect = ["api.example.com", "other.example"]
+```
+The run stops with exit status 126 and a message containing `capability denied: net.connect(other.example)`.
+
+**SPEC-EFF-035** `Fs` values narrow by directory (`under(dir)`) and by direction (`read_only()`); a write through a read-only value is denied even when the ambient grant allows it.
+
+<!-- example: tests/spec/effects/SPEC-EFF-035.wj -->
+```windjammer
+use std::cap
+fn main() {
+    let files = cap::fs().under("/etc").read_only()
+    println("start")
+    let r = files.write("/etc/wj_never_written", "x")
+    println("not reached")
+}
+```
+Manifest (`wj.toml`):
+```toml
+[capabilities]
+fs.read = ["/etc/**"]
+fs.write = ["/etc/**"]
+```
+Output:
+```text
+start
+```
+Then the run stops with exit status 126 and a message containing `capability denied: fs.write(/etc/wj_never_written)`.
+
+**SPEC-EFF-036** Dependencies are checked against their own grants (`[capabilities.dependencies.NAME]`) and against what `.wj-capabilities.lock` records for them; a dependency upgrade that adds an effect is reported (WJ0040/WJ0041 naming the dependency) until `wj caps approve` records it, and `wj caps show` lists each dependency's inferred effects. (untestable: needs a multi-package fixture; acceptance test `tests/effects_packages_test.rs`)
+
+**SPEC-EFF-037** Compile-time enforcement: with a `[capabilities]` table, `wj build` fails on the same findings `wj check` reports (WJ0040-WJ0044) before any code is generated, for every backend. A call the compiler can prove inside the grant (a literal path, host or name) carries no check: the generated code is byte-identical with and without the table. (untestable: needs a compiled backend; acceptance tests `tests/effects_compiled_test.rs`)
+
+**SPEC-EFF-038** Run-time guards: when some call cannot be proven (a computed path, host or name, or a capability value minted from a scoped grant), the generated program installs its grant as the first statement of `main` (`windjammer_runtime::caps::install` on Rust, `$caps_install` on JavaScript, `wjstd_caps_install` on Go) and the runtime's std wrappers check against it; a denial exits with status 126 and cannot be caught. Compiled programs hold the whole program to one grant, so a dependency's computed-resource use needs the same scope as the application's (or `true`), else the build says so. (untestable: needs a compiled backend; acceptance tests `tests/effects_compiled_test.rs`, `tests/effects_vectors_test.rs`)
+
+**SPEC-EFF-039** Without a `[capabilities]` table (and without `--sandbox` or `--allow`) `wj run` enforces the local profile: files inside the project directory, plus `time`, `random` and `console`. Anything else stops the run with exit status 126; the message says why, offers the one-shot `--allow` flag and a copy-paste `[capabilities]` block that keeps the project-directory lines. `WJ_CAPS=warn` (run it, warn once) and `WJ_CAPS=off` are the explicit opt-outs. `wj test --interpret` and the REPL run under the same default (a project's `[capabilities]` is the way to grant them more).
+
+<!-- example: tests/spec/effects/SPEC-EFF-039.wj -->
+```windjammer
+use std::env
+fn main() {
+    println("start")
+    let v = env::var("WJ_NEVER_SET")
+    println("not reached")
+}
+```
+Output:
+```text
+start
+```
+Then the run stops with exit status 126 and a message containing `capability denied: env.read(WJ_NEVER_SET)`.
+
+**SPEC-EFF-040** Standard devices are not files: `/dev/stdin` and `/dev/stdout`, `/dev/stderr` are the console, `/dev/urandom` and `/dev/random` are randomness, `/dev/null` needs nothing. Reading standard input therefore never needs a file grant.
+
+<!-- example: tests/spec/effects/SPEC-EFF-040.wj -->
+```windjammer
+use std::fs
+fn main() {
+    let there = fs::exists("/dev/stdin")
+    println("checked")
+}
+```
+Output:
+```text
+checked
+```
 
 ## Durable functions
 

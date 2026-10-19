@@ -62,8 +62,10 @@ pub struct RunOptions {
     pub sandbox: bool,
     /// `--allow EFFECT[=RESOURCE]` (repeatable).
     pub allow: Vec<String>,
-    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given.
+    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given (default: enforce).
     pub caps_mode: String,
+    /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
+    pub no_jit: bool,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -119,6 +121,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
         it.set_engine_resolved(opts.engine_resolved);
+        it.set_jit(!opts.no_jit);
         if let Some(p) = &opts.mock_http {
             match super::builtins::std_http::HttpMode::mock_from_file(p) {
                 Ok(m) => it.set_http_mode(m),
@@ -204,6 +207,16 @@ pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
         for spec in specs {
             let mut it = Interpreter::new_capturing();
             it.guard_stack();
+            // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
+            it.set_engine_resolved(true);
+            // tests are sandboxed like `wj run` (ADR-0021): the project's [capabilities], else the local profile
+            match super::caps::gate_for_run(&spec.file, false, &[], false, "") {
+                Ok(gate) => it.set_caps(gate.map(|g| g.for_tests())),
+                Err(m) => {
+                    results.push(TestResult { file: spec.file, name: spec.display_name, passed: false, message: m });
+                    continue;
+                }
+            }
             let outcome = match it.load_test_program(&spec.file) {
                 Ok(mut path) => {
                     path.extend(spec.mods.iter().cloned());

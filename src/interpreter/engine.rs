@@ -37,7 +37,10 @@ pub struct FuncDef {
 }
 
 pub struct StructDef {
-    pub fields: Vec<(&'static str, Type)>,
+    pub fields: Rc<[(&'static str, Type)]>,
+    /// The type and field names, interned: every instance built from a literal shares them.
+    pub rc_name: Rc<str>,
+    pub rc_fields: Rc<[Rc<str>]>,
     pub tuple: bool,
     pub copy: bool,
 }
@@ -69,6 +72,9 @@ pub enum Import {
     Item(usize, String),
     /// A builtin (native) std path such as `std::fs`.
     Std(String),
+    /// A name that is both a module and a value (`pub use version::version` next to `mod version`):
+    /// the module for paths (`version::f`), the item `name` of `module` for a bare use.
+    Both(usize, usize, String),
 }
 
 pub struct Module {
@@ -80,6 +86,10 @@ pub struct Module {
     pub children: HashMap<String, usize>,
     pub consts: HashMap<String, &'static crate::parser::Expression<'static>>,
     pub const_types: HashMap<String, &'static Type>,
+    /// Names a function-body `use` added on top of this module (lookups fall through to `fallback`).
+    pub fallback: Option<usize>,
+    /// Standard-library modules glob-imported here (`use std::log::*`), as `std::log`.
+    pub std_globs: Vec<String>,
 }
 
 pub struct Scope {
@@ -128,9 +138,17 @@ pub struct Interpreter {
     /// `--engine=resolved`: run compiled functions where possible (see `resolved/`).
     pub(crate) engine_resolved: bool,
     /// Compiled forms by `FuncDef` address (`None` = not compilable).
-    pub(crate) compiled: HashMap<usize, Option<Rc<super::resolved::CompiledFn>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// The `FuncDef` is kept alive with its entry so its address is never reused (hot reload replaces bodies).
+    pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Compiled closure bodies by body address (`None` = run in the walker).
+    pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
+    /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
+    pub(crate) jit_enabled: bool,
+    /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
+    #[cfg(feature = "jit")]
+    pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
     /// `std::subprocess` children by handle id.
     pub(crate) subprocesses: HashMap<u64, super::builtins::std_proc::Session>,
     pub(crate) next_subprocess: u64,
@@ -176,6 +194,10 @@ pub struct Interpreter {
     pub(crate) expected: Option<(usize, Type)>,
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
+    /// `(module, address of the `use` statement)` -> the module that adds that function-body import.
+    /// Names of the dependency crates mounted as top-level modules (reachable by name from any module; package attribution for grants).
+    pub(crate) dep_crates: HashSet<String>,
+    pub(crate) body_use_modules: HashMap<(usize, usize), usize>,
     /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items
     /// are then bound after every module is registered, instead of one at a time.
     pub(crate) project_loading: bool,
@@ -213,7 +235,11 @@ impl Interpreter {
             vec_pool: Vec::new(),
             engine_resolved: false,
             compiled: HashMap::default(),
+            compiled_closures: HashMap::default(),
             rstack: Vec::new(),
+            jit_enabled: true,
+            #[cfg(feature = "jit")]
+            jit: None,
             subprocesses: HashMap::new(),
             next_subprocess: 0,
             sched: super::sched::Sched::new(),
@@ -244,6 +270,8 @@ impl Interpreter {
             retained: Vec::new(),
             expected: None,
             missing_modules: HashSet::new(),
+            dep_crates: HashSet::new(),
+            body_use_modules: HashMap::new(),
             project_loading: false,
             host: None,
             hot: None,
@@ -285,6 +313,11 @@ impl Interpreter {
     /// Select the resolved (compiled closure) engine for compilable functions.
     pub fn set_engine_resolved(&mut self, on: bool) {
         self.engine_resolved = on;
+    }
+
+    /// Allow machine code for hot integer functions (on by default; a no-op without the `jit` feature).
+    pub fn set_jit(&mut self, on: bool) {
+        self.jit_enabled = on;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {
@@ -396,6 +429,8 @@ impl Module {
             children: HashMap::new(),
             consts: HashMap::new(),
             const_types: HashMap::new(),
+            fallback: None,
+            std_globs: Vec::new(),
         }
     }
 }

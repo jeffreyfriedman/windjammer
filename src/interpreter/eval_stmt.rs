@@ -184,7 +184,10 @@ impl Interpreter {
                 self.scope.defers.push(statement);
                 Ok(Value::Unit)
             }
-            Statement::Use { .. } => Ok(Value::Unit),
+            Statement::Use { path, alias, .. } => {
+                self.bind_body_use(s, path, alias.as_deref())?;
+                Ok(Value::Unit)
+            }
             Statement::Thread { .. } | Statement::Async { .. } => Err(unsupported("`thread {}` / `async {}` blocks (ADR-0004: surface not settled; use `async fn` + `.await`)")),
         }
     }
@@ -223,6 +226,18 @@ impl Interpreter {
                 return Ok(());
             }
         }
+        self.assign_to_place(target, place, rhs, op)
+    }
+
+    /// The store half of an assignment (also the resolved engine's): mark the target, compute the
+    /// new value (`retag` for `=`, the operator for `op=`, in-place string append), write it.
+    pub(crate) fn assign_to_place(
+        &mut self,
+        target: &'static Expression<'static>,
+        place: super::value::Place,
+        rhs: Value,
+        op: Option<crate::parser::CompoundOp>,
+    ) -> R<()> {
         self.mark(super::eval_expr::expr_loc(target));
         let new = match op {
             None => {

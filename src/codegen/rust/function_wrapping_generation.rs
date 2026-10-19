@@ -352,7 +352,7 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str("let _bench_result = windjammer_runtime::bench::bench(|| {\n");
             self.indent_level += 1;
         }
-
+        self.push_capability_install(func, &mut output);
         // Tracy zone (CPU): innermost around timed work so @timeout / @bench wrappers are excluded
         if needs_profile {
             let zone_expr = if let Some(dec) = profile_decorator {

@@ -50,6 +50,20 @@ impl<'ast> CodeGenerator<'ast> {
         self.indent_level += 1;
     }
 
+    /// ADR-0021: the program's capability grant, installed before anything else in `main` runs. Present only when the
+    /// compiler could not prove every sink call inside the grant (computed paths, hosts, names).
+    pub(in crate::codegen::rust) fn capability_install_statement(&self, func: &FunctionDecl<'ast>) -> Option<String> {
+        let install = self.config.capability_install.as_ref()?;
+        (func.name == "main" && !self.is_module).then(|| format!("{}{};\n", self.indent(), install))
+    }
+
+    /// Same, for a `main` that has wrapping decorators (`@timeout`, `@bench`, ...).
+    pub(in crate::codegen::rust) fn push_capability_install(&self, func: &FunctionDecl<'ast>, output: &mut String) {
+        if let Some(stmt) = self.capability_install_statement(func) {
+            output.push_str(&stmt);
+        }
+    }
+
     pub(in crate::codegen::rust) fn append_regular_function_body_and_close(
         &mut self,
         func: &FunctionDecl<'ast>,
@@ -61,6 +75,11 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_function_body = true;
         let import_scope = self.push_function_local_import_scope(&func.body);
         let mut body_code = self.generate_block(&func.body);
+        // ADR-0021: install the program's capability grant before anything else in `main` runs (only present when
+        // the compiler could not prove every sink call inside the grant)
+        if let Some(stmt) = self.capability_install_statement(func) {
+            body_code = format!("{stmt}{body_code}");
+        }
         self.pop_function_local_import_scope(import_scope);
         self.in_function_body = old_in_function_body;
 

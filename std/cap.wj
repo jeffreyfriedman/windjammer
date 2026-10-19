@@ -1,0 +1,150 @@
+// std/cap - capability values (ADR-0021)
+// Implementation: windjammer_runtime::cap (checked against the grant it was minted from)
+//
+// A capability value is an unforgeable handle: the only way to get one is to mint it from the
+// program's own grant (`cap::net()`, `cap::fs()`, ...), and narrowing (`only`, `under`, `read_only`)
+// can only shrink what it allows. A function that is handed a value needs no grant of its own.
+
+// PUBLIC API - Users interact with these types and functions only
+
+struct Net {
+    // Private: a narrowed grant (net.connect)
+}
+
+struct Fs {
+    // Private: a narrowed grant (fs.read / fs.write)
+}
+
+struct Env {
+    // Private: a narrowed grant (env.read)
+}
+
+struct Process {
+    // Private: a narrowed grant (process)
+}
+
+struct Clock {
+    // Private: the right to read the time
+}
+
+struct Rng {
+    // Private: the right to draw random numbers
+}
+
+// Minting (checked against the running program's grant)
+
+fn net() -> Net {
+    Net {}
+}
+
+fn fs() -> Fs {
+    Fs {}
+}
+
+fn env() -> Env {
+    Env {}
+}
+
+fn process() -> Process {
+    Process {}
+}
+
+fn clock() -> Clock {
+    Clock {}
+}
+
+fn rng() -> Rng {
+    Rng {}
+}
+
+impl Net {
+    fn only(self, hosts: Vec<string>) -> Net {
+        Net {}
+    }
+
+    fn get(self, url: string) -> Result<Response, string> {
+        Err("cap::Net requires the Windjammer runtime")
+    }
+
+    fn post(self, url: string, body: string) -> Result<Response, string> {
+        Err("cap::Net requires the Windjammer runtime")
+    }
+
+    fn put(self, url: string, body: string) -> Result<Response, string> {
+        Err("cap::Net requires the Windjammer runtime")
+    }
+
+    fn delete(self, url: string) -> Result<Response, string> {
+        Err("cap::Net requires the Windjammer runtime")
+    }
+
+    fn head(self, url: string) -> Result<Response, string> {
+        Err("cap::Net requires the Windjammer runtime")
+    }
+}
+
+impl Fs {
+    fn under(self, dir: string) -> Fs {
+        Fs {}
+    }
+
+    fn read_only(self) -> Fs {
+        Fs {}
+    }
+
+    fn read_to_string(self, path: string) -> Result<string, string> {
+        Err("cap::Fs requires the Windjammer runtime")
+    }
+
+    fn read(self, path: string) -> Result<Vec<u8>, string> {
+        Err("cap::Fs requires the Windjammer runtime")
+    }
+
+    fn exists(self, path: string) -> bool {
+        false
+    }
+
+    fn write(self, path: string, contents: string) -> Result<(), string> {
+        Err("cap::Fs requires the Windjammer runtime")
+    }
+
+    fn create_dir_all(self, path: string) -> Result<(), string> {
+        Err("cap::Fs requires the Windjammer runtime")
+    }
+
+    fn remove_file(self, path: string) -> Result<(), string> {
+        Err("cap::Fs requires the Windjammer runtime")
+    }
+}
+
+impl Env {
+    fn only(self, names: Vec<string>) -> Env {
+        Env {}
+    }
+
+    fn var(self, name: string) -> Result<string, string> {
+        Err("cap::Env requires the Windjammer runtime")
+    }
+}
+
+impl Process {
+    fn only(self, programs: Vec<string>) -> Process {
+        Process {}
+    }
+
+    fn run(self, program: string, args: Vec<string>) -> Result<string, string> {
+        Err("cap::Process requires the Windjammer runtime")
+    }
+}
+
+impl Clock {
+    fn now_millis(self) -> int {
+        0
+    }
+}
+
+impl Rng {
+    fn range(self, lo: int, hi: int) -> int {
+        lo
+    }
+}

@@ -132,10 +132,10 @@ exit = 1
 [[case]]
 name = "run --interpret refuses network access by default"
 polarity = "negative"
-exit = 0
+exit = 126
 files = { "m.wj" = "use std::http\n\nfn main() {\n    match http::get(\"http://127.0.0.1:9/hello\") {\n        Ok(r) => println(\"${r.status_code()}\"),\n        Err(e) => println(\"ERR ${e}\"),\n    }\n}\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
-stdout_has = ["ERR network access is disabled", "--allow-network"]
+output_has = ["capability denied: net.connect(127.0.0.1)", "--allow net.connect=127.0.0.1", "[capabilities]"]
 
 [[case]]
 name = "run --allow-network performs real requests"
@@ -187,6 +187,43 @@ name = "run --engine resolved executes a file"
 polarity = "positive"
 files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
 args = ["run", "--interpret", "--engine", "resolved", "{w}/m.wj"]
+stdout_has = ["hello"]
+
+[[case]]
+name = "run --no-jit runs hot integer functions as closures"
+polarity = "positive"
+files = { "m.wj" = "fn sq(n: int) -> int {\n    n * n\n}\nfn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 200 {\n        t += sq(i)\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--no-jit", "{w}/m.wj"]
+stdout_has = ["2646700"]
+
+[[case]]
+name = "run --no-jit still panics on integer overflow"
+polarity = "negative"
+files = { "m.wj" = "fn sq(n: int) -> int {\n    n * n\n}\nfn main() {\n    let mut i = 0\n    while i < 200 {\n        println(\"${sq(i * 100000000)}\")\n        i += 1\n    }\n}\n" }
+args = ["run", "--interpret", "--no-jit", "{w}/m.wj"]
+exit = 101
+output_has = ["attempt to multiply with overflow"]
+
+[[case]]
+name = "run --jit off is the same as --no-jit"
+polarity = "positive"
+files = { "m.wj" = "fn sq(n: int) -> int {\n    n * n\n}\nfn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 200 {\n        t += sq(i)\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit", "off", "{w}/m.wj"]
+stdout_has = ["2646700"]
+
+[[case]]
+name = "run --jit rejects an unknown value"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--jit", "maybe", "{w}/m.wj"]
+exit = 1
+output_has = ["unknown WJ_JIT / --jit value"]
+
+[[case]]
+name = "run --engine walker executes a file"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--engine", "walker", "{w}/m.wj"]
 stdout_has = ["hello"]
 
 [[case]]

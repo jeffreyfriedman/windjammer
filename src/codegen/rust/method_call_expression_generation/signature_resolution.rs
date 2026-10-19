@@ -6,6 +6,39 @@ use crate::parser::{Expression, Type};
 use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `http.get(req.url)`: a call through an imported runtime module follows the runtime function's own
+    /// signature (`get(url: &str)`), whatever the WJ stub declares. Returns whether the runtime borrows argument
+    /// `arg_index`; when it does, `call_site_sig` becomes the runtime signature.
+    pub(super) fn adopt_runtime_module_signature(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_index: usize,
+        call_site_sig: &mut Option<FunctionSignature>,
+        method_signature: Option<&FunctionSignature>,
+    ) -> bool {
+        let Expression::Identifier { name, .. } = object else { return false };
+        if self.local_var_types.contains_key(name.as_str())
+            || self.current_function_params.iter().any(|p| p.name == *name)
+            || !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name)
+        {
+            return false;
+        }
+        let qualified = format!("{name}::{method}");
+        let borrows = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+            &self.signature_registry,
+            &qualified,
+            call_site_sig.as_ref().or(method_signature),
+            arg_index,
+        );
+        if borrows {
+            if let Some(runtime) = crate::codegen::rust::runtime_signatures::runtime_signature(&qualified) {
+                *call_site_sig = Some(runtime.clone());
+            }
+        }
+        borrows
+    }
+
     /// Type name used for method registry lookup, peeling stdlib Deref guards.
     fn method_receiver_type_name_peeling_guards(ty: &Type) -> Option<String> {
         let peeled = match ty {

@@ -23,7 +23,8 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 | `wj test --interpret [PATH] [--filter S] [--list] [--watch]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
 | `wj run --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
 | `wj run --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
-| `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client calls from canned responses / allow plain `http://` (default: the client refuses). |
+| `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client and server calls from canned responses (no network capability needed) / allow network access, plain `http://` (default: denied with exit status 126). |
+| `wj run --sandbox` / `--allow EFFECT[=RESOURCE]` / `--caps enforce\|warn\|off` | Capabilities (ADR-0021): with no `[capabilities]` in `wj.toml` a run may use files inside the project directory, time, random and console, and nothing else; a denied call stops with exit status 126 and a message that contains the `--allow` flag and the `[capabilities]` block to add. `WJ_CAPS=warn` (run, warn once) and `WJ_CAPS=off` are explicit opt-outs. |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);
@@ -265,9 +266,15 @@ Findings from running the same programs through the compiled path (compiler bugs
 - **Language**: Rust's slicing panic messages (`v[a..b]`, `s[a..b]`, char boundaries), `char::to_lowercase()` displays,
   top-level macro invocations are loud, `Type::default()` for `@derive(Default)` (Q-016), recursion bounded by stack bytes on
   the interpreter thread (Q-023), `wj test --interpret` shares `wj test` discovery.
-- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). `--engine=resolved` (ADR-0020 option B,
-  milestone 1): functions compiled to closures over slot-indexed locals, walker fallback per function; results in ADR-0020.
-  `scripts/interp_bench.py` is the benchmark ratchet (median of 5, load recorded).
+- **Performance**: `wj run` uses the resolved engine (ADR-0020): each function is compiled to closures over slot-indexed
+  locals the first time it is called, integer code with a statically known width runs unboxed, calls pass arguments in
+  place, field reads and method calls have inline caches, and a construct it does not lower runs in the tree walker as an
+  island inside the compiled function. `--engine walker` runs the tree walker alone (the reference semantics; the parity test
+  compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 12x faster than in the walker,
+  faster than CPython on both; hot functions whose values are all `int` are compiled to machine code by Cranelift
+  (`wj run --no-jit` or `WJ_JIT=0` turns that off; `fib(30)` is about 37x the walker with it). `scripts/interp_bench.py`
+  is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
+  `wj test --interpret` uses the same engine.
 
 Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
 (first interp-gaps measurement: 222 of 382 on the smaller tree then). Of the 138 that do not: 40 are `__SEED__` corpus templates,
@@ -290,7 +297,8 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
   `OrderedMap`/`OrderedSet` iterate in insertion order (`remove` keeps the order of the rest, `swap_remove` does not).
 - `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error (owned by the parser stream; ignored test
   `interpolation_escaped_quotes_test`).
-- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code; see ADR-0020.
+- Performance: integer kernels run within a few times of Node; closure bodies, `match`, floats and collection methods still
+  run at walker speed or close to it (ADR-0020, "What is left").
 
 ## ADR-0007
 

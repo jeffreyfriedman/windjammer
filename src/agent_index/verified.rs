@@ -27,6 +27,8 @@ pub struct ExampleHeader {
     /// `// tests-passed: N` for `*_test.wj` files.
     pub tests_passed: Option<usize>,
     pub tests_failed: Option<usize>,
+    /// `// allow: fs.read=/tmp/**` (repeatable): capabilities the program needs under `wj run` (ADR-0021).
+    pub allow: Vec<String>,
 }
 
 impl ExampleHeader {
@@ -44,6 +46,7 @@ pub fn parse_header(name: &str, src: &str) -> ExampleHeader {
         rust: RustStatus::NotApplicable,
         tests_passed: None,
         tests_failed: None,
+        allow: vec![],
     };
     for line in src.lines() {
         let Some(rest) = line.strip_prefix("//") else { continue };
@@ -61,6 +64,8 @@ pub fn parse_header(name: &str, src: &str) -> ExampleHeader {
             } else {
                 RustStatus::Gap(v.strip_prefix("gap").unwrap_or(v).trim().to_string())
             };
+        } else if let Some(v) = rest.strip_prefix("allow:") {
+            h.allow.push(v.trim().to_string());
         } else if let Some(v) = rest.strip_prefix("tests-passed:") {
             h.tests_passed = v.trim().parse().ok();
         } else if let Some(v) = rest.strip_prefix("tests-failed:") {
@@ -111,6 +116,9 @@ pub fn build_manifest(dir: &Path) -> Result<Value> {
             }
             if h.exit != 0 {
                 v["exit"] = json!(h.exit);
+            }
+            if !h.allow.is_empty() {
+                v["allow"] = json!(h.allow);
             }
             v
         })

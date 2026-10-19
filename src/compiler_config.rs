@@ -36,6 +36,9 @@ pub struct CompilerConfig {
     pub game_path: Option<PathBuf>,
     /// Run the opt-in auto-arena optimizer pass (`scratch_reuse`, ADR-0025; `WJ_AUTO_ARENA=1`).
     pub auto_arena: bool,
+    /// Rust statement installing the program's capability grant at the start of `main` (ADR-0021: only when some
+    /// sink call cannot be proven inside the grant at compile time; see `ir::effect_facts::install`).
+    pub capability_install: Option<String>,
 }
 
 impl Default for CompilerConfig {
@@ -53,6 +56,7 @@ impl Default for CompilerConfig {
             runtime_path: None,
             game_path: None,
             auto_arena: false,
+            capability_install: None,
         }
     }
 }
@@ -88,6 +92,7 @@ impl CompilerConfig {
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
             game_path: path("game-host_PATH"),
             auto_arena: on("WJ_AUTO_ARENA"),
+            capability_install: None,
         }
     }
 
@@ -103,6 +108,11 @@ impl CompilerConfig {
 
     pub fn with_shadow_validate_strict(mut self, on: bool) -> Self {
         self.shadow_validate_strict = on;
+        self
+    }
+
+    pub fn with_capability_install(mut self, install: Option<String>) -> Self {
+        self.capability_install = install;
         self
     }
 

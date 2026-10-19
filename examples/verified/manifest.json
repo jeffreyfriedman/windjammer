@@ -1536,6 +1536,10 @@
       ]
     },
     {
+      "allow": [
+        "fs.read=/tmp/**",
+        "fs.write=/tmp/**"
+      ],
       "expect_lines": 4,
       "file": "std_fs_roundtrip.wj",
       "kind": "program",

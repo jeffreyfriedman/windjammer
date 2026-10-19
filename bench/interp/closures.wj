@@ -1,0 +1,17 @@
+// Closure-heavy iterator chains: map / filter / sum over a Vec, repeated.
+fn main() {
+    let mut v: Vec<int> = Vec::new()
+    let mut k = 0
+    while k < 1000 {
+        v.push(k)
+        k += 1
+    }
+    let mut total = 0
+    let mut r = 0
+    while r < 300 {
+        let s: int = v.map(|x| x * r).filter(|x| x % 3 == 0).map(|x| x / 3).sum()
+        total += s % 100000
+        r += 1
+    }
+    println("${total}")
+}
