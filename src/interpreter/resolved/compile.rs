@@ -533,8 +533,8 @@ fn stmt_tail(cx: &mut Cx, s: S) -> Option<Tail> {
     Some(if raw { Tail::Raw(code) } else { Tail::Code(code) })
 }
 
-/// A statement: lowered when the compiler can, else a walker island (`island.rs`). Only `defer`
-/// (which registers on the walker frame) is refused: the function then runs in the walker.
+/// A statement: lowered when the compiler can, else a walker island (`island.rs`). Only `defer` and a body `use`
+/// (which act on the walker frame) are refused: the function then runs in the walker.
 fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
     if let Some(c) = stmt_native(cx, s) {
         return Some(c);
@@ -543,7 +543,8 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
 }
 
 fn stmt_island(cx: &mut Cx, s: S) -> Option<Code> {
-    if matches!(s, Statement::Defer { .. }) {
+    // `defer` registers on the walker frame and a body `use` switches the frame's module: neither can live in an island
+    if matches!(s, Statement::Defer { .. } | Statement::Use { .. }) {
         return None;
     }
     if matches!(s, Statement::Return { .. }) {
