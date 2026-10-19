@@ -107,11 +107,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 "walker" => false,
                 other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
             };
-            let jit_on = match jit.as_str() {
-                "on" | "1" | "true" => !no_jit,
-                "off" | "0" | "false" => false,
-                other => anyhow::bail!("unknown WJ_JIT / --jit value {other:?}: use on or off (or 1 / 0)"),
-            };
+            let jit_on = jit_setting(&jit, no_jit)?;
             let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, no_jit: !jit_on };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
@@ -506,3 +502,12 @@ fn run_doctests(path: Option<&std::path::Path>, filter: Option<&str>, compiled: 
     Ok(results.len())
 }
 
+
+/// `--jit on|off` (env `WJ_JIT`) and `--no-jit`: may hot integer functions run as machine code?
+fn jit_setting(jit: &str, no_jit: bool) -> anyhow::Result<bool> {
+    match jit {
+        "on" | "1" | "true" => Ok(!no_jit),
+        "off" | "0" | "false" => Ok(false),
+        other => anyhow::bail!("unknown WJ_JIT / --jit value {other:?}: use on or off (or 1 / 0)"),
+    }
+}
