@@ -152,7 +152,9 @@ fn test_vec_contains_adds_ref() {
     assert!(
         generated.contains("items.contains(&search)")
             || generated.contains("items.contains(search)")
-            || generated.contains("items.contains(&search.clone())"),
+            || generated.contains("items.contains(&search.clone())")
+            // `Vec<String>.contains(&str)` compares elements by value (accepts `&str` and `&String`).
+            || generated.contains("items.iter().any(|m| *m == *search)"),
         "Should auto-add & for Vec::contains (or handle borrowed search). Generated:\n{}",
         generated
     );

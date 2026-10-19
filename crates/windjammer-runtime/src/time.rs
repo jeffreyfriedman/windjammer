@@ -109,11 +109,16 @@ impl Instant {
     }
 }
 
-/// Get current instant for time measurements
-pub fn now() -> Instant {
+/// Get current instant for time measurements (monotonic; `instant_now`).
+pub fn instant_now() -> Instant {
     Instant {
         inner: StdInstant::now(),
     }
+}
+
+/// Current local datetime (Windjammer `std::time::now`, declared `-> DateTime` in `std/time.wj`).
+pub fn now() -> DateTime {
+    now_local_datetime()
 }
 
 /// Get current timestamp (seconds since epoch)

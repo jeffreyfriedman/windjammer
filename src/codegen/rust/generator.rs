@@ -4595,7 +4595,7 @@ impl<'ast> CodeGenerator<'ast> {
         expr_str: &mut String,
         expr: &crate::parser::Expression,
     ) {
-        if expr_str.starts_with('*') || expr_str.ends_with(".clone()") {
+        if expr_str.starts_with('*') || expr_str.ends_with(".clone()") || Self::receiver_already_owned(expr_str) {
             return;
         }
         let expects_owned = !matches!(

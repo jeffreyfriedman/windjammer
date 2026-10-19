@@ -19,7 +19,7 @@ impl<'ast> CodeGenerator<'ast> {
         prev_float_target: Option<Type>,
     ) -> String {
         let (mut obj_str, mut args) = (obj_str, args);
-        self.mc_fix_std_idiom_call(object, method, arguments, &mut obj_str, &mut args);
+        if let Some(done) = self.mc_fix_std_idiom_call(object, method, arguments, &mut obj_str, &mut args) { return done; }
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);
         let receiver_type_name = self
