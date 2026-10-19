@@ -25,7 +25,22 @@ def programs(root, quick):
     bad = sorted(glob.glob(os.path.join(root, "tests/check_negative/mutants/*.wj")))
     if quick:
         valid, bad = valid[:: max(len(valid) // 6, 1)][:6], bad[:: max(len(bad) // 10, 1)][:10]
+        gaps = [f for f in sorted(glob.glob(os.path.join(root, "examples/verified/*.wj"))) if rust_gap(f)][:3]
+        valid = sorted(set(valid) | set(gaps))
     return [(f, True) for f in valid], [(f, False) for f in bad]
+
+
+def rust_gap(path):
+    """The `// rust: gap <why>` header of a verified example: the compiled path is documented not to accept it yet."""
+    try:
+        for line in open(path, errors="replace"):
+            if line.startswith("// rust: gap"):
+                return line[len("// rust: gap"):].strip()
+            if not line.startswith("//"):
+                break
+    except OSError:
+        pass
+    return None
 
 
 def pipeline_accepts(ctx, path):
@@ -44,7 +59,7 @@ def pipeline_accepts(ctx, path):
 
 def measure(ctx, cargo_gates=False):
     valid, bad = programs(ctx.root, ctx.quick)
-    blockers, checked, agree, build_checked = [], 0, 0, 0
+    blockers, checked, agree, build_checked, stale_gaps = [], 0, 0, 0, 0
     for path, _ in valid + bad:
         h = file_hash(path)
         name = os.path.relpath(path, ctx.root)
@@ -60,20 +75,26 @@ def measure(ctx, cargo_gates=False):
         else:
             agree += 1
     # compiled path accepts what the interpreter accepts: valid programs only (the mutants are rejected by design)
+    build_ok = 0
     for path, _ in valid:
         name = os.path.relpath(path, ctx.root)
         build_checked += 1
-        if not pipeline_accepts(ctx, path):
-            blockers.append({"program": name, "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it"})
+        gap = rust_gap(path)
+        if pipeline_accepts(ctx, path):
+            build_ok += 1
+            stale_gaps += bool(gap)
+        else:
+            why = f" (documented gap: {gap[:70]})" if gap else " (not a documented gap)"
+            blockers.append({"program": name, "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it" + why})
     gates = run_cargo_gates(ctx) if cargo_gates else None
     if gates and not gates["ok"]:
         blockers.append({"program": "cargo gates", "reason": gates["summary"]})
     real = [b for b in blockers if not b["reason"].startswith("unmeasured")]
     status = "fail" if real else ("unmeasured" if blockers or not checked else "pass")
     return {"id": "R5", "title": "Diagnostics agree", "target": "0 check/interpreter/build disagreements",
-            "percent": pct(agree, checked), "status": status,
+            "percent": pct(agree + build_ok, checked + build_checked), "status": status,
             "detail": {"parity_checked": checked, "parity_agree": agree, "build_checked": build_checked,
-                       "negative_programs": len(bad), "cargo_gates": gates},
+                       "negative_programs": len(bad), "gap_headers_now_accepted": stale_gaps, "cargo_gates": gates},
             "blockers": blockers}
 
 
