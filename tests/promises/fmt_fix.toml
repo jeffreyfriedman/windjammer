@@ -1,0 +1,113 @@
+# Acceptance cases for `wj fmt` and `wj fix` (tests/promise_registry_test.rs).
+
+[[case]]
+name = "fmt rewrites a file in place"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\nlet x=1\n    println(\"${x}\")\n}\n" }
+args = ["fmt", "{w}/m.wj"]
+file_has = { "m.wj" = "    let x = 1\n" }
+
+[[case]]
+name = "fmt of a missing path fails"
+polarity = "negative"
+args = ["fmt", "{w}/nope.wj"]
+exit = 1
+output_has = ["path not found"]
+
+[[case]]
+name = "fmt - formats stdin to stdout"
+polarity = "positive"
+args = ["fmt", "-"]
+stdin = "fn main() {\nlet x=1\n    println(\"${x}\")\n}\n"
+stdout_has = ["fn main() {\n    let x = 1\n"]
+
+[[case]]
+name = "fmt - refuses input that does not parse"
+polarity = "negative"
+xfail = "BUG: `wj fmt -` on `fn main( {` prints `fn main({` and exits 0 (formats unparseable code)"
+args = ["fmt", "-"]
+stdin = "fn main( {\n"
+
+[[case]]
+name = "fmt --check accepts formatted code"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let x = 1\n    println(\"${x}\")\n}\n" }
+args = ["fmt", "--check", "{w}/m.wj"]
+
+[[case]]
+name = "fmt --check fails on unformatted code without touching it"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\nlet x=1\n}\n" }
+args = ["fmt", "--check", "{w}/m.wj"]
+exit = 1
+output_has = ["need formatting"]
+file_has = { "m.wj" = "let x=1" }
+
+[[case]]
+name = "fmt --rust formats the Rust crate in the current directory"
+polarity = "positive"
+needs = "toolchain"
+files = { "c/Cargo.toml" = "[package]\nname = \"c\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "c/src/main.rs" = "fn main(){println!(\"x\");}\n" }
+cwd = "c"
+args = ["fmt", "--rust"]
+file_has = { "c/src/main.rs" = "fn main() {" }
+
+[[case]]
+name = "fmt --rust formats the crate given as a path"
+polarity = "positive"
+xfail = "BUG: `wj fmt --rust PATH` ignores PATH and runs cargo fmt in the current directory"
+needs = "toolchain"
+files = { "c/Cargo.toml" = "[package]\nname = \"c\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "c/src/main.rs" = "fn main(){println!(\"x\");}\n" }
+args = ["fmt", "--rust", "{w}/c"]
+file_has = { "c/src/main.rs" = "fn main() {" }
+
+[[case]]
+name = "fmt --rust fails outside a Rust crate"
+polarity = "negative"
+needs = "toolchain"
+files = { "d/readme.txt" = "x" }
+args = ["fmt", "--rust", "{w}/d"]
+
+[[case]]
+name = "fix migrates deprecated macros in place"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = vec![1, 2]\n    println!(\"{}\", v.len())\n}\n" }
+args = ["fix", "{w}/m.wj"]
+file_has = { "m.wj" = "println(\"${v.len()}\")" }
+output_has = ["2 rewrite(s)"]
+
+[[case]]
+name = "fix of a missing path fails"
+polarity = "negative"
+args = ["fix", "{w}/nope.wj"]
+exit = 1
+output_has = ["Path does not exist"]
+
+[[case]]
+name = "fix --check passes migrated code"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["fix", "--check", "{w}/m.wj"]
+
+[[case]]
+name = "fix --check fails on deprecated code and does not write"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println!(\"{}\", 1)\n}\n" }
+args = ["fix", "--check", "{w}/m.wj"]
+exit = 1
+file_has = { "m.wj" = "println!(" }
+
+[[case]]
+name = "fix --docs migrates code fences in Markdown"
+polarity = "positive"
+files = { "d.md" = "# t\n\n```windjammer\nfn main() {\n    println!(\"hi\")\n}\n```\n" }
+args = ["fix", "--docs", "{w}/d.md"]
+file_has = { "d.md" = "    println(\"hi\")" }
+
+[[case]]
+name = "fix --docs --check fails on deprecated fences"
+polarity = "negative"
+files = { "d.md" = "# t\n\n```windjammer\nfn main() {\n    println!(\"hi\")\n}\n```\n" }
+args = ["fix", "--docs", "--check", "{w}/d.md"]
+exit = 1
+file_has = { "d.md" = "println!(" }

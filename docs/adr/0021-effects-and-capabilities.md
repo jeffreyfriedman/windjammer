@@ -226,8 +226,8 @@ Rules (all compile-time, reported by `wj check`):
   replay would skip the mutation.
 - **DUR-SHARED.** The durable body must not read state it does not own: globals with interior mutability, `Shared`/
   `Mutex`/atomics, channel receives from outside, `select`.
-- **DUR-ORDER.** Iterating a `HashMap`/`HashSet` in the durable body (outside a step) is an error unless the backend
-  guarantees insertion order (decision D6).
+- **DUR-ORDER.** Iterating a `HashMap`/`HashSet` in the durable body (outside a step) is an error, because their order is
+  unspecified (as in Rust). The fix suggestion is `OrderedMap`/`OrderedSet` (decision D6), `BTreeMap`, or sorting first.
 - **DUR-CALL.** Calling a `durable fn` from a durable fn is a child step (journaled with its own journal); calling one
   from ordinary code starts or resumes it by its identity (`durable::start(id, f, args)`; API in stage E4).
 Delivery is at-least-once per step (a crash between performing and journaling re-executes the step); steps that must
@@ -363,8 +363,11 @@ grant status and the check placement (`proven` / `runtime guard` / `denied`).
 - **D3. `durable fn` keyword** (recommended, as briefed) or `@durable` attribute.
 - **D4. Capability denial is an uncatchable fault (exit 126)** (recommended) or a catchable error value.
 - **D5. Default grants for `time`, `random`, `console`** (recommended: granted; visible to durable/replay only).
-- **D6. HashMap/HashSet iteration order:** make it insertion-ordered on every backend (removes DUR-ORDER and a class of
-  cross-backend divergences) or keep DUR-ORDER.
+- **D6. HashMap/HashSet iteration order (decided 2026-10-18):** `HashMap`/`HashSet` follow Rust conventions (unspecified
+  order, randomized hashing). Insertion-ordered maps and sets are separate opt-in types, `OrderedMap`/`OrderedSet`
+  (indexmap on Rust, `Map` on JS, a small ordered table on Go), with `BTreeMap` for sorted order. DUR-ORDER stays. The
+  interpreter keeps a deterministic iteration order by default and offers `--hash-seed N` to perturb it so code that
+  depends on iteration order is caught by a differential gate.
 - **D7. Runtime guards in compiled release binaries** for non-literal resources: on by default (recommended) or only
   with `--sandbox` builds.
 - **D8. Sequencing of code mode (E5)** right after E1, in parallel with E2-E4 (recommended), or after E4.

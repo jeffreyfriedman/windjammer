@@ -54,3 +54,7 @@ tmp_*
 .agent-wip/
 **/*.wip.rs
 /.worktrees/
+
+# autoharness runtime state (locks, sessions, ledgers)
+.claude/autoharness/
+.claude/skills/*/.ledger.jsonl

@@ -1,0 +1,10 @@
+// spec: SPEC-ARGS-008
+// mode: parse-error
+// expect-error: put parameters with defaults last
+fn f(a: int = 1, b: int) -> int {
+    a + b
+}
+
+fn main() {
+    println("${f(1, 2)}")
+}
