@@ -153,16 +153,6 @@ impl CodegenOutput {
         }
     }
 
-    pub fn with_source_map(mut self, source_map: String) -> Self {
-        self.source_map = Some(source_map);
-        self
-    }
-
-    pub fn with_type_definitions(mut self, type_defs: String) -> Self {
-        self.type_definitions = Some(type_defs);
-        self
-    }
-
     pub fn add_file(&mut self, filename: String, content: String) {
         self.additional_files.push((filename, content));
     }

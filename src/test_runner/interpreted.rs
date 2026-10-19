@@ -35,15 +35,6 @@ pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
         .collect()
 }
 
-/// Every test `wj test` would run under `root`, as `file :: display name` lines (sorted by discovery).
-pub fn list_tests(root: &Path) -> Result<Vec<String>> {
-    let d = test_discovery::discover(root)?;
-    Ok(d.files
-        .iter()
-        .flat_map(|f| f.tests.iter().map(|t| format!("{} :: {}", f.path.display(), t.display_name())))
-        .collect())
-}
-
 /// Entry point of `wj test --interpret`. Exits the process with the test status on failure.
 pub fn run_interpreted(
     path: Option<&Path>,

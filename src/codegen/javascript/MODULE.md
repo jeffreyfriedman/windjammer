@@ -36,7 +36,7 @@ Typing or ownership (the portable layer does).
 ## Removed (see docs/backends/ASSESSMENT.md)
 `minifier`, `polyfills`, `source_maps`, `v8_optimizer`, `module_federation`,
 `web_workers`, `code_splitter`, `differential_loading`: they were text/regex scaffolding with no connection to program semantics.
-`--minify/--polyfills/--v8-optimize/--source-maps` now fail loudly. `tree_shaker` (AST-level) is kept.
+`--minify/--polyfills/--v8-optimize` were removed from the CLI; `--source-maps` is refused on this backend with an explanatory error. `tree_shaker` (AST-level) is kept.
 
 
 ## Allowed imports

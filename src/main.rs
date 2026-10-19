@@ -56,10 +56,8 @@ pub mod parser_impl; // Parser implementation (being migrated to parser/)
                      // Test utilities for arena-allocated AST construction (available for integration tests)
 pub mod agent_index;
 pub mod ide_analysis;
-pub mod parser_recovery;
 pub mod rust_integration_tests;
 pub mod source_map; // Source map for error message translation
-pub mod source_map_cache; // Source map caching for performance
 pub mod embedded_assets;
 pub mod stdlib_scanner;
 pub mod stdlib_surface; // ADR-0018 declarative std surface tables

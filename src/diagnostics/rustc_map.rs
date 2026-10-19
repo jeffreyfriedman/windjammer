@@ -38,11 +38,6 @@ impl SourceCache {
     }
 }
 
-/// True when the diagnostic still points into generated Rust instead of `.wj` source.
-pub fn points_into_rust(loc: &Location) -> bool {
-    loc.file.extension().is_some_and(|e| e == "rs")
-}
-
 pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Diagnostic {
     let severity = match d.level {
         DiagnosticLevel::Error => Severity::Error,

@@ -92,23 +92,8 @@ impl CompilerConfig {
         self
     }
 
-    pub fn with_ir_coercion_engine(mut self, on: bool) -> Self {
-        self.ir_coercion_engine = on;
-        self
-    }
-
-    pub fn with_legacy_multipass(mut self, on: bool) -> Self {
-        self.legacy_multipass = on;
-        self
-    }
-
     pub fn with_emit_aosoa_hints(mut self, on: bool) -> Self {
         self.emit_aosoa_hints = on;
-        self
-    }
-
-    pub fn with_cache_locality_json(mut self, path: impl Into<PathBuf>) -> Self {
-        self.cache_locality_json = Some(path.into());
         self
     }
 
@@ -137,8 +122,4 @@ impl CompilerConfig {
         self
     }
 
-    pub fn with_game_path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.game_path = Some(path.into());
-        self
-    }
 }

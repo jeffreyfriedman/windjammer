@@ -25,10 +25,6 @@ impl<'ast> Analyzer<'ast> {
             )
     }
 
-    pub(crate) fn is_text_element_vec_param_type(t: &Type) -> bool {
-        matches!(t, Type::Vec(inner) if Self::is_windjammer_text_param_type(inner))
-    }
-
     /// Resolve struct field map using module-qualified keys (`dialogue::tree::DialogueNodeTree`).
     pub(crate) fn lookup_struct_fields_for_type(
         &self,
@@ -977,16 +973,6 @@ impl<'ast> Analyzer<'ast> {
             }
         }
         saw_benign_let
-    }
-
-    /// Back-compat alias used by older call sites / tests.
-    pub(crate) fn param_field_move_bindings_are_only_text(
-        &self,
-        param_name: &str,
-        param_type: &Type,
-        body: &[&'ast Statement<'ast>],
-    ) -> bool {
-        self.param_field_move_bindings_are_only_copy_or_text(param_name, param_type, body)
     }
 
     fn stmt_field_move_bindings_are_only_copy_or_text(
