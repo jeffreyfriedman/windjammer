@@ -19,8 +19,8 @@ fn reversed<T>(items: Vec<T>) -> Vec<T> {
 }
 
 fn main() {
-    println!("{}", largest([3, 9, 4]));
-    println!("{}", largest(["a", "z", "m"]));
-    println!("{:?}", reversed([1, 2, 3]));
+    println!("{}", largest(vec![3, 9, 4]));
+    println!("{}", largest(vec!["a".to_string(), "z".to_string(), "m".to_string()]));
+    println!("{:?}", reversed(vec![1, 2, 3]));
 }
 

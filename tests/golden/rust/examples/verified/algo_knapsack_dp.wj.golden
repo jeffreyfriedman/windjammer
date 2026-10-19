@@ -15,6 +15,6 @@ fn knapsack(weights: &Vec<i64>, values: &Vec<i64>, cap: i64) -> i64 {
 }
 
 fn main() {
-    println!("best value: {}", knapsack(&[1, 3, 4, 5], &[1, 4, 5, 7], 7_i64));
+    println!("best value: {}", knapsack(&vec![1_i64, 3_i64, 4_i64, 5_i64], &vec![1_i64, 4_i64, 5_i64, 7_i64], 7_i64));
 }
 

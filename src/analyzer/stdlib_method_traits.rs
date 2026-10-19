@@ -1078,3 +1078,13 @@ mod tests {
         assert!(!is_known_readonly_qualified("as_float", Some("Val"), &reg));
     }
 }
+
+/// Adapters that exist on `Iterator` but not on the collection types. Called on a collection they
+/// borrow it (codegen inserts `.iter()`), so the receiver is read, never consumed. One table for the
+/// analyzer's ownership rule and for the codegen lowering (`idiom_lowering`).
+pub const ITERATOR_ONLY_ADAPTERS: &[&str] = &[
+    "map", "filter", "filter_map", "flat_map", "flatten", "fold", "any", "all", "find", "find_map",
+    "position", "take", "skip", "take_while", "skip_while", "step_by", "zip", "chain", "rev",
+    "sum", "product", "max_by_key", "min_by_key", "max_by", "min_by", "partition", "cloned",
+    "copied", "peekable", "inspect", "for_each", "count", "last", "unzip", "scan", "cycle",
+];

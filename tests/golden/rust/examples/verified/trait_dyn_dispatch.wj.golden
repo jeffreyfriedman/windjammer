@@ -47,7 +47,7 @@ fn area(&self) -> i64 {
 }
 
 #[inline]
-fn total(shapes: &Vec<Box<dyn Shape>>) -> i64 {
+fn total(shapes: Vec<Box<dyn Shape>>) -> i64 {
     let mut t = 0_i64;
     for s in shapes {
         t += s.area();
@@ -60,6 +60,6 @@ fn main() {
     let b: Box<dyn Shape> = Box::new(Rc { w: 2_i64, h: 3_i64 });
     println!("{}", a.area() + 3_i64);
     println!("{}", b.area());
-    println!("{}", total(&[a, b]) - 3_i64);
+    println!("{}", total(vec![a, b]) - 3_i64);
 }
 
