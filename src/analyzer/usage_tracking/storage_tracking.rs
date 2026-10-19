@@ -28,11 +28,20 @@ impl<'ast> Analyzer<'ast> {
             Expression::Identifier { name, .. } => {
                 crate::type_classification::is_language_level_payload_call_name(name)
             }
-            Expression::FieldAccess { field, .. } => {
+            Expression::FieldAccess { object, field, .. } => {
                 crate::type_classification::is_language_level_payload_method(field)
+                    || Self::is_ownership_wrapper_constructor(object, field)
             }
             _ => false,
         }
+    }
+
+    /// `Mutex::new(x)`, `Arc::new(x)`, `Box::new(x)` ...: the std wrappers own their payload, so the
+    /// argument is moved in (OWN-STORED), exactly like a struct field or a `Some(..)` payload.
+    fn is_ownership_wrapper_constructor(object: &Expression, field: &str) -> bool {
+        field == "new"
+            && matches!(object, Expression::Identifier { name, .. }
+                if matches!(name.as_str(), "Mutex" | "RwLock" | "Arc" | "Rc" | "RefCell" | "Cell" | "Box" | "OnceCell"))
     }
 
     /// `Type::Variant(...)` lowers as MethodCall with a PascalCase method name.

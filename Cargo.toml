@@ -168,6 +168,11 @@ path = "tests/backend_conformance_test.rs"
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
 
+# Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
+[[test]]
+name = "meta_sidecar_consistency"
+path = "tests/meta_sidecar_consistency_test.rs"
+
 # ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
 [[test]]
 name = "semantic_facts_portable"
