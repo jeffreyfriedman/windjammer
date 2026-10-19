@@ -255,6 +255,16 @@ class R4Tests(unittest.TestCase):
         with self.assertRaises(pygen.Untranslatable):
             pygen.translate("fn main() {\n    let x = 4 / 2\n}\n")
 
+    @with_fixture({})
+    def test_startup_row_reports_hello_and_the_pre_run_check_share(self, fx):
+        row = r4.startup(fx.ctx())
+        self.assertLessEqual(row["hello_s"], 5)
+        self.assertEqual(row["project"], "alpha")
+        self.assertIn("check_share", row)
+
+    def test_hand_written_twin_is_preferred_over_a_generated_one(self):
+        self.assertTrue(os.path.exists(os.path.join(SCRIPTS, "..", "bench", "interp", "twins", "fib30.py")))
+
     @with_fixture({"run": {"k.wj": {"interp": ["3\n", 0]}}})
     def test_kernel_row_and_unmeasured_loop(self, fx):
         rows, blk = r4.kernels(fx.ctx())
