@@ -1,0 +1,8 @@
+warning[WJ0004]: `x` is assigned after its declaration but declared without `mut`
+  --> immutable_reassign.wj:4:5
+  |
+4 |     x = 20
+  |     ^ assigned here
+  = help: declare it with `let mut x` (ADR-0002: explicit `mut`)
+  = fix (auto-fixable): declare `x` as mutable
+  = explain: wj explain WJ0004
