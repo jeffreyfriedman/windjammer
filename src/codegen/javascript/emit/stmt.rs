@@ -169,6 +169,11 @@ impl<'m> Js<'m> {
             return Ok(());
         }
         let it = self.expr(iter)?;
+        let it = match &iter.ty {
+            Ty::Map(..) => format!("$sortedEntries({it})"),
+            Ty::Set(_) => format!("$sortedKeys({it})"),
+            _ => it,
+        };
         let (mut conds, mut binds) = (Vec::new(), Vec::new());
         let item = self.fresh("it");
         self.pat(pat, &item, &mut conds, &mut binds)?;
