@@ -13,9 +13,9 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 
 | Command | Effect |
 |---------|--------|
-| `wj run` | Run the project containing the working directory: `wj.toml` is found upward, its default binary runs (`src/main.wj`, `main.wj`, the first `[[bin]]`). |
-| `wj run PATH [args]` | A `.wj` file, or a directory with `main.wj` / `src/main.wj` (`wj run ./cmd/tool`). Use `wj run . args` to pass arguments, as with `go run . args`. |
-| `wj run --bin NAME` | A `[[bin]]` entry of `wj.toml`, `cmd/NAME/main.wj` or `src/bin/NAME.wj`. |
+| `wj run` | Run the project containing the working directory: `wj.toml` is found upward, its default binary runs (`main.wj` under `src/` or at the root, the first `[[bin]]`). |
+| `wj run PATH [args]` | A `.wj` file, or a directory with `main.wj` at its root or under `src/` (`wj run ./cmd/tool`). Use `wj run . args` to pass arguments, as with `go run . args`. |
+| `wj run --bin NAME` | A `[[bin]]` entry of `wj.toml`, `cmd/NAME/main.wj` or a file named after NAME in `src/bin/`. |
 | `wj run --interpret ...` | Interpreter only: never fall back (an unsupported feature exits 2 naming it). |
 | `wj run --compiled ...` / `--release` | Transpile to Rust and run with cargo (`--release`: optimized). `wj build` is unchanged. |
 | `wj run --watch` | Re-run on every change to `.wj`, `.rs`, `wj.toml`, `wj.lock` under the project (restarts long-running programs). |
@@ -75,7 +75,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
   adds the compiled half for fixtures and the first fuzz seeds.
 
 **Compiled-path bugs found by the project gates** (fixed here unless marked open):
-- Fixed: `use greet` in a crate-root `src/main.wj` was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
+- Fixed: `use greet` in a crate-root `main.wj` (under `src/`) was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
   package lib in the binary).
 - Fixed: a user module named like a runtime std module (`util::math`) also got `use windjammer_runtime::math;` (E0252).
 - Fixed: `util::math::cube(3)` or `crate::x::f()` in the binary's `main.rs` did not resolve (the modules live in the package lib);
@@ -83,7 +83,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 - Fixed: `wj run` (compiled) printed build progress on stdout; it now goes to stderr so both paths print the same bytes.
 - Fixed: a path dependency on a Windjammer source package was handed to Cargo as-is; `wj run --compiled` now builds it into the
   package's `gen/` crate first and the generated `Cargo.toml` links that.
-- Open: `wj build .` on a project root (rather than `src/`) treats `src/main.wj` as a module and drops `fn main`; `wj run` passes the
+- Open: `wj build .` on a project root (rather than `src/`) treats the `main.wj` under `src/` as a module and drops `fn main`; `wj run` passes the
   source root, so it is unaffected.
 - Open: module aliases and `super::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) fail with
   `missing boundary signature for m3::f0`: the ownership boundary lookup is keyed by the written path, not the resolved definition.
@@ -96,7 +96,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 
 **Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
 engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
-root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
+root. Compiled runs of a file in `src/bin/` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
 preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
 kept; other edits print a restart notice (use `--watch` for those).
 
@@ -109,13 +109,13 @@ Two oracles, neither of them a hand-typed number:
   Currently:
 
   <!-- wj:gen name=metric key=interpreter.features_supported -->
-40
+41
   <!-- wj:end -->
 
   supported entries, and
 
   <!-- wj:gen name=metric key=interpreter.features_unsupported -->
-2
+3
   <!-- wj:end -->
 
   entries that must fail with "unsupported".
@@ -148,6 +148,7 @@ Generated from the registry (do not edit; change `src/interpreter/features.rs`):
 - **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability; `RefCell` borrow tracking with Rust's `BorrowMutError` panic; moves decide where destructors run: into collections, aggregates, `let`, partial moves, callee parameters
 - **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`); `thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings); `mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone; `Arc<Mutex>`/`RwLock` guards (released at scope end), `Condvar`, `Barrier`, atomics; deadlocks are reported
 - **Intrinsics**: `assert`, `assert_eq`, `panic`, `todo`, `debug`
+- **Modules**: multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603)
 - **Std modules**: `Duration`, `Instant`, `SystemTime`, `std::time::DateTime` (chrono formats); `std::json` dynamic values and typed `to_string`/`parse_string::<T>`; `std::regex` (same engine as compiled programs); `std::fs` files, directories (`read_dir`, `metadata`), path helpers; `csv`, `url`, `mime`, `crypto` (sha/base64/bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`; `std::http` client and servers (`serve`, `serve_fn`, `Server::serve`) behind a capability port: refused by default, `--mock-http FILE` replays responses/requests, `--allow-network` uses real sockets; `std::config` (toml/yaml, same code as the runtime), `std::db` on SQLite, `std::subprocess` pipes, `std::cli` (clap)
 <!-- wj:end -->
 
@@ -181,8 +182,9 @@ location after consuming it, so the reported line can be the line after the fail
 `unsupported in the interpreter: ...` and exit 2:
 
 <!-- wj:gen name=interpreter_unsupported -->
+- **Modules**: two types with the same name in different modules (the interpreter keys types by name)
 - **Concurrency**: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)
-- **FFI**: calls to `extern fn`
+- **FFI**: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0023)
 <!-- wj:end -->
 
 Other unimplemented built-ins (for example std modules such as `http`, `json`, `ui`) fail the same way, with the name of the missing function.

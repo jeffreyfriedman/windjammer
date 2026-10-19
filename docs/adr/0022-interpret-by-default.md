@@ -1,3 +1,7 @@
+---
+status: accepted
+last_verified: 5809fb56e863
+---
 # ADR-0022: `wj run` interprets by default; compiled is the release path
 
 - **Status:** Accepted (2026-10-11)
@@ -18,7 +22,7 @@ identical behaviour.
    There is no second resolver to drift.
 2. **Project discovery like go.** `wj run` with no path finds `wj.toml` upward and runs the default binary;
    `wj run DIR` runs `DIR/main.wj` or `DIR/src/main.wj`; `--bin NAME` selects `[[bin]]`, `cmd/NAME/main.wj` or
-   `src/bin/NAME.wj`. Arguments pass through, the exit status is the program's (101 panic, N for `process::exit(N)`),
+   a file named after NAME in `src/bin/`. Arguments pass through, the exit status is the program's (101 panic, N for `process::exit(N)`),
    stdin is inherited. Shared by both paths (`module_system::project`).
 3. **Interpret by default, fall back loudly.** `wj run` interprets. When the program uses a feature the interpreter
    does not run (an `Unsupported` entry of `src/interpreter/features.rs`), the **preflight** detects it at load time,

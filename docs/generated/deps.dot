@@ -146,34 +146,39 @@ digraph deps {
   "cargo_toml" -> "config" [label="8"];
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="2"];
-  "check" -> "diagnostics" [label="15"];
+  "check" -> "diagnostics" [label="17"];
   "check" -> "fuzzy_matcher" [label="2"];
-  "check" -> "intrinsics" [label="1"];
+  "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="3"];
   "check" -> "lexer" [label="1"];
   "check" -> "linter" [label="1"];
   "check" -> "metadata" [label="1"];
-  "check" -> "parser" [label="11"];
+  "check" -> "parser" [label="14"];
   "check" -> "resolve" [label="1"];
   "check" -> "source_map" [label="2"];
-  "check" -> "type_classification" [label="1"];
+  "check" -> "type_classification" [label="3"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="7"];
+  "cli" -> "cargo_cache" [label="8"];
+  "cli" -> "cargo_toml" [label="2"];
   "cli" -> "check" [label="2"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="2"];
   "cli" -> "compiler_config" [label="2"];
-  "cli" -> "config" [label="2"];
+  "cli" -> "config" [label="3"];
+  "cli" -> "debug_env" [label="1"];
   "cli" -> "diagnostics" [label="11"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
   "cli" -> "formatter" [label="1"];
+  "cli" -> "interpreter" [label="6"];
   "cli" -> "intrinsics" [label="1"];
   "cli" -> "ir" [label="2"];
   "cli" -> "lexer" [label="4"];
-  "cli" -> "linter" [label="3"];
-  "cli" -> "parser" [label="4"];
+  "cli" -> "linter" [label="4"];
+  "cli" -> "module_system" [label="5"];
+  "cli" -> "package" [label="4"];
+  "cli" -> "parser" [label="5"];
   "cli" -> "source_map" [label="4"];
   "cli" -> "test_runner" [label="1"];
   "cli" -> "wjsl" [label="1"];
@@ -205,7 +210,7 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="632"];
+  "codegen" -> "analyzer" [label="631"];
   "codegen" -> "auto_clone" [label="7"];
   "codegen" -> "compiler" [label="7",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
@@ -218,13 +223,13 @@ digraph deps {
   "codegen" -> "ir" [label="370"];
   "codegen" -> "lexer" [label="23"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="668"];
+  "codegen" -> "parser" [label="669"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "source_map" [label="11"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
   "codegen" -> "type_classification" [label="239"];
-  "codegen" -> "type_inference" [label="61"];
+  "codegen" -> "type_inference" [label="62"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
   "compilation_error_handling" -> "parser" [label="1"];
@@ -243,6 +248,7 @@ digraph deps {
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
   "compiler" -> "metadata" [label="45"];
+  "compiler" -> "module_system" [label="1"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "parser" [label="83"];
   "compiler" -> "project_paths" [label="9"];
@@ -326,15 +332,15 @@ digraph deps {
   "inference" -> "parser" [label="6"];
   "inference" -> "test_utils" [label="1"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "lexer" [label="1"];
-<<<<<<< HEAD
-  "interpreter" -> "parser" [label="71"];
-  "interpreter" -> "source_map" [label="7"];
-=======
-  "interpreter" -> "parser" [label="63"];
-  "interpreter" -> "source_map" [label="4"];
+  "interpreter" -> "lexer" [label="3"];
+  "interpreter" -> "module_system" [label="6"];
+  "interpreter" -> "package" [label="1"];
+  "interpreter" -> "parser" [label="83"];
+  "interpreter" -> "resolve" [label="12"];
+  "interpreter" -> "source_map" [label="8"];
   "interpreter" -> "stdlib_surface" [label="1"];
->>>>>>> next/v0.50.0
+  "interpreter" -> "test_module_gate" [label="1"];
+  "interpreter" -> "type_display" [label="1"];
   "intrinsics" -> "error_catalog" [label="2"];
   "ir" -> "analyzer" [label="59"];
   "ir" -> "auto_clone" [label="1"];
@@ -359,7 +365,9 @@ digraph deps {
   "metadata" -> "compiler" [label="1",color=red,fontcolor=red];
   "metadata" -> "parser" [label="20"];
   "metadata" -> "type_classification" [label="2"];
-  "module_system" -> "test_module_gate" [label="1"];
+  "module_system" -> "project_paths" [label="1"];
+  "module_system" -> "resolve" [label="1"];
+  "module_system" -> "test_module_gate" [label="2"];
   "output_generation" -> "analyzer" [label="1"];
   "output_generation" -> "cargo_toml" [label="1"];
   "output_generation" -> "codegen" [label="4"];
@@ -374,13 +382,8 @@ digraph deps {
   "output_generation" -> "project_paths" [label="1"];
   "package" -> "config" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
-<<<<<<< HEAD
-  "parser" -> "lexer" [label="24"];
-  "parser" -> "parser_impl" [label="21"];
-=======
   "parser" -> "lexer" [label="27"];
   "parser" -> "parser_impl" [label="25"];
->>>>>>> next/v0.50.0
   "parser" -> "source_map" [label="2"];
   "parser_impl" -> "lexer" [label="4"];
   "parser_impl" -> "parser" [label="4"];
