@@ -118,6 +118,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `let mut xs = Vec::new()` for a local that is not returned: the function's return type says nothing about it,
+    /// so the `Vec::<Return>::new()` turbofish must not be emitted (the element type follows from the pushes).
+    fn unreturned_empty_collection_local(&self, var_name: Option<&str>, value: &Expression<'ast>) -> bool {
+        var_name.is_some_and(|vn| !self.local_is_returned(vn))
+            && crate::codegen::rust::call_site_borrow::expression_is_stdlib_empty_default_constructor(value)
+    }
+
     /// True when `name` is the tail expression of the current function body or the value of a `return`.
     fn local_is_returned(&self, name: &str) -> bool {
         fn is_name(e: &Expression<'_>, name: &str) -> bool {
@@ -790,7 +797,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = true;
 
                 let old_suppress = self.suppress_collection_turbofish;
-                if needs_collection_ascription_sv {
+                if needs_collection_ascription_sv || self.unreturned_empty_collection_local(var_name, value) {
                     self.suppress_collection_turbofish = true;
                 }
 
@@ -1208,7 +1215,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = true;
 
                 let old_suppress = self.suppress_collection_turbofish;
-                if needs_collection_ascription {
+                if needs_collection_ascription || self.unreturned_empty_collection_local(var_name, value) {
                     self.suppress_collection_turbofish = true;
                 }
 
