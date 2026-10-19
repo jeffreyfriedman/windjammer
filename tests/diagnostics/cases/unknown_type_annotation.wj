@@ -1,0 +1,5 @@
+// expect: WJ0005
+fn main() {
+    let bad: Widget = 5
+    println("${bad}")
+}

@@ -12,6 +12,7 @@ pub struct StructInfo {
 
 pub struct FnInfo {
     pub params: Vec<Type>,
+    pub ret: Option<Type>,
     pub generic: bool,
 }
 
@@ -36,6 +37,8 @@ pub struct Index {
     pub variants: HashMap<String, Vec<String>>,
     /// Types with a `Display` impl (usable in `${x}`).
     pub display: HashSet<String>,
+    /// Every generic parameter / associated type name declared anywhere in the project.
+    pub generic_names: HashSet<String>,
 }
 
 /// Methods of std traits commonly implemented by hand, plus those every value has.
@@ -86,6 +89,7 @@ fn fn_info(d: &FunctionDecl<'_>) -> FnInfo {
         .collect();
     FnInfo {
         params,
+        ret: d.return_type.clone(),
         generic: !d.type_params.is_empty() || d.parameters.iter().any(|p| p.pattern.is_some()),
     }
 }
@@ -126,6 +130,37 @@ impl Index {
         }
     }
 
+    fn add_generics(&mut self, item: &Item<'_>) {
+        let mut put = |tp: &[crate::parser::TypeParam]| {
+            for t in tp {
+                self.generic_names.insert(t.name.clone());
+            }
+        };
+        match item {
+            Item::Function { decl, .. } => put(&decl.type_params),
+            Item::Struct { decl, .. } => put(&decl.type_params),
+            Item::Enum { decl, .. } => put(&decl.type_params),
+            Item::Impl { block, .. } => {
+                put(&block.type_params);
+                for f in &block.functions {
+                    put(&f.type_params);
+                }
+                for a in &block.associated_types {
+                    self.generic_names.insert(a.name.clone());
+                }
+            }
+            Item::Trait { decl, .. } => {
+                for g in &decl.generics {
+                    self.generic_names.insert(g.clone());
+                }
+                for a in &decl.associated_types {
+                    self.generic_names.insert(a.name.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn add_impl(&mut self, block: &crate::parser::ImplBlock<'_>) {
         let ty = block.type_name.split('<').next().unwrap_or("").trim().to_string();
         let blanket = block.type_params.iter().any(|t| t.name == ty);
@@ -152,6 +187,7 @@ impl Index {
 
     fn add_items(&mut self, items: &[Item<'_>]) {
         for item in items {
+            self.add_generics(item);
             match item {
                 Item::Struct { decl, .. } => {
                     self.types.insert(decl.name.clone());

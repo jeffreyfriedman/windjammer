@@ -1,0 +1,7 @@
+error[WJ0030]: enum `Shape` has no variant named `Triangle`
+  --> unknown_enum_variant.wj:8:20
+  |
+8 |     let s = Shape::Triangle(3)
+  |                    ^^^^^^^^ no such variant
+  = help: `Shape` has the variants: Circle, Square
+  = explain: wj explain WJ0030
