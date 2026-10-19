@@ -76,19 +76,10 @@ fn write_lock(root: &Path, entries: &BTreeMap<String, LockEntry>) -> std::io::Re
     std::fs::write(root.join(LOCKFILE), s)
 }
 
-/// Cache directory for git checkouts (`$WJ_HOME/git` or the platform cache dir).
+/// Cache directory for git checkouts: `git/` under the platform cache root (`cargo_cache::cache_root`, which
+/// `WJ_CARGO_TARGET_ROOT` overrides). The environment is read there, not here.
 pub fn git_cache_dir() -> PathBuf {
-    if let Ok(h) = std::env::var("WJ_HOME") {
-        return PathBuf::from(h).join("git");
-    }
-    let base = std::env::var("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|_| std::env::var("HOME").map(|h| {
-            let mac = PathBuf::from(&h).join("Library/Caches");
-            if mac.is_dir() { mac } else { PathBuf::from(h).join(".cache") }
-        }))
-        .unwrap_or_else(|_| std::env::temp_dir());
-    base.join("windjammer").join("git")
+    crate::cargo_cache::cache_root().join("git")
 }
 
 fn git(args: &[&str], dir: Option<&Path>) -> Result<String, String> {
