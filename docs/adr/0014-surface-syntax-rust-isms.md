@@ -48,3 +48,10 @@ and all dogfood repos are migrated by `wj fix`; formatter normalises to the new 
   span + replacement. `wj fix [--check] [--docs] <path>` (script: `scripts/wj-fix-surface.sh`) is idempotent and
   never guesses: `vec![..]` in call-argument/assignment position and dynamic `{:w$}` specs are reported for manual
   migration. See `docs/design/surface-syntax.md`.
+
+## Shadowing (2026-10-19)
+An intrinsic is a name the language provides when nothing else binds it. A user definition, a local, or a function a `use`
+brings into scope (`use std::log::debug`, `use std::log::{debug, info}`, `use std::log::*`) shadows the intrinsic of the
+same name, in the Rust lowering (`IdiomScratch::imported_std_fn_names`) and in the interpreter (`module_binds_name`). Gates:
+`tests/ecosystem_findings2_test.rs::glob_imported_log_debug_is_the_module_function_not_the_intrinsic`,
+`tests/ecosystem_findings2_interp_test.rs::imported_std_function_shadows_the_intrinsic_of_the_same_name`.

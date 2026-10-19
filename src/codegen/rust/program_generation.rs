@@ -44,7 +44,7 @@ fn is_fn_import_name(name: &str) -> bool {
 
 /// Parser stores `use http::{json_cors_error, ServerResponse}` as one segment
 /// (`"http::{json_cors_error, ServerResponse}"`).
-fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
+pub(super) fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
     let (module, rest) = seg.split_once("::{")?;
     let inner = rest.strip_suffix('}')?;
     if module.is_empty() {

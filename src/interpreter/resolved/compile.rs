@@ -677,7 +677,8 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             let label = label.clone();
             Box::new(move |_, _| Err(Ctl::Continue(Box::new(label.clone()))))
         }
-        Statement::Use { .. } => Box::new(|_, _| Ok(Value::Unit)),
+        // a function-body `use` binds names at run time: the walker runs such functions
+        Statement::Use { .. } => return None,
         Statement::Match { value, arms, .. } => super::matching::match_stmt(cx, value, arms)?,
         _ => return None,
     };

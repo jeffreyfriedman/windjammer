@@ -203,6 +203,9 @@ impl Interpreter {
             let local = alias.map(|s| s.to_string()).unwrap_or_else(|| segs.last().unwrap().clone());
             if local != "*" {
                 self.modules[module].imports.insert(local, Import::Std(segs.join("::")));
+            } else {
+                segs.pop();
+                self.modules[module].std_globs.push(segs.join("::"));
             }
             return Ok(());
         }
@@ -294,5 +297,47 @@ impl Interpreter {
         for (n, m) in kids {
             self.modules[into].imports.entry(n).or_insert(Import::Module(m));
         }
+    }
+}
+
+impl Interpreter {
+    /// A `use` inside a function body: the rest of the running call sees the new name. The import lives in a
+    /// module of its own (one per statement) that falls back to the enclosing module for everything else.
+    pub(crate) fn bind_body_use(
+        &mut self,
+        stmt: &'static crate::parser::Statement<'static>,
+        path: &'static [String],
+        alias: Option<&'static str>,
+    ) -> Result<(), RuntimeError> {
+        let cur = self.scope.module;
+        let key = (cur, stmt as *const _ as usize);
+        let m = match self.body_use_modules.get(&key) {
+            Some(&m) => m,
+            None => {
+                let (name, file, parent) = {
+                    let c = &self.modules[cur];
+                    (c.name.clone(), c.file.clone(), c.parent)
+                };
+                let m = self.new_module(&name, file, parent);
+                // a snapshot of what the module binds (statics stay in the module: `fallback`)
+                let (funcs, imports, children, globs) = {
+                    let c = &self.modules[cur];
+                    (c.funcs.clone(), c.imports.clone(), c.children.clone(), c.std_globs.clone())
+                };
+                let o = &mut self.modules[m];
+                (o.funcs, o.imports, o.children, o.std_globs) = (funcs, imports, children, globs);
+                o.fallback = Some(cur);
+                // `self::x` / `super::x` in the path mean the enclosing module's, not this overlay's
+                let was_loading = std::mem::replace(&mut self.project_loading, false);
+                let r = self.register_use(m, path, alias);
+                self.project_loading = was_loading;
+                r?;
+                self.call_cache.clear();
+                self.body_use_modules.insert(key, m);
+                m
+            }
+        };
+        self.scope.module = m;
+        Ok(())
     }
 }

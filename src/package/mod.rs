@@ -4,6 +4,7 @@
 //! (ADR-0010, WJ-PKG-01): the earlier stubs made no network calls and were removed.
 
 pub mod graph;
+pub mod path_deps;
 pub mod manifest;
 
 pub use manifest::{Dependency, PackageManifest};

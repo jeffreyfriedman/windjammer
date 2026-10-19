@@ -95,3 +95,20 @@ impl StdStubs {
         Cow::Owned(out)
     }
 }
+
+/// A standard-library function's formals are the runtime's (`server_serve(address: String, ..)`): a caller passing a
+/// bare local says nothing about how the runtime function takes it, and the `std/<mod>.wj` stub's empty body would
+/// otherwise be demoted to a borrow by bare-pass demotion. A bare name (glob import) counts when the programs define
+/// no function of that name besides the stub.
+pub(crate) fn runtime_owns_formals(callee_key: &str, sig: &FunctionSignature, programs: &[&crate::parser::Program]) -> bool {
+    let runtime = crate::codegen::rust::runtime_signatures::runtime_signature(callee_key).or_else(|| {
+        let bare = !callee_key.contains("::");
+        let defs = programs
+            .iter()
+            .flat_map(|p| p.items.iter())
+            .filter(|i| matches!(i, crate::parser::Item::Function { decl, .. } if decl.name == callee_key))
+            .count();
+        (bare && defs <= 1).then(|| SignatureRegistry::stdlib().find_unique_signature_ending_with(callee_key)).flatten()
+    });
+    runtime.is_some_and(|r| sig.param_types.len() == r.param_types.len())
+}

@@ -183,7 +183,7 @@ fn register_fs(r: &mut Registry) {
     r.func("fs::is_absolute", |_, a| Ok(Value::Bool(Path::new(arg_str(&a, 0, "is_absolute")?.as_str()).is_absolute())));
     r.func("fs::is_relative", |_, a| Ok(Value::Bool(Path::new(arg_str(&a, 0, "is_relative")?.as_str()).is_relative())));
     r.func("path::glob_match", |_, a| {
-        Ok(Value::Bool(glob_match(arg_str(&a, 0, "glob_match")?.as_bytes(), arg_str(&a, 1, "glob_match")?.as_bytes())))
+        Ok(Value::Bool(glob_match(arg_str(&a, 0, "glob_match")?.as_str(), arg_str(&a, 1, "glob_match")?.as_str())))
     });
     r.native("DirEntry", "path", |_, v, _| Ok(s(&entry(v)?.path)));
     for n in ["name", "file_name"] {
@@ -457,14 +457,32 @@ fn level_of(v: &str) -> Option<i32> {
     }
 }
 
-fn glob_match(p: &[u8], t: &[u8]) -> bool {
-    match (p.first(), t.first()) {
-        (None, None) => true,
-        (Some(b'*'), _) => glob_match(&p[1..], t) || (!t.is_empty() && glob_match(p, &t[1..])),
-        (Some(b'?'), Some(_)) => glob_match(&p[1..], &t[1..]),
-        (Some(a), Some(b)) if a == b => glob_match(&p[1..], &t[1..]),
-        _ => false,
+/// Shell-style glob, the algorithm of `windjammer_runtime::path::glob_match`: `*` / `?` stay inside a path
+/// segment, `**` spans segments, `/` and `\\` both separate, empty and `.` segments are dropped.
+fn glob_match(pattern: &str, path: &str) -> bool {
+    fn segments(s: &str) -> Vec<&str> {
+        s.split(['/', '\\']).filter(|p| !p.is_empty() && *p != ".").collect()
     }
+    fn chars(p: &[u8], t: &[u8]) -> bool {
+        match (p.split_first(), t.split_first()) {
+            (None, None) => true,
+            (None, Some(_)) => false,
+            (Some((b'*', rest)), _) => chars(rest, t) || t.split_first().is_some_and(|(_, tail)| chars(p, tail)),
+            (Some((b'?', rest)), Some((_, tail))) => chars(rest, tail),
+            (Some((a, rest)), Some((b, tail))) if a == b => chars(rest, tail),
+            _ => false,
+        }
+    }
+    fn segs(p: &[&str], t: &[&str]) -> bool {
+        match (p.split_first(), t.split_first()) {
+            (None, None) => true,
+            (None, Some(_)) => false,
+            (Some((&"**", rest)), _) => segs(rest, t) || t.split_first().is_some_and(|(_, tail)| segs(p, tail)),
+            (Some((pat, rest)), Some((seg, tail))) => chars(pat.as_bytes(), seg.as_bytes()) && segs(rest, tail),
+            (Some(_), None) => false,
+        }
+    }
+    segs(&segments(pattern), &segments(path))
 }
 
 fn run_command(program: &str, args: &[String]) -> R {
