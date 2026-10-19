@@ -43,7 +43,7 @@ def _pilot(a):
         return 3
     guard = BU.BudgetGuard(a.budget_usd, a.max_trials, est["per_trial_expected"])
     agent = PL.ClaudeAgent(a.model, a.max_turns, a.max_trial_usd)
-    r = PL.run_pilot(agent, tasks, arms, a.trials, a.out, guard)
+    r = PL.run_pilot(agent, tasks, arms, a.trials, a.out, guard, workers=a.workers)
     print(json.dumps(r))
     return 4 if r["aborted_reason"] else 0
 
@@ -80,6 +80,7 @@ def main(argv=None):
     pl.add_argument("--max-trials", type=int, default=BU.PILOT_MAX_TRIALS)
     pl.add_argument("--max-trial-usd", type=float, default=2.0)
     pl.add_argument("--out", default="results/pilot")
+    pl.add_argument("--workers", type=int, default=2)
     pl.add_argument("--yes", action="store_true", help="proceed after the estimate is printed")
     pl.add_argument("--estimate-only", action="store_true")
     pr = sub.add_parser("pilot-report")

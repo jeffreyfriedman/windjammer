@@ -151,22 +151,39 @@ def load_trials(out_dir):
     return [json.load(open(os.path.join(d, n))) for n in sorted(os.listdir(d)) if n.endswith(".json")]
 
 
-def run_pilot(agent, tasks, arm_ids, trials, out_dir, guard, grader=default_grader, real_wj=None, say=print):
-    """Run the plan; stop (return the reason) when the guard trips. Skips trials already recorded (resume)."""
-    done, reason = [], None
-    for prev in load_trials(out_dir):   # resumed runs count against the same budget and trial ceiling
-        guard.record((prev.get("usage") or {}).get("cost_usd"))
-    for task, arm, k in plan(tasks, arm_ids, trials):
-        if os.path.exists(os.path.join(out_dir, "trials", f"{task}.{arm}.{k}.json")):
-            continue
+def run_pilot(agent, tasks, arm_ids, trials, out_dir, guard, grader=default_grader, real_wj=None, say=print, workers=1):
+    """Run the plan; stop (return the reason) when the guard trips. Resumed runs count earlier trials."""
+    from concurrent.futures import ThreadPoolExecutor
+    for prev in load_trials(out_dir):
+        guard.count += 1
+        guard.spent += (prev.get("usage") or {}).get("cost_usd") or 0.0
+    todo = [(t, a, k) for t, a, k in plan(tasks, arm_ids, trials)
+            if not os.path.exists(os.path.join(out_dir, "trials", f"{t}.{a}.{k}.json"))]
+    done, reasons = [], []
+
+    def one(item):
+        task, arm, k = item
         try:
             guard.before_trial()
         except B.BudgetExceeded as e:
-            reason = str(e)
-            break
-        tr = run_trial(task, arm, agent, k, out_dir, grader, real_wj)
+            reasons.append(str(e))
+            return None
+        try:
+            tr = run_trial(task, arm, agent, k, out_dir, grader, real_wj)
+        except BaseException:
+            guard.record(None)
+            raise
         guard.record(tr["usage"]["cost_usd"])
         done.append(save(tr, out_dir))
         say(f"{task} arm={arm} trial={k} pass={tr['pass_final']} turns={tr['usage']['turns']} "
             f"cost={tr['usage']['cost_usd']} spent=${guard.spent:.2f}")
-    return {"completed": len(done), "aborted_reason": reason, "spent_usd": round(guard.spent, 4)}
+        return tr
+    if workers <= 1:
+        for it in todo:
+            one(it)
+            if reasons:
+                break
+    else:
+        with ThreadPoolExecutor(workers) as ex:
+            list(ex.map(one, todo))
+    return {"completed": len(done), "aborted_reason": reasons[0] if reasons else None, "spent_usd": round(guard.spent, 4)}
