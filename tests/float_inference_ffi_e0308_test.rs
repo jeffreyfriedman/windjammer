@@ -60,7 +60,7 @@ fn main() {
 "#;
     compile_and_assert(source, |rust_code| {
         assert!(
-            rust_code.contains("1.0_f64") && rust_code.contains("2.0_f64"),
+            rust_code.contains("1.0_f32") && rust_code.contains("2.0_f32"),
             "extern fn with f32 params should infer f32 for literals, got:\n{}",
             rust_code
         );
