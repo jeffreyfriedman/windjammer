@@ -134,10 +134,10 @@
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
 "src/cli_project_build.rs::build_project_single_crate" = 456
-"src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 656
-"src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1235
+"src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 647
+"src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1229
 "src/codegen/rust/block_generation.rs::generate_block" = 336
-"src/codegen/rust/block_generation.rs::generate_block_expr" = 520
+"src/codegen/rust/block_generation.rs::generate_block_expr" = 518
 "src/codegen/rust/call_expression_generation/argument_generation/regular_call_arguments.rs::collect_regular_function_arguments" = 905
 "src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 754
 "src/codegen/rust/call_expression_generation/trait_call_generation.rs::generate_call_on_field_access" = 704
