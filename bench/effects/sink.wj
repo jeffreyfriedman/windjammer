@@ -1,0 +1,15 @@
+use std::fs
+use std::random
+use std::time
+fn work(n: int) -> int {
+    let mut hits = 0
+    let mut i = 0
+    while i < n {
+        if fs::exists(".") { hits += 1 }
+        hits += random::range(0, 1)
+        let t = time::now_millis()
+        i += 1
+    }
+    hits
+}
+fn main() { println("${work(30000)}") }

@@ -196,6 +196,12 @@ path = "tests/effects_escape_test.rs"
 name = "effects_compiled"
 path = "tests/effects_compiled_test.rs"
 
+# Every OS-touching runtime function reaches a capability check (ADR-0021)
+#   cargo test --release --test effects_runtime_audit
+[[test]]
+name = "effects_runtime_audit"
+path = "tests/effects_runtime_audit_test.rs"
+
 # One table of capability vectors, every implementation (Rust model, JS runtime, Go runtime)
 #   cargo test --release --test effects_vectors
 [[test]]
