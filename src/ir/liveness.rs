@@ -153,7 +153,12 @@ impl Collector {
                 self.stmt(statement);
                 self.closure_depth -= 1;
             }
-            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+            Statement::Break { value, .. } => {
+                if let Some(v) = value {
+                    self.expr(v);
+                }
+            }
+            Statement::Continue { .. } | Statement::Use { .. } => {}
         }
     }
 
