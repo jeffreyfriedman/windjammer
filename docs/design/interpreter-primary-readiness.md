@@ -1,5 +1,6 @@
 ---
-status: proposal
+status: current
+last_verified: 93be4d01a81f
 ---
 # When can the interpreter be the primary development loop?
 
