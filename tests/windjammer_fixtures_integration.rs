@@ -35,6 +35,9 @@ fn shared_fixture_target_dir() -> PathBuf {
         .join("wj_fixture_verify")
 }
 
+/// Set once a fixture's cargo run has completed (the shared target then holds the runtime build).
+static FIXTURE_TARGET_WARM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Serialize fixture cargo invocations to avoid lock-file contention.
 static FIXTURE_SUITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -123,21 +126,26 @@ path = "tests/generated_fixture.rs"
     fs::write(root.join("Cargo.toml"), cargo_toml).unwrap();
 
     let shared_target = shared_fixture_target_dir();
+    // Output goes to files, not pipes: an undrained pipe blocks cargo once it fills (a spurious "timeout").
+    let (out_path, err_path) = (root.join("cargo.stdout"), root.join("cargo.stderr"));
     let mut child = Command::new("cargo")
         .current_dir(root)
         .env("CARGO_TARGET_DIR", &shared_target)
         .args(["test", "--test", "generated_fixture"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::from(fs::File::create(&out_path).unwrap()))
+        .stderr(Stdio::from(fs::File::create(&err_path).unwrap()))
         .spawn()
         .unwrap_or_else(|e| panic!("failed to spawn cargo test: {e}"));
 
+    // The timeout is a hang guard for the fixture itself. The first run in a process also compiles
+    // windjammer-runtime into the shared target (minutes on a loaded machine), so it is not timed.
+    let warm = FIXTURE_TARGET_WARM.load(std::sync::atomic::Ordering::SeqCst);
     let deadline = Instant::now() + FIXTURE_TIMEOUT;
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
             Ok(None) => {
-                if Instant::now() >= deadline {
+                if warm && Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
                     panic!(
@@ -152,15 +160,15 @@ path = "tests/generated_fixture.rs"
         }
     }
 
-    let output = child.wait_with_output()
-        .unwrap_or_else(|e| panic!("failed to collect output: {e}"));
+    let status = child.wait().unwrap_or_else(|e| panic!("failed to wait for cargo test: {e}"));
+    FIXTURE_TARGET_WARM.store(true, std::sync::atomic::Ordering::SeqCst);
 
-    if output.status.success() {
+    if status.success() {
         return;
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = fs::read_to_string(&out_path).unwrap_or_default();
+    let stderr = fs::read_to_string(&err_path).unwrap_or_default();
     panic!(
         "cargo test failed for fixture {}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}",
         src_path.display()
