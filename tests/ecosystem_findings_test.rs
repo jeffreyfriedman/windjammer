@@ -379,3 +379,16 @@ fn test_file_let_annotation_does_not_need_type_import() {
     let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     assert!(o.status.success(), "wj test failed:\n{text}");
 }
+
+/// E11: `wj test --interpret` binds `use crate::item` in `tests/` to `src/lib.wj`.
+#[test]
+fn interpreted_package_test_imports_from_lib() {
+    let dir = write_project(&[
+        ("wj.toml", "[package]\nname = \"ipkg\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[lib]\n\n[dependencies]\n"),
+        ("src/lib.wj", "pub fn add(a: int, b: int) -> int { a + b }\n"),
+        ("tests/a_test.wj", "use crate::add\n\n@test\nfn test_add() {\n    assert_eq(add(1, 2), 3)\n}\n"),
+    ]);
+    let o = Command::new(WJ).args(["test", "--interpret"]).current_dir(dir.path()).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(o.status.success() && text.contains("1 passed"), "interpreted wj test failed:\n{text}");
+}
