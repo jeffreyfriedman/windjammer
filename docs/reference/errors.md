@@ -18,6 +18,8 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `WJ0008` | Cannot borrow as mutable | Proven | E0502, E0503 | You're trying to borrow a value as mutable, but it's already borrowed as immutable, or vice versa |
 | `WJ0009` | Missing field in struct | Proven | E0063 | When creating a struct, you must provide values for all fields |
 | `WJ0010` | Pattern match not exhaustive | Proven | E0004 | Your match expression doesn't cover all possible cases |
+| `WJ0160` | Arena value escapes its arena | HighConfidence | E0597, E0505 | A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function that declares the arena, stored in a variable, field or collection declared outside the arena's scope, used as the value of the block that declares the arena, or used after the arena's `reset()` |
+| `WJ0161` | `std::arena` is unstable | Proven |  | Arenas (ADR-0025) are behind the compiler feature `unstable_arenas` |
 
 ## Error catalog (translated rustc and intrinsic codes)
 

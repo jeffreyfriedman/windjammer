@@ -80,6 +80,7 @@ pub fn run(cli: Cli) -> Result<()> {
             mock_http,
             sandbox,
             allow,
+            caps,
             defer_drop,
             defer_drop_threshold,
         } => {
@@ -103,7 +104,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 "walker" => false,
                 other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
             };
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint) });
             if code != 0 {
                 std::process::exit(code);
@@ -222,11 +223,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::agent_index::docs_search::run_cli(&query.join(" "), limit, json)
             }
         }
-        Commands::ExplainOwnership {
-            file,
-            function,
-            json,
-        } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
+        Commands::ExplainOwnership { file, function, json } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
         Commands::ExplainEffects { path, function, json } => windjammer::cli::explain_effects::execute(&path, function.as_deref(), json)?,
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {

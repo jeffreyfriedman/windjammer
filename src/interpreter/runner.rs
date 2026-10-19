@@ -62,6 +62,8 @@ pub struct RunOptions {
     pub sandbox: bool,
     /// `--allow EFFECT[=RESOURCE]` (repeatable).
     pub allow: Vec<String>,
+    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given.
+    pub caps_mode: String,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -128,7 +130,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         } else if opts.allow_network {
             it.set_http_mode(super::builtins::std_http::HttpMode::Real);
         }
-        match super::caps::gate_for_run(&entry, opts.sandbox, &opts.allow, opts.allow_network) {
+        match super::caps::gate_for_run(&entry, opts.sandbox, &opts.allow, opts.allow_network, &opts.caps_mode) {
             Ok(gate) => it.set_caps(gate),
             Err(m) => {
                 eprintln!("error: {m}");

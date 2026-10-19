@@ -26,6 +26,12 @@ pub fn execute(path: &Path, function: Option<&str>, json: bool) -> Result<()> {
     let inputs: Vec<ParsedFile<'_>> = programs.iter().map(|(m, f, p)| ParsedFile::new(m.clone(), f.clone(), p)).collect();
     let r = resolve::resolve_program(&inputs);
     let facts = analyze(&r);
+    if let Some(name) = function {
+        let matches = |p: &str| p == name || p.ends_with(&format!("::{name}"));
+        if !facts.fns.values().any(|f| matches(&f.path) && r.collected.decls.contains_key(&f.def)) {
+            bail!("no function named `{name}`");
+        }
+    }
     let grant = nearest_manifest(base).and_then(|(dir, text)| grant_from_manifest_text(&text, &dir).ok().flatten());
     if json {
         println!("{}", serde_json::to_string_pretty(&report::to_json(&r, &facts, grant.as_ref()))?);

@@ -1,0 +1,94 @@
+# Acceptance cases for effects and capabilities (ADR-0021): `wj explain-effects`, `wj run --sandbox/--allow`.
+
+[[case]]
+name = "explain-effects shows the effect, the chain to the sink and the rule"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\n\nfn load() -> string {\n    fs::read_to_string(\"cfg.toml\").unwrap_or(\"\")\n}\n\nfn main() {\n    println(load())\n}\n" }
+args = ["explain-effects", "{w}/m.wj"]
+stdout_has = ["load: fs.read", "main: console, fs.read", "main -> load -> fs::read_to_string", "SPEC-EFF-002"]
+
+[[case]]
+name = "explain-effects reports a parse error"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["explain-effects", "{w}/m.wj"]
+exit = 1
+output_has = ["Expected parameter name"]
+
+[[case]]
+name = "explain-effects --fn limits output to one function"
+polarity = "positive"
+files = { "m.wj" = "use std::random\n\nfn roll() -> int {\n    random::range(1, 7)\n}\n\nfn main() {\n    println(\"${roll()}\")\n}\n" }
+args = ["explain-effects", "{w}/m.wj", "--fn", "roll"]
+stdout_has = ["roll: random"]
+output_lacks = ["main:"]
+
+[[case]]
+name = "explain-effects --fn rejects an unknown function"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["explain-effects", "{w}/m.wj", "--fn", "nope"]
+exit = 1
+output_has = ["no function named `nope`"]
+
+[[case]]
+name = "explain-effects --json lists functions and their effects"
+polarity = "positive"
+files = { "m.wj" = "use std::random\n\nfn roll() -> int {\n    random::range(1, 7)\n}\n\nfn main() {\n    println(\"${roll()}\")\n}\n" }
+args = ["explain-effects", "{w}/m.wj", "--json"]
+json = true
+stdout_has = ["\"function\": \"roll\"", "\"effect\": \"random\""]
+
+[[case]]
+name = "run --sandbox stops a program that reads a file with exit status 126"
+polarity = "negative"
+covers = ["wj run --sandbox"]
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    println(\"start\")\n    let r = fs::read_to_string(\"/etc/hosts\")\n    println(\"leaked ${r.is_ok()}\")\n}\n" }
+args = ["run", "--interpret", "--sandbox", "{w}/m.wj"]
+exit = 126
+stdout_has = ["start"]
+output_has = ["capability denied: fs.read(/etc/hosts)", "--allow fs.read=/etc/hosts"]
+output_lacks = ["leaked"]
+
+[[case]]
+name = "run --sandbox still allows pure computation, time and random"
+polarity = "positive"
+covers = ["wj run --sandbox"]
+files = { "m.wj" = "use std::random\n\nfn main() {\n    let n = random::range(0, 10)\n    println(\"ok ${n < 10}\")\n}\n" }
+args = ["run", "--interpret", "--sandbox", "{w}/m.wj"]
+stdout_has = ["ok true"]
+
+[[case]]
+name = "run --allow grants one effect to a sandboxed run"
+polarity = "positive"
+covers = ["wj run --allow"]
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    println(\"exists ${fs::exists(\"/etc/hosts\")}\")\n}\n" }
+args = ["run", "--interpret", "--sandbox", "--allow", "fs.read=/etc/hosts", "{w}/m.wj"]
+stdout_has = ["exists true"]
+
+[[case]]
+name = "run --allow rejects an unknown effect name"
+polarity = "negative"
+covers = ["wj run --allow"]
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--allow", "net.conect=x", "{w}/m.wj"]
+exit = 1
+output_has = ["unknown effect `net.conect`"]
+
+[[case]]
+name = "a wj.toml [capabilities] table is enforced by wj run"
+polarity = "negative"
+covers = ["wj run --allow"]
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[capabilities]\nnet.connect = [\"api.example.com\"]\n", "src/main.wj" = "use std::http\n\nfn main() {\n    let r = http::get(\"http://other.example/\")\n    println(\"done ${r.is_ok()}\")\n}\n" }
+args = ["run", "--interpret", "{w}"]
+exit = 126
+output_has = ["capability denied: net.connect(other.example)"]
+output_lacks = ["done"]
+
+[[case]]
+name = "wj check reports an effect the manifest does not grant (WJ0040) with the call chain"
+polarity = "negative"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[capabilities]\n", "src/main.wj" = "use std::process\n\nfn run_it() -> bool {\n    process::run(\"ls\").is_ok()\n}\n\nfn main() {\n    println(\"${run_it()}\")\n}\n" }
+args = ["check", "{w}"]
+exit = 1
+output_has = ["WJ0040", "effect `process` is not granted", "main -> run_it -> process::run"]

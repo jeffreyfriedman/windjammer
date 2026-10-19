@@ -91,11 +91,16 @@ fn component_glob(pat: &str, s: &str) -> bool {
 /// `dir/**` = `dir` and everything below it; `*` inside a component matches within that component;
 /// anything else must match exactly. The pattern's non-glob prefix is canonicalized like the path.
 pub fn path_matches(pat: &str, path: &Path, base: &Path) -> bool {
+    path_matches_cached(pat, path, base, &mut |p, b| canonical_abs(p, b))
+}
+
+/// [`path_matches`] with the pattern's canonical prefix supplied by `canon` (a grant caches it: patterns do not change).
+pub fn path_matches_cached(pat: &str, path: &Path, base: &Path, canon: &mut dyn FnMut(&str, &Path) -> PathBuf) -> bool {
     let segs: Vec<&str> = pat.split('/').filter(|s| !s.is_empty() && *s != ".").collect();
     let first_glob = segs.iter().position(|s| s.contains('*')).unwrap_or(segs.len());
     let abs_prefix = if pat.starts_with('/') { "/".to_string() } else { String::new() };
     let prefix_str = format!("{}{}", abs_prefix, segs[..first_glob].join("/"));
-    let prefix = canonical_abs(if prefix_str.is_empty() { "." } else { &prefix_str }, base);
+    let prefix = canon(if prefix_str.is_empty() { "." } else { &prefix_str }, base);
     let pc = components(&prefix);
     let tail = &segs[first_glob..];
     let target = components(path);
