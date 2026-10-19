@@ -4,18 +4,22 @@
 
 pub mod add;
 pub mod build;
+pub mod build_json;
 pub mod cache;
 pub mod check;
 pub mod clean;
 pub mod explain_ownership;
 pub mod fix;
 pub mod fmt;
+pub mod host_build;
 pub mod json_diagnostics;
 pub mod lint;
 pub mod new;
 mod new_templates;
 pub mod remove;
 pub mod run;
+pub mod run_dev;
 pub mod self_install;
 pub mod test;
 pub mod update;
+pub mod watch;

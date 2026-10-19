@@ -9,7 +9,19 @@ impl Parser {
         &mut self,
         min_precedence: u8,
     ) -> Result<&'static Expression<'static>, String> {
-        let mut left = self.parse_primary_expression()?;
+        // A (sub)expression parsed here is never itself a prefix operator's operand, whatever
+        // context it is nested in (parentheses, index, arguments): `-(a as u8)` keeps its cast.
+        let saved = std::mem::replace(&mut self.in_unary_operand, false);
+        let r = self.parse_binary_expression_inner(min_precedence);
+        self.in_unary_operand = saved;
+        r
+    }
+
+    fn parse_binary_expression_inner(
+        &mut self,
+        min_precedence: u8,
+    ) -> Result<&'static Expression<'static>, String> {
+        let mut left = self.parse_prefixed_or_primary()?;
 
         loop {
             // Check for channel send: ch <- value
@@ -21,6 +33,14 @@ impl Parser {
                     value,
                     location: self.current_location(),
                 });
+                continue;
+            }
+
+            // ADR-0018 `x ?? d`: right-associative, between comparison (7) and additive (8).
+            if self.current_token() == &Token::QuestionQuestion && min_precedence <= 7 {
+                self.advance();
+                let right = self.parse_coalesce_rhs()?;
+                left = self.option_default(left, right);
                 continue;
             }
 
@@ -116,5 +136,42 @@ impl Parser {
             Token::Percent => Some((BinaryOp::Mod, 10)),
             _ => None,
         }
+    }
+
+    /// The right operand of `??`: an additive-level expression, itself possibly `b ?? c` (right-associative).
+    fn parse_coalesce_rhs(&mut self) -> Result<&'static Expression<'static>, String> {
+        let right = self.parse_binary_expression(8)?;
+        if self.current_token() == &Token::QuestionQuestion {
+            self.advance();
+            let rest = self.parse_coalesce_rhs()?;
+            return Ok(self.option_default(right, rest));
+        }
+        Ok(right)
+    }
+
+    /// `x ?? d` is `x.unwrap_or_else(|| d)`: `d` is evaluated only when `x` is `None`.
+    fn option_default(
+        &mut self,
+        value: &'static Expression<'static>,
+        default: &'static Expression<'static>,
+    ) -> &'static Expression<'static> {
+        let location = value.location();
+        // A literal or a variable cannot have effects, so the eager `unwrap_or` is equivalent (and gets the
+        // literal coercions every backend already applies to `unwrap_or`); anything else stays lazy.
+        let trivial = matches!(default, Expression::Literal { .. } | Expression::Identifier { .. });
+        let (method, arg) = if trivial {
+            ("unwrap_or", default)
+        } else {
+            let closure =
+                self.alloc_expr(Expression::Closure { parameters: vec![], body: default, location: location.clone() });
+            ("unwrap_or_else", closure)
+        };
+        self.alloc_expr(Expression::MethodCall {
+            object: value,
+            method: method.to_string(),
+            type_args: None,
+            arguments: vec![(None, arg)],
+            location,
+        })
     }
 }

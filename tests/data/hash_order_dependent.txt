@@ -1,0 +1,3 @@
+# Programs whose output changes with --hash-seed (they depend on HashMap/HashSet iteration order). Ratchet: only shrinks.
+# Path relative to the repo root. Regenerate: WJ_UPDATE_HASH_GATE=1 cargo test --test all hash_order_gate
+

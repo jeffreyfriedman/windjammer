@@ -71,16 +71,46 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Run {
             path,
             args,
+            bin,
             target,
             interpret,
+            compiled,
+            release,
+            watch,
+            hot,
+            sched_seed,
+            hash_seed,
+            engine,
+            deterministic_time,
+            allow_network,
+            mock_http,
             defer_drop,
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
-            if interpret {
-                interpret_file(&path, args)?;
+            use windjammer::cli::run_dev::{execute, Mode, RunOptions};
+            if watch {
+                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+                let root = windjammer::cli::watch::watch_root(path.as_deref());
+                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            }
+            let mode = if compiled || release {
+                Mode::Compiled { release }
+            } else if interpret || hot {
+                Mode::Interpret
             } else {
-                windjammer::cli::run::execute(&path, &args, &target)?;
+                Mode::Auto
+            };
+            let lint = windjammer::cli_execution::report_build_lints;
+            let engine_resolved = match engine.as_str() {
+                "resolved" => true,
+                "walker" => false,
+                other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
+            };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved };
+            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint) });
+            if code != 0 {
+                std::process::exit(code);
             }
         }
         Commands::Repl {} => {
@@ -104,9 +134,23 @@ pub fn run(cli: Cli) -> Result<()> {
             list,
             allow_empty,
             interpret,
+            watch,
+            doc,
+            compiled,
         } => {
+            if watch {
+                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+                let root = windjammer::cli::watch::watch_root(path.as_deref());
+                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            }
+            // ADR-0018: doctests run first (interpreter; `--compiled` also through Rust). Not in `--list`/`--json`.
+            let doc_count = if list || json { 0 } else { run_doctests(path.as_deref(), filter.as_deref(), compiled)? };
+            if doc {
+                return Ok(());
+            }
+            let allow_empty = allow_empty || doc_count > 0;
             if interpret {
-                return interpret_tests(path.as_deref(), filter.as_deref());
+                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -136,8 +180,13 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check { path, json } => {
-            windjammer::cli::check::run(path.as_deref(), json)?;
+        Commands::Check {
+            path,
+            json,
+            watch,
+            fix,
+        } => {
+            windjammer::cli::check::execute(path.as_deref(), json, watch, fix)?;
         }
         Commands::Add {
             package,
@@ -206,8 +255,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::cli::cache::execute_setup()?;
             }
         },
-        Commands::SelfInstall => {
-            windjammer::cli::self_install::execute()?;
+        Commands::SelfInstall { dry_run } => {
+            windjammer::cli::self_install::execute(dry_run)?;
         }
         Commands::Plugin(plugin_args) => {
             if plugin_args.is_empty() {
@@ -268,27 +317,49 @@ fn cmd_generate_docs(output: &std::path::Path, format: &str) -> Result<()> {
 }
 
 fn cmd_explain(code: &str) -> Result<()> {
+    if let Some(text) = windjammer::diagnostics::codes::explain(&code.to_uppercase()) {
+        println!("{text}");
+        return Ok(());
+    }
     let registry = windjammer::error_codes::get_registry();
+    let catalog = windjammer::error_catalog::ErrorCatalog::new();
+    let lint = windjammer::linter::codes::LINT_CODES.iter().find(|l| l.code == code);
 
     if let Some(wj_code) = registry.get(code) {
         println!("{}", registry.format_explanation(&wj_code.code));
     } else if let Some(wj_code) = registry.map_rust_code(code) {
         println!("{}", registry.format_explanation(&wj_code.code));
+    } else if let Some(e) = catalog.get_error(code) {
+        println!("{} - {}\n\n{}", e.code, e.title, e.explanation);
+        for s in &e.solutions {
+            println!("  - {s}");
+        }
+        for ex in &e.examples {
+            println!("\n  bad:  {}\n  good: {}", ex.bad_code, ex.good_code);
+        }
+    } else if let Some(l) = lint {
+        println!("{} - {} (default level: {})\n\n{}", l.code, l.name, l.default_level, l.summary);
+        println!("\nRun `wj lint <path>` to list occurrences; `wj check --json` reports them with spans.");
     } else {
         use colored::*;
-        println!("{}", format!("Error code '{}' not found", code).red());
-        println!("\n{}", "Available Windjammer error codes:".yellow());
+        eprintln!("{}", format!("Error code '{}' not found", code).red());
+        eprintln!("\n{}", "Available codes:".yellow());
 
         let mut codes: Vec<_> = registry.all_codes();
         codes.sort_by_key(|c| c.code.as_str());
 
         for error_code in codes {
-            println!("  {} - {}", error_code.code.cyan(), error_code.title);
+            eprintln!("  {} - {}", error_code.code.cyan(), error_code.title);
+        }
+        for l in windjammer::linter::codes::LINT_CODES {
+            eprintln!("  {} - {}", l.code.cyan(), l.name);
         }
 
-        println!("\n{}", "Usage:".yellow());
-        println!("  wj explain WJ0001");
-        println!("  wj explain E0425  (Rust error code)");
+        eprintln!("\n{}", "Usage:".yellow());
+        eprintln!("  wj explain WJ0001");
+        eprintln!("  wj explain W0002   (lint code)");
+        eprintln!("  wj explain E0425   (Rust error code)");
+        anyhow::bail!("unknown error code '{code}'");
     }
 
     Ok(())
@@ -381,8 +452,15 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
         }
     }
 
+    if !path.exists() {
+        anyhow::bail!("path not found: {}", path.display());
+    }
     let mut wjsl_files = Vec::new();
-    find_wjsl_files(path, &mut wjsl_files);
+    if path.is_file() {
+        wjsl_files.push(path.to_path_buf());
+    } else {
+        find_wjsl_files(path, &mut wjsl_files);
+    }
     wjsl_files.sort();
 
     for file in &wjsl_files {
@@ -426,33 +504,23 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Interpret a .wj file or project directory directly (no cargo, no rustc).
-fn interpret_file(file: &std::path::Path, args: Vec<String>) -> Result<()> {
-    windjammer::cli_execution::report_build_lints(file);
-    let code = windjammer::interpreter::runner::run_path(file, args);
-    if code != 0 {
-        std::process::exit(code);
-    }
-    Ok(())
-}
-
 /// Run the Windjammerscript REPL (state persists between inputs).
 fn run_repl() -> Result<()> {
     windjammer::interpreter::repl::run_repl_stdio();
     Ok(())
 }
 
-/// `wj test --interpret`: run `@test` / `test_*` functions without compiling.
-fn interpret_tests(path: Option<&std::path::Path>, filter: Option<&str>) -> Result<()> {
+/// Run the doctests under `path`; exits non-zero on a failure. Returns how many ran.
+fn run_doctests(path: Option<&std::path::Path>, filter: Option<&str>, compiled: bool) -> Result<usize> {
     let root = path.unwrap_or_else(|| std::path::Path::new("."));
-    let results = windjammer::interpreter::runner::run_tests(root, filter);
-    let code = windjammer::interpreter::runner::report_tests(&results);
+    let exe = std::env::current_exe()?;
+    let results = windjammer::doctest::run::run_doctests(root, filter, compiled.then_some(exe.as_path()));
     if results.is_empty() {
-        eprintln!("no test files (*_test.wj) found under {}", root.display());
+        return Ok(0);
+    }
+    if windjammer::doctest::run::report(&results) > 0 {
         std::process::exit(1);
     }
-    if code != 0 {
-        std::process::exit(code);
-    }
-    Ok(())
+    Ok(results.len())
 }
+

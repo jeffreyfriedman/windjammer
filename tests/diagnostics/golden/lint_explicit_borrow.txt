@@ -1,0 +1,8 @@
+error[W0004]: explicit borrow in function call
+  --> lint_explicit_borrow.wj:8:10
+  |
+8 |     show(&n)
+  |          ^
+  = help: remove explicit borrow - pass value directly
+  = note: Windjammer infers borrowing automatically
+  = explain: wj explain W0004

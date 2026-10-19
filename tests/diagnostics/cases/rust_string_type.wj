@@ -1,0 +1,8 @@
+// expect: W0010
+fn greet(name: str) {
+    println("${name}")
+}
+
+fn main() {
+    greet("a")
+}

@@ -61,19 +61,22 @@ pub fn execute(
         .with_shadow_validate_strict(ir_shadow_validate)
         .with_skip_cargo_toml_generation(no_generate_cargo_toml);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
+    if !path.exists() {
+        anyhow::bail!("path not found: {}", path.display());
+    }
 
     if json_output {
-        return build_with_json_output(
+        let external_metadata = parse_external_metadata_args(metadata);
+        return super::build_json::run(super::build_json::JsonBuild {
             path,
             output_dir,
             target_str,
-            check,
+            run_cargo_check: check,
             library,
-            module_file,
             enable_lint,
-            &config,
-            metadata,
-        );
+            config: &config,
+            external_metadata: &external_metadata,
+        });
     }
 
     println!(
@@ -200,68 +203,6 @@ pub fn execute(
         );
         println!("Run cargo build manually:");
         println!("  cd {:?} && cargo build", output_dir);
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_with_json_output(
-    path: &Path,
-    output_dir: &Path,
-    target_str: &str,
-    _check: bool,
-    library: bool,
-    _module_file: bool,
-    enable_lint: bool,
-    config: &crate::compiler_config::CompilerConfig,
-    metadata: &[String],
-) -> Result<()> {
-    use crate::cli::json_diagnostics::{JsonCompilationOutput, JsonDiagnostic, Severity};
-
-    let external_metadata = parse_external_metadata_args(metadata);
-
-    let target = match target_str.to_lowercase().as_str() {
-        "rust" => crate::CompilationTarget::Rust,
-        _ => {
-            let mut output = JsonCompilationOutput::new_failure();
-            output.add_error(format!(
-                "JSON output mode only supports Rust target, got: {}",
-                target_str
-            ));
-            output.emit_to_stdout();
-            return Ok(());
-        }
-    };
-
-    match crate::build_project_with_config(
-        path,
-        output_dir,
-        target,
-        enable_lint,
-        library,
-        &external_metadata,
-        config,
-    ) {
-        Ok(()) => {
-            let mut output = JsonCompilationOutput::new_success();
-            if library {
-                output.add_warning("Library mode: main() functions stripped".to_string());
-            }
-            output.emit_to_stdout();
-        }
-        Err(e) => {
-            let mut output = JsonCompilationOutput::new_failure();
-            output.diagnostics.push(JsonDiagnostic {
-                code: None,
-                severity: Severity::Error,
-                message: format!("{}", e),
-                span: None,
-                maturity: None,
-                repair_hint: None,
-            });
-            output.emit_to_stdout();
-        }
     }
 
     Ok(())
@@ -585,7 +526,7 @@ fn check_with_cargo(
 }
 
 /// Load and merge all source maps from the output directory
-fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
+pub(crate) fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
     use std::fs;
 
     let mut merged_map = crate::source_map::SourceMap::new();
@@ -631,12 +572,12 @@ fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
     }
 
     if map_count == 0 {
-        println!(
+        eprintln!(
             "{} No source maps found. Error locations may be inaccurate.",
             "Warning:".yellow().bold()
         );
     } else {
-        println!(
+        eprintln!(
             "{} Loaded {} source map(s) with {} mapping(s)",
             "Info:".cyan(),
             map_count,

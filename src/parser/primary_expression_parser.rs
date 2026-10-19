@@ -9,21 +9,8 @@ impl Parser {
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
         let expr = match self.current_token() {
-            Token::Underscore if self.in_pipe_stage => {
-                self.pipe_placeholders.push(self.position);
-                let location = self.current_location();
-                self.advance();
-                self.alloc_expr(Expression::Identifier {
-                    name: "_".to_string(),
-                    location,
-                })
-            }
-            Token::Underscore => {
-                return Err(self.pipe_error(
-                    self.position,
-                    "placeholder `_` is only valid as a direct argument of a `|>` stage (e.g. `x |> f(a, _)`)",
-                ));
-            }
+            // `_`: a shorthand-closure parameter or a `|>` placeholder (parser/shorthand_closure.rs).
+            Token::Underscore => self.shorthand_hole()?,
             Token::Thread => {
                 // Check if this is a thread block or a module path
                 if self.peek(1) == Some(&Token::LBrace) {
@@ -99,7 +86,7 @@ impl Parser {
                 } else {
                     false
                 };
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
@@ -113,7 +100,7 @@ impl Parser {
             Token::Star => {
                 // Dereference: *expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
                     operand,
@@ -123,7 +110,7 @@ impl Parser {
             Token::Minus => {
                 // Negation: -expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
                     operand,
@@ -133,7 +120,7 @@ impl Parser {
             Token::Bang => {
                 // Logical not: !expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
                     operand,
@@ -434,8 +421,8 @@ impl Parser {
                 }
             }
             Token::Match => self.parse_primary_match()?,
-            Token::Pipe => self.parse_primary_closure_pipe()?,
-            Token::Or => self.parse_primary_closure_or()?,
+            Token::Pipe => self.with_explicit_closure(|p| p.parse_primary_closure_pipe())?,
+            Token::Or => self.with_explicit_closure(|p| p.parse_primary_closure_or())?,
             Token::If => self.parse_primary_if()?,
             Token::Unsafe => self.parse_primary_unsafe_block()?,
             Token::LBrace => {
@@ -518,10 +505,7 @@ impl Parser {
             Token::Return => {
                 // Return expression: return expr
                 self.advance(); // consume 'return'
-                let return_value = if matches!(
-                    self.current_token(),
-                    Token::Comma | Token::RBrace | Token::Semicolon
-                ) {
+                let return_value = if self.return_has_no_value() {
                     None
                 } else {
                     Some(self.parse_expression()?)

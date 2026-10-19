@@ -596,7 +596,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
         }
     }
 
-    if modules.is_empty() {
+    if modules.is_empty() && !output_dir.join("_mod_items.rs").exists() {
         return Ok(());
     }
 
@@ -608,7 +608,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     // in mod.rs because its .rs file persists from the previous build.
     modules.retain(|m| should_merge_extra_module(m, sibling_src.as_deref(), output_dir));
 
-    if modules.is_empty() {
+    if modules.is_empty() && !output_dir.join("_mod_items.rs").exists() {
         return Ok(());
     }
 

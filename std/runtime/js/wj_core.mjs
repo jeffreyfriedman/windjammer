@@ -7,7 +7,11 @@
 //   Option -> null | {v}     Result -> {ok: true|false, v}
 // Arithmetic that overflows panics (like Rust debug builds); `wrapping_*` ops wrap explicitly.
 
-const fs = typeof process !== "undefined" && process.versions && process.versions.node ? await import("node:fs") : null;
+const isNode = typeof process !== "undefined" && process.versions && process.versions.node;
+const fs = isNode ? await import("node:fs") : null;
+const threads = isNode ? await import("node:worker_threads") : null;
+/** Stack of the thread that runs `main` (Rust's main thread has 8 MiB; Node's default is ~1 MiB). */
+const MAIN_STACK_MB = 64;
 
 export class WjPanic extends Error {}
 
@@ -56,7 +60,23 @@ export function $eprint(s) {
   else console.error(s);
 }
 
-export function $run(main) {
+/**
+ * Run `main` with Rust's process semantics (panic = exit 101, buffered stdout). Under Node the
+ * program runs on a worker thread with a Rust-like stack, so recursion as deep as a Rust program
+ * allows does not overflow Node's small default stack; `entry` is the program module's URL.
+ */
+export function $run(main, entry) {
+  if (threads && threads.isMainThread && entry) {
+    const w = new threads.Worker(new URL(entry), { resourceLimits: { stackSizeMb: MAIN_STACK_MB } });
+    w.on("error", (e) => {
+      writeAll(2, `internal error: ${(e && e.stack) || e}\n`);
+      process.exitCode = 70;
+    });
+    w.on("exit", (code) => {
+      if (code !== 0 || process.exitCode === undefined) process.exitCode = code;
+    });
+    return;
+  }
   try {
     main();
     $flush();
@@ -209,6 +229,26 @@ export function $cmp(a, b) {
   return 0;
 }
 
+// `Ordering` is -1 / 0 / 1.
+export const $dbgOrd = (x) => (x < 0 ? "Less" : x > 0 ? "Greater" : "Equal");
+const hasNaN = (x) => (typeof x === "number" && Number.isNaN(x)) || (Array.isArray(x) && x.some(hasNaN));
+/** `partial_cmp`: None when a float compared is NaN. */
+export const $pcmp = (a, b) => (hasNaN(a) || hasNaN(b) ? null : { v: $cmp(a, b) });
+/** Stable in-place sort by a comparator returning an `Ordering` (Rust `sort_by` is stable). */
+export function $sortBy(v, f) {
+  v.sort((x, y) => f(x, y));
+}
+/** `max_by` (last maximum, dir 1) / `min_by` (first minimum, dir -1) over a comparator. */
+export function $minmaxBy(v, f, dir) {
+  if (v.length === 0) return null;
+  let best = v[0];
+  for (let i = 1; i < v.length; i++) {
+    const c = f(v[i], best);
+    if (dir < 0 ? c < 0 : c >= 0) best = v[i];
+  }
+  return { v: best };
+}
+
 function cmpStr(a, b) {
   const x = Array.from(a);
   const y = Array.from(b);
@@ -246,6 +286,24 @@ export function $ix(v, i) {
   return n;
 }
 export const $at = (v, i) => v[$ix(v, i)];
+
+// ---------------------------------------------------------------------------------------------
+// `&mut` of a value-represented place (numbers, strings, Option, Result, enums): an accessor
+// cell `{ v }` whose reads and writes go to the place. The container and key are evaluated once,
+// when the borrow is taken (Rust evaluates the place expression at the borrow).
+// ---------------------------------------------------------------------------------------------
+export function $cellOf(o, k) {
+  return { get v() { return o[k]; }, set v(x) { o[k] = x; } };
+}
+export const $cellIx = (v, i) => $cellOf(v, $ix(v, i));
+/** `*r = x` through an alias of an object-represented value (struct, Vec, HashMap, HashSet, tuple). */
+export function $replace(dst, src) {
+  if (dst === src) return;
+  if (Array.isArray(dst)) { dst.length = 0; for (const x of src) dst.push(x); return; }
+  if (dst instanceof Map) { dst.clear(); for (const [k, v] of src) dst.set(k, v); return; }
+  if (dst instanceof Set) { dst.clear(); for (const x of src) dst.add(x); return; }
+  Object.assign(dst, src);
+}
 export const $pop = (v) => (v.length ? { v: v.pop() } : null);
 export const $popFront = (v) => (v.length ? { v: v.shift() } : null);
 export const $vget = (v, i) => {
@@ -588,14 +646,16 @@ export function $f32(x) {
   return $f64(x);
 }
 
-export function $dbgF64(x) {
+export function $dbgF64(x, o) {
+  if (o) return $fmtFloat(x, o, true, false, false);
   if (!Number.isFinite(x)) return $f64(x);
   const a = Math.abs(x);
   if (a !== 0 && (a >= 1e16 || a < 1e-4)) return x.toExponential().replace("e+", "e");
   const s = $f64(x);
   return s.includes(".") ? s : `${s}.0`;
 }
-export const $dbgF32 = (x) => {
+export const $dbgF32 = (x, o) => {
+  if (o) return $fmtFloat(x, o, true, true, false);
   if (!Number.isFinite(x) || x === 0) return $dbgF64(x);
   for (let p = 1; p <= 9; p++) {
     const n = Number(x.toPrecision(p));
@@ -620,24 +680,103 @@ function escapeChar(c, quote) {
 }
 export const $dbgStr = (s) => `"${Array.from(s, (c) => escapeChar(c, '"')).join("")}"`;
 export const $dbgChar = (c) => `'${escapeChar(c, "'")}'`;
-export const $dbgVec = (f) => (v) => `[${v.map(f).join(", ")}]`;
-export const $dbgSet = (f) => (s) => `{${Array.from(s, f).join(", ")}}`;
-export const $dbgMap = (kf, vf) => (m) => `{${Array.from(m, ([k, v]) => `${kf(k)}: ${vf(v)}`).join(", ")}}`;
-export const $dbgOpt = (f) => (o) => (o === null ? "None" : `Some(${f(o.v)})`);
-export const $dbgRes = (fa, fb) => (r) => (r.ok ? `Ok(${fa(r.v)})` : `Err(${fb(r.v)})`);
-export const $dbgTuple = (fs) => (t) => (t.length === 1 ? `(${fs[0](t[0])},)` : `(${t.map((x, i) => fs[i](x)).join(", ")})`);
-export const $dbgObj = (x) => x.$dbg();
-export function $dbgAny(x) {
+// Debug formatters take `(value, o)`; `o` holds Rust's Formatter options
+// (`{ w, fill, align, zero, plus, alt, prec }`, absent = defaults). Like Rust's derived `Debug`, an
+// aggregate passes `o` to its elements (`{:5?}` pads every number), and `alt` (`{:#?}`) selects
+// the multi-line layout with 4-space indentation.
+const indent4 = (s) => s.replace(/\n/g, "\n    ");
+export function $dbgList(open, close, items, o) {
+  if (!(o && o.alt)) return `${open}${items.join(", ")}${close}`;
+  if (items.length === 0) return `${open}${close}`;
+  return `${open}\n${items.map((x) => `    ${indent4(x)},\n`).join("")}${close}`;
+}
+/** `Name(a, b)` (tuple struct / variant); empty name = tuple (`(a,)` for one element). */
+export function $dbgTupleS(name, items, o) {
+  if (items.length === 0) return name === "" ? "()" : name;
+  if (name === "" && items.length === 1 && !(o && o.alt)) return `(${items[0]},)`;
+  return name + $dbgList("(", ")", items, o);
+}
+/** `Name { f: v }` (struct / struct variant). */
+export function $dbgStruct(name, fields, o) {
+  if (fields.length === 0) return name;
+  const items = fields.map(([k, v]) => `${k}: ${v}`);
+  if (o && o.alt) return `${name} ${$dbgList("{", "}", items, o)}`;
+  return `${name} { ${items.join(", ")} }`;
+}
+// Map and set iteration is in ascending key order: HashMap order is unspecified (SPEC-EXEC-005),
+// and BTreeMap/BTreeSet (which share this representation) require it.
+export const $sortedEntries = (m) => Array.from(m).sort((a, b) => $cmp(a[0], b[0]));
+export const $sortedKeys = (m) => Array.from(m.keys()).sort($cmp);
+export const $sortedValues = (m) => $sortedEntries(m).map((e) => e[1]);
+export const $dbgVec = (f) => (v, o) => $dbgList("[", "]", v.map((x) => f(x, o)), o);
+export const $dbgSet = (f) => (s, o) => $dbgList("{", "}", $sortedKeys(s).map((x) => f(x, o)), o);
+export const $dbgMap = (kf, vf) => (m, o) => $dbgList("{", "}", $sortedEntries(m).map(([k, v]) => `${kf(k, o)}: ${vf(v, o)}`), o);
+export const $dbgOpt = (f) => (x, o) => (x === null ? "None" : $dbgTupleS("Some", [f(x.v, o)], o));
+export const $dbgRes = (fa, fb) => (r, o) => (r.ok ? $dbgTupleS("Ok", [fa(r.v, o)], o) : $dbgTupleS("Err", [fb(r.v, o)], o));
+export const $dbgTuple = (fs) => (t, o) => $dbgTupleS("", t.map((x, i) => fs[i](x, o)), o);
+export const $dbgObj = (x, o) => x.$dbg(o);
+export const $dbgInt = (x, o) => (o ? $fmtInt(x, o, "", 0) : String(x));
+export const $dbgBool = (x, o) => (o ? $fmtStr(String(x), o) : String(x));
+export const $dbgUnit = (_x, o) => (o ? $fmtStr("()", o) : "()");
+export function $dbgAny(x, o) {
   if (x === null) return "None";
   switch (typeof x) {
     case "string": return $dbgStr(x);
-    case "number": return Number.isInteger(x) ? String(x) : $dbgF64(x);
-    case "bigint": case "boolean": return String(x);
+    case "number": return Number.isInteger(x) ? $dbgInt(x, o) : $dbgF64(x, o);
+    case "bigint": return $dbgInt(x, o);
+    case "boolean": return $dbgBool(x, o);
     default:
   }
-  if (Array.isArray(x)) return `[${x.map($dbgAny).join(", ")}]`;
-  if (typeof x.$dbg === "function") return x.$dbg();
+  if (Array.isArray(x)) return $dbgList("[", "]", x.map((e) => $dbgAny(e, o)), o);
+  if (typeof x.$dbg === "function") return x.$dbg(o);
   return String(x);
+}
+
+// Rust `Formatter::pad`: fill/align/width (the `0` and `+` flags do not apply to text).
+function padAligned(s, o, defAlign) {
+  if (!o || o.w === undefined) return s;
+  const len = Array.from(s).length;
+  if (len >= o.w) return s;
+  const n = o.w - len;
+  const fill = o.fill ?? " ";
+  const align = o.align ?? defAlign;
+  if (align === ">") return fill.repeat(n) + s;
+  if (align === "^") return fill.repeat(Math.floor(n / 2)) + s + fill.repeat(n - Math.floor(n / 2));
+  return s + fill.repeat(n);
+}
+/** Display of text with options: precision truncates, then fill/align (default left). */
+export const $fmtStr = (s, o) => padAligned(o && o.prec !== undefined ? $trunc(s, o.prec) : s, o, "<");
+/** Rust `pad_integral` / `pad_formatted_parts`: sign, prefix, then digits; `0` pads between. */
+export function $padNum(neg, prefix, digits, o) {
+  const sign = neg ? "-" : o && o.plus ? "+" : "";
+  const s = sign + prefix + digits;
+  if (!o || o.w === undefined) return s;
+  if (o.zero) {
+    const n = o.w - Array.from(s).length;
+    return n > 0 ? sign + prefix + "0".repeat(n) + digits : s;
+  }
+  return padAligned(s, o, ">");
+}
+/** Integer with options; `r` is "" (decimal) or a radix type (`x X b o`, two's complement in `bits`). */
+export function $fmtInt(v, o, r, bits) {
+  if (!r) {
+    const b = BigInt(v);
+    return $padNum(b < 0n, "", (b < 0n ? -b : b).toString(), o);
+  }
+  const prefix = o && o.alt ? { x: "0x", X: "0x", b: "0b", o: "0o" }[r] : "";
+  return $padNum(false, prefix, $radix(v, r, bits), o);
+}
+/** Float with options (`debug`: `{:?}` digits, `exp`: `{:e}`); NaN never has a sign. */
+export function $fmtFloat(x, o, debug, f32, exp) {
+  if (Number.isNaN(x)) return $padNum(false, "", "NaN", o && { ...o, plus: false });
+  const neg = x < 0 || Object.is(x, -0);
+  const a = Math.abs(x);
+  let digits;
+  if (exp) digits = $expFmt(a);
+  else if (o && o.prec !== undefined) digits = $fixed(a, o.prec);
+  else if (debug) digits = f32 ? $dbgF32(a) : $dbgF64(a);
+  else digits = f32 ? $f32(a) : $f64(a);
+  return $padNum(neg, "", digits, o);
 }
 
 export function $radix(v, r, bits) {
@@ -648,16 +787,6 @@ export function $radix(v, r, bits) {
 }
 export const $expFmt = (x) => x.toExponential().replace("e+", "e");
 export const $trunc = (s, p) => Array.from(s).slice(0, p).join("");
-
-export function $pad(s, width, fill, align, zero) {
-  const len = Array.from(s).length;
-  if (len >= width) return s;
-  const n = width - len;
-  if (zero && /^[+-]/.test(s)) return s[0] + "0".repeat(n) + s.slice(1);
-  if (align === ">") return fill.repeat(n) + s;
-  if (align === "^") return fill.repeat(Math.floor(n / 2)) + s + fill.repeat(n - Math.floor(n / 2));
-  return s + fill.repeat(n);
-}
 
 export function $fixed(x, p) {
   if (!Number.isFinite(x)) return $f64(x);
@@ -686,4 +815,83 @@ export function $fixed(x, p) {
   let digits = q.toString().padStart(p + 1, "0");
   const out = p === 0 ? digits : `${digits.slice(0, digits.length - p)}.${digits.slice(digits.length - p)}`;
   return (neg ? "-" : "") + out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Enumerable collection methods (ADR-0018 feature 1; surface table: src/stdlib_surface/enumerable.rs)
+// Map keys are compared like any HashMap key (primitives by value).
+// ---------------------------------------------------------------------------------------------
+export function $groupBy(v, f) {
+  const m = new Map();
+  for (const x of v) {
+    const k = f(x);
+    if (m.has(k)) m.get(k).push(x);
+    else m.set(k, [x]);
+  }
+  return m;
+}
+export function $countBy(v, f) {
+  const m = new Map();
+  for (const x of v) {
+    const k = f(x);
+    m.set(k, (m.has(k) ? m.get(k) : 0n) + 1n);
+  }
+  return m;
+}
+export function $uniqueBy(v, f) {
+  const seen = [];
+  const out = [];
+  for (const x of v) {
+    const k = f(x);
+    if (!seen.some((s) => $eq(s, k))) {
+      seen.push(k);
+      out.push(x);
+    }
+  }
+  return out;
+}
+export function $chunkBy(v, f) {
+  const out = [];
+  let last;
+  v.forEach((x, i) => {
+    const k = f(x);
+    if (i > 0 && $eq(last, k)) out[out.length - 1].push(x);
+    else out.push([x]);
+    last = k;
+  });
+  return out;
+}
+export function $partitionBy(v, f) {
+  const yes = [];
+  const no = [];
+  for (const x of v) (f(x) ? yes : no).push(x);
+  return [yes, no];
+}
+export const $intersperse = (v, sep) => v.flatMap((x, i) => (i > 0 ? [sep, x] : [x]));
+export function $zipWith(a, b, f) {
+  const out = [];
+  for (let i = 0; i < Math.min(a.length, b.length); i++) out.push(f(a[i], b[i]));
+  return out;
+}
+export function $indexOf(v, x) {
+  const i = v.findIndex((y) => $eq(x, y));
+  return i < 0 ? null : { v: BigInt(i) };
+}
+export const $sortedByKey = (v, f, desc) => v.slice().sort((a, b) => (desc ? $cmp(f(b), f(a)) : $cmp(f(a), f(b))));
+export function $sortByKeyInPlace(v, f, desc) {
+  const s = $sortedByKey(v, f, desc);
+  for (let i = 0; i < v.length; i++) v[i] = s[i];
+}
+// Rust semantics: min_by_key returns the first minimum, max_by_key the last maximum.
+export function $minByKey(v, f) {
+  if (v.length === 0) return null;
+  let best = v[0];
+  for (const x of v.slice(1)) if ($cmp(f(x), f(best)) < 0) best = x;
+  return { v: best };
+}
+export function $maxByKey(v, f) {
+  if (v.length === 0) return null;
+  let best = v[0];
+  for (const x of v.slice(1)) if ($cmp(f(x), f(best)) >= 0) best = x;
+  return { v: best };
 }

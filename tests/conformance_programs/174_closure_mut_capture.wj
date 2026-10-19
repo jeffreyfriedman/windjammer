@@ -1,0 +1,44 @@
+// Closures capture by reference (SPEC-EXPR-011): a mutation made inside a closure is visible
+// outside it. Expected output from rustc on a line-by-line Rust transliteration.
+// expect: 2
+// expect: 2
+// expect: 6
+// expect: 11
+// expect: a b |
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+
+fn main() {
+    let mut count = 0
+    let mut bump = || {
+        count += 1
+    }
+    bump()
+    bump()
+    println("${count}")
+    let mut v: Vec<int> = vec![]
+    let mut add = |x: int| v.push(x)
+    add(1)
+    add(2)
+    println("${v.len()}")
+    let mut total = 0
+    for i in 0..4 {
+        let mut acc = |n: int| {
+            total += n
+        }
+        acc(i)
+    }
+    println("${total}")
+    let base = 10
+    let f = |x: int| x + base
+    println("${apply(f, 1)}")
+    let mut log = "".to_string()
+    let mut say = |s: string| {
+        log.push_str(s)
+        log.push_str(" ")
+    }
+    say("a")
+    say("b")
+    println("${log}|")
+}

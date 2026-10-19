@@ -1,0 +1,6 @@
+// expect: WJ0004
+fn main() {
+    let x = 10
+    x = 20
+    println("${x}")
+}

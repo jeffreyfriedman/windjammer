@@ -1,0 +1,14 @@
+// expect: none
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    println("${add(p.x, p.y)}")
+}

@@ -1,4 +1,4 @@
-//! Arenas for per-frame, per-request and per-phase allocation (`std::arena`, ADR-0016).
+//! Arenas for per-frame, per-request and per-phase allocation (`std::arena`, ADR-0025).
 //!
 //! Two shapes:
 //!
@@ -9,7 +9,7 @@
 //!   reads another live value or panics on bounds, it is a logic error but never undefined behaviour.
 //! * [`Scratch`]: an untyped bump allocator for transient strings and lists (`str`, `new_string`, `new_list`). The
 //!   borrow checker ties every scratch value to `&Scratch`, so `reset(&mut self)` cannot run while one is alive;
-//!   Windjammer's escape check (ADR-0016) reports the same mistake earlier, in Windjammer terms.
+//!   Windjammer's escape check (ADR-0025) reports the same mistake earlier, in Windjammer terms.
 //!
 //! Go/JS backends and the interpreter implement the same API on their heap; only the cost model differs.
 

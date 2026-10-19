@@ -1,0 +1,13 @@
+// spec: SPEC-STMT-001
+// expect: 100
+// expect: 2 2.5
+fn main() {
+    let x = 1
+    let x = x + 1
+    let y: float = 2.5
+    {
+        let x = 100
+        println("${x}")
+    }
+    println("${x} ${y}")
+}

@@ -1,5 +1,5 @@
 #![cfg(feature = "unstable_arenas")]
-//! `std::arena` (ADR-0016): escape check (WJ0160) and interpreter semantics.
+//! `std::arena` (ADR-0025): escape check (WJ0160) and interpreter semantics.
 //! Programs in tests/arena_programs carry independent `// expect:` lines (computed by hand).
 
 use windjammer::analyzer::arena_escape::{check_program, gate};

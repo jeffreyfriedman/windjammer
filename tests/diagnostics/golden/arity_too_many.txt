@@ -1,0 +1,7 @@
+error[WJ0013]: function `one` takes 1 argument but 3 were supplied
+  --> arity_too_many.wj:7:16
+  |
+7 |     println("${one(1, 2, 3)}")
+  |                ^^^ expected 1 argument(s)
+  = note: defined at arity_too_many.wj:6
+  = explain: wj explain WJ0013

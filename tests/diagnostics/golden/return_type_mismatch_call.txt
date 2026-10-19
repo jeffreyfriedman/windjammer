@@ -1,0 +1,7 @@
+error[WJ0003]: mismatched types: expected `int`, found `string` in initializer
+  --> return_type_mismatch_call.wj:7:20
+  |
+7 |     let bad: int = describe(3)
+  |                    ^^^^^^^^ expected `int`, found `string`
+  = help: make the value a `int`, or change the declaration
+  = explain: wj explain WJ0003

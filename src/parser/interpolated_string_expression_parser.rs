@@ -11,7 +11,13 @@ impl Parser {
         let mut format_string = String::new();
         let mut args = Vec::new();
 
-        for part in parts {
+        // Sub-expressions are lexed on their own, so their (line, column) restart at (1, 1) and would
+        // collide with each other and with real code in every position-keyed table (numeric
+        // inference keys expressions by location). Rebase them onto the string's own line at columns
+        // no source line reaches, unique per string and per `${..}` part.
+        let outer_line = self.current_location().map(|l| l.line).unwrap_or(0);
+        let outer_key = self.position;
+        for (part_index, part) in parts.into_iter().enumerate() {
             match part {
                 crate::lexer::StringPart::Literal(lit) => {
                     let escaped = lit.replace('{', "{{").replace('}', "}}");
@@ -33,14 +39,29 @@ impl Parser {
                         if tok_with_loc.token == crate::lexer::Token::Eof {
                             break;
                         }
+                        let mut tok_with_loc = tok_with_loc;
+                        tok_with_loc.line = outer_line;
+                        tok_with_loc.column +=
+                            1_000_000 + (outer_key * 64 + part_index.min(63)) * 10_000;
                         expr_tokens.push(tok_with_loc);
                     }
 
+                    // Nodes are located at the token that follows them; without a trailing token the
+                    // last expression of the part would have no location (and no numeric identity).
+                    let end_column = expr_tokens.last().map_or(1_000_000, |t| t.column + 1);
+                    expr_tokens.push(crate::lexer::TokenWithLocation {
+                        token: crate::lexer::Token::Eof,
+                        line: outer_line,
+                        column: end_column,
+                    });
                     // Allocate into this parser's arena bundle so the nodes are sealed into the same Program.
                     let mut expr_parser = Parser::new_sharing_arenas(expr_tokens, self);
+                    // ADR-0018: named arguments inside `${..}` resolve like anywhere else.
+                    expr_parser.call_table = self.call_table.clone();
                     let expr = expr_parser.parse_expression().map_err(|e| {
                         format!("invalid expression in string interpolation `{trimmed}`: {e}")
                     })?;
+                    self.saw_label |= expr_parser.saw_label;
                     args.push(expr);
                 }
             }

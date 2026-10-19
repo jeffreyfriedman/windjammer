@@ -1,0 +1,12 @@
+// spec: SPEC-GRAM-004
+// expect: 5 6 2
+fn f() -> int { 5 }
+fn main() {
+    let a = f()
+    [1, 2].len()
+    let total = a
+        + 1
+    let n = [3, 4]
+        .len()
+    println("${a} ${total} ${n}")
+}

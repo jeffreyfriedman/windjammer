@@ -266,7 +266,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                         message: format!("explicit .{}() call", method),
                         location: loc,
                         help: Some(
-                            "use explicit error handling: `if let Some(...)` or `match`"
+                            "give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`"
                                 .to_string(),
                         ),
                         note: Some(".unwrap() is a Rust-specific panic convention".to_string()),

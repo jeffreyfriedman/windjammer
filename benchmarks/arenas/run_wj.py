@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compiled-Windjammer arena benchmarks (ADR-0016).
+"""Compiled-Windjammer arena benchmarks (ADR-0025).
 
 Builds each program in wj/ with `wj build --release` semantics (generated crate, `cargo build --release`),
 optionally with WJ_AUTO_ARENA=1, checks that variants print the same checksum, and reports the median and

@@ -98,6 +98,14 @@ pub struct Parser {
     pub(crate) in_pipe_stage: bool,
     /// Number of `_` placeholders produced in the current pipe stage.
     pub(crate) pipe_placeholders: Vec<usize>,
+    /// `_` shorthand-closure frames, one per call argument being parsed (ADR-0018, `parser/shorthand_closure.rs`).
+    pub(crate) shorthand_frames: Vec<crate::parser::shorthand_closure::ShorthandFrame>,
+    /// Explicit closures being parsed (a `_` inside one, in the same argument, is an error).
+    pub(crate) closure_depth: usize,
+    /// Named-argument lowering table (second parse pass only; `parser/named_args.rs`).
+    pub(crate) call_table: Option<crate::parser::named_args::CallTable>,
+    /// A labelled call argument (`f(x: 1)`) was parsed.
+    pub(crate) saw_label: bool,
     // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
     // SOUNDNESS: nodes are handed out as `'static` references, so the type system cannot tie them to this
@@ -112,9 +120,19 @@ pub struct Parser {
     pub(crate) recovered_errors: Vec<String>,
     /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
     pub(crate) recovering: bool,
+    /// True while parsing the operand of a prefix operator (stops before `as`).
+    pub(crate) in_unary_operand: bool,
 }
 
 impl Parser {
+    /// 1-based (line, column) of the token the parser stopped at (for error reporting).
+    pub fn error_position(&self) -> Option<(usize, usize)> {
+        self.tokens
+            .get(self.position)
+            .or_else(|| self.tokens.last())
+            .map(|t| (t.line, t.column))
+    }
+
     /// Check if there was a newline before the current token (for ASI - Automatic Semicolon Insertion)
     pub(crate) fn had_newline_before_current(&self) -> bool {
         if self.position == 0 {
@@ -142,10 +160,15 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
+            shorthand_frames: Vec::new(),
+            closure_depth: 0,
+            call_table: None,
+            saw_label: false,
             arenas: Arc::new(AstArenas::new()),
             _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
             recovering: false,
+            in_unary_operand: false,
         }
     }
 
@@ -163,10 +186,15 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
+            shorthand_frames: Vec::new(),
+            closure_depth: 0,
+            call_table: None,
+            saw_label: false,
             arenas: Arc::new(AstArenas::new()),
             _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
             recovering: false,
+            in_unary_operand: false,
         }
     }
 
@@ -488,8 +516,18 @@ impl Parser {
             return Err(errors.join("\n"));
         }
 
+        let program = Program::new(items);
+        // ADR-0018 named arguments / defaults: parse again with the file's callee table (parser/named_args.rs).
+        if self.call_table.is_none() {
+            if let Some(table) = crate::parser::named_args::call_table(&program, self.saw_label) {
+                self.call_table = Some(table);
+                self.position = 0;
+                self.warnings.clear();
+                return self.parse();
+            }
+        }
         self.emit_surface_syntax_warnings();
-        Ok(Program::with_owner(items, self.seal_arenas()))
+        Ok(Program::with_owner(program.items, self.seal_arenas()))
     }
 
     pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {
@@ -756,6 +794,7 @@ impl Parser {
                 } else {
                     return Err("Expected type alias name".to_string());
                 };
+                let type_params = self.parse_type_params()?;
                 self.expect(Token::Assign)?;
                 let target = self.parse_type()?;
                 // Semicolon optional (ASI)
@@ -764,6 +803,7 @@ impl Parser {
                 }
                 Ok(Item::TypeAlias {
                     name,
+                    type_params,
                     target,
                     is_pub,
                     location: self.current_location(),

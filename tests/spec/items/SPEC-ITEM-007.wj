@@ -1,0 +1,7 @@
+// spec: SPEC-ITEM-007
+// expect: start
+// expect: end
+fn main() {
+    println("start")
+    println("end")
+}

@@ -85,6 +85,14 @@ impl Interpreter {
                 module = self.modules[module].parent.unwrap_or(0);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
+                // `super::super::x`, `super::self::x`
+                while (first == "super" || first == "self") && !rest.is_empty() {
+                    if first == "super" {
+                        module = self.modules[module].parent.unwrap_or(0);
+                    }
+                    first = rest[0].to_string();
+                    rest = rest[1..].to_vec();
+                }
             }
             _ => {}
         }
@@ -230,8 +238,17 @@ impl Interpreter {
     ) -> R {
         if let Expression::Identifier { name, .. } = function {
             if self.lookup_var(name).is_none() {
+                // call-site cache: a plain call that resolved to a module function keeps resolving to it
+                let site = function as *const Expression<'static> as usize;
+                if let Some(f) = self.call_cache.get(&site).cloned() {
+                    let args = self.eval_args(arguments, Some(&f), false)?;
+                    return self.call_func_g(&f, args, None, &[], expected);
+                }
                 if let Some(intr) = self.intrinsic_for_call(name) {
                     return self.eval_intrinsic_call(intr, function, arguments);
+                }
+                if let Some(f) = self.modules[self.scope.module].funcs.get(name.as_str()).cloned() {
+                    self.call_cache.insert(site, f);
                 }
                 return self.call_named(name, arguments, &[], expected);
             }
@@ -295,7 +312,7 @@ impl Interpreter {
         if let Expression::Unary { op: crate::parser::UnaryOp::MutRef, .. } = a {
             return self.eval_raw(a);
         }
-        self.eval(a)
+        self.eval_keep_guard(a)
     }
 
     pub(crate) fn call_named(
@@ -309,6 +326,7 @@ impl Interpreter {
         // fast path: plain function in the current module (hot in recursion)
         if let Some(f) = self.modules[module].funcs.get(name).cloned() {
             let args = self.eval_args(arguments, Some(&f), false)?;
+            self.prepare_arg_moves(&f, arguments, 0);
             return self.call_func_g(&f, args, None, targs, expected);
         }
         if matches!(name, "drop" | "mem::drop" | "std::mem::drop") && arguments.len() == 1 && self.lookup_var(name).is_none() {
@@ -344,10 +362,13 @@ impl Interpreter {
         match self.resolve_in(module, &segs)? {
             Some(Resolved::Func(f)) => {
                 let args = self.eval_args(arguments, Some(&f), false)?;
+                let offset = usize::from(f.params.first().is_some_and(|p| p.name == "self"));
+                self.prepare_arg_moves(&f, arguments, offset);
                 self.call_func_g(&f, args, None, targs, expected)
             }
             Some(Resolved::Variant(en, idx)) => {
                 let args = self.eval_args(arguments, None, false)?;
+                self.note_moves(arguments.iter().map(|(_, e)| *e));
                 self.make_variant(&en, idx, args)
             }
             Some(Resolved::TupleStruct(n)) => {
@@ -356,6 +377,9 @@ impl Interpreter {
             }
             Some(Resolved::Builtin(p)) => {
                 let args = self.eval_args(arguments, None, false)?;
+                if p.ends_with("json::parse_string") && self.type_hint.is_none() {
+                    self.type_hint = targs.first().cloned().or(expected);
+                }
                 self.call_builtin_fn(&p, args)
             }
             Some(Resolved::Const(m, n)) => {
@@ -382,6 +406,10 @@ impl Interpreter {
                         let recv = args.remove(0);
                         return self.call_method_value(recv, method, args, None);
                     }
+                    if method == "default" && args.is_empty() && (self.structs.contains_key(ty) || self.enums.contains_key(ty)) {
+                        // `@derive(Default)` (or a field-wise default) for a user type
+                        return self.default_for(&Type::Custom(ty.to_string()));
+                    }
                     return Err(unsupported(format!(
                         "cannot resolve `{}`: unknown type or unimplemented std item",
                         name
@@ -401,12 +429,15 @@ impl Interpreter {
     /// `drop(x)`: a local argument is moved out (its slot emptied) and destructors run.
     fn explicit_drop(&mut self, arg: &'static Expression<'static>) -> R {
         let v = self.eval(arg)?;
+        self.note_move(arg);
         if let Expression::Identifier { name, .. } = arg {
             if let Some(slot) = self.lookup_var(name) {
                 *slot.borrow_mut() = Value::Unit;
             }
         }
-        self.drop_unreachable(&[v], &[])?;
+        // `drop(x)` takes ownership: the object dies now even if an alias (an auto-borrowed caller
+        // copy) still mentions it; values behind an `Rc` only lose this handle
+        self.drop_values(&[v], &[], true)?;
         Ok(Value::Unit)
     }
 
@@ -488,6 +519,11 @@ impl Interpreter {
                 }
             }
             Callable::Deferred { .. } => Err(semantic("a future is not callable; `.await` it")),
+            Callable::Thunk { func, args } => {
+                let (f, a) = (func.clone(), args.clone());
+                let r = self.call_value(&f, a)?;
+                self.await_value(r)
+            }
             Callable::Path(p) => {
                 let p = p.to_string();
                 if let Some((en, var)) = p.rsplit_once("::") {
@@ -529,7 +565,7 @@ impl Interpreter {
         self.define(p, a);
     }
 
-    fn depth_check(&mut self) -> R<()> {
+    pub(crate) fn depth_check(&mut self) -> R<()> {
         let over_stack = match self.stack_guard {
             Some((base, budget)) => {
                 let here = 0u8;
@@ -565,6 +601,9 @@ impl Interpreter {
 
     /// `.await`: run a deferred async call to completion; any other value is already a result.
     pub(crate) fn await_value(&mut self, v: Value) -> R {
+        if let Some(r) = super::builtins::thread::wait_if_task(self, &v) {
+            return r;
+        }
         match &v {
             Value::Func(c) => match &**c {
                 Callable::Deferred { func, args, self_val, targs, expected } => {
@@ -586,11 +625,20 @@ impl Interpreter {
         expected: Option<Type>,
     ) -> R {
         if f.is_extern {
-            return Err(unsupported(format!("extern function `{}`", f.name)));
+            return self.call_host(&f.name, args); // ADR-0023 host bridge (unsupported when none is loaded)
+        }
+        if self.hot.is_some() {
+            self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
+        }
+        if self.engine_resolved && self_val.is_none() && targs.is_empty() {
+            if let Some(c) = self.compiled_for(f) {
+                return self.run_compiled(f, &c, args);
+            }
         }
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
         let mut scope = Scope::new(f.module);
+        scope.vars = self.vec_pool.pop().unwrap_or_default();
         scope.self_ty = f.self_ty.clone();
         scope.ret_ty = f.ret;
         if !f.type_params.is_empty() {
@@ -619,6 +667,7 @@ impl Interpreter {
                 self.define("self", v);
             }
         }
+        let first_param_var = self.scope.vars.len();
         let mut bind_err: Option<Ctl> = None;
         for p in f.params.iter().filter(|p| p.name != "self") {
             let a = it.next().unwrap_or(Value::Unit);
@@ -646,6 +695,7 @@ impl Interpreter {
             }
         }
         drop(it);
+        self.bind_links(f, first_param_var);
 
         let r = match bind_err {
             Some(e) => Err(e),
@@ -657,7 +707,7 @@ impl Interpreter {
         let r = self.run_defers(r);
         let r = match r {
             Err(Ctl::Return(v)) => Ok(v),
-            Err(Ctl::Break { .. }) | Err(Ctl::Continue { .. }) => Err(semantic("`break`/`continue` outside of a loop")),
+            Err(Ctl::Break(_)) | Err(Ctl::Continue(_)) => Err(semantic("`break`/`continue` outside of a loop")),
             other => other,
         };
         let r = match r {
@@ -670,7 +720,8 @@ impl Interpreter {
         };
         let r = self.exit_scope_vars(0, r);
         self.depth -= 1;
-        self.scope = self.frames.pop().expect("frame stack");
+        let done = std::mem::replace(&mut self.scope, self.frames.pop().expect("frame stack"));
+        self.recycle_vars(done.vars);
         self.backtrace.pop();
         r
     }
@@ -723,6 +774,10 @@ impl Interpreter {
                     if self.builtins.has_function(&path) {
                         let args = self.eval_args(arguments, None, false)?;
                         self.mark(loc);
+                        if path.ends_with("json::parse_string") {
+                            let expected = self.take_expected(whole);
+                            self.type_hint = type_args.and_then(|t| t.first().cloned()).or(expected);
+                        }
                         return self.call_builtin_fn(&path, args);
                     }
                 }
@@ -748,9 +803,14 @@ impl Interpreter {
         self.mark(loc);
         self.type_hint = type_args.and_then(|t| t.first().cloned());
         if let Some(f) = user {
+            self.prepare_arg_moves(&f, arguments, 0);
             return self.call_user_method(&f, recv, place, args);
         }
-        self.call_builtin_method(recv, place, method, args)
+        let r = self.call_builtin_method(recv, place, method, args)?;
+        if matches!(method, "push" | "push_back" | "push_front" | "insert" | "send" | "try_send") {
+            self.note_moves(arguments.iter().map(|(_, e)| *e));
+        }
+        Ok(r)
     }
 
     pub(crate) fn find_user_method(&self, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {
@@ -795,6 +855,22 @@ impl Interpreter {
         method: &str,
         args: Vec<Value>,
     ) -> R {
+        if let Value::Int(n, super::int::IntTy::U128) = &recv {
+            if let Some(r) = super::u128ops::method(method, *n, &args) {
+                return r;
+            }
+        }
+        if let Value::Native(n) = &recv {
+            if let Some(f) = self.builtins.native_method(n.type_name(), method) {
+                return f(self, &recv, args);
+            }
+        }
+        if let Value::Struct(sv) = &recv {
+            // builtin structs (`regex::Match`, `url::Url`...) keep their methods in the native table
+            if let Some(f) = self.builtins.native_method(&sv.name, method) {
+                return f(self, &recv, args);
+            }
+        }
         let kind = Kind::of(&recv);
         let imp = self.builtins.method(kind, method);
         match imp {
@@ -810,8 +886,15 @@ impl Interpreter {
                     None => Place::temp(recv),
                 };
                 let mut v = place.take()?;
+                let before = if self.drop_types.is_empty() { None } else { Some(v.clone()) };
                 let r = f(self, &mut v, args);
                 place.write(v)?;
+                // elements a mutating builtin discarded (`clear`, `truncate`, `remove`, overwritten map
+                // entries...) are dropped now; what it returns stays alive
+                if let (Some(before), Ok(res)) = (before, &r) {
+                    let keep = res.clone();
+                    self.drop_unreachable(&[before], &[&keep])?;
+                }
                 r
             }
             Some(MethodImpl::Place(f)) => {

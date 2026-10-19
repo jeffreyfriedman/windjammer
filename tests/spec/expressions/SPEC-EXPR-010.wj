@@ -1,0 +1,12 @@
+// spec: SPEC-EXPR-010
+// expect: zero one many
+fn name(n: int) -> string {
+    match n {
+        0 => "zero",
+        1 => "one",
+        _ => "many",
+    }
+}
+fn main() {
+    println("${name(0)} ${name(1)} ${name(9)}")
+}

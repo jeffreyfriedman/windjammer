@@ -314,7 +314,7 @@ match value {
             maturity: GuaranteeMaturity::Proven,
         });
 
-        // WJ0160: arena value escapes its arena (ADR-0016, `std::arena`, unstable)
+        // WJ0160: arena value escapes its arena (ADR-0025, `std::arena`, unstable)
         self.register(WjErrorCode {
             code: "WJ0160".to_string(),
             title: "Arena value escapes its arena".to_string(),
@@ -348,7 +348,7 @@ fn label() -> string {
         self.register(WjErrorCode {
             code: "WJ0161".to_string(),
             title: "`std::arena` is unstable".to_string(),
-            explanation: "Arenas (ADR-0016) are behind the compiler feature `unstable_arenas`.".to_string(),
+            explanation: "Arenas (ADR-0025) are behind the compiler feature `unstable_arenas`.".to_string(),
             causes: vec!["`use std::arena` with a compiler built without `unstable_arenas`".to_string()],
             solutions: vec!["Build the compiler with `cargo build --features unstable_arenas`".to_string()],
             example: None,

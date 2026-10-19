@@ -12,13 +12,28 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 mod arena;
+pub(crate) mod channel;
+mod enumerable;
 mod iter;
 mod map;
 mod num;
 mod option;
 mod seq;
 mod shared;
+mod std_data;
+mod std_extra;
 mod std_fns;
+pub(crate) mod std_proc;
+mod test_assert;
+pub mod std_http;
+mod std_http_server;
+mod std_config;
+mod std_ordered;
+mod std_db;
+mod std_sys;
+pub(crate) mod sync;
+pub(crate) mod thread;
+pub(crate) mod time;
 mod text;
 
 pub use seq::collect_into;
@@ -49,6 +64,7 @@ pub enum Kind {
     Formatter,
     Rc,
     Cell,
+    Native,
 }
 
 impl Kind {
@@ -79,6 +95,7 @@ impl Kind {
             Value::Ref(_) => Kind::Any,
             Value::Rc(_) | Value::Weak(_) => Kind::Rc,
             Value::Cell(..) => Kind::Cell,
+            Value::Native(_) => Kind::Native,
         }
     }
 
@@ -122,6 +139,7 @@ pub struct Registry {
     consts: HashMap<String, Value>,
     types: HashSet<&'static str>,
     mutating: HashSet<&'static str>,
+    natives: HashMap<&'static str, HashMap<&'static str, PureFn>>,
 }
 
 impl Registry {
@@ -130,12 +148,36 @@ impl Registry {
         num::register(&mut r);
         text::register(&mut r);
         seq::register(&mut r);
+        enumerable::register(&mut r);
         map::register(&mut r);
         option::register(&mut r);
+        option::register_chain(&mut r);
         std_fns::register(&mut r);
+        test_assert::register(&mut r);
         shared::register(&mut r);
         arena::register(&mut r);
+        std_sys::register(&mut r);
+        std_data::register(&mut r);
+        std_proc::register(&mut r);
+        std_extra::register(&mut r);
+        std_http::register(&mut r);
+        std_http_server::register(&mut r);
+        std_config::register(&mut r);
+        std_ordered::register(&mut r);
+        std_db::register(&mut r);
+        channel::register(&mut r);
+        sync::register(&mut r);
+        thread::register(&mut r);
+        time::register(&mut r);
         r
+    }
+
+    /// Method of a host object type (`Registry::native("Sender", "send", f)`).
+    pub fn native(&mut self, ty: &'static str, name: &'static str, f: PureFn) {
+        self.natives.entry(ty).or_default().insert(name, f);
+    }
+    pub fn native_method(&self, ty: &str, name: &str) -> Option<PureFn> {
+        self.natives.get(ty).and_then(|m| m.get(name)).copied()
     }
 
     pub fn pure(&mut self, k: Kind, name: &'static str, f: PureFn) {
@@ -218,13 +260,19 @@ impl Registry {
 // Argument helpers
 // ---------------------------------------------------------------------------
 
+/// Argument `i` with `&`/`&mut` references followed. An `Rc` handle is kept (so storing it keeps
+/// the sharing); the typed helpers below look through it.
 pub(crate) fn arg(args: &[Value], i: usize, what: &str) -> R<Value> {
     let v = args.get(i).cloned().ok_or_else(|| semantic(format!("`{}` is missing argument {}", what, i + 1)))?;
-    super::place::deref_value(v)
+    super::place::strip_refs(v)
+}
+
+fn arg_val(args: &[Value], i: usize, what: &str) -> R<Value> {
+    super::place::deref_value(arg(args, i, what)?)
 }
 
 pub(crate) fn arg_int(args: &[Value], i: usize, what: &str) -> R<i128> {
-    match arg(args, i, what)? {
+    match arg_val(args, i, what)? {
         Value::Int(n, _) => Ok(n),
         other => Err(semantic(format!("`{}` expects an integer, found {}", what, other.type_name()))),
     }
@@ -236,7 +284,7 @@ pub(crate) fn arg_usize(args: &[Value], i: usize, what: &str) -> R<usize> {
 }
 
 pub(crate) fn arg_str(args: &[Value], i: usize, what: &str) -> R<Rc<String>> {
-    match arg(args, i, what)? {
+    match arg_val(args, i, what)? {
         Value::Str(s) => Ok(s),
         Value::Char(c) => Ok(Rc::new(c.to_string())),
         other => Err(semantic(format!("`{}` expects a string, found {}", what, other.type_name()))),
@@ -244,7 +292,7 @@ pub(crate) fn arg_str(args: &[Value], i: usize, what: &str) -> R<Rc<String>> {
 }
 
 pub(crate) fn arg_f64(args: &[Value], i: usize, what: &str) -> R<f64> {
-    match arg(args, i, what)? {
+    match arg_val(args, i, what)? {
         Value::Float(f, _) => Ok(f),
         Value::Int(n, IntTy::Lit) => Ok(n as f64),
         other => Err(semantic(format!("`{}` expects a float, found {}", what, other.type_name()))),

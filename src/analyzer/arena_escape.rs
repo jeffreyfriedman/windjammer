@@ -1,4 +1,4 @@
-//! Arena escape check (ADR-0016, `std::arena`, unstable).
+//! Arena escape check (ADR-0025, `std::arena`, unstable).
 //!
 //! A value allocated in an arena may not outlive the arena. Rust's borrow checker enforces this for
 //! `Scratch` values in the emitted code, but its error talks about lifetimes in generated Rust; `Arena<T>`
@@ -652,7 +652,7 @@ pub fn gate(program: &Program) -> Result<(), String> {
         return Ok(());
     }
     if !cfg!(feature = "unstable_arenas") {
-        return Err("error[WJ0161]: `std::arena` is unstable (ADR-0016)\n  = help: build the compiler with \
+        return Err("error[WJ0161]: `std::arena` is unstable (ADR-0025)\n  = help: build the compiler with \
                     `--features unstable_arenas` to opt in"
             .to_string());
     }

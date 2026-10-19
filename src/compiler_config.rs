@@ -31,7 +31,7 @@ pub struct CompilerConfig {
     pub runtime_path: Option<PathBuf>,
     /// Override the a game engine project workspace path for generated Cargo.toml.
     pub game_path: Option<PathBuf>,
-    /// Run the opt-in auto-arena optimizer pass (`scratch_reuse`, ADR-0016; `WJ_AUTO_ARENA=1`).
+    /// Run the opt-in auto-arena optimizer pass (`scratch_reuse`, ADR-0025; `WJ_AUTO_ARENA=1`).
     pub auto_arena: bool,
 }
 

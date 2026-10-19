@@ -35,6 +35,7 @@ pub mod csv_mod;
 pub mod db;
 pub mod doc_test;
 pub mod encoding;
+pub mod enumerable;
 pub mod env;
 pub mod ffi;
 pub mod fixtures;

@@ -119,12 +119,38 @@ pub struct Interpreter {
     pub(crate) type_aliases: HashMap<String, Type>,
     pub(crate) globals: HashMap<(usize, String), Slot>,
     pub(crate) scope: Scope,
+    /// Call-site cache: call expression address -> the module function it resolved to.
+    pub(crate) call_cache: HashMap<usize, Rc<FuncDef>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Recycled variable vectors of finished frames.
+    pub(crate) vec_pool: Vec<Vec<(&'static str, Slot)>>,
+    /// `--engine=resolved`: run compiled functions where possible (see `resolved/`).
+    pub(crate) engine_resolved: bool,
+    /// Compiled forms by `FuncDef` address (`None` = not compilable).
+    pub(crate) compiled: HashMap<usize, Option<Rc<super::resolved::CompiledFn>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Locals of active compiled calls (one window per call).
+    pub(crate) rstack: Vec<Value>,
+    /// `std::subprocess` children by handle id.
+    pub(crate) subprocesses: HashMap<u64, super::builtins::std_proc::Session>,
+    pub(crate) next_subprocess: u64,
+    /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
+    pub(crate) sched: super::sched::Sched,
+    pub(crate) epoch: std::time::Instant,
+    /// Global random generator (`std::random`), seeded from entropy unless time is deterministic.
+    pub(crate) rng: Option<rand::rngs::StdRng>,
+    /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
+    pub(crate) log_level: Option<i32>,
+    /// How `std::http` client calls are answered (default: refuse).
+    pub(crate) http: super::builtins::std_http::HttpMode,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
     pub(crate) drop_types: HashSet<String>,
     pub(crate) next_uid: u32,
     pub(crate) dropped: HashSet<u32>,
+    /// Ownership moves out of variables (`moves.rs`).
+    pub(crate) moves: super::moves::Moves,
+    /// `--hash-seed`: permutation of HashMap/HashSet iteration order (0 = key order).
+    pub hash_seed: u64,
     /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
     pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
     pub(crate) cur: Option<&'static Location>,
@@ -146,6 +172,13 @@ pub struct Interpreter {
     pub(crate) expected: Option<(usize, Type)>,
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
+    /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items
+    /// are then bound after every module is registered, instead of one at a time.
+    pub(crate) project_loading: bool,
+    /// Bridge library for `extern fn` (ADR-0020), when the project provides Rust code.
+    pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
+    /// `wj run --hot`: pending file edits applied at function entry (`hot.rs`).
+    pub(crate) hot: Option<Box<super::hot::HotState>>,
 }
 
 impl Default for Interpreter {
@@ -168,10 +201,24 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             globals: HashMap::new(),
             scope: Scope::new(0),
+            call_cache: HashMap::default(),
+            vec_pool: Vec::new(),
+            engine_resolved: false,
+            compiled: HashMap::default(),
+            rstack: Vec::new(),
+            subprocesses: HashMap::new(),
+            next_subprocess: 0,
+            sched: super::sched::Sched::new(),
+            epoch: std::time::Instant::now(),
+            rng: None,
+            log_level: None,
+            http: Default::default(),
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
             dropped: HashSet::new(),
+            moves: Default::default(),
+            hash_seed: 0,
             backtrace: Vec::new(),
             cur: None,
             output: Vec::new(),
@@ -187,8 +234,14 @@ impl Interpreter {
             type_hint: None,
             expected: None,
             missing_modules: HashSet::new(),
+            project_loading: false,
+            host: None,
+            hot: None,
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
+        if std::thread::current().name() == Some(super::runner::BIG_STACK_THREAD) {
+            s.guard_stack();
+        }
         s
     }
 
@@ -203,6 +256,25 @@ impl Interpreter {
     pub fn guard_stack(&mut self) {
         let here = 0u8;
         self.stack_guard = Some((&here as *const u8 as usize, super::runner::STACK_BYTES - super::runner::STACK_HEADROOM));
+    }
+
+    /// Schedule seed: 0 = FIFO run-to-block, N = seeded exploration of other interleavings.
+    pub fn set_sched_seed(&mut self, seed: u64) {
+        self.sched.set_seed(seed);
+    }
+
+    /// Deterministic time: no real clock is read; time advances only through `sleep`.
+    pub fn set_deterministic_time(&mut self, on: bool) {
+        self.sched.deterministic = on;
+    }
+
+    pub fn set_http_mode(&mut self, mode: super::builtins::std_http::HttpMode) {
+        self.http = mode;
+    }
+
+    /// Select the resolved (compiled closure) engine for compilable functions.
+    pub fn set_engine_resolved(&mut self, on: bool) {
+        self.engine_resolved = on;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {

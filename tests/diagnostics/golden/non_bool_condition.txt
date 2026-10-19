@@ -1,0 +1,7 @@
+error[WJ0003]: mismatched types: expected `bool`, found `int` in condition
+  --> non_bool_condition.wj:4:8
+  |
+4 |     if 1 {
+  |        ^ expected `bool`, found `int`
+  = help: make the value a `bool`, or change the declaration
+  = explain: wj explain WJ0003

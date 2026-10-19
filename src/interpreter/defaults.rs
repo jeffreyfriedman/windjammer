@@ -33,8 +33,10 @@ impl Interpreter {
                 let base = n.rsplit("::").next().unwrap_or(n).split('<').next().unwrap_or(n).to_string();
                 match base.as_str() {
                     "Vec" | "VecDeque" => return Ok(Value::vec(vec![])),
-                    "HashMap" | "BTreeMap" => return Ok(Value::Map(Rc::new(BTreeMap::new()))),
-                    "HashSet" | "BTreeSet" => return Ok(Value::Set(Rc::new(BTreeMap::new()))),
+                    "HashMap" => return Ok(Value::hash_map(BTreeMap::new())),
+                    "BTreeMap" => return Ok(Value::btree_map(BTreeMap::new())),
+                    "HashSet" => return Ok(Value::hash_set(BTreeMap::new())),
+                    "BTreeSet" => return Ok(Value::btree_set(BTreeMap::new())),
                     "String" | "str" | "string" => return Ok(Value::str("")),
                     "char" => return Ok(Value::Char('\0')),
                     "Option" => return Ok(Value::none()),
@@ -66,8 +68,8 @@ impl Interpreter {
             Value::Bool(_) => Value::Bool(false),
             Value::Str(_) => Value::str(""),
             Value::Vec(_) => Value::vec(vec![]),
-            Value::Map(_) => Value::Map(Rc::new(BTreeMap::new())),
-            Value::Set(_) => Value::Set(Rc::new(BTreeMap::new())),
+            Value::Map(m) => Value::Map(Rc::new(KMap { m: BTreeMap::new(), hashed: m.hashed })),
+            Value::Set(m) => Value::Set(Rc::new(KMap { m: BTreeMap::new(), hashed: m.hashed })),
             Value::Char(_) => Value::Char('\0'),
             Value::Enum(e) if &*e.ty == "Option" => Value::none(),
             Value::Struct(s) => self.default_for(&Type::Custom(s.name.to_string()))?,

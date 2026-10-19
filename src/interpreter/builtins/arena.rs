@@ -1,4 +1,4 @@
-//! `std::arena` (ADR-0016): `Arena<T>`, `Handle<T>`, `Scratch` on the interpreter heap.
+//! `std::arena` (ADR-0025): `Arena<T>`, `Handle<T>`, `Scratch` on the interpreter heap.
 //!
 //! Same observable behaviour as `windjammer_runtime::arena` in a debug build: handles are checked on every
 //! access (stale handle after `reset()` and foreign handle both panic with the runtime's messages). Scratch

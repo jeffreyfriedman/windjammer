@@ -1,0 +1,36 @@
+// mutant: extra_argument of examples/verified/algo_linked_list_enum.wj
+enum List {
+    Cons(int, Box<List>),
+    Nil,
+}
+
+fn show(l: List) -> string {
+    match l {
+        List::Cons(v, rest) => "${v} -> ${show(*rest, 0)}",
+        List::Nil => "nil",
+    }
+}
+
+fn sum(l: List) -> int {
+    match l {
+        List::Cons(v, rest) => v + sum(*rest),
+        List::Nil => 0,
+    }
+}
+
+fn len(l: List) -> int {
+    match l {
+        List::Cons(_, rest) => 1 + len(*rest),
+        List::Nil => 0,
+    }
+}
+
+fn build() -> List {
+    List::Cons(1, Box::new(List::Cons(2, Box::new(List::Cons(3, Box::new(List::Nil))))))
+}
+
+fn main() {
+    println(show(build()))
+    println("sum = ${sum(build())}")
+    println("len = ${len(build())}")
+}

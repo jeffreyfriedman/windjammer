@@ -680,7 +680,13 @@ pub fn method_predicate_closure_receives_ref(method: &str) -> bool {
             | "skip_while"
             | "partition"
             | "inspect"
-    )
+    ) || enumerable_key_closure(method)
+}
+
+/// ADR-0018 enumerable surface: key/predicate closures (`group_by(|x| ..)`) receive `&T`.
+fn enumerable_key_closure(method: &str) -> bool {
+    use crate::stdlib_surface::enumerable::{Arg, METHODS};
+    METHODS.iter().any(|m| (m.name == method || m.rust == method) && m.args.contains(&Arg::KeyFn))
 }
 
 /// Unanimous closure-first-arg across all stdlib instance methods named `::{method}`.

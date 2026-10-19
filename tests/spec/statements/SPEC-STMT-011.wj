@@ -1,0 +1,10 @@
+// spec: SPEC-STMT-011
+// expect: done
+fn g() {
+    return
+    println("g after")
+}
+fn main() {
+    g()
+    println("done")
+}

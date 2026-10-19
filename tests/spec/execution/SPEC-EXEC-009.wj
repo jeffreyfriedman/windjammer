@@ -1,0 +1,14 @@
+// spec: SPEC-EXEC-009
+// expect: 1103527590
+// expect: 377401575
+// expect: 662824084
+fn lcg(s: int) -> int { (s * 1103515245 + 12345) % 2147483648 }
+fn main() {
+    let mut s = 1
+    let mut i = 0
+    while i < 3 {
+        s = lcg(s)
+        println("${s}")
+        i += 1
+    }
+}

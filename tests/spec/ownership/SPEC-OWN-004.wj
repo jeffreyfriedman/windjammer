@@ -1,0 +1,14 @@
+// spec: SPEC-OWN-004
+// expect: 4 2
+fn fill(v: Vec<int>, n: int) {
+    let mut i = 0
+    while i < n {
+        v.push(i)
+        i += 1
+    }
+}
+fn main() {
+    let mut v = [100]
+    fill(v, 3)
+    println("${v.len()} ${v[3]}")
+}

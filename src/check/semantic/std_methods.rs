@@ -1,0 +1,72 @@
+//! Method names that exist on some standard, runtime or common external type. A method call
+//! whose name is in neither this list nor the program is reported (WJ0015). Generated from
+//! stdlib_meta/, Rust std and the method names used across the repository corpora.
+
+pub const KNOWN_METHODS: &[&str] = &[
+    "about", "abs", "abs_diff", "acos", "add_result", "all", "and", "and_modify", "and_then", "any",
+    "append", "args", "as_bytes", "as_deref", "as_millis", "as_mut", "as_mut_ptr", "as_ptr",
+    "as_ref", "as_secs", "as_secs_f64", "as_slice", "as_str", "asin", "atan", "atan2", "author",
+    "binary_search", "binary_search_by", "binary_search_by_key", "bind", "borrow", "borrow_mut",
+    "bytes", "call_count", "capacity", "capitalize", "captures", "captures_iter",
+    "case_insensitive", "cbrt", "ceil", "chain", "charCodeAt", "char_at", "char_count",
+    "char_indices", "chars", "check_postconditions", "check_preconditions", "checked_add",
+    "checked_div", "checked_mul", "checked_neg", "checked_pow", "checked_rem", "checked_sub",
+    "choose", "choose_multiple", "chunks", "chunks_exact", "clamp", "clear", "client_ip", "clone",
+    "cloned", "cmp", "collect", "concat", "contains", "contains_char", "contains_key", "context",
+    "copied", "cos", "count", "count_ones", "count_zeros", "cycle", "decode_base64", "dedup",
+    "dedup_by_key", "default_value", "delimiter", "div_euclid", "drain", "duration_since",
+    "elapsed", "encode_base64", "ends_with", "ensures", "entries", "entry", "enumerate", "eq",
+    "eq_ignore_ascii_case", "exp", "expect", "expect_err", "extend", "extend_from_slice",
+    "fetch_all", "fetch_one", "fetch_optional", "file_type", "fill", "filter", "filter_level",
+    "filter_map", "filter_map_ok", "find", "find_iter", "find_map", "first", "first_mut",
+    "flat_map", "flatten", "floor", "fold", "for_each", "format_standard", "fract", "fromCharCode",
+    "from_bits", "from_char_code", "from_reader", "from_str_radix", "from_utf8", "from_writer",
+    "ge", "gen", "gen_bool", "gen_range", "get", "get_bool", "get_context", "get_header",
+    "get_int_opt", "get_key_value", "get_matches", "get_mut", "get_or_insert", "get_or_insert_with",
+    "get_or_int", "get_param", "get_query_param", "get_return", "gt", "help", "hours", "hypot",
+    "index_of", "insert", "inspect", "intersection", "into_inner", "into_iter", "into_keys",
+    "into_make_service", "into_owned", "into_values", "is_alphabetic", "is_alphanumeric",
+    "is_ascii", "is_ascii_alphabetic", "is_ascii_digit", "is_ascii_lowercase",
+    "is_ascii_punctuation", "is_ascii_uppercase", "is_ascii_whitespace", "is_char_boundary",
+    "is_digit", "is_empty", "is_err", "is_finite", "is_infinite", "is_lowercase", "is_match",
+    "is_nan", "is_none", "is_none_or", "is_numeric", "is_ok", "is_sign_negative",
+    "is_sign_positive", "is_some", "is_some_and", "is_uppercase", "is_whitespace", "iter",
+    "iter_mut", "join", "keys", "last", "last_index_of", "last_mut", "le", "leading_zeros", "len",
+    "lines", "ln", "location", "lock", "log", "log10", "log2", "lt", "make_ascii_lowercase",
+    "make_ascii_uppercase", "map", "map_err", "map_or", "map_or_else", "map_while", "match",
+    "match_indices", "max", "max_by", "max_by_key", "max_value", "migrate", "min", "min_by",
+    "min_by_key", "min_value", "minutes", "mul_add", "multiple", "ne", "new", "new_server",
+    "new_v4", "next", "now", "now_unix", "now_unix_nano", "nth", "num_milliseconds", "num_seconds",
+    "ok", "ok_or", "ok_or_else", "open", "or", "or_default", "or_else", "or_insert",
+    "or_insert_with", "output", "overflowing_add", "padStart", "parse", "parse_iso8601",
+    "partial_cmp", "partition", "peekable", "permissions", "pop", "pop_back", "pop_front",
+    "position", "pow", "powf", "powi", "pretty", "print", "println", "product", "push", "push_back",
+    "push_front", "push_str", "query_all", "query_one", "query_param", "query_params", "read",
+    "readonly", "receive_with_timeout", "record_call", "records", "recv", "rem_euclid", "remove",
+    "removeItem", "repeat", "replace", "replacen", "required", "requires", "reserve", "resize",
+    "response", "retain", "rev", "reverse", "rfind", "rotate_left", "rotate_right", "round",
+    "route", "rows_affected", "rposition", "rsplit", "sample_iter", "saturating_add",
+    "saturating_mul", "saturating_sub", "scan", "search_params", "send", "send_text",
+    "serve_static", "setItem", "set_context", "set_header", "set_len", "set_return", "short",
+    "shrink_to_fit", "signum", "sin", "skip", "skip_while", "sleep_millis", "sleep_seconds",
+    "slice", "sort", "sort_by", "sort_by_key", "sort_unstable", "sort_unstable_by", "sorted",
+    "spawn", "split", "split_at", "split_off", "split_once", "split_whitespace", "splitn", "sqrt",
+    "starts_with", "status", "step_by", "strip_prefix", "strip_suffix", "substring", "success",
+    "sum", "swap", "swap_remove", "take", "take_while", "tan", "text_response", "then", "then_some",
+    "toString", "to_ascii_lowercase", "to_ascii_uppercase", "to_bits", "to_bytes", "to_digit",
+    "to_float", "to_int", "to_lowercase", "to_owned", "to_str", "to_string", "to_string_lossy",
+    "to_uppercase", "to_vec", "trailing_zeros", "trim", "trim_end", "trim_end_matches",
+    "trim_matches", "trim_start", "trim_start_matches", "trunc", "truncate", "try_recv", "union",
+    "unwrap", "unwrap_err", "unwrap_or", "unwrap_or_default", "unwrap_or_else", "unzip", "upgrade",
+    "uri", "value_of", "values", "values_mut", "values_of", "var", "verify_called",
+    "verify_called_times", "version", "wait_for_shutdown", "was_called", "windows", "with_args",
+    "with_capacity", "with_error", "with_state", "wrapping_add", "wrapping_mul", "wrapping_sub",
+    "write", "write_record", "zip",
+];
+
+pub fn is_known(name: &str) -> bool {
+    KNOWN_METHODS.binary_search(&name).is_ok()
+        || name == crate::parser::optional_chain::OPT_CHAIN
+        // ADR-0018 enumerable surface: one table (src/stdlib_surface)
+        || crate::stdlib_surface::enumerable::is_surface_name(name)
+}

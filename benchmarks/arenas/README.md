@@ -1,4 +1,4 @@
-# Arena benchmarks (ADR-0016)
+# Arena benchmarks (ADR-0025)
 
 Two runners, both report the machine load average next to the numbers (measure only on a quiet machine):
 

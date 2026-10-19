@@ -48,6 +48,11 @@ impl<'m> Js<'m> {
                     self.pat(sp, &format!("{scrut}.{}", prop(f)), conds, binds)?;
                 }
             }
+            PPat::Struct { fields, .. } => {
+                for (f, _, sp) in fields {
+                    self.pat(sp, &format!("{scrut}.{}", prop(f)), conds, binds)?;
+                }
+            }
             PPat::Some(sp) => {
                 conds.push(format!("{scrut} !== null"));
                 self.pat(sp, &format!("{scrut}.v"), conds, binds)?;

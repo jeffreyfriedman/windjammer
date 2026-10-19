@@ -1,5 +1,4 @@
-// Sign and alternate flags are Rust-only today; Go/JS/TS must reject them at build time
-// (SUPPORT.toml), never print something different.
+// Sign and alternate flags behave as in Rust on every backend (wider coverage: 171).
 // expect: +5 -5
 // expect: 0xff 0b101
 fn main() {
