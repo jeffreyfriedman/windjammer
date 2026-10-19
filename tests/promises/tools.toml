@@ -10,7 +10,7 @@ stdout_has = ["WJ0003"]
 name = "explain describes a lint code"
 polarity = "positive"
 args = ["explain", "W0002"]
-stdout_has = ["W0002", "explicit-unwrap"]
+stdout_has = ["W0002", "unwrap"]
 
 [[case]]
 name = "explain fails on an unknown code"

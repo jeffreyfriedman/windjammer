@@ -50,12 +50,11 @@ polarity = "negative"
 files = { "t/readme.txt" = "nothing" }
 args = ["test", "--interpret", "{w}/t"]
 exit = 1
-output_has = ["no test files"]
+output_has = ["no tests found"]
 
 [[case]]
 name = "test --allow-empty succeeds when no tests exist"
 polarity = "positive"
-xfail = "BUG: `--allow-empty` is ignored with --interpret (exit 1, `no test files`)"
 files = { "t/readme.txt" = "nothing" }
 args = ["test", "--interpret", "--allow-empty", "{w}/t"]
 
