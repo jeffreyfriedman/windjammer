@@ -1,1 +1,0 @@
-load averages: 40.21 69.62 75.86 — assistant: "Load is about 40 and falling, but still above what I want for adding more builds, so the queue stays held." Background command: "export CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=~/Library/Caches/windjammer/wt-arena && (timeout 3000 cargo check ...)"
