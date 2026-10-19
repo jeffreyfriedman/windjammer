@@ -16,6 +16,8 @@ mod compile;
 mod expr;
 mod fast;
 mod island;
+#[cfg(feature = "jit")]
+pub(crate) mod jit;
 mod method;
 mod place;
 mod typed;
@@ -49,6 +51,11 @@ pub(crate) struct CompiledFn {
     scalar: bool,
     /// Replay the walker's `expect_tail_type` at entry.
     tail_hint: bool,
+    /// Calls so far and the machine-code form (`jit.rs`, `--features jit`).
+    #[cfg(feature = "jit")]
+    calls: std::cell::Cell<u32>,
+    #[cfg(feature = "jit")]
+    jit: std::cell::OnceCell<Option<jit::JitFn>>,
     body: Body,
 }
 
@@ -84,6 +91,12 @@ impl Interpreter {
     /// Run `c` on the frame at `base`, whose parameter slots already hold the arguments (`bound`:
     /// already of the declared widths, see `expr::call`).
     pub(crate) fn run_compiled_at(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, bound: bool) -> R {
+        #[cfg(feature = "jit")]
+        if let Body::I(_, _, t) = &c.body {
+            if let Some(v) = self.try_jit(f, c, base) {
+                return Ok(Value::Int(v as i128, *t));
+            }
+        }
         let own = self.enter_compiled(f, base)?;
         let r = match if bound { Ok(true) } else { self.bind_params(f, c, base) } {
             Ok(true) if c.tail_hint => {
@@ -121,6 +134,12 @@ impl Interpreter {
 
     /// `run_compiled_at` for a function declared to return the `small` width `t`: the result unboxed.
     pub(crate) fn run_compiled_int(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, t: IntTy, bound: bool) -> R<i64> {
+        #[cfg(feature = "jit")]
+        if matches!(c.body, Body::I(..)) {
+            if let Some(v) = self.try_jit(f, c, base) {
+                return Ok(v);
+            }
+        }
         let own = self.enter_compiled(f, base)?;
         let r = match if bound { Ok(true) } else { self.bind_params(f, c, base) } {
             Ok(true) => match &c.body {
