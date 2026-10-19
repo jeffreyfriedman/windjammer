@@ -11,6 +11,8 @@ pub mod codes;
 pub mod rust_leakage;
 pub mod surface_syntax;
 pub mod missing_value;
+pub mod mixed_int_width;
+pub mod redundant_as_str;
 pub mod trailing_return;
 
 /// The single lint entry point shared by `wj lint`, `wj build` diagnostics and `wj run --interpret`:
@@ -128,11 +130,6 @@ impl LintCollector {
         self.diagnostics.iter().any(|d| d.level == LintLevel::Error)
     }
 
-    pub fn has_warnings(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(|d| d.level == LintLevel::Warning)
-    }
 }
 
 /// Linter for Windjammer code
@@ -295,14 +292,6 @@ impl<'ast> Linter<'ast> {
         self.collector.diagnostics
     }
 
-    /// Get diagnostics by level
-    pub fn diagnostics_by_level(&self, level: LintLevel) -> Vec<&LintDiagnostic> {
-        self.collector
-            .diagnostics
-            .iter()
-            .filter(|d| d.level == level)
-            .collect()
-    }
 }
 
 #[cfg(test)]

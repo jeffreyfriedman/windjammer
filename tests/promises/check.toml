@@ -162,3 +162,10 @@ files = { "m.wj" = "fn main( {\n" }
 args = ["check", "--fix", "{w}/m.wj"]
 exit = 1
 output_has = ["0 edit(s) applied"]
+
+[[case]]
+name = "check accepts interpolating a type that defines to_string"
+polarity = "positive"
+files = { "m.wj" = "struct P { x: int }\n\nimpl P {\n    fn to_string(self) -> string {\n        \"(${self.x})\"\n    }\n}\n\nfn main() {\n    let p = P { x: 1 }\n    println(\"${p}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+exit = 0

@@ -26,6 +26,7 @@ step() {
 t() { cargo test --release --test all -q -- "$@"; }
 
 step "build (release binaries)" cargo build --release --bins -q
+step "library builds without default features (plugins depend on it this way)" cargo check --release --lib --no-default-features --features cli -q
 step "rustfmt" cargo fmt --all -- --check
 step "test binary" cargo test --release --test all --no-run -q
 step "architecture" t architecture::
@@ -35,6 +36,7 @@ step "dead capabilities" t capability_reachability_test::
 step "single driver (legacy windjammer has nothing wj lacks)" t single_driver_parity_test::
 step "check vs build differential" t check_build_differential_test::
 step "interpreter vs compiled Rust" t interpreter_differential_test::
+step "interpreter refuses what check rejects" t interpreter_check_parity_test::
 step "codegen determinism" t codegen_determinism_test::
 step "fmt/fix preserve behavior" t fmt_fix_semantics_test::
 step "spec examples (interpreter, in-process)" t spec_conformance_test::

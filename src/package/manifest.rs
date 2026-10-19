@@ -30,15 +30,6 @@ impl Dependency {
         }
     }
 
-    pub fn with_registry(mut self, registry: impl Into<String>) -> Self {
-        self.registry = registry.into();
-        self
-    }
-
-    pub fn with_features(mut self, features: Vec<String>) -> Self {
-        self.features = features;
-        self
-    }
 }
 
 /// Parsed package manifest with runtime and dev dependencies.
@@ -87,10 +78,6 @@ impl PackageManifest {
         Ok(Self::from_config(&config))
     }
 
-    /// All dependencies (runtime + dev) by name.
-    pub fn all_dependencies(&self) -> impl Iterator<Item = &Dependency> {
-        self.dependencies.iter().chain(self.dev_dependencies.iter())
-    }
 }
 
 fn parse_dependency_map(map: &HashMap<String, DependencySpec>) -> Vec<Dependency> {

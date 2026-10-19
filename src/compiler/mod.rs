@@ -162,6 +162,7 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     dep_roots: &[std::path::PathBuf],
     dep_epoch: Option<u64>,
 ) -> anyhow::Result<()> {
+    attach_ir_module_if_missing(codegen, analyzed_functions);
     let auto_arena = codegen.config.auto_arena;
     let rust_code = crate::optimizer::run_with_auto_arena(auto_arena, &codegen.generate_program(program, analyzed_functions));
     let mut registry = std::mem::take(&mut codegen.signature_registry);
@@ -170,6 +171,13 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     cache_management::write_if_changed(output_file, &rust_code)?;
     if target == crate::CompilationTarget::Rust {
         let source = std::fs::read_to_string(source_file)?;
+        crate::codegen::rust::source_map_align::write_if_enabled(
+            codegen.config().emit_source_maps,
+            source_file,
+            &source,
+            output_file,
+            &rust_code,
+        );
         let fingerprint = Some(if let Some(epoch) = dep_epoch {
             incremental::compute_fingerprint_with_dep_epoch_and_output(&source, epoch, &rust_code)
                 .into()
@@ -196,6 +204,20 @@ pub(crate) fn write_crate_metadata_json(
     let metadata_json = serde_json::to_string_pretty(metadata)?;
     cache_management::write_if_changed(&metadata_path, &metadata_json)?;
     Ok(())
+}
+
+/// IR cutover: attach the solved IR module when the caller has not (the multipass library path
+/// attaches per-file IR itself). Without it codegen falls back to analyzer data and the semantic
+/// facts (NUM-DEFAULT-INT, last_use) are invisible to single-file builds.
+fn attach_ir_module_if_missing<'ast>(
+    codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
+    analyzed: &[crate::analyzer::AnalyzedFunction<'ast>],
+) {
+    if !codegen.ir_module_functions.is_empty() || codegen.config().ir_cutover.all_disabled() {
+        return;
+    }
+    let ir_module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, &codegen.signature_registry, None);
+    codegen.set_ir_module(ir_module);
 }
 
 /// Collect inferred bounds from a program and apply them to the code generator.

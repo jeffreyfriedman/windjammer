@@ -44,6 +44,10 @@ impl<'ast> CodeGenerator<'ast> {
                 .trim_end_matches(".to_owned()");
             return format!("{base}.to_string()");
         }
+        // `.as_str()` is identity in Windjammer (W0012): lower exactly like the receiver alone.
+        if method == "as_str" && arguments.is_empty() {
+            return self.generate_expression(object);
+        }
         if super::rust_stdlib_annotations::is_strip_redundant(method) && arguments.is_empty() {
             if let Expression::Identifier { name, .. } = object {
                 let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());

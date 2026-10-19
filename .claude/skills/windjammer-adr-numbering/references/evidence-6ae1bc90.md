@@ -1,0 +1,1 @@
+Taking "the next free number" after the merge: ADRs 0017–0024 were already taken on next/v0.50.0 and the cli-polish branch added 0018–0020 rows to docs/adr/README.md; the merge conflicted on that index and was resolved by regenerating it with the docs generator.

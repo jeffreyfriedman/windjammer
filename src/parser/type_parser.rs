@@ -665,8 +665,4 @@ impl Parser {
         Ok(base_type)
     }
 
-    /// Public wrapper for parse_type (for external use)
-    pub fn parse_type_public(&mut self) -> Result<Type, String> {
-        self.parse_type()
-    }
 }

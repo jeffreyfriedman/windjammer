@@ -1,0 +1,28 @@
+// Float associated constants: shortest round-trip digits, no exponent (expected values derived in Python:
+// repr(sys.float_info.max) -> 1.7976931348623157e308, numpy-free f32 values via struct round-trip).
+// expect: 340282350000000000000000000000000000000
+// expect: 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+// expect: 0.00000011920929
+// expect: 0.0000000000000002220446049250313
+// expect: inf
+// expect: -inf
+// expect: true
+// expect: -340282350000000000000000000000000000000
+fn main() {
+    let a = f32::MAX
+    println("${a}")
+    let b = f64::MAX
+    println("${b}")
+    let c = f32::EPSILON
+    println("${c}")
+    let d = f64::EPSILON
+    println("${d}")
+    let e = f64::INFINITY
+    println("${e}")
+    let f = f64::NEG_INFINITY
+    println("${f}")
+    let g = f64::NAN
+    println("${g != g}")
+    let h = f32::MIN
+    println("${h}")
+}

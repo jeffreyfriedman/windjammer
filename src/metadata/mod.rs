@@ -600,17 +600,6 @@ pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std
     Ok(())
 }
 
-/// Emit per-file `.wj.meta` for a compiled module.
-/// Shared by both `compilation_pipeline` and `library_multipass`.
-pub fn emit_module_meta_for_file(
-    source_file: &Path,
-    program: &crate::parser::Program,
-    registry: &crate::analyzer::SignatureRegistry,
-    copy_structs: Vec<String>,
-) {
-    emit_module_meta_for_file_with_fingerprint(source_file, program, registry, copy_structs, None);
-}
-
 pub fn emit_module_meta_for_file_with_fingerprint(
     source_file: &Path,
     program: &crate::parser::Program,

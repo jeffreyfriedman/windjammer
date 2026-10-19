@@ -1,0 +1,1 @@
+{"action": "create", "reason": "The expressiveness round produced a `wj fix` Option migration with explicit safety rules: what it rewrites, what it never touches, and how to verify. No existing skill covers Windjammer optional-syntax migration, and future sessions editing Option-heavy code need these rules before running the tool.", "evidence": "references/evidence-7731b953.md"}

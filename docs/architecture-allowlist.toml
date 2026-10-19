@@ -8,10 +8,9 @@
 "src/analyzer/borrow_analysis.rs" = 1
 "src/analyzer/mod.rs" = 1
 "src/analyzer/mutation_detection.rs" = 1
-"src/analyzer/optimization_detectors/string_optimization_detection.rs" = 3
+"src/analyzer/optimization_detectors/string_optimization_detection.rs" = 1
 "src/analyzer/self_access_and_option_refs.rs" = 1
 "src/analyzer/self_analysis.rs" = 1
-"src/analyzer/self_mutating_calls.rs" = 1
 "src/analyzer/string_optimization.rs" = 1
 "src/cargo_integration.rs" = 1
 "src/cli/update.rs" = 1
@@ -20,8 +19,8 @@
 "src/codegen/javascript/tree_shaker.rs" = 1
 "src/codegen/rust/backend.rs" = 1
 "src/codegen/rust/codegen_helpers.rs" = 1
-"src/codegen/rust/generator.rs" = 6
-"src/codegen/rust/statement_generation.rs" = 2
+"src/codegen/rust/generator.rs" = 2
+"src/codegen/rust/statement_generation.rs" = 1
 "src/codegen/rust/variable_analysis/for_loop_borrow_and_usize.rs" = 6
 "src/error_handling.rs" = 1
 "src/error_mapper.rs" = 1
@@ -40,10 +39,12 @@
 [env_var_reads]
 "src/cargo_cache/mod.rs" = 9
 "src/cli/self_install.rs" = 3
+"src/cli/watch.rs" = 1
 "src/compiler_config.rs" = 1
 "src/debug_env.rs" = 2
 "src/error_statistics.rs" = 1
 "src/interpreter/builtins/std_fns.rs" = 1
+"src/package/graph.rs" = 3
 "src/test_runner/mod.rs" = 2
 
 [forbidden_edges]
@@ -55,7 +56,7 @@
 "analyzer->metadata src/analyzer/signature_registry.rs" = 1
 "auto_clone->codegen src/auto_clone.rs" = 3
 "auto_clone_tests->test_utils src/auto_clone_tests.rs" = 1
-"codegen->compiler src/codegen/portable/tests.rs" = 3
+"codegen->compiler src/codegen/portable/tests.rs" = 2
 "codegen->compiler src/codegen/rust/collection_detection.rs" = 1
 "codegen->compiler src/codegen/rust/function_generation_prepare.rs" = 3
 "codegen->intrinsics src/codegen/portable/lower/call.rs" = 1
@@ -65,8 +66,7 @@
 "codegen->wjsl src/codegen/wgsl/types.rs" = 3
 "compiler->resolve src/compiler/compilation_pipeline.rs" = 4
 "compiler_config->codegen src/compiler_config.rs" = 1
-"config->ir src/config.rs" = 5
-"config->package src/config.rs" = 2
+"config->ir src/config.rs" = 4
 "error_catalog->intrinsics src/error_catalog.rs" = 1
 "errors->analyzer src/errors/mutability.rs" = 2
 "errors->parser src/errors/mutability.rs" = 1
@@ -91,7 +91,7 @@
 "stdlib_scanner->cargo_toml src/stdlib_scanner.rs" = 1
 "stdlib_scanner->codegen src/stdlib_scanner.rs" = 9
 "test_utils->parser src/test_utils.rs" = 2
-"type_classification->analyzer src/type_classification.rs" = 2
+"type_classification->analyzer src/type_classification.rs" = 1
 "type_inference->analyzer src/type_inference/float_inference/expression_constraints_method_call.rs" = 1
 "type_inference->analyzer src/type_inference/float_inference/mod.rs" = 1
 "type_inference->analyzer src/type_inference/float_inference/type_helpers.rs" = 3
@@ -103,25 +103,25 @@
 "type_inference->metadata src/type_inference/int_inference/mod.rs" = 1
 
 [get_signature_calls]
-"outside_signature_registry" = 435
+"outside_signature_registry" = 433
 
 [long_files]
-"src/analyzer/passthrough_inference.rs" = 2357
-"src/analyzer/signature_registry.rs" = 2531
-"src/analyzer/string_optimization.rs" = 2179
+"src/analyzer/passthrough_inference.rs" = 2343
+"src/analyzer/signature_registry.rs" = 2500
+"src/analyzer/string_optimization.rs" = 2164
 "src/auto_clone.rs" = 2224
-"src/codegen/rust/call_signature_resolution.rs" = 3339
+"src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4866
-"src/codegen/rust/function_generation_prepare.rs" = 13531
-"src/codegen/rust/generator.rs" = 5227
-"src/codegen/rust/int_promotion_type_inference.rs" = 2299
-"src/codegen/rust/ir_call_site.rs" = 10448
+"src/codegen/rust/function_generation_prepare.rs" = 13498
+"src/codegen/rust/generator.rs" = 5116
+"src/codegen/rust/int_promotion_type_inference.rs" = 2292
+"src/codegen/rust/ir_call_site.rs" = 10437
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2152
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
-"src/codegen/rust/statement_generation.rs" = 2528
-"src/codegen/rust/stdlib_method_traits.rs" = 2483
-"src/codegen/rust/string_utilities.rs" = 2093
+"src/codegen/rust/statement_generation.rs" = 2520
+"src/codegen/rust/stdlib_method_traits.rs" = 2441
+"src/codegen/rust/string_utilities.rs" = 2044
 "src/compiler/multipass_bare_pass_demotion.rs" = 4676
 "src/stdlib_scanner.rs" = 2156
 
@@ -153,7 +153,7 @@
 "src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 732
 "src/codegen/rust/function_generation_prepare.rs::refresh_method_registry_from_emitted_formals" = 373
 "src/codegen/rust/function_wrapping_generation.rs::generate_wrapped_function_body" = 383
-"src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 401
+"src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 406
 "src/codegen/rust/ir_call_site.rs::apply_ir_call_site_coercion" = 3812
 "src/codegen/rust/ir_call_site.rs::apply_post_ir_forwarder_owned_outer_and_reuse" = 353
 "src/codegen/rust/ir_call_site.rs::apply_registry_borrow_to_call_arg" = 302
@@ -163,13 +163,13 @@
 "src/codegen/rust/ir_call_site.rs::reconcile_post_ir_mut_borrow_and_owned_peel" = 1236
 "src/codegen/rust/item_generation.rs::generate_impl" = 401
 "src/codegen/rust/item_generation.rs::generate_trait_with_analysis" = 308
-"src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1178
+"src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1177
 "src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1249
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
-"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 996
+"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 999
 "src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2136
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 329
-"src/codegen/rust/program_generation.rs::generate_program" = 1096
+"src/codegen/rust/program_generation.rs::generate_program" = 1097
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345
 "src/codegen/rust/type_balancing.rs::balance_eq_operands_for_rust" = 497
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
@@ -179,7 +179,7 @@
 "src/file_compilation_pipeline.rs::compile_file_impl" = 403
 "src/interpreter/builtins/option.rs::register" = 316
 "src/interpreter/builtins/seq.rs::register_vec" = 360
-"src/ir/constraint_gen.rs::walk_expression" = 362
+"src/ir/constraint_gen.rs::walk_expression" = 353
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 301
 "src/parser/call_expression_parser.rs::parse_postfix_chain" = 483
@@ -199,7 +199,6 @@
 "lib_only:fuzzy_matcher" = 1
 "lib_only:interpreter" = 1
 "lib_only:intrinsics" = 1
-"lib_only:lib_rs_generator" = 1
 "lib_only:linter" = 1
 "lib_only:metadata" = 1
 "lib_only:parser" = 1
@@ -218,7 +217,6 @@
 "main_only:cli_commands" = 1
 "main_only:cli_output" = 1
 "main_only:cli_project_build" = 1
-"main_only:parser_recovery" = 1
 
 [static_state]
 "src/analyzer/program_initialization.rs" = 1
@@ -227,3 +225,4 @@
 "src/ir/constraint_gen.rs" = 1
 
 [thread_local]
+"src/codegen/portable/alias.rs" = 1

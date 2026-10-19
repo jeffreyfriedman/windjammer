@@ -721,7 +721,6 @@ fn test_self_field_in_if_expr_inside_while_loop_needs_clone() {
                     }),
                     location: None,
                 }),
-                label: None,
                 body: vec![
                     // let star_color = if filled { self.color } else { "#e2e8f0" }
                     test_alloc_stmt(Statement::Let {

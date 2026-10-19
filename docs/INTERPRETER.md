@@ -85,10 +85,8 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
   package's `gen/` crate first and the generated `Cargo.toml` links that.
 - Open: `wj build .` on a project root (rather than `src/`) treats `src/main.wj` as a module and drops `fn main`; `wj run` passes the
   source root, so it is unaffected.
-- Open: module aliases and `super::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) fail with
-  `missing boundary signature for m3::f0`: the ownership boundary lookup is keyed by the written path, not the resolved definition.
-  The compiled half of the fuzzer therefore uses item aliases, globs, groups and `crate::` paths (`WJ_FUZZ_ALL_FORMS=1` compiles
-  every form); the interpreted half covers all forms.
+- Fixed: module aliases and `super::`/`self::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) reported
+  `missing boundary signature for m3::f0`; the callee is now resolved through `resolve::same_crate_callee_key`.
 - Open: a binary under `cmd/<name>/main.wj` compiled on its own keeps `use crate::helper` (E0432); the package-lib rewrite needs a `wj.toml` at its source root. Interpreted `--bin` is unaffected.
 - Open: directory modules without `mod.wj` that only hold children are declared in `lib.rs` without a `mod.rs` (E0433 `cannot find net in self`); the compiled fuzz half avoids them.
 - Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.
@@ -109,13 +107,13 @@ Two oracles, neither of them a hand-typed number:
   Currently:
 
   <!-- wj:gen name=metric key=interpreter.features_supported -->
-40
+41
   <!-- wj:end -->
 
   supported entries, and
 
   <!-- wj:gen name=metric key=interpreter.features_unsupported -->
-2
+3
   <!-- wj:end -->
 
   entries that must fail with "unsupported".
@@ -148,6 +146,7 @@ Generated from the registry (do not edit; change `src/interpreter/features.rs`):
 - **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability; `RefCell` borrow tracking with Rust's `BorrowMutError` panic; moves decide where destructors run: into collections, aggregates, `let`, partial moves, callee parameters
 - **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`); `thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings); `mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone; `Arc<Mutex>`/`RwLock` guards (released at scope end), `Condvar`, `Barrier`, atomics; deadlocks are reported
 - **Intrinsics**: `assert`, `assert_eq`, `panic`, `todo`, `debug`
+- **Modules**: multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603)
 - **Std modules**: `Duration`, `Instant`, `SystemTime`, `std::time::DateTime` (chrono formats); `std::json` dynamic values and typed `to_string`/`parse_string::<T>`; `std::regex` (same engine as compiled programs); `std::fs` files, directories (`read_dir`, `metadata`), path helpers; `csv`, `url`, `mime`, `crypto` (sha/base64/bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`; `std::http` client and servers (`serve`, `serve_fn`, `Server::serve`) behind a capability port: refused by default, `--mock-http FILE` replays responses/requests, `--allow-network` uses real sockets; `std::config` (toml/yaml, same code as the runtime), `std::db` on SQLite, `std::subprocess` pipes, `std::cli` (clap)
 <!-- wj:end -->
 
@@ -181,8 +180,9 @@ location after consuming it, so the reported line can be the line after the fail
 `unsupported in the interpreter: ...` and exit 2:
 
 <!-- wj:gen name=interpreter_unsupported -->
+- **Modules**: two types with the same name in different modules (the interpreter keys types by name)
 - **Concurrency**: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)
-- **FFI**: calls to `extern fn`
+- **FFI**: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0023)
 <!-- wj:end -->
 
 Other unimplemented built-ins (for example std modules such as `http`, `json`, `ui`) fail the same way, with the name of the missing function.

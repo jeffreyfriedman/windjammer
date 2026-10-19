@@ -103,6 +103,35 @@ pub struct IrFunction {
 
     /// Expression-level IR body (populated during lowering).
     pub body: Vec<IrNode>,
+
+    /// Provenance only (convergence plan C2): for each parameter, its ownership after every
+    /// pipeline stage that changed it, in order (`analyzer-seed`, `solver`, then each post-pass).
+    /// Never read by a decision; `wj explain-ownership` uses it to name the pass that overrode
+    /// the solver, which is the deletion list for C5.
+    pub ownership_trail: std::collections::BTreeMap<String, Vec<(&'static str, OwnedType)>>,
+
+    /// Semantic fact NUM-DEFAULT-INT (C4): integer literals (by the literal's own source position,
+    /// `numeric_defaults::literal_key`) whose class no context constrains; they are `int` (i64).
+    pub default_int_literals: std::collections::BTreeSet<(usize, usize)>,
+
+    /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
+    /// the binding is never read again on any path.
+    pub last_uses: std::collections::BTreeSet<usize>,
+}
+
+impl IrFunction {
+    /// Append `stage` to each parameter's trail when its ownership differs from the last entry.
+    pub fn record_ownership_stage(&mut self, stage: &'static str) {
+        for (name, st) in &self.param_types {
+            let trail = self.ownership_trail.entry(name.clone()).or_default();
+            let changed = trail.last().map_or(true, |(_, last)| {
+                std::mem::discriminant(last) != std::mem::discriminant(&st.ownership)
+            });
+            if changed {
+                trail.push((stage, st.ownership.clone()));
+            }
+        }
+    }
 }
 
 /// Convert a parser `Type` to an IR `BaseType`.
@@ -315,6 +344,17 @@ impl IrFunction {
             optimizations,
             local_types: HashMap::new(),
             body: Vec::new(),
+            ownership_trail: std::collections::BTreeMap::new(),
+            default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
+            last_uses: crate::ir::liveness::last_uses(
+                &analyzed
+                    .decl
+                    .parameters
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect::<Vec<_>>(),
+                &analyzed.decl.body,
+            ),
         }
     }
 }

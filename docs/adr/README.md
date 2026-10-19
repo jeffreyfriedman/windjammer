@@ -26,8 +26,13 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0014](0014-surface-syntax-rust-isms.md) | Windjammer-native surface syntax (retire leaked Rust-isms) | Accepted |
 | [0015](0015-language-consistency-proposals.md) | Language consistency proposals (numerics, casts, paths, returns) | Accepted |
 | [0016](0016-ownership-pins.md) | Pins: the surface for overriding inference | Proposed |
+| [0018](0018-expressiveness-phase-2.md) | Expressiveness Phase 2 | Accepted |
+| [0019](0019-process-model.md) | Lightweight processes, mailboxes and supervision (Elixir-inspired) | Proposed |
 | [0020](0020-interpreter-execution-engine.md) | Interpreter execution engine (tree walker vs resolved/bytecode tier) | Accepted for milestone 1 as an opt-in engine |
 | [0021](0021-effects-and-capabilities.md) | Effects and capabilities | Accepted |
+| [0022](0022-interpret-by-default.md) | `wj run` interprets by default; compiled is the release path | Accepted |
+| [0023](0023-interpreter-rust-crate-bridge.md) | Interpreter host bridge for Rust code and Rust-crate dependencies | Proposed |
+| [0024](0024-hot-reload.md) | `wj run --watch` and hot reload of function bodies | Proposed |
 | [0025](0025-arenas.md) | Arenas as a user capability | Proposed |
 <!-- wj:end -->
 

@@ -772,6 +772,7 @@ impl<'ast> CodeGenerator<'ast> {
         // even if a buggy callee key looks like `local_var::method`.
         if receiver_type_name.is_none()
             && Self::is_module_boundary_callee(callee_name)
+            && self.same_crate_callee_key(callee_name).is_none()
             && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     callee_name,
@@ -7272,17 +7273,6 @@ impl<'ast> CodeGenerator<'ast> {
         if !coerced.starts_with('&') {
             *coerced = format!("&{coerced}");
         }
-    }
-
-    /// Signature-driven `(wants_shared_ref, wants_owned)` for a call-site slot.
-    /// Owned Copy-aggregate emission beats stale IR Ref (regression-060).
-    /// Runtime-std baseline borrow (`json::is_array` `&Value`) beats WJ Owned stubs.
-    pub(crate) fn call_site_slot_wants_ref_and_owned(
-        &self,
-        sig: &crate::analyzer::FunctionSignature,
-        arg_index: usize,
-    ) -> (bool, bool) {
-        self.call_site_slot_wants_ref_and_owned_for(sig, arg_index, &sig.name)
     }
 
     pub(crate) fn call_site_slot_wants_ref_and_owned_for(
