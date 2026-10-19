@@ -407,7 +407,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let scope = self.arg_gen_scope();
-                let mut arg_str = self.generate_expression(arg_to_generate);
+                let mut arg_str = self.generate_value_operand(arg_to_generate);
                 self.closure_predicate_typed_params = prev_closure_predicate;
                 self.restore_arg_gen_scope(scope);
                 self.suppress_borrowed_clone = prev_suppress;
