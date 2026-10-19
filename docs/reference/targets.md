@@ -6,7 +6,7 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 156 | 128 | 28 |
+| `rust` | 156 | 129 | 27 |
 | `go` | 156 | 156 | 0 |
 | `js` | 156 | 156 | 0 |
 
@@ -17,7 +17,7 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 | `rust` | mut-ref-to-int-parameters | 2 |
 | `rust` | rust-closure-field-move | 1 |
 | `rust` | rust-closure-if-tail | 1 |
-| `rust` | rust-int-literal-width-inference | 12 |
+| `rust` | rust-int-literal-width-inference | 11 |
 | `rust` | rust-into-bound-param-borrowed | 1 |
 | `rust` | rust-module-impl-self-type | 1 |
 | `rust` | rust-optional-chain | 1 |
