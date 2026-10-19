@@ -7,6 +7,12 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ## [Unreleased]
 
 ### Added
+- **`wj reduce`**: automatic test-case reducer. `wj reduce PROJECT --oracle <rustc-error E0308[:regex]|panic|miscompile|cmd '...'> -o OUT`
+  shrinks a failing multi-file project (hierarchical delta debugging over files, items, statements, match arms, fields,
+  parameters, generics, attributes; literals for expressions) while `wj check` stays in the original diagnostic class
+  and the oracle holds, then anonymizes identifiers, strings, comments and paths and re-checks the oracle on the
+  output. Parallel (`--jobs`), cached, resumable, deterministic (`--seed`), never prints input source. See
+  `src/reduce/MODULE.md`.
 - **Expressiveness Phase 2** (ADR-0018): enumerable collection methods (`group_by`, `count_by`, `tally`, `sum_by`,
   `unique`, `chunk_by`, `each_slice`, `partition_by`, `intersperse`, `zip_with`, `index_of`, `sorted*`,
   `sort_by_key_desc`, `to_list`) on every backend; `_` shorthand closures (`xs.map(_ * 2)`); named arguments with

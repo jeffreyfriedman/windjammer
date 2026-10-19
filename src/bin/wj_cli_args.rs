@@ -277,6 +277,53 @@ pub enum Commands {
         compiled: bool,
     },
 
+    /// Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
+    Reduce {
+        /// Project directory or .wj file to reduce
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present)
+        #[arg(long, value_name = "SPEC")]
+        oracle: String,
+
+        /// Output directory for the minimal project and repro.md
+        #[arg(short, long, value_name = "DIR")]
+        output: PathBuf,
+
+        /// Candidates evaluated in parallel
+        #[arg(long, default_value_t = 2, value_name = "N")]
+        jobs: usize,
+
+        /// Seed for the deterministic candidate order
+        #[arg(long, default_value_t = 0, value_name = "N")]
+        seed: u64,
+
+        /// Maximum number of oracle runs
+        #[arg(long, default_value_t = 5000, value_name = "N")]
+        max_steps: usize,
+
+        /// Wall-clock budget for the reduction search, in seconds
+        #[arg(long, default_value_t = 3600, value_name = "SECS")]
+        time_budget: u64,
+
+        /// Timeout for a single oracle run, in seconds
+        #[arg(long, default_value_t = 300, value_name = "SECS")]
+        candidate_timeout: u64,
+
+        /// Accept a partially anonymized result when some names cannot be renamed without losing the bug
+        #[arg(long)]
+        keep_names: bool,
+
+        /// Compiler binary used by the oracles (default: this executable)
+        #[arg(long, value_name = "WJ")]
+        wj_bin: Option<PathBuf>,
+
+        /// Print progress counts to stderr (never source text)
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
     /// Format Windjammer code
     Fmt {
         /// Check formatting without applying changes (non-zero exit if changes are needed)
