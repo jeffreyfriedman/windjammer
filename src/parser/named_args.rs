@@ -158,7 +158,7 @@ impl Parser {
             return Ok(args);
         };
         let Some(params) = table.get(key) else {
-            return Ok(args);
+            return self.reject_unresolved_labels(key, &args).map(|()| args);
         };
         self.check_shorthand_args(key, params, &args)?;
         let needs = args.iter().any(|(l, _)| l.is_some()) || args.len() < params.len();
@@ -259,7 +259,23 @@ impl Parser {
         let args = self.append_trailing_block(args)?;
         match key {
             Some(k) => self.resolve_call_arguments(&k, args),
-            None => Ok(args),
+            None => self.reject_unresolved_labels("this call", &args).map(|()| args),
+        }
+    }
+
+    /// A labelled argument for a callee whose parameters the parser cannot see (another file, the standard library,
+    /// a function value, an ambiguous method): backends would silently drop the label, so it is an error.
+    fn reject_unresolved_labels(&self, key: &str, args: &Args) -> Result<(), String> {
+        if self.call_table.is_none() {
+            return Ok(()); // first pass: the table is built after it
+        }
+        match args.iter().find_map(|(l, _)| l.as_ref()) {
+            Some(label) => Err(format!(
+                "named argument `{label}:` needs a callee declared in this file, but {} is not one \
+                 (calls into other modules take positional arguments until cross-module resolution lands, ADR-0018)",
+                if key == "this call" { key.to_string() } else { format!("`{}`", key.trim_start_matches('.')) }
+            )),
+            None => Ok(()),
         }
     }
 

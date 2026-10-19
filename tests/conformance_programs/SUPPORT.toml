@@ -204,3 +204,9 @@ reason = "rust-closure-if-tail: a closure whose body is an if/else expression an
 program = "172_clos_shorthand"
 backend = "rust"
 reason = "rust-closure-field-move: `map(|u| u.name)` over a borrowed list moves a String out of `&User` (no clone inserted by the ownership pass)"
+
+# ---- ADR-0018 round 2: optional chaining ---------------------------------------------------------------
+[[unsupported]]
+program = "177_opt_chain"
+backend = "rust"
+reason = "rust-optional-chain: `?.` needs the IR solver's receiver type (convergence C2 is not in next); the Rust backend rejects it with an explicit error instead of guessing Option vs Result"

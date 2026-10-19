@@ -1,0 +1,28 @@
+// expect: ann
+// expect: anon
+// expect: anon
+// expect: 3
+struct Profile {
+    nick: string?,
+}
+
+struct User {
+    name: string,
+    profile: Profile?,
+}
+
+impl User {
+    fn name_len(self) -> int {
+        self.name.len()
+    }
+}
+
+fn main() {
+    let full: User? = Some(User { name: "abc", profile: Some(Profile { nick: Some("ann") }) })
+    let no_nick: User? = Some(User { name: "bob", profile: Some(Profile { nick: None }) })
+    let no_profile: User? = Some(User { name: "cy", profile: None })
+    println(full?.profile?.nick ?? "anon")
+    println(no_nick?.profile?.nick ?? "anon")
+    println(no_profile?.profile?.nick ?? "anon")
+    println("${full?.name_len() ?? 0}")
+}
