@@ -21,6 +21,7 @@ mod shared;
 mod std_data;
 mod std_extra;
 mod std_fns;
+mod test_assert;
 pub mod std_http;
 mod std_sys;
 pub(crate) mod sync;
@@ -143,6 +144,7 @@ impl Registry {
         map::register(&mut r);
         option::register(&mut r);
         std_fns::register(&mut r);
+        test_assert::register(&mut r);
         shared::register(&mut r);
         std_sys::register(&mut r);
         std_data::register(&mut r);
