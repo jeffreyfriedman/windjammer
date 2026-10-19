@@ -22,3 +22,9 @@ Same as the parent module (`analyzer` types, `parser::Type`); submodules reach t
 
 ## Layout
 `generic_returns.rs` generic-struct return erasure (ADR-0025 `std::arena`).
+
+## Entry points
+`stdlib_scanner::populate_runtime_signatures(&mut SignatureRegistry)`.
+
+## Tests
+Inline unit tests in `src/stdlib_scanner.rs`; `std::arena` signatures are exercised by `tests/arena_rust_backend_test.rs`.
