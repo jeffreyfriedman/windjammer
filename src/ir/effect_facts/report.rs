@@ -37,6 +37,7 @@ fn resource_text(e: &EffectRef) -> String {
         Resource::None => e.kind.name(),
         Resource::Lit(s) => format!("{}(\"{}\")", e.kind, s),
         Resource::Computed => format!("{}(<computed>)", e.kind),
+        Resource::MintedOptional => format!("{}(<capability value, if granted>)", e.kind),
     }
 }
 
@@ -45,6 +46,7 @@ fn resource_text(e: &EffectRef) -> String {
 fn placement(e: &EffectRef, grant: Option<&Grant>) -> &'static str {
     let Some(g) = grant else { return "unchecked" };
     match &e.resource {
+        Resource::MintedOptional => "runtime guard",
         Resource::Computed => match g.granted_at_all(&e.kind) {
             Ok(()) if matches!(g.scope(&e.kind), Some(super::grant::Scope::Any)) || e.kind.default_granted() => "proven",
             Ok(()) => "runtime guard",
@@ -106,7 +108,7 @@ pub fn to_json(r: &ResolvedProgram<'_>, facts: &EffectFacts, grant: Option<&Gran
                         .collect();
                     json!({
                         "effect": e.kind.name(),
-                        "resource": match &e.resource { Resource::None => Value::Null, Resource::Lit(s) => json!(s), Resource::Computed => json!("<computed>") },
+                        "resource": match &e.resource { Resource::None => Value::Null, Resource::Lit(s) => json!(s), Resource::Computed => json!("<computed>"), Resource::MintedOptional => json!("<capability value>") },
                         "rule": o.rule,
                         "chain": chain,
                         "check": placement(e, grant),

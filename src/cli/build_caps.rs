@@ -7,14 +7,26 @@
 use crate::check::effects::{analyze_project, parse_app_inputs};
 use crate::check::{self, CheckOptions};
 use crate::diagnostics::render;
-use crate::ir::effect_facts::install::{compiled_dependency_gaps, needs_runtime_guards, render_install};
+use crate::ir::effect_facts::install::{compiled_dependency_gaps, needs_runtime_guards, render_install, render_install_go, render_install_js};
 use anyhow::{bail, Result};
 use std::path::Path;
 
 const EFFECT_CODES: [&str; 5] = ["WJ0040", "WJ0041", "WJ0042", "WJ0043", "WJ0044"];
 
+/// Which backend the install statement is for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Flavor {
+    Rust,
+    JavaScript,
+    Go,
+}
+
 /// Check the project's effects. Returns the `caps::install` statement for the generated `main` when one is needed.
 pub fn prepare(path: &Path, library: bool) -> Result<Option<String>> {
+    prepare_for(path, library, Flavor::Rust)
+}
+
+pub fn prepare_for(path: &Path, library: bool, flavor: Flavor) -> Result<Option<String>> {
     let Ok(inputs) = parse_app_inputs(path) else { return Ok(None) }; // not a checkable project: the build reports why
     let a = analyze_project(path, inputs, false);
     if a.grants.app.is_none() && !a.grants.enforce_deps {
@@ -42,7 +54,12 @@ pub fn prepare(path: &Path, library: bool) -> Result<Option<String>> {
     let Some(app) = a.grants.app.as_ref() else { return Ok(None) };
     if needs_runtime_guards(&a.resolved, &a.facts, &a.grants, &a.dep_names) {
         // relative patterns anchor at the program's working directory at run time, like the paths it opens
-        Ok(Some(render_install(app, Path::new("."))))
+        let root = Path::new(".");
+        Ok(Some(match flavor {
+            Flavor::Rust => render_install(app, root),
+            Flavor::JavaScript => render_install_js(app, root),
+            Flavor::Go => render_install_go(app, root),
+        }))
     } else {
         Ok(None)
     }

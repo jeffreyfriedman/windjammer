@@ -84,7 +84,7 @@ pub fn reference(e: &EffectRef) -> String {
             format!("{}({})", e.kind, super::scope_match::host_port(s).map(|(h, _)| h).unwrap_or_else(|| s.clone()))
         }
         Resource::Lit(s) => format!("{}({})", e.kind, s),
-        Resource::Computed => format!("{}(*)", e.kind),
+        Resource::Computed | Resource::MintedOptional => format!("{}(*)", e.kind),
     }
 }
 

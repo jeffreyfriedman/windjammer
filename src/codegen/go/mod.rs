@@ -38,13 +38,13 @@ impl CodegenBackend for GoBackend {
         Target::Go
     }
 
-    fn generate(&self, program: &Program, _config: &CodegenConfig) -> Result<CodegenOutput> {
+    fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
         let merged = portable::prelude::with_arena_prelude(program);
         let program = merged.as_ref().unwrap_or(program);
         let ctx = crate::ir::analyze_and_lower(program)?;
         let mut m = portable::lower::lower_program(program, Some(&ctx.registry)).map_err(|e| anyhow!("{e}"))?;
         flatten::flatten_module(&mut m);
-        let src = emit::emit_module(&m).map_err(|e| anyhow!("{e}"))?;
+        let src = emit::emit_module(&m, config.capability_install.clone()).map_err(|e| anyhow!("{e}"))?;
         Ok(CodegenOutput::new(src, "go".to_string()))
     }
 

@@ -4,8 +4,12 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -105,6 +109,215 @@ func wjstd_strings_byte_at(s string, i uint) uint8 {
 	return s[i]
 }
 
+
+// ---- capabilities (ADR-0021) --------------------------------------------------------------
+// The program's grant, installed by generated code only when some std call cannot be proven inside it at compile
+// time. Same rules as windjammer-runtime's caps_core (tests/effects/vectors.json pins both). Portable programs reach
+// the file system only, so only fs.read / fs.write are matched here.
+
+type wjCapSpec struct {
+	Root  string
+	Allow map[string][]string
+	Deny  []string
+}
+
+var wjCapGrant *wjCapSpec
+
+func wjstd_caps_install(spec wjCapSpec) {
+	if abs, err := filepath.Abs(spec.Root); err == nil {
+		spec.Root = abs
+	}
+	wjCapGrant = &spec
+}
+
+func wjCapFold(s string) string {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return strings.ToLower(s)
+	}
+	return s
+}
+
+func wjCapComps(p string) []string {
+	var out []string
+	for _, c := range strings.Split(filepath.ToSlash(p), "/") {
+		if c != "" {
+			out = append(out, wjCapFold(c))
+		}
+	}
+	return out
+}
+
+func wjCapCanonical(p, base string) string {
+	lex := p
+	if !filepath.IsAbs(p) {
+		lex = filepath.Join(base, p)
+	}
+	lex = filepath.Clean(lex)
+	existing := lex
+	var rest []string
+	for {
+		if c, err := filepath.EvalSymlinks(existing); err == nil {
+			for i := len(rest) - 1; i >= 0; i-- {
+				c = filepath.Join(c, rest[i])
+			}
+			return c
+		}
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			return lex
+		}
+		rest = append(rest, filepath.Base(existing))
+		existing = parent
+	}
+}
+
+func wjCapGlob(pat, s string) bool {
+	parts := strings.Split(pat, "*")
+	for i, x := range parts {
+		parts[i] = regexp.QuoteMeta(x)
+	}
+	return regexp.MustCompile("^" + strings.Join(parts, ".*") + "$").MatchString(s)
+}
+
+func wjCapTail(tail, rest []string) bool {
+	if len(tail) == 0 {
+		return len(rest) == 0
+	}
+	if tail[0] == "**" {
+		for j := 0; j <= len(rest); j++ {
+			if wjCapTail(tail[1:], rest[j:]) {
+				return true
+			}
+		}
+		return false
+	}
+	return len(rest) > 0 && wjCapGlob(wjCapFold(tail[0]), rest[0]) && wjCapTail(tail[1:], rest[1:])
+}
+
+func wjCapPathMatches(pat, target, root string) bool {
+	var segs []string
+	for _, s := range strings.Split(pat, "/") {
+		if s != "" && s != "." {
+			segs = append(segs, s)
+		}
+	}
+	first := len(segs)
+	for i, s := range segs {
+		if strings.Contains(s, "*") {
+			first = i
+			break
+		}
+	}
+	prefix := strings.Join(segs[:first], "/")
+	if strings.HasPrefix(pat, "/") {
+		prefix = "/" + prefix
+	}
+	if prefix == "" {
+		prefix = "."
+	}
+	pc := wjCapComps(wjCapCanonical(prefix, root))
+	t := wjCapComps(target)
+	if len(t) < len(pc) {
+		return false
+	}
+	for i, c := range pc {
+		if t[i] != c {
+			return false
+		}
+	}
+	tail, rest := segs[first:], t[len(pc):]
+	if len(tail) == 0 {
+		return len(rest) == 0
+	}
+	return wjCapTail(tail, rest)
+}
+
+func wjCapProtected(p string) bool {
+	name := filepath.Base(p)
+	return name == "wj.toml" || strings.HasSuffix(name, ".wj-capabilities.lock") || strings.HasSuffix(name, ".wj")
+}
+
+func wjCapDisplay(root, res string) string {
+	cwd, _ := os.Getwd()
+	abs := res
+	if !filepath.IsAbs(res) {
+		abs = filepath.Join(cwd, res)
+	}
+	abs = filepath.Clean(abs)
+	rel, err := filepath.Rel(root, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return abs
+	}
+	if rel == "." {
+		return "."
+	}
+	return "./" + filepath.ToSlash(rel)
+}
+
+// wjCapDecide returns "" when the use is allowed, otherwise the denial text.
+func wjCapDecide(g wjCapSpec, kind string, resource *string) string {
+	deny := func(scopeText string) string {
+		subject, entry := kind, kind+" = true"
+		if resource != nil {
+			shown := wjCapDisplay(g.Root, *resource)
+			subject = kind + "(" + shown + ")"
+			entry = kind + ` = ["` + shown + `"]`
+		}
+		return fmt.Sprintf("error: capability denied: %s\n  = grant in force: %s\n  = to allow: add `%s` under [capabilities] in wj.toml\n", subject, scopeText, entry)
+	}
+	for _, d := range g.Deny {
+		if d == kind {
+			return deny(kind + " is denied")
+		}
+	}
+	scope, ok := g.Allow[kind]
+	if !ok {
+		if kind == "time" || kind == "random" || kind == "console" {
+			return ""
+		}
+		return deny(kind + " not granted")
+	}
+	if len(scope) == 1 && scope[0] == "*" {
+		return ""
+	}
+	scopeText := kind + " = [" + strings.Join(scope, ", ") + "]"
+	if resource == nil {
+		return deny(scopeText)
+	}
+	cwd, _ := os.Getwd()
+	target := wjCapCanonical(*resource, cwd)
+	for _, pat := range scope {
+		if kind == "fs.write" && wjCapProtected(target) && strings.Contains(pat, "*") {
+			continue
+		}
+		if wjCapPathMatches(pat, target, g.Root) {
+			return ""
+		}
+	}
+	return deny(scopeText)
+}
+
+// wjstd_caps_vector is the conformance-vector entry point: "allow" or "deny" for one use under spec.
+func wjstd_caps_vector(spec wjCapSpec, kind string, resource *string) string {
+	if abs, err := filepath.Abs(spec.Root); err == nil {
+		spec.Root = abs
+	}
+	if wjCapDecide(spec, kind, resource) == "" {
+		return "allow"
+	}
+	return "deny"
+}
+
+func wjCapsFs(kind, p string) {
+	if wjCapGrant == nil {
+		return
+	}
+	if d := wjCapDecide(*wjCapGrant, kind, &p); d != "" {
+		fmt.Fprint(os.Stderr, d)
+		os.Exit(126)
+	}
+}
+
 // ---- fs -----------------------------------------------------------------------------------
 
 func wjstd_fs_result(err error) Result[struct{}, string] {
@@ -115,6 +328,7 @@ func wjstd_fs_result(err error) Result[struct{}, string] {
 }
 
 func wjstd_fs_read_to_string(p string) Result[string, string] {
+	wjCapsFs("fs.read", p)
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return Result[string, string]{E: err.Error()}
@@ -122,9 +336,13 @@ func wjstd_fs_read_to_string(p string) Result[string, string] {
 	return Result[string, string]{Ok: true, V: string(b)}
 }
 
-func wjstd_fs_write(p, c string) Result[struct{}, string] { return wjstd_fs_result(os.WriteFile(p, []byte(c), 0o644)) }
+func wjstd_fs_write(p, c string) Result[struct{}, string] {
+	wjCapsFs("fs.write", p)
+	return wjstd_fs_result(os.WriteFile(p, []byte(c), 0o644))
+}
 
 func wjstd_fs_append(p, c string) Result[struct{}, string] {
+	wjCapsFs("fs.write", p)
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return wjstd_fs_result(err)
@@ -134,18 +352,30 @@ func wjstd_fs_append(p, c string) Result[struct{}, string] {
 	return wjstd_fs_result(err)
 }
 
-func wjstd_fs_remove_file(p string) Result[struct{}, string]     { return wjstd_fs_result(os.Remove(p)) }
-func wjstd_fs_create_dir_all(p string) Result[struct{}, string]  { return wjstd_fs_result(os.MkdirAll(p, 0o755)) }
-func wjstd_fs_remove_dir_all(p string) Result[struct{}, string]  { return wjstd_fs_result(os.RemoveAll(p)) }
+func wjstd_fs_remove_file(p string) Result[struct{}, string] {
+	wjCapsFs("fs.write", p)
+	return wjstd_fs_result(os.Remove(p))
+}
+func wjstd_fs_create_dir_all(p string) Result[struct{}, string] {
+	wjCapsFs("fs.write", p)
+	return wjstd_fs_result(os.MkdirAll(p, 0o755))
+}
+func wjstd_fs_remove_dir_all(p string) Result[struct{}, string] {
+	wjCapsFs("fs.write", p)
+	return wjstd_fs_result(os.RemoveAll(p))
+}
 func wjstd_fs_exists(p string) bool {
+	wjCapsFs("fs.read", p)
 	_, err := os.Stat(p)
 	return err == nil
 }
 func wjstd_fs_is_file(p string) bool {
+	wjCapsFs("fs.read", p)
 	st, err := os.Stat(p)
 	return err == nil && st.Mode().IsRegular()
 }
 func wjstd_fs_is_dir(p string) bool {
+	wjCapsFs("fs.read", p)
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
 }

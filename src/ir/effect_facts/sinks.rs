@@ -21,6 +21,9 @@ pub enum Res {
     /// Minting a capability value (`cap::net()`): the effect must be granted for *some* resource; the value then
     /// carries that scope. The runtime check is the mint itself (`Interpreter::cap_mint`).
     Scope,
+    /// Like [`Res::Scope`], but a package that was not granted the effect is not at fault: the value simply carries
+    /// no such ability (`cap::fs()` of a read-only grant has no write scope).
+    ScopeOptional,
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +112,7 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("uuid::v7", &[u(Random, Res::None), u(Time, Res::None)]),
     // capability values (std::cap): minting needs the effect, the value is then checked on every use
     ("cap::net", &[u(NetConnect, Res::Scope)]),
-    ("cap::fs", &[u(FsRead, Res::Scope), u(FsWrite, Res::Scope)]),
+    ("cap::fs", &[u(FsRead, Res::Scope), u(FsWrite, Res::ScopeOptional)]),
     ("cap::env", &[u(EnvRead, Res::Scope)]),
     ("cap::process", &[u(Process, Res::Scope)]),
     ("cap::clock", &[u(Time, Res::None)]),

@@ -29,6 +29,11 @@ pub struct Denial {
 }
 
 impl Denial {
+    /// The manifest part of the fix, without the interpreter-only `--allow` flag (compiled programs have no such flag).
+    pub fn manifest_fix(&self) -> &str {
+        self.fix.split(", or run with").next().unwrap_or(&self.fix)
+    }
+
     pub fn subject(&self) -> String {
         match &self.resource {
             Some(r) => format!("{}({})", self.effect, r),
