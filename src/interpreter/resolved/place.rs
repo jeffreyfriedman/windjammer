@@ -12,8 +12,9 @@ use crate::interpreter::place::PlaceEnv;
 use crate::interpreter::value::{Slot, Value};
 use crate::parser::{CompoundOp, Expression, UnaryOp};
 
+/// Variables and compiled sub-expressions handed to a walker routine through `PlaceEnv`.
 #[derive(Default)]
-struct PlaceCode {
+pub(super) struct PlaceCode {
     /// Locals named in the target (boxed): name -> slot.
     vars: Vec<(&'static str, usize)>,
     /// Compiled sub-expressions by address: what `eval` / `eval_keep_ref` would compute.
@@ -25,9 +26,21 @@ fn addr(e: E) -> usize {
     e as *const _ as usize
 }
 
-struct Env<'a> {
+pub(super) struct Env<'a> {
     pc: &'a PlaceCode,
     b: usize,
+}
+
+impl PlaceCode {
+    /// Compile `e` as the walker's `eval` of it.
+    pub(super) fn add_eval(&mut self, cx: &mut Cx, e: E) -> Option<()> {
+        let c = expr_eval(cx, e)?.code();
+        self.evals.push((addr(e), c));
+        Some(())
+    }
+    pub(super) fn env(&self, b: usize) -> Env<'_> {
+        Env { pc: self, b }
+    }
 }
 
 impl PlaceEnv for Env<'_> {

@@ -37,7 +37,10 @@ pub struct FuncDef {
 }
 
 pub struct StructDef {
-    pub fields: Vec<(&'static str, Type)>,
+    pub fields: Rc<[(&'static str, Type)]>,
+    /// The type and field names, interned: every instance built from a literal shares them.
+    pub rc_name: Rc<str>,
+    pub rc_fields: Rc<[Rc<str>]>,
     pub tuple: bool,
     pub copy: bool,
 }

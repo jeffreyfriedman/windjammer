@@ -257,9 +257,22 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             let o = expr_eval(cx, object)?.code();
             let loc = location.as_ref();
             let field: &'static str = field.as_str();
+            // inline cache: the field's position in the last struct read here (checked by name)
+            let at = std::cell::Cell::new(0usize);
             X::V(Box::new(move |it, b| {
                 let obj = o(it, b)?;
                 it.mark(loc);
+                if let Value::Struct(s) = &obj {
+                    if let Some((n, v)) = s.fields.get(at.get()) {
+                        if &**n == field {
+                            return Ok(v.clone());
+                        }
+                    }
+                    if let Some(i) = s.fields.iter().position(|(n, _)| &**n == field) {
+                        at.set(i);
+                        return Ok(s.fields[i].1.clone());
+                    }
+                }
                 it.field_of(&obj, field)
             }))
         }
@@ -289,6 +302,19 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             }))
         }
         Expression::Call { function, arguments, location } => call(cx, function, arguments, location.as_ref())?,
+        Expression::StructLiteral { name, fields, location } => {
+            // the walker's own construction (declaration order, coercions, `..base`), compiled fields
+            let mut codes = super::place::PlaceCode::default();
+            for (_, fe) in fields.iter() {
+                codes.add_eval(cx, fe)?;
+            }
+            let (loc, name, fields): (Loc, &'static str, &'static [(String, E)]) = (location.as_ref(), name.as_str(), fields.as_slice());
+            X::V(Box::new(move |it, b| {
+                it.mark(loc);
+                let mut env = codes.env(b);
+                it.eval_struct_literal_in(name, fields, &mut env)
+            }))
+        }
         _ => return None,
     })
 }

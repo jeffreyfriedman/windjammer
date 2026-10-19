@@ -630,9 +630,9 @@ impl Interpreter {
         if self.hot.is_some() {
             self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
-        if self.engine_resolved && self_val.is_none() && targs.is_empty() {
+        if self.engine_resolved && targs.is_empty() && Self::compiled_call_ok(f, &self_val) {
             if let Some(c) = self.compiled_for(f) {
-                return self.run_compiled(f, &c, args);
+                return self.run_compiled(f, &c, args, self_val);
             }
         }
         self.call_func_walk(f, args, self_val, targs, expected)

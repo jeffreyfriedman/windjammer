@@ -320,7 +320,7 @@ pub(crate) trait PlaceEnv {
 }
 
 /// The tree walker's scope.
-struct WalkerEnv;
+pub(crate) struct WalkerEnv;
 
 impl PlaceEnv for WalkerEnv {
     fn var(&mut self, it: &Interpreter, name: &str) -> Option<Slot> {
