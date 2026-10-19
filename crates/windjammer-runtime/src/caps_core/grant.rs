@@ -37,20 +37,26 @@ impl Denial {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Grant {
     allow: BTreeMap<EffectKind, Scope>,
     deny: BTreeSet<EffectKind>,
     /// Directory that relative patterns are anchored to (the project directory).
     root: PathBuf,
     /// Canonical form of each pattern's literal prefix (patterns do not change, so symlink resolution is done once).
-    prefix_cache: std::cell::RefCell<std::collections::HashMap<String, PathBuf>>,
+    prefix_cache: std::sync::Mutex<std::collections::HashMap<String, PathBuf>>,
+}
+
+impl Clone for Grant {
+    fn clone(&self) -> Grant {
+        Grant { allow: self.allow.clone(), deny: self.deny.clone(), root: self.root.clone(), prefix_cache: Default::default() }
+    }
 }
 
 impl Grant {
     /// Nothing but the default-granted determinism effects.
     pub fn sandbox(root: &Path) -> Grant {
-        Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: root.to_path_buf(), prefix_cache: Default::default() }
+        Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: m::lexical_abs(".", root_base(root).as_path()), prefix_cache: Default::default() }
     }
 
     /// Everything allowed (a trusted run).
@@ -103,6 +109,11 @@ impl Grant {
         }
     }
 
+    /// Mention `kind` with an empty pattern list: declared, but nothing is allowed yet (`fs.read = []`).
+    pub fn declare_empty(&mut self, kind: EffectKind) {
+        self.allow.entry(kind).or_insert_with(|| Scope::Only(Vec::new()));
+    }
+
     pub fn allow_all(&mut self, kind: EffectKind) {
         self.allow.insert(kind, Scope::Any);
     }
@@ -146,6 +157,23 @@ impl Grant {
         Ok(out)
     }
 
+    /// The grant as `(effect name, patterns)` pairs; `Any` is the single pattern `"*"` (for the compiler to render into a
+    /// compiled program's `caps::install`).
+    pub fn entries(&self) -> Vec<(String, Vec<String>)> {
+        self.allow
+            .iter()
+            .map(|(k, s)| match s {
+                Scope::Any => (k.name(), vec!["*".to_string()]),
+                Scope::Only(p) => (k.name(), p.clone()),
+            })
+            .collect()
+    }
+
+    /// Names of the denied effects.
+    pub fn denied(&self) -> Vec<String> {
+        self.deny.iter().map(|k| k.name()).collect()
+    }
+
     /// Forget everything this grant says about `kind` (a read-only value drops `fs.write`).
     pub fn drop_scope(&mut self, kind: &EffectKind) {
         self.allow.remove(kind);
@@ -182,51 +210,12 @@ impl Grant {
             self.allow_all(EffectKind::User(v.to_string()));
             return Ok(());
         }
-        let kind = EffectKind::parse_builtin(name).ok_or_else(|| format!("unknown effect `{name}` (known: {})", known_names()))?;
+        let kind = EffectKind::parse_builtin(name).ok_or_else(|| format!("unknown effect `{name}` (known: {})", known_effect_names()))?;
         match value {
             None | Some("*") | Some("") => self.allow_all(kind),
             Some(v) => self.allow(kind, v),
         }
         Ok(())
-    }
-
-    /// Build from the `[capabilities]` table of a manifest. Unknown keys are an error (a typo must not silently deny).
-    pub fn from_manifest(table: &toml::value::Table, root: &Path) -> Result<Grant, String> {
-        let mut g = Grant::sandbox(root);
-        let mut flat: Vec<(String, &toml::Value)> = Vec::new();
-        flatten("", table, &mut flat);
-        for (key, val) in flat {
-            match key.as_str() {
-                "deny" => {
-                    for n in strings(&key, val)? {
-                        g.deny(EffectKind::parse_builtin(&n).ok_or_else(|| format!("[capabilities] deny: unknown effect `{n}`"))?);
-                    }
-                }
-                "effects" => {
-                    for n in strings(&key, val)? {
-                        g.allow_all(EffectKind::User(n));
-                    }
-                }
-                _ => {
-                    let kind = EffectKind::parse_builtin(&key)
-                        .ok_or_else(|| format!("[capabilities]: unknown key `{key}` (known: {}, effects, deny)", known_names()))?;
-                    match val {
-                        toml::Value::Boolean(true) => g.allow_all(kind),
-                        toml::Value::Boolean(false) => g.deny(kind),
-                        _ => {
-                            let pats = strings(&key, val)?;
-                            if pats.is_empty() {
-                                g.allow.entry(kind.clone()).or_insert_with(|| Scope::Only(Vec::new()));
-                            }
-                            for p in pats {
-                                g.allow(kind.clone(), &p);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(g)
     }
 
     /// Is `kind` granted for at least some resource? (Static check of a use whose resource is computed:
@@ -276,7 +265,7 @@ impl Grant {
                 let p = m::canonical_abs(res, &Self::cwd());
                 let inside = |pat: &String| {
                     m::path_matches_cached(pat, &p, &self.root, &mut |prefix, base| {
-                        self.prefix_cache.borrow_mut().entry(prefix.to_string()).or_insert_with(|| m::canonical_abs(prefix, base)).clone()
+                        self.prefix_cache.lock().unwrap_or_else(|e| e.into_inner()).entry(prefix.to_string()).or_insert_with(|| m::canonical_abs(prefix, base)).clone()
                     })
                 };
                 if *kind == EffectKind::FsWrite && is_protected(&p) {
@@ -351,168 +340,21 @@ impl Grant {
     }
 }
 
+/// `root` as an absolute, lexically normalized directory (a relative root is taken against the current directory).
+fn root_base(root: &Path) -> PathBuf {
+    if root.is_absolute() {
+        root.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")).join(root)
+    }
+}
+
 /// Files that define what a program may do or is: never reachable through a glob grant.
 fn is_protected(p: &Path) -> bool {
     let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     name == "wj.toml" || name.ends_with(".wj-capabilities.lock") || name.ends_with(".wj")
 }
 
-fn known_names() -> String {
+pub fn known_effect_names() -> String {
     EffectKind::BUILTIN.iter().map(|k| k.name()).collect::<Vec<_>>().join(", ")
-}
-
-fn flatten<'a>(prefix: &str, t: &'a toml::value::Table, out: &mut Vec<(String, &'a toml::Value)>) {
-    for (k, v) in t {
-        let key = if prefix.is_empty() { k.clone() } else { format!("{prefix}.{k}") };
-        if key == "dependencies" {
-            continue; // per-dependency grants: stage E2
-        }
-        match v {
-            toml::Value::Table(inner) => flatten(&key, inner, out),
-            _ => out.push((key, v)),
-        }
-    }
-}
-
-fn strings(key: &str, v: &toml::Value) -> Result<Vec<String>, String> {
-    match v {
-        toml::Value::String(s) => Ok(vec![s.clone()]),
-        toml::Value::Array(a) => a
-            .iter()
-            .map(|x| x.as_str().map(str::to_string).ok_or_else(|| format!("[capabilities] {key}: expected strings")))
-            .collect(),
-        _ => Err(format!("[capabilities] {key}: expected a list of strings")),
-    }
-}
-
-/// Parse the `[capabilities]` table out of a whole `wj.toml` text. `Ok(None)` = the table is absent.
-pub fn grant_from_manifest_text(text: &str, root: &Path) -> Result<Option<Grant>, String> {
-    let doc: toml::Value = toml::from_str(text).map_err(|e| format!("wj.toml: {e}"))?;
-    match doc.get("capabilities") {
-        None => Ok(None),
-        Some(toml::Value::Table(t)) => Grant::from_manifest(t, root).map(Some),
-        Some(_) => Err("wj.toml: [capabilities] must be a table".to_string()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn root() -> PathBuf {
-        std::env::current_dir().unwrap()
-    }
-
-    fn g(manifest: &str) -> Grant {
-        grant_from_manifest_text(&format!("[capabilities]\n{manifest}"), &root()).unwrap().unwrap()
-    }
-
-    #[test]
-    fn empty_table_grants_only_determinism_effects() {
-        let g = g("");
-        assert!(g.check(&EffectKind::Time, None).is_ok());
-        assert!(g.check(&EffectKind::Random, None).is_ok());
-        assert!(g.check(&EffectKind::Console, None).is_ok());
-        let d = g.check(&EffectKind::FsRead, Some("/etc/hosts")).unwrap_err();
-        assert_eq!(d.subject(), "fs.read(/etc/hosts)");
-        assert!(!d.outside_scope);
-        assert!(d.fix.contains("fs.read"), "{}", d.fix);
-    }
-
-    #[test]
-    fn dotted_keys_nest_and_quoted_keys_work() {
-        let a = g("net.connect = [\"api.example.com\"]");
-        let b = g("\"net.connect\" = [\"api.example.com\"]");
-        for g in [&a, &b] {
-            assert!(g.check(&EffectKind::NetConnect, Some("http://api.example.com/x")).is_ok());
-            let d = g.check(&EffectKind::NetConnect, Some("http://other.example/")).unwrap_err();
-            assert_eq!(d.subject(), "net.connect(other.example)");
-            assert!(d.outside_scope);
-        }
-    }
-
-    #[test]
-    fn deny_wins_over_default_and_allow() {
-        let g = g("deny = [\"time\", \"fs.read\"]\nfs.read = [\"./**\"]");
-        assert!(g.check(&EffectKind::Time, None).is_err());
-        assert!(g.check(&EffectKind::FsRead, Some("./x")).is_err());
-    }
-
-    #[test]
-    fn unknown_keys_are_errors() {
-        let r = grant_from_manifest_text("[capabilities]\nnet.conect = [\"x\"]\n", &root());
-        assert!(r.unwrap_err().contains("unknown key `net.conect`"));
-    }
-
-    #[test]
-    fn userinfo_trick_does_not_pass_the_host_check() {
-        let g = g("net.connect = [\"api.example.com\"]");
-        assert!(g.check(&EffectKind::NetConnect, Some("http://api.example.com@evil.example/")).is_err());
-    }
-
-    #[test]
-    fn fs_scope_and_display_are_relative_to_the_root() {
-        let g = g("fs.read = [\"./data/**\"]");
-        assert!(g.check(&EffectKind::FsRead, Some("./data/a.json")).is_ok());
-        let d = g.check(&EffectKind::FsRead, Some("./data/../secret.txt")).unwrap_err();
-        assert_eq!(d.subject(), "fs.read(./secret.txt)");
-        assert!(d.outside_scope);
-    }
-
-    #[test]
-    fn user_effects_and_flags() {
-        let mut g = g("effects = [\"ledger.post\"]");
-        assert!(g.check(&EffectKind::User("ledger.post".into()), None).is_ok());
-        assert!(g.check(&EffectKind::User("other".into()), None).is_err());
-        g.allow_flag("net.connect=*.github.com").unwrap();
-        assert!(g.check(&EffectKind::NetConnect, Some("https://api.github.com/")).is_ok());
-        assert!(g.allow_flag("net.conect=x").is_err());
-    }
-
-    #[test]
-    fn narrowing_never_widens() {
-        let g = g("net.connect = [\"api.example.com\", \"*.github.com\"]\nfs.read = [\"./data/**\"]");
-        let n = g.derive_scope(&EffectKind::NetConnect, Some(&["api.example.com".to_string()])).unwrap();
-        assert!(n.check(&EffectKind::NetConnect, Some("http://api.example.com/")).is_ok());
-        assert!(n.check(&EffectKind::NetConnect, Some("http://x.github.com/")).is_err(), "narrowed away");
-        assert!(g.derive_scope(&EffectKind::NetConnect, Some(&["evil.example".to_string()])).is_err(), "not covered by the parent");
-        assert!(g.derive_scope(&EffectKind::NetConnect, Some(&["*".to_string()])).is_err(), "cannot widen to everything");
-        assert!(g.derive_scope(&EffectKind::NetConnect, Some(&["*.github.com".to_string()])).is_ok(), "an existing pattern is fine");
-        assert!(g.derive_scope(&EffectKind::FsRead, Some(&["./data/sub/**".to_string()])).is_ok(), "a sub-tree");
-        assert!(g.derive_scope(&EffectKind::FsRead, Some(&["./**".to_string()])).is_err(), "the parent of the grant");
-        assert!(g.derive_scope(&EffectKind::Process, None).is_err(), "an effect that is not granted cannot be minted");
-    }
-
-    #[test]
-    fn process_grants_match_names_not_local_paths() {
-        let g = g("process = [\"echo\", \"/usr/bin/git\"]");
-        assert!(g.check(&EffectKind::Process, Some("echo")).is_ok());
-        assert!(g.check(&EffectKind::Process, Some("./echo")).is_err());
-        assert!(g.check(&EffectKind::Process, Some("/tmp/echo")).is_err());
-        assert!(g.check(&EffectKind::Process, Some("/usr/bin/git")).is_ok());
-        assert!(g.check(&EffectKind::Process, Some("git")).is_err());
-        assert!(g.check(&EffectKind::Process, Some("sh")).is_err());
-    }
-
-    #[test]
-    fn manifest_and_sources_are_not_writable_through_globs() {
-        let g = Grant::local_profile(&root());
-        assert!(g.check(&EffectKind::FsWrite, Some("out.txt")).is_ok());
-        assert!(g.check(&EffectKind::FsWrite, Some("wj.toml")).is_err());
-        assert!(g.check(&EffectKind::FsWrite, Some("src/main.wj")).is_err());
-        assert!(g.check(&EffectKind::FsRead, Some("wj.toml")).is_ok(), "reading is fine");
-        let mut named = Grant::sandbox(&root());
-        named.allow(EffectKind::FsWrite, "./src/gen.wj");
-        assert!(named.check(&EffectKind::FsWrite, Some("src/gen.wj")).is_ok(), "named exactly");
-    }
-
-    #[test]
-    fn local_profile_is_the_project_directory() {
-        let g = Grant::local_profile(&root());
-        assert!(g.check(&EffectKind::FsWrite, Some("out/x.txt")).is_ok());
-        assert!(g.check(&EffectKind::FsRead, Some("/etc/hosts")).is_err());
-        assert!(g.check(&EffectKind::NetConnect, Some("http://example.com/")).is_err());
-        assert!(g.check(&EffectKind::EnvRead, Some("HOME")).is_err());
-        assert!(g.check(&EffectKind::Process, Some("ls")).is_err());
-    }
 }

@@ -353,6 +353,16 @@ impl<'ast> CodeGenerator<'ast> {
             self.indent_level += 1;
         }
 
+        // ADR-0021: the program's capability grant, installed once before anything else runs. Present only when
+        // the compiler could not prove every sink call inside the grant (computed paths, hosts, names).
+        if func.name == "main" && !self.is_module {
+            if let Some(install) = &self.config.capability_install {
+                output.push_str(&self.indent());
+                output.push_str(install);
+                output.push_str(";\n");
+            }
+        }
+
         // Tracy zone (CPU): innermost around timed work so @timeout / @bench wrappers are excluded
         if needs_profile {
             let zone_expr = if let Some(dec) = profile_decorator {

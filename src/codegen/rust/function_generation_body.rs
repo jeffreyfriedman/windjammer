@@ -61,6 +61,13 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_function_body = true;
         let import_scope = self.push_function_local_import_scope(&func.body);
         let mut body_code = self.generate_block(&func.body);
+        // ADR-0021: install the program's capability grant before anything else in `main` runs (only present when
+        // the compiler could not prove every sink call inside the grant)
+        if func.name == "main" && !self.is_module {
+            if let Some(install) = &self.config.capability_install {
+                body_code = format!("{}{};\n{}", self.indent(), install, body_code);
+            }
+        }
         self.pop_function_local_import_scope(import_scope);
         self.in_function_body = old_in_function_body;
 

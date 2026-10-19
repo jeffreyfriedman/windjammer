@@ -1,0 +1,49 @@
+// Compile-time capability enforcement for `wj build` (ADR-0021 stage E2).
+//
+// With a `[capabilities]` table (or a `.wj-capabilities.lock`) in wj.toml the build fails on the same findings
+// `wj check` reports (WJ0040-WJ0044), and a compiled program carries a run-time guard (the installed grant) only
+// when some sink call cannot be proven inside the grant here. Zero guards otherwise.
+
+use crate::check::effects::{analyze_project, parse_app_inputs};
+use crate::check::{self, CheckOptions};
+use crate::diagnostics::render;
+use crate::ir::effect_facts::install::{compiled_dependency_gaps, needs_runtime_guards, render_install};
+use anyhow::{bail, Result};
+use std::path::Path;
+
+const EFFECT_CODES: [&str; 5] = ["WJ0040", "WJ0041", "WJ0042", "WJ0043", "WJ0044"];
+
+/// Check the project's effects. Returns the `caps::install` statement for the generated `main` when one is needed.
+pub fn prepare(path: &Path, library: bool) -> Result<Option<String>> {
+    let Ok(inputs) = parse_app_inputs(path) else { return Ok(None) }; // not a checkable project: the build reports why
+    let a = analyze_project(path, inputs, false);
+    if a.grants.app.is_none() && !a.grants.enforce_deps {
+        return Ok(None); // no [capabilities], no lock file: nothing to enforce
+    }
+    let checked = check::check_path(path, &CheckOptions::default())?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    let mut errors = 0;
+    for d in checked.report.diagnostics.iter().filter(|d| d.is_error() && EFFECT_CODES.contains(&d.code.as_str())) {
+        eprintln!("{}", render::render(d, &source_of));
+        errors += 1;
+    }
+    for (pkg, kind) in compiled_dependency_gaps(&a.resolved, &a.facts, &a.grants, &a.dep_names) {
+        eprintln!(
+            "error[WJ0041]: dependency `{pkg}` uses a computed `{kind}` resource, and a compiled program enforces one grant at run time\n  = help: give [capabilities.dependencies.{pkg}] the same `{kind}` entries as [capabilities], or pass the dependency a capability value (`std::cap`)"
+        );
+        errors += 1;
+    }
+    if errors > 0 {
+        bail!("{errors} capability error(s): the build stops before generating code");
+    }
+    if library {
+        return Ok(None);
+    }
+    let Some(app) = a.grants.app.as_ref() else { return Ok(None) };
+    if needs_runtime_guards(&a.resolved, &a.facts, &a.grants, &a.dep_names) {
+        // relative patterns anchor at the program's working directory at run time, like the paths it opens
+        Ok(Some(render_install(app, Path::new("."))))
+    } else {
+        Ok(None)
+    }
+}
