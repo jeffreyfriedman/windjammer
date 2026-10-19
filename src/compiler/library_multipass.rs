@@ -142,30 +142,6 @@ fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
     crate::compiler::library_copy_registry::stdlib_modules_from_source(source)
 }
 
-/// A std stub parameter the runtime function takes by value stays owned (analysis of the empty stub body says
-/// `Borrowed`, which made call sites emit `&String::from("0.0.0.0")` for `address: String`).
-fn restore_runtime_owned_params(
-    stub: &crate::analyzer::FunctionSignature,
-    runtime: Option<&crate::analyzer::FunctionSignature>,
-) -> crate::analyzer::FunctionSignature {
-    use crate::analyzer::OwnershipMode;
-    let mut out = stub.clone();
-    let Some(rt) = runtime else { return out };
-    if rt.param_ownership.len() != out.param_ownership.len() {
-        return out;
-    }
-    for (i, rt_mode) in rt.param_ownership.iter().enumerate() {
-        let rt_formal_owned = rt.param_types.get(i).is_some_and(|t| !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)));
-        if *rt_mode == OwnershipMode::Owned && rt_formal_owned && out.param_ownership[i] == OwnershipMode::Borrowed {
-            out.param_ownership[i] = OwnershipMode::Owned;
-            if let (Some(t), Some(rt_t)) = (out.param_types.get_mut(i), rt.param_types.get(i)) {
-                *t = rt_t.clone();
-            }
-        }
-    }
-    out
-}
-
 /// Find Windjammer stdlib directory (`std/`).
 ///
 /// Shared by multipass + single-file API-type collection. Prefer env / crate
@@ -522,18 +498,14 @@ pub(crate) fn build_library_multipass(
     let struct_defining_module_paths = std::sync::Arc::new(struct_defining_module_paths);
     let global_copy_structs = std::sync::Arc::new(global_copy_structs);
 
-    // Runtime-scanned contracts for `std/<module>.wj` stubs (`http::server_serve(address: String, ..)`): a stub body
-    // never uses its parameters, so analysis infers `Borrowed` where the runtime function takes ownership.
-    let mut std_stub_runtime_contracts: HashMap<String, crate::analyzer::FunctionSignature> = HashMap::new();
-    for stub in &std_stub_files {
-        if let Some(stem) = stub.file_stem().and_then(|s| s.to_str()) {
-            for (key, sig) in &global_registry.signatures {
-                if key.strip_prefix(stem).is_some_and(|r| r.starts_with("::") && !r[2..].contains("::")) {
-                    std_stub_runtime_contracts.insert(key.clone(), sig.clone());
-                }
-            }
-        }
-    }
+    // Runtime-scanned contracts: a `std/<module>.wj` stub has an empty body, so analysing it infers `Borrowed` for
+    // every parameter (`address: string` of `server_serve`, which the runtime takes by value). The runtime
+    // signature stays authoritative, exactly as in an incremental build where the unchanged stub is not re-analysed.
+    let runtime_contracts: HashMap<String, crate::analyzer::FunctionSignature> = if std_stub_files.is_empty() {
+        HashMap::new()
+    } else {
+        global_registry.signatures.clone()
+    };
 
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
@@ -609,12 +581,17 @@ pub(crate) fn build_library_multipass(
             let module_path = file_module.join("::");
             let is_std_stub = std_stub_files.contains(file);
             for (name, sig) in &file_registry.signatures {
+                let runtime_key = if name.contains("::") { name.clone() } else { format!("{file_stem}::{name}") };
+                let runtime_sig = if is_std_stub { runtime_contracts.get(&runtime_key) } else { None };
                 let restored;
-                let sig = if is_std_stub && !name.contains("::") {
-                    restored = restore_runtime_owned_params(sig, std_stub_runtime_contracts.get(&format!("{file_stem}::{name}")));
-                    &restored
-                } else {
-                    sig
+                let sig = match runtime_sig {
+                    Some(rt) if rt.param_ownership.len() == sig.param_ownership.len() => {
+                        let mut r = rt.clone();
+                        r.name = sig.name.clone();
+                        restored = r;
+                        &restored
+                    }
+                    _ => sig,
                 };
                 // Skip passthrough entries inherited from the frozen global snapshot.
                 // analyze_program_with_global_arc clones the global registry, so

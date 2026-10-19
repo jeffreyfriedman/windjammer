@@ -427,3 +427,46 @@ fn main() {
         "2\n",
     );
 }
+
+// ------------------------------------------------------------------ build determinism
+
+fn read_generated(dir: &std::path::Path) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for e in fs::read_dir(dir.join("build")).unwrap().flatten() {
+        let p = e.path();
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        if name.ends_with(".rs") || name == "Cargo.toml" {
+            out.insert(name, fs::read_to_string(&p).unwrap());
+        }
+    }
+    out
+}
+
+/// E12: a rebuild after touching a file emits byte-identical Rust (and `Cargo.toml`) to a clean build. Std stubs
+/// (`std/http.wj`) are analysed on a clean build only; the runtime contracts must win in both.
+#[test]
+fn clean_build_equals_incremental_build() {
+    let dir = write_project(&[
+        ("wj.toml", "[package]\nname = \"inc\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\n"),
+        (
+            "src/http_server.wj",
+            "use std::http::*\n\npub fn to_response(headers: string) -> ServerResponse {\n    let mut resp = ServerResponse::with_status(200, \"ok\")\n    resp = resp.header(\"Content-Type\", \"application/json\")\n    for line in headers.lines() {\n        let kv: Vec<string> = line.split(\": \").collect()\n        if kv.len() == 2 {\n            resp = resp.header(kv[0], kv[1])\n        }\n    }\n    resp\n}\n",
+        ),
+        ("src/main.wj", "mod http_server\n\nfn main() {\n    println(\"x\")\n}\n"),
+    ]);
+    let build = || {
+        let o = Command::new(WJ).args(["build", "--no-cargo", "src"]).current_dir(dir.path()).output().unwrap();
+        assert!(o.status.success(), "wj build failed: {}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+        read_generated(dir.path())
+    };
+    let clean = build();
+    let main = dir.path().join("src/http_server.wj");
+    let mut src = fs::read_to_string(&main).unwrap();
+    src.push_str("// touched\n");
+    fs::write(&main, src).unwrap();
+    let incremental = build();
+    assert_eq!(clean.keys().collect::<Vec<_>>(), incremental.keys().collect::<Vec<_>>());
+    for (name, text) in &clean {
+        assert_eq!(text, &incremental[name], "{name} differs between the clean and the incremental build");
+    }
+}
