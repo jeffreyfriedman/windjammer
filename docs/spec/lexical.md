@@ -149,19 +149,28 @@ y
 
 ## Dollar escape
 
-**SPEC-LEX-009** `$$` inside a string literal is a literal `$`; a `$` not followed by `{` is also literal.
+**SPEC-LEX-009** `$$` inside a string literal is a literal `$`; a `$` not followed by `{` is also literal. `${` starts an interpolation. A literal `${` is written `$${` or `$\{`. Two literal dollars are written `$$$$`. (The escape is `$$`, not `\$`.) Content is never rewritten anywhere else: embedded JavaScript, CSS or SQL keeps every other character, and a single `$` is always safe.
 
 <!-- example: tests/spec/lexical/SPEC-LEX-009.wj -->
 ```windjammer
 fn main() {
+    let x = 7
     println("cost: $$5")
     println("a$b")
+    println("$$$$")
+    println("$${x}")
+    println("$\{x}")
+    println("${x}")
 }
 ```
 Output:
 ```text
 cost: $5
 a$b
+$$
+${x}
+${x}
+7
 ```
 
 ## Other escapes

@@ -138,6 +138,8 @@ pub struct Registry {
     funcs: HashMap<&'static str, FnImpl>,
     consts: HashMap<String, Value>,
     types: HashSet<&'static str>,
+    /// Field names of host struct types a program may construct with a struct literal (test requests).
+    struct_fields: HashMap<&'static str, &'static [&'static str]>,
     mutating: HashSet<&'static str>,
     natives: HashMap<&'static str, HashMap<&'static str, PureFn>>,
 }
@@ -196,6 +198,12 @@ impl Registry {
     }
     pub fn add_const(&mut self, path: impl Into<String>, v: Value) {
         self.consts.insert(path.into(), v);
+    }
+    pub fn constructible(&mut self, name: &'static str, fields: &'static [&'static str]) {
+        self.struct_fields.insert(name, fields);
+    }
+    pub fn constructible_fields(&self, name: &str) -> Option<&'static [&'static str]> {
+        self.struct_fields.get(name).copied()
     }
     pub fn type_name(&mut self, name: &'static str) {
         self.types.insert(name);
