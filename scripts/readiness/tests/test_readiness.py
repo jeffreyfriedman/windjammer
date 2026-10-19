@@ -339,6 +339,31 @@ class CacheTests(unittest.TestCase):
         finally:
             shutil.rmtree(d)
 
+    def test_compiled_runs_are_skipped_when_disk_is_low(self):
+        d = tempfile.mkdtemp()
+        n = []
+        os.environ["WJ_READINESS_MIN_FREE_GIB"] = "1000000000"
+        try:
+            c = core.Ctx(SHIM, d, core.QUICK, core.Cache(os.path.join(d, "c")), [], runner=lambda *a, **k: n.append(1) or core.Res(0, "", "", 0))
+            self.assertTrue(c.cached_run("r1-compiled", "h", ["a"], 1).timed_out)
+            self.assertFalse(c.cached_run("r1-interp", "h", ["a"], 1).timed_out)
+            self.assertEqual(len(n), 1)
+        finally:
+            os.environ.pop("WJ_READINESS_MIN_FREE_GIB")
+            shutil.rmtree(d)
+
+    def test_unwritable_cache_degrades_to_uncached(self):
+        d = tempfile.mkdtemp()
+        try:
+            cache = core.Cache(os.path.join(d, "c"))
+            shutil.rmtree(cache.dir)
+            open(cache.dir, "w").close()          # the cache directory is now a file: every write fails
+            cache.put("k", {"a": 1})
+            self.assertFalse(cache.enabled)
+            self.assertIsNone(cache.get("k"))
+        finally:
+            shutil.rmtree(d)
+
     def test_timeouts_are_not_cached(self):
         d = tempfile.mkdtemp()
         n = []
