@@ -55,8 +55,8 @@ elif cmd == "run":
         wrong = seed in spec.get("gen_wrong", [])
         emit("0\n" if always else f"{seed * 7 + 3 + (1 if wrong else 0)}\n")
     if "--compiled" in rest:
-        out, rc = (s or {}).get("compiled", ["", 0])
-        emit(out, rc)
+        v = (s or {}).get("compiled", ["", 0])
+        emit(v[0], v[1], v[2] if len(v) > 2 else "")
     if "--interpret" in rest:
         hs = rest[rest.index("--hash-seed") + 1] if "--hash-seed" in rest else "0"
         if s is None:
