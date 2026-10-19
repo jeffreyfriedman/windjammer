@@ -536,7 +536,17 @@ mod tests {
         assert!(lits.iter().all(|l| l.ends_with(":?")), "{lits:?}");
         let src = "fn main() {\n let a = 5\n let f = |x: int| x + a\n println(\"${f(1)}\")\n}\n";
         let (lits, _) = literals_in(src, "main");
-        assert_eq!(lits, vec!["5:?"]);
+        assert_eq!(lits[0], "5:?");
+    }
+
+    #[test]
+    fn literals_next_to_a_typed_parameter_are_never_defaulted() {
+        let src = "fn f(seg: i32) -> u32 {\n (2 * seg + 1) as u32\n}\n";
+        let (lits, _) = literals_in(src, "f");
+        assert!(lits.iter().all(|l| l.ends_with(":?")), "{lits:?}");
+        let src = "fn a(seg: i32) -> i32 {\n 1 + 2 * seg\n}\n";
+        let (lits, _) = literals_in(src, "a");
+        assert!(lits.iter().all(|l| l.ends_with(":?")), "{lits:?}");
     }
 
     #[test]

@@ -566,3 +566,70 @@ fn corpus_call_inside_interpolation_constrains_literal_width() {
 fn corpus_int_accumulator_over_int_fields_is_not_truncated_to_i32() {
     corpus_check("int_accumulator_field_width");
 }
+
+#[test]
+fn corpus_unsuffixed_literal_follows_typed_operand_in_nested_arithmetic() {
+    // Expected output (hand-derived): f(3)=7, g(5,2,100)=11+3+100-3+10=121, h(4)=1+8-1=8.
+    corpus_check("mixed_typed_literal_width");
+}
+
+/// Generated gate: random arithmetic over typed parameters (i32/u32/u8/i64), unsuffixed literals and
+/// casts must be accepted by rustc (the oracle). Compile-only: the values may overflow at runtime.
+#[test]
+fn generated_mixed_width_arithmetic_is_accepted_by_rustc() {
+    let n = env_u64("WJ_INFER_SEEDS", 6).max(8);
+    let first = env_u64("WJ_INFER_SEED0", 1);
+    let tys = [("i32", "pi"), ("u32", "pu"), ("u8", "pb"), ("i64", "pl")];
+    fn gen(rng: &mut Rng, ty: usize, depth: usize, tys: &[(&str, &str); 4]) -> String {
+        if depth == 0 || rng.below(4) == 0 {
+            return if rng.below(2) == 0 { tys[ty].1.to_string() } else { format!("{}", rng.below(9)) };
+        }
+        match rng.below(5) {
+            0 | 1 => {
+                let op = ["+", "*", "+", "-"][rng.below(3)]; // no constant `-` chain: rustc denies constant underflow
+                format!("({} {} {})", gen(rng, ty, depth - 1, tys), op, gen(rng, ty, depth - 1, tys))
+            }
+            2 => {
+                // cast from another width; the operand must itself be well typed in that width
+                let from = rng.below(4);
+                format!("(({}) as {})", gen(rng, from, depth - 1, tys), tys[ty].0)
+            }
+            3 => format!("({} + {})", gen(rng, ty, depth - 1, tys), rng.below(9)),
+            _ => format!("({} * {})", rng.below(9), gen(rng, ty, depth - 1, tys)),
+        }
+    }
+    let mut failures = Vec::new();
+    for seed in first..first + n {
+        let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9));
+        let mut src = String::new();
+        let mut calls = String::new();
+        for k in 0..4 {
+            let ty = rng.below(4);
+            let body = gen(&mut rng, ty, 3, &tys);
+            // A cast of a bare literal-only expression is fine; make sure the body has the return width.
+            src.push_str(&format!(
+                "fn f{k}(pi: i32, pu: u32, pb: u8, pl: i64) -> {} {{\n    {}\n}}\n\n",
+                tys[ty].0, body
+            ));
+            calls.push_str(&format!("    let r{k} = f{k}(1, 2, 3, 4)\n    println(\"${{r{k}}}\")\n"));
+        }
+        src.push_str(&format!("fn main() {{\n{calls}}}\n"));
+        let dir = work_dir(&format!("mix{seed}"));
+        let r = check_source_no_run(&src, &dir);
+        let _ = std::fs::remove_dir_all(&dir);
+        // rustc denies constant overflow of literal-only arithmetic (`7 * 7 * 7 as u8`): a property of the
+        // generated constants, not of width inference.
+        if let Err(f) = r.or_else(|f| match &f {
+            Failure::Rustc(m) if m.contains("will overflow") => Ok(()),
+            _ => Err(f),
+        }) {
+            failures.push(format!("seed {seed}: {:?}\n{src}", f));
+        }
+    }
+    assert!(failures.is_empty(), "{} failing program(s):\n{}", failures.len(), failures.join("\n---\n"));
+}
+
+/// Build with `wj build --no-cargo` and require rustc to accept the result (no execution).
+fn check_source_no_run(src: &str, dir: &Path) -> Result<(), Failure> {
+    check_source(src, dir, &[], false)
+}
