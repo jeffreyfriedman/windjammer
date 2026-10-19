@@ -72,7 +72,7 @@ Implementation legend: **Implemented** (works end to end on the main path), **Pa
 | RFC | Document status | Implementation | Evidence | Gap / next step |
 |-----|-----------------|----------------|----------|-----------------|
 | WJ-SEC-01 Effect capabilities | Draft | Partial | `src/ir/effects.rs`, `EffectSolver` in `src/ir/pipeline.rs`; `[app_capabilities]` enforced in `src/output_generation.rs`; `src/config.rs` | Only enforced when `[app_capabilities]` exists; app-level only, not per dependency; unknown externals unclassified. [ADR-0009](../../adr/0009-security-enforcement.md) |
-| WJ-SEC-02 Taint tracking | Draft | Partial | `src/ir/taint.rs`, `TaintSolver` stage in `src/ir/pipeline.rs`; read by `src/cli/json_diagnostics.rs` | Errors do not fail `wj build`; sources/sinks only for annotated stdlib. ADR-0009 |
+| WJ-SEC-02 Taint tracking | Draft | Partial | `src/ir/taint.rs`, `TaintSolver` stage in `src/ir/pipeline.rs`; read by `src/diagnostics/` | Errors do not fail `wj build`; sources/sinks only for annotated stdlib. ADR-0009 |
 | WJ-SEC-03 Capability lock file | Draft | Partial | `src/ir/capability_lock.rs` (format, escalation detection) | Not referenced outside `src/ir/mod.rs`; no `.wj-capabilities.lock` is read or written by the CLI. ADR-0009, ADR-0010 |
 | WJ-SEC-04 Capability profiles | Draft | Partial | `src/ir/capability_profiles.rs` (5 built-in profiles) | Not wired to any command or check; no community trust signals. ADR-0009 |
 | WJ-SYN-01 Pipe operator | Draft (optional) | Implemented | `Token::PipeOp`, `src/parser/binary_expression_parser.rs`; `tests/pipe_operator_multi_arg_test.rs` | Document status should become Implemented; RFC text still debates adoption |

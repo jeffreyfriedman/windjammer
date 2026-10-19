@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: 2006232625ab
+---
 # ADR-0017: One semantic layer, consumed by every backend
 
 - **Status:** Proposed
