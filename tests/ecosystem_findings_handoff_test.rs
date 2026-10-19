@@ -95,14 +95,18 @@ fn main() {
     assert_eq!(out, "3\n");
 }
 
-/// C5: a parameter moved into `Mutex::new` stays owned.
+/// C5: a parameter moved into `Mutex::new` stays owned (`fn share(c: Counter)`, not `c: &Counter`).
 #[test]
 fn param_moved_into_mutex_new_stays_owned() {
-    let out = compile_and_run(
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("test.wj");
+    fs::write(
+        &f,
         r#"use std::sync::{Arc, Mutex}
 
 struct Counter {
     n: int,
+    label: string,
 }
 
 fn share(c: Counter) -> Arc<Mutex<Counter>> {
@@ -110,13 +114,17 @@ fn share(c: Counter) -> Arc<Mutex<Counter>> {
 }
 
 fn main() {
-    let s = share(Counter { n: 1 })
+    let s = share(Counter { n: 1, label: "a" })
     println("done")
 }
 "#,
     )
-    .unwrap_or_else(|e| panic!("{e}"));
-    assert_eq!(out, "done\n");
+    .unwrap();
+    fs::create_dir_all(dir.path().join("build")).unwrap();
+    let wj = Command::new(WJ).args(["build", "--target", "rust", "--no-cargo"]).arg(&f).current_dir(dir.path()).output().unwrap();
+    assert!(wj.status.success(), "wj build failed: {}", String::from_utf8_lossy(&wj.stderr));
+    let rs = fs::read_to_string(dir.path().join("build/test.rs")).unwrap();
+    assert!(rs.contains("fn share(c: Counter)"), "parameter moved into Mutex::new must stay owned:\n{rs}");
 }
 
 /// C3: free functions with the same name in different modules keep their own parameter modes.
