@@ -221,7 +221,7 @@ fn unwrap_defaults(src: &str, toks: &[Tok], edits: &mut Vec<Edit>) {
         let next_ok = match next {
             None => true,
             Some(n) => match n.t {
-                Token::RParen | Token::Comma | Token::Semicolon | Token::RBrace | Token::RBracket => true,
+                Token::RParen | Token::Comma | Token::Semicolon | Token::RBrace | Token::RBracket | Token::Eof => true,
                 Token::Ident(_) | Token::Let | Token::Return | Token::If | Token::For | Token::While | Token::Match | Token::Break | Token::Continue => {
                     n.line > toks[close].line
                 }
