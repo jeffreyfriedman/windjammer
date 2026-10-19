@@ -90,7 +90,7 @@ fn str_map(pairs: &[(String, String)]) -> Value {
     for (k, v) in pairs {
         m.insert(Key(s(k)), s(v));
     }
-    Value::Map(Rc::new(m))
+    Value::btree_map(m)
 }
 
 fn pair_vec(pairs: &[(String, String)]) -> Value {
@@ -446,11 +446,11 @@ fn register_responses(r: &mut Registry) {
     for n in ["with_header", "header"] {
         r.native("ServerResponse", n, |_, v, a| {
             let mut hs = match field(v, "headers") {
-                Some(Value::Map(m)) => (*m).clone(),
+                Some(Value::Map(m)) => m.m.clone(),
                 _ => BTreeMap::new(),
             };
             hs.insert(Key(s(&arg_str(&a, 0, "header")?)), s(&arg_str(&a, 1, "header")?));
-            Ok(set_field(v, "headers", Value::Map(Rc::new(hs))))
+            Ok(set_field(v, "headers", Value::btree_map(hs)))
         });
     }
 }

@@ -60,7 +60,7 @@ type M = BTreeMap<Key, Value>;
 
 fn map_arg(a: &[Value], i: usize, what: &str) -> R<M> {
     match crate::interpreter::place::deref_value(arg(a, i, what)?)? {
-        Value::Map(m) => Ok((*m).clone()),
+        Value::Map(m) => Ok(m.m.clone()),
         other => Err(semantic(format!("`config::{what}` expects a HashMap<string, string>, got {}", other.type_name()))),
     }
 }
@@ -91,7 +91,7 @@ fn result(r: Result<Value, String>) -> Value {
 }
 
 fn map(m: M) -> Value {
-    Value::Map(Rc::new(m))
+    Value::btree_map(m)
 }
 
 pub fn register(r: &mut Registry) {

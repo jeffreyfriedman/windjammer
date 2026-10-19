@@ -74,6 +74,7 @@ pub fn run(cli: Cli) -> Result<()> {
             target,
             interpret,
             sched_seed,
+            hash_seed,
             deterministic_time,
             allow_network,
             mock_http,
@@ -85,6 +86,7 @@ pub fn run(cli: Cli) -> Result<()> {
             if interpret {
                 let opts = windjammer::interpreter::runner::RunOptions {
                     sched_seed,
+                    hash_seed,
                     deterministic_time,
                     allow_network,
                     mock_http,

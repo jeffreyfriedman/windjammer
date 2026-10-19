@@ -58,6 +58,8 @@ pub fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static)
 #[derive(Clone, Default)]
 pub struct RunOptions {
     pub sched_seed: u64,
+    /// `--hash-seed N`: permutes HashMap/HashSet iteration order (0 = key order).
+    pub hash_seed: u64,
     pub deterministic_time: bool,
     /// `--allow-network`: plain http:// client requests are allowed.
     pub allow_network: bool,
@@ -83,6 +85,7 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
     with_big_stack(move || {
         let mut it = Interpreter::new();
         it.guard_stack();
+        super::value::HASH_SEED.store(opts.hash_seed, std::sync::atomic::Ordering::Relaxed);
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
         it.set_engine_resolved(opts.engine_resolved);

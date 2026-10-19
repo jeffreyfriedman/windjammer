@@ -25,6 +25,7 @@ pub(crate) mod std_proc;
 pub mod std_http;
 mod std_http_server;
 mod std_config;
+mod std_ordered;
 mod std_db;
 mod std_sys;
 pub(crate) mod sync;
@@ -155,6 +156,7 @@ impl Registry {
         std_http::register(&mut r);
         std_http_server::register(&mut r);
         std_config::register(&mut r);
+        std_ordered::register(&mut r);
         std_db::register(&mut r);
         channel::register(&mut r);
         sync::register(&mut r);

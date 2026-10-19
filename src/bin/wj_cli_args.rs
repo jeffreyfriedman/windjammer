@@ -157,6 +157,11 @@ pub enum Commands {
         #[arg(long, value_name = "N", default_value = "0")]
         sched_seed: u64,
 
+        /// With --interpret: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible
+        /// shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)
+        #[arg(long, value_name = "N", default_value = "0")]
+        hash_seed: u64,
+
         /// With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
         deterministic_time: bool,

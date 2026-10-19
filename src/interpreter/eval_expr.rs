@@ -222,7 +222,7 @@ impl Interpreter {
                     let v = self.eval(v)?;
                     m.insert(Key(k), v);
                 }
-                Ok(Value::Map(Rc::new(m)))
+                Ok(Value::hash_map(m))
             }
 
             Expression::Range { start, end, inclusive, .. } => {
