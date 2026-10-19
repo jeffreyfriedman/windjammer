@@ -25,7 +25,7 @@ fn base64_decode_bytes(data: string) -> Result<Vec<u8>, string> {
     Err("Base64 decoding requires base64 crate (auto-added)")
 }
 
-// Password Hashing (bcrypt)
+// Password Hashing (argon2id preferred; bcrypt verified for migration)
 
 fn hash_password(password: string) -> Result<string, string> {
     // Implementation wraps: bcrypt::hash(password, DEFAULT_COST)
@@ -37,9 +37,21 @@ fn hash_password_with_cost(password: string, cost: int) -> Result<string, string
     Err("Password hashing requires bcrypt crate (auto-added)")
 }
 
+/// Verify against a stored hash: bcrypt (`$2b$...`) or Argon2 PHC (`$argon2id$...`).
 fn verify_password(password: string, hash: string) -> Result<bool, string> {
-    // Implementation wraps: bcrypt::verify(password, hash)
+    // Implementation wraps: bcrypt::verify / argon2 PHC verification
     Err("Password verification requires bcrypt crate (auto-added)")
+}
+
+/// Argon2id with OWASP defaults (19 MiB, 2 iterations, 1 lane) and a random salt; returns a PHC string.
+fn hash_password_argon2id(password: string) -> Result<string, string> {
+    Err("Password hashing requires argon2 crate (auto-added)")
+}
+
+/// True for `$argon2id$...` hashes. After a successful `verify_password` on a hash where this is
+/// false, call `hash_password_argon2id` and store the result to migrate on login.
+fn password_hash_is_argon2id(hash: string) -> bool {
+    false
 }
 
 // SHA-256 Hashing
