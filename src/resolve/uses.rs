@@ -115,6 +115,37 @@ fn normalize_relative(path: &[String]) -> Vec<String> {
     out
 }
 
+/// Crate-relative key of a call path, or `None` when the path leaves the crate.
+///
+/// `aliases` maps a bound name to the written `use` target (`low` -> `crate::lowlevel`). The first
+/// segment of `callee` is expanded through it, relative prefixes (`./`, `../`, `self`, `super`,
+/// `crate`) are normalised like [`expand_use`], and the leading `crate`/`self`/`super` segments are
+/// dropped: `low::make` -> `lowlevel::make`, `super::super::lowlevel::make` -> `lowlevel::make`.
+/// This is the one place codegen asks whether a qualified callee is a same-crate definition.
+pub fn same_crate_callee_key(
+    aliases: &std::collections::HashMap<String, String>,
+    callee: &str,
+) -> Option<String> {
+    let mut segs: Vec<String> = callee.split("::").map(str::to_string).collect();
+    if segs.len() < 2 {
+        return None;
+    }
+    if let Some(target) = aliases.get(&segs[0]) {
+        let mut expanded: Vec<String> = target.split("::").map(str::to_string).collect();
+        expanded.extend(segs.drain(1..));
+        segs = expanded;
+    }
+    let segs = normalize_relative(&segs);
+    let rest: Vec<&String> = segs
+        .iter()
+        .skip_while(|s| matches!(s.as_str(), "crate" | "self" | "super"))
+        .collect();
+    if rest.len() == segs.len() || rest.is_empty() {
+        return None;
+    }
+    Some(rest.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("::"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -140,5 +171,19 @@ mod tests {
         assert_eq!(a[0].binding, Binding::Named("c".into()));
         let r = expand_use(&s(&["../m", "x"]), &None, false, &None);
         assert_eq!(r[0].segments, s(&["super", "m", "x"]));
+    }
+
+    #[test]
+    fn same_crate_callee_keys() {
+        let mut a = std::collections::HashMap::new();
+        a.insert("low".to_string(), "crate::lowlevel".to_string());
+        a.insert("ext".to_string(), "other_crate::m".to_string());
+        assert_eq!(same_crate_callee_key(&a, "low::make").as_deref(), Some("lowlevel::make"));
+        assert_eq!(same_crate_callee_key(&a, "crate::m::f").as_deref(), Some("m::f"));
+        assert_eq!(same_crate_callee_key(&a, "super::super::m::f").as_deref(), Some("m::f"));
+        assert_eq!(same_crate_callee_key(&a, "self::f").as_deref(), Some("f"));
+        assert_eq!(same_crate_callee_key(&a, "ext::f"), None);
+        assert_eq!(same_crate_callee_key(&a, "plain"), None);
+        assert_eq!(same_crate_callee_key(&a, "other::f"), None);
     }
 }

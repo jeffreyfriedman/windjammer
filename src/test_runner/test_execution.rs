@@ -920,13 +920,38 @@ fn compile_test_module(
     } else {
         build_project(&file.path, &build_dir, CompilationTarget::Rust, false)?;
     }
-    let produced = build_dir.join(format!("{stem}.rs"));
+    let produced = locate_compiled_test(&build_dir, &stem);
     let target = output_dir.join(format!("{}.rs", file.module_name));
     if produced != target {
         std::fs::rename(&produced, &target)
             .with_context(|| format!("moving {} to {}", produced.display(), target.display()))?;
     }
     Ok(target)
+}
+
+/// Where the build wrote `<stem>.rs`: next to the output root for a top-level file, under the file's
+/// relative directory (`sub/<stem>.rs`) for a test in a sub-directory of the source root.
+fn locate_compiled_test(build_dir: &Path, stem: &str) -> PathBuf {
+    let flat = build_dir.join(format!("{stem}.rs"));
+    if flat.exists() {
+        return flat;
+    }
+    let name = format!("{stem}.rs");
+    let mut stack = vec![build_dir.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if p.file_name().is_some_and(|n| n != ".wj-scratch") {
+                    stack.push(p);
+                }
+            } else if p.file_name().is_some_and(|n| *n == *name) {
+                return p;
+            }
+        }
+    }
+    flat
 }
 
 /// Generate Rust test harness from Windjammer tests (`files` are already filter-selected).

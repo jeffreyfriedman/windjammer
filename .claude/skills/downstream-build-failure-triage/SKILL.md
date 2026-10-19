@@ -1,6 +1,6 @@
 ---
 name: downstream-build-failure-triage
-description: Use when a downstream build fails with many errors.
+description: Use when a downstream build (wj-game, plugins) fails with many errors, or with one error pointing into compiler source.
 category: dogfood-triage
 ---
 
@@ -13,5 +13,6 @@ Do not hand-edit downstream source to route around a compiler bug. First classif
 3. Classes that do not reproduce in one file are usually cross-module or registry-dependent. Build a 3-5 file project repro before fixing them.
 4. Route by owner: numeric literal widths to the numeric solver, ownership and clones to the IR solver, name resolution and aliases to the resolver. Add no codegen special cases.
 5. A full downstream transpile is slow (about 75 minutes under load). Iterate on reduced repros and re-run the whole program only after they pass.
+6. A single error naming a symbol inside compiler source (E0425 in `src/`) means the integration HEAD is broken, not the downstream. Find the deleting commit with `git log -S'<symbol>'`, restore the symbol, and route the fix to the branch owner. Do not build downstream against an older `git archive` snapshot to dodge it; the workaround hides the break from everyone else. See windjammer-merge-verification.
 
 Reference: [references/triage-checklist.md](references/triage-checklist.md) has the checklist and report shape.
