@@ -112,18 +112,20 @@ pub fn register(r: &mut Registry) {
         let bytes: Vec<u8> = it.to_items(arg(&a, 0, "from_utf8_lossy")?)?.into_iter().filter_map(|v| if let Value::Int(n, _) = v { Some(n as u8) } else { None }).collect();
         Ok(Value::str(String::from_utf8_lossy(&bytes).to_string()))
     });
-    for n in ["HashMap::new", "BTreeMap::new", "HashMap::with_capacity", "BTreeMap::with_capacity"] {
-        r.func(n, |_, _| Ok(Value::Map(Rc::new(BTreeMap::new()))));
+    for n in ["HashMap::new", "HashMap::with_capacity"] {
+        r.func(n, |_, _| Ok(Value::hash_map(BTreeMap::new())));
     }
-    for n in ["HashSet::new", "BTreeSet::new", "HashSet::with_capacity"] {
-        r.func(n, |_, _| Ok(Value::Set(Rc::new(BTreeMap::new()))));
+    for n in ["BTreeMap::new", "BTreeMap::with_capacity"] {
+        r.func(n, |_, _| Ok(Value::btree_map(BTreeMap::new())));
     }
-    for n in ["HashMap::from", "BTreeMap::from"] {
-        r.func(n, |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashMap".into()))));
+    for n in ["HashSet::new", "HashSet::with_capacity"] {
+        r.func(n, |_, _| Ok(Value::hash_set(BTreeMap::new())));
     }
-    for n in ["HashSet::from", "BTreeSet::from"] {
-        r.func(n, |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashSet".into()))));
-    }
+    r.func("BTreeSet::new", |_, _| Ok(Value::btree_set(BTreeMap::new())));
+    r.func("HashMap::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashMap".into()))));
+    r.func("BTreeMap::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("BTreeMap".into()))));
+    r.func("HashSet::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashSet".into()))));
+    r.func("BTreeSet::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("BTreeSet".into()))));
     for t in ["Vec", "String", "HashMap", "HashSet", "BTreeMap", "BTreeSet", "VecDeque", "Option", "Result", "Box", "Rc", "Arc", "char", "bool", "str"] {
         r.type_name(t);
     }
@@ -479,8 +481,10 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
     match (ty, method) {
         ("String" | "string" | "str", "default") => Some(Ok(Value::str(""))),
         ("Vec" | "VecDeque", "default") => Some(Ok(Value::vec(vec![]))),
-        ("HashMap" | "BTreeMap", "default") => Some(Ok(Value::Map(Rc::new(BTreeMap::new())))),
-        ("HashSet" | "BTreeSet", "default") => Some(Ok(Value::Set(Rc::new(BTreeMap::new())))),
+        ("HashMap", "default") => Some(Ok(Value::hash_map(BTreeMap::new()))),
+        ("BTreeMap", "default") => Some(Ok(Value::btree_map(BTreeMap::new()))),
+        ("HashSet", "default") => Some(Ok(Value::hash_set(BTreeMap::new()))),
+        ("BTreeSet", "default") => Some(Ok(Value::btree_set(BTreeMap::new()))),
         ("bool", "default") => Some(Ok(Value::Bool(false))),
         ("Option", "default") => Some(Ok(Value::none())),
         _ => None,

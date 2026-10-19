@@ -271,7 +271,7 @@ fn from_json(it: &mut Interpreter, j: &serde_json::Value, t: &Type) -> Result<Va
                 for (k, x) in o {
                     m.insert(Key(s(k)), from_json(it, x, &vt)?);
                 }
-                Ok(Value::Map(Rc::new(m)))
+                Ok(Value::btree_map(m))
             }
             _ => Err(format!("invalid type: {}, expected a map", kind_name(j))),
         },
@@ -510,7 +510,7 @@ fn captures_val(re: &regex::Regex, c: &regex::Captures) -> Value {
             named.insert(Key(s(n)), s(m.as_str()));
         }
     }
-    struct_val("Captures", vec![("groups", Value::vec(groups)), ("named", Value::Map(Rc::new(named)))])
+    struct_val("Captures", vec![("groups", Value::vec(groups)), ("named", Value::btree_map(named))])
 }
 
 fn build(pattern: &str, ci: bool) -> Value {

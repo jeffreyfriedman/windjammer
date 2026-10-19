@@ -269,8 +269,9 @@ impl Interpreter {
                     }
                     Value::Map(m) => {
                         let items: Vec<Value> = m
-                            .keys()
-                            .map(|k| Value::tuple(vec![k.0.clone(), Value::Ref(p.proj(Proj::Key(k.0.clone())))]))
+                            .ordered_keys()
+                            .into_iter()
+                            .map(|k| Value::tuple(vec![k.clone(), Value::Ref(p.proj(Proj::Key(k)))]))
                             .collect();
                         Value::vec(items)
                     }
@@ -345,8 +346,8 @@ impl Interpreter {
                 let s = super::iter::as_iter(self, n)?;
                 self.drain_iter(&s)
             }
-            Value::Map(m) => Ok(m.iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
-            Value::Set(m) => Ok(m.keys().map(|k| k.0.clone()).collect()),
+            Value::Map(m) => Ok(m.ordered().into_iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
+            Value::Set(m) => Ok(m.ordered_keys()),
             Value::Enum(e) if &*e.ty == "Option" => Ok(match &e.payload {
                 Payload::Tuple(p) => p.clone(),
                 _ => vec![],

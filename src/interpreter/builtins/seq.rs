@@ -113,6 +113,7 @@ pub fn collect_into(items: Vec<Value>, hint: Option<&Type>) -> R {
             Ok(Value::str(s))
         }
         "HashMap" | "BTreeMap" => {
+            let hashed = name == "HashMap";
             let mut m = std::collections::BTreeMap::new();
             for x in items {
                 match x {
@@ -122,14 +123,15 @@ pub fn collect_into(items: Vec<Value>, hint: Option<&Type>) -> R {
                     other => return Err(semantic(format!("cannot collect {} into a map", other.type_name()))),
                 }
             }
-            Ok(Value::Map(Rc::new(m)))
+            Ok(if hashed { Value::hash_map(m) } else { Value::btree_map(m) })
         }
         "HashSet" | "BTreeSet" => {
+            let hashed = name == "HashSet";
             let mut m = std::collections::BTreeMap::new();
             for x in items {
                 m.insert(Key(x), Value::Unit);
             }
-            Ok(Value::Set(Rc::new(m)))
+            Ok(if hashed { Value::hash_set(m) } else { Value::btree_set(m) })
         }
         "Result" => {
             let inner = match hint {

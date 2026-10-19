@@ -7,16 +7,16 @@ use std::collections::BTreeMap;
 
 type M = BTreeMap<Key, Value>;
 
-fn map_of(v: &Value) -> Rc<M> {
+fn map_of(v: &Value) -> Rc<KMap> {
     match v {
         Value::Map(m) | Value::Set(m) => m.clone(),
-        _ => Rc::new(M::new()),
+        _ => Rc::new(KMap::default()),
     }
 }
 
 fn map_mut(v: &mut Value) -> &mut M {
     match v {
-        Value::Map(m) | Value::Set(m) => Rc::make_mut(m),
+        Value::Map(m) | Value::Set(m) => &mut Rc::make_mut(m).m,
         _ => unreachable!("map method on non-map"),
     }
 }
@@ -52,12 +52,12 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Map, "get", |_, v, a| Ok(Value::option(map_of(v).get(&Key(arg(&a, 0, "get")?)).cloned())));
     r.pure(Kind::Map, "contains_key", |_, v, a| Ok(Value::Bool(map_of(v).contains_key(&Key(arg(&a, 0, "contains_key")?)))));
     r.pure(Kind::Map, "get_or_insert", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Map, "keys", |_, v, _| Ok(new_iter(map_of(v).keys().map(|k| k.0.clone()).collect())));
-    r.pure(Kind::Map, "into_keys", |_, v, _| Ok(new_iter(map_of(v).keys().map(|k| k.0.clone()).collect())));
-    r.pure(Kind::Map, "values", |_, v, _| Ok(new_iter(map_of(v).values().cloned().collect())));
-    r.pure(Kind::Map, "into_values", |_, v, _| Ok(new_iter(map_of(v).values().cloned().collect())));
-    r.pure(Kind::Map, "iter", |_, v, _| Ok(new_iter(map_of(v).iter().map(|(k, x)| tup(k, x)).collect())));
-    r.pure(Kind::Map, "into_iter", |_, v, _| Ok(new_iter(map_of(v).iter().map(|(k, x)| tup(k, x)).collect())));
+    r.pure(Kind::Map, "keys", |_, v, _| Ok(new_iter(map_of(v).ordered_keys())));
+    r.pure(Kind::Map, "into_keys", |_, v, _| Ok(new_iter(map_of(v).ordered_keys())));
+    r.pure(Kind::Map, "values", |_, v, _| Ok(new_iter(map_of(v).ordered_values())));
+    r.pure(Kind::Map, "into_values", |_, v, _| Ok(new_iter(map_of(v).ordered_values())));
+    r.pure(Kind::Map, "iter", |_, v, _| Ok(new_iter(map_of(v).ordered().into_iter().map(|(k, x)| tup(k, x)).collect())));
+    r.pure(Kind::Map, "into_iter", |_, v, _| Ok(new_iter(map_of(v).ordered().into_iter().map(|(k, x)| tup(k, x)).collect())));
     r.pure(Kind::Map, "first_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next().map(|(k, x)| tup(k, x)))));
     r.pure(Kind::Map, "last_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next_back().map(|(k, x)| tup(k, x)))));
     r.pure(Kind::Map, "range", |_, v, a| {
@@ -120,11 +120,11 @@ pub fn register(r: &mut Registry) {
     });
     r.place(Kind::Map, "entry", |_, p, a| Ok(entry_value(p, arg(&a, 0, "entry")?)));
     r.place(Kind::Map, "iter_mut", |_, p, _| {
-        let keys: Vec<Value> = map_of(&p.read()?).keys().map(|k| k.0.clone()).collect();
+        let keys: Vec<Value> = map_of(&p.read()?).ordered_keys();
         Ok(new_iter(keys.into_iter().map(|k| Value::tuple(vec![k.clone(), Value::Ref(p.proj(Proj::Key(k)))])).collect()))
     });
     r.place(Kind::Map, "values_mut", |_, p, _| {
-        let keys: Vec<Value> = map_of(&p.read()?).keys().map(|k| k.0.clone()).collect();
+        let keys: Vec<Value> = map_of(&p.read()?).ordered_keys();
         Ok(new_iter(keys.into_iter().map(|k| Value::Ref(p.proj(Proj::Key(k)))).collect()))
     });
 
@@ -184,8 +184,8 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Set, "len", |_, v, _| Ok(Value::usize(map_of(v).len())));
     r.pure(Kind::Set, "is_empty", |_, v, _| Ok(Value::Bool(map_of(v).is_empty())));
     r.pure(Kind::Set, "contains", |_, v, a| Ok(Value::Bool(map_of(v).contains_key(&Key(arg(&a, 0, "contains")?)))));
-    r.pure(Kind::Set, "iter", |_, v, _| Ok(new_iter(map_of(v).keys().map(|k| k.0.clone()).collect())));
-    r.pure(Kind::Set, "into_iter", |_, v, _| Ok(new_iter(map_of(v).keys().map(|k| k.0.clone()).collect())));
+    r.pure(Kind::Set, "iter", |_, v, _| Ok(new_iter(map_of(v).ordered_keys())));
+    r.pure(Kind::Set, "into_iter", |_, v, _| Ok(new_iter(map_of(v).ordered_keys())));
     r.pure(Kind::Set, "first", |_, v, _| Ok(Value::option(map_of(v).keys().next().map(|k| k.0.clone()))));
     r.pure(Kind::Set, "last", |_, v, _| Ok(Value::option(map_of(v).keys().next_back().map(|k| k.0.clone()))));
     fn setop(v: &Value, a: &[Value], f: fn(&M, &M) -> Vec<Key>) -> R {
