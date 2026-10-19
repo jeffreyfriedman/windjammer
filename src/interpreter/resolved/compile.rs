@@ -14,6 +14,7 @@
 //! and the function is compiled again with that slot untyped.
 
 use super::expr::{self, X};
+use super::island::{self, Island};
 use super::fast::Cond;
 use super::typed::{self, small, ICode, I};
 use super::{Body, Code, CompiledFn};
@@ -43,6 +44,13 @@ pub(super) struct Cx<'a> {
     conflicts: Vec<usize>,
     /// A `return` whose value is not a typed integer was compiled (no typed body).
     untyped_return: bool,
+    /// Boxed locals (named by a walker island, see `island.rs`), and those found to need it.
+    boxed: &'a HashSet<usize>,
+    need: Vec<usize>,
+    /// The function's declared return type (the walker's `scope.ret_ty` inside islands).
+    pub(super) ret: Option<&'static Type>,
+    /// The walker hands this function's tail an expected type at entry (see `needs_hint`).
+    tail_hint: bool,
 }
 
 impl Cx<'_> {
@@ -55,9 +63,47 @@ impl Cx<'_> {
     fn declare(&mut self, name: &'static str, ty: Option<IntTy>) -> usize {
         let i = self.nslots;
         self.nslots += 1;
-        self.slot_ty.push(ty.filter(|t| small(*t) && !self.poison.contains(&i)));
+        self.slot_ty.push(ty.filter(|t| small(*t) && !self.poison.contains(&i) && !self.boxed.contains(&i)));
         self.scopes.last_mut().expect("scope").push((name, i));
         i
+    }
+    fn declare_boxed(&mut self, name: &'static str) -> usize {
+        let i = self.declare(name, None);
+        self.need_box(i);
+        i
+    }
+    pub(super) fn is_boxed(&self, slot: usize) -> bool {
+        self.boxed.contains(&slot)
+    }
+    /// `slot` must be boxed (the function is compiled again if it is not yet).
+    pub(super) fn need_box(&mut self, slot: usize) {
+        if !self.boxed.contains(&slot) {
+            self.need.push(slot);
+        }
+    }
+    /// Is `e` a bare read of a boxed local (which may hold a reference)?
+    pub(super) fn boxed_ident(&self, e: E) -> bool {
+        matches!(e, Expression::Identifier { name, .. } if self.local(name).is_some_and(|s| self.is_boxed(s)))
+    }
+    /// Every local declared so far and still in scope (shadowed ones too), in declaration order.
+    pub(super) fn all_locals(&self) -> Vec<(&'static str, usize)> {
+        self.scopes.iter().flatten().copied().collect()
+    }
+    /// The visible locals among `names`, in declaration order.
+    pub(super) fn visible_locals(&self, names: &HashSet<&str>) -> Vec<(&'static str, usize)> {
+        let mut v: Vec<(&'static str, usize)> = Vec::new();
+        for n in names {
+            if let Some(s) = self.local(n) {
+                let name = self.scopes.iter().flatten().find(|(_, i)| *i == s).map(|(m, _)| *m).expect("declared");
+                v.push((name, s));
+            }
+        }
+        v.sort_by_key(|(_, s)| *s);
+        v
+    }
+    /// Boxed slots declared in the innermost name scope.
+    fn boxed_in_scope(&self) -> Vec<usize> {
+        self.scopes.last().map(|s| s.iter().map(|(_, i)| *i).filter(|i| self.is_boxed(*i)).collect()).unwrap_or_default()
     }
     /// Does storing a value of static width `rhs` (`None`: not a typed integer; with its value
     /// when constant) into typed `slot` keep the slot's width, for `=` (`op` `None`) or `op=`?
@@ -85,11 +131,10 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
     if f.params.iter().any(|p| p.name == "self" || !matches!(p.pattern, None | Some(Pattern::Identifier(_)))) {
         return None;
     }
-    // a parameter the body mutates is passed by reference (inferred `&mut`): walker only
-    if it.param_mutation(f).iter().any(|m| *m) {
-        return None;
-    }
+    // a parameter the body mutates holds a `&mut` place (inferred `&mut`): boxed, touched only by islands
+    let mutated = it.param_mutation(f);
     let mut poison = HashSet::new();
+    let mut boxed: HashSet<usize> = mutated.iter().enumerate().filter(|(_, m)| **m).map(|(i, _)| i).collect();
     loop {
         let mut cx = Cx {
             it: &mut *it,
@@ -100,13 +145,19 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
             poison: &poison,
             conflicts: Vec::new(),
             untyped_return: false,
+            boxed: &boxed,
+            need: Vec::new(),
+            ret: f.ret,
+            tail_hint: tail_hint(f),
         };
         let r = compile_with(&mut cx, f);
         let conflicts = std::mem::take(&mut cx.conflicts);
-        if conflicts.is_empty() || r.is_none() {
+        let need = std::mem::take(&mut cx.need);
+        if (conflicts.is_empty() && need.is_empty()) || r.is_none() {
             return r;
         }
         poison.extend(conflicts);
+        boxed.extend(need);
     }
 }
 
@@ -117,13 +168,28 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
     let param_typed = params.iter().map(|s| cx.slot_ty[*s].is_some()).collect();
     let ret_int = f.ret.and_then(IntTy::from_type).filter(|t| *t != IntTy::Lit);
     let typed_ret = ret_int.filter(|t| small(*t));
-    let (init, tail) = stmt_list(cx, f.body, typed_ret.is_some())?;
+    let (mut init, tail) = stmt_list(cx, f.body, typed_ret.is_some())?;
+    // boxed parameters move into walker slots before the body runs
+    let boxed_params: Vec<usize> = params.iter().copied().filter(|s| cx.is_boxed(*s)).collect();
+    if !boxed_params.is_empty() {
+        let bp = boxed_params.clone();
+        let prologue: Code = Box::new(move |it, b| {
+            for s in &bp {
+                let v = std::mem::replace(&mut it.rstack[b + s], Value::Unit);
+                it.rstack[b + s] = island::boxed(v);
+            }
+            Ok(Value::Unit)
+        });
+        init.insert(0, Step::Code(None, prologue));
+    }
+    // a panic leaving the function poisons the lock guards its variables hold (the walker's `exit_scope_vars`)
+    let top = cx.boxed_in_scope();
     let body = match (typed_ret, tail) {
-        (Some(t), Some((loc, Tail::Int(i, u)))) if !cx.untyped_return => Body::I(typed_seq(init, u, loc, i.into_code()), u, t),
-        (_, tail) => Body::V(seq(init, tail.map(|(l, t)| (l, t.code())))),
+        (Some(t), Some((loc, Tail::Int(i, u)))) if !cx.untyped_return => Body::I(poisoning_i(typed_seq(init, u, loc, i.into_code()), top), u, t),
+        (_, tail) => Body::V(poisoning(seq(init, tail.map(|(l, t)| (l, t.code()))), top)),
     };
     let scalar = cx.slot_ty.iter().all(|t| t.is_some());
-    Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, scalar, body })
+    Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, scalar, tail_hint: cx.tail_hint, body })
 }
 
 /// The last statement of a list: a typed integer expression, or any code.
@@ -169,15 +235,18 @@ impl Step {
 type Init = Vec<Step>;
 
 /// `if c { return e }` (no `else`) as a `Step::Guard` when `e` is a typed integer.
-fn guard(cx: &mut Cx, s: S) -> Option<Option<Step>> {
-    let Statement::If { condition, then_block, else_block: None, .. } = s else { return Some(None) };
-    let [r @ Statement::Return { value: Some(e), .. }] = then_block.as_slice() else { return Some(None) };
+fn guard(cx: &mut Cx, s: S) -> Option<Step> {
+    let Statement::If { condition, then_block, else_block: None, .. } = s else { return None };
+    let [r @ Statement::Return { value: Some(e), .. }] = then_block.as_slice() else { return None };
+    if cx.needs_hint(e) || cx.boxed_ident(e) {
+        return None;
+    }
     let cond = expr::cond(cx, condition, "if", true)?;
     cx.scopes.push(Vec::new());
     let v = expr::expr(cx, e);
     cx.scopes.pop();
     let (loc, rloc) = (stmt_loc(s), stmt_loc(r));
-    Some(Some(match v? {
+    Some(match v? {
         X::I(val, w) => Step::Guard { loc, cond, rloc, val, w },
         x => {
             cx.untyped_return = true;
@@ -193,7 +262,28 @@ fn guard(cx: &mut Cx, s: S) -> Option<Option<Step>> {
                 }),
             )
         }
-    }))
+    })
+}
+
+/// Could the walker hand `e` an expected type when a `let x: T` / `return` / tail evaluates it
+/// (`expect_type_of`: calls, and `parse_string` under `?` or in a `match` block)?
+fn hinted(e: E) -> bool {
+    matches!(e, Expression::Call { .. } | Expression::MethodCall { .. } | Expression::TryOp { .. } | Expression::Block { .. })
+}
+
+/// Does the walker set the tail's expected type at entry (`expect_tail_type`)?
+fn tail_hint(f: &FuncDef) -> bool {
+    f.ret.is_some() && matches!(f.body.last(), Some(Statement::Expression { expr, .. }) if hinted(expr))
+}
+
+impl Cx<'_> {
+    /// Must a compiled `let x: T = e` / `return e` replay the walker's `expect_type_of(e, T)`? The
+    /// hint is a single pending slot: it matters for walker code inside `e` (a block's islands), and
+    /// for the tail hint set at entry, which every intervening setter clobbers. A compiled call to a
+    /// non-generic function never reads it.
+    fn needs_hint(&self, e: E) -> bool {
+        matches!(e, Expression::Block { .. }) || (self.tail_hint && hinted(e))
+    }
 }
 
 /// Every statement of a list but the last, and the last one (in value position).
@@ -201,16 +291,17 @@ fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Opt
     let Some((last, init)) = list.split_last() else { return Some((Vec::new(), None)) };
     let mut steps = Vec::with_capacity(init.len());
     for s in init {
-        match if guards { guard(cx, s)? } else { None } {
+        match if guards { guard(cx, s) } else { None } {
             Some(g) => steps.push(g),
             None => steps.push(Step::Code(stmt_loc(s), stmt(cx, s)?)),
         }
     }
     let init = steps;
     let tail = match last {
-        Statement::Expression { expr: e, .. } => match expr::expr(cx, e)? {
-            X::I(i, t) => Tail::Int(i, t),
-            x => Tail::Code(x.code()),
+        Statement::Expression { expr: e, .. } if !cx.boxed_ident(e) => match expr::expr(cx, e) {
+            Some(X::I(i, t)) => Tail::Int(i, t),
+            Some(x) => Tail::Code(x.code()),
+            None => Tail::Code(stmt(cx, last)?),
         },
         s => Tail::Code(stmt(cx, s)?),
     };
@@ -265,13 +356,99 @@ fn typed_seq(init: Init, u: IntTy, lloc: Loc, lc: ICode) -> ICode {
 pub(super) fn block(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
     cx.scopes.push(Vec::new());
     let c = stmt_list(cx, list, false).map(|(init, tail)| seq(init, tail.map(|(l, t)| (l, t.code()))));
+    let c = scoped(cx, c);
     cx.scopes.pop();
     c
 }
 
+/// The walker's `pop_scope` for the innermost name scope: a panic poisons the lock guards its boxed
+/// locals hold, then its locals are released (guards unlock, `Rc` counts drop) however it exits.
+/// Typed slots hold plain integers and are skipped.
+fn scoped(cx: &Cx, c: Option<Code>) -> Option<Code> {
+    let c = c?;
+    let poison = cx.boxed_in_scope();
+    let clear: Vec<usize> = cx.scopes.last().map(|s| s.iter().map(|(_, i)| *i).filter(|i| cx.slot_ty(*i).is_none()).collect()).unwrap_or_default();
+    if clear.is_empty() {
+        return Some(c);
+    }
+    Some(Box::new(move |it, b| {
+        let r = c(it, b);
+        if is_panic(&r) {
+            poison_slots(it, b, &poison);
+        }
+        for s in &clear {
+            super::fast::set(it, b + s, Value::Unit);
+        }
+        r
+    }))
+}
+
+/// A panic leaving the function poisons the lock guards its boxed locals hold.
+fn poisoning(c: Code, slots: Vec<usize>) -> Code {
+    if slots.is_empty() {
+        return c;
+    }
+    Box::new(move |it, b| {
+        let r = c(it, b);
+        if is_panic(&r) {
+            poison_slots(it, b, &slots);
+        }
+        r
+    })
+}
+
+fn poisoning_i(c: ICode, slots: Vec<usize>) -> ICode {
+    if slots.is_empty() {
+        return c;
+    }
+    Box::new(move |it, b| {
+        let r = c(it, b);
+        if is_panic(&r) {
+            poison_slots(it, b, &slots);
+        }
+        r
+    })
+}
+
+fn is_panic<T>(r: &R<T>) -> bool {
+    matches!(r, Err(Ctl::Err(e)) if e.kind == crate::interpreter::error::ErrorKind::Panic)
+}
+
+fn poison_slots(it: &mut Interpreter, b: usize, slots: &[usize]) {
+    for s in slots {
+        if let Value::Ref(p) = &it.rstack[b + s] {
+            crate::interpreter::scope::poison_if_guard(&p.slot.borrow());
+        }
+    }
+}
+
+/// A statement: lowered when the compiler can, else a walker island (`island.rs`). Only `defer`
+/// (which registers on the walker frame) is refused: the function then runs in the walker.
 fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
+    if let Some(c) = stmt_native(cx, s) {
+        return Some(c);
+    }
+    if matches!(s, Statement::Defer { .. }) {
+        return None;
+    }
+    if matches!(s, Statement::Return { .. }) {
+        cx.untyped_return = true;
+    }
+    let island = Island::new(cx, &format!("{:?}", s));
+    let mut names = Vec::new();
+    match s {
+        Statement::Let { pattern, .. } => island::pattern_names(pattern, &mut names),
+        Statement::Const { name, .. } | Statement::Static { name, .. } => names.push(name.as_str()),
+        _ => {}
+    }
+    let declares = names.into_iter().map(|n| (n, cx.declare_boxed(n))).collect();
+    let island = island.declaring(declares);
+    Some(Box::new(move |it, b| island.run(it, b, |it| it.exec_stmt(s))))
+}
+
+fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
     let code: Code = match s {
-        Statement::Expression { expr: e, .. } => expr::expr(cx, e)?.code(),
+        Statement::Expression { expr: e, .. } if !cx.boxed_ident(e) => expr::expr(cx, e)?.code(),
         Statement::Let { pattern, type_, value, else_block: None, .. } => {
             let name = match pattern {
                 Pattern::Identifier(n) | Pattern::MutBinding(n) => Some(n.as_str()),
@@ -279,21 +456,41 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
                 _ => return None,
             };
             let v = expr::expr(cx, value)?;
-            let_stmt(cx, name, type_.as_ref(), v)
+            let code = let_stmt(cx, name, type_.as_ref(), v);
+            match type_ {
+                Some(t) if cx.needs_hint(value) => Box::new(move |it, b| {
+                    it.expect_type_of(value, t);
+                    code(it, b)
+                }),
+                _ => code,
+            }
         }
         Statement::Assignment { target, value, compound_op, .. } => {
             let Expression::Identifier { name, location } = target else { return None };
             let slot = cx.local(name)?;
+            // boxed locals may hold `&mut` places / guards: assignments to or from them are the walker's
+            if cx.is_boxed(slot) || cx.boxed_ident(value) {
+                return None;
+            }
             let v = expr::expr(cx, value)?;
             assign(cx, slot, v, *compound_op, location.as_ref())
         }
         Statement::Return { value, .. } => match value {
+            Some(e) if cx.boxed_ident(e) => return None,
             Some(e) => match expr::expr(cx, e)? {
-                X::I(i, t) => Box::new(move |it, b| Err(Ctl::Return(Value::Int(i.get(it, b)? as i128, t)))),
+                X::I(i, t) if !(cx.ret.is_some() && cx.needs_hint(e)) => {
+                    Box::new(move |it, b| Err(Ctl::Return(Value::Int(i.get(it, b)? as i128, t))))
+                }
                 x => {
                     cx.untyped_return = true;
                     let v = x.code();
-                    Box::new(move |it, b| Err(Ctl::Return(v(it, b)?)))
+                    match cx.ret {
+                        Some(rt) if cx.needs_hint(e) => Box::new(move |it, b| {
+                            it.expect_type_of(e, rt);
+                            Err(Ctl::Return(v(it, b)?))
+                        }),
+                        _ => Box::new(move |it, b| Err(Ctl::Return(v(it, b)?))),
+                    }
                 }
             },
             None => {
@@ -373,32 +570,58 @@ fn let_stmt(cx: &mut Cx, name: Option<&'static str>, ty: Option<&'static Type>, 
     if let (Some(t), X::I(..)) = (width, &v) {
         let X::I(i, u) = v else { unreachable!() };
         let slot = name.map(|n| cx.declare(n, Some(t)));
-        let typed_slot = slot.is_some_and(|s| cx.slot_ty(s).is_some());
+        let kind = slot_kind(cx, slot);
         return Box::new(move |it, b| {
             let mut x = i.get(it, b)?;
             if let Some(ty) = ty {
                 x = typed::retype(it, x, u, t, ty)?;
             }
-            match slot {
-                Some(s) if typed_slot => typed::set_int(it, b + s, x, t),
-                Some(s) => super::fast::set(it, b + s, Value::Int(x as i128, t)),
-                None => {}
+            match (slot, kind) {
+                (Some(s), Kind::Typed) => typed::set_int(it, b + s, x, t),
+                (Some(s), k) => store(it, b + s, Value::Int(x as i128, t), k),
+                (None, _) => {}
             }
             Ok(Value::Unit)
         });
     }
     let v = v.code();
     let slot = name.map(|n| cx.declare(n, None));
+    let kind = slot_kind(cx, slot);
     Box::new(move |it, b| {
         let mut x = v(it, b)?;
         if let Some(t) = ty {
             x = it.coerce(x, t)?;
         }
         if let Some(s) = slot {
-            super::fast::set(it, b + s, x);
+            store(it, b + s, x, kind);
         }
         Ok(Value::Unit)
     })
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Kind {
+    Plain,
+    Typed,
+    Boxed,
+}
+
+fn slot_kind(cx: &Cx, slot: Option<usize>) -> Kind {
+    match slot {
+        Some(s) if cx.is_boxed(s) => Kind::Boxed,
+        Some(s) if cx.slot_ty(s).is_some() => Kind::Typed,
+        _ => Kind::Plain,
+    }
+}
+
+/// A fresh binding of a slot (`let`, a loop variable): a boxed local gets a new walker slot, as the
+/// walker's `define` does (closures that captured the previous one keep it).
+#[inline(always)]
+fn store(it: &mut Interpreter, i: usize, v: Value, kind: Kind) {
+    match kind {
+        Kind::Boxed => super::fast::set(it, i, island::boxed(v)),
+        _ => super::fast::set(it, i, v),
+    }
 }
 
 /// `slot = v` / `slot op= v`; the walker evaluates the right side, marks the target, then stores.
@@ -491,6 +714,10 @@ fn loop_var(cx: &mut Cx, pattern: &'static Pattern<'static>, ty: Option<IntTy>) 
 }
 
 fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: &'static [S], label: Option<&'static str>) -> Option<Code> {
+    // the walker iterates a reference by reference (`for x in &mut v`, a `&mut` parameter)
+    if cx.boxed_ident(iterable) {
+        return None;
+    }
     let src = match iterable {
         Expression::Range { start, end, inclusive, .. } => match (expr::expr(cx, start)?, expr::expr(cx, end)?) {
             // `for i in a..b` over typed bounds: count in place, the variable is a typed slot
@@ -500,7 +727,9 @@ fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: 
         _ => expr::expr(cx, iterable)?.code(),
     };
     let slot = loop_var(cx, pattern, None).ok()?;
+    let kind = slot_kind(cx, slot);
     let body = block(cx, body);
+    let body = scoped(cx, body);
     cx.scopes.pop();
     let body = body?;
     Some(Box::new(move |it, b| {
@@ -509,7 +738,7 @@ fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: 
             let mut i = lo;
             while i < hi {
                 if let Some(s) = slot {
-                    it.rstack[b + s] = Value::Int(i, ty);
+                    store(it, b + s, Value::Int(i, ty), kind);
                 }
                 if loop_exit(body(it, b), label)?.is_some() {
                     break;
@@ -521,7 +750,7 @@ fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: 
         let iter = crate::interpreter::iter::as_iter(it, v)?;
         while let Some(x) = crate::interpreter::iter::next(it, &iter)? {
             if let Some(s) = slot {
-                it.rstack[b + s] = x;
+                store(it, b + s, x, kind);
             }
             if loop_exit(body(it, b), label)?.is_some() {
                 break;
@@ -534,18 +763,19 @@ fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: 
 fn typed_for(cx: &mut Cx, range: (I, I, bool, IntTy), pattern: &'static Pattern<'static>, body: &'static [S], label: Option<&'static str>) -> Option<Code> {
     let (s, e, inclusive, ty) = range;
     let slot = loop_var(cx, pattern, Some(ty)).ok()?;
+    let kind = slot_kind(cx, slot);
     let body = block(cx, body);
+    let body = scoped(cx, body);
     cx.scopes.pop();
     let body = body?;
-    let typed_var = slot.is_some_and(|s| cx.slot_ty(s).is_some());
     Some(Box::new(move |it, b| {
         let lo = s.get(it, b)? as i128;
         let hi = e.get(it, b)? as i128 + inclusive as i128;
         let mut i = lo;
         while i < hi {
             match slot {
-                Some(s) if typed_var => typed::set_int(it, b + s, i as i64, ty),
-                Some(s) => super::fast::set(it, b + s, Value::Int(i, ty)),
+                Some(s) if kind == Kind::Typed => typed::set_int(it, b + s, i as i64, ty),
+                Some(s) => store(it, b + s, Value::Int(i, ty), kind),
                 None => {}
             }
             if loop_exit(body(it, b), label)?.is_some() {

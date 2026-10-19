@@ -7,6 +7,7 @@
 
 use super::compile::{block, run_all, Cx, E};
 use super::fast::{self, Cond, Operand};
+use super::island::{self, Island};
 use super::typed::{self, small, unbox, I};
 use super::{Code, CompiledFn};
 use crate::interpreter::engine::{FuncDef, Interpreter};
@@ -73,7 +74,7 @@ fn is_cmp(op: BinaryOp) -> bool {
 pub(super) fn cond(cx: &mut Cx, e: E, what: &'static str, deref: bool) -> Option<Cond> {
     match e {
         Expression::Binary { left, op, right, location } if is_cmp(*op) => {
-            let (l, r) = (expr(cx, left)?, expr(cx, right)?);
+            let (l, r) = (expr_eval(cx, left)?, expr_eval(cx, right)?);
             Some(match (l, r) {
                 (X::I(l, _), X::I(r, _)) => typed::compare(*op, l, r, location.as_ref())?,
                 (l, r) => fast::compare(l.operand(), r.operand(), *op, location.as_ref(), what)?,
@@ -91,7 +92,7 @@ pub(super) fn cond(cx: &mut Cx, e: E, what: &'static str, deref: bool) -> Option
             let c = cond(cx, operand, what, deref)?;
             Some(Box::new(move |it, b| Ok(!c(it, b)?)))
         }
-        _ => Some(fast::general(expr(cx, e)?.code(), what, deref)),
+        _ => Some(fast::general(expr_eval(cx, e)?.code(), what, deref)),
     }
 }
 
@@ -109,6 +110,20 @@ fn exprs(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
     list.into_iter().map(|e| Some(expr(cx, e)?.code())).collect()
 }
 
+fn evals(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
+    list.into_iter().map(|e| Some(expr_eval(cx, e)?.code())).collect()
+}
+
+/// `e` where the walker evaluates it with `eval` (references followed, no expected type): lowered
+/// when the compiler can, else a walker island.
+pub(super) fn expr_eval(cx: &mut Cx, e: E) -> Option<X> {
+    if let Some(x) = expr(cx, e) {
+        return Some(x);
+    }
+    let island = Island::new(cx, &format!("{:?}", e));
+    Some(X::V(Box::new(move |it, b| island.run(it, b, |it| it.eval(e)))))
+}
+
 pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
     Some(match e {
         Expression::Literal { value, .. } => match cx.it.literal(value) {
@@ -116,6 +131,10 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             v => X::Const(v),
         },
         Expression::Identifier { name, location } => match cx.local(name) {
+            Some(slot) if cx.is_boxed(slot) => {
+                let name: &'static str = name.as_str();
+                X::V(Box::new(move |it, b| island::read_boxed(it, b + slot, name)))
+            }
             Some(slot) => match cx.slot_ty(slot) {
                 Some(t) => X::I(I::Slot(slot), t),
                 None => X::Slot(slot),
@@ -130,11 +149,11 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             }
         },
         Expression::Binary { left, op, right, location } if !matches!(op, BinaryOp::And | BinaryOp::Or) => {
-            let (l, r) = (expr(cx, left)?, expr(cx, right)?);
+            let (l, r) = (expr_eval(cx, left)?, expr_eval(cx, right)?);
             binary(l, *op, r, location.as_ref())
         }
         Expression::Binary { left, op, right, .. } => {
-            let (l, r) = (expr(cx, left)?.code(), expr(cx, right)?.code());
+            let (l, r) = (expr_eval(cx, left)?.code(), expr_eval(cx, right)?.code());
             let is_and = matches!(op, BinaryOp::And);
             X::V(Box::new(move |it, b| match l(it, b)? {
                 Value::Bool(x) if x != is_and => Ok(Value::Bool(x)),
@@ -173,7 +192,7 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
         }
         Expression::Cast { expr: inner, type_, location } => cast(cx, inner, type_, location.as_ref())?,
         Expression::Index { object, index, location } => {
-            let (o, i) = (expr(cx, object)?.code(), expr(cx, index)?.code());
+            let (o, i) = (expr_eval(cx, object)?.code(), expr_eval(cx, index)?.code());
             let loc = location.as_ref();
             X::V(Box::new(move |it, b| {
                 let obj = o(it, b)?;
@@ -189,7 +208,7 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
                     return None;
                 }
             }
-            let o = expr(cx, object)?.code();
+            let o = expr_eval(cx, object)?.code();
             let loc = location.as_ref();
             let field: &'static str = field.as_str();
             X::V(Box::new(move |it, b| {
@@ -199,15 +218,15 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             }))
         }
         Expression::Tuple { elements, .. } => {
-            let cs = exprs(cx, elements.iter().copied())?;
+            let cs = evals(cx, elements.iter().copied())?;
             X::V(Box::new(move |it, b| Ok(Value::tuple(run_all(it, b, &cs)?))))
         }
         Expression::Array { elements, .. } => {
-            let cs = exprs(cx, elements.iter().copied())?;
+            let cs = evals(cx, elements.iter().copied())?;
             X::V(Box::new(move |it, b| Ok(Value::vec(run_all(it, b, &cs)?))))
         }
         Expression::Range { start, end, inclusive, .. } => {
-            let (s, en) = (expr(cx, start)?.code(), expr(cx, end)?.code());
+            let (s, en) = (expr_eval(cx, start)?.code(), expr_eval(cx, end)?.code());
             X::V(range_code(s, en, *inclusive))
         }
         Expression::Block { statements, is_unsafe: false, .. } => X::V(block(cx, statements)?),
@@ -260,7 +279,7 @@ pub(super) fn range_code(s: Code, en: Code, inclusive: bool) -> Code {
 /// `e as T`: a `small` integer target is typed (`cast` always yields that width or fails).
 fn cast(cx: &mut Cx, inner: E, ty: &'static Type, loc: Loc) -> Option<X> {
     let target = IntTy::from_type(ty).filter(|t| small(*t));
-    Some(match (expr(cx, inner)?, target) {
+    Some(match (expr_eval(cx, inner)?, target) {
         (X::I(i, _), Some(t)) => X::I(
             I::Code(Box::new(move |it, b| {
                 let x = i.get(it, b)?;
@@ -299,6 +318,9 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
     let arg_exprs = || arguments.iter().map(|(_, e)| *e);
     // a callable local (closure or function value)
     if let Some(slot) = cx.local(name) {
+        if cx.is_boxed(slot) {
+            return None;
+        }
         let cs = exprs(cx, arg_exprs())?;
         return Some(X::V(Box::new(move |it, b| {
             it.mark(loc);
@@ -314,7 +336,11 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
         if mutated.iter().any(|m| *m) || !f.type_params.is_empty() || f.params.first().is_some_and(|p| p.name == "self") {
             return None;
         }
-        let args: Vec<X> = arg_exprs().map(|e| expr(cx, e)).collect::<Option<_>>()?;
+        // arguments are plain values in the walker (`eval_raw_for_arg`), except an explicit `&mut x`
+        if arg_exprs().any(|e| matches!(e, Expression::Unary { op: UnaryOp::MutRef, .. })) {
+            return None;
+        }
+        let args: Vec<X> = arg_exprs().map(|e| expr_eval(cx, e)).collect::<Option<_>>()?;
         let ret = f.ret.and_then(IntTy::from_type).filter(|t| small(*t) && !f.is_async && !f.is_extern);
         let widths = args.iter().map(|a| if let X::I(_, u) = a { Some(*u) } else { None }).collect();
         let site = Site { f, args, widths, target: std::cell::OnceCell::new() };
