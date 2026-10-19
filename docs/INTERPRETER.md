@@ -46,8 +46,8 @@ Windjammer package (it has `wj.toml` or `.wj` sources) is loaded as source and m
 dependencies are cloned once into the wj cache and pinned in `wj.lock` (written on first resolution; later upstream commits are not
 picked up until the lock entry is removed). Rust-crate dependencies are reached through `extern fn` and the host bridge.
 
-**Rust code via the host bridge (ADR-0020).** When a project declares `extern fn`s and has hand-written Rust next to `wj.toml` or in
-`src/` (`ffi.rs`, the files the compiled build links), `wj run` compiles that Rust once into a cached dynamic library with one
+**Rust code via the host bridge (ADR-0020).** When a project declares `extern fn`s and has hand-written Rust in `src/` or next to `wj.toml`
+(`ffi.rs`; the compiled build links it when the `extern fn`s are declared in a library module such as `native.wj`, not in `main.wj`), `wj run` compiles that Rust once into a cached dynamic library with one
 generated C-ABI shim per `extern fn`, loads it, and calls the same symbols the compiled binary calls. Integers, floats, `bool` and
 `string` cross the bridge; any other type is rejected before the program runs, naming the item, and `wj run` falls back to the
 compiled path. Measured on the `host_bridge` fixture (loaded machine): first run 214 s (cargo builds `windjammer-runtime` in release
@@ -89,6 +89,9 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
   `missing boundary signature for m3::f0`: the ownership boundary lookup is keyed by the written path, not the resolved definition.
   The compiled half of the fuzzer therefore uses item aliases, globs, groups and `crate::` paths (`WJ_FUZZ_ALL_FORMS=1` compiles
   every form); the interpreted half covers all forms.
+- Open: a binary under `cmd/<name>/main.wj` compiled on its own keeps `use crate::helper` (E0432); the package-lib rewrite needs a `wj.toml` at its source root. Interpreted `--bin` is unaffected.
+- Open: directory modules without `mod.wj` that only hold children are declared in `lib.rs` without a `mod.rs` (E0433 `cannot find net in self`); the compiled fuzz half avoids them.
+- Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.
 - Open: `env::args().skip(1).collect()` into `Vec<string>` fails in rustc (iterates `&String`).
 
 **Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the

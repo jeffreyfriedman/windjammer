@@ -1,5 +1,2 @@
 pub mod case
-
-pub fn banner(s: string) -> string {
-    format!("== {} ==", s)
-}
+pub mod frame
