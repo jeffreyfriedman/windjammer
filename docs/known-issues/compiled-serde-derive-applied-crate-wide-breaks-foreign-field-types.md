@@ -29,3 +29,5 @@ pub struct Limiter {
 `WindowBucket: serde::Serialize is not satisfied`. Derives should follow what is actually serialized (or be limited to
 structs that reach a `json` call), otherwise any struct holding a dependency type breaks the build. Moving the `json`
 use out of the crate fixes it, which is not a reasonable fix for an app.
+
+Status: fixed. `Serialize`/`Deserialize` are derived only for structs whose field types (transitively through this crate's structs) are not imported from another crate. Gate: `ecosystem_findings_test::serde_derive_skips_structs_holding_foreign_types`.

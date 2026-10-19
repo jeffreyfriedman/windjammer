@@ -10,3 +10,5 @@ Seen on a multi-module app (about 20 files, `store.wj` defines `fn tasks_of(self
 
 Not reduced to a minimal program yet. The expected invariant: a rebuild after touching file X must produce byte-identical
 Rust for files whose inputs did not change (the ownership convergence passes should reach the same fixed point).
+
+Status: reduced and fixed for the stdlib case. A minimal project using `std::http` emitted different call-site borrows after touching a file, because a clean build analysed the std stub (all parameters `Borrowed`) while an incremental build used the runtime contracts. The runtime contracts now win in both. Gate: `ecosystem_findings_test::clean_build_equals_incremental_build` (generated Rust and `Cargo.toml` byte-identical; `Cargo.toml` dependencies are now sorted). The original two-user-module shape (`store.tasks_of(project_id, f)`) has not been reproduced separately.

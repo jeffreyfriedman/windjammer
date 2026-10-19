@@ -201,6 +201,10 @@ path = "tests/codegen_correctness_test.rs"
 name = "ecosystem_findings"
 path = "tests/ecosystem_findings_test.rs"
 
+[[test]]
+name = "ecosystem_findings_handoff"
+path = "tests/ecosystem_findings_handoff_test.rs"
+
 [[bench]]
 name = "string_optimization_bench"
 harness = false

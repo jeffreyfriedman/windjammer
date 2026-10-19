@@ -16,3 +16,5 @@ fn main() {
 
 `wj build` emits `seen.get(&key).copied().copied().unwrap_or(0_i64)` (`E0599: no method named copied found for enum
 Option<i64>`). Only one `.copied()` is valid.
+
+Status: fixed. Exactly one `.copied()`, and no leading `*` on the by-value result. Gate: `ecosystem_findings_test::hashmap_get_unwrap_or_literal_copies_once`.
