@@ -95,11 +95,8 @@ impl Parser {
         }
         self.saw_label = true; // build the callee table so misplaced shorthand can be diagnosed (named_args.rs)
         let parameters = (0..frame.holes.len()).map(hole_name).collect();
-        Ok(self.alloc_expr(Expression::Closure {
-            parameters,
-            body: expr,
-            location: expr.location(),
-        }))
+        let location = self.token_location(frame.holes[0]); // the closure starts at its first `_`
+        Ok(self.alloc_expr(Expression::Closure { parameters, body: expr, location }))
     }
 
     /// Run an explicit-closure parser with the nesting depth raised (so `_` inside it is rejected).
