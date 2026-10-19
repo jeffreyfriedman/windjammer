@@ -11,8 +11,6 @@ mod stmt;
 use super::env::ItemEnv;
 use super::ir::*;
 use super::ty::Ty;
-use crate::analyzer::SignatureRegistry;
-use crate::parser::Program;
 use std::collections::HashMap;
 
 pub use items::lower_program;
@@ -24,8 +22,6 @@ pub(super) struct Local {
     pub alias: bool,
     /// Unique emitted name (shadowed declarations get a numeric suffix).
     pub out: String,
-    /// Declared `mut` (closures snapshot such captures).
-    pub mutable: bool,
 }
 
 pub(super) struct Lowerer<'e> {
@@ -44,6 +40,10 @@ pub(super) struct Lowerer<'e> {
     /// Inference variables introduced by integer / float literals (default to i64 / f64).
     pub int_vars: std::collections::HashSet<u32>,
     pub float_vars: std::collections::HashSet<u32>,
+    /// Variables of `len()`-like results (SPEC-NUM-014): they adopt the integer type their use
+    /// requires (`int` in `i < v.len()` with `i: int`) and default to `usize` (takes precedence over
+    /// a literal's `i64` default when both meet).
+    pub usize_vars: std::collections::HashSet<u32>,
     /// Enclosing loops, innermost last (for labels and `break value`).
     pub loop_stack: Vec<LoopCtx>,
 }
@@ -59,7 +59,7 @@ pub(super) struct LoopCtx {
 
 impl<'e> Lowerer<'e> {
     pub fn new(env: &'e ItemEnv) -> Self {
-        Lowerer { env, scopes: vec![HashMap::new()], rets: vec![], generics: vec![], bounds: HashMap::new(), owner: None, tmp: 0, line: 0, used: Default::default(), vars: vec![], int_vars: Default::default(), float_vars: Default::default(), loop_stack: vec![] }
+        Lowerer { env, scopes: vec![HashMap::new()], rets: vec![], generics: vec![], bounds: HashMap::new(), owner: None, tmp: 0, line: 0, used: Default::default(), vars: vec![], int_vars: Default::default(), float_vars: Default::default(), usize_vars: Default::default(), loop_stack: vec![] }
     }
 
     pub fn push(&mut self) {
@@ -79,14 +79,8 @@ impl<'e> Lowerer<'e> {
             out = format!("{name}_{n}");
         }
         self.used.insert(out.clone());
-        self.scopes.last_mut().unwrap().insert(name.to_string(), Local { ty, alias, out: out.clone(), mutable: false });
+        self.scopes.last_mut().unwrap().insert(name.to_string(), Local { ty, alias, out: out.clone() });
         out
-    }
-
-    pub fn set_mutable(&mut self, name: &str) {
-        if let Some(l) = self.scopes.last_mut().and_then(|s| s.get_mut(name)) {
-            l.mutable = true;
-        }
     }
 
     pub fn new_var(&mut self) -> Ty {
@@ -103,9 +97,29 @@ impl<'e> Lowerer<'e> {
         t
     }
 
+    /// A fresh variable for a `len()`-like result (see `usize_vars`).
+    pub fn len_var(&mut self) -> Ty {
+        let t = self.new_var();
+        if let Ty::Var(i) = t {
+            self.usize_vars.insert(i);
+        }
+        t
+    }
+
+    /// `from` was linked to `to`: the root keeps the strongest default (usize > int > float).
+    fn merge_defaults(&mut self, from: u32, to: u32) {
+        if self.usize_vars.contains(&from) {
+            self.usize_vars.insert(to);
+        }
+        if self.int_vars.contains(&from) && !self.float_vars.contains(&to) {
+            self.int_vars.insert(to);
+        }
+    }
+
     /// Resolve; unbound literal variables take their default type (i64 / f64).
     pub fn resolve_final(&self, t: &Ty) -> Ty {
         match self.resolve(t) {
+            Ty::Var(i) if self.usize_vars.contains(&i) => Ty::usize(),
             Ty::Var(i) if self.int_vars.contains(&i) => Ty::i64(),
             Ty::Var(i) if self.float_vars.contains(&i) => Ty::F64,
             Ty::Vec(a) => Ty::Vec(Box::new(self.resolve_final(&a))),
@@ -126,7 +140,7 @@ impl<'e> Lowerer<'e> {
     pub fn resolve_for_dispatch(&mut self, t: &Ty) -> Ty {
         let r = self.resolve(t);
         if let Ty::Var(i) = r {
-            let d = if self.int_vars.contains(&i) { Ty::i64() } else if self.float_vars.contains(&i) { Ty::F64 } else { return r };
+            let d = if self.usize_vars.contains(&i) { Ty::usize() } else if self.int_vars.contains(&i) { Ty::i64() } else if self.float_vars.contains(&i) { Ty::F64 } else { return r };
             self.vars[i as usize] = Some(d.clone());
             return d;
         }
@@ -175,6 +189,9 @@ impl<'e> Lowerer<'e> {
         match (&e, &a) {
             (Ty::Var(i), other) | (other, Ty::Var(i)) if !matches!(other, Ty::Var(j) if j == i) && !other.is_unknown() => {
                 self.vars[*i as usize] = Some(other.clone());
+                if let Ty::Var(j) = other {
+                    self.merge_defaults(*i, *j);
+                }
             }
             (Ty::Var(i), Ty::Var(j)) if i != j => self.vars[*i as usize] = Some(Ty::Var(*j)),
             (Ty::Vec(x), Ty::Vec(y)) | (Ty::Set(x), Ty::Set(y)) | (Ty::Option(x), Ty::Option(y)) | (Ty::Iter(x), Ty::Iter(y)) | (Ty::Range(x), Ty::Range(y)) => self.constrain(x, y),

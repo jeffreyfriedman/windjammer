@@ -47,9 +47,10 @@ A divergence report names which voice disagrees with which (`oracle != go`), and
 Programs may declare expectations about stderr, which the stdout trace cannot see:
 `// stderr: line` (exact lines, in order), `// stderr-has: text` (substring, e.g. a panic message or `] x = 21`
 for `debug`), `// stderr-empty`. A `SUPPORT.toml` reason that says "explicit `unsupported" must be backed by a real
-`unsupported on this backend` build error: wrong output is never accepted as "unsupported". The `*_intr_*` programs
-(120-138) also run on the TypeScript flavour (`intrinsic_corpus_conforms_on_typescript`; skipped loudly when Node < 22.6).
-`WJ_CONFORMANCE_ONLY=<substring>` restricts the corpus matrix to matching programs (development knob).
+`unsupported on this backend` build error: wrong output is never accepted as "unsupported". The whole corpus
+also runs on the TypeScript flavour (`corpus_conforms_on_typescript`; skipped loudly when Node < 22.6).
+`WJ_CONFORMANCE_ONLY=<substring>` restricts the corpus matrix to matching programs and
+`WJ_CONFORMANCE_BACKENDS=go,js,ts` to the listed backends (`ts` included) (development knobs).
 
 ## Trace-level comparison
 

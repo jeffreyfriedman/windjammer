@@ -9,7 +9,8 @@ mod res;
 mod uses;
 mod walk;
 
-pub use collect::Collected;
+pub use collect::{Collected, ModuleScope};
+pub use uses::{Binding, UseDecl};
 pub use def::{Def, DefId, DefKind, DefTable};
 pub use lookup::{Found, Ns};
 pub use res::{

@@ -1,0 +1,187 @@
+// `&mut` to value-represented data (ints, floats, bools, strings, Option, enums) and whole-value
+// writes through `&mut` to aggregates: every write must reach the borrowed place.
+// Expected output derived by hand from Rust semantics and cross-checked with rustc on a
+// line-by-line Rust transliteration (not a Windjammer backend).
+// expect: a!
+// expect: new
+// expect: Some(3)
+// expect: B9
+// expect: 5 6
+// expect: 1.5
+// expect: true
+// expect: [1, 3, 3]
+// expect: 3
+// expect: 2
+// expect: 2
+// expect: 8
+// expect: 10
+// expect: [1, 2]
+// expect: 0 0
+// expect: B2
+// expect: [10, 20, 30]
+// expect: 6
+// expect: 7 107
+// expect: 41
+// expect: 3
+// expect: 12
+struct P {
+    x: int,
+    y: int,
+}
+
+enum St {
+    A,
+    B(int),
+}
+
+impl P {
+    fn reset(&mut self) {
+        *self = P { x: 0, y: 0 }
+    }
+}
+
+impl St {
+    fn advance(&mut self) {
+        *self = match self {
+            St::A => St::B(1),
+            St::B(n) => St::B(*n + 1),
+        }
+    }
+}
+
+fn add_s(s: &mut string) {
+    s.push_str("!")
+}
+
+fn set_s(s: &mut string) {
+    *s = "new".to_string()
+}
+
+fn set_o(o: &mut Option<int>) {
+    *o = Some(3)
+}
+
+fn set_e(e: &mut St) {
+    *e = St::B(9)
+}
+
+fn set_p(p: &mut P) {
+    *p = P { x: 5, y: 6 }
+}
+
+fn inc_f(f: &mut f64) {
+    *f += 0.5
+}
+
+fn flip(b: &mut bool) {
+    *b = !*b
+}
+
+fn inc(c: &mut int) {
+    *c += 1
+}
+
+fn inc2(c: &mut int) {
+    inc(c)
+    inc(c)
+}
+
+fn swap_ints(a: &mut int, b: &mut int) {
+    let t = *a
+    *a = *b
+    *b = t
+}
+
+fn bump_ret(c: &mut i32) -> i32 {
+    *c = *c * 2 + 1
+    let out = *c
+    out
+}
+
+fn main() {
+    let mut s = "a".to_string()
+    add_s(&mut s)
+    println("${s}")
+    set_s(&mut s)
+    println("${s}")
+    let mut o: Option<int> = None
+    set_o(&mut o)
+    println("{:?}", o)
+    let mut e = St::A
+    set_e(&mut e)
+    match e {
+        St::A => println("A"),
+        St::B(n) => println("B{}", n),
+    }
+    let mut p = P { x: 1, y: 2 }
+    set_p(&mut p)
+    println("{} {}", p.x, p.y)
+    let mut f = 1.0
+    inc_f(&mut f)
+    println("{}", f)
+    let mut b = false
+    flip(&mut b)
+    println("{}", b)
+    let mut v = vec![1, 2, 3]
+    inc(&mut v[1])
+    println("{:?}", v)
+    let mut q = P { x: 1, y: 2 }
+    inc(&mut q.y)
+    println("{}", q.y)
+    let mut n = 0
+    inc2(&mut n)
+    println("{}", n)
+    let mut t = (1, 2)
+    inc(&mut t.0)
+    println("{}", t.0)
+
+    let mut z = 7
+    let r = &mut z
+    *r += 1
+    println("{}", z)
+    let mut p2 = P { x: 1, y: 2 }
+    let rp = &mut p2
+    rp.x = 10
+    println("{}", p2.x)
+    let mut w = vec![1]
+    let rw = &mut w
+    rw.push(2)
+    println("{:?}", w)
+    p2.reset()
+    println("{} {}", p2.x, p2.y)
+    let mut st = St::A
+    st.advance()
+    st.advance()
+    match st {
+        St::A => println("A"),
+        St::B(k) => println("B{}", k),
+    }
+    let mut xs = vec![1, 2, 3]
+    for x in xs.iter_mut() {
+        *x *= 10
+    }
+    println("{:?}", xs)
+    let mut ps = vec![P { x: 1, y: 1 }]
+    for pp in ps.iter_mut() {
+        pp.x += 5
+    }
+    println("{}", ps[0].x)
+
+    // A copy taken before the borrow is independent of it.
+    let mut a = 107
+    let mut c = 7
+    let before = a
+    swap_ints(&mut a, &mut c)
+    println("{} {}", a, before + c - 107)
+    let mut h: i32 = 20
+    let got = bump_ret(&mut h)
+    println("{}", got)
+    // The index of `&mut v[i]` is evaluated when the borrow is taken.
+    let mut i = 0
+    let mut ys = vec![2, 5]
+    inc(&mut ys[i])
+    i += 1
+    println("{}", ys[0])
+    ys[i] = ys[i] + 7
+    println("{}", ys[1])
+}

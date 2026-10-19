@@ -274,7 +274,7 @@ known_violations = []
 layer = "tooling"
 owner_stage = "tree-walking interpreter"
 module_md = "src/interpreter/MODULE.md"
-allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "optimizer", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "stdlib_surface"]
+allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "optimizer", "package", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "stdlib_surface", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
 known_violations = ["intrinsics"]
 
 [modules.ir]
@@ -330,7 +330,7 @@ known_violations = ["compiler"]
 layer = "resolve"
 owner_stage = "module/import resolution (stage 2)"
 module_md = "src/module_system/MODULE.md"
-allowed_imports = ["compiler_config", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "lexer", "parser", "parser_impl", "project_paths", "source_map", "test_module_gate", "test_utils", "stdlib_surface"]
+allowed_imports = ["compiler_config", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "lexer", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_surface", "test_module_gate", "test_utils"]
 known_violations = []
 
 [modules.optimizer]

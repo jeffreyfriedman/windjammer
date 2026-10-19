@@ -71,6 +71,25 @@ pub fn run_interpreted(
         );
     }
     let results = run_specs(specs);
+    if json {
+        let failed = results.iter().filter(|r| !r.passed).count();
+        let tests: Vec<_> = results
+            .iter()
+            .map(|r| serde_json::json!({ "file": r.file.display().to_string(), "name": r.name, "passed": r.passed, "message": r.message }))
+            .collect();
+        let doc = serde_json::json!({
+            "mode": "interpreted",
+            "success": failed == 0,
+            "passed": results.len() - failed,
+            "failed": failed,
+            "tests": tests,
+        });
+        println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
+        if failed > 0 {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     let code = report_tests(&results);
     if code != 0 {
         std::process::exit(code);

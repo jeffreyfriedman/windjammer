@@ -1,0 +1,15 @@
+use std::env
+use std::process
+use report
+
+fn main() {
+    let mut n = 0
+    for _a in env::args().skip(1) {
+        n += 1
+    }
+    println("${report::summary(n)}")
+    for a in env::args().skip(1) {
+        println("arg ${a}")
+    }
+    process::exit(3)
+}

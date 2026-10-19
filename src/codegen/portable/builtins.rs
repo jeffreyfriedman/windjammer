@@ -33,6 +33,9 @@ fn iter_elem(recv: &Ty) -> Option<Ty> {
 }
 
 pub fn arg_want(recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
+    if let Some(t) = super::ordering::arg_want(recv, iter_elem(recv).as_ref(), name, i) {
+        return Some(t);
+    }
     if let Some(t) = super::enumerable::arg_want(recv, name, i, prev) {
         return Some(t);
     }
@@ -59,7 +62,6 @@ fn vec_arg_want(t: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
         ("insert", 0) | ("remove", 0) | ("get", 0) | ("swap", _) | ("truncate", 0) | ("windows", 0) | ("chunks", 0) | ("swap_remove", 0) | ("split_at", 0) => Some(Ty::usize()),
         ("insert", 1) => Some(t.clone()),
         ("extend", 0) | ("append", 0) | ("extend_from_slice", 0) => Some(Ty::Vec(b(t.clone()))),
-        ("sort_by", 0) | ("sort_by_key", 0) => Some(fnty(vec![t.clone(), t.clone()], Ty::Adt("Ordering".into(), vec![]))),
         ("retain", 0) => Some(fnty(vec![t.clone()], Ty::Bool)),
         ("join", 0) => Some(Ty::Str),
         ("binary_search", 0) => Some(t.clone()),
@@ -124,6 +126,9 @@ pub fn ret_ty(recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Optio
         "clone" | "to_owned" | "cloned" | "copied" if !matches!(recv, Ty::Iter(_)) => return Some(recv.clone()),
         "to_string" => return Some(Ty::Str),
         _ => {}
+    }
+    if let Some(t) = super::ordering::ret_ty(recv, iter_elem(recv).as_ref(), name) {
+        return Some(t);
     }
     if let Some(t) = super::enumerable::ret_ty(recv, name, args) {
         return Some(t);
@@ -196,7 +201,6 @@ fn iter_ret(e: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty>
         "fold" => args.first()?.ty.clone(),
         "any" | "all" => Ty::Bool,
         "min" | "max" | "last" | "next" | "find" | "nth" => Ty::Option(b(e.clone())),
-        "min_by_key" | "max_by_key" => Ty::Option(b(e.clone())),
         "position" => Ty::Option(b(Ty::usize())),
         "for_each" => Ty::Unit,
         _ => return None,
@@ -331,6 +335,7 @@ pub fn static_ret(owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) ->
         }
         ("f64", "from") => Ty::F64,
         ("char", "from_u32") => Ty::Option(b(Ty::Char)),
+        (o, v) if super::ordering::is_path(o) && super::ordering::variant_value(v).is_some() => super::ordering::ty(),
         _ => return None,
     })
 }

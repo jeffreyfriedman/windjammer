@@ -1,0 +1,9 @@
+// expect: WJ0003
+fn describe(n: int) -> string {
+    "number"
+}
+
+fn main() {
+    let bad: int = describe(3)
+    println("${bad}")
+}

@@ -113,7 +113,7 @@ mod tests {
         assert!(result.is_ok());
 
         if let Ok(output) = result {
-            assert_eq!(output.extension, "js");
+            assert_eq!(output.extension, "mjs");
             assert!(output.source.contains("JavaScript"));
         }
     }

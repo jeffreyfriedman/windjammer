@@ -20,7 +20,7 @@ Layer `tooling`. May import: every module in a lower layer (support < syntax < r
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`package/manifest.rs`.
+`package/manifest.rs`. `graph::resolve`: the real dependency graph (path + git, git pinned in `wj.lock`, ADR-0010 option A), used by the interpreter and the host bridge.
 
 ## Tests
 Inline unit tests; tests/package_flat_lib_wj_test_exports_test.rs covers library exports.

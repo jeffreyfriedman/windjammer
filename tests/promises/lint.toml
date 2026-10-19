@@ -45,7 +45,6 @@ exit = 1
 [[case]]
 name = "lint reports the line of an unwrap"
 polarity = "negative"
-xfail = "BUG: W0002 is reported one line below the `.unwrap()` call"
 exit = 1
 files = { "m.wj" = "fn main() {\n    let n = Some(1).unwrap()\n    println(\"${n}\")\n}\n" }
 args = ["lint", "{w}/m.wj"]
@@ -54,8 +53,7 @@ output_has = ["m.wj:2:"]
 [[case]]
 name = "lint reports W0010 for the Rust String type"
 polarity = "negative"
-xfail = "BUG: `wj lint` says `No issues found` for `let n: String` (W0010 is only raised by the compile path)"
-exit = 0
+exit = 1
 files = { "m.wj" = "fn main() {\n    let n: String = \"x\"\n    println(\"${n}\")\n}\n" }
 args = ["lint", "{w}/m.wj"]
 output_has = ["W0010"]

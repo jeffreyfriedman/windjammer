@@ -1,0 +1,7 @@
+use textkit::frame::banner
+use textkit::case::title
+
+fn main() {
+    println("${banner("deps")}")
+    println("${title("hello world")}")
+}

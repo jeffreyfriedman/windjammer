@@ -330,7 +330,10 @@ impl CodeGenerator<'_> {
                     )
                 }
             } else if is_actual_module_file {
-                if self.is_output_mod_rs() {
+                if !self.is_module {
+                    // crate-root `main.wj`: a sibling file is a crate-level module, never `super::`
+                    format!("{}use crate::{} as {};\n", pub_prefix, rust_path, alias_name)
+                } else if self.is_output_mod_rs() {
                     format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name)
                 } else {
                     format!(
@@ -351,7 +354,9 @@ impl CodeGenerator<'_> {
                 format!("{}use {}{};\n", pub_prefix, import_prefix, rp)
             }
         } else if is_actual_module_file {
-            if self.is_output_mod_rs() {
+            if !self.is_module {
+                format!("{}use crate::{};\n", pub_prefix, rust_path)
+            } else if self.is_output_mod_rs() {
                 format!("{}use self::{};\n", pub_prefix, rust_path)
             } else {
                 format!("{}use super::{};\n", pub_prefix, rust_path)

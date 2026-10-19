@@ -22,10 +22,11 @@
 "src/analyzer/string_optimization.rs" = 1
 "src/auto_fix.rs" = 1
 "src/cargo_toml/mod.rs" = 1
-"src/cli_execution.rs" = 1
+"src/cli_execution.rs" = 3
 "src/codegen/backend.rs" = 1
 "src/codegen/javascript/tree_shaker.rs" = 1
 "src/codegen/mod.rs" = 3
+"src/codegen/portable/visit.rs" = 4
 "src/codegen/rust/call_site_borrow.rs" = 2
 "src/codegen/rust/codegen_helpers.rs" = 3
 "src/codegen/rust/defer_lowering.rs" = 1
@@ -51,6 +52,8 @@
 "src/inference.rs" = 1
 "src/interpreter/builtins/mod.rs" = 1
 "src/interpreter/eval_expr.rs" = 1
+"src/interpreter/loader.rs" = 1
+"src/interpreter/runner.rs" = 3
 "src/intrinsics/mod.rs" = 1
 "src/ir/capability_profiles.rs" = 5
 "src/ir/constraint_gen.rs" = 1
@@ -69,7 +72,7 @@
 "src/module_system/module_graph.rs" = 1
 "src/package/manifest.rs" = 2
 "src/parser_impl.rs" = 4
-"src/resolve/def.rs" = 2
+"src/resolve/def.rs" = 1
 "src/resolve/mod.rs" = 1
 "src/source_map.rs" = 1
 "src/syntax_highlighter.rs" = 1
