@@ -37,7 +37,9 @@ ARMS = {
 HEAD = ("You are solving one programming task in Windjammer. Write the complete solution in the file `main.wj` "
         "in the current directory. The program reads standard input (and command-line arguments / files in the "
         "current directory when the task says so) and writes to standard output exactly as specified; it is graded "
-        "on hidden tests with the compiled `wj build` toolchain. Stop when you believe it is correct for all inputs.\n\n")
+        "on hidden tests with the compiled `wj build` toolchain. Create and edit files with the Write/Edit tools; the only shell "
+        "commands available are `wj`, `printf`, `echo`, `head` and `tail` (pipe input with `printf 'a\\nb\\n' | wj run ...`). "
+        "Stop when you believe it is correct for all inputs.\n\n")
 
 
 def prompt(task_id, arm):
@@ -47,7 +49,8 @@ def prompt(task_id, arm):
 def tool_policy():
     """Tools available to the trial agent. dontAsk denies everything not allowed; file tools stay in the cwd."""
     return {"tools": "Read,Edit,Write,Glob,Grep,Bash",
-            "allowed": ["Read", "Edit", "Write", "Glob", "Grep", "Bash(wj:*)"],
+            "allowed": ["Read", "Edit", "Write", "Glob", "Grep", "Bash(wj:*)", "Bash(printf:*)", "Bash(echo:*)",
+                        "Bash(head:*)", "Bash(tail:*)"],   # printf/echo/head/tail let the agent pipe input into `wj run`
             "permission_mode": "dontAsk"}
 
 
