@@ -66,6 +66,10 @@ pub fn check(
                 }
             }
             Res::Unresolved(Reason::External(path)) => {
+                // `use std::http::*` makes every bare name look external; intrinsics (`println`...) are not std members
+                if !call.callee.contains("::") && super::intrinsics::Intrinsic::from_call_name(&call.callee).is_some() {
+                    continue;
+                }
                 let head = path.split("::").next().unwrap_or("");
                 if rust_crates.iter().any(|c| c == head) {
                     return Err(at(
