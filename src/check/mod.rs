@@ -2,6 +2,7 @@
 //! See `MODULE.md` and `docs/DIAGNOSTICS.md`.
 
 mod cache;
+mod effects;
 mod files;
 mod fix;
 mod front;

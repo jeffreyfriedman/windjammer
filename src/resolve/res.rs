@@ -65,6 +65,20 @@ pub struct CallResolution {
     pub module: DefId,
     pub location: Option<Location>,
     pub res: Res,
+    /// Per argument: its value when it is a plain string literal (no interpolation), else `None`.
+    /// Data for resource-refined facts (a literal host or path); the resolver never interprets it.
+    pub str_args: Vec<Option<String>>,
+    /// Per argument: its name when it is a plain identifier (a parameter or local passed along).
+    pub ident_args: Vec<Option<String>>,
+}
+
+/// A function named as a value (`apply(load, 1)`, `let f = load`): a potential call through a
+/// function-typed value. Kept apart from [`CallResolution`] so call statistics are unchanged.
+#[derive(Debug, Clone)]
+pub struct FnRef {
+    pub enclosing: Option<DefId>,
+    pub def: DefId,
+    pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -238,6 +238,7 @@ impl Interpreter {
 
     /// Call `extern fn name` through the bridge.
     pub(crate) fn call_host(&mut self, name: &str, args: Vec<Value>) -> R {
+        self.cap_gate_ffi(name)?;
         let Some(host) = self.host.clone() else {
             return Err(unsupported(format!("extern function `{}`", name)));
         };
