@@ -37,6 +37,21 @@ impl IntInference {
 
     }
 
+    /// The callee of a call: an immediately-invoked closure sees its arguments, anything else is ordinary code.
+    pub(crate) fn collect_callee_constraints<'ast>(
+        &mut self,
+        function: &Expression<'ast>,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        return_type: Option<&Type>,
+    ) {
+        if let Expression::Closure { parameters, body, .. } = function {
+            let arg_ids: Vec<ExprId> = arguments.iter().map(|(_, a)| self.get_expr_id(a)).collect();
+            self.collect_closure_constraints(parameters, body, &arg_ids);
+        } else {
+            self.collect_expression_constraints(function, return_type);
+        }
+    }
+
     pub(crate) fn collect_closure_constraints<'ast>(
         &mut self,
         parameters: &[String],
