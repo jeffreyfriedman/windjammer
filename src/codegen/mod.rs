@@ -81,11 +81,6 @@ pub fn generate_rust(program: &Program) -> Result<String> {
     Ok(output.source)
 }
 
-/// Generate Go code
-pub fn generate_go(program: &Program) -> Result<CodegenOutput> {
-    generate(program, Target::Go, None)
-}
-
 /// Generate JavaScript code
 pub fn generate_javascript(program: &Program) -> Result<CodegenOutput> {
     generate(program, Target::JavaScript, None)

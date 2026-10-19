@@ -4897,15 +4897,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.param_only_forwarded_to_qualified_key_callee(body, param_name, func, true)
     }
 
-    pub(in crate::codegen::rust) fn param_only_forwarded_to_qualified_map_key_callee(
-        &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        self.param_only_forwarded_to_qualified_key_callee(body, param_name, func, false)
-    }
-
     fn param_only_forwarded_to_qualified_key_callee(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -6814,30 +6805,6 @@ impl<'ast> CodeGenerator<'ast> {
             }),
             _ => false,
         }
-    }
-
-    pub(in crate::codegen::rust) fn param_only_used_in_same_name_struct_field_return(
-        &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-    ) -> bool {
-        if body.len() != 1 {
-            return false;
-        }
-        let expr = match body[0] {
-            Statement::Expression { expr, .. }
-            | Statement::Return {
-                value: Some(expr), ..
-            } => expr,
-            _ => return false,
-        };
-        let Expression::StructLiteral { fields, .. } = expr else {
-            return false;
-        };
-        fields.iter().any(|(field, value)| {
-            field == param_name
-                && matches!(value, Expression::Identifier { name, .. } if name == param_name)
-        })
     }
 
     fn method_call_sibling_ast_expects_owned_arg(

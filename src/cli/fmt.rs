@@ -15,7 +15,7 @@ use std::process::Command;
 /// Entry point for `wj fmt`. A single path of `-` formats stdin to stdout.
 pub fn execute(check: bool, paths: &[PathBuf], rust: bool) -> Result<()> {
     if rust {
-        return execute_rust(check);
+        return execute_rust(check, paths);
     }
     if paths.len() == 1 && paths[0] == Path::new("-") {
         return format_stdin(check);
@@ -31,6 +31,7 @@ pub fn execute(check: bool, paths: &[PathBuf], rust: bool) -> Result<()> {
 fn format_stdin(check: bool) -> Result<()> {
     let mut src = String::new();
     std::io::stdin().read_to_string(&mut src)?;
+    require_parses(Path::new("<stdin>"), &src)?;
     let out = format_source(&src, &options_for_dir(Path::new(".")))?;
     if check {
         if out != src {
@@ -80,10 +81,18 @@ fn report(check: bool, total: usize, changed: &[PathBuf], failed: usize) -> Resu
     Ok(())
 }
 
+/// The formatter works on tokens, so it would happily "format" broken code; refuse it instead.
+fn require_parses(path: &Path, src: &str) -> Result<()> {
+    crate::compiler::parse_wj_source(path, src)
+        .map(|_| ())
+        .map_err(|e| anyhow::anyhow!("cannot format {}: it does not parse ({e})", path.display()))
+}
+
 /// Format one file; returns whether its content differs from the formatted text.
 fn format_file(path: &Path, check: bool) -> Result<bool> {
     let src = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    require_parses(path, &src)?;
     let out = format_source(&src, &options_for_dir(dir))?;
     if out == src {
         return Ok(false);
@@ -125,15 +134,26 @@ fn options_for_dir(dir: &Path) -> FormatOptions {
     FormatOptions::default()
 }
 
-/// Legacy behavior: `cargo fmt --all` for generated Rust crates.
-fn execute_rust(check: bool) -> Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.arg("fmt").arg("--all");
-    if check {
-        cmd.arg("--").arg("--check");
-    }
-    if !cmd.status()?.success() {
-        bail!("Formatting check failed");
+/// Legacy behavior: `cargo fmt --all` for generated Rust crates, run in each given crate
+/// directory (default: the current directory).
+fn execute_rust(check: bool, paths: &[PathBuf]) -> Result<()> {
+    let crates: Vec<PathBuf> = if paths.is_empty() { vec![PathBuf::from(".")] } else { paths.to_vec() };
+    for path in &crates {
+        if !path.exists() {
+            bail!("path not found: {}", path.display());
+        }
+        let dir = if path.is_file() { path.parent().unwrap_or_else(|| Path::new(".")) } else { path.as_path() };
+        if !dir.join("Cargo.toml").is_file() {
+            bail!("no Cargo.toml in {}: `wj fmt --rust` formats a Rust crate", dir.display());
+        }
+        let mut cmd = Command::new("cargo");
+        cmd.arg("fmt").arg("--all").current_dir(dir);
+        if check {
+            cmd.arg("--").arg("--check");
+        }
+        if !cmd.status()?.success() {
+            bail!("Formatting check failed in {}", dir.display());
+        }
     }
     Ok(())
 }

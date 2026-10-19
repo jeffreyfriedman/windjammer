@@ -27,14 +27,14 @@ enum Maybe {
 }
 
 impl Shape {
-    fn area(&self) -> int {
+    fn area(self) -> int {
         match self {
             Shape.Circle(r) => 3 * r * r,  // Approximate π as 3
             Shape.Square(s) => s * s,
         }
     }
     
-    fn describe(&self) -> string {
+    fn describe(self) -> string {
         match self {
             Shape.Circle(r) => "Circle with radius ${r}",
             Shape.Square(s) => "Square with side ${s}",
