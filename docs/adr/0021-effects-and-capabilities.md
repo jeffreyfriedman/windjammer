@@ -351,7 +351,7 @@ host-bridge externs); `wj explain-effects`; `wj run --sandbox/--allow/--caps`. A
 
 | E1 gate | Result (evidence) |
 |---|---|
-| Soundness: dynamic effects within the static set of `main` | 0 violations over 211 corpus programs (spec examples + 15 effectful programs in `tests/effects/corpus/`), 16 of them performing gated effects; `tests/effects_soundness_test.rs`. `console` is static-only in E1 (the `println` intrinsic is not a gated builtin) |
+| Soundness: dynamic effects within the static set of `main` | 0 violations over the whole corpus (the spec examples plus the effectful ones in `tests/effects/corpus/`); `tests/effects_soundness_test.rs`. `console` was static-only in E1 (the `println` intrinsic was not a gated builtin); E2 observes it too |
 | Escape suite, at least 60 cases, 0 escapes | 107 cases, 0 escapes (`tests/effects_escape_test.rs`): fs (dotdot, absolute, dir and file symlinks, sibling prefix, info leaks via exists/metadata, rename/copy across the boundary, manifest and source protection), net (userinfo, fragment, query, backslash, suffix, wildcard apex, port, scheme default, IP/IPv6/localhost, trailing dot, case, every verb, listen), env, process (shell metacharacters, local-path borrowing a granted name), time/random/console revocation, closures, spawned tasks, uncatchable denial |
 | Interpreter overhead at most 5% | non-sink-heavy workload: +3.8% CPU (median of 18 interleaved runs each, output identical); **provisional, measured at load 57-65**. Sink-dense loop (`fs::exists` + `random` + `time` x 30000): about 22 microseconds per fs check (path canonicalization is a few syscalls), 6x on that microbenchmark; re-measure on a quiet machine |
 | False-positive effect errors at most 2% of the corpus with a correct manifest | 0 of 211: no program's static set names an effect kind its run never exercised (`console` aside) |
@@ -389,7 +389,7 @@ Decisions taken while implementing (each enforced by a test):
   minting needs the minting package's grant; narrowing can only shrink (`derive_scope`). A closure keeps the grant of the package that
   wrote it.
 * **JavaScript denial is an exception, not `process.exit`**: programs run in a worker with top-level `await`, and `process.exit` there
-  crashes V8; `$CapFault` propagates to `$run`, which exits 126 (programs cannot catch it).
+  crashes V8; `$CapFault` propagates to `$run`, which exits with status 126; no program can catch it.
 * Portable (Go/JS) programs can only reach `fs` and `time` today, so their guards cover `fs.read`/`fs.write`; `net`, `env`, `process`
   appear in those backends when their std modules do (the vectors already carry the cases).
 
@@ -399,8 +399,9 @@ Decisions taken while implementing (each enforced by a test):
 | Every run-time sink in the Rust runtime is guarded | `tests/effects_runtime_audit_test.rs` scans fs/http/env/process/subprocess/db against OS-touching tokens, with a mutation check on the scanner itself |
 | Go/JS parity with the Rust model | 60 vectors, three implementations, one table (`tests/effects_vectors_test.rs`) |
 | Compiled enforcement end to end | Rust program built with cargo and run: allowed read prints, escape exits 126 (`WJ_EFFECTS_COMPILED=1`); JS (node) and Go programs the same, in the normal run |
+| Escape suite after E2 | 130 cases, 0 escapes (adds capability values, console revocation); soundness still holds with `console` observed, and 1 corpus entry has a static effect it never exercised (about 0.5%, under the 2% bar) |
 | Per-package grants, lock file, escalation | `tests/effects_packages_test.rs` (7 cases, through the `wj` binary) |
-| `std::cap` | SPEC-EFF-012, 034, 035 and 26 escape cases (narrowing never widens; delegation; symlinks and `..` through `under`; process and env values) |
+| `std::cap` | SPEC-EFF-012, 034, 035 and 23 of the 130 escape cases (narrowing never widens; delegation; symlinks and `..` through `under`; process and env values) |
 | Interpreter overhead at most 5% (re-measure at load below 20) | `scripts/bench_effects_overhead.py` refuses a verdict above load 20 and records `load_avg_1m`. The E1 figure (+3.8% CPU on the non-sink workload) was measured at load 57-65 and stays **provisional**; the machine is at load 165 as of this writing |
 
 Not done in E2: `@uses` bounds on trait methods (the parser keeps no attributes on trait methods; SPEC-EFF-006 still uses the union of impls);
