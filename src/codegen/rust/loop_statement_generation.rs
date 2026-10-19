@@ -76,7 +76,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let mut condition_str = self.generate_expression(condition);
+        let mut condition_str = self.generate_value_operand(condition);
         self.assignment_int_target_type = prev_while_int;
         if let Expression::Binary {
             left, op, right, ..
