@@ -1,0 +1,10 @@
+// spec: SPEC-EFF-017
+// mode: check-ok
+// manifest: [capabilities]
+// manifest: fs.read = ["./**"]
+use std::fs
+@uses(fs.read)
+fn load(path: string) -> string { fs::read_to_string(path).unwrap_or("") }
+fn main() {
+    println(load("cfg.toml"))
+}
