@@ -7,7 +7,7 @@ Module map and invariants: `src/interpreter/MODULE.md`.
 
 ## How to use it
 
-`wj run` interprets by default (ADR-0019): no cargo, no rustc, milliseconds to first output. When a program uses a
+`wj run` interprets by default (ADR-0022): no cargo, no rustc, milliseconds to first output. When a program uses a
 feature listed as unsupported below, the load-time preflight detects it before `main` runs and `wj run` switches to
 the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 
@@ -19,7 +19,7 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 | `wj run --interpret ...` | Interpreter only: never fall back (an unsupported feature exits 2 naming it). |
 | `wj run --compiled ...` / `--release` | Transpile to Rust and run with cargo (`--release`: optimized). `wj build` is unchanged. |
 | `wj run --watch` | Re-run on every change to `.wj`, `.rs`, `wj.toml`, `wj.lock` under the project (restarts long-running programs). |
-| `wj run --hot` | Preview: keep the program running and swap in edited function bodies (state survives; ADR-0021). |
+| `wj run --hot` | Preview: keep the program running and swap in edited function bodies (state survives; ADR-0024). |
 | `wj test --interpret [PATH] [--filter S] [--list] [--watch]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
 | `wj run --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
 | `wj run --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
@@ -46,7 +46,7 @@ Windjammer package (it has `wj.toml` or `.wj` sources) is loaded as source and m
 dependencies are cloned once into the wj cache and pinned in `wj.lock` (written on first resolution; later upstream commits are not
 picked up until the lock entry is removed). Rust-crate dependencies are reached through `extern fn` and the host bridge.
 
-**Rust code via the host bridge (ADR-0020).** When a project declares `extern fn`s and has hand-written Rust in `src/` or next to `wj.toml`
+**Rust code via the host bridge (ADR-0023).** When a project declares `extern fn`s and has hand-written Rust in `src/` or next to `wj.toml`
 (`ffi.rs`; the compiled build links it when the `extern fn`s are declared in a library module such as `native.wj`, not in `main.wj`), `wj run` compiles that Rust once into a cached dynamic library with one
 generated C-ABI shim per `extern fn`, loads it, and calls the same symbols the compiled binary calls. Integers, floats, `bool` and
 `string` cross the bridge; any other type is rejected before the program runs, naming the item, and `wj run` falls back to the
@@ -65,7 +65,7 @@ for the bridge crate), every later run 10 to 30 ms.
 Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (records the keys `interpreter.run_hello_ms`,
 `interpreter.project_50_cold_ms`, `interpreter.project_50_warm_ms`, `interpreter.watch_restart_ms` in `docs/generated/measured.json`).
 
-**Parity gates** (ADR-0019; the default stays interpreted only while these are green):
+**Parity gates** (ADR-0022; the default stays interpreted only while these are green):
 - `cargo test --release --test interpreter_features`: every registry probe behaves as registered, every `Unsupported` probe is caught
   by the preflight at load time (so it triggers the fallback) and no `Supported` probe is.
 - `cargo test --release --test interpreter_projects`: the fixtures in `tests/interpreter_projects/` (nested modules, every `use` form,
@@ -96,7 +96,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 
 **Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
 engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
-root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0021) is a
+root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
 preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
 kept; other edits print a restart notice (use `--watch` for those).
 

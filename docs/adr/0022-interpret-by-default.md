@@ -1,8 +1,8 @@
-# ADR-0019: `wj run` interprets by default; compiled is the release path
+# ADR-0022: `wj run` interprets by default; compiled is the release path
 
 - **Status:** Accepted (2026-10-11)
 - **Date:** 2026-10-11
-- **Related:** [ADR-0010](0010-package-source-of-truth.md), [ADR-0020](0020-interpreter-rust-crate-bridge.md), [ADR-0021](0021-hot-reload.md), `src/cli/run_dev.rs`, `src/interpreter/{project,preflight,deps}.rs`, `src/module_system/{project,sources}.rs`, `docs/INTERPRETER.md`
+- **Related:** [ADR-0010](0010-package-source-of-truth.md), [ADR-0023](0023-interpreter-rust-crate-bridge.md), [ADR-0024](0024-hot-reload.md), `src/cli/run_dev.rs`, `src/interpreter/{project,preflight,deps}.rs`, `src/module_system/{project,sources}.rs`, `docs/INTERPRETER.md`
 
 ## Context
 `wj run` used to transpile, `cargo build` and run: seconds to minutes per edit. The interpreter runs the same
@@ -27,7 +27,7 @@ identical behaviour.
    `--interpret` disables the fallback (exit 2), `--compiled` / `--release` force cargo. `wj build` is unchanged.
 4. **Dependencies are one graph.** `package::graph` resolves `wj.toml` path and git dependencies (git pinned by
    `wj.lock`); Windjammer packages are loaded as source and mounted as crates; Rust crates go through the host bridge
-   (ADR-0020) or trigger the fallback.
+   (ADR-0023) or trigger the fallback.
 
 ## Parity gates (must stay green; a red gate blocks the default)
 | Gate | Where | What it proves |

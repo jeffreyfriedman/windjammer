@@ -2,7 +2,7 @@
 
 ## Purpose
 Run Windjammer source directly, with no cargo/rustc, for an instant dev loop
-(`wj run` interprets by default, ADR-0019; `wj test --interpret`, `wj repl`). Rust remains the release path;
+(`wj run` interprets by default, ADR-0022; `wj test --interpret`, `wj repl`). Rust remains the release path;
 the interpreter must never print something the compiled program would not print.
 Status and measurements: `docs/INTERPRETER.md`.
 
@@ -20,7 +20,7 @@ Status and measurements: `docs/INTERPRETER.md`.
   (`crate::resolve`), Rust privacy (E0603) on resolved defs; dependencies mounted as crates
 - `preflight.rs`         load-time detection of registry-`Unsupported` features (the `wj run` compiled-fallback trigger)
 - `deps.rs`              Windjammer dependencies as source (`package::graph`: path/git + `wj.lock`)
-- `host_bridge.rs`       `extern fn` through a cached bridge library (ADR-0020): signatures, shim source, libloading calls
+- `host_bridge.rs`       `extern fn` through a cached bridge library (ADR-0023): signatures, shim source, libloading calls
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`

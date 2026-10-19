@@ -1,11 +1,11 @@
-# ADR-0021: `wj run --watch` and hot reload of function bodies
+# ADR-0024: `wj run --watch` and hot reload of function bodies
 
 - **Status:** Proposed (watch implemented; hot reload spike implemented as `wj run --hot`)
 - **Date:** 2026-10-11
-- **Related:** [ADR-0019](0019-interpret-by-default.md), `src/cli/watch.rs`, `src/interpreter/project.rs`
+- **Related:** [ADR-0022](0022-interpret-by-default.md), `src/cli/watch.rs`, `src/interpreter/project.rs`
 
 ## Context
-With interpretation as the default (ADR-0019) a program starts in milliseconds, so "re-run on save" is the natural
+With interpretation as the default (ADR-0022) a program starts in milliseconds, so "re-run on save" is the natural
 loop. Long-running programs (game loops, servers) lose their state on every restart; for those, swapping changed
 function bodies into the running process keeps the state and the window.
 

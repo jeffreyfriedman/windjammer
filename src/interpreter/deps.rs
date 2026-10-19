@@ -12,7 +12,7 @@ use std::path::Path;
 pub struct Dependencies {
     /// `(crate name, files)` for every Windjammer dependency, loaded as source.
     pub windjammer: Vec<(String, Vec<LoadedFile>)>,
-    /// Crate names of Rust dependencies (bridged per ADR-0020, never interpreted).
+    /// Crate names of Rust dependencies (bridged per ADR-0023, never interpreted).
     pub rust: Vec<String>,
 }
 
