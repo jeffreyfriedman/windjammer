@@ -23,11 +23,13 @@ pub struct CapGate {
     pub grant: Grant,
     pub mode: CapMode,
     warned: HashSet<String>,
+    /// Every effect kind the run exercised (checked), for the soundness gate (dynamic set within the static set).
+    pub seen: std::collections::BTreeSet<crate::ir::effect_facts::EffectKind>,
 }
 
 impl CapGate {
     pub fn new(grant: Grant, mode: CapMode) -> CapGate {
-        CapGate { grant, mode, warned: HashSet::new() }
+        CapGate { grant, mode, warned: HashSet::new(), seen: Default::default() }
     }
 }
 
@@ -84,6 +86,11 @@ impl Interpreter {
         self.caps = gate;
     }
 
+    /// Effect kinds exercised so far (empty without a gate).
+    pub fn caps_seen(&self) -> Vec<crate::ir::effect_facts::EffectKind> {
+        self.caps.as_ref().map(|g| g.seen.iter().cloned().collect()).unwrap_or_default()
+    }
+
     /// True when the grant lets the program talk to the network (the http port must then be live).
     pub fn caps_grant_network(&self) -> bool {
         self.caps.as_ref().is_some_and(|g| g.grant.scope(&crate::ir::effect_facts::EffectKind::NetConnect).is_some())
@@ -102,7 +109,7 @@ impl Interpreter {
                 Res::None => None,
                 Res::Fixed(s) => Some(s.to_string()),
                 Res::Arg(n) => Some(arg_text(args.get(n))),
-                Res::CmdArg(n) => Some(arg_text(args.get(n))),
+                Res::CmdArg(n) => Some(crate::ir::effect_facts::scope_match::parse_command(&arg_text(args.get(n))).0),
             };
             self.cap_decide(&u.effect, resource.as_deref())?;
         }
@@ -114,6 +121,9 @@ impl Interpreter {
     /// Check one effect use against the grant; stop (enforce) or warn once (local profile).
     fn cap_decide(&mut self, effect: &crate::ir::effect_facts::EffectKind, resource: Option<&str>) -> R<()> {
         let Some(gate) = self.caps.as_mut() else { return Ok(()) };
+        if !gate.seen.contains(effect) {
+            gate.seen.insert(effect.clone());
+        }
         if let Err(d) = gate.grant.check(effect, resource) {
             let text = format!("capability denied: {}\n  = grant in force: {}\n  = to allow: {}", d.subject(), d.grant, d.fix);
             match gate.mode {

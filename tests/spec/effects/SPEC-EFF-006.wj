@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-006
 // mode: effects
-// xfail: Q-032
 // expect: read_any: fs.read
 use std::fs
 trait Source { fn get(self) -> string }

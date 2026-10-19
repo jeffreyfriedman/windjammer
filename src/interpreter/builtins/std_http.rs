@@ -105,15 +105,14 @@ fn send(mode: &HttpMode, method: &str, url: &str, body: Option<&str>) -> Result<
 }
 
 fn real_request(method: &str, url: &str, body: Option<&str>) -> Result<ResponseObj, String> {
-    let rest = url.strip_prefix("http://").ok_or_else(|| {
-        format!("only http:// is available in the interpreter (no TLS): {url}; use --mock-http or `wj run`")
-    })?;
-    let (hostport, path) = match rest.split_once('/') {
-        Some((h, p)) => (h, format!("/{p}")),
-        None => (rest, "/".to_string()),
-    };
-    let addr = if hostport.contains(':') { hostport.to_string() } else { format!("{hostport}:80") };
-    let mut stream = std::net::TcpStream::connect(&addr).map_err(|e| e.to_string())?;
+    if !url.starts_with("http://") {
+        return Err(format!("only http:// is available in the interpreter (no TLS): {url}; use --mock-http or `wj run`"));
+    }
+    // the capability gate checked this same parse (ir::effect_facts::scope_match::split_url): connect to what was checked
+    let (host, port, path) = crate::ir::effect_facts::scope_match::split_url(url).ok_or_else(|| format!("invalid url: {url}"))?;
+    let port = port.unwrap_or(80);
+    let hostport = if port == 80 { host.clone() } else { format!("{host}:{port}") };
+    let mut stream = std::net::TcpStream::connect((host.as_str(), port)).map_err(|e| e.to_string())?;
     let payload = body.unwrap_or("");
     let req = format!(
         "{method} {path} HTTP/1.1\r\nHost: {hostport}\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{payload}",

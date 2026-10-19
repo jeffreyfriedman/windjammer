@@ -199,7 +199,13 @@ impl Grant {
         let ok = match kind {
             EffectKind::FsRead | EffectKind::FsWrite => {
                 let p = m::canonical_abs(res, &Self::cwd());
-                pats.iter().any(|pat| m::path_matches(pat, &p, &self.root))
+                let inside = |pat: &String| m::path_matches(pat, &p, &self.root);
+                if *kind == EffectKind::FsWrite && is_protected(&p) {
+                    // the manifest, the lock file and program sources can be written only when a pattern names them exactly
+                    pats.iter().any(|pat| !pat.contains('*') && inside(pat))
+                } else {
+                    pats.iter().any(inside)
+                }
             }
             EffectKind::NetConnect | EffectKind::NetListen => match m::host_port(res) {
                 Some((h, port)) => pats.iter().any(|pat| m::host_matches(pat, &h, port)),
@@ -207,8 +213,14 @@ impl Grant {
             },
             EffectKind::EnvRead | EffectKind::EnvWrite => pats.iter().any(|pat| m::name_matches(pat, res)),
             EffectKind::Process => {
-                let name = m::program_name(res);
-                pats.iter().any(|pat| m::name_matches(pat, &name))
+                // a bare name is looked up on PATH and matched by name; a path (./echo, /bin/ls) only by that exact path,
+                // so a local binary cannot borrow the name of a granted program
+                let prog = res.split_whitespace().next().unwrap_or("");
+                if prog.contains('/') {
+                    pats.iter().any(|pat| pat == prog)
+                } else {
+                    pats.iter().any(|pat| m::name_matches(pat, prog))
+                }
             }
             EffectKind::Ffi => pats.iter().any(|pat| m::name_matches(pat, res)),
             _ => true,
@@ -238,7 +250,7 @@ impl Grant {
                 Some((h, _)) => h,
                 None => res.to_string(),
             },
-            EffectKind::Process => m::program_name(res),
+            EffectKind::Process => res.split_whitespace().next().unwrap_or(res).to_string(),
             _ => res.to_string(),
         }
     }
@@ -258,6 +270,12 @@ impl Grant {
             fix: format!("add `{entry}` under [capabilities] in wj.toml, or run with `--allow {flag_val}`"),
         }
     }
+}
+
+/// Files that define what a program may do or is: never reachable through a glob grant.
+fn is_protected(p: &Path) -> bool {
+    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    name == "wj.toml" || name.ends_with(".wj-capabilities.lock") || name.ends_with(".wj")
 }
 
 fn known_names() -> String {
@@ -370,6 +388,29 @@ mod tests {
         g.allow_flag("net.connect=*.github.com").unwrap();
         assert!(g.check(&EffectKind::NetConnect, Some("https://api.github.com/")).is_ok());
         assert!(g.allow_flag("net.conect=x").is_err());
+    }
+
+    #[test]
+    fn process_grants_match_names_not_local_paths() {
+        let g = g("process = [\"echo\", \"/usr/bin/git\"]");
+        assert!(g.check(&EffectKind::Process, Some("echo")).is_ok());
+        assert!(g.check(&EffectKind::Process, Some("./echo")).is_err());
+        assert!(g.check(&EffectKind::Process, Some("/tmp/echo")).is_err());
+        assert!(g.check(&EffectKind::Process, Some("/usr/bin/git")).is_ok());
+        assert!(g.check(&EffectKind::Process, Some("git")).is_err());
+        assert!(g.check(&EffectKind::Process, Some("sh")).is_err());
+    }
+
+    #[test]
+    fn manifest_and_sources_are_not_writable_through_globs() {
+        let g = Grant::local_profile(&root());
+        assert!(g.check(&EffectKind::FsWrite, Some("out.txt")).is_ok());
+        assert!(g.check(&EffectKind::FsWrite, Some("wj.toml")).is_err());
+        assert!(g.check(&EffectKind::FsWrite, Some("src/main.wj")).is_err());
+        assert!(g.check(&EffectKind::FsRead, Some("wj.toml")).is_ok(), "reading is fine");
+        let mut named = Grant::sandbox(&root());
+        named.allow(EffectKind::FsWrite, "./src/gen.wj");
+        assert!(named.check(&EffectKind::FsWrite, Some("src/gen.wj")).is_ok(), "named exactly");
     }
 
     #[test]

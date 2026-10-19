@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-003
 // mode: effects
-// xfail: Q-032
 // expect: read_config: fs.read
 // expect: settings: fs.read, random
 // expect: main: console, fs.read, random

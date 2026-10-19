@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-016
 // mode: check-error
-// xfail: Q-032
 // expect-error: WJ0042: `parse` performs `fs.read`
 use std::fs
 @pure
