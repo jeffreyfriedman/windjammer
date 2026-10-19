@@ -1,1 +1,0 @@
-"First read ~/src/wj-wt/AGENT_PREAMBLE.txt and obey it (PUBLIC compiler repo: no private names, ever, in code, tests, docs, commit messages). Worktree ~/src/wj-wt/game-findings ... Source (read-only, private; do not copy names): ~/src/wj-wt/game-restore/docs/compiler-findings/2026-10-11-engine-fails-to-compile.md and its repros/ dir."
