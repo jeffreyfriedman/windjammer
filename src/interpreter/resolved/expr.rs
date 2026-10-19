@@ -5,7 +5,7 @@
 //! indexing, field reads, tuples, arrays, ranges, blocks, `format`/interpolation,
 //! `print`/`println`/`eprint`/`eprintln`, calls to user functions and to callable locals.
 
-use super::compile::{block, run_all, Cx, E};
+use super::compile::{block_x, run_all, Cx, E};
 use super::fast::{self, Cond, Operand};
 use super::island::{self, Island};
 use super::typed::{self, small, unbox, I};
@@ -30,12 +30,16 @@ pub(super) enum X {
     Slot(usize),
     Const(Value),
     V(Code),
+    /// Code whose value may be a reference: the walker's `eval_raw` of a method call, a block, or
+    /// an island (see `clean` / `keep_guard` for the contexts that follow references).
+    R(Code),
 }
 
 impl X {
+    /// The value as computed (references kept: the contexts where the walker uses `eval_raw`).
     pub(super) fn code(self) -> Code {
         match self {
-            X::V(c) => c,
+            X::V(c) | X::R(c) => c,
             X::Slot(s) | X::I(I::Slot(s), _) => Box::new(move |it, b| Ok(it.rstack[b + s].clone())),
             X::Const(v) => Box::new(move |_, _| Ok(v.clone())),
             X::I(I::Const(c), t) => Box::new(move |_, _| Ok(Value::Int(c as i128, t))),
@@ -50,17 +54,44 @@ impl X {
             X::I(I::Const(c), t) => Operand::Const(Value::Int(c as i128, t)),
             X::I(I::Code(c), t) => Operand::Int(c, t),
             X::V(c) => Operand::Code(c),
+            r @ X::R(_) => Operand::Code(r.clean().code()),
+        }
+    }
+
+    pub(super) fn is_raw(&self) -> bool {
+        matches!(self, X::R(_))
+    }
+
+    /// The walker's `eval`: references are followed.
+    pub(super) fn clean(self) -> X {
+        match self {
+            X::R(c) => X::V(Box::new(move |it, b| strip_refs(c(it, b)?))),
+            x => x,
+        }
+    }
+
+    /// The walker's `eval_keep_guard`: a lock/borrow guard stays a guard, other references are followed.
+    fn keep_guard(self) -> X {
+        match self {
+            X::R(c) => X::V(Box::new(move |it, b| {
+                let v = c(it, b)?;
+                match &v {
+                    Value::Ref(p) if p.guard.is_none() => strip_refs(v),
+                    _ => Ok(v),
+                }
+            })),
+            x => x,
         }
     }
 
     /// Evaluate to a `Value` (call arguments).
     #[inline(always)]
-    fn eval(&self, it: &mut Interpreter, b: usize) -> R {
+    pub(super) fn eval(&self, it: &mut Interpreter, b: usize) -> R {
         match self {
             X::I(i, t) => Ok(Value::Int(i.get(it, b)? as i128, *t)),
             X::Slot(s) => Ok(it.rstack[b + s].clone()),
             X::Const(v) => Ok(v.clone()),
-            X::V(c) => c(it, b),
+            X::V(c) | X::R(c) => c(it, b),
         }
     }
 }
@@ -106,19 +137,31 @@ fn boolish(e: E) -> bool {
     }
 }
 
-fn exprs(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
-    list.into_iter().map(|e| Some(expr(cx, e)?.code())).collect()
-}
-
 fn evals(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
     list.into_iter().map(|e| Some(expr_eval(cx, e)?.code())).collect()
+}
+
+/// A call argument: the walker evaluates it with `eval_keep_guard` (a lock/borrow guard stays a
+/// guard; other references are followed).
+pub(super) fn expr_arg(cx: &mut Cx, e: E) -> Option<X> {
+    if let Expression::Identifier { name, .. } = e {
+        if let Some(slot) = cx.local(name).filter(|s| cx.is_boxed(*s)) {
+            let name: &'static str = name.as_str();
+            return Some(X::V(Box::new(move |it, b| island::read_boxed_arg(it, b + slot, name))));
+        }
+    }
+    if let Some(x) = expr(cx, e) {
+        return Some(x.keep_guard());
+    }
+    let island = Island::new(cx, &format!("{:?}", e));
+    Some(X::V(Box::new(move |it, b| island.run(it, b, |it| it.eval_keep_guard(e)))))
 }
 
 /// `e` where the walker evaluates it with `eval` (references followed, no expected type): lowered
 /// when the compiler can, else a walker island.
 pub(super) fn expr_eval(cx: &mut Cx, e: E) -> Option<X> {
     if let Some(x) = expr(cx, e) {
-        return Some(x);
+        return Some(x.clean());
     }
     let island = Island::new(cx, &format!("{:?}", e));
     Some(X::V(Box::new(move |it, b| island.run(it, b, |it| it.eval(e)))))
@@ -165,7 +208,10 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             if matches!(operand, Expression::Range { .. }) {
                 return None;
             }
-            let v = expr(cx, operand)?;
+            if matches!(op, UnaryOp::MutRef) {
+                return None;
+            }
+            let v = expr_eval(cx, operand)?;
             let loc = location.as_ref();
             match (op, v) {
                 (UnaryOp::Neg, X::I(i, t)) => X::I(I::Code(typed::negate(i, t, loc)), t),
@@ -229,9 +275,12 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             let (s, en) = (expr_eval(cx, start)?.code(), expr_eval(cx, end)?.code());
             X::V(range_code(s, en, *inclusive))
         }
-        Expression::Block { statements, is_unsafe: false, .. } => X::V(block(cx, statements)?),
+        Expression::Block { statements, is_unsafe: false, .. } => block_x(cx, statements)?,
+        Expression::MethodCall { object, method, type_args, arguments, location } => {
+            super::method::method_call(cx, e, object, method.as_str(), type_args.as_ref(), arguments, location.as_ref())?
+        }
         Expression::MacroInvocation { name, args, is_repeat: false, location, .. } if name == "format" => {
-            let cs = exprs(cx, args.iter().copied())?;
+            let cs = evals(cx, args.iter().copied())?;
             let loc = location.as_ref();
             X::V(Box::new(move |it, b| {
                 it.mark(loc);
@@ -321,7 +370,7 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
         if cx.is_boxed(slot) {
             return None;
         }
-        let cs = exprs(cx, arg_exprs())?;
+        let cs: Vec<Code> = arg_exprs().map(|e| Some(expr_arg(cx, e)?.code())).collect::<Option<_>>()?;
         return Some(X::V(Box::new(move |it, b| {
             it.mark(loc);
             let f = it.rstack[b + slot].clone();
@@ -340,7 +389,7 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
         if arg_exprs().any(|e| matches!(e, Expression::Unary { op: UnaryOp::MutRef, .. })) {
             return None;
         }
-        let args: Vec<X> = arg_exprs().map(|e| expr_eval(cx, e)).collect::<Option<_>>()?;
+        let args: Vec<X> = arg_exprs().map(|e| expr_arg(cx, e)).collect::<Option<_>>()?;
         let ret = f.ret.and_then(IntTy::from_type).filter(|t| small(*t) && !f.is_async && !f.is_extern);
         let widths = args.iter().map(|a| if let X::I(_, u) = a { Some(*u) } else { None }).collect();
         let site = Site { f, args, widths, target: std::cell::OnceCell::new() };
@@ -377,7 +426,7 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
     if !matches!(intr, Intrinsic::Print | Intrinsic::Println | Intrinsic::Eprint | Intrinsic::Eprintln) {
         return None;
     }
-    let cs = exprs(cx, arg_exprs())?;
+    let cs = evals(cx, arg_exprs())?;
     Some(X::V(Box::new(move |it, b| {
         it.mark(loc);
         let vals = run_all(it, b, &cs)?;

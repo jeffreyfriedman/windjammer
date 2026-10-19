@@ -192,18 +192,23 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
     Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, scalar, tail_hint: cx.tail_hint, body })
 }
 
-/// The last statement of a list: a typed integer expression, or any code.
+/// The last statement of a list: a typed integer expression, or code (`Raw`: its value may be a
+/// reference, as the walker's `eval_raw` of a method call / block / island).
 enum Tail {
     Int(I, IntTy),
     Code(Code),
+    Raw(Code),
 }
 
 impl Tail {
     fn code(self) -> Code {
         match self {
             Tail::Int(i, t) => X::I(i, t).code(),
-            Tail::Code(c) => c,
+            Tail::Code(c) | Tail::Raw(c) => c,
         }
+    }
+    fn is_raw(&self) -> bool {
+        matches!(self, Tail::Raw(_))
     }
 }
 
@@ -250,7 +255,7 @@ fn guard(cx: &mut Cx, s: S) -> Option<Step> {
         X::I(val, w) => Step::Guard { loc, cond, rloc, val, w },
         x => {
             cx.untyped_return = true;
-            let v = x.code();
+            let v = x.clean().code();
             Step::Code(
                 loc,
                 Box::new(move |it, b| {
@@ -300,10 +305,11 @@ fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Opt
     let tail = match last {
         Statement::Expression { expr: e, .. } if !cx.boxed_ident(e) => match expr::expr(cx, e) {
             Some(X::I(i, t)) => Tail::Int(i, t),
+            Some(x @ X::R(_)) => Tail::Raw(x.code()),
             Some(x) => Tail::Code(x.code()),
-            None => Tail::Code(stmt(cx, last)?),
+            None => stmt_tail(cx, last)?,
         },
-        s => Tail::Code(stmt(cx, s)?),
+        s => stmt_tail(cx, s)?,
     };
     Some((init, Some((stmt_loc(last), tail))))
 }
@@ -354,11 +360,20 @@ fn typed_seq(init: Init, u: IntTy, lloc: Loc, lc: ICode) -> ICode {
 
 /// A nested block: its own name scope (slots are never reused, so no runtime work).
 pub(super) fn block(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
+    block_x(cx, list).map(X::code)
+}
+
+/// A nested block as a value (`X::R` when its tail may yield a reference).
+pub(super) fn block_x(cx: &mut Cx, list: &'static [S]) -> Option<X> {
     cx.scopes.push(Vec::new());
-    let c = stmt_list(cx, list, false).map(|(init, tail)| seq(init, tail.map(|(l, t)| (l, t.code()))));
-    let c = scoped(cx, c);
+    let r = stmt_list(cx, list, false).map(|(init, tail)| {
+        let raw = tail.as_ref().is_some_and(|(_, t)| t.is_raw());
+        (seq(init, tail.map(|(l, t)| (l, t.code()))), raw)
+    });
+    let r = r.and_then(|(c, raw)| Some((scoped(cx, Some(c))?, raw)));
     cx.scopes.pop();
-    c
+    let (c, raw) = r?;
+    Some(if raw { X::R(c) } else { X::V(c) })
 }
 
 /// The walker's `pop_scope` for the innermost name scope: a panic poisons the lock guards its boxed
@@ -422,12 +437,50 @@ fn poison_slots(it: &mut Interpreter, b: usize, slots: &[usize]) {
     }
 }
 
+/// A statement in value position (a list's last): an `if` whose branches may yield references, or an
+/// island of a value-producing statement, is `Tail::Raw`.
+fn stmt_tail(cx: &mut Cx, s: S) -> Option<Tail> {
+    if let Statement::If { condition, then_block, else_block, .. } = s {
+        if let Some(c) = expr::cond(cx, condition, "if", true) {
+            let t = block_x(cx, then_block);
+            let e = match else_block {
+                Some(eb) => block_x(cx, eb).map(Some),
+                None => Some(None),
+            };
+            if let (Some(t), Some(e)) = (t, e) {
+                let raw = t.is_raw() || e.as_ref().is_some_and(X::is_raw);
+                let (t, e) = (t.code(), e.map(X::code));
+                let code: Code = Box::new(move |it, b| match c(it, b)? {
+                    true => t(it, b),
+                    false => match &e {
+                        Some(e) => e(it, b),
+                        None => Ok(Value::Unit),
+                    },
+                });
+                return Some(if raw { Tail::Raw(code) } else { Tail::Code(code) });
+            }
+        }
+    }
+    let native = stmt_native(cx, s);
+    let island = native.is_none();
+    let code = match native {
+        Some(c) => c,
+        None => stmt_island(cx, s)?,
+    };
+    let valued = matches!(s, Statement::Expression { .. } | Statement::If { .. } | Statement::Match { .. } | Statement::Loop { .. });
+    Some(if island && valued { Tail::Raw(code) } else { Tail::Code(code) })
+}
+
 /// A statement: lowered when the compiler can, else a walker island (`island.rs`). Only `defer`
 /// (which registers on the walker frame) is refused: the function then runs in the walker.
 fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
     if let Some(c) = stmt_native(cx, s) {
         return Some(c);
     }
+    stmt_island(cx, s)
+}
+
+fn stmt_island(cx: &mut Cx, s: S) -> Option<Code> {
     if matches!(s, Statement::Defer { .. }) {
         return None;
     }
@@ -456,7 +509,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
                 _ => return None,
             };
             let v = expr::expr(cx, value)?;
-            let code = let_stmt(cx, name, type_.as_ref(), v);
+            let code = if v.is_raw() { raw_let(cx, name, type_.as_ref(), v) } else { let_stmt(cx, name, type_.as_ref(), v) };
             match type_ {
                 Some(t) if cx.needs_hint(value) => Box::new(move |it, b| {
                     it.expect_type_of(value, t);
@@ -473,6 +526,9 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
                 return None;
             }
             let v = expr::expr(cx, value)?;
+            if v.is_raw() {
+                return None;
+            }
             assign(cx, slot, v, *compound_op, location.as_ref())
         }
         Statement::Return { value, .. } => match value {
@@ -483,7 +539,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
                 }
                 x => {
                     cx.untyped_return = true;
-                    let v = x.code();
+                    let v = x.clean().code();
                     match cx.ret {
                         Some(rt) if cx.needs_hint(e) => Box::new(move |it, b| {
                             it.expect_type_of(e, rt);
@@ -538,7 +594,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
         Statement::For { pattern, iterable, body, label, .. } => for_stmt(cx, pattern, iterable, body, label.as_deref())?,
         Statement::Break { label, value, .. } => {
             let v = match value {
-                Some(e) => Some(expr::expr(cx, e)?.code()),
+                Some(e) => Some(expr::expr(cx, e)?.clean().code()),
                 None => None,
             };
             let label = label.clone();
@@ -558,6 +614,28 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
         _ => return None,
     };
     Some(code)
+}
+
+/// `let x = <method call / block>` whose value may be a reference (the walker's `eval_raw_binding`):
+/// the local is boxed (reads follow references) and the declared type coerces anything but a reference.
+fn raw_let(cx: &mut Cx, name: Option<&'static str>, ty: Option<&'static Type>, v: X) -> Code {
+    let v = match name {
+        Some(_) => v.code(),
+        None => v.clean().code(), // `let _ = e` evaluates with `eval`
+    };
+    let slot = name.map(|n| cx.declare_boxed(n));
+    Box::new(move |it, b| {
+        let mut x = v(it, b)?;
+        if let Some(t) = ty {
+            if !matches!(x, Value::Ref(_)) {
+                x = it.coerce(x, t)?;
+            }
+        }
+        if let Some(s) = slot {
+            super::fast::set(it, b + s, island::boxed(x));
+        }
+        Ok(Value::Unit)
+    })
 }
 
 /// `let [name][: ty] = v`: a typed integer value (with an integer or no annotation) makes a typed slot.
@@ -722,9 +800,13 @@ fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: 
         Expression::Range { start, end, inclusive, .. } => match (expr::expr(cx, start)?, expr::expr(cx, end)?) {
             // `for i in a..b` over typed bounds: count in place, the variable is a typed slot
             (X::I(s, st), X::I(e, et)) => return typed_for(cx, (s, e, *inclusive, IntTy::unify(st, et)), pattern, body, label),
-            (s, e) => expr::range_code(s.code(), e.code(), *inclusive),
+            (s, e) => expr::range_code(s.clean().code(), e.clean().code(), *inclusive),
         },
-        _ => expr::expr(cx, iterable)?.code(),
+        _ => match expr::expr(cx, iterable)? {
+            // a reference is iterated by reference: the walker's
+            X::R(_) => return None,
+            x => x.code(),
+        },
     };
     let slot = loop_var(cx, pattern, None).ok()?;
     let kind = slot_kind(cx, slot);

@@ -114,6 +114,20 @@ pub(super) fn read_boxed(it: &mut Interpreter, i: usize, name: &'static str) -> 
     }
 }
 
+/// Read a boxed local as a call argument (`eval_keep_guard`: a guard stays a guard).
+#[inline]
+pub(super) fn read_boxed_arg(it: &mut Interpreter, i: usize, name: &'static str) -> R {
+    let v = match &it.rstack[i] {
+        Value::Ref(p) => p.slot.borrow().clone(),
+        _ => it.eval_path_value(name)?,
+    };
+    match &v {
+        Value::Ref(p) if p.guard.is_some() => Ok(v),
+        Value::Ref(_) => crate::interpreter::place::strip_refs(v),
+        _ => Ok(v),
+    }
+}
+
 /// A fresh walker slot holding `v` (what the walker's `define` creates).
 #[inline]
 pub(super) fn boxed(v: Value) -> Value {
