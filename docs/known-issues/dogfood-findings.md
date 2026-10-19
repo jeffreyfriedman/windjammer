@@ -63,3 +63,15 @@ These need ownership or width decisions in the IR solver rather than local patch
 - `for i in 0..v.len()` with an `int` loop variable: `usize` versus `int` index typing;
 - incremental cache: reverting files after an edit once reported hundreds of phantom type errors until
   the build directory and cache were removed. Not minimized, so there is no test yet.
+
+## Round 2 (large backend)
+
+| Test (`tests/expression_operand_positions_property_test.rs`, `round2_findings_test.rs`, `range_precedence_test.rs`, `string_literal_roundtrip_test.rs`) | Status |
+|---|---|
+| operand `if`/`match` in compound assignment, conditions, binary operands (generated gate) | fixed (value position generates the block tail even inside void blocks) |
+| `outer + 1..n` precedence | fixed (range is the lowest binary operator; parser, formatter and codegen agree) |
+| `$$` in string literals | documented as SPEC-LEX-009 (literal `$`); round-trip gate on fmt, interpreter, Rust, JS, Go |
+| owned trait-impl `string` formal into a runtime `&str` formal | fixed (emit-truth sync of `str_ref_optimized_params`) |
+| same-name private structs, `json.parse_string` target from later use, `ServerRequest` literal (interpreter) | fixed |
+| untyped counter vs `len()`, push literal width from return type, loop variable vs literal inside `if` | open, numeric solver (ADR-0015 / C4) |
+| call-site `&T`/`T` mismatches across modules | not reproduced in minimal projects (guards added) |
