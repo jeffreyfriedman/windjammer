@@ -3,6 +3,29 @@ use std::path::Path;
 
 use super::new_templates;
 
+/// Package names become the crate name: letters, digits, `-` and `_`, starting with a letter.
+fn validate_package_name(name: &str) -> Result<(), String> {
+    let ok = name.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if ok {
+        return Ok(());
+    }
+    let mut suggestion: String = name
+        .trim()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c.to_ascii_lowercase() } else { '-' })
+        .collect();
+    suggestion = suggestion.trim_matches('-').to_string();
+    let hint = if suggestion.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        format!(" (try `wj new {suggestion}`)")
+    } else {
+        String::new()
+    };
+    Err(format!(
+        "Invalid project name '{name}': use letters, digits, '-' and '_', starting with a letter{hint}"
+    ))
+}
+
 pub fn handle_new_command(name: &str, template: &str) -> Result<(), String> {
     // Validate project name
     if name.is_empty() {
@@ -12,6 +35,8 @@ pub fn handle_new_command(name: &str, template: &str) -> Result<(), String> {
     if name.contains('/') || name.contains('\\') {
         return Err("Project name cannot contain path separators".to_string());
     }
+
+    validate_package_name(name)?;
 
     // Validate template
     let valid_templates = new_templates::TEMPLATE_NAMES;

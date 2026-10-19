@@ -330,12 +330,6 @@ pub fn is_stdlib_default_empty_type(name: &str) -> bool {
     is_map_type(short) || is_set_type_name(name) || matches!(short, "Vec" | "VecDeque" | "String")
 }
 
-/// Heap-owning types that are never Copy.
-pub fn is_heap_container(name: &str) -> bool {
-    let leaf = type_name_leaf(name);
-    leaf == "String" || leaf == "Vec" || is_map_type_name(leaf)
-}
-
 /// Stdlib wrapper return/param bases (Vec, maps, sets, Option, Result) — not custom owned payloads.
 ///
 /// Used when deciding whether a formal argument is *stored into* a user composite return
@@ -589,26 +583,6 @@ pub fn is_ref_receiver_trait(name: &str) -> bool {
 // =============================================================================
 
 // Ownership-producing methods are signature-registry driven (`method_is_type_preserving_qualified`).
-
-/// DEPRECATED: use [`crate::analyzer::stdlib_method_traits::method_preserves_float_receiver`]
-/// with the receiver type — bare method names collide with struct builders (`Slider::max`).
-#[deprecated(note = "use method_preserves_float_receiver(method, receiver_type, registry)")]
-pub fn is_float_receiver_method(name: &str) -> bool {
-    use crate::analyzer::{stdlib_method_traits, SignatureRegistry};
-    use crate::parser::Type;
-    // Legacy callers without receiver context: only true for unambiguous f32/f64 methods.
-    for float in ["f32", "f64"] {
-        let ty = Type::Custom(float.to_string());
-        if stdlib_method_traits::method_preserves_float_receiver(
-            name,
-            Some(&ty),
-            SignatureRegistry::stdlib(),
-        ) {
-            return true;
-        }
-    }
-    false
-}
 
 // =============================================================================
 // Rust-to-Windjammer Type Mapping

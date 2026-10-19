@@ -10,7 +10,7 @@
 
 use crate::parser::*;
 
-use super::{ast_utilities, codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
+use super::{ast_utilities, pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
@@ -356,11 +356,6 @@ impl<'ast> CodeGenerator<'ast> {
         if let Err(e) = self.enter_recursion("generate_statement") {
             eprintln!("{}", e);
             return format!("/* {} */", e);
-        }
-
-        // Record source mapping if location info is available
-        if let Some(location) = codegen_helpers::get_statement_location(stmt) {
-            self.record_mapping(&location);
         }
 
         let result = self.generate_statement_impl(stmt);

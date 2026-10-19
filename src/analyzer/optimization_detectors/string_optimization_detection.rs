@@ -69,27 +69,6 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    /// Detect concatenation chains (a + b + c + ...)
-    #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
-    pub(crate) fn detect_concatenation_chain(
-        &self,
-        expr: &Expression,
-        optimizations: &mut Vec<StringOptimization>,
-        idx: usize,
-    ) {
-        let mut concat_count = 0;
-        self.count_concatenations(expr, &mut concat_count);
-
-        if concat_count >= 3 {
-            // Multiple concatenations, could benefit from pre-allocation
-            optimizations.push(StringOptimization {
-                optimization_type: StringOptimizationType::ConcatenationChain,
-                estimated_capacity: Some(concat_count * 32), // Rough estimate
-                location: idx,
-            });
-        }
-    }
-
     /// Count the number of concatenation operations
     #[allow(dead_code)] // TODO: Implement concatenation optimization in future version
     #[allow(clippy::only_used_in_recursion)]
@@ -106,15 +85,4 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    /// Check if a statement is accumulating strings (s += ...)
-    #[allow(dead_code)] // TODO: Implement loop accumulation optimization in future version
-    pub(crate) fn is_string_accumulation(&self, stmt: &Statement) -> bool {
-        matches!(
-            stmt,
-            Statement::Assignment {
-                target: Expression::Identifier { .. },
-                ..
-            }
-        )
-    }
 }

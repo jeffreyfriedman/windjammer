@@ -217,11 +217,6 @@ impl FloatInference {
         }
     }
 
-    /// TDD FIX: Get all collected function signatures (for building global registry)
-    pub fn get_function_signatures(&self) -> &HashMap<String, (Vec<Type>, Option<Type>)> {
-        &self.function_signatures
-    }
-
     /// Set source root for resolving metadata file paths
     pub fn set_source_root(&mut self, path: &std::path::Path) {
         self.source_root = Some(path.to_path_buf());

@@ -24,9 +24,10 @@ stdout_has = ["fn main() {\n    let x = 1\n"]
 [[case]]
 name = "fmt - refuses input that does not parse"
 polarity = "negative"
-xfail = "BUG: `wj fmt -` on `fn main( {` prints `fn main({` and exits 0 (formats unparseable code)"
 args = ["fmt", "-"]
 stdin = "fn main( {\n"
+exit = 1
+output_has = ["does not parse"]
 
 [[case]]
 name = "fmt --check accepts formatted code"
@@ -55,7 +56,6 @@ file_has = { "c/src/main.rs" = "fn main() {" }
 [[case]]
 name = "fmt --rust formats the crate given as a path"
 polarity = "positive"
-xfail = "BUG: `wj fmt --rust PATH` ignores PATH and runs cargo fmt in the current directory"
 needs = "toolchain"
 files = { "c/Cargo.toml" = "[package]\nname = \"c\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "c/src/main.rs" = "fn main(){println!(\"x\");}\n" }
 args = ["fmt", "--rust", "{w}/c"]

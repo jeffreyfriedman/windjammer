@@ -7274,17 +7274,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Signature-driven `(wants_shared_ref, wants_owned)` for a call-site slot.
-    /// Owned Copy-aggregate emission beats stale IR Ref (regression-060).
-    /// Runtime-std baseline borrow (`json::is_array` `&Value`) beats WJ Owned stubs.
-    pub(crate) fn call_site_slot_wants_ref_and_owned(
-        &self,
-        sig: &crate::analyzer::FunctionSignature,
-        arg_index: usize,
-    ) -> (bool, bool) {
-        self.call_site_slot_wants_ref_and_owned_for(sig, arg_index, &sig.name)
-    }
-
     pub(crate) fn call_site_slot_wants_ref_and_owned_for(
         &self,
         sig: &crate::analyzer::FunctionSignature,
