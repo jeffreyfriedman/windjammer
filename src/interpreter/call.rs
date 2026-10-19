@@ -834,7 +834,7 @@ impl Interpreter {
         self.methods.get(&(tn, method.to_string())).cloned()
     }
 
-    fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
+    pub(crate) fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         if !has_self {
             // `fn render() -> T` written without `self` but called on an instance: the body may
