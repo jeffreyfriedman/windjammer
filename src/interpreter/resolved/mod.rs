@@ -65,13 +65,20 @@ impl Interpreter {
     }
 
     /// `call_func_run` for a compiled function: same frame, backtrace, binding and return rules.
-    pub(crate) fn run_compiled(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, args: Vec<Value>) -> R {
+    /// A method's receiver (`self_val`) goes to slot 0; without one, the first argument is `self`.
+    pub(crate) fn run_compiled(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, args: Vec<Value>, self_val: Option<Value>) -> R {
         let base = self.rstack.len();
         self.rstack.resize(base + c.nslots, Value::Unit);
-        for (slot, a) in c.params.iter().zip(args) {
+        for (slot, a) in c.params.iter().zip(self_val.into_iter().chain(args)) {
             self.rstack[base + slot] = a;
         }
         self.run_compiled_at(f, c, base, false)
+    }
+
+    /// May the walker run `f` compiled for this call? (A method without `self` called on an instance
+    /// binds an implicit `self`: walker only.)
+    pub(crate) fn compiled_call_ok(f: &FuncDef, self_val: &Option<Value>) -> bool {
+        self_val.is_none() || compile::has_self(f)
     }
 
     /// Run `c` on the frame at `base`, whose parameter slots already hold the arguments (`bound`:
@@ -153,11 +160,13 @@ impl Interpreter {
         }
         self.backtrace.push((f.qual.clone(), self.cur));
         // a compiled caller's scope is empty and in the same module: no need for a new walker frame
+        // (a method gets its own, for `Self`)
         let s = &self.scope;
-        let own = !(s.vars.is_empty() && s.marks.is_empty() && s.module == f.module && s.defers.is_empty() && s.tparams.is_empty() && s.self_ty.is_none());
+        let own = !(s.vars.is_empty() && s.marks.is_empty() && s.module == f.module && s.defers.is_empty() && s.tparams.is_empty() && s.self_ty.is_none() && f.self_ty.is_none());
         if own {
             let mut scope = Scope::new(f.module);
             scope.ret_ty = f.ret;
+            scope.self_ty = f.self_ty.clone();
             let saved = std::mem::replace(&mut self.scope, scope);
             self.frames.push(saved);
         }
@@ -228,6 +237,9 @@ impl Interpreter {
     /// `false`: a typed parameter did not receive an integer (the caller runs the walker instead).
     fn bind_params(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize) -> R<bool> {
         for (((p, slot), fast), typed) in f.params.iter().zip(&c.params).zip(&c.param_int).zip(&c.param_typed) {
+            if p.name == "self" {
+                continue; // the receiver is bound as is
+            }
             let v = &self.rstack[base + slot];
             if let (Some(t), Value::Int(a, vt)) = (fast, v) {
                 if vt == t && (!typed || *a as i64 as i128 == *a) {

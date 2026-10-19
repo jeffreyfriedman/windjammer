@@ -13,7 +13,10 @@ use super::compile::{Cx, E};
 use super::expr::{expr, expr_arg, X};
 use super::island::Island;
 use super::Code;
-use crate::interpreter::engine::Interpreter;
+use super::CompiledFn;
+use crate::interpreter::engine::{FuncDef, Interpreter};
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::interpreter::error::R;
 use crate::interpreter::place::deref_value;
 use crate::interpreter::value::{Place, Value};
@@ -59,6 +62,7 @@ pub(super) fn method_call(
     };
     let args: Vec<X> = arguments.iter().map(|(_, a)| expr_arg(cx, a)).collect::<Option<_>>()?;
     let hint: Option<Type> = type_args.and_then(|t| t.first().cloned());
+    let cache = SiteCache::default();
     Some(X::R(Box::new(move |it, b| {
         let (place, recv) = match &recv {
             Recv::Local(s) => {
@@ -90,7 +94,7 @@ pub(super) fn method_call(
             return Ok(recv); // Rc::clone: another handle to the same allocation
         }
         let recv = deref_value(recv)?;
-        let user = it.find_user_method(&recv, method);
+        let user = cache.user(it, &recv, method);
         if let (Some(f), Some(island)) = (&user, &fallback) {
             if it.param_mutation(f).iter().any(|m| *m) {
                 drop(recv);
@@ -104,8 +108,65 @@ pub(super) fn method_call(
         it.mark(loc);
         it.type_hint = hint.clone();
         match user {
-            Some(f) => it.call_user_method(&f, recv, place, vals),
+            Some(f) => match cache.compiled(it, &f) {
+                // `call_user_method` -> `call_func_run` for a compiled method with a `self` receiver
+                Some(c) => {
+                    let self_val = match place {
+                        Some(p) if it.self_mutation(&f) => {
+                            drop(recv);
+                            Value::Ref(p)
+                        }
+                        _ => recv,
+                    };
+                    it.run_compiled(&f, &c, vals, Some(self_val))
+                }
+                None => it.call_user_method(&f, recv, place, vals),
+            },
             None => it.call_builtin_method(recv, place, method, vals),
         }
     })))
+}
+
+/// Inline cache of a method call site: the user method found for the last receiver type, and its
+/// compiled form. Methods are fixed once a program is loaded, except under `--hot` (no caching).
+#[derive(Default)]
+struct SiteCache {
+    ty: RefCell<Option<(Rc<str>, Option<Rc<FuncDef>>)>>,
+    compiled: RefCell<Option<(Rc<FuncDef>, Option<Rc<CompiledFn>>)>>,
+}
+
+impl SiteCache {
+    fn user(&self, it: &mut Interpreter, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {
+        let ty = match recv {
+            Value::Struct(s) => &s.name,
+            Value::Enum(e) => &e.ty,
+            _ => return it.find_user_method(recv, method),
+        };
+        if it.hot.is_some() {
+            return it.find_user_method(recv, method);
+        }
+        if let Some((t, f)) = &*self.ty.borrow() {
+            if Rc::ptr_eq(t, ty) || **t == **ty {
+                return f.clone();
+            }
+        }
+        let f = it.find_user_method(recv, method);
+        *self.ty.borrow_mut() = Some((ty.clone(), f.clone()));
+        f
+    }
+
+    /// The compiled form of a method the walker would run compiled (`call_func_run` with a receiver).
+    fn compiled(&self, it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Rc<CompiledFn>> {
+        if !it.engine_resolved || it.hot.is_some() || f.is_async || f.is_extern || !super::compile::has_self(f) {
+            return None;
+        }
+        if let Some((g, c)) = &*self.compiled.borrow() {
+            if Rc::ptr_eq(g, f) {
+                return c.clone();
+            }
+        }
+        let c = it.compiled_for(f);
+        *self.compiled.borrow_mut() = Some((f.clone(), c.clone()));
+        c
+    }
 }

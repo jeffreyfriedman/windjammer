@@ -49,6 +49,8 @@ pub(super) struct Cx<'a> {
     need: Vec<usize>,
     /// The function's declared return type (the walker's `scope.ret_ty` inside islands).
     pub(super) ret: Option<&'static Type>,
+    /// The impl's type (the walker's `scope.self_ty` inside islands).
+    pub(super) self_ty: Option<Rc<str>>,
     /// The walker hands this function's tail an expected type at entry (see `needs_hint`).
     tail_hint: bool,
 }
@@ -125,16 +127,22 @@ impl Cx<'_> {
 }
 
 pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<CompiledFn> {
-    if f.is_extern || f.is_async || !f.type_params.is_empty() || f.self_ty.is_some() {
+    if f.is_extern || f.is_async || !f.type_params.is_empty() {
         return None;
     }
-    if f.params.iter().any(|p| p.name == "self" || !matches!(p.pattern, None | Some(Pattern::Identifier(_)))) {
+    let has_self = has_self(f);
+    if f.params.iter().enumerate().any(|(i, p)| (p.name == "self" && !(i == 0 && has_self)) || !matches!(p.pattern, None | Some(Pattern::Identifier(_)))) {
         return None;
     }
-    // a parameter the body mutates holds a `&mut` place (inferred `&mut`): boxed, touched only by islands
+    // a parameter the body mutates holds a `&mut` place (inferred `&mut`): boxed. `self` (slot 0 of
+    // a method) is always boxed: it may be the receiver's place.
     let mutated = it.param_mutation(f);
     let mut poison = HashSet::new();
-    let mut boxed: HashSet<usize> = mutated.iter().enumerate().filter(|(_, m)| **m).map(|(i, _)| i).collect();
+    let shift = has_self as usize;
+    let mut boxed: HashSet<usize> = mutated.iter().enumerate().filter(|(_, m)| **m).map(|(i, _)| i + shift).collect();
+    if has_self {
+        boxed.insert(0);
+    }
     loop {
         let mut cx = Cx {
             it: &mut *it,
@@ -148,6 +156,7 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
             boxed: &boxed,
             need: Vec::new(),
             ret: f.ret,
+            self_ty: f.self_ty.clone(),
             tail_hint: tail_hint(f),
         };
         let r = compile_with(&mut cx, f);
@@ -274,6 +283,11 @@ fn guard(cx: &mut Cx, s: S) -> Option<Step> {
 /// (`expect_type_of`: calls, and `parse_string` under `?` or in a `match` block)?
 fn hinted(e: E) -> bool {
     matches!(e, Expression::Call { .. } | Expression::MethodCall { .. } | Expression::TryOp { .. } | Expression::Block { .. })
+}
+
+/// A method with a `self` receiver (slot 0).
+pub(super) fn has_self(f: &FuncDef) -> bool {
+    f.params.first().is_some_and(|p| p.name == "self")
 }
 
 /// Does the walker set the tail's expected type at entry (`expect_tail_type`)?
@@ -530,6 +544,8 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             }
             let v = expr::expr(cx, value)?;
             if v.is_raw() {
+                // may store a guard / rebind to a reference: the boxed path (next compile)
+                cx.need_box(slot);
                 return None;
             }
             assign(cx, slot, v, *compound_op, location.as_ref())

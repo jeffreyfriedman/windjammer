@@ -23,6 +23,7 @@ pub(super) struct Island {
     declares: Vec<(&'static str, usize)>,
     module: usize,
     ret: Option<&'static Type>,
+    self_ty: Option<std::rc::Rc<str>>,
 }
 
 impl Island {
@@ -33,7 +34,7 @@ impl Island {
         for (_, s) in &names {
             cx.need_box(*s);
         }
-        Island { names, declares: Vec::new(), module: cx.module, ret: cx.ret }
+        Island { names, declares: Vec::new(), module: cx.module, ret: cx.ret, self_ty: cx.self_ty.clone() }
     }
 
     pub(super) fn declaring(mut self, declares: Vec<(&'static str, usize)>) -> Island {
@@ -45,6 +46,7 @@ impl Island {
     pub(super) fn run(&self, it: &mut Interpreter, b: usize, f: impl FnOnce(&mut Interpreter) -> R) -> R {
         let mut scope = Scope::new(self.module);
         scope.ret_ty = self.ret;
+        scope.self_ty = self.self_ty.clone();
         scope.vars = it.vec_pool.pop().unwrap_or_default();
         for (n, s) in &self.names {
             if let Value::Ref(p) = &it.rstack[b + s] {
