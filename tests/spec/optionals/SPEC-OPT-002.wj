@@ -1,0 +1,15 @@
+// spec: SPEC-OPT-002
+// expect: 5
+// expect: evaluated
+// expect: 7
+fn loud() -> int {
+    println("evaluated")
+    7
+}
+
+fn main() {
+    let a: int? = Some(5)
+    let b: int? = None
+    println("${a ?? loud()}")
+    println("${b ?? loud()}")
+}

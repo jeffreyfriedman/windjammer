@@ -37,6 +37,9 @@ impl<'m> Js<'m> {
         if name == "to_string" {
             return self.display(recv, &FmtSpec::default());
         }
+        if let Some(js) = self.enumerable_method(recv, name, &r, &a, args)? {
+            return Ok(js);
+        }
         if let Some(s) = self.ordering_method(recv, name, &r, &a) {
             return Ok(s);
         }
@@ -99,7 +102,7 @@ impl<'m> Js<'m> {
         })
     }
 
-    fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
+    pub(super) fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
         let mul = name == "product";
         match t {
             Ty::Int(k) => {

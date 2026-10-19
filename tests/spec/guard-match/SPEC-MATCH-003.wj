@@ -1,0 +1,10 @@
+// spec: SPEC-MATCH-003
+// mode: parse-error
+// expect-error: needs a final `_ => ..` arm
+fn main() {
+    let x = 3
+    let s = match {
+        x > 0 => "pos",
+        x <= 0 => "non-pos",
+    }
+}

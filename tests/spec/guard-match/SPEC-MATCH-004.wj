@@ -1,0 +1,10 @@
+// spec: SPEC-MATCH-004
+// mode: parse-error
+// expect-error: must be the last arm
+fn main() {
+    let x = 3
+    let s = match {
+        _ => "any",
+        x > 0 => "pos",
+    }
+}

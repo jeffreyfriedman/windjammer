@@ -145,8 +145,16 @@ impl Interpreter {
         while i < segs.len() {
             let seg = segs[i].clone();
             let last = i + 1 == segs.len();
+            // `use a::name::name`: when the module already defines an item called `name`, the last
+            // segment is that item, not the module file `name.wj` found again by the search path.
+            let item_shadows_module = last
+                && !glob
+                && i > start
+                && (self.modules[cur].funcs.contains_key(&seg) || self.modules[cur].consts.contains_key(&seg));
             // Is it a module?
-            let child = if cur == 0 && i == start && self.modules[0].children.get(&seg).is_none() {
+            let child = if item_shadows_module {
+                None
+            } else if cur == 0 && i == start && self.modules[0].children.get(&seg).is_none() {
                 self.load_child_module(0, &seg)?
             } else {
                 self.load_child_module(cur, &seg)?

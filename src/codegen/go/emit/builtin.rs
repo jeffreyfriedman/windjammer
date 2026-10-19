@@ -24,6 +24,9 @@ impl<'m> Go<'m> {
             }
         }
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
+        if let Some(go) = self.enumerable_method(recv, name, &a)? {
+            return Ok(go);
+        }
         let r = self.expr(recv)?;
         if let Some(s) = self.ordering_method(recv, name, &r, &a) {
             return Ok(s);
