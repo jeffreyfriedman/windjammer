@@ -561,3 +561,8 @@ fn corpus_unsuffixed_integer_literal_defaults_to_int() {
 fn corpus_call_inside_interpolation_constrains_literal_width() {
     corpus_check("interp_call_width");
 }
+
+#[test]
+fn corpus_int_accumulator_over_int_fields_is_not_truncated_to_i32() {
+    corpus_check("int_accumulator_field_width");
+}

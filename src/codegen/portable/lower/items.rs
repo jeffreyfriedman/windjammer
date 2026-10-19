@@ -11,7 +11,18 @@ use std::collections::HashMap;
 
 /// Lower a whole program. `reg` supplies analyzer-inferred parameter ownership.
 pub fn lower_program(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
-    let env = ItemEnv::build(program, reg);
+    lower_with_env(program, ItemEnv::build(program, reg))
+}
+
+/// [`lower_program`] ignoring the semantic layer's facts (defensive copy at every owned use).
+/// Used to measure what the facts save; never used to emit code.
+pub fn lower_program_without_facts(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
+    let mut env = ItemEnv::build(program, reg);
+    env.without_facts = true;
+    lower_with_env(program, env)
+}
+
+fn lower_with_env(program: &Program, env: ItemEnv) -> PResult<PModule> {
     let mut m = PModule { structs: vec![], enums: vec![], traits: vec![], fns: vec![], consts: vec![] };
     let mut items: Vec<&Item> = Vec::new();
     flatten(&program.items, &mut items);
@@ -174,10 +185,17 @@ pub(super) fn lower_fn(env: &ItemEnv, decl: &FunctionDecl, sig: &crate::codegen:
         let (_, pty, mode) = sig.params.iter().find(|(n, _, _)| *n == p.name).cloned().unwrap_or((p.name.clone(), fix_self(from_ast(&p.type_, &lw.generics), self_ty.as_ref()), ParamMode::Value));
         let _ = i;
         let out = lw.declare(&p.name, pty.clone(), mode != ParamMode::Value);
+        if mode == ParamMode::Value {
+            lw.set_fresh(&p.name);
+        }
         if p.is_mutable {
             lw.set_mutable(&p.name);
         }
         params.push(PParam { name: out, ty: pty, mode, own_mutable: p.is_mutable });
+    }
+    let names: Vec<&str> = decl.parameters.iter().map(|p| p.name.as_str()).collect();
+    if !env.without_facts {
+        lw.last_uses = crate::ir::liveness::last_uses(&names, &decl.body);
     }
     lw.rets.push(sig.ret.clone());
     let need_value = sig.ret != Ty::Unit;

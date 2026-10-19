@@ -39,6 +39,10 @@ Keyed by stable identity (function `DefId` / parameter index / binding id / expr
 | `width(expr)` | resolved numeric type (ADR-0015 defaults: `int`=i64, `float`=f64; explicit widths exact) | numeric solver |
 | `conversions(expr)` | checked conversions the solver placed (ADR-0015 #2) | numeric solver |
 
+Invariant (money-type correctness): no backend inserts a narrowing numeric conversion that is not in `conversions`.
+If a backend would need one, the semantic layer reports a diagnostic (NUM-MIXED) instead; silent truncation of an
+`int` is never an acceptable realisation.
+
 Requests for new facts from a backend stream (for example the portable-gaps stream asking for `lent_mut`) are
 added to this table and produced by the semantic layer; the backend does not derive them locally.
 
@@ -69,6 +73,16 @@ facts -> correct overflow and `BigInt` choices). It is not an external commitmen
 After convergence-plan C5/C6 (the solver is the single owner for Rust). First portable consumers: `needs_copy` /
 `last_use` (copies), `mutated` (immutability), `width` (integer representation). Each change ships with conformance
 programs that prove no behavior change and a measurement (copies emitted over the conformance corpus).
+
+## Status of the implementation (2026-10-12)
+* `last_use` exists (`src/ir/liveness.rs`, keyed by AST node identity) and is stored on `IrFunction::last_uses`.
+  The portable lowering consumes it: a `let`-bound or by-value local is moved, not copied, at its last use
+  (`src/codegen/portable/lower/mod.rs::own`). Measured by `tests/semantic_facts_portable_test.rs`
+  (ratchet `tests/golden/portable_copies.txt`); behavior checked by the backend conformance suite.
+* `width` for unconstrained integer literals exists (`src/ir/numeric_defaults.rs`, NUM-DEFAULT-INT) and the Rust
+  backend consumes it; the IR solver's integer default is `int` (i64).
+* Not yet: `param_mode`/`receiver_mode` from the solver (the portable layer still reads the analyzer registry until
+  convergence-plan C5), `mutated`, `escapes`, `lent_mut`, `consumed`, `needs_copy` per site (C6).
 
 ## Consequences
 * `src/codegen/portable/env.rs` stops reading parameter modes from the analyzer registry and reads the facts.

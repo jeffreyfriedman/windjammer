@@ -258,6 +258,7 @@ impl<'e> Lowerer<'e> {
         match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => {
                 let out = self.declare(name, ty.clone(), false);
+                self.set_fresh(name);
                 let m = mutable || matches!(pattern, Pattern::MutBinding(_));
                 if m {
                     self.set_mutable(name);
