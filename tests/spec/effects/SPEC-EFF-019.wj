@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-019
 // mode: check-error
-// xfail: Q-032
 // manifest: [capabilities]
 // manifest: effects = ["ledger.post"]
 // manifest: [policy]

@@ -2,9 +2,9 @@
 
 [ADR-0021](../adr/0021-effects-and-capabilities.md) (accepted 2026-10-12; implementation staged E1-E7) decides
 this chapter. **Stage E1 is implemented:** effect inference (SPEC-EFF-001..007), grants enforced in the interpreter
-(008..011), `wj check` findings (013..016, 020) and `wj explain-effects`. Rules marked [PLANNED] carry an `xfail`
+(008..011), `wj check` findings (013..016, 018..020) and `wj explain-effects`. Rules marked [PLANNED] carry an `xfail`
 example: the example states the intended behaviour, it is expected to fail today, and the run fails if it starts
-passing. They are the acceptance tests of the later stages (E2 `std::cap`, policy and per-package grants; E3 replay;
+passing. They are the acceptance tests of the later stages (E2 `std::cap` and per-package grants; E3 replay;
 E4 `durable fn`; E5 code mode). `--deterministic-time` and `--sched-seed` give a virtual clock, a seeded random
 generator and reproducible interleavings (SPEC-EFF-027, SPEC-EFF-028).
 
@@ -349,11 +349,10 @@ fs.read = ["./**"]
 ```
 `wj check` reports no error.
 
-**SPEC-EFF-018** [PLANNED ADR-0021] `[policy] forbid.<module> = [effects]` forbids a module's functions from performing those effects, directly or through callees (`WJ0043`).
+**SPEC-EFF-018** `[policy] forbid.<module> = [effects]` forbids a module's functions from performing those effects, directly or through callees (`WJ0043`).
 
 <!-- example: tests/spec/effects/SPEC-EFF-018.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::http
 mod data {
     pub fn latest() -> bool { http::get("http://api.example.com/").is_ok() }
@@ -373,13 +372,11 @@ net.connect = ["*"]
 forbid.ui = ["net"]
 ```
 `wj check` reports an error containing: `WJ0043: module `ui` may not perform `net.connect``
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-019** [PLANNED ADR-0021] `@effect("name")` declares a user-defined effect performed by calling that function. `[policy] "name" = { only_via = [modules] }` allows direct calls of its sinks only from the listed modules (`WJ0043`).
+**SPEC-EFF-019** `@effect("name")` declares a user-defined effect performed by calling that function. `[policy] "name" = { only_via = [modules] }` allows direct calls of its sinks only from the listed modules (`WJ0043`).
 
 <!-- example: tests/spec/effects/SPEC-EFF-019.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 mod ledger {
     @effect("ledger.post")
     pub fn post(amount: int) { println("posted ${amount}") }
@@ -403,7 +400,6 @@ effects = ["ledger.post"]
 "ledger.post" = { only_via = ["billing"] }
 ```
 `wj check` reports an error containing: `WJ0043: `ledger.post` may only be performed via `billing``
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 **SPEC-EFF-020** An `extern` function must declare its effects with `@uses(...)` or `@pure`; without a declaration it performs `ffi`, which is granted only by name (`ffi = ["lib"]`), and `wj check` reports `WJ0044` when it is not granted.
 
