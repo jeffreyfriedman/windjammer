@@ -13,7 +13,8 @@ pub fn execute(path: &Path, function: Option<&str>, json: bool) -> Result<()> {
     if files.is_empty() {
         bail!("no .wj files under {}", path.display());
     }
-    let base = if path.is_file() { path.parent().unwrap_or(path) } else { path };
+    let base = crate::check::effects::module_base(path);
+    let base = base.as_path();
     let mut programs: Vec<(Vec<String>, std::path::PathBuf, &'static crate::parser::ast::core::Program<'static>)> = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?;
@@ -21,7 +22,7 @@ pub fn execute(path: &Path, function: Option<&str>, json: bool) -> Result<()> {
         let tokens = lexer.tokenize_with_locations();
         let mut parser = crate::parser::Parser::new_with_source(tokens, f.display().to_string(), src.clone());
         let program = parser.parse().map_err(|e| anyhow::anyhow!("{}: {e}", f.display()))?;
-        programs.push((if path.is_file() { Vec::new() } else { resolve::module_path_from_file(base, f) }, f.clone(), Box::leak(Box::new(program))));
+        programs.push((if path.is_file() && base == path.parent().unwrap_or(path) { Vec::new() } else { resolve::module_path_from_file(base, f) }, f.clone(), Box::leak(Box::new(program))));
     }
     let inputs: Vec<ParsedFile<'_>> = programs.iter().map(|(m, f, p)| ParsedFile::new(m.clone(), f.clone(), p)).collect();
     let r = resolve::resolve_program(&inputs);

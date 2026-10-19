@@ -544,6 +544,10 @@ id = "wj run --sandbox"
 statement = "Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021)"
 
 [[promise]]
+id = "wj run --caps"
+statement = "Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate"
+
+[[promise]]
 id = "wj run --allow"
 statement = "Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`"
 

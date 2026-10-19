@@ -26,6 +26,22 @@ fn manifest_path(root: &Path) -> Option<PathBuf> {
     None
 }
 
+/// The directory module paths are relative to: `<project>/src` when the project has one, else the checked directory.
+pub fn module_base(root: &Path) -> PathBuf {
+    let dir = if root.is_file() { root.parent().unwrap_or(root) } else { root };
+    match manifest_path(dir) {
+        Some(m) => {
+            let src = m.parent().unwrap_or(dir).join("src");
+            if src.is_dir() && dir.starts_with(src.parent().unwrap_or(dir)) && (dir == src || dir.starts_with(&src) || dir == src.parent().unwrap_or(dir)) {
+                src
+            } else {
+                dir.to_path_buf()
+            }
+        }
+        None => dir.to_path_buf(),
+    }
+}
+
 pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
     let manifest = manifest_path(root);
     let text = manifest.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
@@ -44,7 +60,8 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
             None
         }
     };
-    let base = if root.is_file() { root.parent().unwrap_or(root) } else { root };
+    let base = module_base(root);
+    let base = base.as_path();
     let inputs: Vec<ParsedFile<'_>> = parsed
         .iter()
         .map(|p| {
