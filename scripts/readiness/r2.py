@@ -2,6 +2,7 @@
 (c) itself under hash seeds 0..3; generated seeded programs vs their independent python reference model."""
 import math, os, re
 from .core import run, sha, pct, file_hash
+from . import pilot
 
 HASH_SEEDS_FULL, HASH_SEEDS_QUICK = (0, 1, 2, 3), (0, 1)
 GEN_SEEDS_FULL = 300
@@ -130,7 +131,14 @@ def measure(ctx, corpora, templates):
         for k, p in enumerate(progs):
             check_program(ctx, p, hs, k < limit and not p.interp_only, res)
     check_generated(ctx, templates, hs, res)
-    return summarize(res, ctx.quick)
+    pm = pilot.measure(ctx)
+    for r in pm["rows"]:
+        res["checked"] += 1
+        if r["silent"]:
+            res["divergences"].append({"program": r["program"], "kind": "agent-pilot", "reason": f"interpreter-green, compiled fails: {r['rustc_error'][:100] or 'wrong output'}"})
+    out = summarize(res, ctx.quick)
+    out["detail"]["agent_pilot"] = pilot.summary(ctx)
+    return out
 
 
 def summarize(res, quick):
