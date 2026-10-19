@@ -557,7 +557,9 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
             let Some(ty) = ty else { continue };
             let user_type = self.known_struct_fields(&ty).is_some() || idx.variants.contains_key(&ty);
-            if !display || !user_type || idx.display.contains(&ty) || idx.opaque_impls.contains(&ty) {
+            // An inherent `to_string` makes `${x}` valid (codegen interpolates through it).
+            let has_to_string = idx.methods.get(&ty).is_some_and(|m| m.contains("to_string"));
+            if !display || !user_type || idx.display.contains(&ty) || idx.opaque_impls.contains(&ty) || has_to_string {
                 continue;
             }
             let mut d = Diagnostic::error("WJ0017", format!("`{ty}` cannot be formatted with `${{..}}`: it does not implement `Display`"));

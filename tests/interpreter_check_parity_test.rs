@@ -5,7 +5,8 @@
 //! interpreter ran `let x: int = "s"` and printed `s`.
 //!
 //! Programs: the labelled mutation operators of `common/check_diff_gen.rs` (each MUST be rejected by
-//! `wj check`), unmutated controls, and the interpreter corpus.
+//! `wj check`), unmutated controls, the interpreter corpus and the verified examples (valid programs: `wj check` must accept them, so a
+//! false positive in the checker cannot silently block the interpreter).
 
 #[path = "common/check_diff_gen.rs"]
 mod check_diff_gen;
@@ -66,23 +67,17 @@ fn judge(name: &str, o: &Outcome) -> Option<String> {
 }
 
 fn corpus() -> Vec<(String, String)> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/interpreter_corpus");
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
-        .unwrap()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "wj"))
-        .collect();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files: Vec<PathBuf> = Vec::new();
+    for dir in ["tests/interpreter_corpus", "examples/verified"] {
+        files.extend(std::fs::read_dir(root.join(dir)).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "wj")));
+    }
     files.sort();
     files
         .into_iter()
         .map(|p| {
-            (
-                format!("corpus/{}", p.file_name().unwrap().to_string_lossy()),
-                std::fs::read_to_string(&p)
-                    .unwrap()
-                    .replace("__SEED__", "1"),
-            )
+            let rel = p.strip_prefix(root).unwrap().display().to_string();
+            (rel, std::fs::read_to_string(&p).unwrap().replace("__SEED__", "1"))
         })
         .collect()
 }
