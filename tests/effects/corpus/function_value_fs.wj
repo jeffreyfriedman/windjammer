@@ -1,0 +1,4 @@
+use std::fs
+fn probe(p: string) -> bool { fs::exists(p) }
+fn run(f: fn(string) -> bool) -> bool { f(".") }
+fn main() { println("${run(probe)}") }

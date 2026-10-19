@@ -26,7 +26,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `resolved/`            `--engine=resolved` (ADR-0020): per-function closure compilation over `Interpreter::rstack` slots; `fast.rs` hot shapes; walker fallback
 - `sched.rs`, `locks.rs`, `native.rs`, `slicing.rs`  task scheduler (virtual clock), guard tokens + poisoning, host objects, panic texts `arena` (`std::arena`: Arena/Handle/Scratch with debug-build handle checks).
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
-- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists
+- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists; `caps.rs` = capability gate (ADR-0021): every sink builtin is checked against the run's grant (`ir::effect_facts`) before it runs, denial = exit 126, uncatchable
 
 ## Invariants
 - Values are immutable trees behind `Rc` with copy-on-write; `&mut` is a `Place` (slot + projections).

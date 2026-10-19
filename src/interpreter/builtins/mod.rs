@@ -246,6 +246,12 @@ impl Registry {
             }
         }
     }
+    /// Every registered function path, sorted (audits: `caps.rs` requires each authority-module builtin to be classified).
+    pub fn function_paths(&self) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = self.funcs.keys().copied().collect();
+        v.sort_unstable();
+        v
+    }
     pub fn has_function(&self, path: &str) -> bool {
         self.function(path).is_some()
     }

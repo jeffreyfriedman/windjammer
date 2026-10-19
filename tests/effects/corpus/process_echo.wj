@@ -1,0 +1,3 @@
+use std::process
+fn say(s: string) -> string { process::run_with_args("echo", [s]).unwrap_or("") }
+fn main() { println("${say("hi").trim()}") }

@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-014
 // mode: check-error
-// xfail: Q-032
 // manifest: [capabilities]
 // manifest: fs.read = ["./config/**"]
 // expect-error: main -> load -> fs::read_to_string

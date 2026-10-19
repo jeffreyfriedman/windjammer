@@ -13,6 +13,13 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
   and the oracle holds, then anonymizes identifiers, strings, comments and paths and re-checks the oracle on the
   output. Parallel (`--jobs`), cached, resumable, deterministic (`--seed`), never prints input source. See
   `src/reduce/MODULE.md`.
+- **Effects and capabilities, stage E1** (ADR-0021): the compiler infers what each function may do (`fs.read`, `fs.write`,
+  `net.connect`, `net.listen`, `env.read/write`, `process`, `time`, `random`, `console`, `ffi`, user `@effect`s) from one sink table;
+  `wj explain-effects` shows the effects, the call chain to each sink and how it is checked; `wj check` reports WJ0040-WJ0044
+  against `wj.toml [capabilities]` / `[policy]` and `@uses`/`@pure`; the interpreter enforces grants per host, path, variable
+  and program (`--sandbox`, `--allow EFFECT=RESOURCE`; exit status 126, not catchable). Without a `[capabilities]` table
+  `wj run` uses the local profile (project directory + time/random/console) in warn mode this release, enforced in the next
+  (`WJ_CAPS=enforce` previews it, `WJ_CAPS=off` disables the gate). Spec chapter `docs/spec/effects.md`.
 - **Expressiveness Phase 2** (ADR-0018): enumerable collection methods (`group_by`, `count_by`, `tally`, `sum_by`,
   `unique`, `chunk_by`, `each_slice`, `partition_by`, `intersperse`, `zip_with`, `index_of`, `sorted*`,
   `sort_by_key_desc`, `to_list`) on every backend; `_` shorthand closures (`xs.map(_ * 2)`); named arguments with

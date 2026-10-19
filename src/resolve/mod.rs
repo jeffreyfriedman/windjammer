@@ -14,7 +14,7 @@ pub use uses::{same_crate_callee_key, Binding, UseDecl};
 pub use def::{Def, DefId, DefKind, DefTable};
 pub use lookup::{Found, Ns};
 pub use res::{
-    CallKind, CallResolution, Diagnostic, DiagnosticKind, ExprKey, Reason, Res, ResolveReport,
+    CallKind, CallResolution, Diagnostic, DiagnosticKind, ExprKey, FnRef, Reason, Res, ResolveReport,
 };
 
 use crate::parser::ast::core::Program;
@@ -59,6 +59,8 @@ pub fn module_path_from_file(root: &Path, file: &Path) -> Vec<String> {
 pub struct ResolvedProgram<'a> {
     pub collected: Collected<'a>,
     pub calls: Vec<CallResolution>,
+    /// Functions named as values (see [`FnRef`]).
+    pub fn_refs: Vec<FnRef>,
     pub report: ResolveReport,
 }
 
@@ -82,11 +84,12 @@ pub fn resolve_program<'a>(files: &[ParsedFile<'a>]) -> ResolvedProgram<'a> {
     let mut collected = collect::collect(files);
     collected.link_impls();
     check_imports(&mut collected);
-    let calls = walk::resolve_bodies(&collected);
+    let (calls, fn_refs) = walk::resolve_bodies(&collected);
     let report = ResolveReport::from_calls(&calls, std::mem::take(&mut collected.diagnostics));
     ResolvedProgram {
         collected,
         calls,
+        fn_refs,
         report,
     }
 }

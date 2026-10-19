@@ -1,0 +1,9 @@
+use std::time
+struct Clock { offset: int }
+impl Clock {
+    fn now(self) -> int { time::now().timestamp() + self.offset }
+}
+fn main() {
+    let c = Clock { offset: 0 }
+    println("${c.now() > 0}")
+}
