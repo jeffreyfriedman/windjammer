@@ -181,3 +181,48 @@ files = { "m.wj" = "fn main() {\n}\n" }
 args = ["run", "--interpret", "--sched-seed", "abc", "{w}/m.wj"]
 exit = 2
 output_has = ["invalid value 'abc'"]
+
+[[case]]
+name = "run --engine resolved executes a file"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--engine", "resolved", "{w}/m.wj"]
+stdout_has = ["hello"]
+
+[[case]]
+name = "run --engine rejects an unknown engine"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--engine", "bogus", "{w}/m.wj"]
+exit = 1
+output_has = ["unknown --engine", "walker or resolved"]
+
+[[case]]
+name = "run --hash-seed runs the program with a perturbed hash order"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--hash-seed", "7", "{w}/m.wj"]
+stdout_has = ["hello"]
+
+[[case]]
+name = "run --hash-seed rejects a non-numeric seed"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--hash-seed", "abc", "{w}/m.wj"]
+exit = 2
+output_has = ["invalid value 'abc' for '--hash-seed <N>'"]
+
+[[case]]
+name = "run --bin selects a named binary of the project"
+polarity = "positive"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "src/main.wj" = "fn main() {\n    println(\"main\")\n}\n", "cmd/tool/main.wj" = "fn main() {\n    println(\"tool\")\n}\n" }
+args = ["run", "--interpret", "--bin", "tool", "{w}"]
+stdout_has = ["tool"]
+
+[[case]]
+name = "run --bin of an unknown name lists the available binaries"
+polarity = "negative"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "src/main.wj" = "fn main() {\n    println(\"main\")\n}\n" }
+args = ["run", "--interpret", "--bin", "nope", "{w}"]
+exit = 1
+output_has = ["no binary named `nope`"]

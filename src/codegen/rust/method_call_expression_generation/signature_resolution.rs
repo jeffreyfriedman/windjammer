@@ -294,11 +294,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let local_sig = self
             .signature_registry
-            .find_signature_by_name_and_arg_count(method, arguments.len())
+            .find_own_signature_by_name_and_arg_count(method, arguments.len())
             .cloned();
         let global_sig = self
             .global_signature_registry()
-            .and_then(|g| g.find_signature_by_name_and_arg_count(method, arguments.len()))
+            .and_then(|g| g.find_own_signature_by_name_and_arg_count(method, arguments.len()))
             .cloned();
         match (local_sig, global_sig) {
             (Some(l), Some(g)) => {

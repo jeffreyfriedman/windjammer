@@ -145,6 +145,17 @@ impl Scratch {
             s.write(f, if f.ends_with(".json") { "{\"tools\": []}\n" } else { "# Stub\n" });
         }
         let ctx = s.ctx();
+        // The generated CLI/error references cite ADRs by id (clap help text); the scratch repo carries a stub
+        // for every id they cite so its own link check has something to resolve against.
+        for gen in ["cli", "errors"] {
+            let text = genfiles::render_file(&ctx, gen).unwrap();
+            for (i, _) in text.match_indices("ADR-") {
+                let id: String = text[i + 4..].chars().take_while(char::is_ascii_digit).collect();
+                if id.len() == 4 && !s.dir.path().join("docs/adr").read_dir().is_ok_and(|mut d| d.any(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with(&id)))) {
+                    s.write(&format!("docs/adr/{id}-stub.md"), &format!("# ADR-{id}: Stub\n\n- **Status:** Accepted (2026-01-01)\n"));
+                }
+            }
+        }
         genfiles::write_all(&ctx).unwrap();
         s
     }
