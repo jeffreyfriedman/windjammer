@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-034
+// mode: panic
+// manifest: [capabilities]
+// manifest: net.connect = ["api.example.com", "other.example"]
+// expect-exit: 126
+// expect-error: capability denied: net.connect(other.example)
+use std::cap
+fn main() {
+    let api = cap::net().only(["api.example.com"])
+    let wider = api.only(["other.example"])
+    println("not reached")
+}

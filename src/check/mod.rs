@@ -2,6 +2,7 @@
 //! See `MODULE.md` and `docs/DIAGNOSTICS.md`.
 
 mod cache;
+mod dep_sources;
 pub mod effects;
 pub mod files;
 mod fix;
@@ -44,7 +45,17 @@ pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     for p in &paths {
         sources.push((p.display().to_string(), std::fs::read_to_string(p)?));
     }
-    let fp = cache::fingerprint(&sources);
+    // inputs that change what the effect pass reports: the manifest, the lock file and dependency sources
+    let mut keyed = sources.clone();
+    if let Some(manifest) = effects::manifest_path(path) {
+        let dir = manifest.parent().unwrap_or(path).to_path_buf();
+        for extra in [manifest.clone(), dir.join(crate::ir::effect_facts::lock::LOCK_FILE)].into_iter().chain(dep_sources::input_paths(&dir)) {
+            if let Ok(t) = std::fs::read_to_string(&extra) {
+                keyed.push((extra.display().to_string(), t));
+            }
+        }
+    }
+    let fp = cache::fingerprint(&keyed);
     let cached = if opts.use_cache { cache::load(path, fp) } else { None };
     let was_cached = cached.is_some();
     let diagnostics = match cached {

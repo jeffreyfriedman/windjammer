@@ -190,6 +190,12 @@ path = "tests/spec_conformance_test.rs"
 name = "effects_escape"
 path = "tests/effects_escape_test.rs"
 
+# Per-package grants and the lock file (ADR-0021 E2), through the wj binary
+#   cargo test --release --test effects_packages
+[[test]]
+name = "effects_packages"
+path = "tests/effects_packages_test.rs"
+
 # Effects soundness over the spec corpus: every effect performed at run time is in the inferred static set
 #   cargo test --release --test effects_soundness
 [[test]]

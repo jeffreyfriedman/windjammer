@@ -351,6 +351,7 @@ fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind,
             let res = match u.res {
                 SinkRes::None => Resource::None,
                 SinkRes::Fixed(s) => Resource::Lit(s.to_string()),
+                SinkRes::Scope => Resource::Computed,
                 SinkRes::Arg(n) => match c.str_args.get(n) {
                     Some(Some(s)) => Resource::Lit(s.clone()),
                     _ => Resource::Computed,

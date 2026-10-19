@@ -253,14 +253,13 @@ pub fn run(cli: Cli) -> Result<()> {
         }
         Commands::ExplainOwnership { file, function, json } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
         Commands::ExplainEffects { path, function, json } => windjammer::cli::explain_effects::execute(&path, function.as_deref(), json)?,
+        Commands::Caps { action, path, json } => windjammer::cli::caps::execute(&action, path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), json)?,
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;
         }
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
-        Commands::Errors { path, code, severity } => {
-            windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?
-        }
+        Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;

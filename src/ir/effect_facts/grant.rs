@@ -89,6 +89,20 @@ impl Grant {
         }
     }
 
+    /// Grant exactly what a lock-file reference names: `kind` (no resource), `kind(resource)`, `kind(*)` (any resource).
+    pub fn allow_ref(&mut self, r: &str) {
+        let (name, res) = match r.split_once('(') {
+            Some((n, rest)) => (n, Some(rest.trim_end_matches(')'))),
+            None => (r, None),
+        };
+        let kind = EffectKind::parse_builtin(name).unwrap_or_else(|| EffectKind::User(name.to_string()));
+        match res {
+            Some("*") => self.allow_all(kind),
+            Some(lit) => self.allow(kind, lit),
+            None => self.allow_all(kind),
+        }
+    }
+
     pub fn allow_all(&mut self, kind: EffectKind) {
         self.allow.insert(kind, Scope::Any);
     }
@@ -99,6 +113,65 @@ impl Grant {
 
     pub fn scope(&self, kind: &EffectKind) -> Option<&Scope> {
         self.allow.get(kind)
+    }
+
+    /// A capability value's grant (`std::cap`): only `kind`, restricted to `patterns`, each of which this grant already
+    /// covers. `patterns` empty = the whole of this grant's scope for `kind` (`cap::net()`); anything this grant does
+    /// not cover is refused, so narrowing can never widen.
+    pub fn derive_scope(&self, kind: &EffectKind, patterns: Option<&[String]>) -> Result<Grant, Denial> {
+        let mut out = Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: self.root.clone(), prefix_cache: Default::default() };
+        let Some(scope) = self.allow.get(kind) else {
+            return match self.check(kind, None) {
+                Err(d) => Err(d),
+                Ok(()) => Ok(out), // a default-granted effect (time, random, console): unscoped
+            };
+        };
+        match (patterns, scope) {
+            (None, s) => {
+                out.allow.insert(kind.clone(), s.clone());
+            }
+            (Some(ps), scope) => {
+                out.allow.insert(kind.clone(), Scope::Only(Vec::new()));
+                for p in ps {
+                    if !self.covers_pattern(kind, scope, p) {
+                        return Err(self.denial(kind, Some(p), true, format!("{kind} = [{}]", match scope {
+                            Scope::Any => "*".to_string(),
+                            Scope::Only(v) => v.join(", "),
+                        })));
+                    }
+                    out.allow(kind.clone(), p);
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Forget everything this grant says about `kind` (a read-only value drops `fs.write`).
+    pub fn drop_scope(&mut self, kind: &EffectKind) {
+        self.allow.remove(kind);
+    }
+
+    /// Add the scopes of `other` (used to assemble a value that carries both `fs.read` and `fs.write`).
+    pub fn absorb(&mut self, other: Grant) {
+        for (k, s) in other.allow {
+            self.allow.entry(k).or_insert(s);
+        }
+    }
+
+    fn covers_pattern(&self, kind: &EffectKind, scope: &Scope, pattern: &str) -> bool {
+        let pats = match scope {
+            Scope::Any => return true,
+            Scope::Only(p) => p,
+        };
+        if pats.iter().any(|q| q == pattern) {
+            return true;
+        }
+        match pattern.strip_suffix("/**") {
+            // a directory subtree: its root must be inside the grant
+            Some(dir) if matches!(kind, EffectKind::FsRead | EffectKind::FsWrite) => self.check(kind, Some(dir)).is_ok(),
+            _ if pattern.contains('*') => false,
+            _ => self.check(kind, Some(pattern)).is_ok(),
+        }
     }
 
     /// `--allow net.connect=api.example.com` (repeatable); `effects=ledger.post` grants a user effect.
@@ -394,6 +467,20 @@ mod tests {
         g.allow_flag("net.connect=*.github.com").unwrap();
         assert!(g.check(&EffectKind::NetConnect, Some("https://api.github.com/")).is_ok());
         assert!(g.allow_flag("net.conect=x").is_err());
+    }
+
+    #[test]
+    fn narrowing_never_widens() {
+        let g = g("net.connect = [\"api.example.com\", \"*.github.com\"]\nfs.read = [\"./data/**\"]");
+        let n = g.derive_scope(&EffectKind::NetConnect, Some(&["api.example.com".to_string()])).unwrap();
+        assert!(n.check(&EffectKind::NetConnect, Some("http://api.example.com/")).is_ok());
+        assert!(n.check(&EffectKind::NetConnect, Some("http://x.github.com/")).is_err(), "narrowed away");
+        assert!(g.derive_scope(&EffectKind::NetConnect, Some(&["evil.example".to_string()])).is_err(), "not covered by the parent");
+        assert!(g.derive_scope(&EffectKind::NetConnect, Some(&["*".to_string()])).is_err(), "cannot widen to everything");
+        assert!(g.derive_scope(&EffectKind::NetConnect, Some(&["*.github.com".to_string()])).is_ok(), "an existing pattern is fine");
+        assert!(g.derive_scope(&EffectKind::FsRead, Some(&["./data/sub/**".to_string()])).is_ok(), "a sub-tree");
+        assert!(g.derive_scope(&EffectKind::FsRead, Some(&["./**".to_string()])).is_err(), "the parent of the grant");
+        assert!(g.derive_scope(&EffectKind::Process, None).is_err(), "an effect that is not granted cannot be minted");
     }
 
     #[test]

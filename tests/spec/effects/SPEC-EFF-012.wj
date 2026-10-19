@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-012
 // mode: panic
-// xfail: Q-032
 // manifest: [capabilities]
 // manifest: net.connect = ["*"]
 // expect-exit: 126
