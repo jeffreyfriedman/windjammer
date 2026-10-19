@@ -1,0 +1,6 @@
+use std::fs
+fn there(p: string) -> bool { fs::exists(p) }
+fn main() {
+    let check = |p: string| there(p)
+    println("${check(".")}")
+}

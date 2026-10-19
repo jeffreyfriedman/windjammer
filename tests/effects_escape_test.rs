@@ -177,7 +177,7 @@ fn cases() -> Vec<Case> {
         // ---- confinement survives indirection
         esc("indirect/inside-closure", FS, "use std::fs", "let f = || fs::read_to_string(\"$ROOT/secret.txt\")\n    let r = f()\n    println(\"DONE\")", "fs.read"),
         esc("indirect/inside-spawned-task", FS, "use std::fs", "let t = spawn fs::read_to_string(\"$ROOT/secret.txt\")\n    let r = t.wait()\n    println(\"DONE\")", "fs.read"),
-        esc("indirect/inside-callback-argument", FS, "use std::fs", "let items = [1]\n    let r = items.map(|x| fs::read_to_string(\"$ROOT/secret.txt\"))\n    println(\"DONE ${r.len()}\")", "fs.read"),
+        esc("indirect/inside-callback-argument", FS, "use std::fs", "let items = [1]\n    let r = items.iter().map(|x| fs::read_to_string(\"$ROOT/secret.txt\")).collect::<Vec<_>>()\n    println(\"DONE ${r.len()}\")", "fs.read"),
         esc("indirect/denial-is-not-catchable", FS, "use std::fs", "match fs::read_to_string(\"$ROOT/secret.txt\") {\n        Ok(_) => println(\"DONE\"),\n        Err(_) => println(\"DONE survived\"),\n    }", "fs.read"),
     ];
     // every effect from an empty grant: nothing but time/random/console works
