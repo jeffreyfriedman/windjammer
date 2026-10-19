@@ -244,10 +244,10 @@ fn pattern_names(p: &Pattern<'_>, out: &mut Vec<String>) {
 }
 
 /// Identifier reads in `body` that are the last use of their binding, by [`node_id`].
-/// `params` are bindings declared at function entry (outside every loop).
-pub fn last_uses(params: &[&str], body: &[&Statement<'_>]) -> BTreeSet<usize> {
+/// `entry` are the bindings declared at function entry (outside every loop).
+pub fn last_uses(entry: &[&str], body: &[&Statement<'_>]) -> BTreeSet<usize> {
     let mut c = Collector::default();
-    for p in params {
+    for p in entry {
         c.declared_in.insert(p.to_string(), 0);
     }
     c.stmts(body);

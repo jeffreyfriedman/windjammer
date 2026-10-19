@@ -33,7 +33,7 @@ fn test() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") && output.contains("2.0_f64") && output.contains("3.0_f32"),
+        output.contains("1.0_f32") && output.contains("2.0_f32") && output.contains("3.0_f32"),
         "Vec<f32> = vec![1.0, 2.0, 3.0] should generate _f32, got:\n{}",
         output
     );
@@ -54,7 +54,7 @@ fn test() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") && output.contains("2.0_f64") && output.contains("3.0_f32"),
+        output.contains("1.0_f32") && output.contains("2.0_f32") && output.contains("3.0_f32"),
         "[f32; 3] = [1.0, 2.0, 3.0] should generate _f32, got:\n{}",
         output
     );

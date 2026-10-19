@@ -6,7 +6,7 @@ last_verified: 3406ef05bb35
 
 - **Status:** Accepted (2026-10-10)
 - **Date:** 2026-10-10
-- **Related:** [OPTIMIZATION_ARCHITECTURE.md](../OPTIMIZATION_ARCHITECTURE.md), [WJ-PERF-01](../proposals/rfcs/WJ-PERF-01-economic-efficiency.md), `src/compiler_database.rs`, `src/optimizer/`, `src/ir/cost_model.rs`
+- **Related:** [OPTIMIZATION_ARCHITECTURE.md](../OPTIMIZATION_ARCHITECTURE.md), [WJ-PERF-01](../proposals/rfcs/WJ-PERF-01-economic-efficiency.md), `src/compiler_database.rs`, `src/optimizer/`, the former `cost_model` module (deleted in convergence C4)
 
 ## Context
 `src/compiler_database.rs` (`optimize_program`) states the optimizer is "INTENTIONALLY DISABLED": `src/optimizer/` has

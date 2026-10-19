@@ -1,0 +1,7 @@
+error[WJ0023]: `@derive(Copy)` on struct `P` is a forbidden pattern
+  --> forbidden_derive_copy.wj:2:1
+  |
+2 | @derive(Copy)
+  | ^^^^^^^ remove this
+  = help: the compiler derives this automatically; delete the decorator argument
+  = explain: wj explain WJ0023

@@ -1,8 +1,8 @@
 # Ownership: a by-value store passed through adapter functions is inferred `&mut`
 
 A `Store` whose methods take `self` by value and return a new store (`add(self, ..) -> Result<(Store, int), string>`,
-`merge_from(self, ..) -> (Store, int)`), consumed by `fn apply(store: Store, ..)` in `src/adapters/run.wj` and
-forwarded by `pub fn run_args(store: Store, ..)`, with `Store` defined in `src/domain/store.wj`.
+`merge_from(self, ..) -> (Store, int)`), consumed by `fn apply(store: Store, ..)` in src/adapters/run.wj and
+forwarded by `pub fn run_args(store: Store, ..)`, with `Store` defined in src/domain/store.wj.
 
 `wj build src` emits `apply(store: &mut Store, ..)` and `run_args(store: &mut Store, ..)` (single-file and flat
 two-file forms stay owned; the cross-module form does not), and callers pass `&Store`

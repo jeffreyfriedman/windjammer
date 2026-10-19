@@ -125,7 +125,10 @@ struct Scratch {
 impl Scratch {
     fn new() -> Scratch {
         let s = Scratch { dir: tempfile::tempdir().unwrap() };
-        s.write("docs/docs-truth.toml", "[freshness]\ntracked = [\"docs/design/*.md\"]\n");
+        s.write(
+            "docs/docs-truth.toml",
+            "[freshness]\ntracked = [\"docs/design/*.md\"]\n\n[[exclude]]\ncheck = \"links\"\nglob = \"docs/reference/**\"\nreason = \"generated from the real CLI definition, whose help text cites the repository's ADRs; the scratch repo has none of them\"\n",
+        );
         s.write("docs/adr/0001-first.md", "# ADR-0001: First\n\n- **Status:** Accepted (2026-01-01)\n");
         s.write("tests/conformance_programs/SUPPORT.toml", "[[unsupported]]\nprogram = \"01_a\"\nbackend = \"go\"\nreason = \"x: y\"\n");
         s.write("tests/conformance_programs/01_a.wj", "fn main() {}\n");

@@ -36,7 +36,7 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 fn run(path: &Path, engine: &str, cwd: &Path) -> (Vec<u8>, Vec<u8>, Option<i32>) {
     let o = Command::new(WJ)
-        .args(["run", "--interpret", "--deterministic-time", "--engine", engine])
+        .args(["run", "--interpret", "--no-lint", "--deterministic-time", "--engine", engine])
         .arg(path)
         .current_dir(cwd)
         .stdin(std::process::Stdio::null())

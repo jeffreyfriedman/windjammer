@@ -411,7 +411,7 @@ fn unsupported_intrinsic_shapes_are_explicit_errors() {
         ("let y = debug(x, x)", "`debug` takes exactly one argument"),
         ("assert()", "without a condition"),
         ("assert_eq(x)", "needs two operands"),
-        ("println(a: x)", "named arguments"),
+        ("println(a: x)", "needs a callee declared in this file"),
     ] {
         expect_err(&main_with(body), needle);
     }

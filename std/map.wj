@@ -5,6 +5,7 @@
 
 use std::collections::HashMap as RustHashMap
 use std::collections::BTreeMap as RustBTreeMap
+use std::collections::BTreeSet as RustBTreeSet
 
 // Map<K, V> — general-purpose hash map (Rust: HashMap)
 pub struct Map<K, V> {
@@ -69,6 +70,41 @@ impl<K, V> OrderedMap<K, V> {
 
     pub fn contains_key(self, key: K) -> bool {
         self.inner.contains_key(key)
+    }
+
+    pub fn len(self) -> int {
+        self.inner.len() as i64
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn clear(self) {
+        self.inner.clear()
+    }
+}
+
+// OrderedSet<T> — insertion-ordered set (Rust: BTreeSet)
+pub struct OrderedSet<T> {
+    inner: RustBTreeSet<T>,
+}
+
+impl<T> OrderedSet<T> {
+    pub fn new() -> OrderedSet<T> {
+        OrderedSet { inner: RustBTreeSet::new() }
+    }
+
+    pub fn insert(self, value: T) -> bool {
+        self.inner.insert(value)
+    }
+
+    pub fn remove(self, value: T) -> bool {
+        self.inner.remove(value)
+    }
+
+    pub fn contains(self, value: T) -> bool {
+        self.inner.contains(value)
     }
 
     pub fn len(self) -> int {
