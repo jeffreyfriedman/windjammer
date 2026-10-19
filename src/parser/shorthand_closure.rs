@@ -15,8 +15,10 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 /// Parameter name of the `i`-th `_` of a shorthand closure.
+pub(crate) const HOLE_PREFIX: &str = "_it";
+
 pub(crate) fn hole_name(i: usize) -> String {
-    format!("_it{i}")
+    format!("{HOLE_PREFIX}{i}")
 }
 
 #[derive(Debug, Default)]
@@ -91,6 +93,7 @@ impl Parser {
                 "`_` alone is not a function: write the function name or a closure such as `|x| x` (shorthand needs an expression around `_`, e.g. `_ * 2`)",
             ));
         }
+        self.saw_label = true; // build the callee table so misplaced shorthand can be diagnosed (named_args.rs)
         let parameters = (0..frame.holes.len()).map(hole_name).collect();
         Ok(self.alloc_expr(Expression::Closure {
             parameters,

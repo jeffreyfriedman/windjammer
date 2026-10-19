@@ -282,6 +282,7 @@ impl Parser {
                     })
                 }
                 Token::QuestionQuestion if self.double_try_follows() => self.double_try(expr),
+                Token::Question if self.at_optional_chain() => self.parse_optional_chain(expr)?,
                 Token::Question => {
                     // TryOp: expr?
                     // No ambiguity since we removed ternary operator

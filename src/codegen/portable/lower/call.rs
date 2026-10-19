@@ -244,6 +244,9 @@ impl<'e> Lowerer<'e> {
         let recv = self.expr(object, None)?;
         let rty = self.resolve_for_dispatch(&recv.ty);
         let recv = PExpr { ty: rty, ..recv };
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.optional_chain(recv, args);
+        }
         let owner_ty = match &recv.ty {
             Ty::Adt(n, a) => Some((n.clone(), a.clone())),
             _ => None,
