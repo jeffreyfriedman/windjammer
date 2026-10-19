@@ -53,14 +53,14 @@ impl Interpreter {
         let sem = |m: String| RuntimeError::new(ErrorKind::Semantic, m);
         if is_item_start(src) {
             let prog = parse_source(src, "<repl>").map_err(|e| sem(format!("parse error: {}", e)))?;
-            let prog: &'static crate::parser::Program<'static> = Box::leak(Box::new(prog));
+            let prog = self.retain_program(prog);
             self.register_items(0, &prog.items)?;
             self.finish_registration()?;
             return Ok(None);
         }
         let wrapped = format!("fn __repl__() {{\n{}\n}}", src);
         let prog = parse_source(&wrapped, "<repl>").map_err(|e| sem(format!("parse error: {}", e)))?;
-        let prog: &'static crate::parser::Program<'static> = Box::leak(Box::new(prog));
+        let prog = self.retain_program(prog);
         let Some(Item::Function { decl, .. }) = prog.items.first() else {
             return Err(sem("could not parse input".into()));
         };

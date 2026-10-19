@@ -20,6 +20,8 @@ pub enum Mutant {
     AppendIgnoresSelfReference,
     /// dead_helpers: remove `to_bytes` even when referenced.
     HelpersIgnoreReferences,
+    /// scratch_reuse: accept loops that move the buffer.
+    ScratchIgnoresMoves,
     /// dead_helpers: remove repr(C) from structs in files using `unsafe`.
     ReprIgnoresUnsafe,
 }

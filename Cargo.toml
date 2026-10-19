@@ -76,6 +76,8 @@ default = ["cli", "safety_typed_ir"]
 cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
+# std::arena (ADR-0016): arena types, escape check, interpreter support. Unstable surface.
+unstable_arenas = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
 # ownership/effect/taint as first-class types, and multi-target safety encodings.
 safety_typed_ir = []
@@ -206,6 +208,37 @@ path = "tests/interpreter_projects_test.rs"
 [[test]]
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
+
+[[test]]
+name = "optimizer_scratch_reuse"
+path = "tests/optimizer_scratch_reuse_test.rs"
+
+[[test]]
+name = "arena_capability"
+path = "tests/arena_capability_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
+name = "arena_rust_backend"
+path = "tests/arena_rust_backend_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
+name = "interpreter_program_lifetime"
+path = "tests/interpreter_program_lifetime_test.rs"
+
+[[test]]
+name = "arena_backends"
+path = "tests/arena_backends_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
+name = "parser_arena_memory"
+path = "tests/parser_arena_memory_test.rs"
+
+[[bench]]
+name = "parser_throughput"
+harness = false
 
 # Codegen correctness gates (compiled Rust vs interpreter): also standalone for fast iteration.
 [[test]]
