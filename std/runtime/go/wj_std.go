@@ -256,6 +256,18 @@ func wjCapDisplay(root, res string) string {
 
 // wjCapDecide returns "" when the use is allowed, otherwise the denial text.
 func wjCapDecide(g wjCapSpec, kind string, resource *string) string {
+	// standard devices are the console / the entropy source, not files
+	if (kind == "fs.read" || kind == "fs.write") && resource != nil {
+		reading := kind == "fs.read"
+		switch {
+		case *resource == "/dev/null":
+			return ""
+		case *resource == "/dev/stdin" && reading, (*resource == "/dev/stdout" || *resource == "/dev/stderr") && !reading:
+			return wjCapDecide(g, "console", nil)
+		case (*resource == "/dev/urandom" || *resource == "/dev/random") && reading:
+			return wjCapDecide(g, "random", nil)
+		}
+	}
 	deny := func(scopeText string) string {
 		subject, entry := kind, kind+" = true"
 		if resource != nil {

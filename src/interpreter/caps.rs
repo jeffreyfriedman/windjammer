@@ -20,10 +20,10 @@ pub enum CapMode {
     Warn,
 }
 
-/// What the local profile does when no grant is given (ADR-0021 D1, owner decision 2026-10-19): warn through
-/// the 0.50 line, enforce from 0.51.0. `gate_for_run` reads only this constant; the test below fails the
-/// release that bumps the version without flipping it.
-pub const LOCAL_PROFILE_MODE: CapMode = CapMode::Warn;
+/// What the local profile does when no grant is given (ADR-0021 D1). The owner decided on 2026-10-19 to enforce it
+/// from this release on (it was staged as warn-then-enforce at 0.51.0). `gate_for_run` reads only this constant;
+/// `--caps warn|off` / `WJ_CAPS=warn|off` remain explicit opt-outs.
+pub const LOCAL_PROFILE_MODE: CapMode = CapMode::Enforce;
 
 pub struct CapGate {
     /// The application's grant.
@@ -40,13 +40,22 @@ pub struct CapGate {
     console_seen: bool,
     /// Nonzero while a capability value performs an operation it already validated (`std::cap`).
     pub(crate) bypass: u32,
+    /// No `[capabilities]`, `--sandbox` or `--allow`: the project-directory default is in force (messages explain it).
+    local_profile: bool,
 }
 
 impl CapGate {
+    /// The local profile (files inside `root`, plus time/random/console), enforced, as `wj run` uses with no `[capabilities]`.
+    pub fn local(root: &Path) -> CapGate {
+        let mut g = CapGate::new(Grant::local_profile(root), LOCAL_PROFILE_MODE);
+        g.local_profile = true;
+        g
+    }
+
     pub fn new(grant: Grant, mode: CapMode) -> CapGate {
         let console_open = grant.check(&EffectKind::Console, None).is_ok()
             && grant.scope(&EffectKind::Console).is_none_or(|s| matches!(s, crate::ir::effect_facts::Scope::Any));
-        CapGate { grant, deps: BTreeMap::new(), default_dep: None, mode, warned: HashSet::new(), seen: BTreeSet::new(), console_open, console_seen: false, bypass: 0 }
+        CapGate { grant, deps: BTreeMap::new(), default_dep: None, mode, warned: HashSet::new(), seen: BTreeSet::new(), console_open, console_seen: false, bypass: 0, local_profile: false }
     }
 
     /// Per-package grants: each dependency's code is checked against its own grant (lexical attribution).
@@ -103,6 +112,7 @@ pub fn gate_for_run(entry: &Path, sandbox: bool, allow: &[String], allow_network
         None => None,
     };
     let explicit = sandbox || packages.is_some() || !allow.is_empty() || allow_network;
+    let local_profile = packages.is_none() && !sandbox;
     let mut grants = packages.unwrap_or_else(|| PackageGrants {
         app: Some(if sandbox { Grant::sandbox(&root) } else { Grant::local_profile(&root) }),
         deps: BTreeMap::new(),
@@ -115,6 +125,7 @@ pub fn gate_for_run(entry: &Path, sandbox: bool, allow: &[String], allow_network
         }
         if allow_network {
             app.allow_flag("net.connect=*")?;
+            app.allow_flag("net.listen=*")?;
         }
     }
     // an explicit grant is always enforced; the local profile follows the flag, then the release default
@@ -124,7 +135,11 @@ pub fn gate_for_run(entry: &Path, sandbox: bool, allow: &[String], allow_network
         "warn" => CapMode::Warn,
         _ => LOCAL_PROFILE_MODE,
     };
-    Ok(CapGate::with_packages(grants, mode))
+    let local_profile = local_profile && allow.is_empty() && !allow_network;
+    Ok(CapGate::with_packages(grants, mode).map(|mut g| {
+        g.local_profile = local_profile;
+        g
+    }))
 }
 
 impl Interpreter {
@@ -144,8 +159,8 @@ impl Interpreter {
 
     /// True when the grant lets the program talk to the network (the http port must then be live).
     pub fn caps_grant_network(&self) -> bool {
-        let net = EffectKind::NetConnect;
-        self.caps.as_ref().is_some_and(|g| g.grant.scope(&net).is_some() || g.deps.values().any(|d| d.scope(&net).is_some()))
+        let has = |g: &Grant| g.scope(&EffectKind::NetConnect).is_some() || g.scope(&EffectKind::NetListen).is_some();
+        self.caps.as_ref().is_some_and(|g| has(&g.grant) || g.deps.values().any(has))
     }
 
     /// The dependency crate whose code is running, if any: the child of the root module that contains the
@@ -236,6 +251,8 @@ impl Interpreter {
             return Ok(());
         }
         let package = self.cap_package();
+        // a mocked http port (--mock-http) never touches the network, so it needs no network capability
+        let mocked_net = matches!(effect, EffectKind::NetConnect | EffectKind::NetListen) && matches!(self.http, super::builtins::std_http::HttpMode::Mock(_));
         let Some(gate) = self.caps.as_mut() else { return Ok(()) };
         if !gate.seen.contains(effect) {
             gate.seen.insert(effect.clone());
@@ -243,9 +260,21 @@ impl Interpreter {
         if gate.bypass > 0 {
             return Ok(());
         }
+        if mocked_net {
+            return Ok(());
+        }
         if let Err(d) = gate.grant_for(package.as_deref()).check(effect, resource) {
             let who = package.as_deref().map(|p| format!(" (dependency `{p}`)")).unwrap_or_default();
-            let text = format!("capability denied: {}{who}\n  = grant in force: {}\n  = to allow: {}", d.subject(), d.grant, d.fix);
+            let text = if gate.local_profile {
+                format!(
+                    "capability denied: {}{who}\n  = why: this project has no [capabilities] in wj.toml, so `wj run` allows files inside the project directory (plus time, random and console) and nothing else\n  = to allow just this once: run with `--allow {}`\n  = to allow it for good, put this in wj.toml:\n        [capabilities]\n        fs.read = [\"./**\"]\n        fs.write = [\"./**\"]\n        {}\n  = to keep the old behaviour while you migrate: WJ_CAPS=warn (or WJ_CAPS=off)",
+                    d.subject(),
+                    d.flag(),
+                    d.entry()
+                )
+            } else {
+                format!("capability denied: {}{who}\n  = grant in force: {}\n  = to allow: {}", d.subject(), d.grant, d.fix)
+            };
             match gate.mode {
                 CapMode::Enforce => return Err(RuntimeError::new(ErrorKind::CapabilityDenied, text).into()),
                 CapMode::Warn => {
@@ -300,14 +329,19 @@ mod tests {
         assert!(stale.is_empty(), "sink rows with no interpreter builtin (renamed or removed?): {stale:?}");
     }
 
-    /// The release that reaches 0.51.0 must enforce the local profile (owner decision D1).
+    /// Owner decision (2026-10-19): the local profile is enforced by default; warn and off are explicit opt-outs.
     #[test]
-    fn local_profile_is_enforced_from_0_51() {
-        let v: Vec<u32> = env!("CARGO_PKG_VERSION").split(['.', '-']).take(2).filter_map(|p| p.parse().ok()).collect();
-        let past = v.first().is_some_and(|major| *major > 0) || v.get(1).is_some_and(|minor| *minor >= 51);
-        if past {
-            assert_eq!(LOCAL_PROFILE_MODE, CapMode::Enforce, "version {} must enforce the local profile", env!("CARGO_PKG_VERSION"));
-        }
+    fn local_profile_is_enforced_by_default() {
+        assert_eq!(LOCAL_PROFILE_MODE, CapMode::Enforce);
+        let dir = std::env::temp_dir().join(format!("wj_caps_default_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("m.wj");
+        std::fs::write(&entry, "fn main() {}\n").unwrap();
+        let default = gate_for_run(&entry, false, &[], false, "").unwrap().expect("a gate by default");
+        assert_eq!(default.mode, CapMode::Enforce);
+        assert_eq!(gate_for_run(&entry, false, &[], false, "warn").unwrap().unwrap().mode, CapMode::Warn);
+        assert!(gate_for_run(&entry, false, &[], false, "off").unwrap().is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn gate(manifest: &str) -> CapGate {

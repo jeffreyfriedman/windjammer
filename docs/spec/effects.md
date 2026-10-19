@@ -479,6 +479,38 @@ Then the run stops with exit status 126 and a message containing `capability den
 
 **SPEC-EFF-038** Run-time guards: when some call cannot be proven (a computed path, host or name, or a capability value minted from a scoped grant), the generated program installs its grant as the first statement of `main` (`windjammer_runtime::caps::install` on Rust, `$caps_install` on JavaScript, `wjstd_caps_install` on Go) and the runtime's std wrappers check against it; a denial exits with status 126 and cannot be caught. Compiled programs hold the whole program to one grant, so a dependency's computed-resource use needs the same scope as the application's (or `true`), else the build says so. (untestable: needs a compiled backend; acceptance tests `tests/effects_compiled_test.rs`, `tests/effects_vectors_test.rs`)
 
+**SPEC-EFF-039** Without a `[capabilities]` table (and without `--sandbox` or `--allow`) `wj run` enforces the local profile: files inside the project directory, plus `time`, `random` and `console`. Anything else stops the run with exit status 126; the message says why, offers the one-shot `--allow` flag and a copy-paste `[capabilities]` block that keeps the project-directory lines. `WJ_CAPS=warn` (run it, warn once) and `WJ_CAPS=off` are the explicit opt-outs.
+
+<!-- example: tests/spec/effects/SPEC-EFF-039.wj -->
+```windjammer
+use std::env
+fn main() {
+    println("start")
+    let v = env::var("WJ_NEVER_SET")
+    println("not reached")
+}
+```
+Output:
+```text
+start
+```
+Then the run stops with exit status 126 and a message containing `capability denied: env.read(WJ_NEVER_SET)`.
+
+**SPEC-EFF-040** Standard devices are not files: `/dev/stdin` and `/dev/stdout`, `/dev/stderr` are the console, `/dev/urandom` and `/dev/random` are randomness, `/dev/null` needs nothing. Reading standard input therefore never needs a file grant.
+
+<!-- example: tests/spec/effects/SPEC-EFF-040.wj -->
+```windjammer
+use std::fs
+fn main() {
+    let there = fs::exists("/dev/stdin")
+    println("checked")
+}
+```
+Output:
+```text
+checked
+```
+
 ## Durable functions
 
 **SPEC-EFF-021** [PLANNED ADR-0021] `durable fn` declares a function whose progress survives crashes. When nothing fails it behaves exactly like the same function without `durable`.

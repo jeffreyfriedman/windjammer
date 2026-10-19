@@ -18,8 +18,9 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
   `wj explain-effects` shows the effects, the call chain to each sink and how it is checked; `wj check` reports WJ0040-WJ0044
   against `wj.toml [capabilities]` / `[policy]` and `@uses`/`@pure`; the interpreter enforces grants per host, path, variable
   and program (`--sandbox`, `--allow EFFECT=RESOURCE`; exit status 126, not catchable). Without a `[capabilities]` table
-  `wj run` uses the local profile (project directory + time/random/console) in warn mode this release, enforced in the next
-  (`WJ_CAPS=enforce` previews it, `WJ_CAPS=off` disables the gate). Spec chapter `docs/spec/effects.md`.
+  `wj run` uses the local profile (files in the project directory + time/random/console) and ENFORCES it: a call outside it
+  stops with exit status 126 and a message with the copy-paste fix (`WJ_CAPS=warn|off` are the explicit opt-outs; `wj new` templates ship
+  a `[capabilities]` table or the commented lines to add). Spec chapter `docs/spec/effects.md`.
 - **Expressiveness Phase 2** (ADR-0018): enumerable collection methods (`group_by`, `count_by`, `tally`, `sum_by`,
   `unique`, `chunk_by`, `each_slice`, `partition_by`, `intersperse`, `zip_with`, `index_of`, `sorted*`,
   `sort_by_key_desc`, `to_list`) on every backend; `_` shorthand closures (`xs.map(_ * 2)`); named arguments with

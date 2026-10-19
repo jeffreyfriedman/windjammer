@@ -841,6 +841,82 @@
    "resource": "sh",
    "expect": "deny",
    "portable": false
+  },
+  {
+   "name": "stdin is the console, granted by default",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/dev/stdin",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "stdin follows the console grant",
+   "allow": {},
+   "deny": [
+    "console"
+   ],
+   "kind": "fs.read",
+   "resource": "/dev/stdin",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "stdout is the console",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/dev/stdout",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "null is always fine",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/dev/null",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "urandom is randomness",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/dev/urandom",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "urandom follows the random grant",
+   "allow": {},
+   "deny": [
+    "random"
+   ],
+   "kind": "fs.read",
+   "resource": "/dev/urandom",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "other devices are files",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/dev/sda",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "writing stdin is not a device",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/dev/stdin",
+   "expect": "deny",
+   "portable": true
   }
  ]
 }

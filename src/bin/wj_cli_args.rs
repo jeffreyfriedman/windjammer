@@ -183,7 +183,7 @@ pub enum Commands {
         #[arg(long)]
         deterministic_time: bool,
 
-        /// Interpreted runs: allow plain http:// client requests (default: the http client refuses)
+        /// Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`)
         #[arg(long)]
         allow_network: bool,
 
@@ -201,9 +201,9 @@ pub enum Commands {
         #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
         allow: Vec<String>,
 
-        /// Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a
-        /// warning, `enforce` stops them (exit 126), `off` disables the gate
-        #[arg(long, value_name = "MODE", env = "WJ_CAPS", default_value = "warn")]
+        /// Interpreted runs without a [capabilities] table: `enforce` (default) stops calls outside the project
+        /// directory with exit status 126 and prints the exact fix, `warn` runs them with a warning, `off` disables the gate
+        #[arg(long, value_name = "MODE", env = "WJ_CAPS", default_value = "enforce")]
         caps: String,
 
         /// Defer drop optimization mode (auto, always, never)

@@ -29,6 +29,22 @@ pub struct Denial {
 }
 
 impl Denial {
+    /// The `[capabilities]` line that would allow this use (`net.connect = ["api.example.com"]`).
+    pub fn entry(&self) -> String {
+        match &self.resource {
+            Some(r) => format!("{} = [\"{r}\"]", self.effect),
+            None => format!("{} = true", self.effect),
+        }
+    }
+
+    /// The `--allow` argument that would allow this use (`net.connect=api.example.com`).
+    pub fn flag(&self) -> String {
+        match &self.resource {
+            Some(r) => format!("{}={r}", self.effect),
+            None => self.effect.name(),
+        }
+    }
+
     /// The manifest part of the fix, without the interpreter-only `--allow` flag (compiled programs have no such flag).
     pub fn manifest_fix(&self) -> &str {
         self.fix.split(", or run with").next().unwrap_or(&self.fix)
@@ -239,6 +255,14 @@ impl Grant {
 
     /// Check one use of `kind` on `resource` (the raw argument: a path, URL/address, variable name, program).
     pub fn check(&self, kind: &EffectKind, resource: Option<&str>) -> Result<(), Denial> {
+        // standard devices are the console / the entropy source, not files (`fs::read_to_string("/dev/stdin")`)
+        if let (EffectKind::FsRead | EffectKind::FsWrite, Some(res)) = (kind, resource) {
+            match device_effect(kind, res) {
+                Some(None) => return Ok(()),
+                Some(Some(effect)) => return self.check(&effect, None),
+                None => {}
+            }
+        }
         if self.deny.contains(kind) {
             return Err(self.denial(kind, resource, false, format!("{kind} is denied")));
         }
@@ -351,6 +375,19 @@ fn root_base(root: &Path) -> PathBuf {
         root.to_path_buf()
     } else {
         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")).join(root)
+    }
+}
+
+/// `/dev/stdin` (read) and `/dev/stdout`, `/dev/stderr` (write) are the console; `/dev/urandom`, `/dev/random` (read) are
+/// randomness; `/dev/null` is nothing. `Some(None)` = always allowed, `Some(Some(e))` = checked as effect `e`.
+fn device_effect(kind: &EffectKind, res: &str) -> Option<Option<EffectKind>> {
+    let reading = *kind == EffectKind::FsRead;
+    match res {
+        "/dev/null" => Some(None),
+        "/dev/stdin" if reading => Some(Some(EffectKind::Console)),
+        "/dev/stdout" | "/dev/stderr" if !reading => Some(Some(EffectKind::Console)),
+        "/dev/urandom" | "/dev/random" if reading => Some(Some(EffectKind::Random)),
+        _ => None,
     }
 }
 
