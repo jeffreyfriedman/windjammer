@@ -1,0 +1,87 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "A",
+ "arm_name": "interpreted-first",
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_diag": [
+  "a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&std::string::String`\nerror[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&std::string::String`\n    --> main.rs:101:56\n     |\n 101 |     let mut keys: Vec<String> = accts.keys().collect::<Vec<String>>();\n     |                                              -----"
+ ],
+ "final_build_diag_source": "regrade of final_source (backfilled)",
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 33
+ },
+ "final_source": "use std::collections::HashMap\nuse std::fs\n\nfn bal(m: HashMap<string, int>, k: string) -> int {\n    match m.get(k) {\n        Some(v) => v,\n        None => 0,\n    }\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut accts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() < 2 {\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"open\" && parts.len() >= 3 {\n            let name = parts[1]\n            let amt = parts[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if accts.contains_key(name) {\n                println(\"error: duplicate account\")\n            } else {\n                accts.insert(name, amt)\n                println(\"ok\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && parts.len() >= 3 {\n            let name = parts[1]\n            let amt = parts[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(name) {\n                println(\"error: unknown account ${name}\")\n            } else {\n                let b = bal(accts, name)\n                if cmd == \"deposit\" {\n                    accts.insert(name, b + amt)\n                    println(\"ok\")\n                } else if b < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    accts.insert(name, b - amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && parts.len() >= 4 {\n            let from = parts[1]\n            let to = parts[2]\n            let amt = parts[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(from) {\n                println(\"error: unknown account ${from}\")\n            } else if !accts.contains_key(to) {\n                println(\"error: unknown account ${to}\")\n            } else if from == to {\n                println(\"error: same account\")\n            } else {\n                let fb = bal(accts, from)\n                if fb < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    let tb = bal(accts, to)\n                    accts.insert(from, fb - amt)\n                    accts.insert(to, tb + amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"balance\" {\n            let name = parts[1]\n            if !accts.contains_key(name) {\n                println(\"error: unknown account ${name}\")\n            } else {\n                println(\"${bal(accts, name)}\")\n            }\n        }\n    }\n    let mut keys: Vec<string> = accts.keys().collect()\n    keys.sort()\n    for k in keys {\n        println(\"${k} ${bal(accts, k)}\")\n    }\n}\n",
+ "first_source": "use std::collections::HashMap\nuse std::fs\n\nfn bal(m: HashMap<string, int>, k: string) -> int {\n    match m.get(k) {\n        Some(v) => v,\n        None => 0,\n    }\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut accts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() < 2 {\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"open\" && parts.len() >= 3 {\n            let name = parts[1]\n            let amt = parts[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if accts.contains_key(name) {\n                println(\"error: duplicate account\")\n            } else {\n                accts.insert(name, amt)\n                println(\"ok\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && parts.len() >= 3 {\n            let name = parts[1]\n            let amt = parts[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(name) {\n                println(\"error: unknown account ${name}\")\n            } else {\n                let b = bal(accts, name)\n                if cmd == \"deposit\" {\n                    accts.insert(name, b + amt)\n                    println(\"ok\")\n                } else if b < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    accts.insert(name, b - amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && parts.len() >= 4 {\n            let from = parts[1]\n            let to = parts[2]\n            let amt = parts[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(from) {\n                println(\"error: unknown account ${from}\")\n            } else if !accts.contains_key(to) {\n                println(\"error: unknown account ${to}\")\n            } else if from == to {\n                println(\"error: same account\")\n            } else {\n                let fb = bal(accts, from)\n                if fb < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    let tb = bal(accts, to)\n                    accts.insert(from, fb - amt)\n                    accts.insert(to, tb + amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"balance\" {\n            let name = parts[1]\n            if !accts.contains_key(name) {\n                println(\"error: unknown account ${name}\")\n            } else {\n                println(\"${bal(accts, name)}\")\n            }\n        }\n    }\n    let mut keys: Vec<string> = accts.keys().collect()\n    keys.sort()\n    for k in keys {\n        println(\"${k} ${bal(accts, k)}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.083,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.059,
+   "verb": "check"
+  }
+ ],
+ "mode_violations": 0,
+ "original_final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 33
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "other_seconds": 3.57,
+ "pass_final": false,
+ "recorded_at": "2026-10-19T11:15:50",
+ "regraded": true,
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 11.097,
+ "tool_wait_seconds": 0.14,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 11.097,
+  "cost_usd": 0.0293218,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.wj`. It gives the expected output for Example 1 and passes `wj check` with no errors or warnings. I did not run Example 2 or run `wj build`, as instructed.\n\nMy test input was Example 1 plus a `transfer a a 1` at the end. That printed `error: same account`, and the final lines were `a 70` and `b 35`.\n\n- **Parsing:** an amount that doesn't parse as an integer is treated",
+  "subtype": "success",
+  "tokens_in": 27503,
+  "tokens_out": 1798,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 14.81
+}
