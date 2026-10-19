@@ -1,4 +1,3 @@
-compile_error!("missing boundary signature for `geometry::circle::half`");
 use self::geometry::rect_area;
 mod geometry {
     #[inline]
@@ -8,7 +7,15 @@ pub fn rect_area(w: i64, h: i64) -> i64 {
 pub fn perimeter(w: i64, h: i64) -> i64 {
         2_i64 * (w + h)
 }    pub mod circle {
-            }
+        #[inline]
+pub fn half(r: f64) -> f64 {
+            r / 2.0_f64
+}    }
+}
+
+#[inline]
+pub fn half(r: f64) -> f64 {
+    r / 2.0_f64
 }
 
 fn main() {
