@@ -3,6 +3,22 @@
 
 use crate::parser::ast::*;
 
+/// True for an unsuffixed integer literal or arithmetic built only from such literals
+/// (`7`, `1 + 7`, `-(2 * 3)`): an expression with no width of its own, which takes its typed peer's.
+pub fn expression_is_literal_only_int(expr: &Expression) -> bool {
+    use crate::parser::{BinaryOp, UnaryOp};
+    match expr {
+        Expression::Literal { value: Literal::Int(_), .. } => true,
+        Expression::Unary { op: UnaryOp::Neg, operand, .. } => expression_is_literal_only_int(operand),
+        Expression::Binary { left, op, right, .. } => {
+            matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod)
+                && expression_is_literal_only_int(left)
+                && expression_is_literal_only_int(right)
+        }
+        _ => false,
+    }
+}
+
 /// Untyped `let mut idx = 0` / `let mut colon_at = -1` — WJ `int`, never Rust `usize`.
 pub fn expression_is_int_literal_init(expr: &Expression) -> bool {
     match expr {

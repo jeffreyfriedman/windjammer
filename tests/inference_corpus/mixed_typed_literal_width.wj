@@ -1,0 +1,22 @@
+// An unsuffixed literal takes the type of its typed operand, in any position of the expression;
+// the `int` default applies only when the whole class is unconstrained (ADR-0015, plan C4).
+fn f(seg: i32) -> u32 {
+    (2 * seg + 1) as u32
+}
+
+fn g(a: i32, b: u8, c: i64) -> i64 {
+    let x = (2 * a + 1) as i64
+    let y = (b + 1) as i64
+    let z = c - 3 + (a * 2) as i64
+    x + y + z
+}
+
+fn h(seg: i32) -> i32 {
+    1 + 2 * seg - 1
+}
+
+fn main() {
+    println(f(3))
+    println(g(5, 2, 100))
+    println(h(4))
+}
