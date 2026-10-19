@@ -10,7 +10,7 @@ use super::engine::Interpreter;
 use super::error::{semantic, unsupported, R};
 use super::eval_expr::expr_loc;
 use super::value::Value;
-use crate::intrinsics::Intrinsic;
+pub(crate) use crate::intrinsics::Intrinsic;
 use crate::parser::ast::{BinaryOp, Expression, Literal, UnaryOp};
 
 type Expr = &'static Expression<'static>;

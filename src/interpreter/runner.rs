@@ -19,21 +19,11 @@ pub fn exit_code_for(e: &RuntimeError) -> i32 {
     }
 }
 
-/// Find the entry `.wj` file for a path: a file, or a project directory (`main.wj` / `src/main.wj`).
+/// Find the entry `.wj` file for a path: a file, or a project directory (`main.wj`, `src/main.wj`, or the
+/// default binary of its `wj.toml`). Discovery is `module_system::project`, shared with the compiled `wj run`.
 pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
-    if path.is_file() {
-        return Ok(path.to_path_buf());
-    }
-    if path.is_dir() {
-        for cand in ["main.wj", "src/main.wj", "src/lib.wj"] {
-            let p = path.join(cand);
-            if p.is_file() {
-                return Ok(p);
-            }
-        }
-        return Err(format!("no main.wj or src/main.wj found in {}", path.display()));
-    }
-    Err(format!("File not found: {}", path.display()))
+    let cwd = std::env::current_dir().unwrap_or_default();
+    crate::module_system::project::resolve_run_target(Some(path), &cwd, None).map(|t| t.entry)
 }
 
 /// Stack of the interpreter thread; recursion is limited by the bytes actually used (not a frame count),
@@ -58,11 +48,15 @@ pub fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static)
 #[derive(Clone, Default)]
 pub struct RunOptions {
     pub sched_seed: u64,
+    /// `--hash-seed N`: permutes HashMap/HashSet iteration order (0 = key order).
+    pub hash_seed: u64,
     pub deterministic_time: bool,
     /// `--allow-network`: plain http:// client requests are allowed.
     pub allow_network: bool,
     /// `--mock-http FILE`: canned responses for the http client (takes precedence).
     pub mock_http: Option<PathBuf>,
+    /// `--engine=resolved`: compiled closure engine for the functions it supports.
+    pub engine_resolved: bool,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -78,28 +72,78 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
             return 1;
         }
     };
+    match run_entry(&entry, args, EntryOptions { run: opts, ..EntryOptions::default() }) {
+        RunOutcome::Exited(code) => code,
+        RunOutcome::NeedsCompiled(_) => unreachable!("fallback disabled"),
+    }
+}
+
+/// Result of an interpreted run.
+#[derive(Debug)]
+pub enum RunOutcome {
+    /// The program ran (or failed) in the interpreter; this is its exit status.
+    Exited(i32),
+    /// The program uses a registry-unsupported feature, detected at load time before anything ran
+    /// (see `preflight.rs`); the caller should run it compiled. Only returned when `fallback` is set.
+    NeedsCompiled(RuntimeError),
+}
+
+/// How `run_entry` runs a program.
+#[derive(Default)]
+pub struct EntryOptions {
+    /// Return [`RunOutcome::NeedsCompiled`] on a preflight hit instead of printing the error.
+    pub fallback: bool,
+    /// Bridge library and the `extern fn`s it provides (ADR-0023), built by the CLI.
+    pub host: Option<(PathBuf, Vec<super::host_bridge::ExternSig>)>,
+    /// Apply source edits to the running program (ADR-0024).
+    pub hot: bool,
+    /// Scheduler seed, deterministic time, network policy.
+    pub run: RunOptions,
+}
+
+/// Load and run `entry` in the interpreter.
+pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutcome {
+    let entry = entry.to_path_buf();
     with_big_stack(move || {
+        let EntryOptions { fallback, host, hot, run: opts } = opts;
         let mut it = Interpreter::new();
         it.guard_stack();
+        it.hash_seed = opts.hash_seed;
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
+        it.set_engine_resolved(opts.engine_resolved);
         if let Some(p) = &opts.mock_http {
             match super::builtins::std_http::HttpMode::mock_from_file(p) {
                 Ok(m) => it.set_http_mode(m),
                 Err(e) => {
                     eprintln!("error: {e}");
-                    return 1;
+                    return RunOutcome::Exited(1);
                 }
             }
         } else if opts.allow_network {
             it.set_http_mode(super::builtins::std_http::HttpMode::Real);
         }
         it.set_args(args);
-        if let Err(e) = it.load_entry_file(&entry) {
-            eprintln!("{}", e.render());
-            return exit_code_for(&e);
+        if let Some((lib, sigs)) = host {
+            match super::host_bridge::HostLib::open(&lib, &sigs) {
+                Ok(h) => it.attach_host(h),
+                Err(m) => {
+                    eprintln!("error: {}", m);
+                    return RunOutcome::Exited(1);
+                }
+            }
         }
-        match it.call_main() {
+        if let Err(e) = it.load_program_at(&entry) {
+            if fallback && super::preflight::is_preflight(&e) {
+                return RunOutcome::NeedsCompiled(e);
+            }
+            eprintln!("{}", e.render());
+            return RunOutcome::Exited(exit_code_for(&e));
+        }
+        if hot {
+            it.enable_hot_reload();
+        }
+        let code = match it.call_main() {
             Ok(_) => 0,
             Err(e) => {
                 if !matches!(e.kind, ErrorKind::Exit(_)) {
@@ -107,7 +151,9 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
                 }
                 exit_code_for(&e)
             }
-        }
+        };
+        it.flush();
+        RunOutcome::Exited(code)
     })
 }
 
@@ -140,7 +186,7 @@ pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
         for spec in specs {
             let mut it = Interpreter::new_capturing();
             it.guard_stack();
-            let outcome = match it.load_entry_file(&spec.file) {
+            let outcome = match it.load_program_at(&spec.file) {
                 Ok(_) => it.run_test(&spec.mods, spec.assoc.as_deref(), &spec.name),
                 Err(e) => Err(e),
             };

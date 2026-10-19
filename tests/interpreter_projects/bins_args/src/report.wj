@@ -1,0 +1,3 @@
+pub fn summary(n: int) -> string {
+    format!("{} args", n)
+}

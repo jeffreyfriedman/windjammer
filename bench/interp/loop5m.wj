@@ -1,0 +1,10 @@
+fn main() {
+    let mut total: int = 0
+    let mut i: int = 0
+    while i < 5000000 {
+        let x = i * 3 + 1
+        if x % 7 == 0 { total += x } else { total -= 1 }
+        i += 1
+    }
+    println("${total}")
+}

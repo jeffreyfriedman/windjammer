@@ -45,12 +45,19 @@ pub fn lint_file(path: &Path, strict: bool) -> Result<()> {
     }
 
     println!(
-        "\n{} {} warning(s) found in {}",
+        "\n{} {} finding(s) in {}",
         "⚠".yellow().bold(),
         warnings.len(),
         path.display()
     );
 
+    let errors = warnings
+        .iter()
+        .filter(|w| w.level == crate::linter::LintLevel::Error)
+        .count();
+    if errors > 0 {
+        bail!("Linter failed: {} error(s) found", errors);
+    }
     if strict {
         bail!("Linter failed: {} warning(s) found", warnings.len());
     }

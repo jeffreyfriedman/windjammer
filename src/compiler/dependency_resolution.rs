@@ -441,21 +441,7 @@ dep-crate = { path = "../dep_crate" }
 }
 
 fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
-            files.push(path);
-        } else if path.is_dir() {
-            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if matches!(
-                dir_name,
-                "build" | "gen" | "target" | ".git" | "node_modules"
-            ) {
-                continue;
-            }
-            find_wj_files_recursive(&path, files)?;
-        }
-    }
+    // One walker shared with the interpreter and resolver (module_system::sources).
+    files.extend(crate::module_system::sources::wj_files_under(dir)?);
     Ok(())
 }

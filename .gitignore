@@ -55,6 +55,7 @@ tmp_*
 **/*.wip.rs
 /.worktrees/
 
-# autoharness runtime state (locks, sessions, ledgers)
+# Claude plugin runtime state
 .claude/autoharness/
+.claude/autoharness*/
 .claude/skills/*/.ledger.jsonl

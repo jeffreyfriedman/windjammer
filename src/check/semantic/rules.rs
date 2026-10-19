@@ -74,6 +74,35 @@ pub enum Kind {
     Int,
     Float,
     Str,
+    Bool,
+}
+
+/// ADR-0002 migration switch: today the compiler infers `mut` for locals, so assigning to a
+/// binding declared without `mut` is reported as a warning (WJ0004). When the ADR-0002 migration
+/// makes explicit `let mut` mandatory, flip this to `true` to make it an error.
+pub const MUTABILITY_REQUIRED: bool = false;
+
+/// Scalar kind of a declared type, if it is one of the four scalars.
+pub fn type_kind(t: &crate::parser::Type) -> Option<Kind> {
+    use crate::parser::Type;
+    match t {
+        Type::Int | Type::Int32 | Type::Uint => Some(Kind::Int),
+        Type::Float => Some(Kind::Float),
+        Type::Bool => Some(Kind::Bool),
+        Type::String => Some(Kind::Str),
+        Type::Custom(n) => match n.as_str() {
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => Some(Kind::Int),
+            "f32" | "f64" => Some(Kind::Float),
+            "bool" => Some(Kind::Bool),
+            "String" | "str" | "string" => Some(Kind::Str),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+pub fn display_kind(k: Kind) -> &'static str {
+    kind_name(k)
 }
 
 pub fn literal_kind(l: &Literal) -> Option<Kind> {
@@ -81,6 +110,7 @@ pub fn literal_kind(l: &Literal) -> Option<Kind> {
         Literal::Int(_) | Literal::IntSuffixed(..) => Some(Kind::Int),
         Literal::Float(_) => Some(Kind::Float),
         Literal::String(_) => Some(Kind::Str),
+        Literal::Bool(_) => Some(Kind::Bool),
         _ => None,
     }
 }
@@ -90,6 +120,7 @@ fn kind_name(k: Kind) -> &'static str {
         Kind::Int => "int",
         Kind::Float => "float",
         Kind::Str => "string",
+        Kind::Bool => "bool",
     }
 }
 
@@ -109,7 +140,12 @@ fn op_text(op: BinaryOp) -> Option<&'static str> {
 pub fn bad_operands(op: BinaryOp, l: Option<Kind>, r: Option<Kind>, strict: bool) -> Option<Diagnostic> {
     let sym = op_text(op)?;
     let (l, r) = (l?, r?);
-    let string_arith = op != BinaryOp::Add && (l == Kind::Str || r == Kind::Str);
+    if l == Kind::Bool || r == Kind::Bool {
+        return None;
+    }
+    let numeric = |k: Kind| matches!(k, Kind::Int | Kind::Float);
+    let string_arith = (op != BinaryOp::Add && (l == Kind::Str || r == Kind::Str))
+        || (op == BinaryOp::Add && ((l == Kind::Str && numeric(r)) || (r == Kind::Str && numeric(l))));
     let mixed = strict && matches!((l, r), (Kind::Int, Kind::Float) | (Kind::Float, Kind::Int));
     if !(string_arith || mixed) {
         return None;

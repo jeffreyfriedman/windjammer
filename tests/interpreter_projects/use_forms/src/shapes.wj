@@ -1,0 +1,7 @@
+pub fn area(w: int, h: int) -> int {
+    w * h
+}
+
+pub fn perimeter(w: int, h: int) -> int {
+    2 * (w + h)
+}

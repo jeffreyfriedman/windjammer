@@ -26,6 +26,14 @@ pub trait Native: Any {
     fn display(&self) -> Option<String> {
         None
     }
+    /// Elements in iteration order, for collections that `for` / `into_iter` can walk.
+    fn iter_items(&self) -> Option<Vec<Value>> {
+        None
+    }
+    /// For `{:?}` of collections: `(is_map, entries)`; a set entry has no value.
+    fn debug_entries(&self) -> Option<(bool, Vec<(Value, Option<Value>)>)> {
+        None
+    }
     /// `{:?}` text.
     fn debug(&self) -> String {
         format!("{} {{ .. }}", self.type_name())

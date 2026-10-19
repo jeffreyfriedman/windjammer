@@ -32,12 +32,16 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 | WJ0006 | unresolved `use` |
 | WJ0011 / WJ0012 | syntax error, invalid character (with line/column) |
 | WJ0013 | wrong argument count |
+| WJ0003 (conditions, assignments, calls) | non-`bool` `if`/`while` condition; assigning another type to a typed local; `let x: int = f()` where `f` returns `string` |
+| WJ0004 | assignment to a binding declared without `mut` (warning until the ADR-0002 migration flips `rules::MUTABILITY_REQUIRED`; fix adds `mut`) |
+| WJ0005 (annotations) | `let x: Name` where `Name` is declared nowhere |
+| WJ0030 | `Enum::Variant` that the enum does not declare |
 | WJ0010 | `match` over a user enum that misses variants |
 | WJ0015 | unknown method (on a known user type, or a name no type has) |
 | WJ0017 | `${x}` where `x` is a user type without `Display` |
 | WJ0018 | `impl Trait for T` missing required methods |
 | WJ0019 | call to a private function of another module |
-| WJ0020 | arithmetic on strings, or declared `int` mixed with declared `float` |
+| WJ0020 | `string + int`, arithmetic on strings, or declared `int` mixed with declared `float` |
 | WJ0003 (return) | literal of the wrong type returned from a function |
 | WJ0021 | duplicate top-level definition |
 | WJ0023 | forbidden Rust pattern (`.as_str()`, redundant `@derive`) |
