@@ -98,7 +98,7 @@ impl Interpreter {
             .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", path.display(), e)))?;
         let program = parse_source(&src, &path.to_string_lossy())
             .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("parse error: {}", e)))?;
-        let prog: &'static Program<'static> = Box::leak(Box::new(program));
+        let prog = self.retain_program(program);
         self.modules[0].file = path.to_path_buf();
         self.modules[0].name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         self.load_program(0, prog)
@@ -158,7 +158,7 @@ impl Interpreter {
         let program = parse_source(&src, &file.to_string_lossy()).map_err(|e| {
             RuntimeError::new(ErrorKind::Semantic, format!("parse error in {}: {}", file.display(), e))
         })?;
-        let prog: &'static Program<'static> = Box::leak(Box::new(program));
+        let prog = self.retain_program(program);
         let id = self.new_module(name, file, Some(from));
         self.modules[from].children.insert(name.to_string(), id);
         self.register_items(id, &prog.items)?;
