@@ -58,7 +58,10 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(base);
         };
 
+        // The function's return element type only describes a local that is itself returned.
+        let returned_local = var_name.is_some_and(|vn| self.local_is_returned(vn));
         let elem_from_return = match &self.current_function_return_type {
+            _ if !returned_local => None,
             Some(Type::Vec(inner))
                 if crate::type_classification::is_single_elem_iterable_base(collection_name) =>
             {
@@ -84,6 +87,32 @@ impl<'ast> CodeGenerator<'ast> {
             );
         }
         Some(base)
+    }
+
+    /// True when `name` is the tail expression of the current function body or the value of a `return`.
+    fn local_is_returned(&self, name: &str) -> bool {
+        fn is_name(e: &Expression<'_>, name: &str) -> bool {
+            matches!(e, Expression::Identifier { name: n, .. } if n == name)
+        }
+        fn has_return(stmts: &[&Statement<'_>], name: &str) -> bool {
+            stmts.iter().any(|st| match st {
+                Statement::Return { value: Some(v), .. } => is_name(v, name),
+                Statement::If { then_block, else_block, .. } => {
+                    has_return(then_block, name) || else_block.as_ref().is_some_and(|b| has_return(b, name))
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                    has_return(body, name)
+                }
+                _ => false,
+            })
+        }
+        let body: Vec<&Statement<'_>> = if self.full_function_body_snapshot.is_empty() {
+            self.current_function_body.iter().copied().collect()
+        } else {
+            self.full_function_body_snapshot.iter().copied().collect()
+        };
+        matches!(body.last(), Some(Statement::Expression { expr, .. }) if is_name(expr, name))
+            || has_return(&body, name)
     }
 
     /// Generate code for a let statement
