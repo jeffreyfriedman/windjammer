@@ -586,3 +586,7 @@ pending = "no acceptance cases yet"
 id = "wj test --watch"
 statement = "Re-run the tests on every source change"
 pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --no-lint"
+statement = "Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it"

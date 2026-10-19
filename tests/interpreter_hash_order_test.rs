@@ -50,13 +50,13 @@ fn main() {
         t.insert(i)
     }
     let mut hk = ""
-    for (k, _) in h.iter() { hk = "${hk}${k} " }
+    for (k, _) in h { hk = "${hk}${k} " }
     let mut sk = ""
-    for k in s.iter() { sk = "${sk}${k} " }
+    for k in s { sk = "${sk}${k} " }
     let mut bk = ""
-    for (k, _) in b.iter() { bk = "${bk}${k} " }
+    for (k, _) in b { bk = "${bk}${k} " }
     let mut tk = ""
-    for k in t.iter() { tk = "${tk}${k} " }
+    for k in t { tk = "${tk}${k} " }
     println(hk)
     println(sk)
     println(bk)
@@ -153,15 +153,15 @@ fn main() {
     m.insert("b", 2)
     println("${m.insert("a", 10).unwrap_or(-1)} ${m.insert("z", 26).unwrap_or(-1)}")
     println("${m.len()} ${m.contains_key("a")} ${m.get("zz").is_none()}")
-    for (k, v) in m.iter() { println("${k}=${v}") }
+    for (k, v) in m { println("${k}=${v}") }
     println("${m.remove("c").unwrap_or(-1)}")
     for k in m.keys() { println(k) }
     println("${m.swap_remove("a").unwrap_or(-1)}")
-    for (k, v) in m.iter() { println("${k}=${v}") }
+    for (k, v) in m { println("${k}=${v}") }
     let mut s: OrderedSet<int> = OrderedSet::new()
     for x in [5, 3, 5, 9, 3, 1] { println("${s.insert(x)}") }
     println("${s.remove(3)} ${s.remove(42)} ${s.len()}")
-    for x in s.iter() { println("${x}") }
+    for x in s { println("${x}") }
     println(format("{:?}", s))
     println(format("{:?}", m))
 }

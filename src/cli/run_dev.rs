@@ -32,6 +32,8 @@ pub struct RunOptions {
     pub interp: runner::RunOptions,
     /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report).
     pub lint: Option<fn(&Path)>,
+    /// Interpreted runs: lints (W####) are reported but do not stop the run; compile errors still do.
+    pub no_lint: bool,
 }
 
 /// Run once; returns the process exit status.
@@ -53,7 +55,7 @@ pub fn execute(opts: &RunOptions) -> i32 {
         _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false),
         Mode::Interpret | Mode::Auto => {
             // The interpreter must not be more permissive than the compiler: same front end as `wj check`.
-            if let Err(e) = crate::cli::check::require_clean(&target.entry) {
+            if let Err(e) = crate::cli::check::require_clean(&target.entry, !opts.no_lint) {
                 eprintln!("Error: {e}");
                 return 1;
             }
