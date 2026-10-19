@@ -1,5 +1,6 @@
 ---
 status: proposed
+last_verified: 09234834330f
 ---
 # ADR-0025: Arenas as a user capability
 

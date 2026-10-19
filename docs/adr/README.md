@@ -28,6 +28,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0016](0016-ownership-pins.md) | Pins: the surface for overriding inference | Proposed |
 | [0020](0020-interpreter-execution-engine.md) | Interpreter execution engine (tree walker vs resolved/bytecode tier) | Accepted for milestone 1 as an opt-in engine |
 | [0021](0021-effects-and-capabilities.md) | Effects and capabilities | Accepted |
+| [0025](0025-arenas.md) | Arenas as a user capability | Proposed |
 <!-- wj:end -->
 
 ## Template
