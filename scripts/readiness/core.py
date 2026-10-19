@@ -107,12 +107,13 @@ class Ctx:
         self.timeouts = dict(interp=120, compiled=900, check=60, build=300)
         self.timeouts.update(timeouts or {})
         self.wj_hash = file_hash(wj)
+        self.cache_id = commit  # what cached results are keyed by (see --cache-id)
         self.cold = False
         self.deadline = None  # monotonic time after which compiled (heavy) runs are skipped as unmeasured
         self.quick = mode == QUICK
 
     def key(self, kind, program_hash):
-        return sha(self.commit, self.wj_hash, kind, program_hash)
+        return sha(self.cache_id, self.wj_hash, kind, program_hash)
 
     def cached_run(self, kind, program_hash, cmd, timeout, keep_timeouts=False, **kw):
         """Run `cmd` once per (commit, binary, kind, program hash); later calls replay the stored result."""
@@ -138,6 +139,18 @@ class Ctx:
             return shutil.disk_usage(self.cache.dir).free < need
         except OSError:
             return False
+
+    def isolated(self, path):
+        """A private one-file directory holding `path`: compiled runs of a loose file would otherwise treat its whole
+        directory (examples/verified, tests/spec/...) as one project, which is not what a user's `wj run FILE` does."""
+        d = os.path.join(self.cache.dir, "iso", sha(path, file_hash(path))[:16])
+        os.makedirs(d, exist_ok=True)
+        dst = os.path.join(d, os.path.basename(path))
+        try:
+            shutil.copyfile(path, dst)
+        except OSError:
+            return path
+        return dst
 
     def target_root(self, scratch=None):
         """Private cargo target root for compiled runs (WJ_CARGO_TARGET_ROOT): isolates them from other

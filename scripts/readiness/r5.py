@@ -3,7 +3,7 @@ path (wj build + rustc metadata check) accepts everything the interpreter accept
 interpreter_check_parity and check_build_differential gates natively; --cargo-gates runs the real ones too."""
 import glob, os, shutil, tempfile
 from .core import run, file_hash, pct
-from . import pilot
+from . import pilot, r2
 
 
 def refused(err):
@@ -85,12 +85,16 @@ def measure(ctx, cargo_gates=False):
         name = os.path.relpath(path, ctx.root)
         build_checked += 1
         gap = rust_gap(path)
-        if pipeline_accepts(ctx, path):
+        c = r2.compiled(ctx, path, file_hash(path))   # the real cargo build, shared with R2's cache
+        if c.timed_out:
+            build_checked -= 1
+            blockers.append({"program": name, "reason": "unmeasured: compiled build timed out or was skipped (budget/disk)"})
+        elif not r2.build_failed(c):
             build_ok += 1
             stale_gaps += bool(gap)
         else:
             why = f" (documented gap: {gap[:70]})" if gap else " (not a documented gap)"
-            blockers.append({"program": name, "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it" + why})
+            blockers.append({"program": name, "reason": f"[check-vs-build] interpreter accepts it, the compiled build fails: {r2.build_error(c)[:60]}" + why})
     pilot_rows = pilot.measure(ctx)["rows"]
     for r in pilot_rows:
         if r["silent"] and r["check_accepts"]:
