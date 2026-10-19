@@ -29,6 +29,7 @@ class Fixture:
         spec_path = os.path.join(self.tmp, "spec.json")
         write(spec_path, json.dumps(spec))
         os.environ["WJ_FAKE_SPEC"] = spec_path
+        os.environ["WJ_READINESS_MIN_FREE_GIB"] = "0"   # tests must not depend on the machine's free disk
         write(os.path.join(self.root, "examples/verified/a.wj"), "// expect: 1\nfn main() { println(\"1\") }\n")
         write(os.path.join(self.root, "examples/verified/b.wj"), "// expect: 2\nfn main() { println(\"2\") }\n")
         write(os.path.join(self.root, "tests/conformance_programs/c.wj"), "// expect: 3\nfn main() { println(\"3\") }\n")
@@ -60,6 +61,7 @@ class Fixture:
 
     def close(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+        os.environ.pop("WJ_READINESS_MIN_FREE_GIB", None)
 
 
 def with_fixture(spec, private=False):

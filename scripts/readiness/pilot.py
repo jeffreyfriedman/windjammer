@@ -1,7 +1,7 @@
 """Agent-preference pilot corpus (bench/agent-dx/results/pilot): programs an agent wrote interpreted-first.
 A program that passes the interpreter but fails the compiled grade is a silent divergence; if `wj check` also
 accepts it, the parity failure is only discovered by rustc. Both are scorecard metrics (R2 and R5)."""
-import glob, json, os, re, tempfile
+import glob, json, os, re, shutil, tempfile
 from .core import sha
 
 QUICK_SILENT, QUICK_OTHER = 4, 2
@@ -53,6 +53,7 @@ def measure(ctx):
         out = os.path.join(gdir, "out_" + h[:10])
         b = ctx.cached_run("pilot-build-compiled", h, [ctx.wj, "build", path, "-o", out], ctx.timeouts["compiled"], cwd=gdir,
                            env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
+        shutil.rmtree(out, ignore_errors=True)  # each build leaves a cargo target tree behind
         ok = b.rc == 0
         err = "" if ok else ("unmeasured: " + b.err.strip()[:60] if b.timed_out else
                              next((l.strip() for l in (b.err + b.out).splitlines() if l.startswith("error[") or l.startswith("error:")), "build failed"))

@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-19T22:19:09Z",
- "commit": "e56c64c4b5a2733651a3b41f69e585afedd78401",
+ "generated_at": "2026-10-19T23:17:24Z",
+ "commit": "fab6f0580f4d0329d04b4177ad2d66ab366cec82",
  "mode": "full",
- "load_avg_1m": 76.9,
+ "load_avg_1m": 48.7,
  "wj_profile": "release",
  "criteria": [
   {
@@ -1915,16 +1915,16 @@
    "id": "R2",
    "title": "No silent divergence",
    "target": "0 divergent programs",
-   "percent": 93.3,
+   "percent": 92.6,
    "status": "fail",
    "detail": {
-    "divergences": 91,
-    "unmeasured": 76,
+    "divergences": 104,
+    "unmeasured": 0,
     "checked": 861,
-    "compiled_checked": 30,
+    "compiled_checked": 426,
     "generated_seeds": 312,
-    "compiled_build_failures": 413,
-    "build_failures": 413,
+    "compiled_build_failures": 93,
+    "build_failures": 93,
     "hash_seeds": [
      0,
      1,
@@ -1938,7 +1938,8 @@
      "silent_divergence_rate": 0.433,
      "rechecked": 30,
      "compiled_error_classes": {
-      "other": 13
+      "other": 3,
+      "[E0308]": 10
      },
      "check_misses": 13
     }
@@ -2051,6 +2052,10 @@
     {
      "program": "conformance/171_format_flags_padding.wj",
      "reason": "[oracle] line 1: interpreted '[5    ] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [' vs expected '[00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] ['"
+    },
+    {
+     "program": "conformance/171_format_flags_padding.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '[5    ] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [' vs expected '[00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] ['"
     },
     {
      "program": "conformance/172_pretty_debug_aggregates.wj",
@@ -2193,6 +2198,10 @@
      "reason": "[oracle] line 4: interpreted 'number too large or too small to fit in target typ' vs expected 'number too large to fit in target type'"
     },
     {
+     "program": "conformance/58_parse_numbers.wj",
+     "reason": "[compiled-stdout] line 4: interpreted 'number too large or too small to fit in target typ' vs expected 'number too large to fit in target type'"
+    },
+    {
      "program": "conformance/63_closures_capture.wj",
      "reason": "[compiled-stdout] line 1: interpreted '6' vs expected '<end>'"
     },
@@ -2211,6 +2220,10 @@
     {
      "program": "conformance/68_unwrap_none_panics.wj",
      "reason": "[compiled-stderr] panic message 'called `Option::unwrap()` on a `None` value' vs ''"
+    },
+    {
+     "program": "conformance/71_explicit_panic.wj",
+     "reason": "[compiled-stderr] panic message 'value too large: 5' vs 'value too large: {}'"
     },
     {
      "program": "conformance/75_iterators.wj",
@@ -2257,1056 +2270,252 @@
      "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
     },
     {
+     "program": "spec/SPEC-PIPE-006.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '2' vs expected '<end>'"
+    },
+    {
+     "program": "spec/SPEC-PIPE-006.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "spec/SPEC-STMT-005.wj",
+     "reason": "[compiled-stdout] line 1: interpreted 'abc0120a1b2c' vs expected '<end>'"
+    },
+    {
+     "program": "spec/SPEC-STMT-005.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "spec/SPEC-STD-001.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '0123 4 true' vs expected '<end>'"
+    },
+    {
+     "program": "spec/SPEC-STD-001.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "spec/SPEC-STD-002.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '2 a 20 false' vs expected '<end>'"
+    },
+    {
+     "program": "spec/SPEC-STD-002.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "spec/SPEC-STD-003.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '3 20 60' vs expected '<end>'"
+    },
+    {
+     "program": "spec/SPEC-STD-003.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
      "program": "pilot/t006_base_convert.A.0",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: wrong output"
     },
     {
      "program": "pilot/t006_base_convert.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t006_base_convert.A.2",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t011_lru_cache.A.0",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t011_lru_cache.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t011_lru_cache.A.2",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t013_bst.A.0",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t013_bst.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t018_word_freq.A.0",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t018_word_freq.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t018_word_freq.A.2",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t030_bank_ledger.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
     },
     {
      "program": "pilot/t030_bank_ledger.A.2",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
-    },
-    {
-     "program": "verified/algo_anagram.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_bank_account.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_bfs_grid.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_binary_search.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
     },
     {
      "program": "verified/algo_binary_tree.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_bubble_sort.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_caesar_cipher.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_collatz.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_digits.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_fibonacci.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_fizzbuzz.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_gcd_lcm.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_inventory.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_knapsack_dp.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/algo_lcs.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_linked_list_enum.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/algo_matrix_multiply.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_palindrome.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_pascal_triangle.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_perfect_numbers.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_primes_sieve.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_roman_numerals.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/algo_stack_calculator.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0658]: use of unstable library feature `str_as_str`"
     },
     {
      "program": "verified/algo_state_machine.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_statistics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_temperature_table.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/algo_tokenizer.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/algo_word_frequency.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&S"
     },
     {
      "program": "verified/basics_arithmetic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_bool_logic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_const.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_float_math.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_for_range.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_functions.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_hello.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_if_else.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_if_expression.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_interpolation.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_loop_break.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_main_exit_code.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_shadowing_blocks.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_tuples.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_variables.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/basics_while.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/btreemap_ordered.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/chars_ascii_arith.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/chars_classify.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/closures_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/closures_counter.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/closures_return_fn.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/defer_cleanup.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/defer_panic_lifo.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/display_to_string.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/enum_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/enum_data.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0689]: can't call method `pow` on ambiguous numeric type `{integer}`"
     },
     {
      "program": "verified/enum_methods.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/enum_option_like_generic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/error_assert_eq_fails.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/error_assert_ok.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/error_custom_enum.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/error_map_err_ok.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/error_panic_exit_code.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/error_unwrap_or_expect.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/from_conversion.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: arguments to this enum variant are incorrect"
     },
     {
      "program": "verified/generics_function.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/generics_struct.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/hashmap_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/hashmap_iterate_sorted.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/hashmap_remove_update.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/hashmap_word_count.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `clone` found for type parameter `T` in the current scope"
     },
     {
      "program": "verified/hashset_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/idiom_agentdx_regressions.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/if_let_chain.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/iter_any_all_count.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/iter_collect_hashmap.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/iter_enumerate_zip.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/iter_filter_map_flat.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `HashMap<String, i64>` cannot be built from an iterator over elements of type `("
     },
     {
      "program": "verified/iter_flat_map_chain.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0271]: type mismatch resolving `<[i64; 2] as IntoIterator>::Item == &i64`"
     },
     {
      "program": "verified/iter_fold_sum.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/iter_group_by_manual.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/iter_map_filter.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/iter_min_max_by.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0061]: this method takes 1 argument but 0 arguments were supplied"
     },
     {
      "program": "verified/iter_partition_unzip.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/iter_scan_running_total.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/iter_sort_by_float.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not satisfied"
     },
     {
      "program": "verified/iter_take_skip_rev.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/let_else_pattern.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/loops_labeled_nested.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/match_patterns.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/match_tuple_destructure.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/match_while_let.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/mem_swap_replace_take.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/module_inline.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/module_nested_pub_mod.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/modules_trait_static.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/numbers_bitwise.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/numbers_conversions.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/numbers_float_rounding.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/numbers_float_special.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/numbers_integer_widths.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/numbers_min_max_abs.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/numbers_overflow_checked.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/operators_overload.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/option_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/option_combinators.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/option_filter_zip_flatten.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/option_take_replace.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/pipe_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/pipe_method_stage.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/pipe_result_question.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_bit_counting.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_csv_parse.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0046]: not all trait items implemented, missing: `Output`"
     },
     {
      "program": "verified/prog_event_handlers.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/prog_game_of_life.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/prog_lru_cache.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_matrix_transpose.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_priority_scheduler.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_queue_simulation.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_run_length_encoding.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_shapes_report.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_text_wrap.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/prog_tictactoe_winner.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/recursion_hanoi_ackermann.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/result_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "verified/result_collect_all_or_nothing.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/result_question_mark.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/sort_stability_keys.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/std_cmp_ordering.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0282]: type annotations needed"
     },
     {
      "program": "verified/std_env_args.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/std_fs_roundtrip.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/std_math_functions.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_build.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_chars.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_compare_sort.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_format_specs.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_parse.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_slicing.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_split_join.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/strings_unicode.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/struct_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/struct_default_builder.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/struct_derive_debug_eq.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/struct_method_chain_mut.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/struct_nested.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/struct_update_copy.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of typ"
     },
     {
      "program": "verified/struct_with_vec_field.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/trait_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/trait_default_and_override.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/trait_display_to_string.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/trait_dyn_dispatch.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/trait_generic_bound.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0282]: type annotations needed"
     },
     {
      "program": "verified/vec_2d_grid.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/vec_basics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/vec_contains_position.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/vec_insert_remove.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: the trait bound `Vec<i32>: Copy` is not satisfied"
     },
     {
      "program": "verified/vec_of_structs.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/vec_slices_windows.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/vec_sort_dedup.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "verified/vecdeque_queue.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/01_arith_i32.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/02_arith_i64.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/03_arith_f64.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/04_int_overflow_i64_large.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/05_string_concat.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/06_string_interp.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/07_string_methods.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/08_struct_basic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/09_struct_mutate_method.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/100_determinant_known.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/101_float_summation_known.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/102_sort_stability.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `max_by_key` found for struct `Vec<Person>` in the current scope"
     },
     {
      "program": "conformance/103_xorshift_reference.wj",
      "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
     },
     {
-     "program": "conformance/10_struct_copy_semantics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
      "program": "conformance/110_std_math.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0425]: cannot find function `pow` in module `math`"
     },
     {
      "program": "conformance/111_std_strings.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0425]: cannot find function `repeat` in module `strings`"
     },
     {
      "program": "conformance/112_std_fs_roundtrip.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/113_std_time_monotonic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0425]: cannot find function `append` in module `fs`"
     },
     {
      "program": "conformance/114_hashmap_entry_counting.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/115_clone_vec_field.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/11_struct_clone_independent.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/120_intr_streams.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/121_intr_format_known.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "conformance/122_intr_format_seeded.wj",
      "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
     },
     {
-     "program": "conformance/123_intr_debug.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/124_intr_assert_ok.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/125_intr_assert_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/126_intr_assert_eq_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/127_intr_assert_eq_msg_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/128_intr_assert_ne_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/129_intr_todo_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/12_struct_pass_mutable.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/130_intr_todo_msg_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/131_intr_unreachable_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/132_intr_unreachable_msg_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/133_intr_panic_fmt_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/134_intr_panic_bare_fail.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/135_intr_list_literal.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
      "program": "conformance/136_intr_mixed_seeded.wj",
      "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
     },
     {
-     "program": "conformance/137_intr_format_sign_alt.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/138_intr_format_pretty_debug.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/13_enum_unit_match.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/140_float_format_spec.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/141_f32_format_widen.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/142_parse_radix.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/143_float_consts.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/14_enum_data_match.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/150_pipe_forms_mixed.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/151_pipe_try.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/152_range_patterns.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/153_labeled_loops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/154_u64_literals_fnv.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/156_deref_assign_after_call.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/158_self_path_vs_method.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/15_match_guard_or.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/160_bare_return_newline.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/161_unary_minus_cast.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/162_block_comments.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/163_trait_generics_and_aliases.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/164_into_bound_param_consumed.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/16_closure_basic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
      "program": "conformance/170_coll_grouping.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/171_coll_reshape_order.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/171_format_flags_padding.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `()` cannot be made by summing an iterator over elements of type `()`"
     },
     {
      "program": "conformance/172_clos_shorthand.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/173_match_guard_only.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/174_args_named_defaults.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/175_block_trailing.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0507]: cannot move out of `_it0.name` which is behind a shared reference"
     },
     {
      "program": "conformance/175_len_and_index_as_int.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/176_opt_default.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/177_deep_recursion.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "conformance/177_opt_chain.wj",
      "reason": "[compiled-build-failed] error: optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type"
     },
     {
-     "program": "conformance/17_closure_counter_capture.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
      "program": "conformance/18_option_match.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/19_result_match.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/20_result_question.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/21_vec_ops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/22_vec_index_mutate.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/23_hashmap_ops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/24_hashmap_sorted_iter.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/25_loops_ranges.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/26_break_continue.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/27_trait_impl.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/28_generic_fn.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/29_recursion_fib.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/31_bool_logic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/32_struct_nested_fields.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/33_shadow_and_blocks.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/34_method_chain_builder.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/35_vec_of_structs.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "conformance/40_prng_fnv_checksum.wj",
@@ -3354,183 +2563,35 @@
     },
     {
      "program": "conformance/51_result_question_chain.wj",
-     "reason": "[compiled-build-failed] error: cast cannot be followed by a method call"
-    },
-    {
-     "program": "conformance/52_int_casts.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/53_div_mod_signs.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
     },
     {
      "program": "conformance/54_shifts_bitops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/55_float_format.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/56_float_math.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/57_checked_ops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/58_parse_numbers.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/59_string_unicode.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/60_overflow_panics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "conformance/61_string_split_trim.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<String>` cannot be built from an iterator over elements of type `&str`"
     },
     {
      "program": "conformance/62_vec_alias_semantics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/64_enum_match_guards.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/65_option_combinators.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/66_result_propagation.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/69_index_oob_panics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/70_div_zero_panics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/71_explicit_panic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "conformance/72_hashmap_ops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/73_hashset_ops.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: `match` arms have incompatible types"
     },
     {
      "program": "conformance/74_vec_algorithms.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/76_loops_ranges.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/77_shadowing_blocks.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/78_tuples_destructuring.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/79_trait_dispatch.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/80_generic_struct.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/81_recursion_depth.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/82_consts_statics.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/83_builder_chain.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/90_crc32_known_answer.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/91_fnv1a_known_answers.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/92_minstd_known_answer.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/93_pcg32_known_answer.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/94_sha256_known_answer.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/95_base64_rfc4648_vectors.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/96_utf8_encode_decode.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/97_rational_harmonic.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "conformance/98_bignum_factorial.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "conformance/99_collatz_longest.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ARGS-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ARGS-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ARGS-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-ATTR-001.wj",
      "reason": "[compiled-build-failed] error: cannot find attribute `custom_tag` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ATTR-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ATTR-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
     },
     {
      "program": "spec/SPEC-ATTR-004.wj",
@@ -3538,363 +2599,63 @@
     },
     {
      "program": "spec/SPEC-CLOS-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-CLOS-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-CLOS-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-CLOS-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `filter` found for struct `Vec<User>` in the current scope"
     },
     {
      "program": "spec/SPEC-COLL-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-COLL-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-008.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: lifetime may not live long enough"
     },
     {
      "program": "spec/SPEC-COLL-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-COLL-010.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: lifetime may not live long enough"
     },
     {
      "program": "spec/SPEC-CONC-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0433]: cannot find module or crate `tokio` in this scope"
     },
     {
      "program": "spec/SPEC-CONC-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `wait` found for `async` block `{async block@SPEC-CONC-002.rs:7:13: 7:23}` in th"
     },
     {
      "program": "spec/SPEC-CONC-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0433]: cannot find module or crate `tokio` in this scope"
     },
     {
      "program": "spec/SPEC-CONC-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-CONC-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ERR-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: `Result<{integer}, RecvError>` doesn't implement `std::fmt::Display`"
     },
     {
      "program": "spec/SPEC-ERR-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ERR-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ERR-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXEC-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-008.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-010.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-EXPR-011.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-012.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-013.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-014.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-015.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-016.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-EXPR-018.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-GRAM-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-GRAM-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-GRAM-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-GRAM-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: cannot add `i32` to `i64`"
     },
     {
      "program": "spec/SPEC-GRAM-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-GRAM-008.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-GRAM-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-MATCH-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-MATCH-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`"
     },
     {
      "program": "spec/SPEC-INTR-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-INTR-008.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-ITEM-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-ITEM-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-ITEM-010.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-ITEM-011.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-008.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-010.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-011.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-012.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-013.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-014.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-LEX-015.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-MOD-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-MOD-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-MOD-003.wj",
@@ -3902,367 +2663,75 @@
     },
     {
      "program": "spec/SPEC-NUM-001.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: literal out of range for `i32`"
     },
     {
      "program": "spec/SPEC-NUM-002.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: this arithmetic operation will overflow"
     },
     {
      "program": "spec/SPEC-NUM-003.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: this arithmetic operation will overflow"
     },
     {
      "program": "spec/SPEC-NUM-004.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-005.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: this arithmetic operation will overflow"
     },
     {
      "program": "spec/SPEC-NUM-006.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-007.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-008.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-009.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-010.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-012.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-013.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-014.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-015.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
-    },
-    {
-     "program": "spec/SPEC-NUM-016.wj",
-     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+     "reason": "[compiled-build-failed] error: this operation will panic at runtime"
     },
     {
      "program": "spec/SPEC-NUM-017.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OPT-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OPT-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OPT-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error: literal out of range for `i32`"
     },
     {
      "program": "spec/SPEC-OPT-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error: optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type"
     },
     {
      "program": "spec/SPEC-OPT-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-007.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-OWN-008.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error: optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type"
     },
     {
      "program": "spec/SPEC-PAT-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-PAT-007.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-008.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-PAT-009.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PAT-010.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PIPE-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PIPE-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PIPE-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PIPE-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PIPE-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-PIPE-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-007.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-008.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0004]: non-exhaustive patterns: `i64::MIN..=0_i64` and `3_i64..=i64::MAX` not covered"
     },
     {
      "program": "spec/SPEC-STMT-009.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-010.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STMT-011.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STD-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STD-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STD-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STD-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-STD-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0689]: can't call method `abs` on ambiguous numeric type `{integer}`"
     },
     {
      "program": "spec/SPEC-STR-007.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-008.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-009.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-010.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-STR-011.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-BLOCK-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-BLOCK-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-BLOCK-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<String>` cannot be built from an iterator over elements of type `&str`"
     },
     {
      "program": "spec/SPEC-TRT-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-003.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-TRT-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-007.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-008.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TRT-009.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TYP-001.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TYP-002.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TYP-004.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TYP-005.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0369]: cannot add `V` to `V`"
     },
     {
      "program": "spec/SPEC-TYP-006.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TYP-007.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
-    },
-    {
-     "program": "spec/SPEC-TYP-008.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-TYP-010.wj",
-     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     }
    ]
   },
@@ -4285,7 +2754,7 @@
    "id": "R4",
    "title": "Fast enough",
    "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
-   "percent": 87.5,
+   "percent": 85.4,
    "status": "fail",
    "detail": {
     "projects": [
@@ -4597,63 +3066,63 @@
     "warm_loop": {
      "project": "wj-sync",
      "files": 24,
-     "median_s": 0.93
+     "median_s": 2.08
     },
     "startup": {
-     "hello_s": 0.025,
+     "hello_s": 0.048,
      "target_s": 0.25,
      "project": "wj-sync",
      "files": 24,
-     "check_s": 0.01,
-     "interp_test_s": 0.514,
+     "check_s": 0.025,
+     "interp_test_s": 1.395,
      "check_share": 0.02
     },
     "kernels": [
      {
       "kernel": "closures.wj",
-      "interp_cpu_s": 0.15,
-      "python_cpu_s": 0.04,
-      "ratio": 3.6,
+      "interp_cpu_s": 0.17,
+      "python_cpu_s": 0.06,
+      "ratio": 3.0,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "fib30.wj",
       "interp_cpu_s": 0.09,
-      "python_cpu_s": 0.14,
+      "python_cpu_s": 0.16,
       "ratio": 0.6,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "hashmap.wj",
-      "interp_cpu_s": 0.2,
-      "python_cpu_s": 0.06,
-      "ratio": 3.5,
+      "interp_cpu_s": 0.23,
+      "python_cpu_s": 0.05,
+      "ratio": 4.1,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "loop5m.wj",
-      "interp_cpu_s": 0.18,
-      "python_cpu_s": 1.07,
+      "interp_cpu_s": 0.22,
+      "python_cpu_s": 1.08,
       "ratio": 0.2,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "nbody.wj",
-      "interp_cpu_s": 0.89,
+      "interp_cpu_s": 0.96,
       "python_cpu_s": 0.13,
-      "ratio": 7.0,
+      "ratio": 7.3,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "sieve.wj",
-      "interp_cpu_s": 0.55,
-      "python_cpu_s": 0.41,
-      "ratio": 1.3,
+      "interp_cpu_s": 0.6,
+      "python_cpu_s": 0.42,
+      "ratio": 1.4,
       "outputs_match": true,
       "met": false
      },
@@ -4661,15 +3130,15 @@
       "kernel": "strings.wj",
       "interp_cpu_s": 0.11,
       "python_cpu_s": 0.08,
-      "ratio": 1.5,
+      "ratio": 1.4,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "structs.wj",
-      "interp_cpu_s": 0.36,
-      "python_cpu_s": 0.17,
-      "ratio": 2.2,
+      "interp_cpu_s": 0.4,
+      "python_cpu_s": 0.19,
+      "ratio": 2.1,
       "outputs_match": true,
       "met": false
      }
@@ -4755,27 +3224,31 @@
     },
     {
      "program": "bench/closures.wj",
-     "reason": "interpreter 0.15s vs python 0.04s CPU (3.6x slower)"
+     "reason": "interpreter 0.17s vs python 0.06s CPU (3.0x slower)"
     },
     {
      "program": "bench/hashmap.wj",
-     "reason": "interpreter 0.20s vs python 0.06s CPU (3.5x slower)"
+     "reason": "interpreter 0.23s vs python 0.05s CPU (4.1x slower)"
     },
     {
      "program": "bench/nbody.wj",
-     "reason": "interpreter 0.89s vs python 0.13s CPU (7.0x slower)"
+     "reason": "interpreter 0.96s vs python 0.13s CPU (7.3x slower)"
     },
     {
      "program": "bench/sieve.wj",
-     "reason": "interpreter 0.55s vs python 0.41s CPU (1.3x slower)"
+     "reason": "interpreter 0.60s vs python 0.42s CPU (1.4x slower)"
     },
     {
      "program": "bench/strings.wj",
-     "reason": "interpreter 0.11s vs python 0.08s CPU (1.5x slower)"
+     "reason": "interpreter 0.11s vs python 0.08s CPU (1.4x slower)"
     },
     {
      "program": "bench/structs.wj",
-     "reason": "interpreter 0.36s vs python 0.17s CPU (2.2x slower)"
+     "reason": "interpreter 0.40s vs python 0.19s CPU (2.1x slower)"
+    },
+    {
+     "program": "wj-sync",
+     "reason": "warm edit-run loop 2.08s > 1.0s (24 files)"
     }
    ]
   },
@@ -4783,709 +3256,177 @@
    "id": "R5",
    "title": "Diagnostics agree",
    "target": "0 check/interpreter/build disagreements",
-   "percent": 65.9,
+   "percent": 94.2,
    "status": "fail",
    "detail": {
     "parity_checked": 300,
     "parity_agree": 300,
     "build_checked": 169,
     "negative_programs": 131,
-    "gap_headers_now_accepted": 0,
+    "gap_headers_now_accepted": 20,
     "cargo_gates": null,
     "agent_pilot_check_misses": 13
    },
    "blockers": [
     {
-     "program": "examples/verified/algo_anagram.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_bank_account.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_bfs_grid.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_binary_search.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
      "program": "examples/verified/algo_binary_tree.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/algo_bubble_sort.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/algo_caesar_cipher.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_collatz.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_digits.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_fibonacci.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_fizzbuzz.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_gcd_lcm.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_inventory.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_knapsack_dp.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: arguments to this function are incorrect)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/algo_lcs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ)"
-    },
-    {
-     "program": "examples/verified/algo_linked_list_enum.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ)"
     },
     {
      "program": "examples/verified/algo_matrix_multiply.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: arguments to this function are incorrect)"
-    },
-    {
-     "program": "examples/verified/algo_palindrome.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_pascal_triangle.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_perfect_numbers.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_primes_sieve.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_roman_numerals.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: arguments to this function are incorrect)"
     },
     {
      "program": "examples/verified/algo_stack_calculator.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0277]: can't compare 'str' with '&str')"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0658]: use of unstable library feature `str_as_str` (documented gap: error[E0277]: can't compare 'str' with '&str')"
     },
     {
      "program": "examples/verified/algo_state_machine.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/algo_statistics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_temperature_table.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/algo_tokenizer.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/algo_word_frequency.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'map' found for struct 'HashMap<String, )"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: a value of type `Vec<(String, i64)>` cannot be (documented gap: error[E0599]: no method named 'map' found for struct 'HashMap<String, )"
     },
     {
      "program": "examples/verified/basics_arithmetic.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0689]: can't call method 'pow' on ambiguous numeric type '{inte)"
-    },
-    {
-     "program": "examples/verified/basics_bool_logic.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_const.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_float_math.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_for_range.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_functions.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_hello.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_if_else.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_if_expression.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_interpolation.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_loop_break.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_main_exit_code.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0433]: cannot find module or crate 'windjammer_runtime' in this)"
-    },
-    {
-     "program": "examples/verified/basics_shadowing_blocks.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_tuples.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/basics_variables.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/basics_while.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/btreemap_ordered.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/chars_ascii_arith.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/chars_classify.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/closures_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/closures_counter.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/closures_return_fn.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/defer_cleanup.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/defer_panic_lifo.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/display_to_string.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/enum_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/enum_data.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0689]: can't call method `pow` on ambiguous numeric t (documented gap: error[E0689]: can't call method 'pow' on ambiguous numeric type '{inte)"
     },
     {
      "program": "examples/verified/enum_methods.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: arguments to this enum variant are incorrect)"
-    },
-    {
-     "program": "examples/verified/enum_option_like_generic.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/error_assert_eq_fails.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/error_assert_ok.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/error_custom_enum.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/error_map_err_ok.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/error_panic_exit_code.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/error_unwrap_or_expect.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/from_conversion.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: arguments to this enum variant are incorrect (documented gap: error[E0308]: arguments to this enum variant are incorrect)"
     },
     {
      "program": "examples/verified/generics_function.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'clone' found for type parameter 'T' in )"
-    },
-    {
-     "program": "examples/verified/generics_struct.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/hashmap_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/hashmap_iterate_sorted.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/hashmap_remove_update.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/hashmap_word_count.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0599]: no method named `clone` found for type paramet (documented gap: error[E0599]: no method named 'clone' found for type parameter 'T' in )"
     },
     {
      "program": "examples/verified/hashset_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/idiom_agentdx_regressions.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/if_let_chain.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/iter_any_all_count.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the)"
     },
     {
      "program": "examples/verified/iter_collect_hashmap.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<String>' in )"
-    },
-    {
-     "program": "examples/verified/iter_enumerate_zip.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/iter_filter_map_flat.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: a value of type `HashMap<String, i64>` cannot  (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<String>' in )"
     },
     {
      "program": "examples/verified/iter_flat_map_chain.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' i)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0271]: type mismatch resolving `<[i64; 2] as IntoIter (documented gap: error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' i)"
     },
     {
      "program": "examples/verified/iter_fold_sum.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'sum' found for struct 'Vec<i32>' in the)"
-    },
-    {
-     "program": "examples/verified/iter_group_by_manual.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/iter_map_filter.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<i32>' in the)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0599]: no method named 'sum' found for struct 'Vec<i32>' in the)"
     },
     {
      "program": "examples/verified/iter_min_max_by.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0061]: this method takes 1 argument but 0 arguments were suppli)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0061]: this method takes 1 argument but 0 arguments w (documented gap: error[E0061]: this method takes 1 argument but 0 arguments were suppli)"
     },
     {
      "program": "examples/verified/iter_partition_unzip.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'partition' found for struct 'Vec<i32>' )"
-    },
-    {
-     "program": "examples/verified/iter_scan_running_total.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/iter_sort_by_float.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not (documented gap: error[E0599]: no method named 'partition' found for struct 'Vec<i32>' )"
     },
     {
      "program": "examples/verified/iter_take_skip_rev.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'take' found for struct 'Vec<i32>' in th)"
-    },
-    {
-     "program": "examples/verified/let_else_pattern.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/loops_labeled_nested.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: arguments to this function are incorrect)"
-    },
-    {
-     "program": "examples/verified/match_patterns.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/match_tuple_destructure.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/match_while_let.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/mem_swap_replace_take.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/module_inline.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0255]: the name 'rect_area' is defined multiple times)"
-    },
-    {
-     "program": "examples/verified/module_nested_pub_mod.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/modules_trait_static.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/numbers_bitwise.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/numbers_conversions.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/numbers_float_rounding.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/numbers_float_special.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/numbers_integer_widths.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0599]: no method named 'take' found for struct 'Vec<i32>' in th)"
     },
     {
      "program": "examples/verified/numbers_min_max_abs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0689]: can't call method 'abs' on ambiguous numeric type '{inte)"
-    },
-    {
-     "program": "examples/verified/numbers_overflow_checked.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0689]: can't call method 'abs' on ambiguous numeric type '{inte)"
     },
     {
      "program": "examples/verified/operators_overload.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0119]: conflicting implementations of trait 'PartialEq' for typ)"
-    },
-    {
-     "program": "examples/verified/option_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/option_combinators.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/option_filter_zip_flatten.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/option_take_replace.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/pipe_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/pipe_method_stage.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/pipe_result_question.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_bit_counting.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_csv_parse.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0046]: not all trait items implemented, missing: `Out (documented gap: error[E0119]: conflicting implementations of trait 'PartialEq' for typ)"
     },
     {
      "program": "examples/verified/prog_event_handlers.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/prog_game_of_life.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/prog_lru_cache.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/prog_matrix_transpose.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/prog_priority_scheduler.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_queue_simulation.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_run_length_encoding.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_shapes_report.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_text_wrap.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/prog_tictactoe_winner.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/recursion_hanoi_ackermann.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/result_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/result_collect_all_or_nothing.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0282]: type annotations needed)"
-    },
-    {
-     "program": "examples/verified/result_question_mark.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/sort_stability_keys.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/std_cmp_ordering.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0282]: type annotations needed (documented gap: error[E0282]: type annotations needed)"
     },
     {
      "program": "examples/verified/std_env_args.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0432]: unresolved import 'windjammer_runtime')"
-    },
-    {
-     "program": "examples/verified/std_fs_roundtrip.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0433]: cannot find module or crate 'windjammer_runtime' in this)"
-    },
-    {
-     "program": "examples/verified/std_math_functions.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_build.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_chars.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_compare_sort.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_format_specs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_parse.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_slicing.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0277]: the size for values of type 'str' cannot be known at com)"
-    },
-    {
-     "program": "examples/verified/strings_split_join.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/strings_unicode.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/struct_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/struct_default_builder.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/struct_derive_debug_eq.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/struct_method_chain_mut.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/struct_nested.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/struct_update_copy.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: a value of type `Vec<std::string::String>` can (documented gap: error[E0432]: unresolved import 'windjammer_runtime')"
     },
     {
      "program": "examples/verified/struct_with_vec_field.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0282]: type annotations needed)"
-    },
-    {
-     "program": "examples/verified/trait_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/trait_default_and_override.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/trait_display_to_string.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/trait_dyn_dispatch.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
-    },
-    {
-     "program": "examples/verified/trait_generic_bound.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0425]: cannot find type 'int' in this scope)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0282]: type annotations needed (documented gap: error[E0282]: type annotations needed)"
     },
     {
      "program": "examples/verified/vec_2d_grid.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied)"
-    },
-    {
-     "program": "examples/verified/vec_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/vec_contains_position.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: v.position(|x| *x == 15) emits 15_i64 against an i32 array (literal wi)"
-    },
-    {
-     "program": "examples/verified/vec_insert_remove.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: the trait bound `Vec<i32>: Copy` is not satisf (documented gap: error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied)"
     },
     {
      "program": "examples/verified/vec_of_structs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0599]: no method named 'max_by_key' found for struct 'Vec<Perso)"
-    },
-    {
-     "program": "examples/verified/vec_slices_windows.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (documented gap: error[E0277]: a value of type 'Vec<i64>' cannot be built from an itera)"
-    },
-    {
-     "program": "examples/verified/vec_sort_dedup.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
-    },
-    {
-     "program": "examples/verified/vecdeque_queue.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0423]: cannot find function `println` in this scope (not a documented gap)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0599]: no method named `max_by_key` found for struct  (documented gap: error[E0599]: no method named 'max_by_key' found for struct 'Vec<Perso)"
     },
     {
      "program": "pilot/t006_base_convert.A.0",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: "
     },
     {
      "program": "pilot/t006_base_convert.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t006_base_convert.A.2",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t011_lru_cache.A.0",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t011_lru_cache.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t011_lru_cache.A.2",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t013_bst.A.0",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t013_bst.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t018_word_freq.A.0",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t018_word_freq.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t018_word_freq.A.2",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0308]: mismatched types"
     },
     {
      "program": "pilot/t030_bank_ledger.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
     },
     {
      "program": "pilot/t030_bank_ledger.A.2",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
     }
    ]
   },
@@ -5535,9 +3476,13 @@
     "window": 20,
     "commits_in_window": 20,
     "commits_passing": 0,
-    "commits_recorded": 2
+    "commits_recorded": 3
    },
    "blockers": [
+    {
+     "program": "fab6f0580f",
+     "reason": "failed R1,R2,R4,R5,R6"
+    },
     {
      "program": "736e392eec",
      "reason": "no full readiness run recorded for this commit"
@@ -5612,10 +3557,6 @@
     },
     {
      "program": "0634ac951a",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "6f9b2b3d3c",
      "reason": "no full readiness run recorded for this commit"
     }
    ]

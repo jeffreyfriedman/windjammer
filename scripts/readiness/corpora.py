@@ -118,7 +118,9 @@ class Program:
 
     def runnable(self):
         """Comparable interpreted-vs-compiled: plain run/panic programs without manifest grants."""
-        return self.mode in ("run", "panic") and "manifest" not in self.header and not self.xfail
+        # test-runner programs (`tests-passed:` headers) belong to R1; `__SEED__` templates to the generated corpus
+        return (self.mode in ("run", "panic") and "manifest" not in self.header and not self.xfail
+                and "tests-passed" not in self.header and "tests-failed" not in self.header and "__SEED__" not in self.src)
 
     def expected_stdout(self):
         return ("\n".join(self.expect) + "\n") if self.expect and self.mode == "run" else None
