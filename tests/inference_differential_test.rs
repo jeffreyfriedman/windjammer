@@ -633,3 +633,8 @@ fn generated_mixed_width_arithmetic_is_accepted_by_rustc() {
 fn check_source_no_run(src: &str, dir: &Path) -> Result<(), Failure> {
     check_source(src, dir, &[], false)
 }
+
+#[test]
+fn corpus_untyped_accumulator_mixed_with_int_stays_int_in_while_condition() {
+    corpus_check("untyped_accumulator_mixed_int");
+}
