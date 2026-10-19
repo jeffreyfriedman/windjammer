@@ -22,7 +22,7 @@ fn unique_dir() -> std::path::PathBuf {
 }
 
 fn wj_bin() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/release/wj")
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 /// When metadata has return_type: null for Type::new(), the compiler should

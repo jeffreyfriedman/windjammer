@@ -13,9 +13,9 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 
 | Command | Effect |
 |---------|--------|
-| `wj run` | Run the project containing the working directory: `wj.toml` is found upward, its default binary runs (`src/main.wj`, `main.wj`, the first `[[bin]]`). |
-| `wj run PATH [args]` | A `.wj` file, or a directory with `main.wj` / `src/main.wj` (`wj run ./cmd/tool`). Use `wj run . args` to pass arguments, as with `go run . args`. |
-| `wj run --bin NAME` | A `[[bin]]` entry of `wj.toml`, `cmd/NAME/main.wj` or `src/bin/NAME.wj`. |
+| `wj run` | Run the project containing the working directory: `wj.toml` is found upward, its default binary runs (`main.wj` under `src/` or at the root, the first `[[bin]]`). |
+| `wj run PATH [args]` | A `.wj` file, or a directory with `main.wj` at its root or under `src/` (`wj run ./cmd/tool`). Use `wj run . args` to pass arguments, as with `go run . args`. |
+| `wj run --bin NAME` | A `[[bin]]` entry of `wj.toml`, `cmd/NAME/main.wj` or a file named after NAME in `src/bin/`. |
 | `wj run --interpret ...` | Interpreter only: never fall back (an unsupported feature exits 2 naming it). |
 | `wj run --compiled ...` / `--release` | Transpile to Rust and run with cargo (`--release`: optimized). `wj build` is unchanged. |
 | `wj run --watch` | Re-run on every change to `.wj`, `.rs`, `wj.toml`, `wj.lock` under the project (restarts long-running programs). |
@@ -75,7 +75,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
   adds the compiled half for fixtures and the first fuzz seeds.
 
 **Compiled-path bugs found by the project gates** (fixed here unless marked open):
-- Fixed: `use greet` in a crate-root `src/main.wj` was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
+- Fixed: `use greet` in a crate-root `main.wj` (under `src/`) was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
   package lib in the binary).
 - Fixed: a user module named like a runtime std module (`util::math`) also got `use windjammer_runtime::math;` (E0252).
 - Fixed: `util::math::cube(3)` or `crate::x::f()` in the binary's `main.rs` did not resolve (the modules live in the package lib);
@@ -83,7 +83,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 - Fixed: `wj run` (compiled) printed build progress on stdout; it now goes to stderr so both paths print the same bytes.
 - Fixed: a path dependency on a Windjammer source package was handed to Cargo as-is; `wj run --compiled` now builds it into the
   package's `gen/` crate first and the generated `Cargo.toml` links that.
-- Open: `wj build .` on a project root (rather than `src/`) treats `src/main.wj` as a module and drops `fn main`; `wj run` passes the
+- Open: `wj build .` on a project root (rather than `src/`) treats the `main.wj` under `src/` as a module and drops `fn main`; `wj run` passes the
   source root, so it is unaffected.
 - Fixed: module aliases and `super::`/`self::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) reported
   `missing boundary signature for m3::f0`; the callee is now resolved through `resolve::same_crate_callee_key`.
@@ -94,7 +94,7 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 
 **Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
 engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
-root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
+root. Compiled runs of a file in `src/bin/` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
 preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
 kept; other edits print a restart notice (use `--watch` for those).
 

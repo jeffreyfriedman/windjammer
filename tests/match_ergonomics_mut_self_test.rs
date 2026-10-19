@@ -21,7 +21,7 @@ fn compile_wj_to_string(source: &str) -> String {
     let out_dir = dir.path().join("build");
     std::fs::create_dir_all(&out_dir).unwrap();
 
-    let wj_binary = std::env::current_dir().unwrap().join("target/release/wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = Command::new(&wj_binary)
         .arg("build")

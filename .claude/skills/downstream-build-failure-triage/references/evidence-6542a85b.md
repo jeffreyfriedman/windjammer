@@ -1,0 +1,1 @@
+The rebuild with the new compiler made things worse: the engine still does not build, and the error count rose from 330 to 361. The cause is a regression introduced by my own merge of the convergence work. The repro is two lines: `fn f(seg: i32) -> u32 { (2 * seg + 1) as u32 }` now emits `(2_i32 * seg + 1_i64) as u32`. That accounts for about 25 new errors.

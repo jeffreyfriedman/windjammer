@@ -809,6 +809,12 @@ impl SignatureRegistry {
         if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) { bucket.insert(pos, name.to_string()); }
     }
 
+    /// INTR-009: is `name` a user-defined (non-extern) function that is not also a stdlib one? Such a function
+    /// shadows an intrinsic of the same name.
+    pub fn is_user_fn_shadowing_stdlib(&self, name: &str) -> bool {
+        self.get_signature(name).is_some_and(|sig| !sig.is_extern) && Self::stdlib().get_signature(name).is_none()
+    }
+
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
         if let Some(sig) = self.signatures.get(name) {
             return Some(sig);

@@ -1,4 +1,4 @@
-# `wj test --interpret`: `use crate::item` in `tests/` is not resolved against `src/lib.wj`
+# `wj test --interpret`: `use crate::item` in `tests/` is not resolved against src/lib.wj
 
 Package layout:
 
@@ -19,5 +19,5 @@ fn test_add() {
 
 `wj test` (compiled) passes. `wj test --interpret` fails with
 `unsupported in the interpreter: crate::add is not implemented by the interpreter`, so every package-shaped project
-(`src/lib.wj` plus `tests/*_test.wj`, the ecosystem convention) is only testable compiled. Expected: the interpreter loads
-`src/lib.wj` as the crate root and binds `crate::` paths in test files to it, as it does for `wj run` projects.
+(src/lib.wj plus `tests/*_test.wj`, the ecosystem convention) is only testable compiled. Expected: the interpreter loads
+src/lib.wj as the crate root and binds `crate::` paths in test files to it, as it does for `wj run` projects.

@@ -85,11 +85,22 @@ impl<'ast> CodeGenerator<'ast> {
         // inference does not key closure-body expressions reliably, so give the body the type of
         // its own operands as the ambient integer slot.
         let prev_int_target = self.assignment_int_target_type.clone();
-        if !is_compiler_generated
-            && matches!(body, Expression::Binary { .. })
-        {
-            if let Some(ty) = self.infer_expression_type(body) {
-                if Self::int_type_from_assignment_target(&ty).is_some() {
+        // The operand that is not a literal is the typed peer. When it has no type of its own (an untyped
+        // parameter) but numeric inference bound the literal (immediately-invoked `(|v| v * 2)(x)`, the
+        // lowering of `x |> (|v| v * 2)`), that width wins; otherwise the body's own type is the slot.
+        if !is_compiler_generated {
+            if let Expression::Binary { left, right, .. } = body {
+                let is_lit = |e: &Expression| matches!(e, Expression::Literal { .. });
+                let peer = [&**left, &**right].into_iter().find(|e| !is_lit(e));
+                let lit_inferred = [&**left, &**right].into_iter().filter(|e| is_lit(e)).any(|e| {
+                    self.numeric_inference.as_ref().is_some_and(|ni| ni.get_int_type(e) != crate::type_inference::IntType::Unknown)
+                });
+                let slot = match peer.and_then(|p| self.infer_expression_type(p)) {
+                    Some(ty) => Some(ty),
+                    None if lit_inferred => None,
+                    None => self.infer_expression_type(body),
+                };
+                if let Some(ty) = slot.filter(|t| Self::int_type_from_assignment_target(t).is_some()) {
                     self.assignment_int_target_type = Some(ty);
                 }
             }

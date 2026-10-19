@@ -12,7 +12,9 @@ fn test_mcp_manifest_matches_catalog_count() {
     let count = json["count"].as_u64().expect("count field");
     let tools = json["tools"].as_array().expect("tools array");
     assert_eq!(count as usize, tools.len());
-    assert_eq!(tools.len(), 13, "expected 13 MCP tools");
+    // The tool list itself is checked against the catalog in crates/windjammer-mcp/tests/manifest_test.rs;
+    // a hard-coded number here only drifts every time a tool is added.
+    assert!(!tools.is_empty(), "manifest lists no MCP tools");
 }
 
 #[test]

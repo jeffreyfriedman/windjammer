@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: 5809fb56e863
+---
 # ADR-0024: `wj run --watch` and hot reload of function bodies
 
 - **Status:** Proposed (watch implemented; hot reload spike implemented as `wj run --hot`)

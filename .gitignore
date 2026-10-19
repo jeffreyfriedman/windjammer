@@ -58,3 +58,4 @@ tmp_*
 # Claude plugin runtime state
 .claude/autoharness/
 .claude/autoharness*/
+.claude/skills/*/.ledger.jsonl

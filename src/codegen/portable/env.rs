@@ -1,5 +1,6 @@
 //! Program-wide symbol tables used while lowering (types of items, never of locals).
 
+use super::alias::Aliases;
 use super::ir::ParamMode;
 use super::ty::{from_ast, Ty};
 use crate::analyzer::{OwnershipMode, SignatureRegistry};
@@ -51,15 +52,17 @@ pub struct ItemEnv {
     /// Methods of generic-trait impls (`impl From<X> for E`), which may coexist under one name:
     /// (owner, method) -> [(trait type arguments, emitted name)].
     pub trait_impls: HashMap<(String, String), Vec<(Vec<Ty>, String)>>,
+    /// `type` aliases and module names of the program (explicit state for `ty::from_ast`).
+    pub aliases: Aliases,
 }
 
 /// Emitted name of a method of a generic-trait impl: `from` in `impl From<string> for E` is
 /// `from__string`, so several `From` impls of one type coexist. Other methods keep their name.
-pub fn impl_method_name(block: &crate::parser::ImplBlock, method: &str) -> String {
+pub fn impl_method_name(block: &crate::parser::ImplBlock, method: &str, al: &Aliases) -> String {
     match &block.trait_type_args {
         Some(args) if !args.is_empty() => {
             let outer: Vec<String> = block.type_params.iter().map(|t| t.name.clone()).collect();
-            let tags: Vec<String> = args.iter().map(|t| ty_tag(&from_ast(t, &outer))).collect();
+            let tags: Vec<String> = args.iter().map(|t| ty_tag(&from_ast(t, &outer, al))).collect();
             format!("{method}__{}", tags.join("_"))
         }
         _ => method.to_string(),
@@ -113,7 +116,7 @@ fn modes_for(key: &str, decl: &FunctionDecl, reg: Option<&SignatureRegistry>) ->
     (recv, modes)
 }
 
-fn sig_of(decl: &FunctionDecl, key: &str, reg: Option<&SignatureRegistry>, outer: &[String], self_ty: Option<&Ty>) -> FnSig {
+fn sig_of(decl: &FunctionDecl, key: &str, reg: Option<&SignatureRegistry>, outer: &[String], self_ty: Option<&Ty>, al: &Aliases) -> FnSig {
     let mut generics: Vec<String> = outer.to_vec();
     generics.extend(decl.type_params.iter().map(|t| t.name.clone()));
     let (recv, modes) = modes_for(key, decl, reg);
@@ -122,15 +125,15 @@ fn sig_of(decl: &FunctionDecl, key: &str, reg: Option<&SignatureRegistry>, outer
         .iter()
         .enumerate()
         .filter(|(_, p)| p.name != "self")
-        .map(|(i, p)| (p.name.clone(), fix_self(from_ast(&p.type_, &generics), self_ty), modes[i]))
+        .map(|(i, p)| (p.name.clone(), fix_self(from_ast(&p.type_, &generics, al), self_ty), modes[i]))
         .collect();
-    let ret = decl.return_type.as_ref().map(|t| fix_self(from_ast(t, &generics), self_ty)).unwrap_or(Ty::Unit);
+    let ret = decl.return_type.as_ref().map(|t| fix_self(from_ast(t, &generics, al), self_ty)).unwrap_or(Ty::Unit);
     FnSig { type_params: generics, recv, params, ret }
 }
 
 impl ItemEnv {
     pub fn build(program: &Program, reg: Option<&SignatureRegistry>) -> ItemEnv {
-        let mut env = ItemEnv::default();
+        let mut env = ItemEnv { aliases: Aliases::from_program(program), ..ItemEnv::default() };
         // Traits first so impls can inherit default-method signatures regardless of source order.
         for item in &program.items {
             if matches!(item, Item::Trait { .. }) {
@@ -150,18 +153,18 @@ impl ItemEnv {
             Item::Struct { decl, .. } => {
                 let tp: Vec<String> = decl.type_params.iter().map(|t| t.name.clone()).collect();
                 let (fields, tuple) = match &decl.tuple_fields {
-                    Some(ts) => (ts.iter().enumerate().map(|(i, t)| (i.to_string(), from_ast(t, &tp))).collect(), true),
-                    None => (decl.fields.iter().map(|f| (f.name.clone(), from_ast(&f.field_type, &tp))).collect(), false),
+                    Some(ts) => (ts.iter().enumerate().map(|(i, t)| (i.to_string(), from_ast(t, &tp, &self.aliases))).collect(), true),
+                    None => (decl.fields.iter().map(|f| (f.name.clone(), from_ast(&f.field_type, &tp, &self.aliases))).collect(), false),
                 };
                 self.structs.insert(decl.name.clone(), StructInfo { type_params: tp, fields, tuple });
             }
             Item::Enum { decl, .. } => {
                 let tp: Vec<String> = decl.type_params.iter().map(|t| t.name.clone()).collect();
-                let variants = decl.variants.iter().map(|v| variant_info(v, &tp)).collect();
+                let variants = decl.variants.iter().map(|v| variant_info(v, &tp, &self.aliases)).collect();
                 self.enums.insert(decl.name.clone(), EnumInfo { type_params: tp, variants });
             }
             Item::Function { decl, .. } => {
-                self.fns.insert(decl.name.clone(), sig_of(decl, &decl.name, reg, &[], None));
+                self.fns.insert(decl.name.clone(), sig_of(decl, &decl.name, reg, &[], None, &self.aliases));
             }
             Item::Impl { block, .. } => self.register_impl(block, reg),
             Item::Trait { decl, .. } => {
@@ -170,11 +173,11 @@ impl ItemEnv {
                 let defaults = decl.methods.iter().filter(|m| m.body.is_some()).map(|m| m.name.clone()).collect();
                 self.trait_defaults.insert(decl.name.clone(), defaults);
                 for m in &decl.methods {
-                    self.methods.insert((decl.name.clone(), m.name.clone()), trait_sig(m, &decl.name));
+                    self.methods.insert((decl.name.clone(), m.name.clone()), trait_sig(m, &decl.name, &self.aliases));
                 }
             }
             Item::Const { name, type_, .. } | Item::Static { name, type_, .. } => {
-                self.consts.insert(name.clone(), from_ast(type_, &[]));
+                self.consts.insert(name.clone(), from_ast(type_, &[], &self.aliases));
             }
             Item::Mod { items, .. } => {
                 for i in items {
@@ -192,11 +195,11 @@ impl ItemEnv {
             self.impl_traits.entry(owner.clone()).or_default().push(t.clone());
         }
         let self_ty = Ty::Adt(owner.clone(), outer.iter().map(|n| Ty::Param(n.clone())).collect());
-        let trait_args: Option<Vec<Ty>> = block.trait_type_args.as_ref().filter(|a| !a.is_empty()).map(|a| a.iter().map(|t| from_ast(t, &outer)).collect());
+        let trait_args: Option<Vec<Ty>> = block.trait_type_args.as_ref().filter(|a| !a.is_empty()).map(|a| a.iter().map(|t| from_ast(t, &outer, &self.aliases)).collect());
         for f in &block.functions {
             let key = format!("{}::{}", block.type_name, f.name);
-            let name = impl_method_name(block, &f.name);
-            self.methods.insert((owner.clone(), name.clone()), sig_of(f, &key, reg, &outer, Some(&self_ty)));
+            let name = impl_method_name(block, &f.name, &self.aliases);
+            self.methods.insert((owner.clone(), name.clone()), sig_of(f, &key, reg, &outer, Some(&self_ty), &self.aliases));
             if let Some(args) = &trait_args {
                 self.trait_impls.entry((owner.clone(), f.name.clone())).or_default().push((args.clone(), name));
             }
@@ -238,23 +241,23 @@ pub fn fix_self(t: Ty, self_ty: Option<&Ty>) -> Ty {
     }
 }
 
-fn variant_info(v: &crate::parser::EnumVariant, tp: &[String]) -> VariantInfo {
+fn variant_info(v: &crate::parser::EnumVariant, tp: &[String], al: &Aliases) -> VariantInfo {
     match &v.data {
         EnumVariantData::Unit => VariantInfo { name: v.name.clone(), fields: vec![], named: false },
         EnumVariantData::Tuple(ts) => VariantInfo {
             name: v.name.clone(),
-            fields: ts.iter().enumerate().map(|(i, t)| (i.to_string(), from_ast(t, tp))).collect(),
+            fields: ts.iter().enumerate().map(|(i, t)| (i.to_string(), from_ast(t, tp, al))).collect(),
             named: false,
         },
         EnumVariantData::Struct(fs) => VariantInfo {
             name: v.name.clone(),
-            fields: fs.iter().map(|(n, t)| (n.clone(), from_ast(t, tp))).collect(),
+            fields: fs.iter().map(|(n, t)| (n.clone(), from_ast(t, tp, al))).collect(),
             named: true,
         },
     }
 }
 
-fn trait_sig(m: &crate::parser::TraitMethod, trait_name: &str) -> FnSig {
+fn trait_sig(m: &crate::parser::TraitMethod, trait_name: &str, al: &Aliases) -> FnSig {
     let has_self = m.parameters.first().map(|p| p.name == "self").unwrap_or(false);
     let self_ty = Ty::Adt(trait_name.to_string(), vec![]);
     let mode = |p: &crate::parser::Parameter| match p.type_ {
@@ -265,7 +268,7 @@ fn trait_sig(m: &crate::parser::TraitMethod, trait_name: &str) -> FnSig {
     FnSig {
         type_params: vec![],
         recv: if has_self { Some(mode(&m.parameters[0])) } else { None },
-        params: m.parameters.iter().filter(|p| p.name != "self").map(|p| (p.name.clone(), fix_self(from_ast(&p.type_, &[]), Some(&self_ty)), ParamMode::Value)).collect(),
-        ret: m.return_type.as_ref().map(|t| fix_self(from_ast(t, &[]), Some(&self_ty))).unwrap_or(Ty::Unit),
+        params: m.parameters.iter().filter(|p| p.name != "self").map(|p| (p.name.clone(), fix_self(from_ast(&p.type_, &[], al), Some(&self_ty)), ParamMode::Value)).collect(),
+        ret: m.return_type.as_ref().map(|t| fix_self(from_ast(t, &[], al), Some(&self_ty))).unwrap_or(Ty::Unit),
     }
 }

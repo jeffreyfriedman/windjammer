@@ -27,25 +27,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // `map.get(k).unwrap_or(0)`: `get` / `first` / `last` on a collection yield `Option<&T>`; a by-value
-        // numeric default means "the element, or this number", so read the element by value.
-        if method == "unwrap_or" && args.len() == 1 {
-            let default_is_scalar_literal = matches!(
-                arguments.first(),
-                Some((_, Expression::Literal { value: Literal::Int(_) | Literal::IntSuffixed(..) | Literal::Float(_) | Literal::Bool(_), .. }))
-            );
-            if default_is_scalar_literal && !obj_str.ends_with(".copied()") && !obj_str.ends_with(".cloned()") {
-                if let Expression::MethodCall { object: inner, method: m, .. } = object {
-                    if matches!(m.as_str(), "get" | "first" | "last")
-                        && self
-                            .infer_expression_type(inner)
-                            .is_some_and(|t| Self::type_is_iterable_collection(&t))
-                    {
-                        *obj_str = format!("{}.copied()", *obj_str);
-                    }
-                }
-            }
-        }
+        // `map.get(k).unwrap_or(0)` (read the element by value) is lowered once, from the receiver's
+        // `Option<&T>` type, in `idiom_lowering::lower_option_default_and_cmp`.
         // `opt.unwrap_or("lit")` on an `Option<&str>` (`lines().next()`, `split(..).next()`): the default
         // stays `&str`; coercing the literal to an owned `String` is a type error there.
         if method == "unwrap_or" && args.len() == 1 {

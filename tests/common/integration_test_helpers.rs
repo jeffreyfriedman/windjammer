@@ -27,6 +27,9 @@ use windjammer::{build_project_ext, CompilationTarget};
 const CARGO_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Serializes `cargo check` invocations to reduce flakes when the suite runs with high parallelism.
+/// Set after the first completed `cargo check` (the shared target then holds the dependency build).
+static CARGO_TARGET_WARM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 static CARGO_CHECK_LOCK: Mutex<()> = Mutex::new(());
 
 /// Temporary Windjammer project: `src/**/*.wj` → `build/**/*.rs` via multipass compilation.
@@ -173,17 +176,21 @@ impl MultiFileTest {
         .env("CARGO_INCREMENTAL", "0")
         .env("CARGO_PROFILE_DEV_DEBUG", "0")
             .args(["check", "--quiet"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            // Files, not pipes: an undrained pipe blocks cargo once it fills, which looks like a hang.
+            .stdout(Stdio::from(fs::File::create(self.build_dir.join("cargo.stdout")).map_err(|e| e.to_string())?))
+            .stderr(Stdio::from(fs::File::create(self.build_dir.join("cargo.stderr")).map_err(|e| e.to_string())?))
             .spawn()
             .map_err(|e| format!("failed to spawn cargo check: {e}"))?;
 
+        // The timeout is a hang guard. The first check in a process may compile the shared target's
+        // dependencies from scratch (minutes on a loaded machine), so only warm checks are timed.
+        let warm = CARGO_TARGET_WARM.load(std::sync::atomic::Ordering::SeqCst);
         let deadline = Instant::now() + CARGO_TIMEOUT;
         loop {
             match child.try_wait() {
                 Ok(Some(_)) => break,
                 Ok(None) => {
-                    if Instant::now() >= deadline {
+                    if warm && Instant::now() >= deadline {
                         let _ = child.kill();
                         let _ = child.wait();
                         return Err(format!(
@@ -198,17 +205,16 @@ impl MultiFileTest {
             }
         }
 
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("failed to collect cargo check output: {e}"))?;
+        let status = child.wait().map_err(|e| format!("failed to wait for cargo check: {e}"))?;
+        CARGO_TARGET_WARM.store(true, std::sync::atomic::Ordering::SeqCst);
 
-        if output.status.success() {
+        if status.success() {
             Ok(())
         } else {
             Err(format!(
                 "cargo check failed in {}.\nstderr:\n{}",
                 self.build_dir.display(),
-                String::from_utf8_lossy(&output.stderr),
+                fs::read_to_string(self.build_dir.join("cargo.stderr")).unwrap_or_default(),
             ))
         }
     }

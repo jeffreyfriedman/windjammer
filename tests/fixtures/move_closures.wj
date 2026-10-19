@@ -1,11 +1,11 @@
 // Test file for closure move inference
-// The compiler automatically adds `move` when the closure captures outer variables.
+// A closure that escapes gets `move`; a let-bound closure used only here borrows its captures.
 // No explicit `move` keyword needed — the compiler infers it.
 
 fn test_closure_captures_outer() {
     let x = 42
     
-    // Captures `x` from outer scope → compiler adds `move`
+    // Captures `x` from outer scope → borrowed (the closure never leaves the function)
     let closure = || x + 1
     
     let result = closure()
@@ -14,7 +14,7 @@ fn test_closure_captures_outer() {
 fn test_closure_with_param_and_capture() {
     let offset = 10
     
-    // Captures `offset` from outer scope → compiler adds `move`
+    // Captures `offset` from outer scope → borrowed (the closure never leaves the function)
     let add_offset = |n| n + offset
     
     let result = add_offset(5)
