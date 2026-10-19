@@ -113,6 +113,8 @@ pub(super) fn binary(l: Operand, r: Operand, op: BinaryOp, loc: Loc) -> Code {
         it.mark(loc);
         match (x, y) {
             (Got::Int(a, at), Got::Int(c, ct)) => int_op(op, a, at, c, ct),
+            // what `binary` does for two floats, without the dispatch
+            (Got::Val(Value::Float(a, at)), Got::Val(Value::Float(c, ct))) => crate::interpreter::ops::float_binary(op, a, at, c, ct),
             (x, y) => it.binary(op, x.value(), y.value()),
         }
     })
