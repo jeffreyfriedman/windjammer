@@ -1,5 +1,4 @@
-// expect: none
-// Windjammer infers `mut` for locals: this program is valid.
+// expect: WJ0004
 fn main() {
     let x = 10
     x = 20

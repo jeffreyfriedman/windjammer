@@ -138,7 +138,7 @@ impl Cx<'_, '_> {
         self_ty: Option<&str>,
         ret: Option<&Type>,
     ) {
-        let mut col = Collect::default();
+        let mut col = Collect::new(self.idx);
         let mut typed: HashMap<String, String> = HashMap::new();
         for p in params {
             col.bind(&p.name);
@@ -148,9 +148,16 @@ impl Cx<'_, '_> {
             if let Some(t) = type_name(&p.type_) {
                 typed.insert(p.name.clone(), t.to_string());
             }
+            if let Some(k) = rules::type_kind(&p.type_) {
+                col.scalars.insert(p.name.clone(), (k, true));
+            }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars } = col;
+        let Collect { names, counts, let_types, scalars, immutable, .. } = col;
+        let immutable: HashSet<String> = immutable
+            .into_iter()
+            .filter(|n| counts.get(n).copied().unwrap_or(0) == 1)
+            .collect();
         let scalars: HashMap<String, (Kind, bool)> = scalars
             .into_iter()
             .filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1)
@@ -164,6 +171,7 @@ impl Cx<'_, '_> {
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
+        ck.immutable = immutable;
         walk_block(&mut ck, body);
         // A literal tail expression is the return value too.
         if let (Some(Statement::Expression { expr: Expression::Literal { value, location }, .. }), Some(ty)) =
@@ -179,23 +187,47 @@ impl Cx<'_, '_> {
 
 /// First pass over a function: every name bound anywhere in it, how often, and the struct type
 /// of `let x = Point { .. }` / `let x: Point` bindings.
-#[derive(Default)]
-struct Collect {
+struct Collect<'i> {
+    idx: &'i Index,
     names: HashSet<String>,
     counts: HashMap<String, usize>,
     let_types: HashMap<String, String>,
+    /// `let x = ..` bindings declared without `mut`.
+    immutable: HashSet<String>,
     /// `let x: int = ..` / `let s = "lit"`: scalar kind and whether it was declared.
     scalars: HashMap<String, (Kind, bool)>,
 }
 
-impl Collect {
+impl<'i> Collect<'i> {
+    fn new(idx: &'i Index) -> Self {
+        Self {
+            idx,
+            names: HashSet::new(),
+            counts: HashMap::new(),
+            let_types: HashMap::new(),
+            immutable: HashSet::new(),
+            scalars: HashMap::new(),
+        }
+    }
+
+    /// Scalar kind of a call to a unique, non-generic project function with a scalar return type.
+    fn call_kind(&self, e: &Expression<'_>) -> Option<Kind> {
+        let Expression::Call { function, .. } = e else { return None };
+        let Expression::Identifier { name, .. } = &**function else { return None };
+        let Some([info]) = self.idx.fns.get(name).map(Vec::as_slice) else { return None };
+        if info.generic {
+            return None;
+        }
+        info.ret.as_ref().and_then(rules::type_kind)
+    }
+
     fn bind(&mut self, n: &str) {
         self.names.insert(n.to_string());
         *self.counts.entry(n.to_string()).or_default() += 1;
     }
 }
 
-impl Visitor for Collect {
+impl Visitor for Collect<'_> {
     fn pattern(&mut self, p: &Pattern<'_>) {
         match p {
             Pattern::Identifier(n) | Pattern::Ref(n) | Pattern::RefMut(n) | Pattern::MutBinding(n) => {
@@ -214,6 +246,9 @@ impl Visitor for Collect {
         }
     }
     fn stmt(&mut self, s: &Statement<'_>) {
+        if let Statement::Let { pattern: Pattern::Identifier(n), mutable: false, .. } = s {
+            self.immutable.insert(n.clone());
+        }
         if let Statement::Let {
             pattern: Pattern::Identifier(n) | Pattern::MutBinding(n),
             type_,
@@ -229,13 +264,10 @@ impl Visitor for Collect {
                 self.let_types.insert(n.clone(), t);
             }
             let declared = match type_ {
-                Some(Type::Int | Type::Int32 | Type::Uint) => Some((Kind::Int, true)),
-                Some(Type::Float) => Some((Kind::Float, true)),
-                Some(Type::String) => Some((Kind::Str, true)),
-                Some(_) => None,
+                Some(t) => rules::type_kind(t).map(|k| (k, true)),
                 None => match value {
-                    Expression::Literal { value: Literal::String(_), .. } => Some((Kind::Str, false)),
-                    _ => None,
+                    Expression::Literal { value: lit, .. } => rules::literal_kind(lit).map(|k| (k, false)),
+                    other => self.call_kind(other).map(|k| (k, true)),
                 },
             };
             if let Some(k) = declared {
@@ -252,6 +284,7 @@ struct Checker<'c, 'a, 'o> {
     self_ty: Option<String>,
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
+    immutable: HashSet<String>,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -270,6 +303,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self_ty,
             ret_ty: None,
             scalars: HashMap::new(),
+            immutable: HashSet::new(),
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -525,8 +559,169 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         match e {
             Expression::Literal { value, .. } => rules::literal_kind(value).map(|k| (k, false)),
             Expression::Identifier { name, .. } => self.scalars.get(name).copied(),
+            Expression::Call { function, .. } => {
+                let Expression::Identifier { name, .. } = &**function else { return None };
+                if self.locals.contains(name) && !self.cx.idx.fns.contains_key(name) {
+                    return None;
+                }
+                let Some([info]) = self.cx.idx.fns.get(name).map(Vec::as_slice) else { return None };
+                if info.generic {
+                    return None;
+                }
+                info.ret.as_ref().and_then(rules::type_kind).map(|k| (k, true))
+            }
             _ => None,
         }
+    }
+
+
+    fn mismatch_diag(&self, expected: Kind, found: Kind, what: &str, span: Option<Span>) -> Diagnostic {
+        let (e, f) = (rules::display_kind(expected), rules::display_kind(found));
+        let mut d = Diagnostic::error("WJ0003", format!("mismatched types: expected `{e}`, found `{f}`{what}"));
+        if let Some(sp) = span {
+            d = d.at(sp.with_label(format!("expected `{e}`, found `{f}`")));
+        }
+        d.with_help(format!("make the value a `{e}`, or change the declaration"))
+    }
+
+    /// `if 3 { .. }` / `while name { .. }`: the condition must be `bool`.
+    fn condition(&mut self, cond: &Expression<'_>, location: &SourceLocation) {
+        let Some((k, _)) = self.kind_of(cond) else { return };
+        if k == Kind::Bool {
+            return;
+        }
+        let span = self.operand_span(cond).or_else(|| self.cx.loc.word(location, "if"));
+        let d = self.mismatch_diag(Kind::Bool, k, " in condition", span);
+        self.cx.out.push(d);
+    }
+
+    /// `x = value` where `x` has a known scalar kind that `value` cannot have.
+    fn assignment(&mut self, target: &Expression<'_>, value: &Expression<'_>) {
+        let Expression::Identifier { name, .. } = target else { return };
+        let Some((lk, _)) = self.scalars.get(name).copied() else { return };
+        let Some((rk, rdeclared)) = self.kind_of(value) else { return };
+        let literal = matches!(value, Expression::Literal { .. });
+        let ok = lk == rk || (lk == Kind::Float && rk == Kind::Int && (literal || !rdeclared));
+        if ok {
+            return;
+        }
+        let span = self.operand_span(value);
+        let d = self.mismatch_diag(lk, rk, &format!(" in assignment to `{name}`"), span);
+        self.cx.out.push(d);
+    }
+
+    /// `let x: int = f(..)` where `f` returns another scalar kind.
+    fn let_from_call(&mut self, ty: &Type, value: &Expression<'_>) {
+        if matches!(value, Expression::Literal { .. }) {
+            return;
+        }
+        let (Some(want), Some((got, true))) = (rules::type_kind(ty), self.kind_of(value)) else { return };
+        if want == got {
+            return;
+        }
+        let span = match value {
+            Expression::Call { function, .. } => self.operand_span(function),
+            other => self.operand_span(other),
+        };
+        let d = self.mismatch_diag(want, got, " in initializer", span);
+        self.cx.out.push(d);
+    }
+
+    /// `let x: Name = ..` where `Name` is declared nowhere (WJ0005).
+    fn annotation(&mut self, ty: &Type, location: &SourceLocation) {
+        let mut names = Vec::new();
+        custom_names(ty, &mut names);
+        let idx: &'a Index = self.cx.idx;
+        for n in names {
+            if n.contains("::")
+                || n == "Self"
+                || idx.types.contains(&n)
+                || idx.generic_names.contains(&n)
+                || self.cx.names.has_value(&n)
+                || self.cx.names.glob
+                || self.cx.names.external
+                || is_std_name(&n)
+                || PRELUDE_TYPES.contains(&n.as_str())
+                || crate::type_classification::is_known_copy_aggregate(&n)
+                || crate::type_classification::is_copy_primitive(&n)
+                || STD_TYPE_NAMES.contains(&n.as_str())
+            {
+                continue;
+            }
+            let mut d = Diagnostic::error("WJ0005", format!("cannot find type `{n}` in this scope"));
+            let span = self.cx.loc.word(location, &n).or_else(|| self.cx.loc.first_use(&n));
+            if let Some(sp) = span {
+                d = d.at(sp.with_label("not found in this scope"));
+            }
+            let pool: Vec<String> = idx.types.iter().cloned().collect();
+            d = match closest(&n, pool.iter()) {
+                Some(best) => d.with_help(format!("a type with a similar name exists: `{best}`")),
+                None => d.with_help(format!("define it, or import it with `use`")),
+            };
+            self.cx.out.push(d);
+        }
+    }
+
+    /// `Enum::Variant` where `Enum` is a project enum without that variant (WJ0030).
+    fn variant_path(&mut self, path: &str, location: &SourceLocation) {
+        let Some((e, v)) = path.rsplit_once("::") else { return };
+        let e = e.rsplit("::").next().unwrap_or(e);
+        let idx: &'a Index = self.cx.idx;
+        let Some(vs) = idx.variants.get(e) else { return };
+        if vs.iter().any(|x| x == v)
+            || idx.methods.get(e).is_some_and(|m| m.contains(v))
+            || idx.blanket_methods.contains(v)
+            || idx.opaque_impls.contains(e)
+            || idx.structs.contains_key(e)
+            || v.chars().all(|c| c.is_uppercase() || c == '_' || c.is_ascii_digit())
+            || UNIVERSAL_ASSOC.contains(&v)
+        {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0030", format!("enum `{e}` has no variant named `{v}`"));
+        let ix = &self.cx.loc.ix;
+        let by_path = ix.text().find(&format!("{e}::{v}")).map(|i| ix.span(i + e.len() + 2, i + e.len() + 2 + v.len()));
+        let span = self.cx.loc.word(&self.effective(location), v).or(by_path).or_else(|| self.cx.loc.first_use(v));
+        if let Some(sp) = &span {
+            d = d.at(sp.clone().with_label("no such variant"));
+        }
+        d = d.with_help(format!("`{e}` has the variants: {}", vs.join(", ")));
+        if let (Some(best), Some(sp)) = (closest(v, vs.iter()), span) {
+            d = d.with_fix(replace_fix(&sp, &best, format!("use `{e}::{best}`")));
+        }
+        self.cx.out.push(d);
+    }
+
+    /// ADR-0002: assigning to a binding declared without `mut`. The compiler still infers `mut`,
+    /// so this is a warning until `rules::MUTABILITY_REQUIRED` flips (the inference itself is not
+    /// duplicated here).
+    fn immutable_assignment(&mut self, target: &Expression<'_>) {
+        let Expression::Identifier { name, location } = target else { return };
+        if !self.immutable.contains(name) {
+            return;
+        }
+        let ix = &self.cx.loc.ix;
+        let text = ix.text();
+        let needle = format!("let {name}");
+        let eff = self.effective(location);
+        let span = self.cx.loc.word(&eff, name);
+        let before = span.as_ref().map_or(text.len(), |s| s.byte_start);
+        let Some(at) = text[..before.min(text.len())].rfind(&needle) else { return };
+        if text[at + needle.len()..].chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_') {
+            return;
+        }
+        let severity = if rules::MUTABILITY_REQUIRED { crate::diagnostics::Severity::Error } else { crate::diagnostics::Severity::Warning };
+        let mut d = Diagnostic::new("WJ0004", severity, format!("`{name}` is assigned after its declaration but declared without `mut`"));
+        if let Some(sp) = span {
+            d = d.at(sp.with_label("assigned here"));
+        }
+        let at_mut = at + 4;
+        d = d.with_help(format!("declare it with `let mut {name}` (ADR-0002: explicit `mut`)")).with_fix(Fix {
+            description: format!("declare `{name}` as mutable"),
+            applicability: Applicability::MachineApplicable,
+            edits: vec![Edit { span: ix.span(at_mut, at_mut), replacement: "mut ".to_string() }],
+        });
+        self.cx.out.push(d);
     }
 
     fn operand_span(&self, e: &Expression<'_>) -> Option<Span> {
@@ -600,13 +795,21 @@ impl Visitor for Checker<'_, '_, '_> {
         match e {
             Expression::Call { function, arguments, .. } => {
                 self.skip.insert(*function as *const Expression<'_> as usize);
-                if let Expression::Identifier { name, .. } = function {
+                if let Expression::Identifier { name, location } = function {
                     self.call_literals(name, arguments);
+                    if name.contains("::") {
+                        let loc = self.effective(location);
+                        self.variant_path(name, &loc);
+                    }
                 }
             }
             Expression::Identifier { name, location } => {
                 if !self.skip.contains(&(e as *const Expression<'_> as usize)) {
                     self.identifier(name, location);
+                    if name.contains("::") {
+                        let loc = self.effective(location);
+                        self.variant_path(name, &loc);
+                    }
                 }
             }
             Expression::StructLiteral { name, fields, location } => {
@@ -618,6 +821,10 @@ impl Visitor for Checker<'_, '_, '_> {
                 self.field_access(object, field, &loc);
             }
             Expression::Binary { left, op, right, .. } => self.operands(left, *op, right),
+            Expression::StructLiteral { name, location, .. } if name.contains("::") => {
+                let loc = self.effective(location);
+                self.variant_path(name, &loc);
+            }
             Expression::MacroInvocation { name, args, .. } if name == "format" => self.display_args(args),
             Expression::MethodCall { object, method, location, .. } => {
                 let loc = self.effective(location);
@@ -628,6 +835,22 @@ impl Visitor for Checker<'_, '_, '_> {
     }
 
     fn stmt(&mut self, s: &Statement<'_>) {
+        match s {
+            Statement::If { condition, location, .. } | Statement::While { condition, location, .. } => {
+                self.condition(condition, location)
+            }
+            Statement::Assignment { target, value, compound_op, .. } => {
+                if compound_op.is_none() {
+                    self.assignment(target, value);
+                }
+                self.immutable_assignment(target);
+            }
+            Statement::Let { type_: Some(ty), value, location, .. } => {
+                self.let_from_call(ty, value);
+                self.annotation(ty, location);
+            }
+            _ => {}
+        }
         if let Statement::Match { arms, location, .. } = s {
             if let Some((e, missing)) = rules::non_exhaustive(self.cx.idx, arms) {
                 let list = missing.iter().map(|v| format!("`{e}::{v}`")).collect::<Vec<_>>().join(", ");
@@ -656,6 +879,13 @@ impl Visitor for Checker<'_, '_, '_> {
             if let Some(d) = check_literal(value, ty, self.cx.idx, span, "") {
                 self.cx.out.push(d);
             }
+        }
+    }
+
+    fn pattern(&mut self, p: &Pattern<'_>) {
+        if let Pattern::EnumVariant(path, _) = p {
+            // Patterns carry no location; find the variant by name in the source.
+            self.variant_path(path, &None);
         }
     }
 
@@ -688,3 +918,37 @@ fn replace_fix(span: &Span, replacement: &str, description: String) -> Fix {
         }],
     }
 }
+
+fn custom_names(t: &Type, out: &mut Vec<String>) {
+    match t {
+        Type::Custom(n) => out.push(n.clone()),
+        Type::Parameterized(n, args) => {
+            out.push(n.clone());
+            args.iter().for_each(|a| custom_names(a, out));
+        }
+        Type::Option(a) | Type::Vec(a) | Type::Reference(a) | Type::MutableReference(a) | Type::Array(a, _) => {
+            custom_names(a, out)
+        }
+        Type::Result(a, b) => {
+            custom_names(a, out);
+            custom_names(b, out);
+        }
+        Type::Tuple(ts) => ts.iter().for_each(|a| custom_names(a, out)),
+        _ => {}
+    }
+}
+
+/// Associated items every type has (so `Enum::default()` etc. are not flagged as variants).
+const UNIVERSAL_ASSOC: &[&str] = &["default", "from", "new", "try_from", "from_str", "clone", "eq", "cmp", "fmt", "hash"];
+
+/// Std / runtime type names usable in annotations without a visible declaration.
+const STD_TYPE_NAMES: &[&str] = &[
+    "Path", "PathBuf", "File", "SystemTime", "Ordering", "Range", "Regex", "Value", "Error", "Rc", "Arc", "Weak",
+    "Cell", "RefCell", "Box", "Mutex", "RwLock", "Condvar", "Duration", "Instant", "Sender", "Receiver", "Channel",
+    "Json", "Uuid", "Url", "Request", "Response", "Method", "StatusCode", "Headers", "Cow", "Pin", "PhantomData",
+    "Chars", "Lines", "Iter", "IntoIter", "Peekable", "Entry", "Formatter", "Display", "Debug", "Send", "Sync",
+    "Fn", "FnMut", "FnOnce", "Any", "TypeId", "NonZeroU32", "AtomicBool", "AtomicI32", "AtomicI64", "AtomicU32",
+    "AtomicU64", "AtomicUsize", "Utf8Error", "ParseIntError", "ParseFloatError", "Infallible", "Self", "Sized",
+    "Copy", "Eq", "Hash", "Hasher", "Add", "Sub", "Mul", "Div", "Neg", "Not", "Index", "Deref", "Drop", "Wrapping",
+    "Reverse", "Bound", "RangeInclusive", "OsString", "ExitCode", "Stdin", "Stdout", "Stderr", "Command", "Child",
+];
