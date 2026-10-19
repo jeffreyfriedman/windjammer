@@ -32,7 +32,6 @@ def measure(ctx):
     """Cached per context: rows for the sampled/all pilot programs plus the headline rate over the full pilot."""
     if getattr(ctx, "_pilot", None) is not None:
         return ctx._pilot
-    from . import r5
     progs = load(ctx.root)
     green = [p for p in progs if p["interp_green"]]
     silent_all = [p for p in green if p["silent"]]
@@ -45,12 +44,18 @@ def measure(ctx):
     for p in pick:
         if not p["interp_green"]:
             continue
-        path = os.path.join(gdir, p["program"].replace("/", "_") + ".wj")
+        path = os.path.join(gdir, re.sub(r"[^A-Za-z0-9_]", "_", p["program"]) + ".wj")
         with open(path, "w") as f:
             f.write(p["source"])
         h = sha(p["source"])
         c = ctx.cached_run("pilot-check", h, [ctx.wj, "check", path], ctx.timeouts["check"], cwd=gdir)
-        ok, err = r5.pipeline(ctx, path)
+        # a real cargo build: these programs use the runtime crate, which a bare rustc check cannot resolve
+        out = os.path.join(gdir, "out_" + h[:10])
+        b = ctx.cached_run("pilot-build-compiled", h, [ctx.wj, "build", path, "-o", out], ctx.timeouts["compiled"], cwd=gdir,
+                           env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
+        ok = b.rc == 0
+        err = "" if ok else ("unmeasured: " + b.err.strip()[:60] if b.timed_out else
+                             next((l.strip() for l in (b.err + b.out).splitlines() if l.startswith("error[") or l.startswith("error:")), "build failed"))
         rows.append({"program": p["program"], "silent": p["silent"], "check_accepts": c.rc == 0,
                      "pipeline_accepts": ok, "rustc_error": err})
     ctx._pilot = {"rows": rows, "interp_green": len(green), "silent": len(silent_all), "total": len(progs)}
@@ -65,5 +70,5 @@ def summary(ctx):
             classes[error_class(r["rustc_error"])] = classes.get(error_class(r["rustc_error"]), 0) + 1
     return {"programs": m["total"], "interpreter_green": m["interp_green"], "silent_divergences_recorded": m["silent"],
             "silent_divergence_rate": round(m["silent"] / m["interp_green"], 3) if m["interp_green"] else None,
-            "rechecked": len(m["rows"]), "rustc_error_classes": classes,
+            "rechecked": len(m["rows"]), "compiled_error_classes": classes,
             "check_misses": sum(1 for r in m["rows"] if r["silent"] and r["check_accepts"])}
