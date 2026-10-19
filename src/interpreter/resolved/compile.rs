@@ -198,7 +198,20 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
         (_, tail) => Body::V(poisoning(seq(init, tail.map(|(l, t)| (l, t.code()))), top)),
     };
     let scalar = cx.slot_ty.iter().all(|t| t.is_some());
-    Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, scalar, tail_hint: cx.tail_hint, body })
+    Some(CompiledFn {
+        nslots: cx.nslots,
+        params,
+        param_int,
+        param_typed,
+        ret_int,
+        scalar,
+        tail_hint: cx.tail_hint,
+        #[cfg(feature = "jit")]
+        calls: std::cell::Cell::new(0),
+        #[cfg(feature = "jit")]
+        jit: std::cell::OnceCell::new(),
+        body,
+    })
 }
 
 /// The last statement of a list: a typed integer expression, or code (`Raw`: its value may be a

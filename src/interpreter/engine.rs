@@ -135,6 +135,9 @@ pub struct Interpreter {
     pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
+    /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
+    #[cfg(feature = "jit")]
+    pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
     /// `std::subprocess` children by handle id.
     pub(crate) subprocesses: HashMap<u64, super::builtins::std_proc::Session>,
     pub(crate) next_subprocess: u64,
@@ -216,6 +219,8 @@ impl Interpreter {
             engine_resolved: false,
             compiled: HashMap::default(),
             rstack: Vec::new(),
+            #[cfg(feature = "jit")]
+            jit: None,
             subprocesses: HashMap::new(),
             next_subprocess: 0,
             sched: super::sched::Sched::new(),
