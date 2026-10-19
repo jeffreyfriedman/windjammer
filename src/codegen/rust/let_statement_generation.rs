@@ -89,6 +89,35 @@ impl<'ast> CodeGenerator<'ast> {
         Some(base)
     }
 
+    /// False when `ty` names a crate type that this file neither declares nor imports: an annotation
+    /// spelling it would not resolve (`let rules: Vec<Rule>` in a test that never imports `Rule`).
+    pub(in crate::codegen::rust) fn type_names_are_in_file_scope(&self, ty: &Type) -> bool {
+        if self.file_scope_is_open {
+            return true;
+        }
+        let known_elsewhere = |n: &str| {
+            self.struct_field_types.contains_key(n)
+                || self.enum_variant_types.keys().any(|k| k.split("::").next() == Some(n))
+        };
+        let named_ok = |n: &str| {
+            let leaf = crate::type_classification::type_name_leaf(n);
+            n.contains("::") || self.file_scope_type_names.contains(leaf) || !known_elsewhere(leaf)
+        };
+        match ty {
+            Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Reference(inner)
+            | Type::MutableReference(inner)
+            | Type::Array(inner, _) => self.type_names_are_in_file_scope(inner),
+            Type::Tuple(items) => items.iter().all(|t| self.type_names_are_in_file_scope(t)),
+            Type::Parameterized(base, args) => {
+                named_ok(base) && args.iter().all(|a| self.type_names_are_in_file_scope(a))
+            }
+            Type::Custom(n) => named_ok(n),
+            _ => true,
+        }
+    }
+
     /// True when `name` is the tail expression of the current function body or the value of a `return`.
     fn local_is_returned(&self, name: &str) -> bool {
         fn is_name(e: &Expression<'_>, name: &str) -> bool {
@@ -628,6 +657,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !crate::codegen::rust::types::type_contains_unbound_generic_param(
                                     ty,
                                 )
+                                && self.type_names_are_in_file_scope(ty)
                         })
                     });
                 if needs_collection_ascription_sv {
@@ -1157,6 +1187,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.local_var_types.get(vn).is_some_and(|ty| {
                         matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))
                             && !crate::codegen::rust::types::type_contains_unbound_generic_param(ty)
+                            && self.type_names_are_in_file_scope(ty)
                     })
                 });
                 if needs_collection_ascription {
