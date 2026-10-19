@@ -6,10 +6,10 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 135 | 110 | 25 |
-| `go` | 135 | 130 | 5 |
-| `js` | 135 | 130 | 5 |
-| `ts` | 135 | 133 | 2 |
+| `rust` | 142 | 115 | 27 |
+| `go` | 142 | 137 | 5 |
+| `js` | 142 | 137 | 5 |
+| `ts` | 142 | 140 | 2 |
 
 ## Known-unsupported pairs by cause
 
@@ -26,6 +26,8 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 | `js` | portable-type-aliases | 1 |
 | `js` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
 | `rust` | mut-ref-to-int-parameters | 1 |
+| `rust` | rust-closure-field-move | 1 |
+| `rust` | rust-closure-if-tail | 1 |
 | `rust` | rust-closure-returned-as-fn-pointer | 1 |
 | `rust` | rust-int-literal-width-inference | 14 |
 | `rust` | rust-into-bound-param-borrowed | 1 |
