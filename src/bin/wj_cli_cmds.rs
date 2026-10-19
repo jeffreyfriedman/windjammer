@@ -227,6 +227,7 @@ pub fn run(cli: Cli) -> Result<()> {
             function,
             json,
         } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
+        Commands::ExplainEffects { path, function, json } => windjammer::cli::explain_effects::execute(&path, function.as_deref(), json)?,
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;

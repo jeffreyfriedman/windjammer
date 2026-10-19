@@ -267,10 +267,7 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
         }
         if let Some(f) = facts.fns.get_mut(&owner) {
             for (kind, resource) in direct {
-                let callee = match &c.res {
-                    Res::Unresolved(Reason::External(p)) | Res::Prim(p) => full_path(p, &c.callee),
-                    _ => c.callee.clone(),
-                };
+                let callee = c.callee.clone();
                 f.effects.entry(EffectRef { kind, resource }).or_insert(Origin { rule: "SPEC-EFF-002", site: c.location.clone(), callee, via: None });
             }
         }

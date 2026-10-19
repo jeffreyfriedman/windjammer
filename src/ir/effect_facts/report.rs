@@ -62,7 +62,10 @@ fn placement(e: &EffectRef, grant: Option<&Grant>) -> &'static str {
 }
 
 fn site_text(l: &Option<crate::source_map::Location>) -> String {
-    l.as_ref().map(|l| format!("{}:{}:{}", l.file.display(), l.line, l.column)).unwrap_or_default()
+    match l {
+        Some(l) if !l.file.as_os_str().is_empty() && l.line < 1_000_000 => format!("{}:{}:{}", l.file.display(), l.line, l.column),
+        _ => String::from("<interpolation>"),
+    }
 }
 
 /// Human report: the compact line per function, then each effect with its rule, chain and grant placement.
