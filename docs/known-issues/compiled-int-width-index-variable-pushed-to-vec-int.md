@@ -38,3 +38,5 @@ body is generated as if `cmd` were a borrow: `match cmd.replace { Some(replaceme
 not emitted as `match &cmd.replace`. Same family as `ownership-by-value-store-threaded-through-adapter-becomes-mut-borrow.md`: the body must be generated
 against the formal that is emitted. A minimal single-file or two-module reduction did not reproduce it (they stay borrowed end to end); the full app does
 (`wj build src` in the ecosystem's `apps/wj-grep`). Handed to the convergence stream.
+
+Reduced (`wj reduce`, 3 files, 18 lines) and captured as `tests/formal_body_agreement_field_forward_test.rs`: a `pub fn run(cmd: Command)` whose body forwards `cmd.options` into a call while matching `cmd.replace` inside a `for` loop. The solver decides `cmd` is `&` (field projections only), but the formal is emitted owned (`restore_owned_field_forward_formals` in `src/compiler/multipass_bare_pass_demotion.rs`, an analyzer re-decision) while the body is generated as a borrow. Needs the C5 deletion of the `restore_*` registry passes. Single-file builds do not reproduce.
