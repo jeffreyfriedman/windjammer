@@ -1,0 +1,2 @@
+use std::uuid
+fn main() { println("id: ${uuid::v4()}") }

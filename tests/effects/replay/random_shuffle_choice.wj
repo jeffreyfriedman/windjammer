@@ -1,0 +1,6 @@
+use std::random
+fn main() {
+    let items = [1, 2, 3, 4, 5, 6, 7, 8]
+    for x in random::shuffle(items) { println("${x}") }
+    println("${random::choice(items).unwrap_or(0)}")
+}

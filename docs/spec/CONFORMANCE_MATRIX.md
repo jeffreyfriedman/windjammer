@@ -78,7 +78,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-026 | effects.md | `effects/SPEC-EFF-026.wj` (xfail Q-032) |
 | SPEC-EFF-027 | effects.md | `effects/SPEC-EFF-027.wj` |
 | SPEC-EFF-028 | effects.md | `effects/SPEC-EFF-028.wj` |
-| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` (xfail Q-032) |
+| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` |
 | SPEC-EFF-030 | effects.md | untestable |
 | SPEC-EFF-031 | effects.md | untestable |
 | SPEC-EFF-032 | effects.md | untestable |

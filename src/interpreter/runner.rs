@@ -64,6 +64,10 @@ pub struct RunOptions {
     pub allow: Vec<String>,
     /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given (default: enforce).
     pub caps_mode: String,
+    /// `--record LOG`: run live and write every effect to `LOG` (ADR-0021 E3).
+    pub record: Option<PathBuf>,
+    /// `--replay LOG`: answer every effect from `LOG`, perform none; seeds and arguments come from the log's header.
+    pub replay: Option<PathBuf>,
     /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
     pub no_jit: bool,
 }
@@ -145,6 +149,10 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             it.set_http_mode(super::builtins::std_http::HttpMode::Real);
         }
         it.set_args(args);
+        if let Err(m) = setup_effect_port(&mut it, &opts, &entry) {
+            eprintln!("error: {m}");
+            return RunOutcome::Exited(1);
+        }
         if let Some((lib, sigs)) = host {
             match super::host_bridge::HostLib::open(&lib, &sigs) {
                 Ok(h) => it.attach_host(h),
@@ -176,6 +184,42 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.flush();
         RunOutcome::Exited(code)
     })
+}
+
+/// `--record` / `--replay`: install the effect port. A replay takes the seeds, the time mode and the arguments from the
+/// log's header, because they are part of what the recorded run was a function of.
+pub fn setup_effect_port(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Result<(), String> {
+    use super::effect_port::{log, EffectPort};
+    use rand::{RngCore, SeedableRng};
+    if opts.record.is_some() && opts.replay.is_some() {
+        return Err("--record and --replay cannot be used together".into());
+    }
+    let program = log::digest(&std::fs::read(entry).map_err(|e| format!("cannot read {}: {e}", entry.display()))?);
+    if let Some(path) = &opts.record {
+        let rng_seed = rand::rngs::OsRng.next_u64();
+        let header = log::Header {
+            program,
+            compiler: env!("CARGO_PKG_VERSION").to_string(),
+            sched_seed: opts.sched_seed,
+            sim_seed: None,
+            hash_seed: opts.hash_seed,
+            rng_seed,
+            deterministic_time: opts.deterministic_time,
+            args: it.args.clone(),
+        };
+        it.rng = Some(rand::rngs::StdRng::seed_from_u64(rng_seed));
+        it.set_port(EffectPort::record(path, header).map_err(|e| format!("cannot write {}: {e}", path.display()))?);
+    } else if let Some(path) = &opts.replay {
+        let port = EffectPort::replay(path, &program)?;
+        let h = port.header.clone();
+        it.hash_seed = h.hash_seed;
+        it.set_sched_seed(h.sched_seed);
+        it.set_deterministic_time(h.deterministic_time);
+        it.set_args(h.args);
+        it.rng = Some(rand::rngs::StdRng::seed_from_u64(h.rng_seed));
+        it.set_port(port);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]

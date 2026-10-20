@@ -192,6 +192,16 @@ pub enum Commands {
         #[arg(long)]
         deterministic_time: bool,
 
+        /// Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings)
+        /// to FILE, a replayable log (ADR-0021)
+        #[arg(long, value_name = "FILE", conflicts_with = "replay")]
+        record: Option<PathBuf>,
+
+        /// Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and
+        /// none is performed; seeds, arguments and the time mode come from the log (ADR-0021)
+        #[arg(long, value_name = "FILE")]
+        replay: Option<PathBuf>,
+
         /// Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`)
         #[arg(long)]
         allow_network: bool,

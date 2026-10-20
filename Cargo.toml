@@ -227,6 +227,12 @@ path = "tests/effects_vectors_test.rs"
 name = "effects_scratch"
 path = "tests/effects_scratch_test.rs"
 
+# Record/replay of the effect port (ADR-0021 E3), through the wj binary
+#   cargo test --release --test effect_replay
+[[test]]
+name = "effect_replay"
+path = "tests/effect_replay_test.rs"
+
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages
 [[test]]

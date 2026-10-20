@@ -1,0 +1,7 @@
+use std::time
+fn main() {
+    let start = Instant::now()
+    let mut x = 0
+    for i in 0..1000 { x += i }
+    println("sum ${x} took ${start.elapsed().as_nanos()}ns")
+}

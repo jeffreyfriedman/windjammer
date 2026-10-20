@@ -1,0 +1,8 @@
+use std::collections::HashMap
+fn main() {
+    let mut m = HashMap::new()
+    for k in ["delta", "alpha", "charlie", "bravo", "echo"] {
+        m.insert(k, k.len())
+    }
+    for (k, v) in m.iter() { println("${k}=${v}") }
+}

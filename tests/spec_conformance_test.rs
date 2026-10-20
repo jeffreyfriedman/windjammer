@@ -91,8 +91,7 @@ fn check(s: &Spec) -> Result<(), String> {
         "check-ok" | "check-error" => return check_front_end(s),
         "simulate" => return simulate(s),
         "effects" => return effect_report(s),
-        // ADR-0021 stage E3 adds the effect log.
-        "replay" => return Err("record/replay not implemented (ADR-0021 stage E3)".into()),
+        "replay" => return replay(s),
         _ => {}
     }
     let src = s.src.clone();
@@ -270,6 +269,45 @@ fn simulate(s: &Spec) -> Result<(), String> {
         return Err(format!("two runs with seed {seed} differ:\n  {a:?}\n  {b:?}"));
     }
     let got: Vec<&str> = a.lines().collect();
+    let want: Vec<&str> = s.expect.iter().map(|x| x.as_str()).collect();
+    if !want.is_empty() && got != want {
+        return Err(format!("stdout mismatch\n  want: {want:?}\n  got:  {got:?}"));
+    }
+    Ok(())
+}
+
+/// Record the run into an effect log, replay it from the log: the replay prints the same lines and reports no divergence.
+fn replay(s: &Spec) -> Result<(), String> {
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let (entry, log) = (dir.path().join("main.wj"), dir.path().join("run.wjlog"));
+    std::fs::write(&entry, &s.src).map_err(|e| e.to_string())?;
+    let once = |record: bool| {
+        let (src, name, entry, log) = (s.src.clone(), s.path.display().to_string(), entry.clone(), log.clone());
+        with_big_stack(move || {
+            catch_unwind(AssertUnwindSafe(|| {
+                let mut lexer = windjammer::lexer::Lexer::new(&src);
+                let tokens = lexer.tokenize_with_locations();
+                let parser: &'static mut windjammer::parser::Parser = Box::leak(Box::new(windjammer::parser::Parser::new_with_source(tokens, name, src.clone())));
+                let program = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+                let mut it = Interpreter::new_capturing();
+                let mut opts = windjammer::interpreter::runner::RunOptions::default();
+                if record {
+                    opts.record = Some(log.clone());
+                } else {
+                    opts.replay = Some(log.clone());
+                }
+                windjammer::interpreter::runner::setup_effect_port(&mut it, &opts, &entry)?;
+                it.run_checked(&program).map_err(|e| e.render())?;
+                Ok::<String, String>(it.get_output())
+            }))
+            .unwrap_or_else(|_| Err("lexer/parser/interpreter panicked".to_string()))
+        })
+    };
+    let (recorded, replayed) = (once(true)?, once(false)?);
+    if recorded != replayed {
+        return Err(format!("replay differs from the recording:\n  recorded: {recorded:?}\n  replayed: {replayed:?}"));
+    }
+    let got: Vec<&str> = recorded.lines().collect();
     let want: Vec<&str> = s.expect.iter().map(|x| x.as_str()).collect();
     if !want.is_empty() && got != want {
         return Err(format!("stdout mismatch\n  want: {want:?}\n  got:  {got:?}"));

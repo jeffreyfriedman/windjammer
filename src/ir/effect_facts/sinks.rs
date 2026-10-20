@@ -205,6 +205,22 @@ pub fn lookup(path: &str) -> Option<&'static [SinkUse]> {
     }
 }
 
+/// The table's name for `path` (`std::fs::read` -> `fs::read`); the last two segments when it is not a sink.
+pub fn canonical(path: &str) -> String {
+    let mut p = path;
+    loop {
+        if let Some((n, _)) = SINKS.iter().find(|(n, _)| *n == p) {
+            return (*n).to_string();
+        }
+        match p.split_once("::") {
+            Some((_, rest)) => p = rest,
+            None => break,
+        }
+    }
+    let segs: Vec<&str> = path.split("::").collect();
+    segs[segs.len().saturating_sub(2)..].join("::")
+}
+
 #[cfg(test)]
 pub fn is_not_sink(path: &str) -> bool {
     let mut p = path;

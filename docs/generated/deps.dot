@@ -332,7 +332,7 @@ digraph deps {
   "inference" -> "test_utils" [label="1"];
   "interpreter" -> "analyzer" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "ir" [label="14"];
+  "interpreter" -> "ir" [label="17"];
   "interpreter" -> "lexer" [label="5"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];

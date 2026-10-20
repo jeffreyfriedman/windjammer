@@ -1,0 +1,9 @@
+// allow: env.read=WJ_REPLAY_VAR
+// env: WJ_REPLAY_VAR=from-the-recording
+use std::env
+fn main() {
+    match env::var("WJ_REPLAY_VAR") {
+        Ok(v) => println("var: ${v}"),
+        Err(e) => println("unset: ${e}"),
+    }
+}

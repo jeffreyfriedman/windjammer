@@ -1,0 +1,9 @@
+// args: alpha beta
+use std::env
+fn main() {
+    let mut n = 0
+    for a in env::args() {
+        n += 1
+    }
+    println("args: ${n}")
+}
