@@ -15,14 +15,14 @@ fn describe(e: ParseError) -> String {
 }
 
 #[inline]
-fn parse_amount(s: &str) -> Result<i64, ParseError> {
+fn parse_amount(s: String) -> Result<i64, ParseError> {
     if s.is_empty() {
         return Err(ParseError::Empty);
     }
     let n = match s.parse::<i64>() {
         Ok(n) => n,
         Err(_) => {
-            return Err(ParseError::BadNumber(s.to_string()));
+            return Err(ParseError::BadNumber(s));
         },
     };
     if n > 1000_i64 {
@@ -33,7 +33,7 @@ fn parse_amount(s: &str) -> Result<i64, ParseError> {
 
 #[inline]
 fn double_amount(s: String) -> Result<i64, ParseError> {
-    let n = parse_amount(&s)?;
+    let n = parse_amount(s)?;
     Ok(n * 2)
 }
 

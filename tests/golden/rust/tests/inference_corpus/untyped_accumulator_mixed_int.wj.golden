@@ -1,0 +1,10 @@
+fn main() {
+    let a: i64 = 3_i64;
+    let mut v = 0_i64;
+    v = v * a + 1_i64;
+    while v > 0_i64 {
+        v /= a;
+    }
+    println!("{}", v);
+}
+
