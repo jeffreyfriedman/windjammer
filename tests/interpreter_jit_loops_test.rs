@@ -97,7 +97,7 @@ fn cond_leaf(r: &mut Rng) -> String {
 fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
     let late = iters - 1 - r.below(iters / 4);
     let k = loop {
-        let k = r.below(22);
+        let k = r.below(24);
         let ok = match k {
             19 => !inner,
             21 => depth < 2 && !inner,
@@ -128,10 +128,13 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
         16 => format!("if {} {{\n{}\n}} else {{\n{}\n}}", cond(r), stmt(r, depth + 1, iters, inner), stmt(r, depth + 1, iters, inner)),
         // planted edges, late enough that the loop is in machine code
         17 => planted(r.below(6), late),
+        // a literal-typed value stored into the `i32` local keeps `i32` only while it fits (`retag`)
+        22 => format!("a = i * {}", r.pick(&["3", "3000000", "-1000000"])),
+        23 => "a = a + 1".into(),
         18 => format!("let t = {}\nb = (b + t) % 1000003", int_expr(r, 2)),
         19 => format!("if {} {{ continue }}", cond_leaf(r)),
         20 => format!("if i == {late} {{ break }}"),
-        _ if r.below(2) == 0 => format!(
+        21 if r.below(2) == 0 => format!(
             "for j in {}{} {{\n{}\n}}",
             r.pick(&["0..", "1..=", "(c % 3)..", "(i % 2)..="]),
             1 + r.below(4),
