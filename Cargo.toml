@@ -176,10 +176,10 @@ path = "tests/backend_conformance_test.rs"
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
 
-# Memoized stdlib taint/effect tables equal the computation: cargo test --release --test stdlib_tables_memo
+# Session-shared stdlib taint/effect tables equal the per-pipeline computation: cargo test --release --test stdlib_tables
 [[test]]
-name = "stdlib_tables_memo"
-path = "tests/stdlib_tables_memo_test.rs"
+name = "stdlib_tables"
+path = "tests/stdlib_tables_test.rs"
 
 # Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
 [[test]]
