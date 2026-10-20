@@ -568,7 +568,7 @@ impl Interpreter {
     pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {
         let def = self.enums.get(enum_name).ok_or_else(|| semantic(format!("unknown enum `{}`", enum_name)))?;
         let vd = &def.variants[idx];
-        let (ty, variant) = (def.rc_name.clone(), def.rc_variants[idx].clone());
+        let (ty, variant) = (Name::Shared(def.rc_name.clone()), Name::Shared(def.rc_variants[idx].clone()));
         let named = move |payload| Value::Enum(Rc::new(EnumVal { ty, variant, idx: idx as u32, payload }));
         match &vd.kind {
             VariantKind::Unit => Ok(named(Payload::Unit)),

@@ -20,7 +20,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use crate::interpreter::error::R;
 use crate::interpreter::place::deref_value;
-use crate::interpreter::value::{Place, Value};
+use crate::interpreter::value::{Name, Place, Value};
 use crate::parser::{Expression, Type, UnaryOp};
 use crate::source_map::Location;
 
@@ -140,7 +140,7 @@ pub(super) fn method_call(
 /// compiled form. Methods are fixed once a program is loaded, except under `--hot` (no caching).
 #[derive(Default)]
 struct SiteCache {
-    ty: RefCell<Option<(Rc<str>, Option<Rc<FuncDef>>)>>,
+    ty: RefCell<Option<(Name, Option<Rc<FuncDef>>)>>,
     /// The builtin implementation for the last receiver kind (the registry is fixed once loaded).
     builtin: Cell<Option<(Kind, Option<MethodImpl>)>>,
     compiled: RefCell<Option<(Rc<FuncDef>, Option<Rc<CompiledFn>>)>>,
@@ -159,7 +159,12 @@ impl SiteCache {
     }
 
     fn user(&self, it: &mut Interpreter, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {
-        let ty = match recv {
+        let name = |recv: &Value| match recv {
+            Value::Struct(s) => Some(Name::Shared(s.name.clone())),
+            Value::Enum(e) => Some(e.ty.clone()),
+            _ => None,
+        };
+        let ty: &str = match recv {
             Value::Struct(s) => &s.name,
             Value::Enum(e) => &e.ty,
             _ => return it.find_user_method(recv, method),
@@ -168,12 +173,13 @@ impl SiteCache {
             return it.find_user_method(recv, method);
         }
         if let Some((t, f)) = &*self.ty.borrow() {
-            if Rc::ptr_eq(t, ty) || **t == **ty {
+            // interned names: the same text at the same address is the common case
+            if std::ptr::eq(t.as_ptr(), ty.as_ptr()) && t.len() == ty.len() || **t == *ty {
                 return f.clone();
             }
         }
         let f = it.find_user_method(recv, method);
-        *self.ty.borrow_mut() = Some((ty.clone(), f.clone()));
+        *self.ty.borrow_mut() = name(recv).map(|n| (n, f.clone()));
         f
     }
 
