@@ -181,6 +181,11 @@ path = "tests/convergence_gates_test.rs"
 name = "stdlib_tables"
 path = "tests/stdlib_tables_test.rs"
 
+# Check caches never change diagnostics (ADR-0020 round 3 rung 4): cargo test --release --test check_cache_differential
+[[test]]
+name = "check_cache_differential"
+path = "tests/check_cache_differential_test.rs"
+
 # Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
 [[test]]
 name = "meta_sidecar_consistency"
