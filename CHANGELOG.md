@@ -7,6 +7,7 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ## [Unreleased]
 
 ### Added
+- **Record and replay of effects** (ADR-0021 E3): `wj run --interpret --record LOG` writes every effect (file, env, process and network results, stdin, real-clock readings) to a JSON Lines log; `--replay LOG` re-runs the program from it, answering every effect from the log and performing none, with the seeds, arguments and time mode taken from the log. A request that differs from the log is `WJ0049` with both requests and the source line. Effects that return a live handle (`subprocess::spawn`, `http::serve`, `db::connect`) are refused by name.
 - **Trait-method effect bounds**: `@uses(..)` and `@pure` on a trait method (the parser now keeps attributes on trait methods) bound every impl. A call through the trait performs the bound; an impl that exceeds it is `WJ0042` (SPEC-EFF-006, 041, 042). The interpreter gate also covers the `path::`, `fs::read_bytes`, `fs::write_string`, `env::set_var`, `process::run_with_output` and `uuid::new_v4` builtin names.
 - **Packages that link through `path = "../pkg/build"`**: the interpreter loads the Windjammer package `../pkg` (and its own
   dependencies; `crate::` names the package's root), so apps interpret and `wj run` no longer falls back to cargo; `wj build` and

@@ -624,6 +624,14 @@ id = "wj run --mock-http"
 id = "wj run --sched-seed"
 
 [[promise]]
+id = "wj run --record"
+statement = "Interpreted runs write every effect (file, env, process and network results, stdin, real-clock readings) to a replayable log (ADR-0021)"
+
+[[promise]]
+id = "wj run --replay"
+statement = "Interpreted runs re-run from an effect log: every effect is answered from the log and none is performed (ADR-0021)"
+
+[[promise]]
 id = "wj self-install --dry-run"
 
 [[promise]]

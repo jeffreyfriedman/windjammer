@@ -265,8 +265,8 @@ pub fn register(r: &mut Registry) {
         }
         // like a terminal-attached Rust program: a prompt printed before reading must be visible
         it.flush();
-        let mut line = String::new();
-        let n = std::io::stdin().read_line(&mut line).map_err(|e| semantic(e.to_string()))?;
+        let line = it.stdin_line().map_err(semantic)?;
+        let n = line.len();
         if let Some(Value::Ref(p)) = a.first() {
             p.with_mut(|t| {
                 if let Value::Str(s) = t {

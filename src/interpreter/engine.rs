@@ -163,6 +163,8 @@ pub struct Interpreter {
     pub(crate) http: super::builtins::std_http::HttpMode,
     /// Capability gate for sink calls (`caps.rs`); `None` = unrestricted (library and test use).
     pub(crate) caps: Option<super::caps::CapGate>,
+    /// Record / replay / simulate port for effects (`effect_port`); `None` = effects are live.
+    pub(crate) port: Option<std::cell::RefCell<super::effect_port::EffectPort>>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -248,6 +250,7 @@ impl Interpreter {
             log_level: None,
             http: Default::default(),
             caps: None,
+            port: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
@@ -384,7 +387,11 @@ impl Interpreter {
             Err(_) => Ok(Value::Unit),
         };
         self.flush();
-        out
+        // a replay that did not use the whole log is a divergence; a recording is flushed to disk
+        match (out, self.finish_port()) {
+            (Ok(_), Err(e)) => Err(e),
+            (out, _) => out,
+        }
     }
 
     pub(crate) fn span_of(&self, loc: Option<&'static Location>) -> Option<Span> {

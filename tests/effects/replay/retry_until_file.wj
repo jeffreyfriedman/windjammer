@@ -1,0 +1,10 @@
+use std::fs
+use std::time
+fn main() {
+    let mut tries = 0
+    while tries < 3 && !fs::exists("ready.flag") {
+        tries += 1
+        time::sleep_millis(100)
+    }
+    println("tries: ${tries}")
+}

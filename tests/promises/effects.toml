@@ -174,3 +174,34 @@ files = { "notes.txt" = "nothing to analyze\n" }
 args = ["caps", "show", "{w}", "--json"]
 exit = 1
 output_has = ["no .wj files"]
+
+[[case]]
+name = "run --record runs the program and writes the log"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    fs::write(\"o.txt\", \"x\").unwrap_or(())\n    println(\"recorded\")\n}\n" }
+args = ["run", "--interpret", "--no-lint", "--record", "{w}/run.wjlog", "{w}/m.wj"]
+stdout_has = ["recorded"]
+
+[[case]]
+name = "run --replay fails on a missing log"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--interpret", "--replay", "{w}/nope.wjlog", "{w}/m.wj"]
+exit = 1
+output_has = ["cannot read effect log"]
+
+[[case]]
+name = "run --replay and --record are exclusive"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--record", "{w}/a.wjlog", "--replay", "{w}/a.wjlog", "{w}/m.wj"]
+exit = 2
+output_has = ["cannot be used with"]
+
+[[case]]
+name = "run --replay re-runs a program from its log"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"replayed\")\n}\n", "r.wjlog" = "{\"args\":[],\"compiler\":\"0.50.0\",\"det_time\":false,\"hash_seed\":0,\"program\":\"x\",\"rng_seed\":1,\"sched_seed\":0,\"sim_seed\":null,\"wj_effect_log\":1}\n" }
+args = ["run", "--interpret", "--replay", "{w}/r.wjlog", "{w}/m.wj"]
+stdout_has = ["replayed"]
+

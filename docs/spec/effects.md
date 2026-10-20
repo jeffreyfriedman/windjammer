@@ -679,11 +679,10 @@ fn main() {
 ```
 Simulated twice with seed 42: both runs print the same three lines.
 
-**SPEC-EFF-029** [PLANNED ADR-0021] A run recorded with `--record LOG` replays from the log with `--replay LOG`: every sink call is answered from the log, the program prints the same output, and no live effect is performed.
+**SPEC-EFF-029** A run recorded with `--record LOG` replays from the log with `--replay LOG`: every sink call is answered from the log, the program prints the same output, and no live effect is performed.
 
 <!-- example: tests/spec/effects/SPEC-EFF-029.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 use std::time
 fn main() {
@@ -692,9 +691,8 @@ fn main() {
 }
 ```
 Recorded, then replayed from the effect log: both runs print the same lines and replay reports no divergence.
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-031** [PLANNED ADR-0021] During replay, a sink call that differs from the logged request at the same sequence number stops the run with a replay divergence (`WJ0049`) that shows both requests and the source location. (untestable: needs a log recorded from a different program; acceptance test `tests/effect_replay_test.rs`, stage E3)
+**SPEC-EFF-031** During replay, a sink call that differs from the logged request at the same sequence number stops the run with a replay divergence (`WJ0049`) that shows both requests and the source location. (untestable: needs a log recorded from a different program; acceptance test `tests/effect_replay_test.rs`, stage E3)
 
 ## Code mode
 

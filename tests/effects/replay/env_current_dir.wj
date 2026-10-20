@@ -1,0 +1,2 @@
+use std::env
+fn main() { println("cwd: ${env::current_dir()}") }

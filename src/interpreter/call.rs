@@ -509,6 +509,14 @@ impl Interpreter {
         if self.caps.is_some() {
             self.cap_gate(path, &args)?;
         }
+        if self.port.is_some() && super::effect_port::routed(path) {
+            return self.port_call(path, args);
+        }
+        self.call_builtin_live(path, args)
+    }
+
+    /// The builtin itself, after the capability gate and the effect port.
+    pub(crate) fn call_builtin_live(&mut self, path: &str, args: Vec<Value>) -> R {
         if let Some(r) = super::builtins::assoc_numeric(self, path, &args) {
             return r;
         }

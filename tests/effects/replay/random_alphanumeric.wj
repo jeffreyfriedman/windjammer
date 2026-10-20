@@ -1,0 +1,2 @@
+use std::random
+fn main() { println("token: ${random::alphanumeric(16)}") }
