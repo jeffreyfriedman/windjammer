@@ -1,6 +1,7 @@
 //! Whole-project phases: name resolution, semantic checks, analyzer, numeric inference, IR.
 
 use super::front::Parsed;
+use crate::ir::stdlib_tables::StdlibTables;
 use super::locate::Locator;
 use super::semantic::{self, FileInput, Index};
 use crate::diagnostics::{convert, Diagnostic, SourceIndex};
@@ -35,13 +36,15 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>) {
             out,
         );
     }
+    // Session-shared stdlib tables, computed on the first analysis.
+    let tables = std::cell::OnceCell::new();
     for p in parsed {
         // A file that already has errors would only add cascading analyzer noise.
         let has_errors = out
             .iter()
             .any(|d| d.is_error() && d.primary_span.as_ref().is_some_and(|s| s.file == p.file));
         if !has_errors {
-            analysis_phase(p, out);
+            analysis_phase(p, out, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::compute())).clone());
         }
     }
 }
@@ -157,7 +160,7 @@ fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Par
     }
 }
 
-fn analysis_phase(p: &Parsed, out: &mut Vec<Diagnostic>) {
+fn analysis_phase(p: &Parsed, out: &mut Vec<Diagnostic>, tables: std::sync::Arc<StdlibTables>) {
     use crate::analyzer::{Analyzer, SignatureRegistry};
     let mut analyzer = Analyzer::new();
     let sigs = SignatureRegistry::new();
@@ -171,7 +174,7 @@ fn analysis_phase(p: &Parsed, out: &mut Vec<Diagnostic>) {
                         .with_note(format!("in {}", p.file)),
                 );
             }
-            let mut pipeline = crate::ir::IrPipeline::new();
+            let mut pipeline = crate::ir::IrPipeline::new().with_stdlib_tables(tables);
             let module = pipeline.lower_to_ir(&analyzed, &registry, None);
             use crate::ir::pipeline::DiagnosticSeverity as S;
             for d in &module.diagnostics {

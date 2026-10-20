@@ -14,15 +14,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Module membership comes from the signature registry (not a function-name list).
 /// Read vs write / ingress vs egress is derived from param and return types.
-///
-/// Memoized per process: a function of the stdlib registry only, requested once per checked file.
 pub fn stdlib_effect_declarations() -> Vec<EffectConstraint> {
-    static MEMO: std::sync::OnceLock<Vec<EffectConstraint>> = std::sync::OnceLock::new();
-    MEMO.get_or_init(compute_stdlib_effect_declarations).clone()
-}
-
-/// The unmemoized computation behind [`stdlib_effect_declarations`].
-pub fn compute_stdlib_effect_declarations() -> Vec<EffectConstraint> {
     let registry = SignatureRegistry::stdlib();
     let mut out = Vec::new();
     for (name, sig) in registry.all_signatures_for_suffix_search() {
