@@ -158,7 +158,7 @@ pub struct Key(pub Value);
 
 impl PartialEq for Key {
     fn eq(&self, o: &Key) -> bool {
-        self.0.structural_cmp(&o.0) == Ordering::Equal
+        self.cmp(o) == Ordering::Equal
     }
 }
 impl Eq for Key {}
@@ -168,7 +168,14 @@ impl PartialOrd for Key {
     }
 }
 impl Ord for Key {
+    #[inline]
     fn cmp(&self, o: &Key) -> Ordering {
+        // integer keys (the common case) inline: `structural_cmp`'s order for them
+        if let (Value::Int(a, ta), Value::Int(b, tb)) = (&self.0, &o.0) {
+            if *ta != IntTy::U128 && *tb != IntTy::U128 {
+                return a.cmp(b);
+            }
+        }
         self.0.structural_cmp(&o.0)
     }
 }

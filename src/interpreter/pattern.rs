@@ -10,6 +10,10 @@ type Binds = Vec<(&'static str, Value)>;
 impl Interpreter {
     /// Does `name` (as written in a pattern) denote this enum value's variant?
     fn variant_matches(&self, name: &str, e: &EnumVal) -> bool {
+        // the common spelling: a bare variant name (`Some(v)`, `None`)
+        if !name.bytes().any(|c| c == b'.' || c == b':') {
+            return &*e.variant == name;
+        }
         let normalized = name.replace('.', "::");
         let name = normalized.as_str();
         let (en, var) = match name.rsplit_once("::") {

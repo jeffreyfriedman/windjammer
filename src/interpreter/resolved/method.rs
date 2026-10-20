@@ -105,6 +105,35 @@ pub(super) fn method_call(
                 return island.run(it, b, |it| it.eval_raw(whole));
             }
         }
+        // `call_user_method` -> `call_func_run` for a compiled method with a `self` receiver: the
+        // arguments go straight into the callee's parameter slots (after `self`)
+        if let Some(f) = &user {
+            if let Some(c) = cache.compiled(it, f) {
+                let base = it.rstack.len();
+                it.rstack.resize(base + c.nslots, Value::Unit);
+                for (k, a) in args.iter().enumerate() {
+                    match a.eval(it, b) {
+                        Ok(v) if k + 1 < c.params.len() => it.rstack[base + c.params[k + 1]] = v,
+                        Ok(_) => {}
+                        Err(e) => {
+                            it.rstack.truncate(base);
+                            return Err(e);
+                        }
+                    }
+                }
+                it.mark(loc);
+                it.type_hint = hint.clone();
+                let self_val = match place {
+                    Some(p) if it.self_mutation(f) => {
+                        drop(recv);
+                        Value::Ref(p)
+                    }
+                    _ => recv,
+                };
+                it.rstack[base + c.params[0]] = self_val;
+                return it.run_compiled_at(f, &c, base, false);
+            }
+        }
         let mut vals = Vec::with_capacity(args.len());
         for a in &args {
             vals.push(a.eval(it, b)?);
@@ -112,20 +141,7 @@ pub(super) fn method_call(
         it.mark(loc);
         it.type_hint = hint.clone();
         match user {
-            Some(f) => match cache.compiled(it, &f) {
-                // `call_user_method` -> `call_func_run` for a compiled method with a `self` receiver
-                Some(c) => {
-                    let self_val = match place {
-                        Some(p) if it.self_mutation(&f) => {
-                            drop(recv);
-                            Value::Ref(p)
-                        }
-                        _ => recv,
-                    };
-                    it.run_compiled(&f, &c, vals, Some(self_val))
-                }
-                None => it.call_user_method(&f, recv, place, vals),
-            },
+            Some(f) => it.call_user_method(&f, recv, place, vals),
             None if Interpreter::builtin_by_kind(&recv) && it.hot.is_none() => {
                 let kind = Kind::of(&recv);
                 let imp = cache.builtin(it, kind, method);
