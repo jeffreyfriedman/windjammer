@@ -368,7 +368,7 @@ impl Interpreter {
         if let Some(Type::Result(_, er)) = self.scope.ret_ty {
             if let Type::Custom(target) = &**er {
                 if e.type_name() != *target {
-                    if let Some(f) = self.methods.get(&(target.clone(), "from".to_string())).cloned() {
+                    if let Some(f) = self.from_impl_for(target, &e).or_else(|| self.methods.get(&(target.clone(), "from".to_string())).cloned()) {
                         return self.call_func(&f, vec![e], None);
                     }
                 }
@@ -476,14 +476,26 @@ impl Interpreter {
             };
         }
         let mut name = name.to_string();
+        let mut is_key = false; // `name` already holds type keys (`Self`, or resolved below)
         if let Some(rest) = name.strip_prefix("Self::") {
             name = format!("{}::{}", self.scope.self_ty.as_deref().unwrap_or("Self"), rest);
+            is_key = true;
         } else if name == "Self" {
             name = self.scope.self_ty.as_deref().unwrap_or("Self").to_string();
+            is_key = true;
+        } else if !self.dup_types.is_empty() {
+            // two modules declare a type of this name: the written path picks one (`type_keys.rs`)
+            let module = self.scope.module;
+            name = match name.rsplit_once("::") {
+                Some((head, var)) if self.enums.contains_key(&self.type_key(module, head)) => format!("{}::{}", self.type_key(module, head), var),
+                _ => self.type_key(module, &name),
+            };
+            is_key = true;
         }
         // enum struct variant: Enum::Variant { .. }
-        if let Some((en, var)) = name.rsplit_once("::") {
-            let en = en.rsplit("::").next().unwrap_or(en).to_string();
+        let is_struct = is_key && self.structs.contains_key(&name);
+        if let (false, Some((en, var))) = (is_struct, name.rsplit_once("::")) {
+            let en = if is_key { en.to_string() } else { en.rsplit("::").next().unwrap_or(en).to_string() };
             let target = self.type_aliases.get(&en).and_then(|t| if let Type::Custom(n) = t { Some(n.clone()) } else { None }).unwrap_or(en);
             let variant_fields = self.enums.get(&target).and_then(|def| {
                 def.variants.iter().enumerate().find(|(_, v)| v.name == var).and_then(|(idx, vd)| match &vd.kind {

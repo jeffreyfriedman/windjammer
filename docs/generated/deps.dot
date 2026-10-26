@@ -147,7 +147,7 @@ digraph deps {
   "check" -> "fuzzy_matcher" [label="2"];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="12"];
-  "check" -> "lexer" [label="3"];
+  "check" -> "lexer" [label="5"];
   "check" -> "linter" [label="1"];
   "check" -> "metadata" [label="1"];
   "check" -> "module_system" [label="2"];
@@ -268,6 +268,7 @@ digraph deps {
   "compiler_database" -> "parser" [label="1"];
   "component_analyzer" -> "parser" [label="5"];
   "config" -> "ir" [label="4",color=red,fontcolor=red];
+  "diagnostics" -> "error" [label="2"];
   "diagnostics" -> "error_mapper" [label="1"];
   "diagnostics" -> "intrinsics" [label="1"];
   "diagnostics" -> "linter" [label="1"];
@@ -357,7 +358,7 @@ digraph deps {
   "linter" -> "error" [label="3"];
   "linter" -> "intrinsics" [label="1",color=red,fontcolor=red];
   "linter" -> "lexer" [label="4"];
-  "linter" -> "parser" [label="26"];
+  "linter" -> "parser" [label="28"];
   "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];
   "metadata" -> "analyzer" [label="29"];
@@ -383,11 +384,12 @@ digraph deps {
   "package" -> "config" [label="1"];
   "package" -> "module_system" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
-  "parser" -> "lexer" [label="29"];
-  "parser" -> "parser_impl" [label="26"];
+  "parser" -> "lexer" [label="30"];
+  "parser" -> "parser_impl" [label="27"];
   "parser" -> "source_map" [label="2"];
+  "parser_impl" -> "error" [label="2"];
   "parser_impl" -> "lexer" [label="5"];
-  "parser_impl" -> "parser" [label="4"];
+  "parser_impl" -> "parser" [label="6"];
   "parser_impl" -> "source_map" [label="2"];
   "reduce" -> "check" [label="1"];
   "reduce" -> "embedded_assets" [label="1"];

@@ -12,7 +12,9 @@ impl Parser {
         // A (sub)expression parsed here is never itself a prefix operator's operand, whatever
         // context it is nested in (parentheses, index, arguments): `-(a as u8)` keeps its cast.
         let saved = std::mem::replace(&mut self.in_unary_operand, false);
+        self.span_enter();
         let r = self.parse_binary_expression_inner(min_precedence);
+        self.span_exit();
         self.in_unary_operand = saved;
         r
     }
@@ -20,6 +22,15 @@ impl Parser {
     /// `a..b` / `a..=b` / `a..`: the lowest-precedence operator (below `||`), non-associative, as in Rust.
     /// `v[a..b]` slices are parsed by the index handler, which stops at `..` itself.
     pub(in crate::parser) fn parse_range_expression(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let r = self.parse_range_expression_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_range_expression_inner(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
         let start = self.parse_binary_expression(0)?;

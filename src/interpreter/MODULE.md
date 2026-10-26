@@ -3,8 +3,7 @@
 ## Purpose
 Run Windjammer source directly, with no cargo/rustc, for an instant dev loop
 (`wj run` interprets by default, ADR-0022; `wj test --interpret`, `wj repl`). Rust remains the release path;
-the interpreter must never print something the compiled program would not print.
-Status and measurements: `docs/INTERPRETER.md`.
+the interpreter must never print something the compiled program would not print. Status: `docs/INTERPRETER.md`.
 
 ## Inputs / outputs
 - In: `.wj` source parsed by the compiler's own lexer/parser (`Program<'static>`); a file or a project dir.
@@ -20,6 +19,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`; `moves.rs` ownership moves
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
+- `from_impls.rs`, `type_keys.rs`, `c_library.rs`, `task_blocks.rs`  `From` impl choice by argument type; same-name struct/enum keys (`b::P`); scalar `extern fn` in the C library; `thread {}`/`async {}` tasks
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
 - `builtins/`            native stdlib registry (`std_runtime_gaps.rs`: runtime functions called module-qualified) (`Registry`; `native(type, method)` for host objects): core types, `std_*` modules (`std_http{,_server}` port, `std_proc` subprocess/cli, `std_config`, `std_db`, `std_ordered`), `test_assert`, `thread`/`channel`/`sync`/`time`, `arena` (`std::arena`: Arena/Handle/Scratch, debug-build handle checks)

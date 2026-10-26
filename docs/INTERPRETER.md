@@ -96,8 +96,8 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 - Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.
 - Open: `env::args().skip(1).collect()` into `Vec<string>` fails in rustc (iterates `&String`).
 
-**Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
-engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
+**Known gaps.** Two *traits* with the same name in different modules are still keyed by name (the preflight sends such programs to
+the compiled path); structs and enums with a shared name are keyed by module path. `crate::` inside a dependency resolves against the program
 root. Compiled runs of a file in `src/bin/` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
 preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
 kept; other edits print a restart notice (use `--watch` for those).
@@ -111,13 +111,13 @@ Two oracles, neither of them a hand-typed number:
   Currently:
 
   <!-- wj:gen name=metric key=interpreter.features_supported -->
-41
+44
   <!-- wj:end -->
 
   supported entries, and
 
   <!-- wj:gen name=metric key=interpreter.features_unsupported -->
-3
+0
   <!-- wj:end -->
 
   entries that must fail with "unsupported".
@@ -148,10 +148,11 @@ Generated from the registry (do not edit; change `src/interpreter/features.rs`):
 - **Collections**: `Vec` push/len/index/sort/dedup, `VecDeque`; `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet`, `entry` API; iterator adaptors (`map filter fold sum zip enumerate rev take skip chain flat_map windows chunks sort_by`), lazy `cycle`/`repeat`/`from_fn`; `Option`/`Result` combinators; `OrderedMap`/`OrderedSet`: insertion order, `remove` keeps the order of the rest; `HashMap`/`HashSet` order is unspecified (`--hash-seed N` permutes it)
 - **Strings**: string and char methods, `split`, `parse`
 - **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability; `RefCell` borrow tracking with Rust's `BorrowMutError` panic; moves decide where destructors run: into collections, aggregates, `let`, partial moves, callee parameters
-- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`); `thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings); `mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone; `Arc<Mutex>`/`RwLock` guards (released at scope end), `Condvar`, `Barrier`, atomics; deadlocks are reported
+- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`); `thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings); `mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone; `Arc<Mutex>`/`RwLock` guards (released at scope end), `Condvar`, `Barrier`, atomics; deadlocks are reported; `thread { }` and `async { }` statements: the body runs as a `move` task started like `thread::spawn(move || { ... })`; nothing joins it
 - **Intrinsics**: `assert`, `assert_eq`, `panic`, `todo`, `debug`
-- **Modules**: multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603)
+- **Modules**: multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603); two structs or enums with the same name in different modules (each is keyed by its module path; `use`, `as` and qualified paths pick one)
 - **Std modules**: `Duration`, `Instant`, `SystemTime`, `std::time::DateTime` (chrono formats); `std::json` dynamic values and typed `to_string`/`parse_string::<T>`; `std::regex` (same engine as compiled programs); `std::fs` files, directories (`read_dir`, `metadata`), path helpers; `csv`, `url`, `mime`, `crypto` (sha/base64/bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`; `std::http` client and servers (`serve`, `serve_fn`, `Server::serve`) behind a capability port: refused by default, `--mock-http FILE` replays responses/requests, `--allow-network` uses real sockets; `std::config` (toml/yaml, same code as the runtime), `std::db` on SQLite, `std::subprocess` pipes, `std::cli` (clap)
+- **FFI**: `extern fn`: host-bridge functions (a cached bridge library links the project's Rust, ADR-0023) and scalar C-library symbols (`abs`, `sqrt`, ...) called through the dynamic loader, as the compiled path links them; a symbol neither provides is refused before `main` (it would not link when compiled either)
 <!-- wj:end -->
 
 Also covered by the engine but not itemised in the registry yet: `std::{fs,env,process,io::stdin,time,mem,cmp,math,strings}` subsets and
@@ -180,13 +181,11 @@ re-derives the two facts it needs, locally and testably:
 `called Option::unwrap() on a None value`, `attempt to add with overflow`) and the Windjammer call stack. The parser records a node's
 location after consuming it, so the reported line can be the line after the failing expression.
 
-**Unsupported means an error, never a guess.** Registered unsupported features (generated from the registry) produce
-`unsupported in the interpreter: ...` and exit 2:
+**Unsupported means an error, never a guess.** A feature the registry lists as unsupported (generated below; none today)
+produces `unsupported in the interpreter: ...` and exit 2, and `wj run` falls back to the compiled path:
 
 <!-- wj:gen name=interpreter_unsupported -->
-- **Modules**: two types with the same name in different modules (the interpreter keys types by name)
-- **Concurrency**: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)
-- **FFI**: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0023)
+
 <!-- wj:end -->
 
 Other unimplemented built-ins (for example std modules such as `http`, `json`, `ui`) fail the same way, with the name of the missing function.
@@ -290,8 +289,9 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
 
 ## Remaining gaps
 
-- Not interpreted: extern/FFI; UI/game engine APIs; Postgres (`db::connect("postgres://..")`); `thread {}`/`async {}`
-  statement blocks (deprecated by ADR-0004); `Rc` cycles are leaked but their destructors are not distinguished from
+- Not interpreted: `extern fn` symbols that neither the project's Rust (host bridge) nor the C library provides with a
+  scalar signature (they do not link when compiled either); UI/game engine APIs; Postgres (`db::connect("postgres://..")`);
+  `Rc` cycles are leaked but their destructors are not distinguished from
   reachable values in drop order.
 - Moves: a moved variable stays readable (a valid program never reads it; where Windjammer would auto-clone it, the
   interpreter shares the object instead of copying it, so that clone's destructor does not run). Returning a parameter

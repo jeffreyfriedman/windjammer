@@ -86,7 +86,7 @@ Output:
 
 ## Accepted legacy forms
 
-**SPEC-CONC-005** Until the ADR-0004 surface lands, `async fn`, `.await`, `thread { }` and `async { }` blocks are parsed and compile on the Rust backend; the interpreter rejects thread/async blocks as unsupported (use `spawn`/`async` prefixes or `std::thread`). They are deprecated by ADR-0004 decision 1-2.
+**SPEC-CONC-005** Until the ADR-0004 surface lands, `async fn`, `.await`, `thread { }` and `async { }` blocks are parsed and compile on the Rust backend; the interpreter runs each block as a `move` task started like `thread::spawn(move || { ... })`. They are deprecated by ADR-0004 decision 1-2.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-005.wj -->
 ```windjammer

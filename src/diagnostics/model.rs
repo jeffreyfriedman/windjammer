@@ -74,6 +74,19 @@ pub struct Span {
 }
 
 impl Span {
+    /// Assertion layer (debug builds, tests, `WJ_STRICT_SPANS=1`): a span handed to a diagnostic
+    /// must be structurally valid. Source-aware checks live in `error::span_check::validate_span`.
+    pub fn assert_wellformed(&self) {
+        crate::error::span_check::assert_extent(
+            &self.file,
+            (self.line_start, self.col_start),
+            (self.line_end, self.col_end),
+        );
+        if self.byte_start > self.byte_end && crate::error::span_check::is_strict() {
+            panic!("invalid diagnostic span in {}: byte_start {} > byte_end {}", self.file, self.byte_start, self.byte_end);
+        }
+    }
+
     pub fn with_label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self
@@ -156,6 +169,7 @@ impl Diagnostic {
         Self::new(code, Severity::Warning, message)
     }
     pub fn at(mut self, span: Span) -> Self {
+        span.assert_wellformed();
         self.primary_span = Some(span);
         self
     }
@@ -168,10 +182,12 @@ impl Diagnostic {
         self
     }
     pub fn with_fix(mut self, fix: Fix) -> Self {
+        fix.edits.iter().for_each(|e| e.span.assert_wellformed());
         self.fixes.push(fix);
         self
     }
     pub fn with_secondary(mut self, span: Span) -> Self {
+        span.assert_wellformed();
         self.secondary_spans.push(span);
         self
     }

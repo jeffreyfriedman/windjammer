@@ -366,7 +366,8 @@ impl Cx<'_> {
     /// for the tail hint set at entry, which every intervening setter clobbers. A compiled call to a
     /// non-generic function never reads it.
     fn needs_hint(&self, e: E) -> bool {
-        matches!(e, Expression::Block { .. }) || (self.tail_hint && hinted(e))
+        // `x.into()` reads the declared type (which `From` impl) at its call site
+        matches!(e, Expression::Block { .. }) || matches!(e, Expression::MethodCall { method, type_args: None, .. } if method == "into") || (self.tail_hint && hinted(e))
     }
 }
 

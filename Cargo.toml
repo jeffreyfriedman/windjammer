@@ -153,6 +153,10 @@ name = "optimize_rs"
 path = "benchmarks/rust_parity/optimize_rs.rs"
 
 [[test]]
+name = "span_oracle_suite"
+path = "tests/span_oracle_suite.rs"
+
+[[test]]
 name = "check_negative_gate"
 path = "tests/check_negative_gate.rs"
 
