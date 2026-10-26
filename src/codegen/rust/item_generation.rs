@@ -325,10 +325,12 @@ impl<'ast> CodeGenerator<'ast> {
         // GPU-serializable fields (f32, u32, i32, bool, fixed-size arrays of those).
         // This eliminates manual byte management for GPU uniform uploads and ensures
         // correct bit patterns for all types. The compiler does the hard work.
+        // A user-defined `to_bytes` wins: generating ours too would be a duplicate definition (E0592).
         if !s.fields.is_empty()
             && s.fields
                 .iter()
                 .all(|f| Self::is_gpu_serializable_type(&f.field_type))
+            && !self.method_exists_on_type_name(&s.name, "to_bytes")
         {
             output.push_str(&Self::generate_to_bytes_impl(s));
         }
