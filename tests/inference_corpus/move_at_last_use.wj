@@ -1,0 +1,42 @@
+// MOVE-LAST-USE / CLONE-USE-AFTER-MOVE / CLONE-LOOP (C6): the liveness fact decides per site.
+// Before C6 the last uses of `b` (after a `&mut` call) and `k` (after an owned push) were cloned.
+struct Bag { items: Vec<string>, name: string }
+
+struct Lru { order: Vec<string> }
+
+impl Lru {
+    fn touch(self, k: string) {
+        self.order.push(k)
+    }
+    fn put(self, k: string) {
+        self.order.push(k)
+        self.touch(k)
+    }
+}
+
+fn push_bag(b: Bag, s: string) { b.items.push(s) }
+
+fn wrap(b: Bag, t: string) -> string { t + b.name }
+
+struct It { n: int, s: string }
+
+fn take(i: It) -> int { i.n }
+
+fn main() {
+    let mut b = Bag { items: Vec::new(), name: "n" }
+    push_bag(b, "q")
+    let h = wrap(b, "t")
+    println(h)
+    let mut l = Lru { order: Vec::new() }
+    l.put("x")
+    println("${l.order.len()}")
+    let it = It { n: 1, s: "a" }
+    let a = take(it)
+    let c = take(it)
+    let looped = It { n: 3, s: "c" }
+    let mut sum = 0
+    for k in 0..2 {
+        sum = sum + take(looped) + k
+    }
+    println("${a + c + sum}")
+}

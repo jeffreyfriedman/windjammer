@@ -1,0 +1,66 @@
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+
+struct Bag {
+    items: Vec<String>,
+    name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+
+struct Lru {
+    order: Vec<String>,
+}
+
+impl Lru {
+#[inline]
+fn touch(&mut self, k: String) {
+        self.order.push(k);
+}
+#[inline]
+fn put(&mut self, k: String) {
+        self.order.push(k.clone());
+        self.touch(k);
+}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+
+struct It {
+    n: i64,
+    s: String,
+}
+
+#[inline]
+fn push_bag(b: &mut Bag, s: String) {
+    b.items.push(s);
+}
+
+#[inline]
+fn wrap(b: Bag, t: String) -> String {
+    t + &b.name
+}
+
+#[inline]
+fn take(i: It) -> i64 {
+    i.n
+}
+
+fn main() {
+    let mut b = Bag { items: Vec::new(), name: String::from("n") };
+    push_bag(&mut b, "q".to_string());
+    let h = wrap(b, "t".to_string());
+    println!("{}", h);
+    let mut l = Lru { order: Vec::new() };
+    l.put("x".to_string());
+    println!("{}", l.order.len());
+    let it = It { n: 1_i64, s: String::from("a") };
+    let a = take(it.clone());
+    let c = take(it);
+    let looped = It { n: 3_i64, s: String::from("c") };
+    let mut sum = 0_i64;
+    for k in 0_i32..2_i32 {
+        sum = sum + take(looped.clone()) + k as i64;
+    }
+    println!("{}", a + c + sum);
+}
+
