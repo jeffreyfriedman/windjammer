@@ -19,7 +19,7 @@ use crate::parser::ast::core::Expression;
 use crate::parser::ast::types::Type;
 use rand::SeedableRng;
 use serde_json::{json, Value as Json};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -87,22 +87,6 @@ fn mix(a: u64, b: u64) -> u64 {
 
 fn is_durable(f: &FuncDef) -> bool {
     f.decorators.iter().any(|d| d.name == "durable")
-}
-
-/// The positions of the journaled steps of the program rooted at `entry` (empty when it has no `durable fn`).
-pub fn discover_sites(entry: &Path) -> Result<Vec<(PathBuf, usize, usize)>, String> {
-    use crate::check::effects::{analyze_project, parse_app_inputs};
-    let root = super::caps::project_root(entry);
-    let target = if root.join("wj.toml").is_file() { root } else { entry.to_path_buf() };
-    let files = crate::check::files::collect(&target).map_err(|e| e.to_string())?;
-    let mentions = files.iter().any(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains("durable fn")));
-    if !mentions {
-        return Ok(Vec::new());
-    }
-    let inputs = parse_app_inputs(&target).map_err(|e| e.to_string())?;
-    let a = analyze_project(&target, inputs, false);
-    let d = crate::ir::effect_facts::durable::analyze(&a.resolved, &a.facts);
-    Ok(d.step_sites.into_iter().collect())
 }
 
 impl Interpreter {
@@ -245,9 +229,4 @@ impl Interpreter {
         }
         Ok(v)
     }
-}
-
-/// The sites as a set, for tests.
-pub fn site_set(sites: &[(PathBuf, usize, usize)]) -> HashSet<(usize, usize)> {
-    sites.iter().map(|(_, l, c)| (*l, *c)).collect()
 }

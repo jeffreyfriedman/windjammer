@@ -276,7 +276,7 @@ output_has = ["--seeds takes A..B"]
 [[case]]
 name = "test --faults makes file calls fail"
 polarity = "negative"
-files = { "t/x_test.wj" = "use std::fs\n\n@test\nfn test_w() {\n    assert(fs::write(\"o.txt\", \"abcd\").is_ok())\n}\n" }
+files = { "t/x_test.wj" = "use std::env\nuse std::fs\n\n@test\nfn test_w() {\n    assert(fs::write(\"${env::temp_dir()}/o.txt\", \"abcd\").is_ok())\n}\n" }
 args = ["test", "--interpret", "--simulate", "--faults", "1", "{w}/t"]
 exit = 1
 output_has = ["test_w ... FAILED"]
@@ -314,7 +314,45 @@ stdout_has = ["1 passed; 0 failed"]
 [[case]]
 name = "test --faults 0 never fails a call"
 polarity = "positive"
-files = { "t/x_test.wj" = "use std::fs\n\n@test\nfn test_w() {\n    assert(fs::write(\"o.txt\", \"abcd\").is_ok())\n}\n" }
+files = { "t/x_test.wj" = "use std::env\nuse std::fs\n\n@test\nfn test_w() {\n    assert(fs::write(\"${env::temp_dir()}/o.txt\", \"abcd\").is_ok())\n}\n" }
 args = ["test", "--interpret", "--simulate", "--faults", "0", "{w}/t"]
 stdout_has = ["1 passed; 0 failed"]
 
+[[case]]
+name = "run --journal runs a durable fn and keeps its journal"
+polarity = "positive"
+files = { "m.wj" = "durable fn total() -> int {\n    1 + 2\n}\n\nfn main() {\n    println(\"${total()}\")\n}\n" }
+args = ["run", "--interpret", "--journal", "{w}/j", "{w}/m.wj"]
+stdout_has = ["3"]
+
+[[case]]
+name = "run --journal refuses a durable fn that cannot be replayed"
+polarity = "negative"
+files = { "m.wj" = "use std::collections::HashMap\n\ndurable fn first(m: HashMap<string, int>) -> int {\n    let mut n = 0\n    for (k, v) in m {\n        n = v\n    }\n    n\n}\n\nfn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--interpret", "--journal", "{w}/j", "{w}/m.wj"]
+exit = 1
+output_has = ["WJ0048"]
+
+[[case]]
+name = "run --crash-after needs --journal"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--crash-after", "1", "{w}/m.wj"]
+exit = 2
+output_has = ["--journal"]
+
+[[case]]
+name = "run --crash-after beyond the last step runs to completion"
+polarity = "positive"
+files = { "m.wj" = "durable fn job() -> int {\n    println(\"step\")\n    7\n}\n\nfn main() {\n    println(\"${job()}\")\n}\n" }
+args = ["run", "--interpret", "--journal", "{w}/j", "--crash-after", "9", "{w}/m.wj"]
+stdout_has = ["step", "7"]
+
+[[case]]
+name = "run --crash-after stops a durable fn after that step"
+polarity = "negative"
+files = { "m.wj" = "durable fn job() -> int {\n    println(\"step\")\n    7\n}\n\nfn main() {\n    println(\"${job()}\")\n}\n" }
+args = ["run", "--interpret", "--journal", "{w}/j", "--crash-after", "1", "{w}/m.wj"]
+exit = 137
+stdout_has = ["step"]
+output_lacks = ["\n7\n"]
