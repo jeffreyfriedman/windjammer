@@ -1,7 +1,7 @@
 //! `OrderedMap` / `OrderedSet`: insertion-ordered collections (ADR-0021 D6).
 //!
 //! Iteration is in insertion order; re-inserting an existing key keeps its position and replaces the
-//! value. `remove` / `shift_remove` preserve the order of the rest (O(n)); `swap_remove` moves the last
+//! value. `remove` preserves the order of the rest (O(n)); `swap_remove` moves the last
 //! entry into the hole (as `indexmap` does). They are host objects with interior mutability, like
 //! channels: a `let b = a` moves the handle, `clone()` copies the collection.
 
@@ -132,11 +132,6 @@ pub fn register(r: &mut Registry) {
         });
         r.native(ty, "iter", |_, v, _| Ok(new_iter(me(v)?.iter_items().unwrap_or_default())));
         r.native(ty, "into_iter", |_, v, _| Ok(new_iter(me(v)?.iter_items().unwrap_or_default())));
-        r.native(ty, "get_index", |_, v, a| {
-            let o = me(v)?;
-            let i = arg_usize(&a, 0, "get_index")?;
-            Ok(Value::option(o.inner.borrow().entries.get(i).map(|(k, x)| if o.is_map { pair(k, x) } else { k.clone() })))
-        });
         r.native(ty, "first", |_, v, _| {
             let o = me(v)?;
             Ok(Value::option(o.inner.borrow().entries.first().map(|(k, x)| if o.is_map { pair(k, x) } else { k.clone() })))
@@ -185,9 +180,8 @@ pub fn register(r: &mut Registry) {
         let i = me(v)?.inner.borrow();
         Ok(Value::option(i.find(&arg(&a, 0, "get_key_value")?).map(|j| pair(&i.entries[j].0, &i.entries[j].1))))
     });
-    r.native("OrderedMap", "get_index_of", |_, v, a| Ok(Value::option(me(v)?.inner.borrow().find(&arg(&a, 0, "get_index_of")?).map(Value::usize))));
     r.native("OrderedMap", "contains_key", |_, v, a| Ok(Value::Bool(me(v)?.inner.borrow().find(&arg(&a, 0, "contains_key")?).is_some())));
-    for n in ["remove", "shift_remove"] {
+    for n in ["remove"] {
         r.native("OrderedMap", n, |_, v, a| Ok(Value::option(me(v)?.inner.borrow_mut().shift_remove(&arg(&a, 0, "remove")?).map(|(_, x)| x))));
     }
     r.native("OrderedMap", "swap_remove", |_, v, a| Ok(Value::option(me(v)?.inner.borrow_mut().swap_remove(&arg(&a, 0, "swap_remove")?).map(|(_, x)| x))));
@@ -196,8 +190,7 @@ pub fn register(r: &mut Registry) {
     // ---- set ----
     r.native("OrderedSet", "insert", |_, v, a| Ok(Value::Bool(me(v)?.inner.borrow_mut().insert(arg(&a, 0, "insert")?, Value::Unit).is_none())));
     r.native("OrderedSet", "contains", |_, v, a| Ok(Value::Bool(me(v)?.inner.borrow().find(&arg(&a, 0, "contains")?).is_some())));
-    r.native("OrderedSet", "get_index_of", |_, v, a| Ok(Value::option(me(v)?.inner.borrow().find(&arg(&a, 0, "get_index_of")?).map(Value::usize))));
-    for n in ["remove", "shift_remove"] {
+    for n in ["remove"] {
         r.native("OrderedSet", n, |_, v, a| Ok(Value::Bool(me(v)?.inner.borrow_mut().shift_remove(&arg(&a, 0, "remove")?).is_some())));
     }
     r.native("OrderedSet", "swap_remove", |_, v, a| Ok(Value::Bool(me(v)?.inner.borrow_mut().swap_remove(&arg(&a, 0, "swap_remove")?).is_some())));
