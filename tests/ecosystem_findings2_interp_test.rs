@@ -294,3 +294,24 @@ fn glob_match_keeps_a_star_inside_one_path_segment() {
         "true false true true false\n",
     );
 }
+
+/// Function-body `use` gives the same output in the walker, the resolved engine and the resolved engine without
+/// the JIT (a body `use` switches the frame's module, so such a function must run in the walker, never as an island).
+#[test]
+fn body_use_agrees_across_engines() {
+    let dir = write_project(&[
+        ("wj.toml", &format!("{TOML}\n[dependencies]\n")),
+        (
+            "src/main.wj",
+            "mod helpers\n\nfn hot(n: int) -> int {\n    use crate::helpers::triple\n    let mut t = 0\n    let mut i = 0\n    while i < n {\n        t = t + triple(i)\n        i = i + 1\n    }\n    t\n}\n\nfn main() {\n    use crate::helpers::triple\n    println(\"${triple(4)} ${hot(200)}\")\n}\n",
+        ),
+        ("src/helpers.wj", "pub fn triple(n: int) -> int {\n    n * 3\n}\n"),
+    ]);
+    for extra in [vec!["--engine", "walker"], vec!["--engine", "resolved"], vec!["--engine", "resolved", "--no-jit"]] {
+        let mut args = vec!["run", "--interpret"];
+        args.extend(extra.iter().copied());
+        args.push("src/main.wj");
+        let o = Command::new(WJ).args(&args).current_dir(dir.path()).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&o.stdout), "12 59700\n", "{extra:?}: {}", String::from_utf8_lossy(&o.stderr));
+    }
+}

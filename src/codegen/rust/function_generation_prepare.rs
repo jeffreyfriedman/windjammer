@@ -411,7 +411,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             for param_name in &analyzed.str_ref_optimizable_params {
-                if self.str_ref_optimized_params.contains(param_name) {
+                if self.str_ref_optimized_params.contains(param_name)
+                    || !self.str_ref_optimizable_param(analyzed, param_name)
+                {
                     continue;
                 }
                 if analyzed.inferred_ownership.get(param_name)
@@ -424,6 +426,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else {
             for param_name in &analyzed.str_ref_optimizable_params {
+                if !self.str_ref_optimizable_param(analyzed, param_name) {
+                    continue;
+                }
                 if analyzed.inferred_ownership.get(param_name)
                     == Some(&crate::analyzer::OwnershipMode::Owned)
                 {
@@ -2879,7 +2884,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Phase-2 str_ref emits `&str` in Rust — register Borrowed so static
                 // `Self::helper(self.field)` call sites borrow instead of cloning fields.
                 // Never demote solver/analyzer Owned (enum payload, struct field store).
-                if analyzed.str_ref_optimizable_params.contains(&param.name)
+                if self.str_ref_optimizable_param(analyzed, &param.name)
                     && !matches!(ownership, crate::analyzer::OwnershipMode::Owned)
                     && analyzed.inferred_ownership.get(&param.name)
                         != Some(&crate::analyzer::OwnershipMode::Owned)

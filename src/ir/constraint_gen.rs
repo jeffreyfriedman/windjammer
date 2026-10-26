@@ -591,21 +591,23 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Walk the entire function body.
     fn walk_body(&mut self) {
-        let body = &self.analyzed.decl.body;
-        for (i, stmt) in body.iter().enumerate() {
-            // A trailing expression is the function's value (implicit return).
-            if i + 1 == body.len() && self.analyzed.decl.return_type.is_some() {
-                if let Statement::Expression { expr, .. } = stmt {
-                    let val_var = self.walk_expression(expr);
-                    self.cs.add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
-                    self.cs.add_because(
-                        Constraint::UsedAs(val_var, self.return_var),
-                        origin("OWN-RETURNED", "tail expression: the function's value must be owned", &expr.location()),
-                    );
-                    continue;
-                }
+        let analyzed = self.analyzed;
+        let body = &analyzed.decl.body;
+        // The trailing expression (or the tails of a trailing `if`/`match`) is the function's value.
+        let tails = if self.analyzed.decl.return_type.is_some() {
+            self.walk_block_value(body)
+        } else {
+            for stmt in body {
+                self.walk_statement(stmt);
             }
-            self.walk_statement(stmt);
+            Vec::new()
+        };
+        for val_var in tails {
+            self.cs.add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
+            self.cs.add_because(
+                Constraint::UsedAs(val_var, self.return_var),
+                origin("OWN-RETURNED", "tail expression: the function's value must be owned", &None),
+            );
         }
     }
 
@@ -1167,11 +1169,54 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::Block { statements, .. } => {
-                for s in statements {
-                    self.walk_statement(s);
-                }
+                let tails = self.walk_block_value(statements);
                 let result = self.cs.fresh_var();
+                // A block's value is its tail (or the tails of its `if`/`match` branches): whatever
+                // the block's value is used for is required of each of them (`let c = if p { a } else { b }`).
+                for t in tails {
+                    self.cs.add_because(
+                        Constraint::UsedAs(t, result),
+                        origin("OWN-LATTICE", "value of a block or branch flows to the block's result", &None),
+                    );
+                }
                 result
+            }
+        }
+    }
+
+    /// Walk a statement list that produces a value; returns the constraint vars of the value
+    /// positions (the last expression, or the last expressions of each `if`/`match` branch).
+    fn walk_block_value(&mut self, stmts: &[&'ast Statement<'ast>]) -> Vec<ConstraintVar> {
+        let Some((last, init)) = stmts.split_last() else { return Vec::new() };
+        for s in init {
+            self.walk_statement(s);
+        }
+        match last {
+            Statement::Expression { expr, .. } => vec![self.walk_expression(expr)],
+            Statement::If { condition, then_block, else_block, .. } => {
+                let cond_var = self.walk_expression(condition);
+                self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
+                let mut out = self.walk_block_value(then_block);
+                if let Some(else_stmts) = else_block {
+                    out.extend(self.walk_block_value(else_stmts));
+                }
+                out
+            }
+            Statement::Match { value, arms, .. } => {
+                self.walk_expression(value);
+                let mut out = Vec::new();
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        let guard_var = self.walk_expression(guard);
+                        self.cs.add_because(Constraint::TypeIs(guard_var, BaseType::Bool), tagged("TY-BOOL"));
+                    }
+                    out.push(self.walk_expression(arm.body));
+                }
+                out
+            }
+            other => {
+                self.walk_statement(other);
+                Vec::new()
             }
         }
     }

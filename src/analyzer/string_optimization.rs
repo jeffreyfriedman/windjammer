@@ -144,6 +144,8 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
 
+                // `let v = if c { CONST } else { param }`: the param becomes a branch value that
+                // can reach an owned position; `&str` demotion would mix `&str` and `String`.
                 // LHS of string `+` consumes the param (owned String), not &str.
                 if self.param_is_string_concat_lhs(&param.name, &func.body) {
                     continue;
@@ -159,6 +161,41 @@ impl<'ast> Analyzer<'ast> {
         }
 
         optimizable
+    }
+
+    /// `let v = <if/match/block>` where `param_name` is a bare tail value of a branch.
+    pub(crate) fn param_is_branch_value_of_let(param_name: &str, body: &[&Statement]) -> bool {
+        fn stmt_tail(name: &str, stmts: &[&Statement]) -> bool {
+            match stmts.last() {
+                Some(Statement::Expression { expr, .. }) => expr_tail(name, expr),
+                Some(Statement::If { then_block, else_block, .. }) => {
+                    stmt_tail(name, then_block)
+                        || else_block.as_ref().is_some_and(|b| stmt_tail(name, b))
+                }
+                Some(Statement::Match { arms, .. }) => arms.iter().any(|a| expr_tail(name, a.body)),
+                _ => false,
+            }
+        }
+        fn expr_tail(name: &str, e: &Expression) -> bool {
+            match e {
+                Expression::Identifier { name: n, .. } => n == name,
+                Expression::Block { statements, .. } => stmt_tail(name, statements),
+                _ => false,
+            }
+        }
+        fn in_stmts(name: &str, stmts: &[&Statement]) -> bool {
+            stmts.iter().any(|s| match s {
+                Statement::Let { value, .. } => {
+                    matches!(value, Expression::Block { .. }) && expr_tail(name, value)
+                }
+                Statement::If { then_block, else_block, .. } => {
+                    in_stmts(name, then_block)
+                        || else_block.as_ref().is_some_and(|b| in_stmts(name, b))
+                }
+                _ => false,
+            })
+        }
+        in_stmts(param_name, body)
     }
 
     /// True when `param_name` appears as the LHS of a `+` binary expression

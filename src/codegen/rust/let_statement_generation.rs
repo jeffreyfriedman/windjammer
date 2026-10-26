@@ -1067,7 +1067,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // String literals assigned to variables should become String (not &str)
                 // because they may be passed to functions expecting String later.
                 // This is safe because String auto-borrows to &str when needed.
+                let prev_owned_ctx = self.in_owned_value_context;
+                self.in_owned_value_context |= self.expression_yields_static_str(value);
                 let mut value_str = self.generate_expression(value);
+                self.in_owned_value_context = prev_owned_ctx;
                 self.assignment_int_target_type = prev_assign_int;
                 if u32_return_scan_counter && value_str.ends_with("_usize") {
                     value_str = value_str.replace("_usize", "_u32");
