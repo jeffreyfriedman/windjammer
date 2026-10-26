@@ -243,15 +243,13 @@ pub fn validate_report_spans(
 static STRICT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(cfg!(debug_assertions));
 
 /// Turn the span assertion layer on or off at run time. On by default in debug builds; the test
-/// oracles switch it on so that `--release` test runs are gated too. `WJ_STRICT_SPANS=1` also
-/// enables it.
+/// oracles switch it on so that `--release` test runs are gated too.
 pub fn set_strict(on: bool) {
     STRICT.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
 pub fn is_strict() -> bool {
     STRICT.load(std::sync::atomic::Ordering::Relaxed)
-        || std::env::var_os("WJ_STRICT_SPANS").is_some_and(|v| v == "1")
 }
 
 /// Assertion layer: a location handed to a diagnostic constructor must be structurally valid

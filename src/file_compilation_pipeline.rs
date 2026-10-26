@@ -182,7 +182,6 @@ fn compile_file_impl(
         input_path.to_string_lossy().to_string(),
         source.clone(),
     );
-    wj_parser.enable_span_log(); // true spans for lint and source-map locations
     let program = wj_parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
@@ -252,8 +251,7 @@ fn compile_file_impl(
     // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
     if module_compiler.enable_lint {
         let file_name = input_path.to_string_lossy().to_string();
-        let mut rust_leakage = linter::rust_leakage::RustLeakageLinter::new(&file_name)
-            .with_spans(wj_parser.span_snapshot());
+        let mut rust_leakage = linter::rust_leakage::RustLeakageLinter::new(&file_name).with_spans(wj_parser.span_snapshot());
         rust_leakage.lint_program(&program);
         for diag in rust_leakage.diagnostics() {
             eprintln!("{}", diag);

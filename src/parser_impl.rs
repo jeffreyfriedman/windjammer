@@ -122,7 +122,7 @@ pub struct Parser {
     pub(crate) recovering: bool,
     /// True while parsing the operand of a prefix operator (stops before `as`).
     pub(crate) in_unary_operand: bool,
-    /// Node spans (off unless `enable_span_log()` was called).
+    /// Node spans (on for `new_with_source`, off for `new` unless `enable_span_log()` is called).
     pub(crate) span_log: std::cell::RefCell<Option<crate::parser::span_log::SpanLog>>,
 }
 
@@ -203,7 +203,7 @@ impl Parser {
             recovered_errors: Vec::new(),
             recovering: false,
             in_unary_operand: false,
-            span_log: std::cell::RefCell::new(None),
+            span_log: std::cell::RefCell::new(Some(crate::parser::span_log::SpanLog::default())),
         }
     }
 
