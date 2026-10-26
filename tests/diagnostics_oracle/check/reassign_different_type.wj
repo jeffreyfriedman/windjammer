@@ -1,0 +1,7 @@
+// expect: WJ0003
+fn main() {
+    let mut total = 5
+    total = "five"
+//~@13+6 ERROR WJ0003 mismatched types: expected `int`,
+    println("${total}")
+}

@@ -1,0 +1,4 @@
+fn main() {
+    show(&value)
+//~@10 ERROR W0004 explicit borrow in function call
+}

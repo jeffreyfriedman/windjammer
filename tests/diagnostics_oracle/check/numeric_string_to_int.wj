@@ -1,0 +1,6 @@
+// expect: WJ0003
+fn main() {
+    let n: int = "42"
+//~@18+4 ERROR WJ0003 mismatched types: expected `int`,
+    println("${n}")
+}

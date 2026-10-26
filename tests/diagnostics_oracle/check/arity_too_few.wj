@@ -1,0 +1,9 @@
+// expect: WJ0013
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() {
+    println("${add(1)}")
+//~@16+3 ERROR WJ0013 function `add` takes 2
+}

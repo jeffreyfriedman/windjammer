@@ -1,0 +1,4 @@
+fn main() {
+    let s = "hello".to_string()
+//~@13 ERROR W0006 forbidden Rust leakage
+}

@@ -59,6 +59,11 @@ Design: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/su
 12. Code no user can reach is a bug: `tests/capability_reachability_test.rs` fails on new modules or pub fns that no
     entry point (`wj`, `wj-lint`, LSP, MCP) reaches. Wire it into `wj`, declare it in `docs/MODULE_MAP.toml`
     `[library_api]`, or delete it. The legacy `windjammer` binary may not grow a subcommand `wj` lacks.
+13. A bug found by inspection lands with a class-level gate. If you notice a defect by reading code, reading output or
+    spot-checking (a wrong column, an off-by-one line, a dummy span, a panic on odd input), a one-off regression test is
+    not enough: add or extend an automated gate that fails for the whole class (an independent oracle, a corpus sweep,
+    or a mutation-tested invariant), prove it can fail (mutation self-test), and list it in `docs/testing/INVARIANTS.md`.
+    Ratchet files (`tests/span_oracle_ratchet/`) may only shrink.
 
 ## Merge gate (mandatory)
 

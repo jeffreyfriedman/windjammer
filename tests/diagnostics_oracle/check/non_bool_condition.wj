@@ -1,0 +1,8 @@
+// expect: WJ0003
+fn main() {
+    let n = 3
+    if 1 {
+//~@8+1 ERROR WJ0003 mismatched types: expected `bool`,
+        println("x ${n}")
+    }
+}

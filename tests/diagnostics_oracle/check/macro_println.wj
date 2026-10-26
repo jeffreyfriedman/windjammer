@@ -1,0 +1,5 @@
+// expect: W0007
+fn main() {
+    println!("hello")
+//~@5+17 WARN W0007 `println!` is deprecated: use
+}
