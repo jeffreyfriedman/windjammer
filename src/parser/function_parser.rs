@@ -78,8 +78,10 @@ impl Parser {
         &mut self,
     ) -> Result<Vec<Parameter<'static>>, String> {
         let mut params = Vec::new();
+        let mut param_ranges: Vec<(usize, usize)> = Vec::new();
 
         while self.current_token() != &Token::RParen {
+            let param_start = self.position;
             // Parse parameter decorators (@builtin, etc.)
             let mut decorators = Vec::new();
             while let Token::Decorator(_) = self.current_token() {
@@ -209,6 +211,7 @@ impl Parser {
                 }
             }
 
+            param_ranges.push((param_start, self.position));
             if self.current_token() == &Token::Comma {
                 self.advance();
             } else {
@@ -217,6 +220,7 @@ impl Parser {
         }
 
         self.check_default_order(&params)?;
+        self.record_param_spans(&params, &param_ranges);
         Ok(params)
     }
 }

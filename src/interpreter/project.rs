@@ -307,6 +307,8 @@ impl Interpreter {
         for f in &all {
             ids.push(self.ensure_module_path(&f.module_path, &f.file));
         }
+        let decl_files: Vec<(String, &[crate::parser::Item<'_>])> = all.iter().map(|f| (f.module_path.join("::"), &f.program.items[..])).collect();
+        self.note_duplicate_types(&decl_files);
         self.project_loading = true;
         let reg: Result<(), RuntimeError> = all.iter().zip(&ids).try_for_each(|(f, &m)| self.register_items(m, &f.program.items));
         self.project_loading = false;
@@ -326,7 +328,12 @@ impl Interpreter {
         let vis = Visibility { c: &resolved.collected, crate_roots };
         self.bind_uses(&resolved, &module_ids, &vis)?;
         check_call_privacy(&resolved, &vis)?;
-        let bridged = |name: &str| self.has_host_fn(name);
+        // an `extern fn` runs when the host bridge provides it or the C library does (scalar signatures)
+        let progs: Vec<&crate::parser::Program<'_>> = all.iter().map(|f| f.program).collect();
+        let c_sigs = super::host_bridge::extern_signatures(&progs).unwrap_or_default();
+        let bridged = |name: &str| {
+            self.has_host_fn(name) || c_sigs.iter().find(|s| s.name == name).is_some_and(super::c_library::callable)
+        };
         let std_fn = |path: &str| self.builtins.has_function(path);
         super::preflight::check(&all, &resolved, &rust_crates, &bridged, &std_fn)?;
         self.finish_registration()
@@ -371,11 +378,12 @@ impl Interpreter {
             .collect()
     }
 
-    /// Types are keyed by name inside the interpreter; refuse (loudly) programs where that would merge two types.
+    /// Structs and enums with a shared name are keyed by module path (`type_keys.rs`); traits are still keyed by name,
+    /// so refuse (loudly) programs where that would merge two traits.
     fn reject_shadowed_type_names(&self, r: &ResolvedProgram<'static>) -> Result<(), RuntimeError> {
         let mut seen: HashMap<&str, &Def> = HashMap::new();
         for d in r.collected.defs.iter() {
-            if !matches!(d.kind, DefKind::Struct | DefKind::Enum | DefKind::Trait) {
+            if !matches!(d.kind, DefKind::Trait) {
                 continue;
             }
             if let Some(prev) = seen.get(d.name.as_str()) {

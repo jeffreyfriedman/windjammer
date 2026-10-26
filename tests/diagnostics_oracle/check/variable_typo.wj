@@ -1,0 +1,6 @@
+// expect: WJ0001
+fn main() {
+    let counter = 1
+    println("${countr}")
+//~@16+6 ERROR WJ0001 cannot find value `countr`
+}

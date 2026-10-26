@@ -1,0 +1,14 @@
+// expect: WJ0018
+trait Shape {
+    fn area(self) -> float
+}
+
+struct Dot {}
+
+impl Shape for Dot {
+//~@6+5 ERROR WJ0018 not all trait items
+}
+
+fn main() {
+    println("x")
+}

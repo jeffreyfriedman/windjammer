@@ -33,6 +33,7 @@ pub(crate) mod named_args;
 pub mod optional_chain;
 mod pipe_parser;
 mod primary_expression_parser;
+pub mod span_log;
 pub(crate) mod shorthand_closure;
 pub mod task_prefix;
 mod trailing_block;
@@ -55,6 +56,7 @@ pub use ast::*;
 // Re-export everything else from parser_impl for now to maintain backward compatibility
 pub use crate::parser_impl::ParseWarning;
 pub use crate::parser_impl::Parser;
+pub use span_log::{NodeSpan, SpanSnapshot};
 
 // TODO: Uncomment these as we create the modules
 // pub mod core;

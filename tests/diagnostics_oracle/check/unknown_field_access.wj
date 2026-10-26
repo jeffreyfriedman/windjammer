@@ -1,0 +1,11 @@
+// expect: WJ0014
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let point = Point { x: 1, y: 2 }
+    println("${point.z}")
+//~@22+1 ERROR WJ0014 no field `z` on
+}

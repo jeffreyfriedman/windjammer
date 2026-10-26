@@ -504,5 +504,17 @@ class EndToEndTests(unittest.TestCase):
             report.assert_clean('{"x": "SecretProj"}', ["SecretProj"])
 
 
+class AllowHeaders(unittest.TestCase):
+    def test_allow_lines_become_flags_and_stop_at_code(self):
+        d = tempfile.mkdtemp(prefix="wj-allow-")
+        try:
+            p = os.path.join(d, "a.wj")
+            write(p, "// tags: x\n// allow: fs.read=/tmp/**\n// allow: fs.write=/tmp/**\nfn main() {}\n// allow: not.this=1\n")
+            self.assertEqual(r2.allow_flags(p), ["--allow", "fs.read=/tmp/**", "--allow", "fs.write=/tmp/**"])
+            self.assertEqual(r2.allow_flags(os.path.join(d, "missing.wj")), [])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -67,7 +67,7 @@ fn is_resource(v: &Value) -> bool {
 /// `move` semantics for a thread closure: captured variables the body mentions are copied into the
 /// closure; those holding resources (channel ends, `Arc`s, guards, values with destructors) are
 /// moved out of the spawning scope, so their lifetime is the thread's.
-fn move_captures(f: Value) -> Value {
+pub(crate) fn move_captures(f: Value) -> Value {
     let Value::Func(c) = &f else { return f };
     let Callable::Closure { params, body, env, module, self_ty, tparams } = &**c else { return f };
     let text = format!("{:?}", body);

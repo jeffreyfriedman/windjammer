@@ -9,6 +9,8 @@ pub mod suggestions;
 #[cfg(feature = "cli")]
 pub use suggestions::suggest_fix;
 
+pub mod span_check;
+
 use std::fmt;
 
 /// Source location for an error
@@ -21,6 +23,7 @@ pub struct SourceLocation {
 
 impl SourceLocation {
     pub fn new(file: impl Into<String>, line: usize, column: usize) -> Self {
+        span_check::assert_location("SourceLocation", line, column);
         Self {
             file: file.into(),
             line,
