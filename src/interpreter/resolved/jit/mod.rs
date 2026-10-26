@@ -1,6 +1,8 @@
-//! Cranelift tier (ADR-0020 step 7, spike behind `--features jit`): hot functions whose every value
-//! is an `int` (`i64` / unsuffixed literal) and whose body is arithmetic, comparisons, `let`,
-//! assignment, `if`, `while`, `return` and calls to such functions compile to machine code.
+//! Cranelift tier (ADR-0020 step 7 and round 3; default feature `jit`). Two kinds of machine code:
+//! hot loops of any compiled function (`osr.rs`, `lower*.rs`, `rt.rs`, `kinds.rs`: entered at the loop
+//! head, left at a statement the closure engine finishes), and, in this file, hot functions whose
+//! every value is an `int` (`i64` / unsuffixed literal) and whose body is arithmetic, comparisons,
+//! `let`, assignment, `if`, `while`, `return` and calls to such functions.
 //!
 //! Semantics by construction: a jitted call has no side effect, so on any edge -- an overflow, a
 //! zero divisor, `i64::MIN / -1`, recursion deeper than `MAX_DEPTH` -- it reports a bail-out and the
