@@ -43,18 +43,16 @@ impl Lexer {
         false
     }
 
-    /// At `escaped` (the character after a backslash): `x` + two hex digits, or `u{` + 1 to 6 hex digits + `}`.
+    /// At `escaped` (the character after a backslash): `u{` + 1 to 6 hex digits + `}` names a Unicode scalar value.
     /// Consumes the escape and returns the character when well formed; otherwise consumes nothing.
     fn read_numeric_escape(&mut self, escaped: char) -> Option<char> {
-        let (digits, braces) = match escaped {
-            'x' => (2, false),
-            'u' if self.peek(1) == Some('{') => (6, true),
-            _ => return None,
-        };
-        let mut offset = if braces { 2 } else { 1 };
+        if escaped != 'u' || self.peek(1) != Some('{') {
+            return None;
+        }
+        let mut offset = 2;
         let mut value: u32 = 0;
         let mut seen = 0;
-        while seen < digits {
+        while seen < 6 {
             match self.peek(offset).and_then(|c| c.to_digit(16)) {
                 Some(d) => value = value * 16 + d,
                 None => break,
@@ -62,10 +60,11 @@ impl Lexer {
             offset += 1;
             seen += 1;
         }
-        let well_formed = if braces { seen >= 1 && self.peek(offset) == Some('}') } else { seen == 2 && value < 0x80 };
-        let c = char::from_u32(value).filter(|_| well_formed)?;
-        let consumed = if braces { offset + 1 } else { offset };
-        for _ in 0..consumed {
+        if seen == 0 || self.peek(offset) != Some('}') {
+            return None;
+        }
+        let c = char::from_u32(value)?;
+        for _ in 0..=offset {
             self.advance();
         }
         Some(c)
@@ -86,8 +85,8 @@ impl Lexer {
             } else if ch == '\\' {
                 self.advance();
                 if let Some(escaped) = self.current_char {
-                    // `\xHH` and `\u{H..}` name a character by code point; anything malformed keeps the old
-                    // meaning (the escaped character itself)
+                    // `\u{H..}` names a character by code point; anything malformed keeps the old meaning
+                    // (the escaped character itself)
                     if let Some(c) = self.read_numeric_escape(escaped) {
                         current_literal.push(c);
                         continue;
