@@ -4,3 +4,4 @@
 //! instead of matching method names themselves.
 
 pub mod enumerable;
+pub mod known_methods;

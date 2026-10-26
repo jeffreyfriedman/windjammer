@@ -145,7 +145,6 @@ digraph deps {
   "check" -> "analyzer" [label="2"];
   "check" -> "diagnostics" [label="19"];
   "check" -> "fuzzy_matcher" [label="2"];
-  "check" -> "interpreter" [label="1",color=red,fontcolor=red];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="12"];
   "check" -> "lexer" [label="5"];
@@ -156,7 +155,7 @@ digraph deps {
   "check" -> "parser" [label="22"];
   "check" -> "resolve" [label="3"];
   "check" -> "source_map" [label="3"];
-  "check" -> "stdlib_surface" [label="1"];
+  "check" -> "stdlib_surface" [label="2"];
   "check" -> "test_module_gate" [label="1"];
   "check" -> "type_classification" [label="3"];
   "cli" -> "auto_fix" [label="1"];
