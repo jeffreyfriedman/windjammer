@@ -1,5 +1,5 @@
 // tags: vec, search, contains
-// rust: gap v.position(|x| *x == 15) emits 15_i64 against an i32 array (literal width: numeric solver, convergence C4)
+// rust: ok
 // expect: true
 // expect: false
 // expect: Some(2)

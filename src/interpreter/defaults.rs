@@ -42,6 +42,14 @@ impl Interpreter {
                     "Option" => return Ok(Value::none()),
                     _ => {}
                 }
+                // a name shared by several modules: the written (or already resolved) path picks the type
+                let base = if self.dup_types.is_empty() {
+                    base
+                } else if self.structs.contains_key(n.as_str()) {
+                    n.clone()
+                } else {
+                    self.type_key(self.scope.module, n)
+                };
                 if let Some(f) = self.methods.get(&(base.clone(), "default".to_string())).cloned() {
                     return self.call_func(&f, vec![], None);
                 }
