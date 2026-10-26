@@ -75,7 +75,7 @@ pub fn as_iter(it: &mut Interpreter, v: Value) -> R<Iter> {
     Ok(match deref_value(v)? {
         Value::Iter(i) => i,
         Value::Vec(x) => IterState::from_rc(x),
-        Value::Range(a, b, ty) => IterState::new(IterSrc::Range { cur: Cell::new(a), end: Cell::new(b), ty }),
+        Value::Range(r, ty) => IterState::new(IterSrc::Range { cur: Cell::new(r.0), end: Cell::new(r.1), ty }),
         Value::Native(ref n) if n.type_name() == "Receiver" => match super::builtins::channel::receiver_iter(&Value::Native(n.clone()), false) {
             Some(Value::Iter(i)) => i,
             _ => return Err(semantic("not a receiver")),
@@ -262,7 +262,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             match next(it, inner)? {
                 None => Ok(None),
                 Some(x) => {
-                    let res = it.call_value(f, vec![Value::Ref(state.clone()), x])?;
+                    let res = it.call_value(f, vec![Value::Ref(Box::new(state.clone())), x])?;
                     match res.as_option() {
                         Some(Some(y)) => Ok(Some(y.clone())),
                         _ => {

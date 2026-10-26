@@ -267,7 +267,7 @@ fn register_consumers(r: &mut Registry) {
     r.pure(Kind::Iter, "contains", |_, v, a| {
         let x = arg(&a, 0, "contains")?;
         match v {
-            Value::Range(lo, hi, _) => Ok(Value::Bool(matches!(x, Value::Int(n, _) if n >= *lo && n < *hi))),
+            Value::Range(r, _) => Ok(Value::Bool(matches!(x, Value::Int(n, _) if n >= r.0 && n < r.1))),
             _ => Err(semantic("`contains` on an iterator")),
         }
     });

@@ -233,7 +233,7 @@ impl Interpreter {
                 };
                 let v = slot.borrow().clone();
                 match v {
-                    Value::Ref(p) => Ok(Some(self.chase(p)?)),
+                    Value::Ref(p) => Ok(Some(self.chase(*p)?)),
                     _ => Ok(Some(Place::of_slot(slot))),
                 }
             }
@@ -247,7 +247,7 @@ impl Interpreter {
                 };
                 let bv = base.read()?;
                 let bv = match bv {
-                    Value::Ref(p) => return Ok(Some(self.chase(p)?.proj(Proj::Field(field.as_str().into())))),
+                    Value::Ref(p) => return Ok(Some(self.chase(*p)?.proj(Proj::Field(field.as_str().into())))),
                     Value::Rc(slot) => return Ok(Some(Place::of_slot(slot).proj(Proj::Field(field.as_str().into())))),
                     other => other,
                 };
@@ -291,7 +291,7 @@ impl Interpreter {
             Expression::MethodCall { .. } | Expression::Call { .. } => {
                 let v = env.eval_keep_ref(self, e)?;
                 match v {
-                    Value::Ref(p) => Ok(Some(self.chase(p)?)),
+                    Value::Ref(p) => Ok(Some(self.chase(*p)?)),
                     _ => Ok(None),
                 }
             }
@@ -309,7 +309,7 @@ impl Interpreter {
             }
             let v = cur.slot.borrow().clone();
             match v {
-                Value::Ref(n) => cur = n,
+                Value::Ref(n) => cur = *n,
                 _ => return Ok(cur),
             }
         }
