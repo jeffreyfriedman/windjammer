@@ -693,9 +693,6 @@ impl Interpreter {
         if self.hot.is_some() {
             self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
-        if f.decorators.iter().any(|d| d.name == "durable") {
-            return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
-        }
         if self.engine_resolved && targs.is_empty() && Self::compiled_call_ok(f, &self_val) {
             if let Some(c) = self.compiled_for(f) {
                 return self.run_compiled(f, &c, args, self_val);
@@ -705,7 +702,15 @@ impl Interpreter {
     }
 
     /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
-    pub(crate) fn call_func_walk(
+    pub(crate) fn call_func_walk(&mut self, f: &Rc<FuncDef>, args: Vec<Value>, self_val: Option<Value>, targs: &[Type], expected: Option<Type>) -> R {
+        if f.decorators.iter().any(|d| d.name == "durable") {
+            return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
+        }
+        self.call_func_body(f, args, self_val, targs, expected)
+    }
+
+    /// The walker's call proper (a durable function's body runs through here, inside its journal).
+    pub(crate) fn call_func_body(
         &mut self,
         f: &Rc<FuncDef>,
         mut args: Vec<Value>,

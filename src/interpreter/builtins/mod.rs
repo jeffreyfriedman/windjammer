@@ -21,6 +21,7 @@ mod option;
 mod seq;
 mod shared;
 mod std_cap;
+mod std_caps_rt;
 mod std_data;
 mod std_extra;
 mod std_fns;
@@ -162,6 +163,7 @@ impl Registry {
         arena::register(&mut r);
         std_sys::register(&mut r);
         std_cap::register(&mut r);
+        std_caps_rt::register(&mut r);
         std_data::register(&mut r);
         std_proc::register(&mut r);
         std_runtime_gaps::register(&mut r);
