@@ -14,7 +14,7 @@
 "src/analyzer/string_optimization.rs" = 1
 "src/cargo_integration.rs" = 1
 "src/cli/update.rs" = 1
-"src/cli_commands.rs" = 4
+"src/cli_commands.rs" = 3
 "src/cli_project_build.rs" = 1
 "src/codegen/javascript/tree_shaker.rs" = 1
 "src/codegen/rust/backend.rs" = 1
