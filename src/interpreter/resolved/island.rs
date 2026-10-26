@@ -60,7 +60,7 @@ impl Island {
         if r.is_ok() {
             for (n, s) in &self.declares {
                 if let Some((_, slot)) = it.scope.vars[start.min(it.scope.vars.len())..].iter().rev().find(|(m, _)| m == n) {
-                    let v = Value::Ref(Place::of_slot(slot.clone()));
+                    let v = Value::Ref(Box::new(Place::of_slot(slot.clone())));
                     super::fast::set(it, b + s, v);
                 }
             }
@@ -142,5 +142,5 @@ pub(super) fn read_boxed_arg(it: &mut Interpreter, i: usize, name: &'static str)
 /// A fresh walker slot holding `v` (what the walker's `define` creates).
 #[inline]
 pub(super) fn boxed(v: Value) -> Value {
-    Value::Ref(Place::temp(v))
+    Value::Ref(Box::new(Place::temp(v)))
 }

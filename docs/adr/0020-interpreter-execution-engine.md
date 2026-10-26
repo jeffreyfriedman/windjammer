@@ -392,6 +392,26 @@ Prerequisites: calls in the loop subset (a call is an exit point today), a struc
 the loop body. First experiment: `structs` with `add`/`dot` inlined by hand in Cranelift IR to measure the ceiling. Kill: under
 2x on `structs`, or the inliner over 1.5k lines.
 
+### Round 4 (Oct 26): merged-head verification, 32-byte `Value`
+- Merged head (`interp-speed3` + `interp-startup`): effect replay/simulation/escape suites, interpreter suites and the engine
+  parity corpus pass (the parity test now also runs every corpus program with every loop entering machine code at its first
+  iteration, `WJ_JIT_LOOP_HOT=0`). `std_interpreter_agreement_test` fails on `caps::*` names another stream added to the runtime.
+- Check caches and effect diagnostics: `tests/check_cache/effects.rs` (part of `check_cache_differential_test`) runs every
+  non-xfail WJ004x spec example as a project cached and uncached, and edits the grant and a dependency so WJ0040/WJ0042 change
+  for an unchanged file; cached and uncached agree in every state.
+- Debug mutation gate re-run on the merged head: all six mutants caught, once NaN and literal-retag edges were planted in fixed
+  thirds of the generated programs (the random mix alone had stopped exercising them).
+- `Value` is 32 bytes (was 48): ranges and places are boxed, asserted at compile time. First step of the packed-`Vec` lever.
+
+`scripts/interp_compare.sh --runs 5` at load 60 (`bench/interp/compare.json`), resolved / Node: `loop5m` 0.79x, `fib30` 0.76x,
+`sieve` 2.31x (3.5x before the smaller `Value`, load 36), `nbody` 2.35x, `strings` 2.28x, `closures` 2.77x, `hashmap` 3.81x,
+`structs` 7.12x.
+
+Next, in order: `Vec`s of scalars packed (a `Value::Vec` whose storage is `Vec<i64>`/`Vec<f64>`/`Vec<bool>` with a tag,
+unpacked lazily by the accessors the builtins share; every `Vec` builtin goes through `vec_of`/`vec_mut`, which is the seam);
+a hashed index for maps kept in step by `KMap`'s mutation methods (today `KMap` derefs to `BTreeMap` mutably, so the index needs
+those mutations to go through `KMap` first); method inlining in machine-code loops with non-escaping structs in registers.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to

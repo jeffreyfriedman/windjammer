@@ -107,7 +107,7 @@ impl Interpreter {
         let base = self.rstack.len();
         self.rstack.resize(base + cc.nslots, Value::Unit);
         for (pos, s) in &cc.free {
-            self.rstack[base + s] = Value::Ref(Place::of_slot(env[*pos].1.clone()));
+            self.rstack[base + s] = Value::Ref(Box::new(Place::of_slot(env[*pos].1.clone())));
         }
         for (i, p) in cc.params.iter().enumerate() {
             let a = if i < args.len() { std::mem::replace(&mut args[i], Value::Unit) } else { Value::Unit };
