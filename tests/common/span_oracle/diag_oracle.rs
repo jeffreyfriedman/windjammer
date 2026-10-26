@@ -149,7 +149,49 @@ fn bracket_code(msg: &str) -> Option<String> {
     Some(s[..end].to_string())
 }
 
-/// Run every in-process front-end producer on `src`.
+/// Run `wj check`'s in-process front end (`windjammer::check::check_sources`) on one file and
+/// return its diagnostics in the oracle's normalised form.
+pub fn collect_check(file: &str, src: &str) -> Vec<Found> {
+    check_diagnostics(file, src)
+        .into_iter()
+        .map(|d| {
+            let (line, col, len) = match &d.primary_span {
+                Some(s) => {
+                    let len = (s.line_start == s.line_end && s.byte_end <= src.len() && s.byte_start <= s.byte_end && src.is_char_boundary(s.byte_start) && src.is_char_boundary(s.byte_end))
+                        .then(|| src[s.byte_start..s.byte_end].chars().count());
+                    (s.line_start, s.col_start, len)
+                }
+                None => (0, 0, None),
+            };
+            Found {
+                producer: "check",
+                line,
+                col,
+                len,
+                severity: match d.severity {
+                    windjammer::diagnostics::Severity::Error => "ERROR",
+                    windjammer::diagnostics::Severity::Warning => "WARN",
+                    _ => "NOTE",
+                }
+                .into(),
+                code: d.code.clone(),
+                message: d.message.clone(),
+            }
+        })
+        .collect()
+}
+
+/// The raw diagnostics of `check_sources` (panics inside the checker become one `panic` diagnostic).
+pub fn check_diagnostics(file: &str, src: &str) -> Vec<windjammer::diagnostics::Diagnostic> {
+    windjammer::error::span_check::set_strict(true);
+    let (f, s) = (file.to_string(), src.to_string());
+    std::panic::catch_unwind(move || windjammer::check::check_sources(std::path::Path::new("."), &[(f, s)])).unwrap_or_else(|p| {
+        let msg = p.downcast_ref::<String>().cloned().or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
+        vec![windjammer::diagnostics::Diagnostic::error("WJ0099", format!("checker panicked: {msg}"))]
+    })
+}
+
+/// Run every in-process front-end producer on `src` (legacy: parser, parser warnings, rust-leakage linter).
 pub fn collect(file: &str, src: &str) -> Vec<Found> {
     windjammer::error::span_check::set_strict(true);
     let (f, s) = (file.to_string(), src.to_string());
