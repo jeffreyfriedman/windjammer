@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/check-test-ratchet.sh > scripts/check-test-ratchet.sh && PATH="$W/bin:$PATH" bash scripts/check-test-ratchet.sh ; rc=$?; rm -rf scripts; exit $rc

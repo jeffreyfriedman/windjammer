@@ -1,0 +1,6 @@
+#!/bin/sh
+file=""; out=""
+cmd="$1"; shift
+while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; --no-cargo) ;; *) file="$1" ;; esac; shift; done
+case "$file" in *tfail*) echo "transpile error" 1>&2; exit 1 ;; esac
+mkdir -p "$out"; echo "$file" > "$out/source"

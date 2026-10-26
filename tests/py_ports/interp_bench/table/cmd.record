@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/interp_bench.py > scripts/interp_bench.py && python3 scripts/interp_bench.py $W/bin/fakewj ; rc=$?; rm -rf scripts; exit $rc

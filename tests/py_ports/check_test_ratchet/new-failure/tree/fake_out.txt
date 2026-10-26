@@ -1,0 +1,10 @@
+running 5 tests
+test a::one ... ok
+test b::broken ... FAILED
+test c::flaky ... FAILED
+test d::fine ... ok
+
+failures:
+    b::broken
+
+test result: FAILED. 2 failed

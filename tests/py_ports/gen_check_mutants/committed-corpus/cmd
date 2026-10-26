@@ -1,0 +1,1 @@
+mkdir -p examples && cp -R $REPO/examples/verified examples/verified && $WJ run $ALLOW $SCRIPTS/gen_check_mutants.wj && diff -r tests/check_negative/mutants $REPO/tests/check_negative/mutants && echo IDENTICAL; rc=$?; rm -rf tests examples scripts; exit $rc

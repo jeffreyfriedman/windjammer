@@ -1,0 +1,1 @@
+mkdir -p benchmarks/rust_parity && git -C $REPO show $ORIG:benchmarks/rust_parity/run.py > benchmarks/rust_parity/run.py && PATH="$W/bin:$PATH" python3 benchmarks/rust_parity/run.py --optimize-rs $W/bin/optimize_rs --runs 1 --out custom.json --kernels zeta; rc=$?; sed -E "s/[0-9]+\.[0-9]+/#/g" custom.json | tail -30; rm -f custom.json benchmarks/rust_parity/run.py; exit $rc

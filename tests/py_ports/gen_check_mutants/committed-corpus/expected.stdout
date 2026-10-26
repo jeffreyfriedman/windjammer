@@ -1,0 +1,91 @@
+op_int_annotated_string      14
+op_string_annotated_int      14
+op_unknown_method            14
+op_let_int_gets_string       4
+op_let_string_gets_int       1
+op_let_bool_gets_int         0
+op_undefined_variable        14
+op_drop_argument             14
+op_extra_argument            14
+op_argument_wrong_type       14
+op_return_wrong_type         14
+op_unknown_field             11
+op_undefined_function        14
+total 142
+Only in tests/check_negative/mutants: algo_bfs_grid__return_wrong_type.wj
+Only in tests/check_negative/mutants: algo_bfs_grid__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_binary_search__int_annotated_string.wj
+Only in tests/check_negative/mutants: algo_binary_search__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_binary_search__unknown_method.wj
+Only in tests/check_negative/mutants: algo_bubble_sort__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_bubble_sort__unknown_method.wj
+Only in tests/check_negative/mutants: algo_inventory__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_inventory__unknown_field.wj
+Only in tests/check_negative/mutants: algo_knapsack_dp__return_wrong_type.wj
+Only in tests/check_negative/mutants: algo_knapsack_dp__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_knapsack_dp__unknown_method.wj
+Only in tests/check_negative/mutants: algo_pascal_triangle__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_pascal_triangle__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: algo_perfect_numbers__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_primes_sieve__argument_wrong_type.wj
+Only in tests/check_negative/mutants: algo_primes_sieve__drop_argument.wj
+Only in tests/check_negative/mutants: algo_primes_sieve__extra_argument.wj
+Only in tests/check_negative/mutants: algo_primes_sieve__undefined_function.wj
+Only in tests/check_negative/mutants: algo_primes_sieve__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: algo_roman_numerals__undefined_variable.wj
+Only in tests/check_negative/mutants: algo_statistics__unknown_method.wj
+Only in tests/check_negative/mutants: algo_tokenizer__drop_argument.wj
+Only in tests/check_negative/mutants: algo_tokenizer__extra_argument.wj
+Only in tests/check_negative/mutants: algo_tokenizer__int_annotated_string.wj
+Only in tests/check_negative/mutants: algo_tokenizer__undefined_function.wj
+Only in tests/check_negative/mutants: algo_tokenizer__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_for_range__undefined_variable.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_functions__drop_argument.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_functions__extra_argument.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_functions__undefined_function.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_if_else__drop_argument.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_if_else__extra_argument.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_if_else__undefined_function.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_if_expression__undefined_variable.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_interpolation__undefined_variable.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: basics_loop_break__undefined_variable.wj
+Only in tests/check_negative/mutants: closures_return_fn__argument_wrong_type.wj
+Only in tests/check_negative/mutants: defer_panic_lifo__argument_wrong_type.wj
+Only in tests/check_negative/mutants: defer_panic_lifo__return_wrong_type.wj
+Only in tests/check_negative/mutants: display_to_string__string_annotated_int.wj
+Only in tests/check_negative/mutants: display_to_string__unknown_field.wj
+Only in tests/check_negative/mutants: enum_data__return_wrong_type.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: error_panic_exit_code__int_annotated_string.wj
+Only in tests/check_negative/mutants: hashmap_basics__unknown_method.wj
+Only in tests/check_negative/mutants: hashmap_remove_update__unknown_method.wj
+Only in tests/check_negative/mutants: hashmap_word_count__string_annotated_int.wj
+Only in tests/check_negative/mutants: idiom_agentdx_regressions__argument_wrong_type.wj
+Only in tests/check_negative/mutants: idiom_agentdx_regressions__string_annotated_int.wj
+Only in tests/check_negative/mutants: idiom_agentdx_regressions__unknown_field.wj
+Only in tests/check_negative/mutants: iter_enumerate_zip__string_annotated_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: iter_scan_running_total__int_annotated_string.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: match_patterns__argument_wrong_type.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: pipe_basics__argument_wrong_type.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: pipe_result_question__argument_wrong_type.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: prog_bit_counting__return_wrong_type.wj
+Only in tests/check_negative/mutants: prog_csv_parse__let_int_gets_string.wj
+Only in tests/check_negative/mutants: prog_csv_parse__string_annotated_int.wj
+Only in tests/check_negative/mutants: prog_csv_parse__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: prog_run_length_encoding__unknown_method.wj
+Only in tests/check_negative/mutants: prog_shapes_report__string_annotated_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: prog_text_wrap__string_annotated_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: prog_text_wrap__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: recursion_hanoi_ackermann__argument_wrong_type.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: recursion_hanoi_ackermann__return_wrong_type.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: sort_stability_keys__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_basics__string_annotated_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_basics__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_build__string_annotated_int.wj
+Only in tests/check_negative/mutants: strings_chars__let_string_gets_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_format_specs__string_annotated_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_split_join__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_unicode__string_annotated_int.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: strings_unicode__unknown_method.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: struct_method_chain_mut__return_wrong_type.wj
+Only in tests/check_negative/mutants: trait_dyn_dispatch__unknown_field.wj
+Only in /home/user/src/wj-wt/py-audit/tests/check_negative/mutants: vec_basics__unknown_method.wj

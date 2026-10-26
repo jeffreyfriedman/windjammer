@@ -1,0 +1,11 @@
+🔧 Running tests with ratcheting (known failures: 0)
+
+fake cargo args: test
+running 3 tests
+test a::one ... ok
+test a::two ... ok
+
+test result: ok. 3 passed
+stderr line
+
+✅ All tests passed!

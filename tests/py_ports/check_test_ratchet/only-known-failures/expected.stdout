@@ -1,0 +1,22 @@
+🔧 Running tests with ratcheting (known failures: 2)
+
+fake cargo args: test
+running 5 tests
+test a::one ... ok
+test b::broken ... FAILED
+test c::flaky ... FAILED
+test d::fine ... ok
+
+failures:
+    b::broken
+
+test result: FAILED. 2 failed
+stderr line
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Ratchet Report
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Known failures: 2
+   Actual failures: 2
+
+✅ No new failures introduced. Ratchet holds.

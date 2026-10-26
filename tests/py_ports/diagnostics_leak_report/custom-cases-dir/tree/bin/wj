@@ -1,0 +1,33 @@
+#!/bin/sh
+# stand-in for wj: answers `check --json` and `build` for the corpus cases by file name
+cmd="$1"; shift
+file=""; out=""; json=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    --json) json=1 ;;
+    --check|--no-cargo) ;;
+    *) file="$1" ;;
+  esac
+  shift
+done
+name=$(basename "$file" .wj)
+if [ "$cmd" = check ]; then
+  case "$name" in
+    front*) echo '{"success": false, "diagnostics": [{"severity": "error", "code": "WJ0001"}, {"severity": "warning", "code": "W0002"}, {"severity": "error", "code": "WJ0003"}]}' ;;
+    badjson*) echo 'not json at all' ;;
+    *) echo '{"success": true, "diagnostics": [{"severity": "warning", "code": "W0007"}]}' ;;
+  esac
+  exit 0
+fi
+if [ "$json" = 0 ]; then
+  mkdir -p "$out"
+  echo "$name" > "$out/case"
+  exit 0
+fi
+case "$name" in
+  leak_mapped*) echo '{"diagnostics": [{"severity": "error", "code": "E0308", "primary_span": {"file": "x.wj"}}]}' ;;
+  leak_partial*) echo '{"diagnostics": [{"severity": "error", "code": "E0599", "primary_span": {"file": "x.wj"}}, {"severity": "error", "code": "WJ0099", "primary_span": {"file": "y.wj"}}, {"severity": "error", "code": "E0277", "primary_span": {"file": "gen.rs"}}, {"severity": "error", "code": "E0277"}]}' ;;
+  leak_silent*) echo '{"diagnostics": []}' ;;
+  *) echo 'garbage' ;;
+esac

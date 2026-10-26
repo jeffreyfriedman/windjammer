@@ -1,0 +1,300 @@
+// spec-check: keep docs/spec rule IDs and tests/spec examples in lock-step.
+//
+//   wj run scripts/wj/spec_check.wj           verify (exit 1 on any problem)
+//   wj run scripts/wj/spec_check.wj --write   also regenerate docs/spec/CONFORMANCE_MATRIX.md
+//   wj run scripts/wj/spec_check.wj --run     verify, then run the executable examples and the grammar check (docs_truth)
+//
+// Rules: a rule is a line in docs/spec/*.md that starts with **SPEC-<AREA>-<NNN>**. It needs at least
+// one tests/spec/**/*.wj example whose header has `// spec: SPEC-<AREA>-<NNN>`, unless the rule line
+// contains "(untestable: <reason>)". Every `// spec:` reference must name a defined rule, and every
+// `// xfail: Q-NNN` must name a `## Q-NNN` heading in docs/spec/OPEN_QUESTIONS.md.
+// Run from the repository root.
+use std::collections::HashSet
+use std::env
+use std::fs
+use std::process
+use std::regex
+use std::strings
+use std::subprocess
+use wj_fs_walk::walk_files
+
+const SPEC: string = "docs/spec"
+const TESTS: string = "tests/spec"
+
+struct Rule {
+    id: string,
+    file: string,
+    testable: bool,
+}
+
+struct Ref {
+    id: string,
+    file: string,
+}
+
+fn re(pattern: string) -> Regex {
+    match regex.compile(pattern) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln("bad pattern ${pattern}: ${e}")
+            process.exit(1)
+            regex.compile("x") ?? panic("unreachable")
+        },
+    }
+}
+
+fn read(path: string) -> string {
+    fs.read_to_string(path) ?? ""
+}
+
+fn fail(problems: Vec<string>, msg: string) -> Vec<string> {
+    eprintln("spec-check: ${msg}")
+    let mut out = problems
+    out.push(msg)
+    out
+}
+
+fn spec_files() -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for e in fs.read_dir(SPEC) ?? Vec::new() {
+        let p = e.path()
+        if p.ends_with(".md") && e.is_file() {
+            out.push(p)
+        }
+    }
+    out.sort()
+    out
+}
+
+fn test_files() -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for f in walk_files(TESTS) ?? Vec::new() {
+        if f.ends_with(".wj") {
+            out.push(f)
+        }
+    }
+    out.sort()
+    out
+}
+
+// text up to the first space or tab
+fn first_word(s: string) -> string {
+    let mut out = ""
+    for c in s.chars() {
+        if c == ' ' || c == '\t' {
+            break
+        }
+        out = out + c.to_string()
+    }
+    out
+}
+
+fn main() {
+    let args = env.args()
+    let mut write = false
+    let mut run = false
+    let mut k = 1
+    while k < args.len() {
+        if args[k] == "--write" {
+            write = true
+        } else if args[k] == "--run" {
+            run = true
+        } else {
+            eprintln("unknown arg ${args[k]}")
+            process.exit(2)
+        }
+        k = k + 1
+    }
+    let mut problems: Vec<string> = Vec::new()
+
+    // rule definitions
+    let rule_line = re("^\\*\\*(SPEC-[A-Z]+-[0-9]{3})\\*\\*(.*)$")
+    let mut rules: Vec<Rule> = Vec::new()
+    for file in spec_files() {
+        for line in strings.split_lines(read(file)) {
+            match rule_line.captures(line) {
+                Some(c) => rules.push(Rule { id: c.get(1) ?? "", file: file, testable: !(c.get(2) ?? "").contains("(untestable:") }),
+                None => {},
+            }
+        }
+    }
+    // sorted like the shell's `sort` of "id<TAB>file<TAB>flag" lines
+    rules.sort_by(|a, b| (a.id + "\t" + a.file + "\t" + if a.testable { "testable" } else { "untestable" }).cmp(b.id + "\t" + b.file + "\t" + if b.testable { "testable" } else { "untestable" }))
+    let mut dups: Vec<string> = Vec::new()
+    let mut i = 1
+    while i < rules.len() {
+        if rules[i].id == rules[i - 1].id && (dups.len() == 0 || dups[dups.len() - 1] != rules[i].id) {
+            dups.push(rules[i].id)
+        }
+        i = i + 1
+    }
+    if dups.len() > 0 {
+        problems = fail(problems, "duplicate rule IDs: " + dups.join("\n"))
+    }
+    let mut rule_ids: HashSet<string> = HashSet::new()
+    for r in rules {
+        rule_ids.insert(r.id)
+    }
+
+    // references: only the leading comment header of a test counts
+    let spec_hdr = re("^// *spec: *SPEC-[A-Z]+-[0-9]+")
+    let xfail_hdr = re("^// *xfail: *Q-[0-9]+")
+    let spec_strip = re("^// *spec: *")
+    let xfail_strip = re("^// *xfail: *")
+    let mut refs: Vec<Ref> = Vec::new()
+    let mut xfails: Vec<Ref> = Vec::new()
+    let files = test_files()
+    for f in files {
+        for line in strings.split_lines(read(f)) {
+            if line.starts_with("//") {
+                if spec_hdr.is_match(line) {
+                    refs.push(Ref { id: first_word(spec_strip.replace(line, "")), file: f })
+                }
+                if xfail_hdr.is_match(line) {
+                    xfails.push(Ref { id: first_word(xfail_strip.replace(line, "")), file: f })
+                }
+                continue
+            }
+            if strings.trim(line).len() == 0 {
+                continue
+            }
+            break
+        }
+    }
+    refs.sort_by(|a, b| (a.id + "\t" + a.file).cmp(b.id + "\t" + b.file))
+
+    // unknown references
+    for r in refs {
+        if !rule_ids.contains(r.id) {
+            problems = fail(problems, "${r.file} references unknown rule ${r.id}")
+        }
+    }
+    // untested rules
+    let mut referenced: HashSet<string> = HashSet::new()
+    let mut headed: HashSet<string> = HashSet::new()
+    for r in refs {
+        referenced.insert(r.id)
+        headed.insert(r.file)
+    }
+    for r in rules {
+        if r.testable && !referenced.contains(r.id) {
+            problems = fail(problems, "rule ${r.id} (${r.file}) has no test under ${TESTS}")
+        }
+    }
+    // tests without any spec header
+    for f in files {
+        if !headed.contains(f) {
+            problems = fail(problems, "${f} has no '// spec: SPEC-...' header")
+        }
+    }
+    // xfail targets
+    let open_questions = strings.split_lines(read(SPEC + "/OPEN_QUESTIONS.md"))
+    for x in xfails {
+        let mut found = false
+        for line in open_questions {
+            if line == "## ${x.id}" || line.starts_with("## ${x.id} ") {
+                found = true
+                break
+            }
+        }
+        if !found {
+            problems = fail(problems, "${x.file}: xfail ${x.id} has no '## ${x.id}' entry in OPEN_QUESTIONS.md")
+        }
+    }
+
+    // every SPEC-ID mentioned in prose must exist
+    let mention = re("SPEC-[A-Z]+-[0-9]{3}")
+    let mut mentioned: Vec<string> = Vec::new()
+    for file in spec_files() {
+        for m in mention.find_all(read(file)) {
+            mentioned.push(m.text())
+        }
+    }
+    mentioned.sort()
+    let mut last = ""
+    for id in mentioned {
+        if id == last {
+            continue
+        }
+        last = id
+        if !rule_ids.contains(id) {
+            problems = fail(problems, "docs mention unknown rule ${id}")
+        }
+    }
+    // compact spec size budget (about 8k tokens at ~3.5 chars per token)
+    if read(SPEC + "/SPEC_COMPACT.md").len() > 28000 {
+        problems = fail(problems, "SPEC_COMPACT.md exceeds the 8k-token budget (28000 bytes)")
+    }
+
+    // conformance matrix
+    let mut matrix = "<!-- GENERATED by scripts/spec_check.sh --write; do not edit. -->\n# Conformance matrix\n\nEvery normative rule and the executable examples (under `tests/spec/`) that check it.\n`xfail Q-NNN` means the implementation contradicts the rule today; see OPEN_QUESTIONS.md.\n\n| Rule | Chapter | Examples |\n|------|---------|----------|\n"
+    for r in rules {
+        let mut ex = ""
+        for rf in refs {
+            if rf.id == r.id {
+                let mut x = ""
+                for q in xfails {
+                    if q.file == rf.file {
+                        x = " (xfail ${q.id})"
+                        break
+                    }
+                }
+                let prefix = TESTS + "/"
+                let short = if rf.file.starts_with(prefix) { rf.file[prefix.len()..rf.file.len()].to_string() } else { rf.file }
+                ex = ex + "`${short}`${x}<br>"
+            }
+        }
+        if ex.len() == 0 {
+            ex = "untestable"
+        }
+        if ex.ends_with("<br>") {
+            ex = ex[0..ex.len() - 4].to_string()
+        }
+        let chapter = fs.file_name(r.file) ?? r.file
+        matrix = matrix + "| ${r.id} | ${chapter} | ${ex} |\n"
+    }
+    let matrix_path = SPEC + "/CONFORMANCE_MATRIX.md"
+    if write {
+        let _ = fs.write(matrix_path, matrix)
+    } else if !fs.is_file(matrix_path) || read(matrix_path) != matrix {
+        problems = fail(problems, "${matrix_path} is stale; run scripts/spec_check.sh --write")
+    }
+
+    let mut untestable_lines = 0
+    for r in rules {
+        let flag = if r.testable { "testable" } else { "untestable" }
+        if (r.id + "\t" + r.file + "\t" + flag).contains("untestable") {
+            untestable_lines = untestable_lines + 1
+        }
+    }
+    println("spec-check: ${rules.len()} rules, ${refs.len()} example references, ${untestable_lines} untestable, ${xfails.len()} xfail")
+    if problems.len() > 0 {
+        process.exit(1)
+    }
+    if run {
+        for cmd in [["test", "--release", "--test", "spec_conformance"], ["test", "--release", "--test", "docs_truth", "spec_grammar"]] {
+            let mut argv = ["-c", "exec cargo \"$@\" 2>&1", "sh"]
+            for a in cmd {
+                argv.push(a)
+            }
+            match subprocess.spawn("sh", argv) {
+                Ok(h) => {
+                    loop {
+                        match subprocess.read_line(h) {
+                            Ok(l) => println(l),
+                            Err(_) => break,
+                        }
+                    }
+                    let code = subprocess.wait(h) ?? 1
+                    if code != 0 {
+                        process.exit(code as i32)
+                    }
+                },
+                Err(e) => {
+                    eprintln("cannot run cargo: ${e}")
+                    process.exit(127)
+                },
+            }
+        }
+    }
+}

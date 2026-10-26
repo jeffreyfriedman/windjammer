@@ -1,0 +1,18 @@
+// rust: ok
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}

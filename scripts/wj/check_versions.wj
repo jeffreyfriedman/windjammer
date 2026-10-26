@@ -1,0 +1,117 @@
+// Verify all workspace crate versions are consistent.
+//
+//   wj run scripts/wj/check_versions.wj            check workspace consistency (run from the repository root)
+//   wj run scripts/wj/check_versions.wj v0.41.0    also check against a tag version
+//
+// Exit status 0 when every version matches, 1 on a mismatch.
+use std::env
+use std::fs
+use std::process
+use std::strings
+
+// `version = "X"` on a line that also holds `path =`: the last quoted version on the line
+fn dep_version_of(line: string) -> string {
+    let marker = "version = \""
+    match line.rfind(marker) {
+        Some(i) => {
+            let rest = line[i + marker.len()..line.len()].to_string()
+            match rest.find("\"") {
+                Some(q) => rest[0..q].to_string(),
+                None => "",
+            }
+        },
+        None => "",
+    }
+}
+
+// the leading `name =` of a dependency line
+fn dep_name_of(line: string) -> string {
+    let mut name = ""
+    for c in line.chars() {
+        if (c >= 'a' && c <= 'z') || c == '_' || c == '-' {
+            name = name + c.to_string()
+        } else {
+            break
+        }
+    }
+    let rest = strings.trim_start(line[name.len()..line.len()].to_string())
+    if rest.starts_with("=") {
+        return name
+    }
+    ""
+}
+
+// the first `version = "X"` line of the root manifest (greedy to the last quote, as the shell's sed did)
+fn workspace_version(manifest: string) -> string {
+    for line in strings.split_lines(manifest) {
+        if line.starts_with("version = \"") {
+            let rest = line[11..line.len()].to_string()
+            match rest.rfind("\"") {
+                Some(q) => return rest[0..q].to_string(),
+                None => return "",
+            }
+        }
+    }
+    ""
+}
+
+fn main() {
+    let args = env.args()
+    let manifest = fs.read_to_string("Cargo.toml") ?? ""
+    let ws = workspace_version(manifest)
+    if ws.len() == 0 {
+        println("ERROR: Could not find workspace version in Cargo.toml")
+        process.exit(1)
+    }
+    println("Workspace version: ${ws}")
+    let mut errors = 0
+    let mut crate_dirs: Vec<string> = Vec::new()
+    match fs.read_dir("crates") {
+        Ok(entries) => {
+            for e in entries {
+                if e.is_dir() {
+                    crate_dirs.push(e.path())
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    crate_dirs.sort()
+    for dir in crate_dirs {
+        let cargo_toml = dir + "/Cargo.toml"
+        if !fs.is_file(cargo_toml) {
+            continue
+        }
+        // the shell script built this path from a directory glob that ends in `/`
+        let rel_path = dir + "//Cargo.toml"
+        for line in strings.split_lines(fs.read_to_string(cargo_toml) ?? "") {
+            if !(line.contains("path =") && line.contains("version =")) {
+                continue
+            }
+            let dep_version = dep_version_of(line)
+            let dep_name = dep_name_of(line)
+            if dep_version.len() > 0 && dep_version != ws {
+                println("ERROR: ${rel_path}: dependency '${dep_name}' has version ${dep_version} (expected ${ws})")
+                errors = errors + 1
+            }
+        }
+    }
+    if args.len() >= 2 {
+        let tag = if args[1].starts_with("v") { args[1][1..args[1].len()].to_string() } else { args[1] }
+        println("")
+        println("Checking against tag version: ${tag}")
+        if tag != ws {
+            println("ERROR: Tag version (${tag}) doesn't match workspace version (${ws})")
+            println("  Update Cargo.toml: version = \"${tag}\"")
+            errors = errors + 1
+        } else {
+            println("Tag version matches workspace version")
+        }
+    }
+    println("")
+    if errors > 0 {
+        println("FAILED: Found ${errors} version mismatch(es)")
+        process.exit(1)
+    }
+    println("All versions consistent (${ws})")
+}

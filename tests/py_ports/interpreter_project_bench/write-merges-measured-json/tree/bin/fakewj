@@ -1,0 +1,14 @@
+#!/bin/sh
+# stand-in for wj: `run` prints a result; `run --watch` prints a line at start and one per edit of src/m0.wj
+case "$*" in
+  *--watch*)
+    echo started
+    last=$(wc -c < src/m0.wj)
+    while true; do
+      now=$(wc -c < src/m0.wj)
+      if [ "$now" != "$last" ]; then echo changed; last=$now; fi
+      sleep 0.02
+    done ;;
+  *hello.wj*) echo hi ;;
+  *) echo 123 ;;
+esac

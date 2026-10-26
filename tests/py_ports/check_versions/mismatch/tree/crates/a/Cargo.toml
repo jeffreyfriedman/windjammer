@@ -1,0 +1,6 @@
+[package]
+name = "a"
+version = "0.50.0"
+[dependencies]
+windjammer = { path = "../..", version = "0.50.0" }
+serde = "1"

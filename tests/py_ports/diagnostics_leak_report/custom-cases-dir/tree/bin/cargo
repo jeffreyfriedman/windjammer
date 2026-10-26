@@ -1,0 +1,16 @@
+#!/bin/sh
+# stand-in for cargo build --message-format=json inside a generated crate
+name=$(cat case)
+echo "   Compiling thing v0.1.0"
+echo '{"reason":"compiler-artifact","target":{"name":"thing"}}'
+case "$name" in
+  leak_mapped*) echo '{"reason":"compiler-message","message":{"level":"error","code":{"code":"E0308"},"message":"mismatched"}}' ;;
+  leak_partial*)
+    echo '{"reason":"compiler-message","message":{"level":"error","code":{"code":"E0599"}}}'
+    echo '{"reason":"compiler-message","message":{"level":"warning","code":{"code":"E0000"}}}'
+    echo '{"reason":"compiler-message","message":{"level":"error","code":null}}'
+    echo '{"reason":"compiler-message","message":{"level":"error","code":{"code":"E0277"}}}'
+    echo '{"reason":"compiler-message","message":{"level":"error","code":{"code":"E0277"}}}' ;;
+  leak_silent*) echo '{"reason":"compiler-message","message":{"level":"error","code":{"code":"E0382"}}}' ;;
+esac
+exit 101

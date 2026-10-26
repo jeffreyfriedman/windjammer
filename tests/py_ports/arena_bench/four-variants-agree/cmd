@@ -1,0 +1,1 @@
+PATH="$W/bin:$PATH" $WJ run $ALLOW $SCRIPTS/arena_bench.wj --wj $W/bin/wj --runs 3

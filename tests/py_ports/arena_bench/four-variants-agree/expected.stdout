@@ -1,0 +1,7 @@
+load before: (#,#,#)
+load after: (#,#,#)
+particles_vec              median# ms  min# ms  output checksum=77  scratch_reuse applied: False
+particles_arena            median# ms  min# ms  output checksum=77  scratch_reuse applied: False
+labels_loop                median# ms  min# ms  output checksum=77  scratch_reuse applied: False
+labels_loop+auto_arena     median# ms  min# ms  output checksum=77  scratch_reuse applied: True
+particles: arena vs fresh Vec per frame:#x;  labels: auto-arena vs plain:#x

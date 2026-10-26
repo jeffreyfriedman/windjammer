@@ -1,0 +1,3 @@
+# allowed
+
+tests/fixtures/*.sh | runner fixtures

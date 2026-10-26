@@ -1,0 +1,2 @@
+spec-check: # rules, # example references, # untestable, # xfail
+MATRIX-IDENTICAL

@@ -1,0 +1,5 @@
+// spec: SPEC-BET-002
+
+// xfail: Q-002
+fn main() {}
+// spec: SPEC-ALP-002

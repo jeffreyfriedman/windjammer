@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/interp_bench.wj $W/bin/fakewj 

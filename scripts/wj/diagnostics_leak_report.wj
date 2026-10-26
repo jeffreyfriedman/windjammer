@@ -1,0 +1,192 @@
+// Measure how many diagnostics-corpus cases leak rustc errors, and how many leak untranslated.
+//   wj run scripts/wj/diagnostics_leak_report.wj [path/to/wj] [cases-dir]      (run from the repository root)
+// For every case: `wj check --json` (front end), then for cases the front end accepts, build the
+// generated crate with cargo and compare raw rustc errors with the mapped `wj build --json` output.
+//   leak        = a rustc error reached the user (front end did not catch the case)
+//   unmapped    = a leaked rustc error that came out as WJ0099 or without a .wj location
+//   baseline    = leaked errors whose rustc code the pre-change registry had no WJ code for
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::items
+use wj_json_doc::as_str
+use wj_json_doc::object
+use wj_json_doc::with
+use wj_json_doc::from_int
+use wj_json_doc::dumps
+use wj_proc::capture
+use wj_proc::sh_in
+use wj_proc::quote
+use wj_table::pad_right
+
+
+struct Row {
+    name: string,
+    stage: string,
+    codes: string,
+    unmapped: int,
+    baseline: int,
+}
+
+// the `diagnostics` array of a `--json` report, or empty
+fn diagnostics_of(stdout: string) -> Vec<Json> {
+    match parse(stdout) {
+        Ok(rep) => items(get(rep, "diagnostics") ?? object()),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn error_diagnostics(ds: Vec<Json>) -> Vec<Json> {
+    let mut out = Vec::new()
+    for d in ds {
+        if (as_str(get(d, "severity") ?? object()) ?? "") == "error" {
+            out.push(d)
+        }
+    }
+    out
+}
+
+fn code_of(d: Json) -> string {
+    as_str(get(d, "code") ?? object()) ?? ""
+}
+
+fn is_old_mapped(code: string) -> bool {
+    for c in ["E0425", "E0308", "E0384", "E0596", "E0412", "E0433", "E0382", "E0502", "E0503", "E0063", "E0004"] {
+        if c == code {
+            return true
+        }
+    }
+    false
+}
+
+fn unique_sorted(xs: Vec<string>) -> Vec<string> {
+    let mut sorted = xs
+    sorted.sort()
+    let mut out: Vec<string> = Vec::new()
+    for x in sorted {
+        if out.len() == 0 || out[out.len() - 1] != x {
+            out.push(x)
+        }
+    }
+    out
+}
+
+fn main() {
+    let args = env.args()
+    let wj = if args.len() >= 2 { args[1] } else { "wj" }
+    let cases = if args.len() >= 3 { args[2] } else { "tests/diagnostics/cases" }
+    let target = env.get("CARGO_TARGET_DIR") ?? (env.get_or("TMPDIR", "/tmp") + "/wj-leak-target")
+    let mut tot_cases = 0
+    let mut caught_front = 0
+    let mut leaked = 0
+    let mut rustc_errors = 0
+    let mut unmapped = 0
+    let mut baseline_unmapped = 0
+    let mut wrong_code = 0
+    let mut rows: Vec<Row> = Vec::new()
+    let mut files: Vec<string> = Vec::new()
+    for e in fs.read_dir(cases) ?? Vec::new() {
+        let p = e.path()
+        if p.ends_with(".wj") && !(fs.file_name(p) ?? "").starts_with(".") {
+            files.push(p)
+        }
+    }
+    files.sort()
+    for f in files {
+        let base = fs.file_name(f) ?? ""
+        let name = base[0..base.len() - 3].to_string()
+        let first = strings.split_lines(fs.read_to_string(f) ?? "")
+        let expect = strings.trim(strings.replace(if first.len() > 0 { first[0] } else { "" }, "// expect: ", ""))
+        tot_cases = tot_cases + 1
+        let chk = capture("env", [wj, "check", "--json", f])
+        let front = error_diagnostics(diagnostics_of(match chk { Ok(o) => o.stdout, Err(_) => "" }))
+        if front.len() > 0 || expect == "none" {
+            if front.len() > 0 {
+                caught_front = caught_front + 1
+            }
+            let mut codes: Vec<string> = Vec::new()
+            for d in front {
+                codes.push(code_of(d))
+            }
+            rows.push(Row { name: name, stage: "front-end", codes: if codes.len() == 0 { "-" } else { codes.join(",") }, unmapped: 0, baseline: 0 })
+            continue
+        }
+        let out = "/tmp/wjleak-${process.pid()}-${tot_cases}"
+        let _ = fs.create_dir_all(out)
+        let _ = capture("env", [wj, "build", f, "-o", out, "--no-cargo"])
+        let raw = sh_in(out, "env CARGO_TARGET_DIR=" + quote(target) + " cargo build --message-format=json")
+        let mut rcodes: Vec<string> = Vec::new()
+        for line in strings.split_lines(match raw { Ok(o) => o.stdout, Err(_) => "" }) {
+            if !line.contains("compiler-message") {
+                continue
+            }
+            match parse(line) {
+                Ok(m) => {
+                    let msg = get(m, "message")
+                    if (as_str(get(m, "reason") ?? object()) ?? "") == "compiler-message" && msg.is_some() {
+                        let message = msg ?? object()
+                        let code = get(message, "code")
+                        if (as_str(get(message, "level") ?? object()) ?? "") == "error" && code.is_some() {
+                            let c = as_str(get(code ?? object(), "code") ?? object())
+                            if c.is_some() {
+                                rcodes.push(c ?? "")
+                            }
+                        }
+                    }
+                },
+                Err(_) => {},
+            }
+        }
+        if rcodes.len() == 0 {
+            rows.push(Row { name: name, stage: "builds", codes: "-", unmapped: 0, baseline: 0 })
+            let _ = fs.remove_dir_all(out)
+            continue
+        }
+        leaked = leaked + 1
+        rustc_errors = rustc_errors + rcodes.len() as int
+        let mut base_count = 0
+        for c in rcodes {
+            if !is_old_mapped(c) {
+                base_count = base_count + 1
+            }
+        }
+        baseline_unmapped = baseline_unmapped + base_count
+        let js = capture("env", [wj, "build", f, "-o", out, "--json", "--check"])
+        let errs = error_diagnostics(diagnostics_of(match js { Ok(o) => o.stdout, Err(_) => "" }))
+        let mut unm = 0
+        let mut err_codes: Vec<string> = Vec::new()
+        for d in errs {
+            err_codes.push(code_of(d))
+            let span = get(d, "primary_span") ?? object()
+            let file = as_str(get(span, "file") ?? object()) ?? ""
+            if code_of(d) == "WJ0099" || !file.ends_with(".wj") {
+                unm = unm + 1
+            }
+        }
+        let shown_unmapped = if errs.len() > 0 { unm } else { rcodes.len() as int }
+        unmapped = unmapped + shown_unmapped
+        let want = strings.replace(expect, "rustc:", "")
+        if !err_codes.contains(want) {
+            wrong_code = wrong_code + 1
+        }
+        rows.push(Row { name: name, stage: "rustc", codes: unique_sorted(rcodes).join(","), unmapped: shown_unmapped, baseline: base_count })
+        let _ = fs.remove_dir_all(out)
+    }
+    let mut w = 0
+    for r in rows {
+        if r.name.len() as int > w {
+            w = r.name.len() as int
+        }
+    }
+    println("${pad_right("case", w)}  stage      rustc/front codes        unmapped  baseline-unmapped")
+    for r in rows {
+        println("${pad_right(r.name, w)}  ${pad_right(r.stage, 9)}  ${pad_right(r.codes, 22)}  ${pad_right("${r.unmapped}", 8)}  ${r.baseline}")
+    }
+    println("")
+    let tot = with(with(with(with(with(with(with(object(), "cases", from_int(tot_cases as i64)), "caught_front", from_int(caught_front as i64)), "leaked", from_int(leaked as i64)), "rustc_errors", from_int(rustc_errors as i64)), "unmapped", from_int(unmapped as i64)), "baseline_unmapped", from_int(baseline_unmapped as i64)), "wrong_code", from_int(wrong_code as i64))
+    println(dumps(tot, 0, false))
+}

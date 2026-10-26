@@ -1,0 +1,178 @@
+{
+  "total": {
+    "lines": 7160,
+    "covered": 3917,
+    "pct": 54.71
+  },
+  "modules": {
+    "bin": {
+      "lines": 400,
+      "covered": 100,
+      "branches": 8,
+      "branches_covered": 2,
+      "pct": 25.0
+    },
+    "check": {
+      "lines": 30,
+      "covered": 30,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 100.0
+    },
+    "cli": {
+      "lines": 2050,
+      "covered": 900,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 43.9
+    },
+    "edge": {
+      "lines": 200,
+      "covered": 199,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 99.5
+    },
+    "edge2": {
+      "lines": 200,
+      "covered": 198,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 99.0
+    },
+    "empty": {
+      "lines": 0,
+      "covered": 0,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 100.0
+    },
+    "formatter": {
+      "lines": 90,
+      "covered": 45,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 50.0
+    },
+    "interpreter": {
+      "lines": 2700,
+      "covered": 1600,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 59.26
+    },
+    "lexer": {
+      "lines": 400,
+      "covered": 380,
+      "branches": 40,
+      "branches_covered": 30,
+      "pct": 95.0
+    },
+    "linter": {
+      "lines": 60,
+      "covered": 0,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 0.0
+    },
+    "main": {
+      "lines": 50,
+      "covered": 10,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 20.0
+    },
+    "parser": {
+      "lines": 900,
+      "covered": 450,
+      "branches": 10,
+      "branches_covered": 5,
+      "pct": 50.0
+    },
+    "test_runner": {
+      "lines": 80,
+      "covered": 5,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 6.25
+    }
+  },
+  "biggest_uncovered_user_facing": [
+    {
+      "file": "src/interpreter/call.rs",
+      "uncovered_lines": 600,
+      "lines": 700
+    },
+    {
+      "file": "src/interpreter/eval.rs",
+      "uncovered_lines": 500,
+      "lines": 2000
+    },
+    {
+      "file": "src/bin/wj.rs",
+      "uncovered_lines": 300,
+      "lines": 400
+    },
+    {
+      "file": "src/cli/cmd03.rs",
+      "uncovered_lines": 90,
+      "lines": 130
+    },
+    {
+      "file": "src/cli/cmd15.rs",
+      "uncovered_lines": 90,
+      "lines": 130
+    },
+    {
+      "file": "src/cli/cmd06.rs",
+      "uncovered_lines": 80,
+      "lines": 120
+    },
+    {
+      "file": "src/cli/cmd07.rs",
+      "uncovered_lines": 80,
+      "lines": 130
+    },
+    {
+      "file": "src/test_runner/t.rs",
+      "uncovered_lines": 75,
+      "lines": 80
+    },
+    {
+      "file": "src/cli/cmd09.rs",
+      "uncovered_lines": 70,
+      "lines": 110
+    },
+    {
+      "file": "src/cli/cmd10.rs",
+      "uncovered_lines": 70,
+      "lines": 120
+    },
+    {
+      "file": "src/cli/cmd11.rs",
+      "uncovered_lines": 70,
+      "lines": 130
+    },
+    {
+      "file": "src/linter/l.rs",
+      "uncovered_lines": 60,
+      "lines": 60
+    },
+    {
+      "file": "src/cli/cmd00.rs",
+      "uncovered_lines": 60,
+      "lines": 100
+    },
+    {
+      "file": "src/cli/cmd01.rs",
+      "uncovered_lines": 60,
+      "lines": 110
+    },
+    {
+      "file": "src/cli/cmd02.rs",
+      "uncovered_lines": 60,
+      "lines": 120
+    }
+  ],
+  "scope": "s"
+}

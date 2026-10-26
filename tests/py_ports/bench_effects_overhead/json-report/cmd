@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/bench_effects_overhead.wj --wj $W/bin/fakewj --runs 2 --max-load 100000 --json out.json; sed -E "s/[0-9]+\.[0-9]+/#/g" out.json; rm -f out.json

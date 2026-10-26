@@ -1,0 +1,8 @@
+#!/bin/sh
+out=""; src=""
+while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; --edition|-C|-A) shift ;; *) src="$1" ;; esac; shift; done
+case "$src" in *breaks*) echo "boom" 1>&2; exit 1 ;; esac
+extra=""
+if grep -q __wj_main "$src"; then extra='echo "ALLOCS 12 3456" 1>&2'; fi
+printf '#!/bin/sh\nawk "BEGIN { for (i = 0; i < 100000; i++) x += i }"\necho "result 42"\n%s\n' "$extra" > "$out"
+chmod +x "$out"

@@ -1,0 +1,76 @@
+// Regenerate the committed expected-output vectors of the conformance corpus from its independent
+// reference models (tests/conformance_programs/<name>.ref.py, run with python3 -I).
+//
+//   wj run scripts/wj/regen_conformance_vectors.wj [DIR]     (default DIR: tests/conformance_programs; run from the repository root)
+//
+// The reference models stay Python on purpose: they are the independent oracle.
+use std::env
+use std::fs
+use std::process
+use std::regex
+use std::strings
+use wj_proc::capture
+
+fn ref_models(dir: string) -> Vec<string> {
+    let mut found: Vec<string> = Vec::new()
+    for d in [dir, dir + "/selftest"] {
+        match fs.read_dir(d) {
+            Ok(entries) => {
+                for e in entries {
+                    let p = e.path()
+                    if p.ends_with(".ref.py") {
+                        found.push(p)
+                    }
+                }
+            },
+            Err(_) => {},
+        }
+    }
+    found.sort()
+    found
+}
+
+// seeds named by the program's `// seeds: 1 2 3` line (default 1..5)
+fn seeds_of(program: string) -> Vec<string> {
+    let re = regex.compile("(?m)^// seeds:(.*)$") ?? regex.compile("x") ?? panic("bad pattern")
+    match re.captures(program) {
+        Some(c) => {
+            let mut out = Vec::new()
+            for tok in strings.split_whitespace(c.get(1) ?? "") {
+                out.push("${tok.parse::<i64>() ?? 0}")
+            }
+            out
+        },
+        None => ["1", "2", "3", "4", "5"],
+    }
+}
+
+fn main() {
+    let args = env.args()
+    let dir = if args.len() >= 2 { args[1] } else { "tests/conformance_programs" }
+    for model in ref_models(dir) {
+        let base = fs.file_name(model) ?? ""
+        let name = base[0..base.len() - 7].to_string()
+        let parent = fs.parent(model) ?? "."
+        let program = fs.read_to_string(parent + "/" + name + ".wj") ?? ""
+        let out_dir = parent + "/" + name + ".vectors"
+        let _ = fs.create_dir_all(out_dir)
+        for seed in seeds_of(program) {
+            match capture("python3", ["-I", model, seed]) {
+                Ok(o) => {
+                    if o.status != 0 {
+                        eprintln(o.stderr)
+                        eprintln("reference model ${model} failed for seed ${seed} (exit ${o.status})")
+                        process.exit(1)
+                    }
+                    let _ = fs.write(out_dir + "/" + seed + ".out", o.stdout)
+                },
+                Err(e) => {
+                    eprintln("cannot run python3: ${e}")
+                    process.exit(1)
+                },
+            }
+        }
+    }
+    println("ok")
+}

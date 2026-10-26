@@ -1,0 +1,1 @@
+mkdir -p benchmarks/arenas && git -C $REPO show $ORIG:benchmarks/arenas/run_wj.py > benchmarks/arenas/run_wj.py && PATH="$W/bin:$PATH" python3 benchmarks/arenas/run_wj.py --wj $W/bin/wj --runs 3; rc=$?; rm -f benchmarks/arenas/run_wj.py; exit $rc

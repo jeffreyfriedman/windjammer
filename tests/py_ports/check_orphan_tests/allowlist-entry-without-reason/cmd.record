@@ -1,0 +1,1 @@
+git init -q && git add -A && git -c user.email=a@b.c -c user.name=n commit -q -m init && mkdir -p scripts && git -C $REPO show $ORIG:scripts/check-orphan-tests.sh > scripts/check-orphan-tests.sh && bash scripts/check-orphan-tests.sh ; rc=$?; rm -rf .git scripts; exit $rc

@@ -1,0 +1,1 @@
+spec-check: docs/spec/CONFORMANCE_MATRIX.md is stale; run scripts/spec_check.sh --write

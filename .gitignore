@@ -65,3 +65,4 @@ tmp_*
 .wj-readiness-cache/
 .wj-readiness-history.json
 scripts/**/__pycache__/
+/windjammer-ecosystem

@@ -1,0 +1,129 @@
+// Interpreter benchmark ratchet (ADR-0020).
+//
+// Runs every bench/interp/*.wj under `wj run --interpret` with the walker and the resolved engine,
+// 5 times each, and reports the median user CPU time (the child's own CPU time, so wall-clock noise from a
+// loaded machine does not count) together with the 1-minute load average.
+//
+//   wj run scripts/wj/interp_bench.wj WJ_BIN                 print the table (JSON on stdout)
+//   wj run scripts/wj/interp_bench.wj WJ_BIN --check         fail if a speedup (walker/resolved) falls below
+//                                                            bench/interp/baseline.json minus 15%
+//   wj run scripts/wj/interp_bench.wj WJ_BIN --write         record the measured speedups as the new baseline
+// Speedups are ratios on the same machine and run, so they are comparable across machines. Run from the repository root.
+use std::env
+use std::fs
+use std::process
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::members
+use wj_json_doc::as_f64
+use wj_json_doc::object
+use wj_json_doc::with
+use wj_json_doc::from_int
+use wj_json_doc::from_float
+use wj_json_doc::dumps
+use wj_json_doc::float_repr
+use wj_proc::timed
+use wj_proc::load_avg
+use wj_stats::median
+use wj_table::fixed
+
+const BENCH: string = "bench/interp"
+const BASELINE: string = "bench/interp/baseline.json"
+const RUNS: int = 5
+
+// Python's round(x, digits)
+fn round_to(x: f64, digits: int) -> f64 {
+    fixed(x, digits).parse::<f64>() ?? x
+}
+
+fn measure(wj: string, prog: string, engine: string) -> f64 {
+    let mut times: Vec<f64> = Vec::new()
+    let mut i = 0
+    while i < RUNS {
+        match timed(wj, ["run", "--interpret", "--engine", engine, prog]) {
+            Ok(t) => {
+                if t.output.status != 0 {
+                    eprintln("${prog} (${engine}) failed")
+                    process.exit(1)
+                }
+                times.push(t.user)
+            },
+            Err(e) => {
+                eprintln("${prog} (${engine}) failed: ${e}")
+                process.exit(1)
+            },
+        }
+        i = i + 1
+    }
+    median(times)
+}
+
+fn main() {
+    let args = env.args()
+    if args.len() < 2 {
+        eprintln("usage: interp_bench.wj WJ_BIN [--check] [--write]")
+        process.exit(1)
+    }
+    let wj = args[1]
+    let mut progs: Vec<string> = Vec::new()
+    match fs.read_dir(BENCH) {
+        Ok(entries) => {
+            for e in entries {
+                let name = fs.file_name(e.path()) ?? ""
+                if name.ends_with(".wj") {
+                    progs.push(name)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    progs.sort()
+    let mut programs = object()
+    let mut speedups = object()
+    for f in progs {
+        let p = env.current_dir() + "/" + BENCH + "/" + f
+        let w = measure(wj, p, "walker")
+        let r = measure(wj, p, "resolved")
+        let mut entry = with(with(object(), "walker_s", from_float(round_to(w, 3))), "resolved_s", from_float(round_to(r, 3)))
+        if r > 0.0 {
+            let s = round_to(w / r, 2)
+            entry = with(entry, "speedup", from_float(s))
+            speedups = with(speedups, f, from_float(s))
+        } else {
+            entry = with(entry, "speedup", Json::Null)
+            speedups = with(speedups, f, Json::Null)
+        }
+        programs = with(programs, f, entry)
+    }
+    let res = with(with(with(object(), "load_avg_1m", from_float(round_to(load_avg(), 1))), "runs", from_int(RUNS as i64)), "programs", programs)
+    println(dumps(res, 1, false))
+    if args.contains("--write") {
+        let _ = fs.write(BASELINE, dumps(speedups, 1, false) + "\n")
+    }
+    if args.contains("--check") {
+        let base = parse(fs.read_to_string(BASELINE) ?? "{}") ?? object()
+        let mut bad: Vec<string> = Vec::new()
+        for m in members(base) {
+            match get(get(res, "programs") ?? object(), m.key) {
+                Some(entry) => {
+                    let measured = get(entry, "speedup") ?? Json::Null
+                    match as_f64(measured) {
+                        Some(s) => {
+                            let v = as_f64(m.value) ?? 0.0
+                            if s < v * 0.85 {
+                                bad.push("${m.key}: ${float_repr(s)} < ${float_repr(v)} - 15%")
+                            }
+                        },
+                        None => {},
+                    }
+                },
+                None => {},
+            }
+        }
+        if bad.len() > 0 {
+            eprintln("speedup regressed:\n" + bad.join("\n"))
+            process.exit(1)
+        }
+    }
+}

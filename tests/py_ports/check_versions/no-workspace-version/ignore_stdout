@@ -1,0 +1,1 @@
+the original aborts silently under set -e before reaching its own error message; the port prints the message

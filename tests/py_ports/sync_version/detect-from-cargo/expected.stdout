@@ -1,0 +1,18 @@
+📦 Detected version from Cargo.toml: 0.50.0
+🔄 Syncing version 0.50.0 across project files...
+✅ Updated README.md
+✅ Updated ROADMAP.md
+✅ Updated installation command in README.md
+✅ Updated crates/a/Cargo.toml
+✅ Updated crates/a/README.md
+
+✨ Version sync complete!
+
+📝 Files updated:
+README.md
+ROADMAP.md
+crates/a/Cargo.toml
+crates/a/README.md
+
+🔍 Review changes with: git diff
+💾 Commit with: git add -A && git commit -m 'chore: Sync version to 0.50.0'

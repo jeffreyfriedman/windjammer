@@ -1,0 +1,24 @@
+coverage (cli): 4070/7160 lines = 56.84%
+  uncovered   600 /   700  src/interpreter/call.rs
+  uncovered   500 /  2000  src/interpreter/eval.rs
+  uncovered   300 /   400  src/bin/wj.rs
+  uncovered    90 /   130  src/cli/cmd03.rs
+  uncovered    90 /   130  src/cli/cmd15.rs
+  uncovered    80 /   120  src/cli/cmd06.rs
+  uncovered    80 /   130  src/cli/cmd07.rs
+  uncovered    75 /    80  src/test_runner/t.rs
+  uncovered    70 /   110  src/cli/cmd09.rs
+  uncovered    70 /   120  src/cli/cmd10.rs
+wrote docs/generated/coverage.json
+coverage (cli): 4070/7160 lines = 56.84%
+  uncovered   600 /   700  src/interpreter/call.rs
+  uncovered   500 /  2000  src/interpreter/eval.rs
+  uncovered   300 /   400  src/bin/wj.rs
+  uncovered    90 /   130  src/cli/cmd03.rs
+  uncovered    90 /   130  src/cli/cmd15.rs
+  uncovered    80 /   120  src/cli/cmd06.rs
+  uncovered    80 /   130  src/cli/cmd07.rs
+  uncovered    75 /    80  src/test_runner/t.rs
+  uncovered    70 /   110  src/cli/cmd09.rs
+  uncovered    70 /   120  src/cli/cmd10.rs
+coverage ratchet: ok

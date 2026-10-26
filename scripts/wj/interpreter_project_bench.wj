@@ -1,0 +1,166 @@
+// Measure `wj run` (interpreted) on generated projects; write the numbers to docs/generated/measured.json.
+//
+//   wj run scripts/wj/interpreter_project_bench.wj WJ_BIN [--files 50] [--runs 15] [--write]     (run from the repository root)
+//
+// Measures (median wall-clock of RUNS runs, milliseconds):
+//   interpreter.run_hello_ms        `wj run hello.wj` (process start + load + run; per-run overhead)
+//   interpreter.project_50_cold_ms  `wj run` in a generated project with FILES modules (first run after writing it)
+//   interpreter.project_50_warm_ms  same project, median of later runs
+//   interpreter.watch_restart_ms    `wj run --watch`: time from a source edit to the new output on stdout
+// Each generated module has 3 functions and calls into another module; main calls every module.
+use std::env
+use std::fs
+use std::process
+use std::subprocess
+use std::time::Instant
+use std::time::Duration
+use std::thread
+use wj_cli_args::long_flag_value_or
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::object
+use wj_json_doc::with
+use wj_json_doc::members
+use wj_json_doc::from_float
+use wj_json_doc::from_str
+use wj_json_doc::dumps
+use wj_proc::capture
+use wj_proc::sh_in
+use wj_proc::quote
+use wj_stats::median
+use wj_table::fixed
+
+fn gen_project(root: string, n: int) {
+    let _ = fs.create_dir_all(root + "/src/pkg")
+    let _ = fs.write(root + "/wj.toml", "[package]\nname = \"bench\"\nversion = \"0.1.0\"\n")
+    let mut i = 0
+    while i < n {
+        let sub = if i % 2 == 1 { "pkg/" } else { "" }
+        let has_callee = i > 0
+        let callee = i - 1
+        let mut text = ""
+        if has_callee {
+            let cs = if callee % 2 == 1 { "pkg::" } else { "" }
+            text = text + "use crate::${cs}m${callee}\n\n"
+        }
+        text = text + "pub struct S${i} {\n    pub v: int,\n}\n\n"
+        text = text + "pub fn a(x: int) -> int {\n    x * ${i + 1} + 1\n}\n\n"
+        text = text + "pub fn b(x: int) -> int {\n    let s = S${i} { v: x }\n    s.v + a(x)\n}\n\n"
+        let body = if has_callee { "m${callee}::a(x) + b(x)" } else { "b(x)" }
+        text = text + "pub fn c(x: int) -> int {\n    ${body}\n}\n"
+        let _ = fs.write(root + "/src/" + sub + "m${i}.wj", text)
+        i = i + 1
+    }
+    let mut modtext = ""
+    let mut j = 1
+    while j < n {
+        modtext = modtext + "pub mod m${j}\n"
+        j = j + 2
+    }
+    let _ = fs.write(root + "/src/pkg/mod.wj", modtext)
+    let mut lines: Vec<string> = Vec::new()
+    let mut k = 0
+    while k < n {
+        let p = if k % 2 == 1 { "pkg::m${k}" } else { "m${k}" }
+        lines.push("    total = total + ${p}::c(${k})")
+        k = k + 1
+    }
+    let _ = fs.write(root + "/src/main.wj", "fn main() {\n    let mut total = 0\n" + lines.join("\n") + "\n    println(\"\${total}\")\n}\n")
+}
+
+// wall-clock milliseconds of `cmd` run inside `dir`
+fn timed_ms(dir: string, cmd: string) -> f64 {
+    let t = Instant::now()
+    match sh_in(dir, cmd) {
+        Ok(o) => {
+            let ms = t.elapsed().as_secs_f64() * 1000.0
+            if o.status != 0 {
+                eprintln("failed: ${cmd}\n${o.stderr}")
+                process.exit(1)
+            }
+            ms
+        },
+        Err(e) => {
+            eprintln("failed: ${cmd}\n${e}")
+            process.exit(1)
+            0.0
+        },
+    }
+}
+
+fn watch_restart(wj: string, root: string) -> f64 {
+    let h = match subprocess.spawn("sh", ["-c", "cd " + quote(root) + " && exec " + quote(wj) + " run --watch 2>/dev/null"]) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln("cannot start watch: ${e}")
+            process.exit(1)
+            panic("unreachable")
+        },
+    }
+    let _first = subprocess.read_line(h)
+    let mut samples: Vec<f64> = Vec::new()
+    let target = root + "/src/m0.wj"
+    let mut k = 0
+    while k < 5 {
+        thread::sleep(Duration::from_millis(300))
+        let t = Instant::now()
+        let _ = fs.append(target, "// edit ${k}\n")
+        let _line = subprocess.read_line(h)
+        samples.push(t.elapsed().as_secs_f64() * 1000.0)
+        k = k + 1
+    }
+    let _ = subprocess.kill(h)
+    median(samples)
+}
+
+fn round1(x: f64) -> f64 {
+    fixed(x, 1).parse::<f64>() ?? x
+}
+
+fn main() {
+    let args = env.args()
+    if args.len() < 2 {
+        eprintln("usage: interpreter_project_bench.wj WJ_BIN [--files N] [--runs N] [--write]")
+        process.exit(2)
+    }
+    let mut wj = args[1]
+    if !wj.starts_with("/") {
+        wj = env.current_dir() + "/" + wj
+    }
+    let n: int = (long_flag_value_or(args, "files", "50")).parse::<int>() ?? 50
+    let runs: int = (long_flag_value_or(args, "runs", "15")).parse::<int>() ?? 15
+    let d = "/tmp/wj-project-bench-${process.pid()}"
+    let _ = fs.create_dir_all(d)
+    let _ = fs.write(d + "/hello.wj", "fn main() {\n    println(\"hi\")\n}\n")
+    let run_cmd = quote(wj) + " run"
+    let mut hello: Vec<f64> = Vec::new()
+    let mut i = 0
+    while i < runs {
+        hello.push(timed_ms(d, run_cmd + " hello.wj"))
+        i = i + 1
+    }
+    let proj = d + "/proj"
+    gen_project(proj, n)
+    let cold = timed_ms(proj, run_cmd)
+    let mut warm: Vec<f64> = Vec::new()
+    i = 0
+    while i < runs {
+        warm.push(timed_ms(proj, run_cmd))
+        i = i + 1
+    }
+    let restart = watch_restart(wj, proj)
+    let _ = fs.remove_dir_all(d)
+    let out = with(with(with(with(object(), "interpreter.run_hello_ms", from_float(round1(median(hello)))), "interpreter.project_${n}_cold_ms", from_float(round1(cold))), "interpreter.project_${n}_warm_ms", from_float(round1(median(warm)))), "interpreter.watch_restart_ms", from_float(round1(restart)))
+    println(dumps(out, 1, false))
+    if args.contains("--write") {
+        let path = "docs/generated/measured.json"
+        let mut cur = match parse(fs.read_to_string(path) ?? "{}") {
+            Ok(c) => c,
+            Err(_) => object(),
+        }
+        for m in members(out) {
+            cur = with(cur, m.key, with(with(object(), "value", m.value), "source", from_str("scripts/wj/interpreter_project_bench.wj")))
+        }
+        let _ = fs.write(path, dumps(cur, 2, true) + "\n")
+    }
+}
