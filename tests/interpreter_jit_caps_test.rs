@@ -90,7 +90,7 @@ fn wj_jit_0_and_no_jit_agree_with_the_default() {
 #[test]
 fn a_loop_reaching_a_sink_runs_it_through_the_closures() {
     let tmp = tempfile::TempDir::new().unwrap();
-    let src = "use std::fs\nfn main() {\n    let mut total = 0\n    let mut i = 0\n    while i < 3000 {\n        total += i % 7\n        if i == 2500 {\n            println(\"late print ${total}\")\n        }\n        if i == 2900 {\n            if fs::exists(\".\") { total += 1 }\n        }\n        i += 1\n    }\n    let mut j = 0\n    while j < 3000 {\n        total += j % 3\n        j += 1\n    }\n    println(\"total ${total}\")\n}\n";
+    let src = "use std::fs\nfn main() {\n    let mut total = 0\n    let mut i = 0\n    while i < 3000 {\n        total += i % 7\n        if i == 2500 {\n            println(\"late print ${total}\")\n        }\n        if i == 2900 {\n            let seen = fs::exists(\".\")\n            println(\"seen ${seen}\")\n        }\n        i += 1\n    }\n    let mut j = 0\n    while j < 3000 {\n        total += j % 3\n        j += 1\n    }\n    println(\"total ${total}\")\n}\n";
     let p = tmp.path().join("loop.wj");
     std::fs::write(&p, src).unwrap();
     let run = |extra: &[&str], debug: bool| {

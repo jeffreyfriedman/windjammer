@@ -601,7 +601,10 @@ fn stmt_island(cx: &mut Cx, s: S) -> Option<Code> {
         Statement::Const { name, .. } | Statement::Static { name, .. } => names.push(name.as_str()),
         _ => {}
     }
-    let declares = names.into_iter().map(|n| (n, cx.declare_boxed(n))).collect();
+    let declares: Vec<(&'static str, usize)> = names.into_iter().map(|n| (n, cx.declare_boxed(n))).collect();
+    if let (Statement::Let { pattern: Pattern::Identifier(_) | Pattern::MutBinding(_), .. }, [(_, slot)], true) = (s, declares.as_slice(), cx.loop_depth > 0) {
+        cx.reg.record_let(s, *slot);
+    }
     let island = island.declaring(declares);
     Some(Box::new(move |it, b| island.run(it, b, |it| it.exec_stmt(s))))
 }
