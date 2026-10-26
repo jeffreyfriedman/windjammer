@@ -183,6 +183,19 @@ pub enum Commands {
         #[arg(long, value_name = "on|off", env = "WJ_JIT", default_value = "on", hide = true)]
         jit: String,
 
+        /// Interpreted runs: closure-engine iterations before a hot loop enters machine code (testing:
+        /// 0 makes every loop try at its first iteration)
+        #[arg(long, value_name = "N", env = "WJ_JIT_LOOP_HOT", hide = true)]
+        jit_loop_hot: Option<u32>,
+
+        /// Interpreted runs: report on stderr which loops run as machine code and why others do not
+        #[arg(long, env = "WJ_JIT_DEBUG", hide = true, action = clap::ArgAction::SetTrue, value_parser = clap::builder::FalseyValueParser::new())]
+        jit_debug: bool,
+
+        /// Interpreted runs (debug builds only): leave one machine-code check out (mutation tests)
+        #[arg(long, value_name = "NAME", env = "WJ_JIT_MUTANT", hide = true)]
+        jit_mutant: Option<String>,
+
         /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
         /// compile errors still refuse it
         #[arg(long)]
@@ -191,6 +204,39 @@ pub enum Commands {
         /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
         deterministic_time: bool,
+
+        /// Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings)
+        /// to FILE, a replayable log (ADR-0021)
+        #[arg(long, value_name = "FILE", conflicts_with = "replay")]
+        record: Option<PathBuf>,
+
+        /// Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and
+        /// none is performed; seeds, arguments and the time mode come from the log (ADR-0021)
+        #[arg(long, value_name = "FILE")]
+        replay: Option<PathBuf>,
+
+        /// Interpreted runs: run in the deterministic simulated world (virtual clock, seeded random numbers and
+        /// scheduler, in-memory files, no network); the run is a function of the program and `--seed` (ADR-0021)
+        #[arg(long, conflicts_with_all = ["record", "replay"])]
+        simulate: bool,
+
+        /// With --simulate: the seed of the world
+        #[arg(long, value_name = "N", default_value = "1", requires = "simulate")]
+        seed: u64,
+
+        /// With --simulate: probability (0 to 1) that a file or network call fails
+        #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
+        faults: f64,
+
+        /// Interpreted runs: keep the step journals of `durable fn` runs in DIR, so a crashed run resumes where it stopped
+        /// (default: in memory)
+        #[arg(long, value_name = "DIR")]
+        journal: Option<PathBuf>,
+
+        /// Interpreted runs: exit abruptly (status 137) after the N-th journaled step of a `durable fn`, or with `N:mid`
+        /// after performing it but before journaling it (tests crash recovery)
+        #[arg(long, value_name = "N[:mid]", requires = "journal")]
+        crash_after: Option<String>,
 
         /// Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`)
         #[arg(long)]
@@ -296,6 +342,18 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// With --interpret: run each test in the deterministic simulated world (ADR-0021)
+        #[arg(long, requires = "interpret")]
+        simulate: bool,
+        /// With --simulate: the seed of the world
+        #[arg(long, value_name = "N", requires = "simulate", conflicts_with = "seeds")]
+        seed: Option<u64>,
+        /// With --simulate: try every seed in A..B (inclusive); a test fails with the first seed that fails it
+        #[arg(long, value_name = "A..B", requires = "simulate")]
+        seeds: Option<String>,
+        /// With --simulate: probability (0 to 1) that a file or network call fails
+        #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
+        faults: f64,
         /// Re-run the tests on every source change
         #[arg(long)]
         watch: bool,
@@ -577,6 +635,9 @@ pub enum Commands {
         path: PathBuf,
     },
 
+    /// Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies)
+    Eject(EjectArgs),
+
     /// Clean build artifacts and stale temp files
     Clean {
         /// Also clean local target/ directories (deep clean)
@@ -621,4 +682,28 @@ pub enum CacheCommand {
     },
     /// Write env.sh / env.ps1 for bare `cargo` invocations
     Setup,
+}
+
+/// Arguments of `wj eject`.
+#[derive(clap::Args, Debug)]
+pub struct EjectArgs {
+    /// Windjammer file or project directory
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+
+    /// Output directory (must be absent or empty)
+    #[arg(short, long)]
+    pub output: PathBuf,
+
+    /// Target platform (rust, wasm)
+    #[arg(short, long, default_value = "rust")]
+    pub target: String,
+
+    /// Library crate (as `wj build --library`)
+    #[arg(long)]
+    pub library: bool,
+
+    /// Generate mod.rs re-exports (as `wj build --module-file`)
+    #[arg(long)]
+    pub module_file: bool,
 }

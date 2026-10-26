@@ -70,15 +70,15 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-018 | effects.md | `effects/SPEC-EFF-018.wj` |
 | SPEC-EFF-019 | effects.md | `effects/SPEC-EFF-019.wj` |
 | SPEC-EFF-020 | effects.md | `effects/SPEC-EFF-020.wj` |
-| SPEC-EFF-021 | effects.md | `effects/SPEC-EFF-021.wj` (xfail Q-032) |
-| SPEC-EFF-022 | effects.md | `effects/SPEC-EFF-022.wj` (xfail Q-032) |
-| SPEC-EFF-023 | effects.md | `effects/SPEC-EFF-023.wj` (xfail Q-032) |
-| SPEC-EFF-024 | effects.md | `effects/SPEC-EFF-024.wj` (xfail Q-032) |
-| SPEC-EFF-025 | effects.md | `effects/SPEC-EFF-025.wj` (xfail Q-032) |
-| SPEC-EFF-026 | effects.md | `effects/SPEC-EFF-026.wj` (xfail Q-032) |
+| SPEC-EFF-021 | effects.md | `effects/SPEC-EFF-021.wj` |
+| SPEC-EFF-022 | effects.md | `effects/SPEC-EFF-022.wj` |
+| SPEC-EFF-023 | effects.md | `effects/SPEC-EFF-023.wj` |
+| SPEC-EFF-024 | effects.md | `effects/SPEC-EFF-024.wj` |
+| SPEC-EFF-025 | effects.md | `effects/SPEC-EFF-025.wj` |
+| SPEC-EFF-026 | effects.md | `effects/SPEC-EFF-026.wj` |
 | SPEC-EFF-027 | effects.md | `effects/SPEC-EFF-027.wj` |
 | SPEC-EFF-028 | effects.md | `effects/SPEC-EFF-028.wj` |
-| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` (xfail Q-032) |
+| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` |
 | SPEC-EFF-030 | effects.md | untestable |
 | SPEC-EFF-031 | effects.md | untestable |
 | SPEC-EFF-032 | effects.md | untestable |
@@ -90,6 +90,14 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-038 | effects.md | untestable |
 | SPEC-EFF-039 | effects.md | `effects/SPEC-EFF-039.wj` |
 | SPEC-EFF-040 | effects.md | `effects/SPEC-EFF-040.wj` |
+| SPEC-EFF-041 | effects.md | `effects/SPEC-EFF-041.wj` |
+| SPEC-EFF-042 | effects.md | `effects/SPEC-EFF-042.wj` |
+| SPEC-EFF-043 | effects.md | untestable |
+| SPEC-EFF-044 | effects.md | `effects/SPEC-EFF-044.wj` |
+| SPEC-EFF-045 | effects.md | `effects/SPEC-EFF-045.wj` |
+| SPEC-EFF-046 | effects.md | untestable |
+| SPEC-EFF-047 | effects.md | untestable |
+| SPEC-EFF-048 | effects.md | untestable |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
 | SPEC-ERR-002 | errors.md | `errors/SPEC-ERR-002.wj` |
 | SPEC-ERR-003 | errors.md | `errors/SPEC-ERR-003.wj` |

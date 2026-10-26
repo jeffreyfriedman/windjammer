@@ -1,0 +1,8 @@
+// allow: process=wj-no-such-command
+use std::process
+fn main() {
+    match process::run("wj-no-such-command") {
+        Ok(_) => println("ran"),
+        Err(e) => println("failed to start"),
+    }
+}

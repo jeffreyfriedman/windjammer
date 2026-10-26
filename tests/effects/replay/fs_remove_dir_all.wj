@@ -1,0 +1,7 @@
+use std::fs
+fn main() {
+    fs::create_dir_all("t/u").unwrap()
+    fs::write("t/u/f.txt", "f").unwrap()
+    fs::remove_dir_all("t").unwrap()
+    println("gone: ${!fs::exists("t")}")
+}

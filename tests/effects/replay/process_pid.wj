@@ -1,0 +1,2 @@
+use std::process
+fn main() { println("pid: ${process::pid()}") }

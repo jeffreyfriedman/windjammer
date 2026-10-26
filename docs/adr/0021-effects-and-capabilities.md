@@ -406,9 +406,136 @@ Decisions taken while implementing (each enforced by a test):
 
 The same default sandbox applies to `wj test --interpret` and the REPL (their messages offer only the `wj.toml` fix: no `--allow` there). A verified example declares what it needs with `// allow:` header lines; a mocked http port (`--mock-http`) needs no network capability in the default profile, but an explicit grant keeps governing mocked calls.
 
-Not done in E2: `@uses` bounds on trait methods (the parser keeps no attributes on trait methods; SPEC-EFF-006 still uses the union of impls);
-`console` is gated at run time in the interpreter only (compiled backends reject a denied `console` at compile time, which is exact because the
+Follow-ups delivered after E2 (2026-10-19): `@uses`/`@pure` bounds on trait methods (the parser keeps attributes on trait methods; SPEC-EFF-006, 041, 042) and the per-run scratch directory
+(SPEC-EFF-043). Canonicalization caching was evaluated and **not** added: a cache keyed on the parent directory's inode and mtime does not see a symlink swapped
+higher in the path, and revalidating every ancestor costs about what `canonicalize` costs, so the strict check stays (the 6.6x on sink-dense code is the price of the guarantee).
+
+Not done in E2: `console` is gated at run time in the interpreter only (compiled backends reject a denied `console` at compile time, which is exact because the
 effect has no resource); Go/JS have no `net`/`env`/`process` std modules to guard yet.
+
+### E3 design (2026-10-19): the effect port, log v1, simulation
+
+**Where the port sits.** One struct, `EffectPort` (`src/interpreter/effect_port.rs`), reached from three choke points that already exist:
+(1) `call_builtin_fn` for every path the sink table knows (the same table the gate uses, so a new sink is recorded the moment it is gated);
+(2) the clock sources `wall_ns()` and `mono_ns()`, so every `Instant`, `SystemTime`, `DateTime` and `elapsed()` is a recorded reading and
+needs no per-type encoding; (3) the methods of the `Stdin` handle (reading input is an effect even though `io::stdin()` only mints a handle).
+A run without `--record`, `--replay` or `--simulate` has no port (`Option::None`), so the cost is one pointer test on the sink path.
+
+**Modes.**
+| Mode | Sink call | Clock reading | Random |
+|---|---|---|---|
+| Live (default) | performed | real | real |
+| Record | performed, then `{request, result}` appended | real, appended | real, appended; the run's RNG seed goes in the header |
+| Replay | request compared with the log; the logged result is returned; **nothing is performed** | from the log | from the log; RNG re-seeded from the header for any draw the table does not name |
+| Simulate | answered by the seeded world (below) | virtual clock | RNG derived from `sim_seed` |
+
+**Observed values.** Some reads are not sinks and not gated but still differ between runs: `process::pid`, `env::args`, `env::temp_dir`,
+`env::current_dir` (and the `fs::`/`path::` spellings). They go through the port as *observations* (recorded and replayed, never denied).
+This is the "find and route hidden non-determinism" half of the kill criterion; `OBSERVED` is a list next to `NOT_SINKS`, and a test requires
+every NOT_SINKS entry that reads the host to be on it or on an explicit "pure" list.
+
+**Values in the log.** Data results (unit, bool, int, float, char, string, vec, tuple, struct, enum, option/result, map, set) round-trip through a
+tagged JSON encoding (`{"i":"i64","v":5}`, `{"s":"..."}`, `{"st":"ProcessOutput","f":{...}}`). `Metadata` is encoded field by field. A sink that
+returns a live handle (`subprocess::spawn`, `http::serve`, `db::connect`, sockets) cannot be recorded: `--record` stops at that call with an error that
+names it. This is a narrowing of the claim, stated up front: E3 replays programs whose effects return data. Payloads over 64 KiB are stored once in
+`LOG.blobs/<sha256>` and referenced by hash.
+
+**Log v1** is the format in section 10, plus `"hash_seed"`, `"args"` and `"rng_seed"` in the header; events are canonical JSON, one per line, keys sorted,
+so logs diff cleanly. `seq` counts port events in the order the deterministic scheduler runs them; `task` is the scheduler's task id.
+
+**Divergence (`WJ0049`).** On replay a request is `(effect, op, args)`. A mismatch at `seq` N, a run that ends with events left over, and a run that
+asks for more events than the log has are all divergences. The error shows the logged and actual request, the source line of the call and the
+command that re-records. Exit status 1 (it is a program/log disagreement, not a capability denial).
+
+**Simulation (`wj test --interpret --simulate [--seed N | --seeds A..B] [--faults RATE]`).** The world is a value built from the seed:
+- time: virtual clock from 1_700_000_000 s (the `--deterministic-time` epoch), advanced by `sleep`, timeouts and `recv_timeout` only;
+- randomness: `StdRng` from `sim_seed`; the scheduler seed is `sim_seed` too, so one number reproduces the interleaving and the random stream;
+- filesystem: in-memory tree seeded from the test's directory when it has a `fixtures/` sibling, else empty; every `fs::` sink acts on it;
+  `env::temp_dir()` is a directory in it; writes never reach the host;
+- network: the `--mock-http` table if given, otherwise every connect fails with a simulated "no route"; a sandboxed test is never at the mercy of the network;
+- environment and processes: empty environment; `process::*` fails with "command not found" unless the grant is widened (the capability gate still runs first);
+- faults: with `--faults RATE` (default 0) each fs write, fs read and network call fails with probability RATE drawn from the seeded stream, with the messages the
+  real failure would carry (`No space left on device`, `Connection reset by peer`, a short write that keeps a prefix).
+A failing seed prints `seed N failed; reproduce: wj test --interpret --simulate --seed N FILE` and re-running it reproduces the failure exactly
+(the gate is the same property as replay: the run is a function of program, seed and fault rate).
+
+**Gates (measured, not asserted).**
+1. Replay is bit-exact (stdout, stderr, exit status) on 100% of recorded runs of a corpus of at least 40 programs (the effect corpus, the spec examples
+   that touch sinks, and the verified examples that run without a network), recorded under two different scheduler seeds and replayed on a different working directory.
+2. Simulation is a function of (program, seed, fault rate): 100% of corpus programs give identical output on two runs of the same seed; and the output changes with
+   the seed for the programs that use randomness or concurrency (so the seed is not ignored).
+3. Planted-bug study: 20 small programs, each a concurrency, timing or fault-handling bug of a kind found in public post-mortems (lost update across a yield,
+   check-then-act on a file, retry without backoff reading a stale clock, unhandled partial write, ...), each with a test that passes under the default run.
+   At least 80% (16) are found by `--seeds 1..200` within 10 minutes in total, and every found seed replays the failure.
+4. Record overhead at most 2x on the interpreter benchmark that performs sink calls (`bench/effects/sink.wj`) and at most +3% on the non-sink one.
+5. SPEC-EFF-029 (replay), 027, 028 pass without `xfail`; SPEC-EFF-031 has an acceptance test (`tests/effect_replay_test.rs`).
+
+**Kill / rethink.** Replay below 100% on the corpus after routing every source the audit finds means the port cannot see the non-determinism: either route it or
+narrow the claim in the spec (which this note already does for handles). Planted-bug study below 50% means the simulation world is too tame to be worth the
+claim: keep record/replay, drop the DST positioning. Record overhead above 4x means the log encoding is too heavy: switch events to a binary encoding with the
+JSON form as an export.
+
+### E4 design (2026-10-26): `durable fn` on the interpreter first
+
+**Surface.** `durable fn` is a contextual keyword (an identifier directly before `fn`, at module level or in an `impl`). The parser records it as the marker attribute `@durable` on the function, so no AST shape changes and every layer sees it as a fact of the declaration. This follows the rule in section 3: the keyword changes execution; the attribute is how the declaration is carried.
+
+**What a step is.** The static pass (`ir/effect_facts/durable.rs`, on the resolved program and the effect facts) walks each durable body and marks a call as a *step* when its callee performs an effect, is effect-open, or is a sink (including `println`, `time::now`, `random::range`, file reads). Steps are identified by source position. Calls that perform no effect are ordinary code, so ordinary arithmetic and collection work is simply re-executed on replay. Nothing needs annotating: "no ambient time, randomness or I/O outside a recorded step" holds by construction.
+
+**Checks (all in `wj check`, same pass).** WJ0045 a step result, an argument or the return type cannot be journaled (function types, trait objects, raw pointers, live handles and handle sinks); WJ0046 a step mutates a binding of the body (callee parameter is `&mut`, or its body mutates it); WJ0047 the body receives from a channel, locks, or reads an atomic; WJ0048 the body iterates a `HashMap`/`HashSet` (a binding known to hold one) outside a step. They are syntactic on the resolved AST, not type inference, so each has a stated blind spot: a hash collection reached only through a field or a function result is not seen; the runtime still journals, so the cost of a miss is an unstable order, not a lost step.
+
+**Run time (interpreter).** Calling a durable function opens a *run* identified by function and argument digest (and the call's occurrence count in the process). With `--journal DIR` the run is a JSON Lines file `<fn>-<digest>.wjlog`: a header, one `{"step", "callee", "result", "vt_ns"}` line per step in call order, and `{"done"}` when the function returned. Calling it again with the same arguments replays: a completed run returns its recorded result without running; otherwise journaled steps return their results without executing (not even evaluating arguments) and the first missing step runs live. Steps are numbered when they start, so a step that contains steps replays correctly. A replayed step whose callee name differs from the journal's is WJ0049 (the program changed under the journal). Delivery is at-least-once: a crash after performing a step and before journaling it re-executes that step (`--crash-after N:mid` tests that window); steps that must not repeat take an idempotency key (planned, see below).
+
+**Why a resumed run equals an uninterrupted one.** Skipped steps would otherwise skip their share of the random stream and of virtual time. At each live step the random generator is re-seeded from (run, step number), and the journal records the virtual clock after each step and restores it on replay. In a deterministic world (`--deterministic-time`, `--simulate`) crash and resume therefore give the same output as no crash. With the real clock the numbers differ per run, as they must; they are journaled once.
+
+**Relation to the effect port.** Independent: the journal is call-level, the port is effect-level. A durable run can be recorded or simulated; `println` is a step, so output already printed is not printed again after a resume.
+
+**Not in this slice.** Explicit `step { }` blocks and `step.key()`; `durable::start(id, f, args)` for starting a run by identity from ordinary code; child durable calls with their own journal (DUR-CALL); `durable fn` in traits; a `DurableStore` port with a non-file store (ADR-0019 D1); seeded crash injection under `--simulate`. Each has a spec rule or ADR line already; none is needed by the gates below.
+
+**Compiled backends.** The facts are backend-independent (`step_sites`, the four checks). A compiled backend needs three things: a journal in `windjammer-runtime` (and the Go and JS runtimes) with this file format, checked by shared vectors like `caps_core`; code generation that wraps each step-site call as `durable::step(index, "callee", || call)`; and a serialization of journalable types (derive-based in Rust, JSON in Go and JS). Until then `wj build` and `wj run --compiled` of a program with a `durable fn` **stop with an error** naming the function. A build that dropped the journal would lose progress on a crash while looking correct, which is the failure this feature exists to prevent. This is stage E4b.
+
+**Gates.**
+1. Mutation study: ten sample workflows (ported from public workflow patterns: order checkout, ETL batch, report generation, retrying fetch, invoice numbering, nightly cleanup, signup, inventory sync, export, notification fan-out), each mutated by injecting clock, random, file-read, environment, `HashMap`-order and channel non-determinism into the durable body. Every mutant is either rejected by `wj check` or, when it runs, gives the same final output and files under a crash at every step boundary as an uninterrupted run. Required: 100%.
+2. Crash at every step boundary (before and after journaling) on those workflows and on the replay corpus wrapped in a durable function: final stdout and files equal the crash-free run in 100% of cases.
+3. SPEC-EFF-021 to 026 pass.
+4. Cost: a file-backed journal costs at most 2x per step over the in-memory one.
+5. Escape hatches: at most 20% of the sample workflows need anything beyond ordinary code.
+
+**Kill / rethink.** More than 20% of workflows needing an escape hatch means the rules are too strict: relax DUR-VALUE or DUR-MUT before shipping. A mutant that is neither rejected nor journaled means a step is missing from the pass: fix the pass, and if the hole is structural (calls the resolver cannot see, such as inside string interpolation) narrow the claim in the spec. Cost above 2x means the journal should batch writes.
+
+### E3 status (2026-10-26): implemented, gates measured (overhead provisional)
+
+Delivered: `wj run --interpret --record LOG | --replay LOG`, `wj run --simulate [--seed N] [--faults R]`, `wj test --interpret --simulate [--seed N | --seeds A..B] [--faults R]`; `src/interpreter/effect_port/` (`mod.rs` port and WJ0049, `log.rs` log v1, `codec.rs` values, `sim.rs` world, `sim_fs.rs` in-memory file system). SPEC-EFF-027, 028, 029, 031 and new 044-047 pass; the spec harness has `replay` mode and a `faults:` header.
+
+Differences from the design note above, and why:
+- Random numbers and task interleavings are **not** events: the header's `rng_seed` and `sched_seed` determine them. Sleeping is a scheduler operation on the virtual clock, so it is not an event either. The only clock events are the two real readings under `Instant`/`SystemTime`.
+- `OBSERVED` host reads (`process::pid`, `env::temp_dir`, `env::current_dir`, password-hash salts) go through the port. A unit test lists every host read in the interpreter (`SystemTime::now`, `OsRng`, `io::stdin`, `env::var`, sockets, ...) and fails when a new one appears that is neither routed nor justified: this is the audit behind "no hidden non-determinism".
+- Live-handle sinks (`subprocess::spawn`, `http::serve*`, `db::connect`) are refused under all three modes, naming the call (the narrowing the design note announced). Nested sink calls inside a recorded sink are not events.
+- The program digest covers the entry file only. A replay of an edited program diverges at the first changed request and the message says the digests differ.
+- The simulated world speaks Linux error numbers on every host so a seed reproduces across machines; its fault stream is a second RNG of the same seed. Relative paths resolve where the capability gate resolves them (the working directory); `fixtures/` next to the project is preloaded.
+
+| Gate | Result |
+|---|---|
+| Replay bit-exact (stdout, stderr, exit) on a corpus of at least 40 programs, recorded under two scheduler seeds, replayed in another directory with other environment variables and no stdin, no live effect | **Met**: 44 programs x 2 seeds = 88 replays, 0 differences; the replay directory is checked to contain no file the program would have written (`tests/effect_replay_test.rs`, corpus `tests/effects/replay/`) |
+| Simulation is a function of (program, seed, faults) on the corpus; the seed matters where randomness or tasks are used | **Met**: 44 programs, two runs of one seed agree, nothing reaches the host; 10 seed-sensitive programs change with the seed |
+| Simulated fs agrees with the real one | **Met** on every call of a 23-step script except two error numbers that differ between macOS and Linux (compared only on Linux) |
+| Planted-bug study: 20 bugs, at least 80% found within 10 minutes of seeds, failing seeds reproduce exactly | **Met: 20 of 20 found in 2.0 s** (seeds 1 to 325; the rarest, a 1-in-150 boundary bug, needed seed 325). Caveats: the bugs were written by the implementer; each test passes at seed 0 (one bug was re-parameterised after failing that control, which is the definition of latent); the 12 concurrency and timing bugs need no faults, six I/O bugs run at fault rate 0.15 |
+| Record overhead at most 2x on the sink-dense program and at most +3% on the non-sink one | **Provisional**: sink-dense +42% (0.90 s to 1.28 s), non-sink +5.7% (0.67 s to 0.71 s; that program makes no recorded call, so this is noise), CPU time, median of 10 interleaved runs, at load 130 to 282. `scripts/bench_effects_overhead.py --mode record` refuses a verdict above load 20: re-run it on a quiet machine |
+
+Kill criteria: none triggered. Replay stayed at 100% after routing the sources the audit found; the study found far more than half.
+
+### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
+
+Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
+
+| Gate | Result |
+|---|---|
+| Mutation study: 10 workflows x 6 injected non-determinisms (clock, random, changing file, environment, `HashMap` order, channel receive) are rejected by `wj check` or journaled | **Met: 60 of 60** (20 rejected: `HashMap` order WJ0048, channel WJ0047; 40 journaled: replaying a finished journal after the file and the environment changed returns the recorded result). The oracle can fail: the same mutants without a journal show the changed world |
+| Crash at every step boundary: final stdout and files equal the uninterrupted run | **Met: 96 crash points on the 10 workflows plus 134 on the replay corpus wrapped in a durable fn (38 programs; 3 more are rejected by the durable rules)**, 0 differences. Crashes in the window before journaling are tested separately: the resumed run completes, and the step runs again (at-least-once), shown by `a_crash_between_performing_and_journaling_runs_the_step_again` |
+| SPEC-EFF-021 to 026 | **Met** |
+| Cost: file-backed journal at most 2x per step over in-memory | **Provisional**: about 1.0x to 1.7x on 3000 steps, at load 100; re-measure on a quiet machine (`bench/effects/durable.wj`, `--journal DIR` against none) |
+| Escape hatches: at most 20% of workflows need one | **Met**: 0 of 10 (the rules accepted ordinary code; the only edits were to the `HashMap` and channel mutants, which are meant to be rejected) |
+
+Findings from building it: (1) resumption needs the random stream and the virtual clock restored per step, not per process: a resumed run that simply skipped steps drew different numbers than an uninterrupted one; the per-step re-seeding and the journaled clock fix that (the first crash-everywhere run failed on exactly this for the clock, and on `Instant` not being journalable). (2) The compiled engine called durable functions without going through the interpreter's call entry, so the hook sits at the walker's entry and durable functions are excluded from compilation. (3) Calls inside string interpolation (`"${time::now()}"`) are not seen by the resolver, so neither the effect facts nor the step pass see them; the run-time gate still does. This is a hole in the static claim, recorded for the resolver owner.
 
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).
@@ -434,7 +561,7 @@ Follow-up answers (2026-10-19, after E1): the local profile was staged as warn-t
 copy-paste `[capabilities]` block (including the project-directory `fs` lines, because a `[capabilities]` table is the whole grant);
 standard devices are not files (`/dev/stdin`, `/dev/stdout`, `/dev/stderr` are the console, `/dev/urandom` is randomness, `/dev/null`
 is free), so reading stdin never needs a grant; the allowlist rebase was done by the integrator; **E2 gates `console` at run time** (granted in the local profile and by default, so it costs nothing, visible in
-`explain-effects`, revocable for sandboxes); `ffi` stays denied in the local profile, the WJ0040/WJ0044 fix line names exactly the
+`explain-effects`, revocable for sandboxes); tests and the REPL get a per-run private scratch directory as `env::temp_dir()` (SPEC-EFF-043; env and network stay opt-in); `ffi` stays denied in the local profile, the WJ0040/WJ0044 fix line names exactly the
 `[capabilities] ffi = ["name"]` entry to add, and a test requires any `wj new` template that declares an `extern fn` to ship it.
 
 D1-D5, D7 and D8 are accepted as recommended; D6 is decided as written below (2026-10-18). D1 is staged: the release

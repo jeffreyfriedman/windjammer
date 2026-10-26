@@ -119,32 +119,6 @@ pub enum Commands {
         #[arg(long)]
         fix: bool,
     },
-    /// Eject to pure Rust - convert your Windjammer project to a standalone Rust project
-    Eject {
-        /// Input directory or file
-        #[arg(short, long, value_name = "PATH")]
-        path: PathBuf,
-
-        /// Output directory for ejected Rust project
-        #[arg(short, long, value_name = "OUTPUT")]
-        output: PathBuf,
-
-        /// Compilation target
-        #[arg(short, long, value_enum, default_value = "wasm")]
-        target: CompilationTarget,
-
-        /// Run rustfmt on generated code
-        #[arg(long, default_value = "true")]
-        format: bool,
-
-        /// Add helpful comments explaining Windjammer features
-        #[arg(long, default_value = "true")]
-        comments: bool,
-
-        /// Skip Cargo.toml generation (use existing)
-        #[arg(long)]
-        no_cargo_toml: bool,
-    },
     /// Run a Windjammer file (build + cargo run, or --interpret for instant execution)
     Run {
         /// Input file to run

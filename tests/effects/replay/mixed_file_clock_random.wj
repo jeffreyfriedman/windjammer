@@ -1,0 +1,8 @@
+use std::fs
+use std::random
+use std::time
+fn main() {
+    let body = "id=${random::range(0, 100000)} at=${time::now_unix()}"
+    fs::write("record.txt", body).unwrap()
+    println(fs::read_to_string("record.txt").unwrap())
+}

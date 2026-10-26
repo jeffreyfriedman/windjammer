@@ -1,0 +1,13 @@
+// spec: SPEC-EFF-042
+// mode: check-error
+// expect-error: as Source>::get` performs `fs.read`
+use std::fs
+trait Source {
+    @pure
+    fn get(self) -> string
+}
+struct FileSource { path: string }
+impl Source for FileSource { fn get(self) -> string { fs::read_to_string(self.path).unwrap_or("") } }
+fn main() {
+    println(FileSource { path: "cfg.toml" }.get())
+}

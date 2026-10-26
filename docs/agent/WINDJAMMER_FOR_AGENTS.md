@@ -265,7 +265,7 @@ prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead
 ## Permissions: exit 126 and the fix line
 
 `wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,
-console) and nothing else. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
+console) and nothing else. `wj test` and the REPL also get a private scratch directory: write temporary files under `env::temp_dir()`. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
 message that already contains the fix:
 
 ```text
@@ -282,6 +282,22 @@ Copy that block into `wj.toml` (a `[capabilities]` table is the whole grant, so 
 or work around it; 126 is a policy fault, not an error value. `wj explain-effects FILE` lists what a program will need, `wj check`
 reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_CAPS=warn|off` is the explicit opt-out. Hand untrusted
 helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
+
+
+## Races, flaky tests and replays: `--simulate`, `--record`, `--replay`
+
+A test that passes "usually" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a
+world that is a function of the seed (virtual clock from Unix time 1700000000, seeded random numbers, task interleavings and `HashMap` order, in-memory
+files, no network, and with `--faults` seeded I/O failures). The first failing seed is printed with the command that reproduces it; run that command and the
+same failure comes back every time. Put inputs the test needs in a `fixtures/` directory next to the project (it is preloaded into the in-memory files).
+`wj run --interpret --simulate --seed N` does the same for a program.
+
+To keep a live run for later, `wj run --interpret --record run.wjlog PROGRAM` writes every effect it performed; `--replay run.wjlog` re-runs the program
+answering all of them from the log and performing none, so a run that hit the network or the clock can be debugged offline and gives the same output.
+`durable fn name(...) { ... }` makes a function crash-safe: each call in its body that performs an effect (file, clock, random, print) is journaled, and `wj run --interpret --journal DIR` resumes a crashed run from the journal without repeating finished steps. Write ordinary code; `wj check` rejects what replay could not honour (WJ0045 a value that cannot be journaled, WJ0046 a step that mutates a local, WJ0047 a channel receive or lock, WJ0048 iterating a `HashMap`/`HashSet`: use `BTreeMap` or sort first). A crash between performing a step and journaling it runs the step again, so make steps safe to repeat. It runs only in the interpreter for now.
+
+A replay that asks for something the log does not have stops with `WJ0049` and shows both requests. Calls that return a live handle
+(`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded; the error names the call.
 
 ## The 25 things agents get wrong first
 

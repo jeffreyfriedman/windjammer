@@ -1,0 +1,13 @@
+// bug: save() drops the write error, so the caller believes the data is stored
+// faults: 0.15
+use std::fs
+
+fn save(path: string, text: string) {
+    let _ = fs::write(path, text)
+}
+
+@test
+fn saved_text_can_be_read_back() {
+    save("saved.txt", "important")
+    assert_eq(fs::read_to_string("saved.txt") ?? "", "important")
+}

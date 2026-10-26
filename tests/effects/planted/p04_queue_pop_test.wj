@@ -1,0 +1,37 @@
+// bug: two consumers check that the queue is non-empty and pop in separate critical sections
+use std::sync::{Arc, Mutex}
+use std::thread
+
+fn take(q: Arc<Mutex<Vec<i64>>>, got: Arc<Mutex<i64>>) -> i64 {
+    let has = match q.lock() { Ok(g) => g.len() > 0, Err(_) => false }
+    if has {
+        let item = match q.lock() { Ok(mut g) => g.pop(), Err(_) => None }
+        match item {
+            Some(_) => {
+                match got.lock() {
+                    Ok(mut n) => { *n = *n + 1 }
+                    Err(_) => {}
+                }
+            }
+            None => { panic("pop on an empty queue") }
+        }
+    }
+    0
+}
+
+@test
+fn one_item_is_consumed_exactly_once() {
+    let q = Arc::new(Mutex::new(vec![42]))
+    let got = Arc::new(Mutex::new(0))
+    let (q1, g1) = (q.clone(), got.clone())
+    let (q2, g2) = (q.clone(), got.clone())
+    let h1 = thread::spawn(move || { return take(q1, g1) })
+    let h2 = thread::spawn(move || { return take(q2, g2) })
+    let r1 = h1.join()
+    let r2 = h2.join()
+    assert(r1.is_ok() && r2.is_ok())
+    let n = match got.lock() { Ok(g) => *g, Err(_) => -1 }
+    let left = match q.lock() { Ok(g) => g.len(), Err(_) => 99 }
+    assert_eq(n + left as i64, 1)
+    assert_eq(n, 1)
+}

@@ -24,7 +24,10 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 | `wj run --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
 | `wj run --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
 | `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client and server calls from canned responses (no network capability needed) / allow network access, plain `http://` (default: denied with exit status 126). |
-| `wj run --sandbox` / `--allow EFFECT[=RESOURCE]` / `--caps enforce\|warn\|off` | Capabilities (ADR-0021): with no `[capabilities]` in `wj.toml` a run may use files inside the project directory, time, random and console, and nothing else; a denied call stops with exit status 126 and a message that contains the `--allow` flag and the `[capabilities]` block to add. `WJ_CAPS=warn` (run, warn once) and `WJ_CAPS=off` are explicit opt-outs. |
+| `wj run --sandbox` / `--allow EFFECT[=RESOURCE]` / `--caps enforce\|warn\|off` | Capabilities (ADR-0021): with no `[capabilities]` in `wj.toml` a run may use files inside the project directory, time, random and console, and nothing else (tests and the REPL also get a private scratch directory at `env::temp_dir()`); a denied call stops with exit status 126 and a message that contains the `--allow` flag and the `[capabilities]` block to add. `WJ_CAPS=warn` (run, warn once) and `WJ_CAPS=off` are explicit opt-outs. |
+| `wj run --record LOG` / `--replay LOG` | Effect log (ADR-0021 E3): `--record` runs live and writes every effect (file, env, process and network results, stdin, real-clock readings) to a JSON Lines log; `--replay` re-runs the program answering every effect from the log and performing none; seeds, arguments and time mode come from the log. A request that differs from the log is `WJ0049`. Live-handle effects (`subprocess::spawn`, `http::serve`, `db::connect`) are refused by name. |
+| `wj run --simulate [--seed N] [--faults RATE]` / `wj test --interpret --simulate [--seed N \| --seeds A..B] [--faults RATE]` | Deterministic simulation (ADR-0021 E3): virtual clock from Unix time 1700000000, random numbers, scheduler and hash order from the seed, in-memory files (a `fixtures/` directory next to the project is preloaded), no network or programs, and with `--faults` seeded I/O failures (a failed write keeps a prefix). `--seeds` tries every seed and names the first that fails with the command that reproduces it. The capability gate still applies. |
+| `wj run --interpret --journal DIR [--crash-after N[:mid]]` | `durable fn` (ADR-0021 E4): every effectful call in its body is a journaled step; with `--journal` a crashed run resumes where it stopped, `--crash-after N` exits (status 137) after the N-th step (`N:mid`: after performing it, before journaling it). Without `--journal` the journal is in memory. Compiled builds refuse a `durable fn`. |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);
@@ -271,8 +274,11 @@ Findings from running the same programs through the compiled path (compiler bugs
   place, field reads and method calls have inline caches, and a construct it does not lower runs in the tree walker as an
   island inside the compiled function. `--engine walker` runs the tree walker alone (the reference semantics; the parity test
   compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 12x faster than in the walker,
-  faster than CPython on both; hot functions whose values are all `int` are compiled to machine code by Cranelift
-  (`wj run --no-jit` or `WJ_JIT=0` turns that off; `fib(30)` is about 37x the walker with it). `scripts/interp_bench.py`
+  faster than CPython on both. Hot code is compiled to machine code by Cranelift: functions whose values are all `int`,
+  and hot `while` / range `for` loops in any function (integers of every width up to 64 bits, `f64`, `bool`, `Vec` elements,
+  struct fields, `push`/`len`); a loop leaves machine code at the statement where anything unusual happens and the closures
+  finish it, so results, panics and backtraces are the walker's. `loop5m` and `fib30` run faster than Node, `sieve` and
+  `nbody` within about 2-3x of it (`wj run --no-jit` or `WJ_JIT=0` turns machine code off). `scripts/interp_bench.py`
   is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
   `wj test --interpret` uses the same engine.
 

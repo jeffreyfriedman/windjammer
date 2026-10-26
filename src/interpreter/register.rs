@@ -139,8 +139,9 @@ impl Interpreter {
                                 ),
                             },
                         })
-                        .collect();
-                    self.enums.insert(decl.name.clone(), EnumDef { variants });
+                        .collect::<Vec<VariantDef>>();
+                    let rc_variants = variants.iter().map(|v| Rc::from(v.name)).collect();
+                    self.enums.insert(decl.name.clone(), EnumDef { variants, rc_name: Rc::from(decl.name.as_str()), rc_variants });
                 }
                 Item::Trait { decl, .. } => {
                     self.traits.insert(

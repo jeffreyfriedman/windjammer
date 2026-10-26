@@ -1,0 +1,7 @@
+use std::fs
+use std::time
+fn main() {
+    let name = "snap-${time::now_unix()}.txt"
+    fs::write(name, "snapshot").unwrap()
+    println("wrote ${name}")
+}

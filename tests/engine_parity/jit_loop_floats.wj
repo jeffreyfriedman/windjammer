@@ -1,0 +1,22 @@
+// f64 in machine-code loops: NaN, infinities, -0.0, comparisons, `%`, saturating casts, methods.
+fn main() {
+    let mut acc = 0.0
+    let mut nan_count = 0
+    let mut inf_seen = false
+    let mut neg_zero = 0.0
+    let mut casts: int = 0
+    let mut i = 0
+    while i < 2000 {
+        let x = (i as f64 - 1000.0) / 7.0
+        let y = x / (i % 3) as f64
+        if y != y { nan_count += 1 }
+        if y == 1.0 / 0.0 || y == -1.0 / 0.0 { inf_seen = true }
+        neg_zero = -0.0 * x
+        acc = acc + x * 0.5 - (x % 3.0) + x.abs().sqrt().floor() - x.ceil() + x.trunc() + x.round()
+        casts += (y as int) % 1000 + (x * 1e30) as i32 as int % 7 + (-x * 1e30) as u8 as int
+        if x < 0.0 && !(x > -50.0) { acc -= 1.0 }
+        i += 1
+    }
+    let z = 0.0 / 0.0
+    println("${acc} ${nan_count} ${inf_seen} ${neg_zero} ${casts} ${z < 1.0} ${z >= 1.0}")
+}

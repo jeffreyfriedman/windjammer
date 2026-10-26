@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-044
+// mode: simulate
+// seed: 3
+// expect: kept in memory
+// expect: false
+use std::fs
+fn main() {
+    fs::write("sim-note.txt", "kept in memory") ?? ()
+    println(fs::read_to_string("sim-note.txt") ?? "?")
+    fs::remove_file("sim-note.txt") ?? ()
+    println("${fs::exists("sim-note.txt")}")
+}

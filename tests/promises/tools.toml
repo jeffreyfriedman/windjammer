@@ -294,3 +294,24 @@ name = "self-install --dry-run rejects arguments"
 polarity = "negative"
 args = ["self-install", "--dry-run", "extra"]
 exit = 2
+
+[[case]]
+name = "explain describes the arena escape code (WJ0160)"
+polarity = "positive"
+args = ["explain", "WJ0160"]
+stdout_has = ["WJ0160", "arena"]
+
+[[case]]
+name = "explain describes the arena feature code (WJ0161)"
+polarity = "positive"
+args = ["explain", "WJ0161"]
+stdout_has = ["WJ0161", "unstable"]
+
+[[case]]
+name = "check refuses std::arena in a build without the feature (WJ0161)"
+polarity = "negative"
+files = { "m.wj" = "use std::arena\n\nfn main() {\n    println(\"x\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["WJ0161", "WJ0160"]
+

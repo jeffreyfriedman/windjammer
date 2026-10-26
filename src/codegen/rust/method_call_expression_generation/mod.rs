@@ -42,6 +42,12 @@ impl<'ast> CodeGenerator<'ast> {
             let base = obj_str
                 .trim_end_matches(".to_string()")
                 .trim_end_matches(".to_owned()");
+            // `s[a..].to_string()`: the desugared slice is `&s[a..]`; the conversion applies to the slice itself.
+            let base = if matches!(object, Expression::MethodCall { method: m, arguments: a, .. } if m == "slice" && a.len() == 2) {
+                base.strip_prefix('&').unwrap_or(base)
+            } else {
+                base
+            };
             return format!("{base}.to_string()");
         }
         // `.as_str()` is identity in Windjammer (W0012): lower exactly like the receiver alone.

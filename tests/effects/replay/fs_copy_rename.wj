@@ -1,0 +1,7 @@
+use std::fs
+fn main() {
+    fs::write("src.txt", "payload").unwrap()
+    fs::copy("src.txt", "copy.txt").unwrap()
+    fs::rename("copy.txt", "moved.txt").unwrap()
+    println("${fs::read_to_string("moved.txt").unwrap()} ${fs::exists("copy.txt")}")
+}

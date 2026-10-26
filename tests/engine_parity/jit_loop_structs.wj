@@ -1,0 +1,36 @@
+// Vec of structs and struct locals in machine-code loops; copies taken before the loop keep their
+// values (copy-on-write).
+struct P {
+    x: f64,
+    v: f64,
+    n: int,
+}
+fn step(ps: Vec<P>, dt: f64) {
+    let mut i = 0
+    while i < ps.len() {
+        ps[i].x += ps[i].v * dt
+        ps[i].n += 1
+        if ps[i].x > 10.0 { ps[i].v = -ps[i].v }
+        i += 1
+    }
+}
+fn main() {
+    let mut ps: Vec<P> = Vec::new()
+    ps.push(P { x: 0.0, v: 1.5, n: 0 })
+    ps.push(P { x: 5.0, v: -0.5, n: 0 })
+    let before = ps
+    let mut k = 0
+    while k < 2000 {
+        step(ps, 0.01)
+        k += 1
+    }
+    let mut q = P { x: 1.0, v: 2.0, n: 3 }
+    let keep = q
+    let mut j = 0
+    while j < 1000 {
+        q.x = q.x * 0.5 + q.v
+        q.n += j % 3
+        j += 1
+    }
+    println("${ps[0].x} ${ps[0].n} ${ps[1].x} ${before[0].x} ${q.x} ${q.n} ${keep.x}")
+}

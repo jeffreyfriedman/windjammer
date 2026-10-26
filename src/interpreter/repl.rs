@@ -86,12 +86,18 @@ impl Interpreter {
 
 /// A fresh REPL interpreter, sandboxed like `wj run` (ADR-0021): the working directory's `wj.toml` grant, else the
 /// local profile (files under the working directory, time, random, console).
-fn new_repl_interpreter() -> Interpreter {
+fn new_repl_interpreter(scratch: Option<&super::caps::Scratch>) -> Interpreter {
     let mut it = Interpreter::new();
     it.guard_stack();
     let here = std::env::current_dir().unwrap_or_default().join("repl.wj");
     if let Ok(gate) = super::caps::gate_for_run(&here, false, &[], false, "") {
-        it.set_caps(gate.map(|g| g.for_tests()));
+        it.set_caps(gate.map(|g| {
+            let g = g.for_tests();
+            match scratch {
+                Some(s) => g.with_scratch(s.path()),
+                None => g,
+            }
+        }));
     }
     it
 }
@@ -101,7 +107,8 @@ pub fn run_repl_stdio() -> i32 {
     use std::io::{BufRead, IsTerminal, Write};
     super::runner::with_big_stack(|| {
         let interactive = std::io::stdin().is_terminal();
-        let mut it = new_repl_interpreter();
+        let scratch = super::caps::Scratch::new();
+        let mut it = new_repl_interpreter(scratch.as_ref());
         if interactive {
             println!("Windjammerscript REPL (interpreted, no cargo). Type :help for commands, exit or Ctrl-D to quit.");
         }
@@ -127,7 +134,7 @@ pub fn run_repl_stdio() -> i32 {
                         continue;
                     }
                     ":reset" => {
-                        it = new_repl_interpreter();
+                        it = new_repl_interpreter(scratch.as_ref());
                         continue;
                     }
                     _ => {}

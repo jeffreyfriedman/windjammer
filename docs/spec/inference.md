@@ -100,6 +100,13 @@ starts from `&` (least requirement) and only rises.
 **Status.** Diverges: the constraint is generated (`emit_call_site_constraints`) but never reaches the parameter in
 the solver (D-SOLVER-UNION). The effective behavior comes from the analyzer (`passthrough_inference.rs`).
 
+### OWN-CONSUMING-METHOD
+**Rule.** A consuming trait method (`into`, `try_into`, `into_iter`) called on a parameter whose declared type is one of
+the function's own type parameters takes the parameter by value: `fn label<T: Into<string>>(t: T) -> string { t.into() }`
+makes `t` owned.
+**Status.** Conforms (C5 category 5). The analyzer still seeds generic parameters owned (`parameter_analysis.rs`
+`is_generic_type_param`); that seed is on the deletion list.
+
 ### OWN-STR-REF
 **Rule.** A read-only `string` parameter of a free function is emitted `&str`, not `&String`.
 **Status.** Implementation-defined for visibility: an unused or interpolation-only `string` formal is `String` when the

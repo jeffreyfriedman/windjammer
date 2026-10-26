@@ -175,6 +175,34 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
     }
     let mut edges: BTreeMap<DefId, Vec<Edge>> = BTreeMap::new();
 
+    // `@uses(..)` / `@pure` on a trait method bounds every implementation (SPEC-EFF-006): an impl may not exceed it, and a
+    // call through the trait performs the bound instead of the union of the impls that happen to exist.
+    let mut bound_of: BTreeMap<DefId, BTreeSet<EffectKind>> = BTreeMap::new();
+    for (tm, decs) in &r.collected.trait_method_decorators {
+        if let Some(b) = declared_by(decs) {
+            bound_of.insert(*tm, b);
+            if let Some(f) = facts.fns.get_mut(tm) {
+                f.declared = Some(bound_of[tm].clone());
+            }
+        }
+    }
+    for imp in &r.collected.impls {
+        let Some(trait_def) = imp.trait_def else { continue };
+        for fn_id in &imp.fns {
+            let name = &defs.get(*fn_id).name;
+            let tm = r.collected.members.get(&trait_def).into_iter().flatten().find(|m| &defs.get(**m).name == name);
+            let Some(bound) = tm.and_then(|m| bound_of.get(m)).cloned() else { continue };
+            if let Some(f) = facts.fns.get_mut(fn_id) {
+                f.declared = Some(match f.declared.take() {
+                    Some(own) => own.intersection(&bound).cloned().collect(),
+                    None => bound.clone(),
+                });
+            }
+            bound_of.insert(*fn_id, bound);
+        }
+    }
+    let bound_uses = |ids: &[DefId]| -> BTreeSet<EffectKind> { ids.iter().filter_map(|i| bound_of.get(i)).flatten().cloned().collect() };
+
     // @effect("x") on a function: it performs x, and calling it is the sink use.
     let mut user_effect_of: BTreeMap<DefId, Vec<EffectKind>> = BTreeMap::new();
     for (id, d) in decls {
@@ -221,8 +249,10 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
             }
             Res::Unresolved(Reason::GenericDispatch(p)) => {
                 let last = p.rsplit("::").next().unwrap_or(p);
-                for d in defs.iter().filter(|d| d.name == last && matches!(d.kind, DefKind::Method { .. } | DefKind::AssocFn { .. } | DefKind::TraitMethod { .. })) {
-                    edge(d.id, &c.callee, "SPEC-EFF-006");
+                let all: Vec<DefId> = defs.iter().filter(|d| d.name == last && matches!(d.kind, DefKind::Method { .. } | DefKind::AssocFn { .. } | DefKind::TraitMethod { .. })).map(|d| d.id).collect();
+                direct.extend(bound_uses(&all).into_iter().map(unknown_resource));
+                for id in all.iter().filter(|i| !bound_of.contains_key(i)) {
+                    edge(*id, &c.callee, "SPEC-EFF-006");
                 }
             }
             Res::Unresolved(_) => {}
@@ -236,9 +266,12 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
                             None => direct.push((EffectKind::Ffi, Resource::Lit(d.name.clone()))),
                         }
                     }
+                    DefKind::TraitMethod { .. } if bound_of.contains_key(id) => {
+                        direct.extend(bound_uses(&[*id]).into_iter().map(unknown_resource));
+                    }
                     DefKind::TraitMethod { .. } => {
                         edge(*id, &c.callee, "SPEC-EFF-003");
-                        for m in defs.iter().filter(|m| m.name == d.name && matches!(m.kind, DefKind::Method { .. })) {
+                        for m in defs.iter().filter(|m| m.name == d.name && matches!(m.kind, DefKind::Method { .. }) && !bound_of.contains_key(&m.id)) {
                             edge(m.id, &c.callee, "SPEC-EFF-006");
                         }
                     }
@@ -250,7 +283,9 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
                 }
             }
             Res::MethodCandidates(ids) | Res::Ambiguous(ids) => {
-                for id in ids {
+                // candidates bounded by a trait contribute the bound; the rest contribute their own effects
+                direct.extend(bound_uses(ids).into_iter().map(|k| unknown_resource(k)));
+                for id in ids.iter().filter(|i| !bound_of.contains_key(i)) {
                     edge(*id, &c.callee, "SPEC-EFF-006");
                     if let Some(ks) = user_effect_of.get(id) {
                         direct.extend(ks.iter().map(|k| (k.clone(), Resource::None)));
@@ -335,8 +370,17 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
     facts
 }
 
+/// What a declared bound says about a use: the effect, with a resource nobody knows (so a runtime guard decides).
+fn unknown_resource(k: EffectKind) -> (EffectKind, Resource) {
+    let resourceful = matches!(
+        k,
+        EffectKind::FsRead | EffectKind::FsWrite | EffectKind::NetConnect | EffectKind::NetListen | EffectKind::EnvRead | EffectKind::EnvWrite | EffectKind::Process
+    );
+    (k, if resourceful { Resource::Computed } else { Resource::None })
+}
+
 /// The resolver reports the module an external callee came from (`std::fs`); the callee's last segment completes it.
-fn full_path(external: &str, callee: &str) -> String {
+pub(super) fn full_path(external: &str, callee: &str) -> String {
     let last = callee.rsplit("::").next().unwrap_or(callee);
     if external == last || external.ends_with(&format!("::{last}")) {
         external.to_string()
@@ -346,7 +390,7 @@ fn full_path(external: &str, callee: &str) -> String {
 }
 
 /// Effects a call to the sink at `path` performs, with resources read from the call's literal arguments.
-fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind, Resource)> {
+pub(super) fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind, Resource)> {
     let Some(uses) = sinks::lookup(path) else { return Vec::new() };
     uses.iter()
         .map(|u| {
@@ -401,8 +445,13 @@ fn dotted(e: &Expression<'_>) -> Option<String> {
 
 /// `@pure` -> `Some({})`, `@uses(fs.read, net.connect("h"))` -> `Some({fs.read, net.connect})`, otherwise `None`.
 pub fn declared_effects(d: &FunctionDecl<'_>) -> Option<BTreeSet<EffectKind>> {
+    declared_by(&d.decorators)
+}
+
+/// The same for any attribute list (a trait method's attributes are not a `FunctionDecl`).
+pub fn declared_by(decorators: &[Decorator<'_>]) -> Option<BTreeSet<EffectKind>> {
     let mut out: Option<BTreeSet<EffectKind>> = None;
-    for dec in &d.decorators {
+    for dec in decorators {
         out = merge(out, decorator_effects(dec));
     }
     out

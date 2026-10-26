@@ -15,6 +15,7 @@ use std::path::Path;
 /// The discovered tests as interpreter specs, filtered like the compiled run (a test is selected
 /// when its name or display path contains the filter).
 pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
+    let mut sites: std::collections::HashMap<std::path::PathBuf, Vec<(std::path::PathBuf, usize, usize)>> = std::collections::HashMap::new();
     select_files(&discovery.files, filter)
         .into_iter()
         .flat_map(|f| f.tests.iter())
@@ -31,6 +32,7 @@ pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
                 TestScope::Assoc(ty) => Some(ty.clone()),
                 _ => None,
             },
+            durable_sites: sites.entry(t.file.clone()).or_insert_with(|| crate::check::durable_sites::discover(&t.file).unwrap_or_default()).clone(),
         })
         .collect()
 }
@@ -42,6 +44,7 @@ pub fn run_interpreted(
     list: bool,
     allow_empty: bool,
     json: bool,
+    sim: Option<crate::interpreter::runner::SimRun>,
 ) -> Result<()> {
     let test_dir = path.unwrap_or_else(|| Path::new("."));
     if !test_dir.exists() {
@@ -70,7 +73,7 @@ pub fn run_interpreted(
             discovery.test_count()
         );
     }
-    let results = run_specs(specs);
+    let results = crate::interpreter::runner::run_specs_simulated(specs, sim);
     if json {
         let failed = results.iter().filter(|r| !r.passed).count();
         let tests: Vec<_> = results

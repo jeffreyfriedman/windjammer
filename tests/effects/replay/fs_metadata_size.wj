@@ -1,0 +1,6 @@
+use std::fs
+fn main() {
+    fs::write("ten.bin", "0123456789").unwrap()
+    let m = fs::metadata("ten.bin").unwrap()
+    println("size ${m.len()} file ${m.is_file()} dir ${m.is_dir()}")
+}

@@ -1,0 +1,6 @@
+use std::random
+use std::time
+fn main() {
+    let r = random::seeded(time::now_unix())
+    println("${r.range(0, 1000000)}")
+}

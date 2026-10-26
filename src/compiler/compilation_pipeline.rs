@@ -190,11 +190,13 @@ pub fn build_project_with_config(
         let ancestor_roots = find_dependency_metadata_roots(file_parent, &external_paths);
         let ancestor_root_refs: Vec<&Path> = ancestor_roots.iter().map(|p| p.as_path()).collect();
         meta_roots.extend_from_slice(&ancestor_root_refs);
-        crate::metadata::merge_wj_meta_signatures_and_copy_structs_multi(
-            &meta_roots,
-            &mut global_signatures,
-            &mut analyzer,
-        );
+        crate::metadata::with_own_meta_excluded(file, || {
+            crate::metadata::merge_wj_meta_signatures_and_copy_structs_multi(
+                &meta_roots,
+                &mut global_signatures,
+                &mut analyzer,
+            )
+        });
         // External deps: also register `crate_key::fn` aliases for qualified calls.
         if !external_paths.is_empty() {
             crate::metadata::merge_external_crate_metadata_with_aliases(
