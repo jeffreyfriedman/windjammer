@@ -11,6 +11,7 @@ pub mod fix;
 pub mod fmt;
 pub mod json_diagnostics;
 pub mod lint;
+pub mod eject;
 pub mod new;
 mod new_templates;
 pub mod remove;

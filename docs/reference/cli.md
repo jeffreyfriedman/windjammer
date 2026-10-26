@@ -27,6 +27,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
 | `wj validate-wjsl` | Validate WJSL shader files (transpile to WGSL and check for errors) |
+| `wj eject` | Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies) |
 | `wj clean` | Clean build artifacts and stale temp files |
 | `wj cache` | Manage the shared Cargo target cache (outside application repos) |
 | `wj cache path` | Print the shared (or --verify) Cargo target directory |
@@ -321,6 +322,22 @@ Usage: wj validate-wjsl <DIR>
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `<PATH>` | DIR |  | Path to directory containing .wjsl files |
+
+## `wj eject`
+
+Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies)
+
+```text
+Usage: wj eject [OPTIONS] --output <OUTPUT> [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH | . | Windjammer file or project directory |
+| `-o`, `--output` | OUTPUT |  | Output directory (must be absent or empty) |
+| `-t`, `--target` | TARGET | rust | Target platform (rust, wasm) |
+| `--library` | LIBRARY |  | Library crate (as `wj build --library`) |
+| `--module-file` | MODULE_FILE |  | Generate mod.rs re-exports (as `wj build --module-file`) |
 
 ## `wj clean`
 

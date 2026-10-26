@@ -400,6 +400,29 @@ pub enum Commands {
         path: PathBuf,
     },
 
+    /// Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies)
+    Eject {
+        /// Windjammer file or project directory
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// Output directory (must be absent or empty)
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Target platform (rust, wasm)
+        #[arg(short, long, default_value = "rust")]
+        target: String,
+
+        /// Library crate (as `wj build --library`)
+        #[arg(long)]
+        library: bool,
+
+        /// Generate mod.rs re-exports (as `wj build --module-file`)
+        #[arg(long)]
+        module_file: bool,
+    },
+
     /// Clean build artifacts and stale temp files
     Clean {
         /// Also clean local target/ directories (deep clean)
