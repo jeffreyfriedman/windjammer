@@ -327,11 +327,7 @@ mod tests {
         let s = l.literal(&loc(1, 8), &Literal::Int(42)).unwrap();
         assert_eq!(&src[s.byte_start..s.byte_end], "42");
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn masks_comments_and_string_text_but_not_interpolation_code() {

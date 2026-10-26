@@ -1,576 +1,576 @@
 # Known violations. May only shrink: fix the code, then delete the line.
-bench/agent-dx/solutions/wj-phase2/t018_word_freq/main.wj
-bench/agent-dx/solutions/wj-phase2/t021_anagram_groups/main.wj
-bench/agent-dx/solutions/wj-phase2/t036_multikey_sort/main.wj
-bench/agent-dx/solutions/wj-phase2/t055_log_summary/main.wj
-bench/agent-dx/solutions/wj/t005_roman/main.wj
-bench/agent-dx/solutions/wj/t006_base_convert/main.wj
-bench/agent-dx/solutions/wj/t010_ring_buffer/main.wj
-bench/agent-dx/solutions/wj/t011_lru_cache/main.wj
-bench/agent-dx/solutions/wj/t012_min_heap/main.wj
-bench/agent-dx/solutions/wj/t013_bst/main.wj
-bench/agent-dx/solutions/wj/t014_union_find/main.wj
-bench/agent-dx/solutions/wj/t015_linked_list/main.wj
-bench/agent-dx/solutions/wj/t018_word_freq/main.wj
-bench/agent-dx/solutions/wj/t019_caesar/main.wj
-bench/agent-dx/solutions/wj/t021_anagram_groups/main.wj
-bench/agent-dx/solutions/wj/t022_csv_parse/main.wj
-bench/agent-dx/solutions/wj/t025_template_render/main.wj
-bench/agent-dx/solutions/wj/t027_ini_parser/main.wj
-bench/agent-dx/solutions/wj/t030_bank_ledger/main.wj
-bench/agent-dx/solutions/wj/t031_config_validate/main.wj
-bench/agent-dx/solutions/wj/t032_checked_arith/main.wj
-bench/agent-dx/solutions/wj/t033_org_chart/main.wj
-bench/agent-dx/solutions/wj/t035_generic_minmax_stack/main.wj
-bench/agent-dx/solutions/wj/t036_multikey_sort/main.wj
-bench/agent-dx/solutions/wj/t037_animal_traits/main.wj
-bench/agent-dx/solutions/wj/t038_vec2_ops/main.wj
-bench/agent-dx/solutions/wj/t039_custom_iterators/main.wj
-bench/agent-dx/solutions/wj/t040_memoizer/main.wj
-bench/agent-dx/solutions/wj/t041_expr_tree/main.wj
-bench/agent-dx/solutions/wj/t042_parallel_sum/main.wj
-bench/agent-dx/solutions/wj/t043_channel_pipeline/main.wj
-bench/agent-dx/solutions/wj/t044_shared_histogram/main.wj
-bench/agent-dx/solutions/wj/t045_parallel_divisors/main.wj
-bench/agent-dx/solutions/wj/t046_producer_consumer/main.wj
-bench/agent-dx/solutions/wj/t047_task_scheduler/main.wj
-bench/agent-dx/solutions/wj/t048_wc_clone/main.wj
-bench/agent-dx/solutions/wj/t049_grep_clone/main.wj
-bench/agent-dx/solutions/wj/t050_cat_number/main.wj
-bench/agent-dx/solutions/wj/t051_file_transform/main.wj
-bench/agent-dx/solutions/wj/t052_csv_columns/main.wj
-bench/agent-dx/solutions/wj/t053_cli_flags/main.wj
-bench/agent-dx/solutions/wj/t054_dir_tree/main.wj
-bench/agent-dx/solutions/wj/t055_log_summary/main.wj
-bench/agent-dx/solutions/wj/t056_todo_manager/main.wj
-bench/agent-dx/solutions/wj/t057_inventory/main.wj
-bench/agent-dx/solutions/wj/t058_vending_machine/main.wj
-bench/agent-dx/solutions/wj/t059_game_of_life/main.wj
-bench/agent-dx/solutions/wj/t060_kv_transactions/main.wj
-benchmarks/arenas/wj/particles_arena.wj
-benchmarks/arenas/wj/particles_vec.wj
-benchmarks/rust_parity/wj/byte_hash.wj
-benchmarks/rust_parity/wj/collatz.wj
-benchmarks/rust_parity/wj/fib.wj
-benchmarks/rust_parity/wj/histogram.wj
-benchmarks/rust_parity/wj/insertion_sort.wj
-benchmarks/rust_parity/wj/matmul.wj
-benchmarks/rust_parity/wj/nbody.wj
-benchmarks/rust_parity/wj/sieve.wj
-benchmarks/rust_parity/wj/string_build.wj
-benchmarks/rust_parity/wj/vec_fill.wj
-docs/spec/repros/Q-012_tilde_panics_lexer.wj
-examples/cli_tool/main.wj
-examples/compute_demo.wj
-examples/decorator_syntax_examples.wj
-examples/file_server/main.wj
-examples/http_server/main.wj
-examples/optimization_validation/main.wj
-examples/syntax_tests/07_stdlib_advanced/main.wj
-examples/syntax_tests/08_basic_test/main.wj
-examples/syntax_tests/08_basic_test/test_minimal.wj
-examples/syntax_tests/16_user_modules/main.wj
-examples/syntax_tests/18_stdlib_math_test/main.wj
-examples/syntax_tests/19_stdlib_strings_test/main.wj
-examples/syntax_tests/20_stdlib_log_test/main.wj
-examples/syntax_tests/22_module_aliases/main.wj
-examples/syntax_tests/24_trait_bounds/main.wj
-examples/syntax_tests/25_where_clauses/main.wj
-examples/syntax_tests/28_trait_objects/main.wj
-examples/syntax_tests/29_advanced_traits/main.wj
-examples/syntax_tests/32_testing/main.wj
-examples/syntax_tests/34_inferred_trait_bounds/main.wj
-examples/syntax_tests/37_combined_features/main.wj
-examples/syntax_tests/38_named_bound_sets/main.wj
-examples/syntax_tests/39_stdlib_modules/main.wj
-examples/syntax_tests/40_derive_decorator/main.wj
-examples/syntax_tests/99_error_test/main.wj
-examples/testing_examples.wj
-examples/tests/test_math.wj
-examples/traits.wj
-examples/wasm_hello/main.wj
-std/compute/mod.wj
-std/crypto.wj
-std/csv.wj
-std/db.wj
-std/net/mod.wj
-std/process.wj
-std/random.wj
-std/regex.wj
-std/storage/mod.wj
-std/strings.wj
-std/test/mod.wj
-tests/arena_programs/particles.wj
-tests/arena_programs/scratch_labels.wj
-tests/array_indexing.wj
-tests/auto_clone/test_combined_patterns.wj
-tests/auto_clone/test_method_calls.wj
-tests/bug_array_index_expression_type.wj
-tests/bug_comparison_local_deref.wj
-tests/bug_deref_simple.wj
-tests/bug_deref_vec.wj
-tests/bug_enum_destructure_deref.wj
-tests/bug_enum_self_borrow.wj
-tests/bug_enum_type_alias.wj
-tests/bug_function_arg_deref.wj
-tests/bug_function_call_deref.wj
-tests/bug_method_call_deref.wj
-tests/bug_method_string_arg.wj
-tests/bug_newtype_wrapper_inference.wj
-tests/bug_vec_index_passed_to_function.wj
-tests/check_negative/mutants/algo_anagram__drop_argument.wj
-tests/check_negative/mutants/algo_anagram__extra_argument.wj
-tests/check_negative/mutants/algo_anagram__return_wrong_type.wj
-tests/check_negative/mutants/algo_anagram__undefined_function.wj
-tests/check_negative/mutants/algo_anagram__undefined_variable.wj
-tests/check_negative/mutants/algo_bank_account__undefined_variable.wj
-tests/check_negative/mutants/algo_bank_account__unknown_field.wj
-tests/check_negative/mutants/algo_caesar_cipher__drop_argument.wj
-tests/check_negative/mutants/algo_caesar_cipher__extra_argument.wj
-tests/check_negative/mutants/algo_caesar_cipher__string_annotated_int.wj
-tests/check_negative/mutants/algo_caesar_cipher__undefined_function.wj
-tests/check_negative/mutants/algo_caesar_cipher__undefined_variable.wj
-tests/check_negative/mutants/algo_collatz__argument_wrong_type.wj
-tests/check_negative/mutants/algo_collatz__drop_argument.wj
-tests/check_negative/mutants/algo_collatz__extra_argument.wj
-tests/check_negative/mutants/algo_collatz__int_annotated_string.wj
-tests/check_negative/mutants/algo_collatz__return_wrong_type.wj
-tests/check_negative/mutants/algo_collatz__undefined_function.wj
-tests/check_negative/mutants/algo_collatz__undefined_variable.wj
-tests/check_negative/mutants/algo_digits__argument_wrong_type.wj
-tests/check_negative/mutants/algo_digits__drop_argument.wj
-tests/check_negative/mutants/algo_digits__extra_argument.wj
-tests/check_negative/mutants/algo_digits__int_annotated_string.wj
-tests/check_negative/mutants/algo_digits__return_wrong_type.wj
-tests/check_negative/mutants/algo_digits__undefined_function.wj
-tests/check_negative/mutants/algo_digits__undefined_variable.wj
-tests/check_negative/mutants/algo_fibonacci__argument_wrong_type.wj
-tests/check_negative/mutants/algo_fibonacci__drop_argument.wj
-tests/check_negative/mutants/algo_fibonacci__extra_argument.wj
-tests/check_negative/mutants/algo_fibonacci__undefined_function.wj
-tests/check_negative/mutants/algo_fibonacci__undefined_variable.wj
-tests/check_negative/mutants/algo_fizzbuzz__argument_wrong_type.wj
-tests/check_negative/mutants/algo_fizzbuzz__drop_argument.wj
-tests/check_negative/mutants/algo_fizzbuzz__extra_argument.wj
-tests/check_negative/mutants/algo_fizzbuzz__undefined_function.wj
-tests/check_negative/mutants/algo_fizzbuzz__undefined_variable.wj
-tests/check_negative/mutants/algo_gcd_lcm__argument_wrong_type.wj
-tests/check_negative/mutants/algo_gcd_lcm__drop_argument.wj
-tests/check_negative/mutants/algo_gcd_lcm__extra_argument.wj
-tests/check_negative/mutants/algo_gcd_lcm__return_wrong_type.wj
-tests/check_negative/mutants/algo_gcd_lcm__undefined_function.wj
-tests/check_negative/mutants/algo_linked_list_enum__drop_argument.wj
-tests/check_negative/mutants/algo_linked_list_enum__extra_argument.wj
-tests/check_negative/mutants/algo_linked_list_enum__return_wrong_type.wj
-tests/check_negative/mutants/algo_linked_list_enum__undefined_function.wj
-tests/check_negative/mutants/algo_palindrome__drop_argument.wj
-tests/check_negative/mutants/algo_palindrome__extra_argument.wj
-tests/check_negative/mutants/algo_palindrome__return_wrong_type.wj
-tests/check_negative/mutants/algo_palindrome__undefined_function.wj
-tests/check_negative/mutants/algo_palindrome__undefined_variable.wj
-tests/check_negative/mutants/algo_palindrome__unknown_method.wj
-tests/check_negative/mutants/algo_perfect_numbers__argument_wrong_type.wj
-tests/check_negative/mutants/algo_perfect_numbers__drop_argument.wj
-tests/check_negative/mutants/algo_perfect_numbers__extra_argument.wj
-tests/check_negative/mutants/algo_perfect_numbers__int_annotated_string.wj
-tests/check_negative/mutants/algo_perfect_numbers__return_wrong_type.wj
-tests/check_negative/mutants/algo_perfect_numbers__undefined_function.wj
-tests/check_negative/mutants/algo_perfect_numbers__undefined_variable.wj
-tests/check_negative/mutants/algo_roman_numerals__argument_wrong_type.wj
-tests/check_negative/mutants/algo_roman_numerals__drop_argument.wj
-tests/check_negative/mutants/algo_roman_numerals__extra_argument.wj
-tests/check_negative/mutants/algo_roman_numerals__string_annotated_int.wj
-tests/check_negative/mutants/algo_roman_numerals__undefined_function.wj
-tests/check_negative/mutants/algo_roman_numerals__undefined_variable.wj
-tests/check_negative/mutants/algo_temperature_table__argument_wrong_type.wj
-tests/check_negative/mutants/algo_temperature_table__drop_argument.wj
-tests/check_negative/mutants/algo_temperature_table__extra_argument.wj
-tests/check_negative/mutants/algo_temperature_table__return_wrong_type.wj
-tests/check_negative/mutants/algo_temperature_table__undefined_function.wj
-tests/check_negative/mutants/basics_for_range__int_annotated_string.wj
-tests/check_negative/mutants/basics_for_range__string_annotated_int.wj
-tests/check_negative/mutants/basics_for_range__undefined_variable.wj
-tests/check_negative/mutants/basics_functions__argument_wrong_type.wj
-tests/check_negative/mutants/basics_functions__drop_argument.wj
-tests/check_negative/mutants/basics_functions__extra_argument.wj
-tests/check_negative/mutants/basics_functions__return_wrong_type.wj
-tests/check_negative/mutants/basics_functions__undefined_function.wj
-tests/check_negative/mutants/basics_if_else__argument_wrong_type.wj
-tests/check_negative/mutants/basics_if_else__drop_argument.wj
-tests/check_negative/mutants/basics_if_else__extra_argument.wj
-tests/check_negative/mutants/basics_if_else__undefined_function.wj
-tests/check_negative/mutants/basics_if_expression__int_annotated_string.wj
-tests/check_negative/mutants/basics_if_expression__undefined_variable.wj
-tests/check_negative/mutants/basics_interpolation__int_annotated_string.wj
-tests/check_negative/mutants/basics_interpolation__string_annotated_int.wj
-tests/check_negative/mutants/basics_interpolation__undefined_variable.wj
-tests/check_negative/mutants/basics_loop_break__int_annotated_string.wj
-tests/check_negative/mutants/basics_loop_break__string_annotated_int.wj
-tests/check_negative/mutants/basics_loop_break__undefined_variable.wj
-tests/check_negative/mutants/basics_shadowing_blocks__int_annotated_string.wj
-tests/check_negative/mutants/basics_variables__int_annotated_string.wj
-tests/check_negative/mutants/basics_while__int_annotated_string.wj
-tests/check_negative/mutants/basics_while__string_annotated_int.wj
-tests/check_negative/mutants/chars_ascii_arith__string_annotated_int.wj
-tests/check_negative/mutants/closures_basics__int_annotated_string.wj
-tests/check_negative/mutants/closures_counter__int_annotated_string.wj
-tests/check_negative/mutants/enum_option_like_generic__return_wrong_type.wj
-tests/check_negative/mutants/error_panic_exit_code__int_annotated_string.wj
-tests/check_negative/mutants/error_panic_exit_code__unknown_method.wj
-tests/check_negative/mutants/error_unwrap_or_expect__let_int_gets_string.wj
-tests/check_negative/mutants/from_conversion__let_int_gets_string.wj
-tests/check_negative/mutants/generics_struct__unknown_method.wj
-tests/check_negative/mutants/iter_group_by_manual__unknown_method.wj
-tests/check_negative/mutants/iter_scan_running_total__int_annotated_string.wj
-tests/check_negative/mutants/match_patterns__argument_wrong_type.wj
-tests/check_negative/mutants/modules_trait_static__unknown_field.wj
-tests/check_negative/mutants/numbers_integer_widths__let_int_gets_string.wj
-tests/check_negative/mutants/pipe_basics__argument_wrong_type.wj
-tests/check_negative/mutants/pipe_result_question__argument_wrong_type.wj
-tests/check_negative/mutants/prog_bit_counting__return_wrong_type.wj
-tests/check_negative/mutants/prog_run_length_encoding__string_annotated_int.wj
-tests/check_negative/mutants/prog_run_length_encoding__unknown_method.wj
-tests/check_negative/mutants/prog_text_wrap__string_annotated_int.wj
-tests/check_negative/mutants/prog_text_wrap__unknown_method.wj
-tests/check_negative/mutants/recursion_hanoi_ackermann__argument_wrong_type.wj
-tests/check_negative/mutants/recursion_hanoi_ackermann__return_wrong_type.wj
-tests/check_negative/mutants/sort_stability_keys__unknown_method.wj
-tests/check_negative/mutants/strings_basics__string_annotated_int.wj
-tests/check_negative/mutants/strings_basics__unknown_method.wj
-tests/check_negative/mutants/strings_build__string_annotated_int.wj
-tests/check_negative/mutants/strings_format_specs__string_annotated_int.wj
-tests/check_negative/mutants/strings_split_join__unknown_method.wj
-tests/check_negative/mutants/strings_unicode__string_annotated_int.wj
-tests/check_negative/mutants/strings_unicode__unknown_method.wj
-tests/check_negative/mutants/struct_basics__unknown_field.wj
-tests/check_negative/mutants/struct_default_builder__unknown_field.wj
-tests/check_negative/mutants/struct_method_chain_mut__return_wrong_type.wj
-tests/check_negative/mutants/struct_method_chain_mut__unknown_field.wj
-tests/check_negative/mutants/trait_default_and_override__unknown_field.wj
-tests/check_negative/mutants/trait_display_to_string__unknown_field.wj
-tests/check_negative/mutants/vec_basics__unknown_method.wj
-tests/codegen_correctness_corpus/thread_handles.wj
-tests/conformance/control_flow/pipe_operator.wj
-tests/conformance/types/enums_and_matching.wj
-tests/conformance/types/traits_and_generics.wj
-tests/conformance/values/clone_semantics.wj
-tests/conformance_programs/01_arith_i32.wj
-tests/conformance_programs/02_arith_i64.wj
-tests/conformance_programs/03_arith_f64.wj
-tests/conformance_programs/04_int_overflow_i64_large.wj
-tests/conformance_programs/05_string_concat.wj
-tests/conformance_programs/07_string_methods.wj
-tests/conformance_programs/08_struct_basic.wj
-tests/conformance_programs/09_struct_mutate_method.wj
-tests/conformance_programs/100_determinant_known.wj
-tests/conformance_programs/101_float_summation_known.wj
-tests/conformance_programs/102_sort_stability.wj
-tests/conformance_programs/103_xorshift_reference.wj
-tests/conformance_programs/10_struct_copy_semantics.wj
-tests/conformance_programs/110_std_math.wj
-tests/conformance_programs/111_std_strings.wj
-tests/conformance_programs/112_std_fs_roundtrip.wj
-tests/conformance_programs/114_hashmap_entry_counting.wj
-tests/conformance_programs/115_clone_vec_field.wj
-tests/conformance_programs/11_struct_clone_independent.wj
-tests/conformance_programs/12_struct_pass_mutable.wj
-tests/conformance_programs/13_enum_unit_match.wj
-tests/conformance_programs/14_enum_data_match.wj
-tests/conformance_programs/150_pipe_forms_mixed.wj
-tests/conformance_programs/151_pipe_try.wj
-tests/conformance_programs/155_interp_string_first.wj
-tests/conformance_programs/157_match_turbofish_scrutinee.wj
-tests/conformance_programs/159_deref_assign_ref_params.wj
-tests/conformance_programs/15_match_guard_or.wj
-tests/conformance_programs/160_bare_return_newline.wj
-tests/conformance_programs/163_trait_generics_and_aliases.wj
-tests/conformance_programs/16_closure_basic.wj
-tests/conformance_programs/170_mut_ref_value_types.wj
-tests/conformance_programs/171_format_flags_padding.wj
-tests/conformance_programs/172_pretty_debug_aggregates.wj
-tests/conformance_programs/173_type_aliases.wj
-tests/conformance_programs/174_closure_mut_capture.wj
-tests/conformance_programs/175_len_and_index_as_int.wj
-tests/conformance_programs/176_from_conversions.wj
-tests/conformance_programs/177_deep_recursion.wj
-tests/conformance_programs/178_struct_patterns_slices.wj
-tests/conformance_programs/179_ordering_sort.wj
-tests/conformance_programs/17_closure_counter_capture.wj
-tests/conformance_programs/180_modules_paths.wj
-tests/conformance_programs/181_ordered_map_set.wj
-tests/conformance_programs/18_option_match.wj
-tests/conformance_programs/19_result_match.wj
-tests/conformance_programs/20_result_question.wj
-tests/conformance_programs/21_vec_ops.wj
-tests/conformance_programs/22_vec_index_mutate.wj
-tests/conformance_programs/23_hashmap_ops.wj
-tests/conformance_programs/24_hashmap_sorted_iter.wj
-tests/conformance_programs/25_loops_ranges.wj
-tests/conformance_programs/26_break_continue.wj
-tests/conformance_programs/27_trait_impl.wj
-tests/conformance_programs/28_generic_fn.wj
-tests/conformance_programs/29_recursion_fib.wj
-tests/conformance_programs/30_iter_map_filter.wj
-tests/conformance_programs/31_bool_logic.wj
-tests/conformance_programs/32_struct_nested_fields.wj
-tests/conformance_programs/33_shadow_and_blocks.wj
-tests/conformance_programs/34_method_chain_builder.wj
-tests/conformance_programs/35_vec_of_structs.wj
-tests/conformance_programs/40_prng_fnv_checksum.wj
-tests/conformance_programs/41_i32_wrapping_lcg.wj
-tests/conformance_programs/42_sort_checksum.wj
-tests/conformance_programs/43_struct_value_semantics.wj
-tests/conformance_programs/44_hashmap_counts.wj
-tests/conformance_programs/45_string_ops.wj
-tests/conformance_programs/46_modpow_i64.wj
-tests/conformance_programs/47_sieve.wj
-tests/conformance_programs/48_matrix_det.wj
-tests/conformance_programs/49_closures_fold.wj
-tests/conformance_programs/50_enum_state_machine.wj
-tests/conformance_programs/51_result_question_chain.wj
-tests/conformance_programs/52_int_casts.wj
-tests/conformance_programs/53_div_mod_signs.wj
-tests/conformance_programs/54_shifts_bitops.wj
-tests/conformance_programs/55_float_format.wj
-tests/conformance_programs/56_float_math.wj
-tests/conformance_programs/57_checked_ops.wj
-tests/conformance_programs/58_parse_numbers.wj
-tests/conformance_programs/59_string_unicode.wj
-tests/conformance_programs/60_overflow_panics.wj
-tests/conformance_programs/61_string_split_trim.wj
-tests/conformance_programs/62_vec_alias_semantics.wj
-tests/conformance_programs/63_closures_capture.wj
-tests/conformance_programs/64_enum_match_guards.wj
-tests/conformance_programs/65_option_combinators.wj
-tests/conformance_programs/66_result_propagation.wj
-tests/conformance_programs/68_unwrap_none_panics.wj
-tests/conformance_programs/69_index_oob_panics.wj
-tests/conformance_programs/70_div_zero_panics.wj
-tests/conformance_programs/71_explicit_panic.wj
-tests/conformance_programs/72_hashmap_ops.wj
-tests/conformance_programs/73_hashset_ops.wj
-tests/conformance_programs/74_vec_algorithms.wj
-tests/conformance_programs/75_iterators.wj
-tests/conformance_programs/76_loops_ranges.wj
-tests/conformance_programs/77_shadowing_blocks.wj
-tests/conformance_programs/78_tuples_destructuring.wj
-tests/conformance_programs/79_trait_dispatch.wj
-tests/conformance_programs/80_generic_struct.wj
-tests/conformance_programs/81_recursion_depth.wj
-tests/conformance_programs/82_consts_statics.wj
-tests/conformance_programs/83_builder_chain.wj
-tests/conformance_programs/90_crc32_known_answer.wj
-tests/conformance_programs/91_fnv1a_known_answers.wj
-tests/conformance_programs/92_minstd_known_answer.wj
-tests/conformance_programs/93_pcg32_known_answer.wj
-tests/conformance_programs/94_sha256_known_answer.wj
-tests/conformance_programs/95_base64_rfc4648_vectors.wj
-tests/conformance_programs/96_utf8_encode_decode.wj
-tests/conformance_programs/97_rational_harmonic.wj
-tests/conformance_programs/98_bignum_factorial.wj
-tests/conformance_programs/99_collatz_longest.wj
-tests/consistency_improvements.wj
-tests/copy_type_ownership.wj
-tests/diagnostics/cases/argument_literal_mismatch.wj
-tests/diagnostics/cases/arity_too_few.wj
-tests/diagnostics/cases/arity_too_many.wj
-tests/diagnostics/cases/bad_import.wj
-tests/diagnostics/cases/bad_operand.wj
-tests/diagnostics/cases/duplicate_function.wj
-tests/diagnostics/cases/duplicate_struct.wj
-tests/diagnostics/cases/field_literal_mismatch.wj
-tests/diagnostics/cases/forbidden_derive_copy.wj
-tests/diagnostics/cases/format_placeholder.wj
-tests/diagnostics/cases/function_typo.wj
-tests/diagnostics/cases/immutable_reassign.wj
-tests/diagnostics/cases/invalid_character.wj
-tests/diagnostics/cases/let_int_to_string.wj
-tests/diagnostics/cases/let_string_to_int.wj
-tests/diagnostics/cases/lint_explicit_borrow.wj
-tests/diagnostics/cases/lint_iter.wj
-tests/diagnostics/cases/lint_reference_param.wj
-tests/diagnostics/cases/lint_to_string.wj
-tests/diagnostics/cases/lint_unwrap.wj
-tests/diagnostics/cases/macro_println.wj
-tests/diagnostics/cases/macro_vec.wj
-tests/diagnostics/cases/missing_field.wj
-tests/diagnostics/cases/missing_trait_item.wj
-tests/diagnostics/cases/no_such_method.wj
-tests/diagnostics/cases/non_bool_condition.wj
-tests/diagnostics/cases/non_exhaustive_match.wj
-tests/diagnostics/cases/numeric_mix.wj
-tests/diagnostics/cases/numeric_string_to_int.wj
-tests/diagnostics/cases/private_item.wj
-tests/diagnostics/cases/reassign_different_type.wj
-tests/diagnostics/cases/return_local_ref.wj
-tests/diagnostics/cases/return_type_mismatch_call.wj
-tests/diagnostics/cases/rust_string_type.wj
-tests/diagnostics/cases/self_unknown_field.wj
-tests/diagnostics/cases/string_plus_int.wj
-tests/diagnostics/cases/syntax_missing_expression.wj
-tests/diagnostics/cases/syntax_unclosed_brace.wj
-tests/diagnostics/cases/trait_bound.wj
-tests/diagnostics/cases/undefined_function.wj
-tests/diagnostics/cases/undefined_variable.wj
-tests/diagnostics/cases/undefined_variable_plain.wj
-tests/diagnostics/cases/unknown_enum_variant.wj
-tests/diagnostics/cases/unknown_field_access.wj
-tests/diagnostics/cases/unknown_field_in_literal.wj
-tests/diagnostics/cases/unknown_method_on_string.wj
-tests/diagnostics/cases/unknown_struct.wj
-tests/diagnostics/cases/unknown_type_annotation.wj
-tests/diagnostics/cases/variable_typo.wj
-tests/diagnostics/cases/wrong_return_type.wj
-tests/engine_parity/condvar_guard_match.wj
-tests/engine_parity/islands_scopes.wj
-tests/error_system/test_function_not_found.wj
-tests/error_system/test_type_mismatch.wj
-tests/error_system/test_variable_not_found.wj
-tests/error_system_e2e/test_struct_errors.wj
-tests/error_system_e2e/test_type_errors.wj
-tests/error_system_e2e/test_undefined_errors.wj
-tests/fixtures/formatter/blank_lines.expected.wj
-tests/fixtures/formatter/blank_lines.input.wj
-tests/fixtures/formatter/braces.expected.wj
-tests/fixtures/formatter/braces.input.wj
-tests/fixtures/formatter/closure_block.expected.wj
-tests/fixtures/formatter/closure_block.input.wj
-tests/fixtures/formatter/comments.expected.wj
-tests/fixtures/formatter/comments.input.wj
-tests/fixtures/formatter/expressive.expected.wj
-tests/fixtures/formatter/expressive.input.wj
-tests/fixtures/formatter/method_chain.expected.wj
-tests/fixtures/formatter/method_chain.input.wj
-tests/fixtures/formatter/pipe_chain.expected.wj
-tests/fixtures/formatter/pipe_chain.input.wj
-tests/fixtures/formatter/spacing.expected.wj
-tests/fixtures/formatter/spacing.input.wj
-tests/fixtures/formatter/strings.expected.wj
-tests/fixtures/formatter/strings.input.wj
-tests/fixtures/formatter/trailing_commas.expected.wj
-tests/fixtures/formatter/trailing_commas.input.wj
-tests/fixtures/formatter/wrapping.expected.wj
-tests/fixtures/formatter/wrapping.input.wj
-tests/fixtures/library_multipass/csv_split_pipe.wj
-tests/fixtures/library_multipass/env_trait_forward_hex/postgres.wj
-tests/fixtures/library_multipass/env_trait_forward_hex/seed.wj
-tests/fixtures/library_multipass/migrate_cli_use_positional.wj
-tests/fixtures/library_multipass/postgres_query_vec_params.wj
-tests/fixtures/library_multipass/proxy_http_adapter.wj
-tests/fixtures/library_multipass/proxy_stats_reply.wj
-tests/fixtures/library_multipass/vec_string_int_element.wj
-tests/fixtures/mut_ref_test.wj
-tests/fixtures/optimizer/corpus/kernel_byte_hash.wj
-tests/fixtures/optimizer/corpus/kernel_collatz.wj
-tests/fixtures/optimizer/corpus/kernel_fib.wj
-tests/fixtures/optimizer/corpus/kernel_histogram.wj
-tests/fixtures/optimizer/corpus/kernel_insertion_sort.wj
-tests/fixtures/optimizer/corpus/kernel_matmul.wj
-tests/fixtures/optimizer/corpus/kernel_nbody.wj
-tests/fixtures/optimizer/corpus/kernel_sieve.wj
-tests/fixtures/optimizer/corpus/kernel_string_build.wj
-tests/fixtures/optimizer/corpus/kernel_vec_fill.wj
-tests/fixtures/optimizer/corpus/regression_hashmap_i64_get_insert_bfs_test.wj
-tests/fixtures/optimizer/corpus/regression_nested_stack_item_id_fold_test.wj
-tests/fixtures/optimizer/corpus/regression_option_vec_pair_sum_test.wj
-tests/fixtures/optimizer/corpus/regression_vec_tuple_string_push_test.wj
-tests/fixtures/sync_test.wj
-tests/for_loop_patterns.wj
-tests/framework_validation.wj
-tests/function_param_patterns.wj
-tests/generic_owned_param_test.wj
-tests/inference_corpus/closure_len_width.wj
-tests/inference_corpus/closure_mut_capture.wj
-tests/inference_corpus/for_accumulator_width.wj
-tests/inference_corpus/int_accumulator_field_width.wj
-tests/inference_corpus/interp_call_width.wj
-tests/inference_corpus/pin_ref_vec.wj
-tests/input_keyboard_test.wj
-tests/interpreter_corpus/async_sequential.wj
-tests/interpreter_corpus/bucket_counts.wj
-tests/interpreter_corpus/closures_fold.wj
-tests/interpreter_corpus/collatz_longest.wj
-tests/interpreter_corpus/deep_recursion.wj
-tests/interpreter_corpus/drop_order.wj
-tests/interpreter_corpus/float_format.wj
-tests/interpreter_corpus/fnv1a_string.wj
-tests/interpreter_corpus/generic_static_dispatch.wj
-tests/interpreter_corpus/intrinsic_list_literal.wj
-tests/interpreter_corpus/lazy_iterators.wj
-tests/interpreter_corpus/lcg_i32_wrapping.wj
-tests/interpreter_corpus/matches_macro.wj
-tests/interpreter_corpus/overflow_panics.wj
-tests/interpreter_corpus/result_chain.wj
-tests/interpreter_corpus/selftest/cheat_constant_output.wj
-tests/interpreter_corpus/shared_cells.wj
-tests/interpreter_corpus/sort_checksum.wj
-tests/interpreter_corpus/state_machine.wj
-tests/interpreter_corpus/threads_sync.wj
-tests/interpreter_corpus/xorshift64.wj
-tests/interpreter_projects/bins_args/src/report.wj
-tests/interpreter_projects/path_dep/textkit/src/frame.wj
-tests/interpreter_projects/use_forms/src/geo/mod.wj
-tests/interpreter_projects/use_forms/src/text.wj
-tests/let_patterns.wj
-tests/operator_precedence.wj
-tests/param_mutability_inference.wj
-tests/pattern_matching_consistency.wj
-tests/spec/arguments/SPEC-ARGS-004.wj
-tests/spec/arguments/SPEC-ARGS-005.wj
-tests/spec/arguments/SPEC-ARGS-006.wj
-tests/spec/arguments/SPEC-ARGS-007.wj
-tests/spec/arguments/SPEC-ARGS-008.wj
-tests/spec/arguments/SPEC-ARGS-009.wj
-tests/spec/attributes/SPEC-ATTR-002.wj
-tests/spec/closures/SPEC-CLOS-005.wj
-tests/spec/closures/SPEC-CLOS-006.wj
-tests/spec/closures/SPEC-CLOS-007.wj
-tests/spec/closures/SPEC-CLOS-008.wj
-tests/spec/effects/SPEC-EFF-016.wj
-tests/spec/effects/SPEC-EFF-021.wj
-tests/spec/effects/SPEC-EFF-022.wj
-tests/spec/effects/SPEC-EFF-023.wj
-tests/spec/effects/SPEC-EFF-024.wj
-tests/spec/effects/SPEC-EFF-025.wj
-tests/spec/effects/SPEC-EFF-026.wj
-tests/spec/errors/SPEC-ERR-002.wj
-tests/spec/errors/SPEC-ERR-005.wj
-tests/spec/execution/SPEC-EXEC-005.wj
-tests/spec/expressions/SPEC-EXPR-017.wj
-tests/spec/grammar/SPEC-GRAM-003.wj
-tests/spec/grammar/SPEC-GRAM-007.wj
-tests/spec/guard-match/SPEC-MATCH-003.wj
-tests/spec/guard-match/SPEC-MATCH-004.wj
-tests/spec/intrinsics/SPEC-INTR-008.wj
-tests/spec/items/SPEC-ITEM-002.wj
-tests/spec/items/SPEC-ITEM-008.wj
-tests/spec/lexical/SPEC-LEX-004.wj
-tests/spec/modules/SPEC-MOD-004.wj
-tests/spec/modules/SPEC-MOD-005.wj
-tests/spec/numeric/SPEC-NUM-011.wj
-tests/spec/optionals/SPEC-OPT-004.wj
-tests/spec/ownership/SPEC-OWN-003.wj
-tests/spec/pipe/SPEC-PIPE-006.wj
-tests/spec/pipe/SPEC-PIPE-007.wj
-tests/spec/statements/SPEC-STMT-002.wj
-tests/spec/statements/SPEC-STMT-005.wj
-tests/spec/stdlib/SPEC-STD-001.wj
-tests/spec/stdlib/SPEC-STD-002.wj
-tests/spec/stdlib/SPEC-STD-003.wj
-tests/spec/trailing-blocks/SPEC-BLOCK-004.wj
-tests/spec/traits/SPEC-TRT-005.wj
-tests/spec/types/SPEC-TYP-003.wj
-tests/spec/types/SPEC-TYP-009.wj
-tests/stdlib_all_tests.wj
-tests/struct_pattern_tests.wj
-tests/tuple_enum_variants.wj
-tests/type_registry_imports_test.wj
-tests/vec_index_local_var.wj
-tests/windjammer_tests/regression_enum_kill_payload_extract_test.wj
-tests/windjammer_tests/regression_grid_diagonal_literal_multiply_test.wj
-tests/windjammer_tests/regression_hashmap_i64_get_insert_bfs_test.wj
-tests/windjammer_tests/regression_option_vec_pair_sum_test.wj
-tests/windjammer_tests/regression_outer_inner_area_test.wj
-tests/windjammer_tests/regression_strings_split_pipe_delimiter_test.wj
-tests/windjammer_tests/regression_strings_starts_with_literal_test.wj
-tests/windjammer_tests/regression_vec_tuple_string_push_test.wj
+bench/agent-dx/solutions/wj-phase2/t018_word_freq/main.wj W0005,WJ0015
+bench/agent-dx/solutions/wj-phase2/t021_anagram_groups/main.wj WJ0011
+bench/agent-dx/solutions/wj-phase2/t036_multikey_sort/main.wj W0003,W0005,W0006
+bench/agent-dx/solutions/wj-phase2/t055_log_summary/main.wj W0005,W0006
+bench/agent-dx/solutions/wj/t005_roman/main.wj W0007
+bench/agent-dx/solutions/wj/t006_base_convert/main.wj W0005
+bench/agent-dx/solutions/wj/t010_ring_buffer/main.wj W0005
+bench/agent-dx/solutions/wj/t011_lru_cache/main.wj W0005
+bench/agent-dx/solutions/wj/t012_min_heap/main.wj W0005
+bench/agent-dx/solutions/wj/t013_bst/main.wj W0005
+bench/agent-dx/solutions/wj/t014_union_find/main.wj W0005
+bench/agent-dx/solutions/wj/t015_linked_list/main.wj W0005
+bench/agent-dx/solutions/wj/t018_word_freq/main.wj W0005
+bench/agent-dx/solutions/wj/t019_caesar/main.wj W0005
+bench/agent-dx/solutions/wj/t021_anagram_groups/main.wj W0005
+bench/agent-dx/solutions/wj/t022_csv_parse/main.wj W0005
+bench/agent-dx/solutions/wj/t025_template_render/main.wj W0005
+bench/agent-dx/solutions/wj/t027_ini_parser/main.wj W0005
+bench/agent-dx/solutions/wj/t030_bank_ledger/main.wj W0005
+bench/agent-dx/solutions/wj/t031_config_validate/main.wj W0005
+bench/agent-dx/solutions/wj/t032_checked_arith/main.wj W0005
+bench/agent-dx/solutions/wj/t033_org_chart/main.wj W0005
+bench/agent-dx/solutions/wj/t035_generic_minmax_stack/main.wj W0005
+bench/agent-dx/solutions/wj/t036_multikey_sort/main.wj W0005
+bench/agent-dx/solutions/wj/t037_animal_traits/main.wj W0005
+bench/agent-dx/solutions/wj/t038_vec2_ops/main.wj W0005,W0007
+bench/agent-dx/solutions/wj/t039_custom_iterators/main.wj W0005
+bench/agent-dx/solutions/wj/t040_memoizer/main.wj W0005
+bench/agent-dx/solutions/wj/t041_expr_tree/main.wj W0005
+bench/agent-dx/solutions/wj/t042_parallel_sum/main.wj W0005
+bench/agent-dx/solutions/wj/t043_channel_pipeline/main.wj W0005
+bench/agent-dx/solutions/wj/t044_shared_histogram/main.wj W0005
+bench/agent-dx/solutions/wj/t045_parallel_divisors/main.wj W0005
+bench/agent-dx/solutions/wj/t046_producer_consumer/main.wj W0005
+bench/agent-dx/solutions/wj/t047_task_scheduler/main.wj W0005
+bench/agent-dx/solutions/wj/t048_wc_clone/main.wj W0005
+bench/agent-dx/solutions/wj/t049_grep_clone/main.wj W0005
+bench/agent-dx/solutions/wj/t050_cat_number/main.wj W0005
+bench/agent-dx/solutions/wj/t051_file_transform/main.wj W0005
+bench/agent-dx/solutions/wj/t052_csv_columns/main.wj W0005
+bench/agent-dx/solutions/wj/t053_cli_flags/main.wj W0005
+bench/agent-dx/solutions/wj/t054_dir_tree/main.wj WJ0015
+bench/agent-dx/solutions/wj/t055_log_summary/main.wj W0005
+bench/agent-dx/solutions/wj/t056_todo_manager/main.wj W0005
+bench/agent-dx/solutions/wj/t057_inventory/main.wj W0005
+bench/agent-dx/solutions/wj/t058_vending_machine/main.wj W0005,W0007
+bench/agent-dx/solutions/wj/t059_game_of_life/main.wj W0005
+bench/agent-dx/solutions/wj/t060_kv_transactions/main.wj W0005
+benchmarks/arenas/wj/particles_arena.wj W0003,WJ0015,WJ0023
+benchmarks/arenas/wj/particles_vec.wj W0003
+benchmarks/rust_parity/wj/byte_hash.wj W0008
+benchmarks/rust_parity/wj/collatz.wj W0008
+benchmarks/rust_parity/wj/fib.wj W0008
+benchmarks/rust_parity/wj/histogram.wj W0008
+benchmarks/rust_parity/wj/insertion_sort.wj W0008
+benchmarks/rust_parity/wj/matmul.wj W0008
+benchmarks/rust_parity/wj/nbody.wj W0008
+benchmarks/rust_parity/wj/sieve.wj W0008
+benchmarks/rust_parity/wj/string_build.wj W0008
+benchmarks/rust_parity/wj/vec_fill.wj W0008
+docs/spec/repros/Q-012_tilde_panics_lexer.wj WJ0012
+examples/cli_tool/main.wj W0001,W0002,W0003,W0004,W0005
+examples/compute_demo.wj W0007
+examples/decorator_syntax_examples.wj W0001,W0007
+examples/file_server/main.wj W0002,W0004,WJ0002
+examples/http_server/main.wj W0002,W0003,W0005,W0007,WJ0002
+examples/optimization_validation/main.wj W0005
+examples/syntax_tests/07_stdlib_advanced/main.wj W0001,W0002,W0003,W0004,WJ0015,WJ0020
+examples/syntax_tests/08_basic_test/main.wj W0001
+examples/syntax_tests/08_basic_test/test_minimal.wj W0001,W0004
+examples/syntax_tests/16_user_modules/main.wj WJ0006
+examples/syntax_tests/18_stdlib_math_test/main.wj WJ0002
+examples/syntax_tests/19_stdlib_strings_test/main.wj W0004,WJ0002
+examples/syntax_tests/20_stdlib_log_test/main.wj WJ0002
+examples/syntax_tests/22_module_aliases/main.wj WJ0002
+examples/syntax_tests/24_trait_bounds/main.wj W0001,W0005
+examples/syntax_tests/25_where_clauses/main.wj W0001,W0005
+examples/syntax_tests/28_trait_objects/main.wj W0001,W0004
+examples/syntax_tests/29_advanced_traits/main.wj W0001,W0004,W0005
+examples/syntax_tests/32_testing/main.wj WJ0002
+examples/syntax_tests/34_inferred_trait_bounds/main.wj W0005
+examples/syntax_tests/37_combined_features/main.wj W0005
+examples/syntax_tests/38_named_bound_sets/main.wj W0005
+examples/syntax_tests/39_stdlib_modules/main.wj W0003
+examples/syntax_tests/40_derive_decorator/main.wj W0005
+examples/syntax_tests/99_error_test/main.wj WJ0002,WJ0003,WJ0005
+examples/testing_examples.wj W0001,W0002,W0004,W0007,W0008,WJ0021
+examples/tests/test_math.wj W0009
+examples/traits.wj W0001,W0004,W0007
+examples/wasm_hello/main.wj W0001
+std/compute/mod.wj WJ0011
+std/crypto.wj W0007
+std/csv.wj W0001
+std/db.wj W0001
+std/net/mod.wj WJ0011
+std/process.wj W0004
+std/random.wj WJ0011
+std/regex.wj W0007
+std/storage/mod.wj W0007
+std/strings.wj W0007
+std/test/mod.wj WJ0011
+tests/arena_programs/particles.wj W0003,WJ0015,WJ0023
+tests/arena_programs/scratch_labels.wj W0003,WJ0015,WJ0023
+tests/array_indexing.wj W0009
+tests/auto_clone/test_combined_patterns.wj W0005
+tests/auto_clone/test_method_calls.wj W0005
+tests/bug_array_index_expression_type.wj W0009
+tests/bug_comparison_local_deref.wj W0009
+tests/bug_deref_simple.wj W0006,W0009
+tests/bug_deref_vec.wj W0006,W0009
+tests/bug_enum_destructure_deref.wj W0009
+tests/bug_enum_self_borrow.wj W0009
+tests/bug_enum_type_alias.wj W0009
+tests/bug_function_arg_deref.wj W0009
+tests/bug_function_call_deref.wj W0006
+tests/bug_method_call_deref.wj W0006
+tests/bug_method_string_arg.wj W0009
+tests/bug_newtype_wrapper_inference.wj W0009
+tests/bug_vec_index_passed_to_function.wj WJ0009
+tests/check_negative/mutants/algo_anagram__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_anagram__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_anagram__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_anagram__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_anagram__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_bank_account__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_bank_account__unknown_field.wj WJ0014
+tests/check_negative/mutants/algo_caesar_cipher__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_caesar_cipher__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_caesar_cipher__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/algo_caesar_cipher__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_caesar_cipher__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_collatz__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_collatz__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_collatz__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_collatz__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/algo_collatz__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_collatz__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_collatz__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_digits__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_digits__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_digits__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_digits__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/algo_digits__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_digits__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_digits__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_fibonacci__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_fibonacci__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_fibonacci__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_fibonacci__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_fibonacci__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_fizzbuzz__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_fizzbuzz__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_fizzbuzz__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_fizzbuzz__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_fizzbuzz__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_gcd_lcm__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_gcd_lcm__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_gcd_lcm__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_gcd_lcm__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_gcd_lcm__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_linked_list_enum__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_linked_list_enum__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_linked_list_enum__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_linked_list_enum__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_palindrome__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_palindrome__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_palindrome__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_palindrome__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_palindrome__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_palindrome__unknown_method.wj WJ0015
+tests/check_negative/mutants/algo_perfect_numbers__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_perfect_numbers__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_perfect_numbers__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_perfect_numbers__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/algo_perfect_numbers__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_perfect_numbers__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_perfect_numbers__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_roman_numerals__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_roman_numerals__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_roman_numerals__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_roman_numerals__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/algo_roman_numerals__undefined_function.wj WJ0002
+tests/check_negative/mutants/algo_roman_numerals__undefined_variable.wj WJ0001
+tests/check_negative/mutants/algo_temperature_table__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_temperature_table__drop_argument.wj WJ0013
+tests/check_negative/mutants/algo_temperature_table__extra_argument.wj WJ0013
+tests/check_negative/mutants/algo_temperature_table__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/algo_temperature_table__undefined_function.wj WJ0002
+tests/check_negative/mutants/basics_for_range__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/basics_for_range__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/basics_for_range__undefined_variable.wj WJ0001
+tests/check_negative/mutants/basics_functions__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/basics_functions__drop_argument.wj WJ0013
+tests/check_negative/mutants/basics_functions__extra_argument.wj WJ0013
+tests/check_negative/mutants/basics_functions__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/basics_functions__undefined_function.wj WJ0002
+tests/check_negative/mutants/basics_if_else__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/basics_if_else__drop_argument.wj WJ0013
+tests/check_negative/mutants/basics_if_else__extra_argument.wj WJ0013
+tests/check_negative/mutants/basics_if_else__undefined_function.wj WJ0002
+tests/check_negative/mutants/basics_if_expression__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/basics_if_expression__undefined_variable.wj WJ0001
+tests/check_negative/mutants/basics_interpolation__int_annotated_string.wj WJ0003,WJ0020
+tests/check_negative/mutants/basics_interpolation__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/basics_interpolation__undefined_variable.wj WJ0001
+tests/check_negative/mutants/basics_loop_break__int_annotated_string.wj WJ0003,WJ0020
+tests/check_negative/mutants/basics_loop_break__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/basics_loop_break__undefined_variable.wj WJ0001
+tests/check_negative/mutants/basics_shadowing_blocks__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/basics_variables__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/basics_while__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/basics_while__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/chars_ascii_arith__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/closures_basics__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/closures_counter__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/enum_option_like_generic__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/error_panic_exit_code__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/error_panic_exit_code__unknown_method.wj WJ0015
+tests/check_negative/mutants/error_unwrap_or_expect__let_int_gets_string.wj WJ0003
+tests/check_negative/mutants/from_conversion__let_int_gets_string.wj WJ0003
+tests/check_negative/mutants/generics_struct__unknown_method.wj WJ0015
+tests/check_negative/mutants/iter_group_by_manual__unknown_method.wj WJ0015
+tests/check_negative/mutants/iter_scan_running_total__int_annotated_string.wj WJ0003
+tests/check_negative/mutants/match_patterns__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/modules_trait_static__unknown_field.wj WJ0014
+tests/check_negative/mutants/numbers_integer_widths__let_int_gets_string.wj WJ0003
+tests/check_negative/mutants/pipe_basics__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/pipe_result_question__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/prog_bit_counting__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/prog_run_length_encoding__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/prog_run_length_encoding__unknown_method.wj WJ0015
+tests/check_negative/mutants/prog_text_wrap__string_annotated_int.wj WJ0003,WJ0020
+tests/check_negative/mutants/prog_text_wrap__unknown_method.wj WJ0015
+tests/check_negative/mutants/recursion_hanoi_ackermann__argument_wrong_type.wj WJ0003
+tests/check_negative/mutants/recursion_hanoi_ackermann__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/sort_stability_keys__unknown_method.wj WJ0015
+tests/check_negative/mutants/strings_basics__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/strings_basics__unknown_method.wj WJ0015
+tests/check_negative/mutants/strings_build__string_annotated_int.wj WJ0003,WJ0020
+tests/check_negative/mutants/strings_format_specs__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/strings_split_join__unknown_method.wj WJ0015
+tests/check_negative/mutants/strings_unicode__string_annotated_int.wj WJ0003
+tests/check_negative/mutants/strings_unicode__unknown_method.wj WJ0015
+tests/check_negative/mutants/struct_basics__unknown_field.wj WJ0014
+tests/check_negative/mutants/struct_default_builder__unknown_field.wj WJ0014
+tests/check_negative/mutants/struct_method_chain_mut__return_wrong_type.wj WJ0003
+tests/check_negative/mutants/struct_method_chain_mut__unknown_field.wj WJ0014
+tests/check_negative/mutants/trait_default_and_override__unknown_field.wj WJ0014
+tests/check_negative/mutants/trait_display_to_string__unknown_field.wj WJ0014
+tests/check_negative/mutants/vec_basics__unknown_method.wj WJ0015
+tests/codegen_correctness_corpus/thread_handles.wj WJ0005
+tests/conformance/control_flow/pipe_operator.wj W0005,W0007
+tests/conformance/types/enums_and_matching.wj WJ0010
+tests/conformance/types/traits_and_generics.wj W0005
+tests/conformance/values/clone_semantics.wj W0005
+tests/conformance_programs/01_arith_i32.wj W0008
+tests/conformance_programs/02_arith_i64.wj W0008
+tests/conformance_programs/03_arith_f64.wj W0008
+tests/conformance_programs/04_int_overflow_i64_large.wj W0008
+tests/conformance_programs/05_string_concat.wj W0008
+tests/conformance_programs/07_string_methods.wj W0008
+tests/conformance_programs/08_struct_basic.wj W0008
+tests/conformance_programs/09_struct_mutate_method.wj W0008
+tests/conformance_programs/100_determinant_known.wj W0007,W0008
+tests/conformance_programs/101_float_summation_known.wj W0008
+tests/conformance_programs/102_sort_stability.wj W0007,W0008
+tests/conformance_programs/103_xorshift_reference.wj W0008
+tests/conformance_programs/10_struct_copy_semantics.wj W0008
+tests/conformance_programs/110_std_math.wj W0008
+tests/conformance_programs/111_std_strings.wj W0008
+tests/conformance_programs/112_std_fs_roundtrip.wj W0008
+tests/conformance_programs/114_hashmap_entry_counting.wj W0007,W0008
+tests/conformance_programs/115_clone_vec_field.wj W0005,W0007,W0008
+tests/conformance_programs/11_struct_clone_independent.wj W0005,W0008
+tests/conformance_programs/12_struct_pass_mutable.wj W0008
+tests/conformance_programs/13_enum_unit_match.wj W0008
+tests/conformance_programs/14_enum_data_match.wj W0008
+tests/conformance_programs/150_pipe_forms_mixed.wj W0008
+tests/conformance_programs/151_pipe_try.wj W0008
+tests/conformance_programs/155_interp_string_first.wj W0006
+tests/conformance_programs/157_match_turbofish_scrutinee.wj W0003
+tests/conformance_programs/159_deref_assign_ref_params.wj W0001,W0004
+tests/conformance_programs/15_match_guard_or.wj W0008
+tests/conformance_programs/160_bare_return_newline.wj W0009
+tests/conformance_programs/163_trait_generics_and_aliases.wj W0005
+tests/conformance_programs/16_closure_basic.wj W0008
+tests/conformance_programs/170_mut_ref_value_types.wj W0001,W0003,W0004,W0006,W0007,W0008
+tests/conformance_programs/171_format_flags_padding.wj W0007,W0008
+tests/conformance_programs/172_pretty_debug_aggregates.wj W0006,W0007,W0008
+tests/conformance_programs/173_type_aliases.wj W0006,W0007,W0008
+tests/conformance_programs/174_closure_mut_capture.wj W0006,W0007
+tests/conformance_programs/175_len_and_index_as_int.wj W0005,W0007
+tests/conformance_programs/176_from_conversions.wj W0006
+tests/conformance_programs/177_deep_recursion.wj W0007
+tests/conformance_programs/178_struct_patterns_slices.wj W0006,W0007
+tests/conformance_programs/179_ordering_sort.wj W0002,W0003,W0006,W0007,W0008
+tests/conformance_programs/17_closure_counter_capture.wj W0008
+tests/conformance_programs/180_modules_paths.wj W0006
+tests/conformance_programs/181_ordered_map_set.wj W0006,W0008
+tests/conformance_programs/18_option_match.wj W0007,W0008
+tests/conformance_programs/19_result_match.wj W0008
+tests/conformance_programs/20_result_question.wj W0008
+tests/conformance_programs/21_vec_ops.wj W0008
+tests/conformance_programs/22_vec_index_mutate.wj W0007,W0008
+tests/conformance_programs/23_hashmap_ops.wj W0008
+tests/conformance_programs/24_hashmap_sorted_iter.wj W0005,W0008
+tests/conformance_programs/25_loops_ranges.wj W0008
+tests/conformance_programs/26_break_continue.wj W0008
+tests/conformance_programs/27_trait_impl.wj W0008
+tests/conformance_programs/28_generic_fn.wj W0008
+tests/conformance_programs/29_recursion_fib.wj W0008
+tests/conformance_programs/30_iter_map_filter.wj W0003,W0007,W0008
+tests/conformance_programs/31_bool_logic.wj W0008
+tests/conformance_programs/32_struct_nested_fields.wj W0008
+tests/conformance_programs/33_shadow_and_blocks.wj W0008
+tests/conformance_programs/34_method_chain_builder.wj W0008
+tests/conformance_programs/35_vec_of_structs.wj W0008
+tests/conformance_programs/40_prng_fnv_checksum.wj W0008
+tests/conformance_programs/41_i32_wrapping_lcg.wj W0008
+tests/conformance_programs/42_sort_checksum.wj W0005,W0008
+tests/conformance_programs/43_struct_value_semantics.wj W0005,W0008
+tests/conformance_programs/44_hashmap_counts.wj W0008
+tests/conformance_programs/45_string_ops.wj W0007,W0008
+tests/conformance_programs/46_modpow_i64.wj W0008
+tests/conformance_programs/47_sieve.wj W0008
+tests/conformance_programs/48_matrix_det.wj W0008
+tests/conformance_programs/49_closures_fold.wj W0008
+tests/conformance_programs/50_enum_state_machine.wj W0008
+tests/conformance_programs/51_result_question_chain.wj W0008
+tests/conformance_programs/52_int_casts.wj W0008
+tests/conformance_programs/53_div_mod_signs.wj W0008
+tests/conformance_programs/54_shifts_bitops.wj W0008
+tests/conformance_programs/55_float_format.wj W0008
+tests/conformance_programs/56_float_math.wj W0008
+tests/conformance_programs/57_checked_ops.wj W0008
+tests/conformance_programs/58_parse_numbers.wj W0008
+tests/conformance_programs/59_string_unicode.wj W0008
+tests/conformance_programs/60_overflow_panics.wj W0008
+tests/conformance_programs/61_string_split_trim.wj W0008
+tests/conformance_programs/62_vec_alias_semantics.wj W0005,W0007,W0008
+tests/conformance_programs/63_closures_capture.wj W0003,W0007,W0008
+tests/conformance_programs/64_enum_match_guards.wj W0008
+tests/conformance_programs/65_option_combinators.wj W0008
+tests/conformance_programs/66_result_propagation.wj W0008
+tests/conformance_programs/68_unwrap_none_panics.wj W0002,W0007,W0008
+tests/conformance_programs/69_index_oob_panics.wj W0007,W0008
+tests/conformance_programs/70_div_zero_panics.wj W0008
+tests/conformance_programs/71_explicit_panic.wj W0008
+tests/conformance_programs/72_hashmap_ops.wj W0007,W0008
+tests/conformance_programs/73_hashset_ops.wj W0008
+tests/conformance_programs/74_vec_algorithms.wj W0005,W0007,W0008
+tests/conformance_programs/75_iterators.wj W0003,W0007,W0008
+tests/conformance_programs/76_loops_ranges.wj W0008
+tests/conformance_programs/77_shadowing_blocks.wj W0008
+tests/conformance_programs/78_tuples_destructuring.wj W0007,W0008
+tests/conformance_programs/79_trait_dispatch.wj W0008
+tests/conformance_programs/80_generic_struct.wj W0008
+tests/conformance_programs/81_recursion_depth.wj W0008
+tests/conformance_programs/82_consts_statics.wj W0008
+tests/conformance_programs/83_builder_chain.wj W0008
+tests/conformance_programs/90_crc32_known_answer.wj W0008
+tests/conformance_programs/91_fnv1a_known_answers.wj W0008
+tests/conformance_programs/92_minstd_known_answer.wj W0008
+tests/conformance_programs/93_pcg32_known_answer.wj W0008
+tests/conformance_programs/94_sha256_known_answer.wj W0007,W0008
+tests/conformance_programs/95_base64_rfc4648_vectors.wj W0008
+tests/conformance_programs/96_utf8_encode_decode.wj W0008
+tests/conformance_programs/97_rational_harmonic.wj W0008
+tests/conformance_programs/98_bignum_factorial.wj W0007,W0008
+tests/conformance_programs/99_collatz_longest.wj W0008
+tests/consistency_improvements.wj W0009
+tests/copy_type_ownership.wj W0009
+tests/diagnostics/cases/argument_literal_mismatch.wj WJ0003
+tests/diagnostics/cases/arity_too_few.wj WJ0013
+tests/diagnostics/cases/arity_too_many.wj WJ0013
+tests/diagnostics/cases/bad_import.wj WJ0006
+tests/diagnostics/cases/bad_operand.wj WJ0020
+tests/diagnostics/cases/duplicate_function.wj WJ0021
+tests/diagnostics/cases/duplicate_struct.wj WJ0021
+tests/diagnostics/cases/field_literal_mismatch.wj WJ0003
+tests/diagnostics/cases/forbidden_derive_copy.wj WJ0023
+tests/diagnostics/cases/format_placeholder.wj W0008
+tests/diagnostics/cases/function_typo.wj WJ0002
+tests/diagnostics/cases/immutable_reassign.wj WJ0004
+tests/diagnostics/cases/invalid_character.wj WJ0012
+tests/diagnostics/cases/let_int_to_string.wj WJ0003
+tests/diagnostics/cases/let_string_to_int.wj WJ0003
+tests/diagnostics/cases/lint_explicit_borrow.wj W0004
+tests/diagnostics/cases/lint_iter.wj W0003
+tests/diagnostics/cases/lint_reference_param.wj W0001
+tests/diagnostics/cases/lint_to_string.wj W0006
+tests/diagnostics/cases/lint_unwrap.wj W0002
+tests/diagnostics/cases/macro_println.wj W0007
+tests/diagnostics/cases/macro_vec.wj W0007
+tests/diagnostics/cases/missing_field.wj WJ0009
+tests/diagnostics/cases/missing_trait_item.wj WJ0018
+tests/diagnostics/cases/no_such_method.wj WJ0015
+tests/diagnostics/cases/non_bool_condition.wj WJ0003
+tests/diagnostics/cases/non_exhaustive_match.wj WJ0010
+tests/diagnostics/cases/numeric_mix.wj WJ0020
+tests/diagnostics/cases/numeric_string_to_int.wj WJ0003
+tests/diagnostics/cases/private_item.wj WJ0019
+tests/diagnostics/cases/reassign_different_type.wj WJ0003
+tests/diagnostics/cases/return_local_ref.wj W0011
+tests/diagnostics/cases/return_type_mismatch_call.wj WJ0003
+tests/diagnostics/cases/rust_string_type.wj W0010
+tests/diagnostics/cases/self_unknown_field.wj WJ0014
+tests/diagnostics/cases/string_plus_int.wj WJ0020
+tests/diagnostics/cases/syntax_missing_expression.wj WJ0011
+tests/diagnostics/cases/syntax_unclosed_brace.wj WJ0011
+tests/diagnostics/cases/trait_bound.wj WJ0017
+tests/diagnostics/cases/undefined_function.wj WJ0002
+tests/diagnostics/cases/undefined_variable.wj WJ0001
+tests/diagnostics/cases/undefined_variable_plain.wj WJ0001
+tests/diagnostics/cases/unknown_enum_variant.wj WJ0030
+tests/diagnostics/cases/unknown_field_access.wj WJ0014
+tests/diagnostics/cases/unknown_field_in_literal.wj WJ0014
+tests/diagnostics/cases/unknown_method_on_string.wj WJ0015
+tests/diagnostics/cases/unknown_struct.wj WJ0005
+tests/diagnostics/cases/unknown_type_annotation.wj WJ0005
+tests/diagnostics/cases/variable_typo.wj WJ0001
+tests/diagnostics/cases/wrong_return_type.wj WJ0003
+tests/engine_parity/condvar_guard_match.wj W0005,W0008
+tests/engine_parity/islands_scopes.wj W0004
+tests/error_system/test_function_not_found.wj WJ0002
+tests/error_system/test_type_mismatch.wj WJ0003
+tests/error_system/test_variable_not_found.wj WJ0001
+tests/error_system_e2e/test_struct_errors.wj WJ0005,WJ0014
+tests/error_system_e2e/test_type_errors.wj WJ0003
+tests/error_system_e2e/test_undefined_errors.wj WJ0001,WJ0002,WJ0015
+tests/fixtures/formatter/blank_lines.expected.wj WJ0011
+tests/fixtures/formatter/blank_lines.input.wj WJ0011
+tests/fixtures/formatter/braces.expected.wj WJ0001,WJ0002
+tests/fixtures/formatter/braces.input.wj WJ0001,WJ0002
+tests/fixtures/formatter/closure_block.expected.wj WJ0002
+tests/fixtures/formatter/closure_block.input.wj WJ0002
+tests/fixtures/formatter/comments.expected.wj WJ0011
+tests/fixtures/formatter/comments.input.wj WJ0011
+tests/fixtures/formatter/expressive.expected.wj WJ0002
+tests/fixtures/formatter/expressive.input.wj WJ0002
+tests/fixtures/formatter/method_chain.expected.wj W0003,WJ0001
+tests/fixtures/formatter/method_chain.input.wj W0003,WJ0001
+tests/fixtures/formatter/pipe_chain.expected.wj WJ0001,WJ0002
+tests/fixtures/formatter/pipe_chain.input.wj WJ0001,WJ0002
+tests/fixtures/formatter/spacing.expected.wj WJ0001
+tests/fixtures/formatter/spacing.input.wj WJ0001
+tests/fixtures/formatter/strings.expected.wj WJ0001
+tests/fixtures/formatter/strings.input.wj WJ0001
+tests/fixtures/formatter/trailing_commas.expected.wj WJ0002
+tests/fixtures/formatter/trailing_commas.input.wj WJ0002
+tests/fixtures/formatter/wrapping.expected.wj WJ0001,WJ0002
+tests/fixtures/formatter/wrapping.input.wj WJ0001,WJ0002
+tests/fixtures/library_multipass/csv_split_pipe.wj W0009
+tests/fixtures/library_multipass/env_trait_forward_hex/postgres.wj W0007
+tests/fixtures/library_multipass/env_trait_forward_hex/seed.wj W0007
+tests/fixtures/library_multipass/migrate_cli_use_positional.wj W0005
+tests/fixtures/library_multipass/postgres_query_vec_params.wj W0007
+tests/fixtures/library_multipass/proxy_http_adapter.wj WJ0015
+tests/fixtures/library_multipass/proxy_stats_reply.wj W0005
+tests/fixtures/library_multipass/vec_string_int_element.wj W0007
+tests/fixtures/mut_ref_test.wj W0004
+tests/fixtures/optimizer/corpus/kernel_byte_hash.wj W0008
+tests/fixtures/optimizer/corpus/kernel_collatz.wj W0008
+tests/fixtures/optimizer/corpus/kernel_fib.wj W0008
+tests/fixtures/optimizer/corpus/kernel_histogram.wj W0008
+tests/fixtures/optimizer/corpus/kernel_insertion_sort.wj W0008
+tests/fixtures/optimizer/corpus/kernel_matmul.wj W0008
+tests/fixtures/optimizer/corpus/kernel_nbody.wj W0008
+tests/fixtures/optimizer/corpus/kernel_sieve.wj W0008
+tests/fixtures/optimizer/corpus/kernel_string_build.wj W0008
+tests/fixtures/optimizer/corpus/kernel_vec_fill.wj W0008
+tests/fixtures/optimizer/corpus/regression_hashmap_i64_get_insert_bfs_test.wj W0007
+tests/fixtures/optimizer/corpus/regression_nested_stack_item_id_fold_test.wj W0007
+tests/fixtures/optimizer/corpus/regression_option_vec_pair_sum_test.wj W0002,W0007
+tests/fixtures/optimizer/corpus/regression_vec_tuple_string_push_test.wj W0006
+tests/fixtures/sync_test.wj W0005
+tests/for_loop_patterns.wj W0009
+tests/framework_validation.wj W0004,W0007
+tests/function_param_patterns.wj WJ0011
+tests/generic_owned_param_test.wj W0004
+tests/inference_corpus/closure_len_width.wj W0007
+tests/inference_corpus/closure_mut_capture.wj W0007
+tests/inference_corpus/for_accumulator_width.wj W0007
+tests/inference_corpus/int_accumulator_field_width.wj W0007
+tests/inference_corpus/interp_call_width.wj W0007
+tests/inference_corpus/pin_ref_vec.wj W0001,W0007
+tests/input_keyboard_test.wj WJ0012
+tests/interpreter_corpus/async_sequential.wj W0008
+tests/interpreter_corpus/bucket_counts.wj W0007,W0008
+tests/interpreter_corpus/closures_fold.wj W0005,W0008
+tests/interpreter_corpus/collatz_longest.wj W0008
+tests/interpreter_corpus/deep_recursion.wj W0008
+tests/interpreter_corpus/drop_order.wj W0008
+tests/interpreter_corpus/float_format.wj W0008
+tests/interpreter_corpus/fnv1a_string.wj W0008
+tests/interpreter_corpus/generic_static_dispatch.wj W0008
+tests/interpreter_corpus/intrinsic_list_literal.wj W0007
+tests/interpreter_corpus/lazy_iterators.wj W0008
+tests/interpreter_corpus/lcg_i32_wrapping.wj W0008
+tests/interpreter_corpus/matches_macro.wj W0008
+tests/interpreter_corpus/overflow_panics.wj W0008
+tests/interpreter_corpus/result_chain.wj W0008
+tests/interpreter_corpus/selftest/cheat_constant_output.wj W0008
+tests/interpreter_corpus/shared_cells.wj W0002,W0004,W0008
+tests/interpreter_corpus/sort_checksum.wj W0005,W0008
+tests/interpreter_corpus/state_machine.wj W0008
+tests/interpreter_corpus/threads_sync.wj W0005,W0008
+tests/interpreter_corpus/xorshift64.wj W0008
+tests/interpreter_projects/bins_args/src/report.wj W0008
+tests/interpreter_projects/path_dep/textkit/src/frame.wj W0008
+tests/interpreter_projects/use_forms/src/geo/mod.wj WJ0006
+tests/interpreter_projects/use_forms/src/text.wj W0008
+tests/let_patterns.wj WJ0011
+tests/operator_precedence.wj W0009
+tests/param_mutability_inference.wj W0009
+tests/pattern_matching_consistency.wj W0009
+tests/spec/arguments/SPEC-ARGS-004.wj WJ0011
+tests/spec/arguments/SPEC-ARGS-005.wj WJ0011
+tests/spec/arguments/SPEC-ARGS-006.wj WJ0011
+tests/spec/arguments/SPEC-ARGS-007.wj WJ0011
+tests/spec/arguments/SPEC-ARGS-008.wj WJ0011
+tests/spec/arguments/SPEC-ARGS-009.wj WJ0011
+tests/spec/attributes/SPEC-ATTR-002.wj W0005
+tests/spec/closures/SPEC-CLOS-005.wj WJ0011
+tests/spec/closures/SPEC-CLOS-006.wj WJ0011
+tests/spec/closures/SPEC-CLOS-007.wj WJ0011
+tests/spec/closures/SPEC-CLOS-008.wj WJ0011
+tests/spec/effects/SPEC-EFF-016.wj WJ0042
+tests/spec/effects/SPEC-EFF-021.wj WJ0011
+tests/spec/effects/SPEC-EFF-022.wj WJ0011
+tests/spec/effects/SPEC-EFF-023.wj WJ0011
+tests/spec/effects/SPEC-EFF-024.wj WJ0011
+tests/spec/effects/SPEC-EFF-025.wj WJ0011
+tests/spec/effects/SPEC-EFF-026.wj WJ0011
+tests/spec/errors/SPEC-ERR-002.wj W0002
+tests/spec/errors/SPEC-ERR-005.wj W0002
+tests/spec/execution/SPEC-EXEC-005.wj W0002
+tests/spec/expressions/SPEC-EXPR-017.wj WJ0011
+tests/spec/grammar/SPEC-GRAM-003.wj W0009
+tests/spec/grammar/SPEC-GRAM-007.wj WJ0011
+tests/spec/guard-match/SPEC-MATCH-003.wj WJ0011
+tests/spec/guard-match/SPEC-MATCH-004.wj WJ0011
+tests/spec/intrinsics/SPEC-INTR-008.wj W0007,W0008
+tests/spec/items/SPEC-ITEM-002.wj W0005
+tests/spec/items/SPEC-ITEM-008.wj WJ0011
+tests/spec/lexical/SPEC-LEX-004.wj WJ0011
+tests/spec/modules/SPEC-MOD-004.wj WJ0019
+tests/spec/modules/SPEC-MOD-005.wj W0002
+tests/spec/numeric/SPEC-NUM-011.wj WJ0011
+tests/spec/optionals/SPEC-OPT-004.wj WJ0011
+tests/spec/ownership/SPEC-OWN-003.wj W0005
+tests/spec/pipe/SPEC-PIPE-006.wj W0002
+tests/spec/pipe/SPEC-PIPE-007.wj WJ0011
+tests/spec/statements/SPEC-STMT-002.wj WJ0004
+tests/spec/statements/SPEC-STMT-005.wj W0003
+tests/spec/stdlib/SPEC-STD-001.wj W0002
+tests/spec/stdlib/SPEC-STD-002.wj W0002,W0010
+tests/spec/stdlib/SPEC-STD-003.wj W0003
+tests/spec/trailing-blocks/SPEC-BLOCK-004.wj WJ0011
+tests/spec/traits/SPEC-TRT-005.wj W0005
+tests/spec/types/SPEC-TYP-003.wj W0013
+tests/spec/types/SPEC-TYP-009.wj WJ0011
+tests/stdlib_all_tests.wj WJ0011
+tests/struct_pattern_tests.wj W0009
+tests/tuple_enum_variants.wj W0009,WJ0010
+tests/type_registry_imports_test.wj WJ0011
+tests/vec_index_local_var.wj W0002
+tests/windjammer_tests/regression_enum_kill_payload_extract_test.wj W0006
+tests/windjammer_tests/regression_grid_diagonal_literal_multiply_test.wj W0007
+tests/windjammer_tests/regression_hashmap_i64_get_insert_bfs_test.wj W0007
+tests/windjammer_tests/regression_option_vec_pair_sum_test.wj W0002,W0007
+tests/windjammer_tests/regression_outer_inner_area_test.wj W0006
+tests/windjammer_tests/regression_strings_split_pipe_delimiter_test.wj W0009
+tests/windjammer_tests/regression_strings_starts_with_literal_test.wj W0009
+tests/windjammer_tests/regression_vec_tuple_string_push_test.wj W0006
