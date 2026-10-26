@@ -1,0 +1,8 @@
+// allow: env.read=HOME
+use std::env
+fn main() {
+    match env::home_dir() {
+        Some(h) => println("home: ${h}"),
+        None => println("no home"),
+    }
+}

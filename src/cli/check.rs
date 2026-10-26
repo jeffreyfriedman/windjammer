@@ -98,10 +98,13 @@ fn watch_loop(root: &Path, json: bool, fix: bool) -> Result<()> {
 /// Runs the same front-end checks as `wj check`; on any error-level diagnostic prints them and
 /// returns `Err` so the caller refuses to execute the program. Warnings do not block.
 pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
-    // No cache: running a program must not write `.wj-cache` files next to it.
+    // Cached only inside a project (`wj.toml`): results go to its `.wj-cache/`, the build's cache directory; a
+    // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
+    // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
+    let use_cache = check::effects::manifest_path(path).is_some();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
-    let checked = check::check_path(path, &CheckOptions { use_cache: false });
+    let checked = check::check_path(path, &CheckOptions { use_cache });
     std::panic::set_hook(previous);
     let checked = checked?;
     // `--no-lint`: Rust-leakage lints (W####) do not stop the run; every other error does.

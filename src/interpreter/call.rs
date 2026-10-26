@@ -509,6 +509,14 @@ impl Interpreter {
         if self.caps.is_some() {
             self.cap_gate(path, &args)?;
         }
+        if self.port.is_some() && super::effect_port::routed(path) {
+            return self.port_call(path, args);
+        }
+        self.call_builtin_live(path, args)
+    }
+
+    /// The builtin itself, after the capability gate and the effect port.
+    pub(crate) fn call_builtin_live(&mut self, path: &str, args: Vec<Value>) -> R {
         if let Some(r) = super::builtins::assoc_numeric(self, path, &args) {
             return r;
         }
@@ -940,6 +948,25 @@ impl Interpreter {
         }
         let kind = Kind::of(&recv);
         let imp = self.builtins.method(kind, method);
+        self.run_builtin_method(imp, kind, recv, place, method, args)
+    }
+
+    /// Does `call_builtin_method` dispatch `recv` by its kind alone (so the implementation found for
+    /// a kind can be reused for every receiver of that kind)?
+    pub(crate) fn builtin_by_kind(recv: &Value) -> bool {
+        !matches!(recv, Value::Int(_, super::int::IntTy::U128) | Value::Native(_) | Value::Struct(_))
+    }
+
+    /// The second half of `call_builtin_method`: run `imp`, the registry's method `method` for `kind`.
+    pub(crate) fn run_builtin_method(
+        &mut self,
+        imp: Option<MethodImpl>,
+        kind: Kind,
+        recv: Value,
+        place: Option<Place>,
+        method: &str,
+        args: Vec<Value>,
+    ) -> R {
         match imp {
             Some(MethodImpl::Pure(f)) => f(self, &recv, args),
             Some(MethodImpl::Mut(f)) => {

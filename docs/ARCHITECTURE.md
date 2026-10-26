@@ -45,7 +45,8 @@ Principles and fitness tests: plan sections 2 and 4. The layering is encoded in 
 ```
 
 - **Entry points:** `wj build/run/test/...` (`src/bin/wj.rs`, `wj_cli_args.rs`, `wj_cli_cmds.rs`) and the older `windjammer`
-  binary (`src/main.rs`, `cli_args.rs`, `cli_commands.rs`, which also has `eject`). Single-file and multipass project
+  binary (`src/main.rs`, `cli_args.rs`, `cli_commands.rs`). `wj eject` (`src/ejector.rs`) runs the build pipeline and vendors
+  path dependencies into a standalone Cargo project. Single-file and multipass project
   builds are in `src/compiler/compilation_pipeline.rs`; Salsa-backed library builds in `src/compiler/salsa_library_build.rs`
   and `src/compiler_database.rs`.
 - **Lexer/parser:** `src/lexer`, `src/parser`. Keywords include `thread`, `async`, `await`, `defer`, `extern`, `unsafe`,

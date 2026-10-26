@@ -1,0 +1,16 @@
+use std::random
+use std::sync
+fn main() {
+    let (tx, rx) = sync::channel()
+    scope {
+        for i in 0..4 {
+            let t = tx
+            spawn {
+                t.send(i * 100 + random::range(0, 100))
+            }
+        }
+    }
+    for _ in 0..4 {
+        println("${rx.recv()}")
+    }
+}

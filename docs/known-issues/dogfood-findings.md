@@ -75,3 +75,16 @@ These need ownership or width decisions in the IR solver rather than local patch
 | same-name private structs, `json.parse_string` target from later use, `ServerRequest` literal (interpreter) | fixed |
 | untyped counter vs `len()`, push literal width from return type, loop variable vs literal inside `if` | open, numeric solver (ADR-0015 / C4) |
 | call-site `&T`/`T` mismatches across modules | not reproduced in minimal projects (guards added) |
+
+## Batch 3 (large multi-crate program)
+
+Tests: `tests/compiler_findings_batch3_test.rs` (each emits Rust for a small program and requires rustc to accept it).
+
+| Test | Status |
+|---|---|
+| `user_to_bytes_method_replaces_the_generated_one` | fixed (the GPU `to_bytes` is skipped when the type has its own) |
+| `slice_to_string_is_not_borrowed_after_conversion` | fixed (`s[a..].to_string()` converts the slice, no leading `&`; a receiver slice is parenthesised) |
+| `f64_from_bits_has_a_boundary_signature`, `u64_literals_above_i64_max_lex_and_emit`, `if_else_literal_arm_takes_u64_from_vec_element`, `nested_vec_literals_follow_i64_formal`, `cross_module_readonly_param_stays_borrowed`, `user_get_method_called_across_modules_keeps_owned_formals` | pass (guards) |
+| `user_method_named_contains_keeps_its_owned_formal` | open: `self.contains(r.k)` on a user method named like a std lookup emits `self.contains(&r.k)`; the borrow is added in the method-argument finalize stage by a name-keyed rule that the type-qualified guards tried so far do not reach |
+| `comparison_of_u64_local_with_literal_inside_struct_if`, `negative_literal_in_enum_payload_is_typed_by_the_variant`, `len_if_expression_in_i32_function_stays_usize`, `len_compared_with_literal_sum_stays_usize`, `counter_compared_with_len_in_swap_loop_stays_usize` | open, numeric solver (C4). The last one is not caused by a user `len` method (renaming it changes nothing): an untyped counter compared with `len()` in a function that does not return the counter is cast inconsistently |
+| `field_moved_into_function_keeps_mut_self_callers_valid`, `field_passed_to_extern_fn_keeps_borrowed_receiver` | open, ownership (convergence): a field passed bare to a function or `extern fn` makes the method take `self` by value |

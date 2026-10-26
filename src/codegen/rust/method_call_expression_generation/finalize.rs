@@ -19,6 +19,13 @@ impl<'ast> CodeGenerator<'ast> {
         prev_float_target: Option<Type>,
     ) -> String {
         let (mut obj_str, mut args) = (obj_str, args);
+        // `s[a..].len()`: the desugared slice is `&s[a..]`; as a receiver it needs parentheses,
+        // or the method applies to the indexed value and the borrow wraps the result.
+        if matches!(object, Expression::MethodCall { method: m, arguments: a, .. } if m == "slice" && a.len() == 2)
+            && obj_str.starts_with('&')
+        {
+            obj_str = format!("({obj_str})");
+        }
         if let Some(done) = self.mc_fix_std_idiom_call(object, method, arguments, &mut obj_str, &mut args) { return done; }
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);

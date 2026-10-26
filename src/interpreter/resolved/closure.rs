@@ -27,7 +27,8 @@ pub(crate) struct CompiledClosure {
     params: Vec<Option<usize>>,
     /// Environment names the body uses: (position in the environment, boxed slot).
     free: Vec<(usize, usize)>,
-    /// The parameters' (boxed) slots: lock guards they hold are poisoned on a panic.
+    /// The parameters' boxed slots: lock guards they hold are poisoned on a panic. A parameter the
+    /// body only reads is a plain slot (no walker slot per call); it takes plain values only.
     boxed: Vec<usize>,
     body: Code,
 }
@@ -52,9 +53,10 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
     }
     free.reverse();
     let unit = Unit { module, ret: None, self_ty, tail_hint: false };
-    // environment names and parameters are boxed: the walker binds a parameter to whatever it is
-    // given (an `iter_mut` item is a reference), and boxed reads follow references as `eval` does
-    let boxed_init: HashSet<usize> = (0..free.len() + names.len()).collect();
+    // environment names are boxed (their slots are the environment's). A parameter is boxed only
+    // when the body needs its walker slot (islands, borrows, captures); a plain one is given plain
+    // values only: a call passing a reference to it (an `iter_mut` item) runs in the walker
+    let boxed_init: HashSet<usize> = (0..free.len()).collect();
     let (nslots, pslots, body_code, boxed) = fixpoint(it, &unit, boxed_init, |cx| {
         let free_slots: Vec<usize> = free.iter().map(|n| cx.declare_local(n)).collect();
         debug_assert!(free_slots.iter().enumerate().all(|(i, s)| i == *s));
@@ -98,6 +100,10 @@ impl Interpreter {
         if let Err(e) = self.depth_check() {
             return Some(Err(e));
         }
+        // a reference for a plain parameter: the walker binds it (reads follow it there)
+        if cc.params.iter().zip(args.iter()).any(|(p, a)| matches!(p, Some(s) if !cc.boxed.contains(s)) && matches!(a, Value::Ref(_))) {
+            return None;
+        }
         let base = self.rstack.len();
         self.rstack.resize(base + cc.nslots, Value::Unit);
         for (pos, s) in &cc.free {
@@ -106,7 +112,7 @@ impl Interpreter {
         for (i, p) in cc.params.iter().enumerate() {
             let a = if i < args.len() { std::mem::replace(&mut args[i], Value::Unit) } else { Value::Unit };
             if let Some(s) = p {
-                self.rstack[base + s] = super::island::boxed(a);
+                self.rstack[base + s] = if cc.boxed.contains(s) { super::island::boxed(a) } else { a };
             }
         }
         let mut scope = Scope::new(*module);
