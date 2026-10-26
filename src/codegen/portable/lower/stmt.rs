@@ -170,7 +170,7 @@ impl<'e> Lowerer<'e> {
         match s {
             Statement::Let { pattern, mutable, type_, value, else_block, .. } => self.let_stmt(pattern, *mutable, type_.as_ref(), value, else_block.as_deref()),
             Statement::Const { name, type_, value, .. } | Statement::Static { name, type_, value, .. } => {
-                let ty = from_ast(type_, &self.generics);
+                let ty = from_ast(type_, &self.generics, &self.env.aliases);
                 let init = self.expr(value, Some(&ty))?;
                 let out = self.declare(name, ty.clone(), false);
                 Ok(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }])
@@ -240,8 +240,23 @@ impl<'e> Lowerer<'e> {
     }
 
     fn let_stmt(&mut self, pattern: &Pattern, mutable: bool, ty: Option<&crate::parser::Type>, value: &Expression, els: Option<&[&Statement]>) -> PResult<Vec<PStmt>> {
-        let declared = ty.map(|t| from_ast(t, &self.generics)).map(|t| self.freshen(&t));
+        if let (Expression::Unary { op: UnaryOp::MutRef, operand, .. }, Pattern::Identifier(name) | Pattern::MutBinding(name)) = (value, pattern) {
+            if let Some(stmts) = self.let_mut_borrow(name, operand)? {
+                return Ok(stmts);
+            }
+        }
+        let declared = ty.map(|t| from_ast(t, &self.generics, &self.env.aliases)).map(|t| self.freshen(&t));
         let mut init = self.expr(value, declared.as_ref())?;
+        // `let p = arena.get_mut(h)`: `p` aliases the arena slot (the prelude's `get_mut` lowers to a place).
+        if let (Expression::MethodCall { method, .. }, Pattern::Identifier(name) | Pattern::MutBinding(name)) = (value, pattern) {
+            if method == "get_mut" && init.is_place() && super::arena::is_slot_place(&init) {
+                let ty = init.ty.clone();
+                let out = self.declare(name, ty.clone(), true);
+                let line = init.line;
+                let init = PExpr::new(ty.clone(), PK::BorrowMut(init)).at(line);
+                return Ok(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }]);
+            }
+        }
         if let Some(d) = &declared {
             self.constrain(d, &init.ty);
         }
@@ -258,10 +273,8 @@ impl<'e> Lowerer<'e> {
         match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => {
                 let out = self.declare(name, ty.clone(), false);
+                self.set_fresh(name);
                 let m = mutable || matches!(pattern, Pattern::MutBinding(_));
-                if m {
-                    self.set_mutable(name);
-                }
                 Ok(vec![PStmt::Let { name: out, ty, mutable: m, init: Some(init) }])
             }
             Pattern::Wildcard => Ok(vec![PStmt::Expr(init)]),
@@ -271,6 +284,23 @@ impl<'e> Lowerer<'e> {
                 Ok(vec![PStmt::LetPat { pat, init, els }])
             }
         }
+    }
+
+    /// `let r = &mut place`: `r` aliases the place (never a copy). A `&mut` of a temporary is an
+    /// unaliased value and takes the ordinary path (`None`).
+    fn let_mut_borrow(&mut self, name: &str, operand: &Expression) -> PResult<Option<Vec<PStmt>>> {
+        if !matches!(operand, Expression::Identifier { .. } | Expression::FieldAccess { .. } | Expression::Index { .. }) {
+            return Ok(None);
+        }
+        let place = self.expr(operand, None)?;
+        if !place.is_place() {
+            return self.err("`&mut` of an expression that is not a place");
+        }
+        let ty = place.ty.clone();
+        let out = self.declare(name, ty.clone(), true);
+        let line = place.line;
+        let init = PExpr::new(ty.clone(), PK::BorrowMut(place)).at(line);
+        Ok(Some(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }]))
     }
 
     fn assignment(&mut self, target: &Expression, value: &Expression, op: Option<&CompoundOp>) -> PResult<Vec<PStmt>> {

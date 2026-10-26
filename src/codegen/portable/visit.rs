@@ -39,6 +39,10 @@ fn types_in_pat(p: &mut PPat, v: TyFn) {
         }
         PPat::Tuple(ps) | PPat::Or(ps) => ps.iter_mut().for_each(|p| types_in_pat(p, v)),
         PPat::Variant { fields, .. } => fields.iter_mut().for_each(|(_, p)| types_in_pat(p, v)),
+        PPat::Struct { fields, .. } => fields.iter_mut().for_each(|(_, t, p)| {
+            v(t);
+            types_in_pat(p, v)
+        }),
         PPat::Some(p) | PPat::Ok(p) | PPat::Err(p) => types_in_pat(p, v),
         PPat::Wild | PPat::Bind { .. } | PPat::None => {}
     }
@@ -109,7 +113,7 @@ fn types_in_arm(a: &mut PArm, v: TyFn) {
 
 pub fn children_mut(k: &mut PK) -> Vec<&mut PExpr> {
     match k {
-        PK::Unary(_, a) | PK::Cast(a, _) | PK::Field(a, _) | PK::TupleIdx(a, _) | PK::Some(a) | PK::Ok(a) | PK::Err(a) | PK::Copy(a) | PK::Panic(a) => vec![a],
+        PK::Unary(_, a) | PK::Cast(a, _) | PK::Field(a, _) | PK::TupleIdx(a, _) | PK::Some(a) | PK::Ok(a) | PK::Err(a) | PK::Copy(a) | PK::BorrowMut(a) | PK::Panic(a) => vec![a],
         PK::Try { expr, .. } => vec![expr],
         PK::Binary(_, a, b) | PK::Index(a, b) | PK::VecRepeat(a, b) => vec![a, b],
         PK::Range { start, end, .. } => vec![start, end],
@@ -128,9 +132,8 @@ pub fn types_in_expr(e: &mut PExpr, v: TyFn) {
     v(&mut e.ty);
     match &mut *e.kind {
         PK::Cast(_, t) => v(t),
-        PK::Closure { params, ret, body, captures } => {
+        PK::Closure { params, ret, body } => {
             params.iter_mut().for_each(|(_, t)| v(t));
-            captures.iter_mut().for_each(|(_, t)| v(t));
             v(ret);
             types_in_block(body, v);
         }
@@ -149,99 +152,5 @@ pub fn types_in_expr(e: &mut PExpr, v: TyFn) {
     }
     for c in children_mut(&mut e.kind) {
         types_in_expr(c, v);
-    }
-}
-
-/// Visit every expression (pre-order) in a block, including nested statements, arms and closures.
-pub fn exprs_in_block(b: &mut PBlock, f: &mut dyn FnMut(&mut PExpr)) {
-    for s in b.stmts.iter_mut() {
-        exprs_in_stmt(s, f);
-    }
-    if let Some(t) = &mut b.tail {
-        exprs_in_expr(t, f);
-    }
-}
-
-pub fn exprs_in_stmts(ss: &mut [PStmt], f: &mut dyn FnMut(&mut PExpr)) {
-    ss.iter_mut().for_each(|s| exprs_in_stmt(s, f));
-}
-
-fn exprs_in_arm(a: &mut PArm, f: &mut dyn FnMut(&mut PExpr)) {
-    if let Some(g) = &mut a.guard {
-        exprs_in_expr(g, f);
-    }
-    exprs_in_block(&mut a.body, f);
-}
-
-pub fn exprs_in_stmt(s: &mut PStmt, f: &mut dyn FnMut(&mut PExpr)) {
-    match s {
-        PStmt::Let { init, .. } => {
-            if let Some(e) = init {
-                exprs_in_expr(e, f);
-            }
-        }
-        PStmt::LetPat { init, els, .. } => {
-            exprs_in_expr(init, f);
-            if let Some(b) = els {
-                exprs_in_stmts(b, f);
-            }
-        }
-        PStmt::Assign { target, value, .. } => {
-            exprs_in_expr(target, f);
-            exprs_in_expr(value, f);
-        }
-        PStmt::Expr(e) => exprs_in_expr(e, f),
-        PStmt::If { cond, then, els } => {
-            exprs_in_expr(cond, f);
-            exprs_in_stmts(then, f);
-            exprs_in_stmts(els, f);
-        }
-        PStmt::While { cond, body } => {
-            exprs_in_expr(cond, f);
-            exprs_in_stmts(body, f);
-        }
-        PStmt::Loop { body } | PStmt::Block(body) => exprs_in_stmts(body, f),
-        PStmt::ForRange { start, end, body, .. } => {
-            exprs_in_expr(start, f);
-            exprs_in_expr(end, f);
-            exprs_in_stmts(body, f);
-        }
-        PStmt::ForIn { iter, body, .. } => {
-            exprs_in_expr(iter, f);
-            exprs_in_stmts(body, f);
-        }
-        PStmt::Match { scrutinee, arms } => {
-            exprs_in_expr(scrutinee, f);
-            arms.iter_mut().for_each(|a| exprs_in_arm(a, f));
-        }
-        PStmt::Return(e) => {
-            if let Some(e) = e {
-                exprs_in_expr(e, f);
-            }
-        }
-        PStmt::Defer(s) => exprs_in_stmt(s, f),
-        PStmt::Labeled { stmt, .. } => exprs_in_stmt(stmt, f),
-        PStmt::Break | PStmt::Continue | PStmt::BreakTo(_) | PStmt::ContinueTo(_) => {}
-    }
-}
-
-pub fn exprs_in_expr(e: &mut PExpr, f: &mut dyn FnMut(&mut PExpr)) {
-    f(e);
-    match &mut *e.kind {
-        PK::Closure { body, .. } => exprs_in_block(body, f),
-        PK::If { cond, then, els } => {
-            exprs_in_expr(cond, f);
-            exprs_in_block(then, f);
-            exprs_in_block(els, f);
-        }
-        PK::Match { scrutinee, arms } => {
-            exprs_in_expr(scrutinee, f);
-            arms.iter_mut().for_each(|a| exprs_in_arm(a, f));
-        }
-        PK::Block(b) => exprs_in_block(b, f),
-        _ => {}
-    }
-    for c in children_mut(&mut e.kind) {
-        exprs_in_expr(c, f);
     }
 }

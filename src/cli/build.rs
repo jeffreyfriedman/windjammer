@@ -7,30 +7,30 @@ use colored::*;
 use std::path::Path;
 
 /// `--metadata NAME=PATH` is repeatable; one flag may also list `NAME=PATH,NAME=PATH`.
-fn parse_external_metadata_args(metadata: &[String]) -> Vec<(&str, &Path)> {
-    metadata
-        .iter()
-        .flat_map(|s| s.split(','))
-        .filter_map(|part| {
-            let part = part.trim();
-            let (name, path_str) = part.split_once('=')?;
-            let name = name.trim();
-            let path_str = path_str.trim();
-            if name.is_empty() || path_str.is_empty() {
-                return None;
-            }
-            Some((name, Path::new(path_str)))
-        })
-        .collect()
+/// Malformed entries and paths that do not exist are errors (they used to be dropped silently).
+fn parse_external_metadata_args(metadata: &[String]) -> Result<Vec<(&str, &Path)>> {
+    let mut out = Vec::new();
+    for part in metadata.iter().flat_map(|s| s.split(',')) {
+        let part = part.trim();
+        let Some((name, path_str)) = part.split_once('=') else {
+            anyhow::bail!("invalid --metadata '{part}': expected NAME=PATH (e.g. --metadata mylib=../mylib/build/metadata.json)");
+        };
+        let (name, path_str) = (name.trim(), path_str.trim());
+        if name.is_empty() || path_str.is_empty() {
+            anyhow::bail!("invalid --metadata '{part}': both NAME and PATH must be non-empty (expected NAME=PATH)");
+        }
+        if !Path::new(path_str).exists() {
+            anyhow::bail!("--metadata {name}: path not found: {path_str}");
+        }
+        out.push((name, Path::new(path_str)));
+    }
+    Ok(out)
 }
 
 /// Build options for JavaScript target
 pub struct BuildOptions {
-    pub minify: bool,
     pub tree_shake: bool,
     pub source_maps: bool,
-    pub polyfills: bool,
-    pub v8_optimize: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -59,21 +59,33 @@ pub fn execute(
     // Driver edge: the one place the environment is turned into explicit configuration.
     let config = crate::compiler_config::CompilerConfig::from_env()
         .with_shadow_validate_strict(ir_shadow_validate)
-        .with_skip_cargo_toml_generation(no_generate_cargo_toml);
+        .with_skip_cargo_toml_generation(no_generate_cargo_toml)
+        .with_emit_source_maps(options.source_maps || check);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
+    if !path.exists() {
+        anyhow::bail!("path not found: {}", path.display());
+    }
+    // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
+    let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
+
+    if target_str.eq_ignore_ascii_case("rust") {
+        if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
+            crate::package::path_deps::build_missing(&root)?;
+        }
+    }
 
     if json_output {
-        return build_with_json_output(
+        let external_metadata = parse_external_metadata_args(metadata)?;
+        return super::build_json::run(super::build_json::JsonBuild {
             path,
             output_dir,
             target_str,
-            check,
+            run_cargo_check: check,
             library,
-            module_file,
             enable_lint,
-            &config,
-            metadata,
-        );
+            config: &config,
+            external_metadata: &external_metadata,
+        });
     }
 
     println!(
@@ -90,13 +102,13 @@ pub fn execute(
         "javascript" | "js" | "typescript" | "ts" | "go" | "golang" => {
             use crate::codegen::backend::{CodegenConfig, Target};
             let target: Target = target_str.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+            // ADR-0021: capability findings stop the build; the program installs its grant only when needed
+            let flavor = if target == Target::Go { super::build_caps::Flavor::Go } else { super::build_caps::Flavor::JavaScript };
             let config = CodegenConfig {
                 target,
                 output_dir: output_dir.to_path_buf(),
-                minify: options.minify,
                 tree_shake: options.tree_shake,
-                polyfills: options.polyfills,
-                v8_optimize: options.v8_optimize,
+                capability_install: super::build_caps::prepare_for(path, library, flavor)?,
                 ..Default::default()
             };
             return build_portable(path, &config, options.source_maps);
@@ -120,7 +132,7 @@ pub fn execute(
         }
     };
 
-    let external_metadata = parse_external_metadata_args(metadata);
+    let external_metadata = parse_external_metadata_args(metadata)?;
 
     crate::build_project_with_config(
         path,
@@ -200,68 +212,6 @@ pub fn execute(
         );
         println!("Run cargo build manually:");
         println!("  cd {:?} && cargo build", output_dir);
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_with_json_output(
-    path: &Path,
-    output_dir: &Path,
-    target_str: &str,
-    _check: bool,
-    library: bool,
-    _module_file: bool,
-    enable_lint: bool,
-    config: &crate::compiler_config::CompilerConfig,
-    metadata: &[String],
-) -> Result<()> {
-    use crate::cli::json_diagnostics::{JsonCompilationOutput, JsonDiagnostic, Severity};
-
-    let external_metadata = parse_external_metadata_args(metadata);
-
-    let target = match target_str.to_lowercase().as_str() {
-        "rust" => crate::CompilationTarget::Rust,
-        _ => {
-            let mut output = JsonCompilationOutput::new_failure();
-            output.add_error(format!(
-                "JSON output mode only supports Rust target, got: {}",
-                target_str
-            ));
-            output.emit_to_stdout();
-            return Ok(());
-        }
-    };
-
-    match crate::build_project_with_config(
-        path,
-        output_dir,
-        target,
-        enable_lint,
-        library,
-        &external_metadata,
-        config,
-    ) {
-        Ok(()) => {
-            let mut output = JsonCompilationOutput::new_success();
-            if library {
-                output.add_warning("Library mode: main() functions stripped".to_string());
-            }
-            output.emit_to_stdout();
-        }
-        Err(e) => {
-            let mut output = JsonCompilationOutput::new_failure();
-            output.diagnostics.push(JsonDiagnostic {
-                code: None,
-                severity: Severity::Error,
-                message: format!("{}", e),
-                span: None,
-                maturity: None,
-                repair_hint: None,
-            });
-            output.emit_to_stdout();
-        }
     }
 
     Ok(())
@@ -585,7 +535,7 @@ fn check_with_cargo(
 }
 
 /// Load and merge all source maps from the output directory
-fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
+pub(crate) fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
     use std::fs;
 
     let mut merged_map = crate::source_map::SourceMap::new();
@@ -631,12 +581,12 @@ fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
     }
 
     if map_count == 0 {
-        println!(
+        eprintln!(
             "{} No source maps found. Error locations may be inaccurate.",
             "Warning:".yellow().bold()
         );
     } else {
-        println!(
+        eprintln!(
             "{} Loaded {} source map(s) with {} mapping(s)",
             "Info:".cyan(),
             map_count,

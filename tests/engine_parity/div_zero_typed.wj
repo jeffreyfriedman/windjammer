@@ -1,0 +1,11 @@
+fn q(a: int, b: int) -> int {
+    a % b + a / b
+}
+fn main() {
+    println("${q(17, 5)}")
+    let mut d = 3
+    while d >= 0 {
+        println("${q(100, d)}")
+        d -= 1
+    }
+}

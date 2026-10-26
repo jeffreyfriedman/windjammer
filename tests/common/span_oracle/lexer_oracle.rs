@@ -39,6 +39,25 @@ pub fn check_trivia(gap: &str) -> Result<(), String> {
         }
         if c.is_whitespace() {
             rest = &rest[c.len_utf8()..];
+        } else if rest.starts_with("/*") {
+            // (nested) block comment; may contain newlines
+            let b = rest.as_bytes();
+            let (mut depth, mut i) = (1usize, 2usize);
+            while depth > 0 {
+                if i + 1 >= b.len() {
+                    return Err("unterminated block comment inside a trivia gap".into());
+                }
+                if b[i] == b'/' && b[i + 1] == b'*' {
+                    depth += 1;
+                    i += 2;
+                } else if b[i] == b'*' && b[i + 1] == b'/' {
+                    depth -= 1;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            rest = &rest[i..];
         } else if rest.starts_with("//") {
             let is_doc = rest.starts_with("///") && !rest.starts_with("////");
             if is_doc {

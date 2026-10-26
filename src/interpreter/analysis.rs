@@ -17,7 +17,8 @@ pub fn analyze(it: &mut Interpreter, f: &Rc<FuncDef>) -> (Vec<bool>, bool) {
     let mut out = Vec::new();
     for p in f.params.iter().filter(|p| p.name != "self") {
         let by_type = matches!(p.type_, Type::MutableReference(_));
-        out.push(by_type || set.contains(p.name.as_str()));
+        // a `mut` parameter is an owned local copy (Rust: by value); only inferred `&mut` writes through
+        out.push(by_type || (!p.is_mutable && set.contains(p.name.as_str())));
     }
     let self_mut = set.contains("self")
         || f.params.first().map(|p| p.name == "self" && p.ownership == crate::parser::OwnershipHint::Mut).unwrap_or(false);

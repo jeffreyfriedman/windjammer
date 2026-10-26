@@ -123,6 +123,7 @@ pub enum Token {
     ColonColon, // :: (for turbofish and paths)
     Semicolon,
     Question,
+    QuestionQuestion, // ?? (option default, ADR-0018: `x ?? d`)
     Ampersand,  // &
     Pipe,       // |
     PipeOp,     // |> (pipe operator)
@@ -192,6 +193,11 @@ pub struct TokenWithLocation {
     pub line: usize,
     /// 1-based column (in chars) of the first character of the token.
     pub column: usize,
+    /// The true source position of the token start. Equals `line`/`column` for lexer output; the
+    /// parser rebases `line`/`column` of string-interpolation bodies onto synthetic identity keys
+    /// (numeric inference), so diagnostics and spans read these two fields instead.
+    pub src_line: usize,
+    pub src_column: usize,
     /// 0-based byte offset of the token start.
     pub byte_start: usize,
     /// 0-based byte offset one past the token end (half-open).

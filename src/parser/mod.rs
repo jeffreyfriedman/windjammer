@@ -28,9 +28,15 @@ mod interpolated_string_expression_parser;
 mod intrinsic_lowering;
 mod match_value_expression_parser;
 mod matches_macro;
+mod guard_match;
+pub(crate) mod named_args;
+pub mod optional_chain;
 mod pipe_parser;
 mod primary_expression_parser;
 pub mod span_log;
+pub(crate) mod shorthand_closure;
+pub mod task_prefix;
+mod trailing_block;
 
 // Statement parsing module - extracted from parser_impl.rs
 pub mod statement_parser;

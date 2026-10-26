@@ -1,0 +1,9 @@
+// spec: SPEC-ATTR-001
+// expect: 1
+@derive(Debug)
+@custom_tag(level: 3)
+struct P { x: int }
+fn main() {
+    let p = P { x: 1 }
+    println("${p.x}")
+}

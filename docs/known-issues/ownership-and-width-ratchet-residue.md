@@ -74,3 +74,82 @@ measured with. WP 3 (state into `CompilationSession`) removes the cause.
   rustc clean. Needs the actual 10-formal `audit_canonical_payload` sources to bisect.
 * `loop-var-field-move-reused-collection`: `for item in items { next = item.field; break }` followed by a second
   `for item in items` emits `for item in &items` twice and clones the moved field; no repro.
+
+## 7. Codegen-correctness stream (2026-10-11): fixed, gated, and still open
+
+Gate: `tests/codegen_correctness_test.rs` (also `cargo test --test codegen_correctness`). Hand-written repros with an
+independent `// expect:` oracle live in `tests/codegen_correctness_corpus/`; seeded generated programs per class
+(`gate_*`, `WJ_CODEGEN_GATE_SEEDS=n`) run both `wj run --interpret` and `wj build --no-cargo` + `rustc` and shrink a failing
+program unit by unit. `// interp-gap:` marks a program the interpreter evaluates wrongly; the compiled output must still equal
+the expectation. The verified corpus (`examples/verified`, `// rust: gap`) is the second gate: the gap programs now compile
+and match (the header was flipped to `// rust: ok`).
+
+Fixed (each with a corpus program): by-reference closure capture for let-bound closures that never escape
+(`closure_escape.rs`); `fn(..)` formals and returns emitted as `impl Fn`; `let .. else`; `"x" + n.to_string()`; inline `mod` +
+`use` (functions were emitted twice); hand-written `impl PartialEq` vs the inferred derive and `&Self` formals; `impl Trait for
+int`; `map[key]` with a `&str`/`String` key; `map.get(&k)` with an owned `String` local; `get(..).unwrap_or(0)` /
+`unwrap_or(&0)` / `lines().next().unwrap_or("0")`; `cmp(&x)`; open slices `s[a..]`; `*tok == "lit"`; `return if ..` in a unit
+block; integer widths through `${..}` interpolation, closure bodies, `&x`, and `max/min/abs` on integers; `&mut self` for
+`Iterator::next`, `self.helper()?`, and loop variables whose field is mutated (`for i in self.list { i.c.inc() }`);
+`o.ok_or(e)?` / `r?` on a parameter (owned); parameters moved into a spawned closure (owned); `JoinHandle` pushed by move;
+spawn closure tail values; `let mut i: int = 0` with a literal `while` bound; `--library --module-file` writes `mod.rs` for
+directories whose `mod.wj` is their only file; direct adapters on collections (`v.map(..)`, `v.sum()`).
+
+Still open (needs the numeric/ownership convergence, not another local heuristic):
+* unconstrained integer literals default to `i32` (`let v = [1, 2, 3]; v.map(..).collect()` into `Vec<int>` needs the result
+  type to flow back through iterator adapters); `for x in rx { prev = x }` with `let mut prev = 0`.
+* `let c = self.items[i]; c.inc()` clones the element: Windjammer's value semantics versus the interpreter's aliasing is
+  undecided (needs an ADR).
+* codegen still re-decides loop/for borrow mutability (`iteration_borrow_dispatch.rs`) separately from the analyzer's `&mut self`
+  rule: both were extended with the same field-chain walk (`for_loop_over_self_field_triggers_mut_self`); WP 9 should leave one.
+* the interpreter copies loop elements (`for i in self.list { i.c.inc() }` mutates nothing); and has no threads/channels.
+* `ExprId` is `(line, column)` of the token *after* an expression, so `x`, `x * 2` and an enclosing closure can share an id;
+  interpolation sub-expressions are now rebased onto unique columns. Keying by node identity is part of WP 8.
+
+## Cross-module trait field access keeps an owned parameter (`cross_module_ownership_test::cross_module_trait_field_access_inferred_borrowed`)
+
+```windjammer
+// composition/login.wj
+pub fn login(deps: AppDeps, token: string) -> Result<string, string> {
+    let claims = match deps.verifier.verify(token) { Ok(v) => v, Err(m) => return Err(m) }
+    deps.issuer.issue(claims.sub, claims.email)
+}
+```
+
+`deps` is only read (a field access and two `&self` trait-method calls) but is emitted as `deps: AppDeps` instead of
+`deps: &AppDeps`. The trait methods are declared in another module (`ports/auth.wj`), so at analysis time the callee's
+receiver mode is unknown and the conservative answer is "owned". Same class as the multi-file ownership demotion
+entries above: the call-site and defining-module analyses need the trait method receiver modes before parameter
+ownership is decided.
+
+## An untyped counter compared with a literal is painted `i32` after an `==` against a declared `int` (`interpreter_differential_test::interpreter_matches_compiled_rust`, `check_build_differential_test::check_agrees_with_the_build_pipeline`)
+
+```windjammer
+fn main() {
+    let seed: int = 1
+    let mut i = 0
+    while i < 6 {
+        let b = i == seed
+        i += 1
+    }
+}
+```
+
+The numeric solver resolves every integer in this program to `i64` (`WJ_DEBUG_INT_CONSTRAINTS=1` shows `4:15 -> I64`),
+but the Rust backend emits `while i < (6_i32 as i32)` (rustc: expected `i64`, found `i32`). Without the `==` line it is
+`6_i64`. The width is re-decided downstream of the solver by the same let/while heuristics as section 1
+(`function_prefers_i32_coord_locals`, `codegen_i32_binding_names`, comparison balancing in `type_balancing.rs`).
+Convergence C4 made `int` default to `i64` in the solver; deleting those heuristics so the solver is the only width
+owner closes this and section 1 together. The interpreter corpus program `result_chain` hits it (seeds 1 and 4).
+
+## Tuple write-back after a by-value call clones the heap vectors (`library_multipass_map_key_codegen_test::test_library_multipass_tuple_writeback_must_not_clone`)
+
+```windjammer
+let pushed = push_pair(costs, verts, i as f64, i as i64)
+costs = pushed.0
+verts = pushed.1
+```
+
+emits `push_pair(costs.clone(), verts.clone(), ..)`. Both bindings are overwritten from the result before they are read
+again, so the clones are dead copies (rustc accepts the program). The last-use fact (C6, `ir::liveness`) does not model
+"reassigned before the next read" for tuple projections of the call result.

@@ -2,7 +2,7 @@
 
 use super::names::ident;
 use super::Js;
-use crate::codegen::portable::ty::{IntKind, Ty};
+use crate::codegen::portable::ty::Ty;
 
 impl<'m> Js<'m> {
     /// TypeScript spelling of a type (`any` when not expressible).
@@ -19,6 +19,7 @@ impl<'m> Js<'m> {
             Ty::Option(e) => format!("{{ v: {} }} | null", self.ts_type(e)),
             Ty::Result(a, b) => format!("{{ ok: true; v: {} }} | {{ ok: false; v: {} }}", self.ts_type(a), self.ts_type(b)),
             Ty::Tuple(ts) => format!("[{}]", ts.iter().map(|t| self.ts_type(t)).collect::<Vec<_>>().join(", ")),
+            Ty::Adt(..) if self.builtin_ordering(t) => "number".into(),
             Ty::Adt(n, _) => ident(n),
             Ty::Fn(p, r) => format!("({}) => {}", p.iter().enumerate().map(|(i, t)| format!("a{i}: {}", self.ts_type(t))).collect::<Vec<_>>().join(", "), self.ts_type(r)),
             Ty::Param(n) => n.clone(),
@@ -76,10 +77,4 @@ impl<'m> Js<'m> {
         matches!(t, Ty::Int(_) | Ty::F32 | Ty::F64 | Ty::Bool | Ty::Str | Ty::Char | Ty::Unit)
     }
 
-    pub fn wide_kind(&self, t: &Ty) -> Option<IntKind> {
-        match t {
-            Ty::Int(k) => Some(*k),
-            _ => None,
-        }
-    }
 }

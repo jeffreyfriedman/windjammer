@@ -60,7 +60,7 @@ pub struct IntInference {
     pub inferred_types: HashMap<ExprId, IntType>,
     constraints: Vec<IntConstraint>,
     pub errors: Vec<String>,
-    function_signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
+    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
     var_assignments: HashMap<String, ExprId>,
     /// Element expr ids of `let v = vec![…]` / `[…]` so later `push`/`insert` args share that width.
     var_collection_elements: HashMap<String, Vec<ExprId>>,
@@ -98,7 +98,7 @@ impl IntInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: HashMap::new(),
+            function_signatures: std::collections::BTreeMap::new(),
             var_assignments: HashMap::new(),
             var_collection_elements: HashMap::new(),
             var_types: HashMap::new(),
@@ -773,6 +773,53 @@ impl IntInference {
         self.collect_expression_constraints(expr, Some(ty));
     }
 
+    /// `for` loop: constrain the iterable and the body. NUM-PROPAGATE (D-NUM-FOR-ACC): the loop
+    /// variable has the width of the elements of a local collection literal it iterates
+    /// (`let v = [1, 2]; for x in v { acc += x }`).
+    fn collect_for_constraints<'ast>(
+        &mut self,
+        pattern: &crate::parser::ast::core::Pattern<'ast>,
+        iterable: &Expression<'ast>,
+        body: &[&'ast Statement<'ast>],
+        return_type: Option<&Type>,
+    ) {
+        self.collect_expression_constraints(iterable, return_type);
+        let coll = match iterable {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
+                operand: Expression::Identifier { name, .. },
+                ..
+            } => Some(name.as_str()),
+            _ => None,
+        };
+        let loop_var = match pattern {
+            crate::parser::ast::core::Pattern::Identifier(n)
+            | crate::parser::ast::core::Pattern::MutBinding(n) => Some(n.clone()),
+            _ => None,
+        };
+        let elem_id = coll
+            .and_then(|c| self.var_collection_elements.get(c))
+            .and_then(|ids| ids.first().copied());
+        let saved = match (&loop_var, elem_id) {
+            (Some(n), Some(id)) => Some((n.clone(), self.var_assignments.insert(n.clone(), id))),
+            _ => None,
+        };
+        for s in body {
+            self.collect_statement_constraints(s, return_type);
+        }
+        if let Some((n, prev)) = saved {
+            match prev {
+                Some(p) => {
+                    self.var_assignments.insert(n, p);
+                }
+                None => {
+                    self.var_assignments.remove(&n);
+                }
+            }
+        }
+    }
+
     fn collect_statement_constraints<'ast>(
         &mut self,
         stmt: &Statement<'ast>,
@@ -902,12 +949,12 @@ impl IntInference {
                     self.collect_statement_constraints(s, return_type);
                 }
             }
-            Statement::For { iterable, body, .. } => {
-                self.collect_expression_constraints(iterable, return_type);
-                for s in body {
-                    self.collect_statement_constraints(s, return_type);
-                }
-            }
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                ..
+            } => self.collect_for_constraints(pattern, iterable, body, return_type),
             Statement::Assignment {
                 target,
                 value,
@@ -1060,5 +1107,6 @@ include!("literal_inference.rs");
 include!("get_expr_id.rs");
 include!("binary_op_inference.rs");
 include!("expression_constraints.rs");
+include!("closure_unary_constraints.rs");
 include!("constraint_solving.rs");
 include!("get_int_type.rs");

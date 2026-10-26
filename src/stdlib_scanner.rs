@@ -3,8 +3,8 @@
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
+mod generic_returns;
 
 /// Resolve `windjammer-runtime/src` for signature scanning.
 ///
@@ -153,7 +153,7 @@ fn scan_rust_file(
             }
             let header_done = header.contains('{') || trimmed.ends_with(';');
             if header_done {
-                if let Some(sig) = parse_function_signature(&header, module_name) {
+                if let Some(sig) = generic_returns::parse_sig(&header, module_name, &content) {
                     let mark_sanitizer = pending_sanitizer;
                     pending_sanitizer = false;
                     register_scanned_runtime_signature(
@@ -253,7 +253,7 @@ fn scan_rust_file(
 
         // Single-line `pub fn … {` (multi-line headers registered via pending_fn_header).
         if pending_fn_header.is_none() {
-            if let Some(sig) = parse_function_signature(trimmed, module_name) {
+            if let Some(sig) = generic_returns::parse_sig(trimmed, module_name, &content) {
                 let mark_sanitizer = pending_sanitizer;
                 pending_sanitizer = false;
                 register_scanned_runtime_signature(

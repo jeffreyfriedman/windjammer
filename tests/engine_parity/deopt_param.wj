@@ -1,0 +1,9 @@
+// A typed parameter that receives a non-integer at run time: the compiled call hands over to the walker.
+fn show(x: int) -> string {
+    "<${x}>"
+}
+fn main() {
+    println(show(7))
+    let s = "ab"
+    println(show(s))
+}

@@ -1,0 +1,8 @@
+error[W0003]: explicit .iter() call
+  --> lint_iter.wj:4:16
+  |
+4 |     for x in v.iter() {
+  |                ^^^^
+  = help: use direct iteration: `for x in collection`
+  = note: Windjammer supports direct iteration
+  = explain: wj explain W0003

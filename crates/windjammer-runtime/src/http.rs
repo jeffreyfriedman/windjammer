@@ -148,6 +148,7 @@ impl Response {
 
 /// Perform a GET request
 pub fn get(url: &str) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     let rt = Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
         let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
@@ -169,6 +170,7 @@ pub fn get(url: &str) -> Result<Response, String> {
 
 /// Perform a POST request with JSON body
 pub fn post_json<T: serde::Serialize>(url: &str, body: &T) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     let rt = Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
         let client = reqwest::Client::new();
@@ -197,26 +199,31 @@ pub fn post_json<T: serde::Serialize>(url: &str, body: &T) -> Result<Response, S
 
 /// Perform a POST request with string body
 pub fn post(url: &str, body: &str) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     client_send_with_body(reqwest::Method::POST, url, Some(body))
 }
 
 /// Perform a PUT request with string body
 pub fn put(url: &str, body: &str) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     client_send_with_body(reqwest::Method::PUT, url, Some(body))
 }
 
 /// Perform a PATCH request with string body
 pub fn patch(url: &str, body: &str) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     client_send_with_body(reqwest::Method::PATCH, url, Some(body))
 }
 
 /// Perform a DELETE request
 pub fn delete(url: &str) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     client_send_with_body(reqwest::Method::DELETE, url, None)
 }
 
 /// Perform a HEAD request
 pub fn head(url: &str) -> Result<Response, String> {
+    crate::caps::net_connect(url);
     client_send_with_body(reqwest::Method::HEAD, url, None)
 }
 
@@ -657,6 +664,7 @@ async fn extract_request(req: AxumRequest) -> Request {
 
 /// Start an HTTP server
 pub fn serve(addr: &str, router: Router) -> Result<(), String> {
+    crate::caps::net_listen(addr);
     let rt = Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
         let addr: SocketAddr = addr
@@ -677,6 +685,7 @@ pub fn serve_fn<F>(addr: &str, handler: F) -> Result<(), String>
 where
     F: Fn(&Request) -> ServerResponse + Clone + Send + Sync + 'static,
 {
+    crate::caps::net_listen(addr);
     let router = Router::new().get("/*path", move |req: Request| handler(&req));
     serve(addr, router)
 }
@@ -743,6 +752,7 @@ pub fn server_serve<F>(address: String, port: i64, handler: F) -> Result<(), Str
 where
     F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
 {
+    crate::caps::net_listen(&format!("{address}:{port}"));
     use std::sync::Arc;
 
     let handler = Arc::new(handler);

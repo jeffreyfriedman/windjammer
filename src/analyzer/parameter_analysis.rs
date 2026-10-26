@@ -20,6 +20,8 @@ impl<'ast> Analyzer<'ast> {
         current_func_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> Result<OwnershipMode, String> {
+        // 0d. Used inside a closure given to `spawn`: moved into the thread.
+        if !self.is_copy_type(param_type) && super::spawn_capture::param_captured_by_spawned_closure(param_name, body) { return Ok(OwnershipMode::Owned); }
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
         // Generic types like T, G, S should always be passed by value.
@@ -122,6 +124,9 @@ impl<'ast> Analyzer<'ast> {
 
         // 2. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
+            if self.param_is_moved_through_rebinding(param_name, param_type, body, registry) {
+                return Ok(OwnershipMode::Owned);
+            }
             // `Vox::new(self.scene)` then `self.grid = 1` is a partial
             // move of a non-Copy field plus a remaining-field write. Keep Owned
             // so the ctor can take the field; MutBorrowed would force `.clone()`.
@@ -161,14 +166,6 @@ impl<'ast> Analyzer<'ast> {
         {
             return Ok(OwnershipMode::Owned);
         }
-
-        // THE WINDJAMMER WAY: Removed aggressive string optimization
-        // When a user writes `text: string`, they mean `String` (owned), period.
-        // Do NOT auto-convert to `&str` just because it's "only passed to read-only functions".
-        // That breaks API contracts and causes confusing type errors.
-        //
-        // Smart inference is OFF for explicit type annotations.
-        // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // THE WINDJAMMER WAY: Removed aggressive string optimization
         // When a user writes `text: string`, they mean `String` (owned), period.
@@ -242,12 +239,7 @@ impl<'ast> Analyzer<'ast> {
         // When `a.as_float()` is called and `as_float` takes owned `self`, `a` is consumed
         // and must be owned. Without this check, `a` defaults to Borrowed (&a), producing
         // E0507 errors because you can't move out of a shared reference.
-        let receiver_type = match param_type {
-            Type::Custom(name) | Type::Generic(name) => {
-                Some(name.split('<').next().unwrap_or(name.as_str()))
-            }
-            _ => None,
-        };
+        let receiver_type = Self::param_receiver_type_name(param_type);
         if self.calls_consuming_method(param_name, body, registry, receiver_type) {
             return Ok(OwnershipMode::Owned);
         }
@@ -1105,7 +1097,7 @@ impl<'ast> Analyzer<'ast> {
     /// before passthrough ownership is applied. Prevents short names like `contains` / `len`
     /// from unrelated impls forcing Owned on `str` / `string` parameters (E0382).
     pub(super) fn passthrough_types_compatible(&self, sig_ty: &Type, decl_ty: &Type) -> bool {
-        if self.types_equal(sig_ty, decl_ty) {
+        if self.types_equal(sig_ty, decl_ty) || Self::generic_instance_of(sig_ty, decl_ty) {
             return true;
         }
         // Windjammer `string` formals passthrough to extern `String` / owned string callees.
@@ -1124,6 +1116,33 @@ impl<'ast> Analyzer<'ast> {
         let decl_str = matches!(decl_ty, Type::String);
         let sig_str = matches!(sig_ty, Type::String);
         decl_str && sig_str
+    }
+
+    /// `h = step(h)`: the value moves through the parameter (an owned `mut` binding), it is not written through a
+    /// borrow the caller would observe. Copy parameters keep their existing handling.
+    fn param_is_moved_through_rebinding(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        body: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) -> bool {
+        !self.is_copy_type(param_type)
+            && self.is_rebound(param_name, body)
+            && !self.is_mutated_in_place(param_name, body, registry, Some(param_type))
+    }
+
+    /// `decl` is an instance of the generic formal `sig`: `Handle<int>` for `Handle<T>`
+    /// (a callee's type parameter matches any argument; the constructor and arity must agree).
+    fn generic_instance_of(sig: &Type, decl: &Type) -> bool {
+        match (sig, decl) {
+            (x, _) if Self::is_generic_type_param(x) => true,
+            (Type::Parameterized(a, xs), Type::Parameterized(b, ys)) => {
+                a == b && xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| Self::generic_instance_of(x, y))
+            }
+            (Type::Vec(x), Type::Vec(y)) | (Type::Option(x), Type::Option(y)) => Self::generic_instance_of(x, y),
+            (x, y) => x == y,
+        }
     }
 
     pub(crate) fn types_equal(&self, a: &Type, b: &Type) -> bool {

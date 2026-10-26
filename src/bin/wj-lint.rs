@@ -35,12 +35,20 @@ fn lint_file(path: &Path, strict: bool) -> Result<(), Box<dyn std::error::Error>
     for warning in &warnings {
         println!("{}", warning);
     }
+    let errors = warnings
+        .iter()
+        .filter(|w| w.level == windjammer::linter::LintLevel::Error)
+        .count();
     println!(
-        "\n⚠  {} warning(s) found in {}",
-        warnings.len(),
+        "\n⚠  {} error(s), {} warning(s) found in {}",
+        errors,
+        warnings.len() - errors,
         path.display()
     );
 
+    if errors > 0 {
+        return Err(format!("Linter failed: {} error(s) found", errors).into());
+    }
     if strict {
         return Err(format!("Linter failed: {} warning(s) found", warnings.len()).into());
     }

@@ -7,8 +7,12 @@ use crate::parser::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+pub mod arena_escape;
 mod borrow_analysis;
+mod spawn_capture;
+pub(crate) use spawn_capture::param_captured_by_spawned_closure;
 mod cache_locality;
+pub(crate) mod nested_mod_items;
 pub(crate) mod field_enum_borrow;
 mod forbidden_patterns;
 mod function_analysis;
@@ -310,8 +314,14 @@ pub struct Analyzer<'ast> {
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
     // PUBLIC: The generator needs this for trait signature inference
     pub analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction<'ast>>>,
+    /// `(trait, method)` whose `&mut self` receiver was required by some impl seen so far. A later
+    /// program whose impls only read must not downgrade it (the receiver is the join over ALL impls).
+    pub(crate) trait_receiver_widened_by_impl: std::collections::HashSet<(String, String)>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
+    /// `false` while asking "is this parameter mutated other than by rebinding the whole name"
+    /// (`h = step(h)` moves a value through the parameter; it does not write through a borrow).
+    pub(crate) rebind_is_mutation: std::cell::Cell<bool>,
     // Track functions in the current impl block (for cross-method analysis)
     current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
     /// Set while analyzing methods inside an `impl` block (inherent or trait impl body).
@@ -349,7 +359,9 @@ impl<'ast> Analyzer<'ast> {
             explicit_copy_structs: Arc::new(HashSet::new()),
             trait_definitions: HashMap::new(),
             analyzed_trait_methods: HashMap::new(),
+            trait_receiver_widened_by_impl: std::collections::HashSet::new(),
             mutated_variables: HashSet::new(),
+            rebind_is_mutation: std::cell::Cell::new(true),
             current_impl_functions: None,
             self_impl_context: None,
             global_struct_field_types: Arc::new(HashMap::new()),
@@ -374,7 +386,8 @@ impl<'ast> Analyzer<'ast> {
     /// Check for forbidden Rust-specific patterns that should not appear in Windjammer source.
     /// These are implementation details that the compiler should handle automatically.
     pub fn check_forbidden_rust_patterns(&self, program: &Program<'ast>) -> Result<(), String> {
-        forbidden_patterns::check_forbidden_rust_patterns(program)
+        forbidden_patterns::check_forbidden_rust_patterns(program)?;
+        arena_escape::gate(program)
     }
 }
 

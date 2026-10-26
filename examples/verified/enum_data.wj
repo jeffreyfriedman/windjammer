@@ -1,5 +1,5 @@
 // tags: enum, match, data
-// rust: gap error[E0308]: mismatched types
+// rust: ok
 // expect: 78.5
 // expect: 6
 // expect: 9

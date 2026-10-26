@@ -1,0 +1,7 @@
+// spec: SPEC-CONC-002
+// expect: 5
+fn work(n: int) -> int { n + 1 }
+fn main() {
+    let t = async work(4)
+    println("${t.wait()}")
+}

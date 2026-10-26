@@ -1,0 +1,8 @@
+use native
+
+fn main() {
+    println("${native::add(40, 2)}")
+    println("${native::greet("wj")}")
+    println("${native::scale(1.5, true)}")
+    println("${native::scale(1.5, false)}")
+}

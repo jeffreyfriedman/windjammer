@@ -17,6 +17,9 @@
 //! * ```` ```windjammer,bad ````   a "what not to write" block: `wj check --json` must report a diagnostic
 //! * ```` ```windjammer,parse ```` a fragment: wrapped in `fn main() { .. }` and only parsed (`wj check`)
 //!
+//! The info string is a comma-separated annotation list shared with docs-truth (`tools/docs_truth/fences.rs`),
+//! so `windjammer,should_fail,bad` is a `bad` block here: the kind is the first annotation this file knows.
+//!
 //! Also: the main context pack stays within its token budget, the `wj docs` CLI answers real queries
 //! from the embedded index, and the agent-tool instruction files agree with the CLI.
 
@@ -92,7 +95,7 @@ fn expect_lines(code: &str) -> Vec<String> {
 fn check_block(b: &Block) -> Option<String> {
     let d = TempDir::new().unwrap();
     let who = format!("{}:{}", b.file, b.line);
-    match b.kind.split(',').nth(1).unwrap_or("run") {
+    match b.kind.split(',').skip(1).find(|a| matches!(*a, "bad" | "parse" | "test")).unwrap_or("run") {
         "bad" => {
             let f = d.path().join("bad.wj");
             fs::write(&f, &b.code).unwrap();
@@ -222,8 +225,8 @@ fn wj_check_json_reports_diagnostics_with_spans() {
     assert_eq!(v["success"], false);
     let diag = &v["diagnostics"][0];
     assert_eq!(diag["code"], "W0003");
-    assert_eq!(diag["span"]["start_line"], 3);
-    assert!(diag["repair_hint"]["description"].as_str().unwrap().contains("iter"));
+    assert_eq!(diag["primary_span"]["line_start"], 3);
+    assert!(diag["help"][0].as_str().unwrap().contains("iter"));
 
     let ok = d.path().join("ok.wj");
     fs::write(&ok, "fn main() {\n    println(\"hi\")\n}\n").unwrap();
@@ -238,7 +241,7 @@ fn wj_check_json_reports_diagnostics_with_spans() {
     let o = Command::new(WJ).args(["check", "--json"]).arg(&bad).output().unwrap();
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["diagnostics"][0]["code"], "parse");
+    assert_eq!(v["diagnostics"][0]["code"], "WJ0011", "syntax errors are WJ0011 (docs/diagnostics-schema.json)");
 }
 
 #[test]

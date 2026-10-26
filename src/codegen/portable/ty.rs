@@ -3,6 +3,7 @@
 //! The parser's `Type` collapses `i8..i64`/`u8..u64` into `Custom(..)`; this module resolves them
 //! into exact widths so emitters can implement wrapping, division and formatting correctly.
 
+use super::alias::Aliases;
 use crate::parser::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -208,8 +209,8 @@ impl Ty {
 }
 
 /// Resolve a parser `Type`. `generics` lists type-parameter names in scope.
-pub fn from_ast(t: &Type, generics: &[String]) -> Ty {
-    let rec = |t: &Type| from_ast(t, generics);
+pub fn from_ast(t: &Type, generics: &[String], al: &Aliases) -> Ty {
+    let rec = |t: &Type| from_ast(t, generics, al);
     match t {
         Type::Int => Ty::Int(IntKind::I64),
         Type::Int32 => Ty::Int(IntKind::I32),
@@ -217,9 +218,12 @@ pub fn from_ast(t: &Type, generics: &[String]) -> Ty {
         Type::Float => Ty::F64,
         Type::Bool => Ty::Bool,
         Type::String => Ty::Str,
-        Type::Custom(n) => from_name(n, generics),
+        Type::Custom(n) => match al.strip_modules(n) {
+            Some(last) => from_name(&last, generics, al),
+            None => from_name(n, generics, al),
+        },
         Type::Generic(n) => Ty::Param(n.clone()),
-        Type::Parameterized(n, args) => from_parameterized(n, args, generics),
+        Type::Parameterized(n, args) => from_parameterized(n, args, generics, al),
         Type::Option(t) => Ty::Option(Box::new(rec(t))),
         Type::Result(a, b) => Ty::Result(Box::new(rec(a)), Box::new(rec(b))),
         Type::Vec(t) => Ty::Vec(Box::new(rec(t))),
@@ -237,7 +241,7 @@ pub fn from_ast(t: &Type, generics: &[String]) -> Ty {
     }
 }
 
-fn from_name(n: &str, generics: &[String]) -> Ty {
+fn from_name(n: &str, generics: &[String], al: &Aliases) -> Ty {
     if let Some(k) = IntKind::from_name(n) {
         return Ty::Int(k);
     }
@@ -249,12 +253,14 @@ fn from_name(n: &str, generics: &[String]) -> Ty {
         "char" => Ty::Char,
         "()" | "unit" => Ty::Unit,
         _ if generics.iter().any(|g| g == n) => Ty::Param(n.to_string()),
-        _ => Ty::Adt(n.to_string(), vec![]),
+        _ => al.expand(n, &[], generics).unwrap_or_else(|| Ty::Adt(n.to_string(), vec![])),
     }
 }
 
-fn from_parameterized(n: &str, args: &[Type], generics: &[String]) -> Ty {
-    let a: Vec<Ty> = args.iter().map(|t| from_ast(t, generics)).collect();
+fn from_parameterized(n: &str, args: &[Type], generics: &[String], al: &Aliases) -> Ty {
+    let stripped = al.strip_modules(n);
+    let n = stripped.as_deref().unwrap_or(n);
+    let a: Vec<Ty> = args.iter().map(|t| from_ast(t, generics, al)).collect();
     let arg = |i: usize| Box::new(a.get(i).cloned().unwrap_or(Ty::Unknown));
     match n {
         "Vec" => Ty::Vec(arg(0)),
@@ -263,7 +269,10 @@ fn from_parameterized(n: &str, args: &[Type], generics: &[String]) -> Ty {
         "Option" => Ty::Option(arg(0)),
         "Result" => Ty::Result(arg(0), arg(1)),
         "Box" | "Rc" | "Arc" => *arg(0),
-        _ => Ty::Adt(n.to_string(), a),
+        _ => match al.expand(n, &a, generics) {
+            Some(t) => t,
+            None => Ty::Adt(n.to_string(), a),
+        },
     }
 }
 
@@ -273,10 +282,10 @@ mod tests {
 
     #[test]
     fn custom_int_names_resolve_to_widths() {
-        assert_eq!(from_ast(&Type::Custom("u8".into()), &[]), Ty::Int(IntKind::U8));
-        assert_eq!(from_ast(&Type::Custom("usize".into()), &[]), Ty::Int(IntKind::Usize));
-        assert_eq!(from_ast(&Type::Int32, &[]), Ty::Int(IntKind::I32));
-        assert_eq!(from_ast(&Type::Int, &[]), Ty::Int(IntKind::I64));
+        assert_eq!(from_ast(&Type::Custom("u8".into()), &[], &Aliases::default()), Ty::Int(IntKind::U8));
+        assert_eq!(from_ast(&Type::Custom("usize".into()), &[], &Aliases::default()), Ty::Int(IntKind::Usize));
+        assert_eq!(from_ast(&Type::Int32, &[], &Aliases::default()), Ty::Int(IntKind::I32));
+        assert_eq!(from_ast(&Type::Int, &[], &Aliases::default()), Ty::Int(IntKind::I64));
     }
 
     #[test]

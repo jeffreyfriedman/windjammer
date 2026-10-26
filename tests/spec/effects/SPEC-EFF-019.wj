@@ -1,0 +1,21 @@
+// spec: SPEC-EFF-019
+// mode: check-error
+// manifest: [capabilities]
+// manifest: effects = ["ledger.post"]
+// manifest: [policy]
+// manifest: "ledger.post" = { only_via = ["billing"] }
+// expect-error: WJ0043: `ledger.post` may only be performed via `billing`
+mod ledger {
+    @effect("ledger.post")
+    pub fn post(amount: int) { println("posted ${amount}") }
+}
+mod billing {
+    pub fn charge(amount: int) { super::ledger::post(amount) }
+}
+mod reports {
+    pub fn adjust(amount: int) { super::ledger::post(amount) }
+}
+fn main() {
+    billing::charge(5)
+    reports::adjust(1)
+}

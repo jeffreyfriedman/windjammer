@@ -5,6 +5,7 @@ pub mod dead_helpers;
 pub mod inline_policy;
 pub mod macro_arg_clone;
 pub mod same_type_cast;
+pub mod scratch_reuse;
 pub mod string_append;
 pub mod with_capacity;
 
@@ -44,6 +45,9 @@ pub fn collect(ctx: &Ctx) -> Vec<Edit> {
     }
     if c.inline_policy {
         edits.extend(inline_policy::collect(ctx));
+    }
+    if c.scratch_reuse {
+        edits.extend(scratch_reuse::collect(ctx));
     }
     if c.dead_helpers {
         edits.extend(dead_helpers::collect(ctx));

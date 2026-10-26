@@ -1,0 +1,5 @@
+// spec: SPEC-STR-010
+// expect: true false x
+fn main() {
+    println("${true} ${false} ${'x'}")
+}

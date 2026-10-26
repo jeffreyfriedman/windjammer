@@ -2,6 +2,7 @@
 
 use super::engine::Interpreter;
 use super::error::{semantic, R};
+use super::int::IntTy;
 use super::place::deref_value;
 use super::value::*;
 use std::cell::RefCell;
@@ -189,6 +190,7 @@ impl Interpreter {
         match v {
             Value::Unit => Ok("()".into()),
             Value::Bool(b) => Ok(b.to_string()),
+            Value::Int(n, IntTy::U128) => Ok(super::u128ops::display(*n)),
             Value::Int(n, _) => Ok(n.to_string()),
             Value::Float(f, FloatTy::F32) => Ok(format!("{}", *f as f32)),
             Value::Float(f, _) => Ok(format!("{}", f)),
@@ -202,6 +204,20 @@ impl Interpreter {
                 let inner = slot.borrow().clone();
                 self.display_string(&inner)
             }
+            Value::Native(n) if n.display().is_some() => Ok(n.display().unwrap_or_default()),
+            // `char::to_lowercase()`/`to_uppercase()`/`escape_*` are char iterators that implement Display
+            Value::Iter(i) => {
+                let copy = super::iter::clone_iter(i);
+                let items = self.drain_iter(&copy)?;
+                let mut out = String::new();
+                for x in &items {
+                    match x {
+                        Value::Char(c) => out.push(*c),
+                        other => return Err(semantic(format!("`{}` iterator doesn't implement `std::fmt::Display`", other.type_name()))),
+                    }
+                }
+                Ok(out)
+            }
             Value::Struct(_) | Value::Enum(_) => {
                 let tn = v.type_name();
                 let f = self
@@ -214,6 +230,13 @@ impl Interpreter {
                     self.call_func(&f, vec![Value::Formatter(buf.clone())], Some(v.clone()))?;
                     let s = buf.borrow().clone();
                     return Ok(s);
+                }
+                // ADR-0015 #3: a user `fn to_string(self) -> string` makes the type printable.
+                if let Some(f) = self.methods.get(&(tn.clone(), "to_string".to_string())).cloned() {
+                    return match self.call_func(&f, vec![], Some(v.clone()))? {
+                        Value::Str(s) => Ok((*s).clone()),
+                        other => self.display_string(&other),
+                    };
                 }
                 Err(semantic(format!("`{}` doesn't implement `std::fmt::Display`", tn)))
             }
@@ -243,6 +266,7 @@ impl Interpreter {
         match v {
             Value::Unit => out.push_str("()"),
             Value::Bool(b) => out.push_str(&b.to_string()),
+            Value::Int(n, IntTy::U128) => out.push_str(&super::u128ops::display(*n)),
             Value::Int(n, _) => out.push_str(&n.to_string()),
             Value::Float(f, FloatTy::F32) => out.push_str(&format!("{:?}", *f as f32)),
             Value::Float(f, _) => out.push_str(&format!("{:?}", f)),
@@ -263,7 +287,7 @@ impl Interpreter {
                 }
             }
             Value::Set(m) => {
-                let items: Vec<Value> = m.keys().map(|k| k.0.clone()).collect();
+                let items: Vec<Value> = m.ordered_keys(self.hash_seed);
                 self.debug_seq("{", "}", items.iter(), pretty, ind, out)?
             }
             Value::Map(m) => {
@@ -271,7 +295,7 @@ impl Interpreter {
                     out.push_str("{}");
                 } else if pretty {
                     out.push_str("{\n");
-                    for (k, val) in m.iter() {
+                    for (k, val) in m.ordered(self.hash_seed) {
                         out.push_str(&pad(ind + 1));
                         self.debug_fmt(&k.0, true, ind + 1, out)?;
                         out.push_str(": ");
@@ -282,7 +306,7 @@ impl Interpreter {
                     out.push('}');
                 } else {
                     out.push('{');
-                    for (n, (k, val)) in m.iter().enumerate() {
+                    for (n, (k, val)) in m.ordered(self.hash_seed).into_iter().enumerate() {
                         if n > 0 {
                             out.push_str(", ");
                         }
@@ -329,13 +353,42 @@ impl Interpreter {
                 self.debug_fmt(&inner, pretty, ind, out)?;
             }
             Value::Weak(_) => out.push_str("(Weak)"),
-            Value::Cell(kind, slot) => {
+            Value::Native(n) if n.debug_entries().is_some() => {
+                let (is_map, entries) = n.debug_entries().unwrap_or_default();
+                if is_map {
+                    let pairs = Value::vec(entries.into_iter().map(|(k, v)| Value::tuple(vec![k, v.unwrap_or(Value::Unit)])).collect());
+                    out.push('{');
+                    if let Value::Vec(ps) = &pairs {
+                        for (i, p) in ps.iter().enumerate() {
+                            if i > 0 {
+                                out.push_str(", ");
+                            }
+                            if let Value::Tuple(t) = p {
+                                self.debug_fmt(&t[0], false, ind, out)?;
+                                out.push_str(": ");
+                                self.debug_fmt(&t[1], false, ind, out)?;
+                            }
+                        }
+                    }
+                    out.push('}');
+                } else {
+                    let items: Vec<Value> = entries.into_iter().map(|(k, _)| k).collect();
+                    self.debug_seq("{", "}", items.iter(), pretty, ind, out)?
+                }
+            }
+            Value::Native(n) => out.push_str(&n.debug()),
+            Value::Cell(CellKind::Atomic, slot, _) => {
+                let inner = slot.borrow().clone();
+                self.debug_fmt(&inner, pretty, ind, out)?;
+            }
+            Value::Cell(kind, slot, _) => {
                 let inner = slot.borrow().clone();
                 let (name, field) = match kind {
                     CellKind::RefCell => ("RefCell", "value"),
                     CellKind::Cell => ("Cell", "value"),
                     CellKind::Mutex => ("Mutex", "data"),
                     CellKind::RwLock => ("RwLock", "data"),
+                    CellKind::Atomic => ("", ""),
                 };
                 out.push_str(name);
                 let mut fields = vec![(field.to_string(), inner)];

@@ -1,0 +1,5 @@
+use std::time
+fn main() {
+    let t = Instant::now()
+    println("${t.elapsed().as_millis() >= 0}")
+}

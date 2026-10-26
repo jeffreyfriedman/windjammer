@@ -1,0 +1,34 @@
+// expect: hello!
+// expect: 42
+// expect: 3 4
+type Pair<T> = (T, T)
+
+trait Shout {
+    fn shout<S: Into<string>>(self, s: S) -> string
+}
+
+struct Loud {
+}
+
+impl Shout for Loud {
+    fn shout<S: Into<string>>(self, s: S) -> string {
+        let t: string = s.into()
+        t + "!"
+    }
+}
+
+fn first<T: Clone>(p: Pair<T>) -> T {
+    p.0.clone()
+}
+
+fn pair_of(a: int, b: int) -> Pair<int> {
+    (a, b)
+}
+
+fn main() {
+    let l = Loud {}
+    println(l.shout("hello"))
+    println("${first((42, 7))}")
+    let p = pair_of(3, 4)
+    println("${p.0} ${p.1}")
+}

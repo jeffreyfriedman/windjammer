@@ -1,0 +1,114 @@
+# Acceptance cases for `wj reduce` (tests/promise_registry_test.rs). `{w}` is the scratch dir.
+
+[[case]]
+name = "reduce shrinks a project to the part the oracle needs and writes repro.md"
+polarity = "positive"
+files = { "p/main.wj" = "use util\n\nfn main() {\n    println(\"${util::helper(2)}\")\n}\n", "p/util.wj" = "pub fn helper(x: int) -> int {\n    let unused = x + 1\n    x * 4242\n}\n\npub fn other(y: int) -> int {\n    y + 1\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rqE \"[*] *4242\" .'", "-o", "{w}/out"]
+creates = ["out/repro.md"]
+file_has = { "out/repro.md" = "| files | 2 | 1 |" }
+output_has = ["reduced 2 -> 1 files"]
+output_lacks = ["helper", "unused"]
+
+[[case]]
+name = "reduce anonymizes names in the output project"
+polarity = "positive"
+files = { "p/main.wj" = "fn secret_calc(secret_arg: int) -> int {\n    secret_arg * 4242\n}\n\nfn main() {\n    println(\"${secret_calc(2)}\")\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rqE \"[*] *4242\" .'", "-o", "{w}/out"]
+file_has = { "out/main.wj" = "4242" }
+output_lacks = ["secret_calc", "secret_arg"]
+
+[[case]]
+name = "reduce rejects an oracle that does not hold on the input"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rq 4242 .'", "-o", "{w}/out"]
+exit = 1
+output_has = ["does not hold"]
+absent = ["out/repro.md"]
+
+[[case]]
+name = "reduce rejects an unknown oracle spec"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "telepathy", "-o", "{w}/out"]
+exit = 1
+output_has = ["unknown oracle"]
+
+[[case]]
+name = "reduce of a missing path fails"
+polarity = "negative"
+args = ["reduce", "{w}/nope", "--oracle", "panic", "-o", "{w}/out"]
+exit = 1
+output_has = ["path not found"]
+
+[[case]]
+name = "reduce accepts budgets, seed, jobs, timeout and verbose"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    let a = 1\n    let b = 4242\n    println(\"${a + b}\")\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rq 4242 .'", "-o", "{w}/out", "--jobs", "1", "--seed", "5", "--max-steps", "500", "--time-budget", "60", "--candidate-timeout", "30", "--verbose"]
+creates = ["out/repro.md"]
+output_has = ["reduced 1 -> 1 files"]
+
+[[case]]
+name = "reduce rejects a non-numeric job count"
+polarity = "negative"
+args = ["reduce", "{w}/p", "--oracle", "panic", "-o", "{w}/out", "--jobs", "many"]
+exit = 2
+output_has = ["invalid value"]
+
+[[case]]
+name = "reduce rejects a non-numeric seed, step budget, time budget and timeout"
+polarity = "negative"
+args = ["reduce", "{w}/p", "--oracle", "panic", "-o", "{w}/out", "--seed", "x", "--max-steps", "x", "--time-budget", "x", "--candidate-timeout", "x"]
+exit = 2
+output_has = ["invalid value"]
+
+[[case]]
+name = "reduce refuses to write a partially anonymized result without --keep-names"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n    println(\"needle-text\")\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rq needle-text .'", "-o", "{w}/out"]
+exit = 1
+output_has = ["anonymization is incomplete"]
+absent = ["out/repro.md"]
+
+[[case]]
+name = "reduce --keep-names accepts a result that keeps oracle-essential text"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    println(\"needle-text\")\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rq needle-text .'", "-o", "{w}/out", "--keep-names"]
+creates = ["out/repro.md"]
+file_has = { "out/repro.md" = "could not be anonymized" }
+
+[[case]]
+name = "reduce runs oracle commands with the chosen compiler binary in $WJ"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd 'test \"$WJ\" = /bin/echo'", "-o", "{w}/out", "--wj-bin", "/bin/echo"]
+creates = ["out/repro.md"]
+
+[[case]]
+name = "reduce with a compiler that never panics does not satisfy the panic oracle"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "panic", "-o", "{w}/out", "--wj-bin", "/usr/bin/true"]
+exit = 1
+output_has = ["does not hold"]
+
+[[case]]
+name = "reduce --keep-names still rejects an oracle that does not hold"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rq absent-text .'", "-o", "{w}/out", "--keep-names"]
+exit = 1
+output_has = ["does not hold"]
+
+[[case]]
+name = "reduce --verbose reports an unsatisfied oracle without echoing source"
+polarity = "negative"
+files = { "p/main.wj" = "fn secret_name() {\n}\n" }
+args = ["reduce", "{w}/p", "--oracle", "cmd '/usr/bin/grep -rq absent-text .'", "-o", "{w}/out", "--verbose"]
+exit = 1
+output_has = ["does not hold"]
+output_lacks = ["secret_name"]

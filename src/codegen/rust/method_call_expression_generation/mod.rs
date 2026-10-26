@@ -6,7 +6,9 @@ use crate::parser::*;
 
 mod arguments;
 mod finalize;
+mod idiom_lowering;
 mod receiver;
+mod std_idiom_fixups;
 mod signature_resolution;
 
 use crate::codegen::rust::CodeGenerator;
@@ -21,6 +23,9 @@ impl<'ast> CodeGenerator<'ast> {
         type_args: &Option<Vec<Type>>,
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.unsupported_optional_chain();
+        }
         if method == "find" && arguments.len() == 1 {}
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" {
@@ -38,6 +43,10 @@ impl<'ast> CodeGenerator<'ast> {
                 .trim_end_matches(".to_string()")
                 .trim_end_matches(".to_owned()");
             return format!("{base}.to_string()");
+        }
+        // `.as_str()` is identity in Windjammer (W0012): lower exactly like the receiver alone.
+        if method == "as_str" && arguments.is_empty() {
+            return self.generate_expression(object);
         }
         if super::rust_stdlib_annotations::is_strip_redundant(method) && arguments.is_empty() {
             if let Expression::Identifier { name, .. } = object {
@@ -103,8 +112,22 @@ impl<'ast> CodeGenerator<'ast> {
             self.upgrade_get_to_get_mut = false;
         }
         let effective_method = mut_sibling.as_deref().unwrap_or(method);
+        // ADR-0018: surface collection methods (`group_by`, ...) call the inlined enumerable runtime.
+        let effective_method = self
+            .enumerable_rust_name(receiver_type_name.as_deref(), effective_method, arguments.len())
+            .unwrap_or(effective_method);
 
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
+        // `reader.read_line(line)` / `read_to_string(buf)`: std fills a `&mut String`. The lint-clean spelling has no
+        // `&mut`, so a bare identifier argument is passed by mutable borrow, never cloned (a clone is filled and the
+        // caller's buffer stays empty, so read loops never end).
+        // A module receiver (`fs.read_to_string(path)`) is a path call, not a reader method.
+        let receiver_is_module = matches!(object, Expression::Identifier { name, .. } if self.identifier_is_static_call_root(name));
+        if !receiver_is_module && matches!(effective_method, "read_line" | "read_to_string") && arguments.len() == 1 {
+            if let Expression::Identifier { name, .. } = arguments[0].1 {
+                return format!("{obj_str}.{effective_method}(&mut {name})");
+            }
+        }
         let method_signature =
             self.mc_resolve_method_call_signature(object, effective_method, arguments);
         let type_name = self

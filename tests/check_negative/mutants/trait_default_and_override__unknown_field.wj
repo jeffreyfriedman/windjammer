@@ -1,0 +1,24 @@
+// mutant: unknown_field of examples/verified/trait_default_and_override.wj
+trait Greeter {
+    fn name(self) -> string
+    fn greet(self) -> string {
+        "Hi, I am ${self.name()}"
+    }
+}
+
+struct Robot {}
+struct Person { n: string }
+
+impl Greeter for Robot {
+    fn name(self) -> string { "Robot" }
+}
+
+impl Greeter for Person {
+    fn name(self) -> string { self.nx }
+    fn greet(self) -> string { "Hello, I am ${self.n}" }
+}
+
+fn main() {
+    println(Robot {}.greet())
+    println(Person { n: "Ann" }.greet())
+}

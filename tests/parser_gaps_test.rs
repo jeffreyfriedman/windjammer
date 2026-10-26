@@ -144,10 +144,11 @@ fn label_without_loop_is_an_error() {
 
 #[test]
 fn string_literal_first_in_interpolation() {
-    let d = body_dbg("fn f() {\n    let a = \"${\"abc\".len()}\"\n    let b = \"${\"x\"} literal\"\n}\n");
+    let d = body_dbg("fn f() {\n    let a = \"${\"abc\".len()}\"\n    let b = \"${\"\n}\n");
     assert!(d.contains("len"), "{d}");
-    // `${"` followed by a closing quote and no method call stays a literal dollar-brace.
-    assert!(d.contains("${x"), "{d}");
+    // `${"` whose nested string is not followed by `.`/`[` stays a literal dollar-brace
+    // (so `"${"` is the two characters `${`); documented in docs/design/lexical-grammar.md.
+    assert!(d.contains("String(\"${\")"), "{d}");
 }
 
 // ---- (6) statement boundaries ------------------------------------------------------------
@@ -195,6 +196,9 @@ fn split_line_equals_one_line_property() {
         "let z = (a + b) * 2",
         "if a > 1 { *c = 3 }",
         "g(1) * 2",
+        "[1, 2].len()",
+        "[a, b]",
+        "xs[0] = 1",
     ];
     let mut rng = Rng(0xABCDEF0123456789);
     for case in 0..400 {
@@ -243,4 +247,11 @@ fn hash_attribute_suggests_decorator() {
 #[test]
 fn decorators_still_parse() {
     body_dbg("@derive(Clone, Debug)\nstruct S { x: int }\n@test\nfn t() {}\n");
+}
+
+#[test]
+fn continue_does_not_take_a_label_from_the_next_line() {
+    let d = body_dbg("fn f() {\n    loop {\n        continue\n        'outer: loop {\n            break 'outer\n        }\n    }\n}\n");
+    assert!(d.contains("Continue { label: None"), "{d}");
+    assert!(d.contains("label: Some(\"outer\")"), "{d}");
 }

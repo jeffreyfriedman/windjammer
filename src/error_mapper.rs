@@ -226,18 +226,15 @@ impl ErrorMapper {
             }
         }
 
-        // Add "did you mean?" for field typos when we have "no field X" and notes list fields
-        if message.contains("No field `") && !notes.is_empty() {
-            if let Some(field_name) = self.extract_between(&message, "No field `", "`") {
-                for note in &notes {
-                    if note.contains("has fields") {
-                        let fields = Self::parse_struct_fields_from_note(note);
-                        if let Some(suggestion) = Self::fuzzy_match_field(&field_name, &fields) {
-                            help.push(format!("did you mean `{}`?", suggestion));
-                            break;
-                        }
-                    }
-                }
+        // Add "did you mean?" for field typos when rustc says "no field X" and its note lists the fields
+        // (the note itself is kept below: it is the struct's field list, not Rust-specific advice).
+        let field_note = notes.iter().find(|n| n.contains("has fields")).cloned();
+        if let (Some(note), Some(field_name)) =
+            (&field_note, self.extract_between(&rustc_diag.message.replace("no field", "No field"), "No field `", "`"))
+        {
+            let fields = Self::parse_struct_fields_from_note(note);
+            if let Some(suggestion) = Self::fuzzy_match_field(&field_name, &fields) {
+                help.push(format!("did you mean `{}`?", suggestion));
             }
         }
 
@@ -256,6 +253,35 @@ impl ErrorMapper {
                 }
             }
         }
+
+        // Errors are rewritten into Windjammer terms with a stable WJ code; anything the
+        // translator does not know becomes WJ0099 (an internal coverage gap), never raw rustc.
+        let (message, wj_code, help) = if rustc_diag.level == "error" {
+            let tr = crate::diagnostics::rustc_text::translate(
+                rustc_diag.code.as_ref().map(|c| c.code.as_str()),
+                &rustc_diag.message,
+                primary_span.label.as_deref(),
+            );
+            // rustc's own help/notes are phrased in Rust terms; only the translated help is kept.
+            let did_you_mean: Vec<String> = help.iter().filter(|h| h.starts_with("did you mean")).cloned().collect();
+            let mut help: Vec<String> = did_you_mean;
+            notes.retain(|n| n.contains("has fields"));
+            if tr.code == "WJ0099" {
+                notes.push(format!(
+                    "untranslated rustc code: {}",
+                    rustc_diag.code.as_ref().map_or("none", |c| c.code.as_str())
+                ));
+            }
+            if let Some(h) = tr.help {
+                help.insert(0, h);
+            }
+            if tr.code == "WJ0003" && tr.message.contains("`int`") && tr.message.contains("`float`") {
+                help.push("convert with `x as int` / `x as float`".to_string());
+            }
+            (tr.message, Some(tr.code.to_string()), help)
+        } else {
+            (message, wj_code, help)
+        };
 
         Some(WindjammerDiagnostic {
             message,
@@ -538,7 +564,7 @@ impl WindjammerDiagnostic {
     /// Check if this error is automatically fixable
     pub fn is_fixable(&self) -> bool {
         if let Some(code) = &self.code {
-            matches!(code.as_str(), "E0384" | "E0308" | "E0425" | "E0596")
+            matches!(code.as_str(), "WJ0004" | "WJ0003" | "WJ0001" | "WJ0008")
         } else {
             false
         }
@@ -553,7 +579,7 @@ impl WindjammerDiagnostic {
         }
 
         match self.code.as_ref()?.as_str() {
-            "E0384" | "E0596" => {
+            "WJ0004" | "WJ0008" => {
                 // Immutability error - suggest adding mut
                 extract_variable_from_message(&self.message).map(|var_name| FixType::AddMut {
                     file: self.location.file.clone(),
@@ -561,7 +587,7 @@ impl WindjammerDiagnostic {
                     variable_name: var_name,
                 })
             }
-            "E0308" => {
+            "WJ0003" => {
                 // Type mismatch - suggest conversion
                 if self.message.contains("expected int") && self.message.contains("found string") {
                     Some(FixType::AddParse {

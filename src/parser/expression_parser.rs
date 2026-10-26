@@ -14,9 +14,31 @@ use crate::parser_impl::Parser;
 
 impl Parser {
     pub(crate) fn parse_expression(&mut self) -> Result<&'static Expression<'static>, String> {
+        // A full expression (parenthesised, argument, index...) is never itself a unary operand.
+        let saved = std::mem::replace(&mut self.in_unary_operand, false);
         self.span_enter();
         let r = self.parse_ternary_expression();
         self.span_exit();
+        self.in_unary_operand = saved;
+        r
+    }
+
+    /// Operand of a prefix operator (`-`, `!`, `*`, `&`). Postfix operators bind tighter than
+    /// prefix ones except `as`, which binds looser (Rust): `-1 as u8` is `(-1) as u8`,
+    /// `-x.abs()` is `-(x.abs())`.
+    pub(in crate::parser) fn parse_unary_operand(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
+        self.with_unary_operand(|p| p.parse_primary_expression())
+    }
+
+    pub(in crate::parser) fn with_unary_operand<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let saved = std::mem::replace(&mut self.in_unary_operand, true);
+        let r = f(self);
+        self.in_unary_operand = saved;
         r
     }
 
@@ -42,6 +64,7 @@ impl Parser {
             let label = if let Token::Ident(name) = self.current_token() {
                 if self.peek(1) == Some(&Token::Colon) {
                     let label = name.clone();
+                    self.saw_label = true;
                     self.advance(); // consume identifier
                     self.advance(); // consume colon
                     Some(label)
@@ -52,7 +75,7 @@ impl Parser {
                 None
             };
 
-            let expr = self.parse_expression()?;
+            let expr = self.parse_argument_with_shorthand()?;
             args.push((label, expr));
 
             if self.current_token() == &Token::Comma {

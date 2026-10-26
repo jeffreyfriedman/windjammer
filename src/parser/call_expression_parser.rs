@@ -5,11 +5,38 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// Where the postfix chain must stop (docs/design/statement-boundaries.md): `(` or `[` that
+    /// start a new line begin a new statement; `as` after a prefix operator's operand applies to
+    /// the whole prefix expression (`-1 as u8` is `(-1) as u8`, as in Rust).
+    fn postfix_stops_here(&self, stop_at_as: bool) -> bool {
+        match self.current_token() {
+            Token::LParen | Token::LBracket => self.had_newline_before_current(),
+            Token::As => stop_at_as,
+            _ => false,
+        }
+    }
+
+    /// Postfix chain. Whether `as` ends it is decided by *this* chain's context only: expressions
+    /// nested inside it (index, arguments, closure bodies) start with the flag cleared.
     pub(in crate::parser) fn parse_postfix_expression(
         &mut self,
+        expr: &'static Expression<'static>,
+    ) -> Result<&'static Expression<'static>, String> {
+        let stop_at_as = std::mem::replace(&mut self.in_unary_operand, false);
+        let r = self.parse_postfix_chain(expr, stop_at_as);
+        self.in_unary_operand = stop_at_as;
+        r
+    }
+
+    fn parse_postfix_chain(
+        &mut self,
         mut expr: &'static Expression<'static>,
+        stop_at_as: bool,
     ) -> Result<&'static Expression<'static>, String> {
         loop {
+            if self.postfix_stops_here(stop_at_as) {
+                break;
+            }
             expr = match self.current_token() {
                 Token::Dot => {
                     // Peek ahead to check for .await
@@ -34,6 +61,8 @@ impl Parser {
                             _ => None,
                         };
                         if let Some(field) = field_opt {
+                            // Diagnostics point at the method name, not at the token after the call.
+                            let name_loc = self.current_location();
                             self.advance();
 
                             // Check for turbofish ::<Type>
@@ -64,8 +93,7 @@ impl Parser {
                             if self.current_token() == &Token::LParen {
                                 // Check for newline before LParen (ASI)
                                 if self.had_newline_before_current() {
-                                    // ASI: This LParen starts a new statement, not a method call
-                                    // Create a field access and break
+                                    // ASI: `(` on a new line starts a statement; keep the field access
                                     self.alloc_expr(Expression::FieldAccess {
                                         object: expr,
                                         field,
@@ -74,8 +102,7 @@ impl Parser {
                                 } else {
                                     // Method call (possibly with turbofish)
                                     self.advance();
-                                    let arguments = self.parse_arguments()?;
-                                    self.expect(Token::RParen)?;
+                                    let arguments = self.parse_call_rest(Some(format!(".{field}")))?;
                                     if let Some(lowered) =
                                         self.lower_stream_method_call(expr, &field, &arguments)
                                     {
@@ -86,7 +113,7 @@ impl Parser {
                                             method: field,
                                             type_args,
                                             arguments,
-                                            location: self.current_location(),
+                                            location: name_loc,
                                         })
                                     }
                                 }
@@ -228,8 +255,8 @@ impl Parser {
 
                         if self.current_token() == &Token::LParen {
                             self.advance();
-                            let arguments = self.parse_arguments()?;
-                            self.expect(Token::RParen)?;
+                            let key = crate::parser::named_args::call_key(expr).map(|t| format!("{t}::{method}"));
+                            let arguments = self.parse_call_rest(key)?;
                             self.alloc_expr(Expression::MethodCall {
                                 object: expr,
                                 method,
@@ -248,26 +275,18 @@ impl Parser {
                     }
                 }
                 Token::LParen => {
-                    // Check for newline before LParen (automatic semicolon insertion)
-                    // If there was a newline, this might be a new statement, not a function call
-                    if self.had_newline_before_current() {
-                        // ASI: Treat newline as statement terminator
-                        // Don't consume the LParen - it belongs to the next statement
-                        break;
-                    }
-
                     self.advance();
-                    let arguments = self.parse_arguments()?;
-                    self.expect(Token::RParen)?;
+                    let arguments = self.parse_call_rest(crate::parser::named_args::call_key(expr))?;
                     self.alloc_expr(Expression::Call {
                         function: expr,
                         arguments,
                         location: self.current_location(),
                     })
                 }
+                Token::QuestionQuestion if self.double_try_follows() => self.double_try(expr),
+                Token::Question if self.at_optional_chain() => self.parse_optional_chain(expr)?,
                 Token::Question => {
-                    // TryOp: expr?
-                    // No ambiguity since we removed ternary operator
+                    // TryOp: expr? (no ternary operator, so no ambiguity)
                     self.advance();
                     self.alloc_expr(Expression::TryOp {
                         expr,
@@ -361,37 +380,11 @@ impl Parser {
                         }
                     }
                 }
-                Token::DotDot | Token::DotDotEq => {
-                    // Don't parse as range if followed by ] (that's slice syntax)
-                    if let Some(next_tok) = self.peek(1) {
-                        if next_tok == &Token::RBracket {
-                            // This is slice syntax like [1..], not a range
-                            // Let the LBracket handler deal with it
-                            break;
-                        }
-                    }
-
-                    let inclusive = self.current_token() == &Token::DotDotEq;
-                    if let Some(open) = self.try_parse_range_from(expr) {
-                        expr = open;
-                        continue;
-                    }
-                    self.advance();
-                    // P3.280: range end must be a full expression so
-                    // `(cx - 16)..(cx + 16)` and `a..b + c` parse correctly.
-                    // Previously only `parse_primary_expression` ran, dropping
-                    // binary ops on the end bound unless parenthesized.
-                    let end = self.parse_binary_expression(0)?;
-                    self.alloc_expr(Expression::Range {
-                        start: expr,
-                        end,
-                        inclusive,
-                        location: self.current_location(),
-                    })
-                }
+                // `..` / `..=` is not a postfix operator: a range has lower precedence than every
+                // binary operator (`a + 1..n` is `(a + 1)..n`) and is built in `parse_range_expression`.
                 Token::As => {
                     self.advance();
-                    let type_ = self.parse_type()?;
+                    let type_ = self.parse_cast_type()?;
                     self.alloc_expr(Expression::Cast {
                         expr,
                         type_,

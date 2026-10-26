@@ -1,0 +1,60 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::fs\nuse std::collections::BTreeMap\n\nfn balance_of(m: BTreeMap<string, int>, name: string) -> Option<int> {\n    m.get(name).cloned()\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut m: BTreeMap<string, int> = BTreeMap::new()\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0]\n        if cmd == \"open\" && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(-1)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if balance_of(m, p[1]).is_some() {\n                println(\"error: duplicate account\")\n            } else {\n                m.insert(p[1], amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            match balance_of(m, p[1]) {\n                Some(b) => println(\"${b}\"),\n                None => println(\"error: unknown account ${p[1]}\"),\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                match balance_of(m, p[1]) {\n                    None => println(\"error: unknown account ${p[1]}\"),\n                    Some(b) => {\n                        if cmd == \"deposit\" {\n                            m.insert(p[1], b + amt)\n                            println(\"ok\")\n                        } else if amt > b {\n                            println(\"error: insufficient funds\")\n                        } else {\n                            m.insert(p[1], b - amt)\n                            println(\"ok\")\n                        }\n                    }\n                }\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let amt = p[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                match balance_of(m, p[1]) {\n                    None => println(\"error: unknown account ${p[1]}\"),\n                    Some(fb) => {\n                        match balance_of(m, p[2]) {\n                            None => println(\"error: unknown account ${p[2]}\"),\n                            Some(tb) => {\n                                if p[1] == p[2] {\n                                    println(\"error: same account\")\n                                } else if amt > fb {\n                                    println(\"error: insufficient funds\")\n                                } else {\n                                    m.insert(p[1], fb - amt)\n                                    m.insert(p[2], tb + amt)\n                                    println(\"ok\")\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n    for (k, v) in m {\n        println(\"${k} ${v}\")\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::BTreeMap\n\nfn balance_of(m: BTreeMap<string, int>, name: string) -> Option<int> {\n    m.get(name).cloned()\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut m: BTreeMap<string, int> = BTreeMap::new()\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0]\n        if cmd == \"open\" && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(-1)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if balance_of(m, p[1]).is_some() {\n                println(\"error: duplicate account\")\n            } else {\n                m.insert(p[1], amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            match balance_of(m, p[1]) {\n                Some(b) => println(\"${b}\"),\n                None => println(\"error: unknown account ${p[1]}\"),\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                match balance_of(m, p[1]) {\n                    None => println(\"error: unknown account ${p[1]}\"),\n                    Some(b) => {\n                        if cmd == \"deposit\" {\n                            m.insert(p[1], b + amt)\n                            println(\"ok\")\n                        } else if amt > b {\n                            println(\"error: insufficient funds\")\n                        } else {\n                            m.insert(p[1], b - amt)\n                            println(\"ok\")\n                        }\n                    }\n                }\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let amt = p[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                match balance_of(m, p[1]) {\n                    None => println(\"error: unknown account ${p[1]}\"),\n                    Some(fb) => {\n                        match balance_of(m, p[2]) {\n                            None => println(\"error: unknown account ${p[2]}\"),\n                            Some(tb) => {\n                                if p[1] == p[2] {\n                                    println(\"error: same account\")\n                                } else if amt > fb {\n                                    println(\"error: insufficient funds\")\n                                } else {\n                                    m.insert(p[1], fb - amt)\n                                    m.insert(p[2], tb + amt)\n                                    println(\"ok\")\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n    for (k, v) in m {\n        println(\"${k} ${v}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 11.415,
+   "verb": "run"
+  }
+ ],
+ "mode_violations": 0,
+ "other_seconds": 12.66,
+ "pass_final": true,
+ "recorded_at": "2026-10-19T10:35:12",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 11.229,
+ "tool_wait_seconds": 11.41,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 11.229,
+  "cost_usd": 0.0352837,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It compiles with `wj build` and runs correctly under `wj run --compiled`.\n\nI ran a test input that is Example 1 plus two extra lines, `transfer a a 1` and `transfer a q 1`. The output matched Example 1 line for line. The two extra lines gave `error: same account` and `error: unknown account q`. I did not run Example 2 or any other input, and I wrote no `*_test.wj",
+  "subtype": "success",
+  "tokens_in": 27667,
+  "tokens_out": 1790,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 35.3
+}

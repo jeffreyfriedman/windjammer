@@ -1,0 +1,7 @@
+fn bump(a: u8) -> u8 {
+    a + 200
+}
+fn main() {
+    println("${bump(55)}")
+    println("${bump(56)}")
+}

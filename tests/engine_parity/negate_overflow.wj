@@ -1,0 +1,8 @@
+fn n8(x: i8) -> i8 {
+    -x
+}
+fn main() {
+    println("${n8(-127)}")
+    let m: i8 = -128
+    println("${n8(m)}")
+}

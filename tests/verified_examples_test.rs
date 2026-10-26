@@ -88,7 +88,9 @@ fn run_example(h: &ExampleHeader, path: &Path) -> Option<String> {
         }
         return None;
     }
-    let o = Command::new(WJ).args(["run", "--interpret"]).arg(path).output().unwrap();
+    // `// allow:` lines are the capabilities the example needs (it runs under the default sandbox, ADR-0021)
+    let allow: Vec<&str> = h.allow.iter().flat_map(|a| ["--allow", a.as_str()]).collect();
+    let o = Command::new(WJ).args(["run", "--interpret"]).args(allow).arg(path).output().unwrap();
     compare(h, &lines(&o), o.status.code().unwrap_or(-1))
 }
 
@@ -171,6 +173,21 @@ fn compiled(h: &ExampleHeader, path: &Path) -> Result<Vec<String>, String> {
     }
     let o = Command::new(&bin).output().unwrap();
     Ok(lines(&o))
+}
+
+/// Ratchet: the compiled-path gap count only shrinks. Lower this when a gap is fixed; never raise it.
+/// North star: zero (`// rust: gap` must disappear from the corpus).
+const MAX_RUST_GAPS: usize = 47;
+
+#[test]
+fn rust_gap_count_only_shrinks() {
+    let all = load_examples(&dir()).unwrap();
+    let gaps = all.iter().filter(|(h, _)| matches!(h.rust, RustStatus::Gap(_))).count();
+    assert!(gaps <= MAX_RUST_GAPS, "{gaps} gap programs > ratchet {MAX_RUST_GAPS}: a regression moved a program back to `rust: gap`");
+    assert!(
+        gaps == MAX_RUST_GAPS,
+        "{gaps} gap programs < ratchet {MAX_RUST_GAPS}: lower MAX_RUST_GAPS to {gaps} to lock in the progress"
+    );
 }
 
 #[test]

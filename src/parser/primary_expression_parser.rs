@@ -5,6 +5,17 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// The path segment spelled by the token at `index`: an identifier, or `thread` / `async`, which are keywords
+    /// and also standard-library module names (`std::thread::spawn`).
+    fn path_segment_name_at(&self, index: usize) -> Option<String> {
+        match &self.tokens.get(index)?.token {
+            Token::Ident(name) => Some(name.clone()),
+            Token::Thread => Some("thread".to_string()),
+            Token::Async => Some("async".to_string()),
+            _ => None,
+        }
+    }
+
     pub(in crate::parser) fn parse_primary_expression(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
@@ -18,21 +29,8 @@ impl Parser {
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
         let expr = match self.current_token() {
-            Token::Underscore if self.in_pipe_stage => {
-                self.pipe_placeholders.push(self.position);
-                let location = self.current_location();
-                self.advance();
-                self.alloc_expr(Expression::Identifier {
-                    name: "_".to_string(),
-                    location,
-                })
-            }
-            Token::Underscore => {
-                return Err(self.pipe_error(
-                    self.position,
-                    "placeholder `_` is only valid as a direct argument of a `|>` stage (e.g. `x |> f(a, _)`)",
-                ));
-            }
+            // `_`: a shorthand-closure parameter or a `|>` placeholder (parser/shorthand_closure.rs).
+            Token::Underscore => self.shorthand_hole()?,
             Token::Thread => {
                 // Check if this is a thread block or a module path
                 if self.peek(1) == Some(&Token::LBrace) {
@@ -108,7 +106,7 @@ impl Parser {
                 } else {
                     false
                 };
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
@@ -122,7 +120,7 @@ impl Parser {
             Token::Star => {
                 // Dereference: *expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
                     operand,
@@ -132,7 +130,7 @@ impl Parser {
             Token::Minus => {
                 // Negation: -expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
                     operand,
@@ -142,35 +140,14 @@ impl Parser {
             Token::Bang => {
                 // Logical not: !expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
                     operand,
                     location: self.current_location(),
                 })
             }
-            Token::Self_ => {
-                // `self` the value, or `self::f` the module-relative path. They must stay
-                // distinct in the AST: `self.f()` is a method call on the value (MethodCall),
-                // `self::f()` calls the free function `f` of the current module (Call on a path
-                // identifier). Conflating them made the resolver pick method candidates for a path.
-                self.advance();
-                let mut name = "self".to_string();
-                while self.current_token() == &Token::ColonColon {
-                    if let Some(Token::Ident(seg)) = self.peek(1) {
-                        name.push_str("::");
-                        name.push_str(seg);
-                        self.advance();
-                        self.advance();
-                    } else {
-                        break;
-                    }
-                }
-                self.alloc_expr(Expression::Identifier {
-                    name,
-                    location: self.current_location(),
-                })
-            }
+            Token::Self_ => self.parse_self_value_or_path(),
             Token::IntLiteral(n) => {
                 let n = *n;
                 let loc = self.current_location();
@@ -219,10 +196,9 @@ impl Parser {
             }
             Token::InterpolatedString(parts) => {
                 let parts = parts.clone();
-                let loc = self.current_location();
                 let starts = self.tokens[self.position].interpolation_starts.clone();
                 self.advance();
-                self.finish_interpolated_string(parts, loc, starts)?
+                self.finish_interpolated_string(parts, starts)?
             }
             Token::BoolLiteral(b) => {
                 let b = *b;
@@ -259,10 +235,10 @@ impl Parser {
                 while self.current_token() == &Token::ColonColon {
                     // Look ahead to see if there's an identifier after ::
                     if self.position + 1 < self.tokens.len() {
-                        if let Token::Ident(next_name) = &self.tokens[self.position + 1].token {
+                        if let Some(next_name) = self.path_segment_name_at(self.position + 1) {
                             // This is a qualified path segment
                             qualified_name.push_str("::");
-                            qualified_name.push_str(next_name);
+                            qualified_name.push_str(&next_name);
                             self.advance(); // consume ::
                             self.advance(); // consume identifier
                         } else if let Token::Lt = &self.tokens[self.position + 1].token {
@@ -466,8 +442,8 @@ impl Parser {
                 }
             }
             Token::Match => self.parse_primary_match()?,
-            Token::Pipe => self.parse_primary_closure_pipe()?,
-            Token::Or => self.parse_primary_closure_or()?,
+            Token::Pipe => self.with_explicit_closure(|p| p.parse_primary_closure_pipe())?,
+            Token::Or => self.with_explicit_closure(|p| p.parse_primary_closure_or())?,
             Token::If => self.parse_primary_if()?,
             Token::Unsafe => self.parse_primary_unsafe_block()?,
             Token::LBrace => {
@@ -545,31 +521,12 @@ impl Parser {
                     })
                 }
             }
-            // `loop { .. break value .. }` / `'label: loop { .. }` used as a value: a block whose
-            // tail statement is the loop (the loop evaluates to its `break` value).
-            Token::Loop => {
-                let stmt = self.parse_loop(None)?;
-                self.alloc_expr(Expression::Block {
-                    statements: vec![stmt],
-                    is_unsafe: false,
-                    location: self.current_location(),
-                })
-            }
-            Token::Lifetime(_) if self.peek(1) == Some(&Token::Colon) => {
-                let stmt = self.parse_statement()?;
-                self.alloc_expr(Expression::Block {
-                    statements: vec![stmt],
-                    is_unsafe: false,
-                    location: self.current_location(),
-                })
-            }
+            Token::Loop => self.parse_loop_expression()?,
+            Token::Lifetime(_) if self.peek(1) == Some(&Token::Colon) => self.parse_loop_expression()?,
             Token::Return => {
                 // Return expression: return expr
                 self.advance(); // consume 'return'
-                let return_value = if matches!(
-                    self.current_token(),
-                    Token::Comma | Token::RBrace | Token::Semicolon
-                ) {
+                let return_value = if self.return_has_no_value() {
                     None
                 } else {
                     Some(self.parse_expression()?)

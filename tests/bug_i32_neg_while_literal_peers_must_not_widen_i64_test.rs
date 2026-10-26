@@ -40,6 +40,9 @@ pub fn search_offsets(radius: f32) -> i32 {
 }
 "#;
 
+// Width is the unified solver's since ADR-0015 (`int` is i64, and an untyped literal follows its peers), so the old
+// text assertions about i32 vs i64 no longer describe the contract. The property that mattered in the dogfood
+// code is that the emitted Rust has no mixed-width arithmetic: it compiles (`cargo check`).
 #[test]
 fn i32_neg_while_literal_peers_must_not_widen_i64() {
     let mut test = MultiFileTest::new();
@@ -47,12 +50,5 @@ fn i32_neg_while_literal_peers_must_not_widen_i64() {
     let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("MultiFile lib.rs:\n{rs}");
-    // Consistent i32 (`-1_i32` + `1_i32`) is GREEN. Split is i64 counter + i32 lit peers.
-    let split = (rs.contains("-1_i64") || rs.contains("= -1_i64"))
-        && (rs.contains("1_i32") || rs.contains("0_i32") || rs.contains("while i <= 1_i32"));
-    assert!(
-        !split,
-        "neg while counter must stay one int width (no i64 vs i32 lit):\n{rs}"
-    );
     test.cargo_check().expect("cargo-check");
 }

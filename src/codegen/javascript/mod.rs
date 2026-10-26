@@ -57,6 +57,7 @@ impl JavaScriptBackend {
 
     fn lower(&self, program: &Program, config: &CodegenConfig) -> Result<portable::PModule> {
         let program = if config.tree_shake { tree_shaker::shake_tree(program) } else { program.clone() };
+        let program = portable::prelude::with_arena_prelude(&program).unwrap_or(program);
         let ctx = crate::ir::analyze_and_lower(&program)?;
         let mut m = portable::lower::lower_program(&program, Some(&ctx.registry)).map_err(|e| anyhow!("{e}"))?;
         flatten::flatten_module(&mut m);
@@ -80,11 +81,8 @@ impl CodegenBackend for JavaScriptBackend {
     }
 
     fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
-        if config.minify || config.polyfills || config.v8_optimize {
-            anyhow::bail!("--minify/--polyfills/--v8-optimize were removed: they operated on text and could change program meaning (see docs/backends/ASSESSMENT.md)");
-        }
         let m = self.lower(program, config)?;
-        let body = emit::emit_module(&m, &EmitOptions { typescript: self.typescript }).map_err(|e| anyhow!("{e}"))?;
+        let body = emit::emit_module(&m, &EmitOptions { typescript: self.typescript, capability_install: config.capability_install.clone() }).map_err(|e| anyhow!("{e}"))?;
         let ext = if self.typescript { "ts" } else { "mjs" };
         Ok(CodegenOutput::new(with_runtime_import(body), ext.to_string()))
     }

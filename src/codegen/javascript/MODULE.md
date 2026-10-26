@@ -14,12 +14,18 @@ One emitter serves both languages; `JavaScriptBackend::typescript()` adds type a
 - `Vec` = Array, `HashMap` = Map (integer/string/char/bool keys only), `HashSet` = Set, tuple = Array.
 - `Option<T>` = `null | {v}`, `Result<T, E>` = `{ok, v}`; structs = classes with `clone()`; enums = base class + one class per variant (`$t` tag).
 - Strings are UTF-16 in memory but `len()`, slicing and `find` use UTF-8 byte semantics (`$strlen`, `$strSlice`).
-- Panics exit 101 (`$run`); output is buffered and flushed on exit.
+- Panics exit 101 (`$run`); output is buffered and flushed on exit. Under Node, `main` runs on a worker thread
+  with a 64 MiB stack (Rust's main thread has 8 MiB; Node's default ~1 MiB overflowed at ~10k frames).
+- `&mut` (`emit/refs.rs`): a `&mut` of a value-represented type (numbers, strings, bool, char, `Option`,
+  `Result`, enums, generics) is an accessor cell `{ v }` reading/writing the borrowed place (`$cellOf`,
+  `$cellIx`, or an inline getter/setter for a local); `&mut self` on an enum is a static method taking a cell.
+  Structs, `Vec`, maps, sets and tuples are shared objects; `*r = x` through such an alias is `$replace(r, x)`.
+  Where borrows exist comes from the IR (`ParamMode::MutRef`, `PK::BorrowMut`); code without them is unchanged.
 
 
 ## Intrinsics
-Same as Go: lowered by the portable layer to `$print`/`$eprint`/`$panic`; format specs use `$pad`, `$fixed`, `$radix`, `$dbg*`.
-The TypeScript flavour is exercised on the intrinsic corpus (`intrinsic_corpus_conforms_on_typescript`, Node type stripping).
+Same as Go: lowered by the portable layer to `$print`/`$eprint`/`$panic`; format specs follow Rust's Formatter: an options object `{ w, fill, align, zero, plus, alt, prec }` passed to `$fmtInt`/`$fmtFloat`/`$fmtStr` and to every `$dbg*` formatter (options reach the elements of aggregates; `alt` = pretty layout).
+The TypeScript flavour runs the whole conformance corpus (`corpus_conforms_on_typescript`, Node type stripping).
 
 
 ## Invariants
@@ -36,7 +42,7 @@ Typing or ownership (the portable layer does).
 ## Removed (see docs/backends/ASSESSMENT.md)
 `minifier`, `polyfills`, `source_maps`, `v8_optimizer`, `module_federation`,
 `web_workers`, `code_splitter`, `differential_loading`: they were text/regex scaffolding with no connection to program semantics.
-`--minify/--polyfills/--v8-optimize/--source-maps` now fail loudly. `tree_shaker` (AST-level) is kept.
+`--minify/--polyfills/--v8-optimize` were removed from the CLI; `--source-maps` is refused on this backend with an explanatory error. `tree_shaker` (AST-level) is kept.
 
 
 ## Allowed imports

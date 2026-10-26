@@ -147,7 +147,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.extend_implicit_self_parameters(analyzed, func, &mut params);
             let unused_params = self.compute_unused_formal_parameter_names(func);
             self.refresh_unused_let_bindings_for_function_body(&func.body);
-            params.extend(self.collect_additional_formal_parameter_strings(
+            params.extend(self.collect_formal_parameter_strings(
                 analyzed,
                 func,
                 false,
@@ -352,7 +352,7 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str("let _bench_result = windjammer_runtime::bench::bench(|| {\n");
             self.indent_level += 1;
         }
-
+        self.push_capability_install(func, &mut output);
         // Tracy zone (CPU): innermost around timed work so @timeout / @bench wrappers are excluded
         if needs_profile {
             let zone_expr = if let Some(dec) = profile_decorator {

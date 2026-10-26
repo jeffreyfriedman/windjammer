@@ -1,0 +1,17 @@
+// spec: SPEC-EFF-018
+// mode: check-error
+// manifest: [capabilities]
+// manifest: net.connect = ["*"]
+// manifest: [policy]
+// manifest: forbid.ui = ["net"]
+// expect-error: WJ0043: module `ui` may not perform `net.connect`
+use std::http
+mod data {
+    pub fn latest() -> bool { http::get("http://api.example.com/").is_ok() }
+}
+mod ui {
+    pub fn render() -> string { if super::data::latest() { "fresh" } else { "stale" } }
+}
+fn main() {
+    println(ui::render())
+}

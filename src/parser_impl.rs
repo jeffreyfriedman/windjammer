@@ -64,7 +64,7 @@
 //   - parser/items.rs - Top-level item parsing
 
 use crate::lexer::Token;
-use typed_arena::Arena as RawArena;
+use std::sync::Arc;
 
 // Import all AST types from the new parser::ast module
 pub use crate::parser::ast::*;
@@ -84,31 +84,6 @@ pub struct ParseWarning {
     pub is_error: bool,
 }
 
-/// True when `msg` already contains a `:line:col` pair (e.g. `file.wj:3:5: error: ...`).
-pub(crate) fn message_has_line_col(msg: &str) -> bool {
-    let b = msg.as_bytes();
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b':' {
-            let mut j = i + 1;
-            while j < b.len() && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j > i + 1 && j < b.len() && b[j] == b':' {
-                let mut k = j + 1;
-                while k < b.len() && b[k].is_ascii_digit() {
-                    k += 1;
-                }
-                if k > j + 1 {
-                    return true;
-                }
-            }
-        }
-        i += 1;
-    }
-    false
-}
-
 pub struct Parser {
     pub(crate) tokens: Vec<crate::lexer::TokenWithLocation>,
     pub(crate) position: usize,
@@ -123,118 +98,48 @@ pub struct Parser {
     pub(crate) in_pipe_stage: bool,
     /// Number of `_` placeholders produced in the current pipe stage.
     pub(crate) pipe_placeholders: Vec<usize>,
+    /// `_` shorthand-closure frames, one per call argument being parsed (ADR-0018, `parser/shorthand_closure.rs`).
+    pub(crate) shorthand_frames: Vec<crate::parser::shorthand_closure::ShorthandFrame>,
+    /// Explicit closures being parsed (a `_` inside one, in the same argument, is an error).
+    pub(crate) closure_depth: usize,
+    /// Named-argument lowering table (second parse pass only; `parser/named_args.rs`).
+    pub(crate) call_table: Option<crate::parser::named_args::CallTable>,
+    /// A labelled call argument (`f(x: 1)`) was parsed.
+    pub(crate) saw_label: bool,
     // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
-    // SOUNDNESS: `parse()` returns `Program<'static>`, so nothing ties the AST to this Parser. The
-    // arenas therefore must outlive every Program, and the wrapper `Arena` never frees them (see its docs).
-    // Dropping the Parser after `parse()` used to free the nodes under a live `Program` (use after free).
-    pub(crate) expr_arena: Arena<Expression<'static>>,
-    pub(crate) stmt_arena: Arena<Statement<'static>>,
-    pub(crate) pattern_arena: Arena<Pattern<'static>>,
-    /// Node spans (off unless `enable_span_log()` was called).
-    pub(crate) span_log: std::cell::RefCell<Option<crate::parser::span_log::SpanLog>>,
+    // SOUNDNESS: nodes are handed out as `'static` references, so the type system cannot tie them to this
+    // arena bundle. Instead, `parse()` *seals* the bundle: it moves the `Arc` into the returned `Program`
+    // (as its `AstOwner`) and installs a fresh bundle here. The arenas live exactly as long as the last
+    // program (or merged program) that borrows them; the parser can be dropped at any time.
+    pub(crate) arenas: Arc<AstArenas>,
+    /// `AstArenas` is `Sync` only once sealed; a parser allocates through `&self`, so it must not be shared.
+    _not_sync: std::marker::PhantomData<std::cell::Cell<()>>,
     /// Errors already reported and recovered from (statement-level recovery); `parse()` fails
     /// with all of them plus the final one.
     pub(crate) recovered_errors: Vec<String>,
     /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
     pub(crate) recovering: bool,
-}
-
-/// An AST arena that is **never freed** (same API as `typed_arena::Arena` for the calls the parser makes).
-///
-/// `Program<'static>` borrows from the arenas owned by the `Parser` that produced it, but the type system
-/// does not know that: the `'static` lifetime lets the program outlive the parser. Freeing the arenas when
-/// the parser is dropped is therefore a use-after-free for every caller that drops the parser first (the
-/// common pattern). Until `Program` owns a reference-counted handle to its arenas (design in
-/// `docs/design/parser-arena-ownership.md`), the sound choice is to retire the arena: leak it and count it.
-/// Cost: AST memory of each parse lives until process exit (short-lived `wj` runs; the LSP should re-use
-/// parses). `ArenaLedger` backs the drop-order test in `tests/parser_arena_soundness_test.rs`.
-pub struct Arena<T> {
-    raw: std::mem::ManuallyDrop<RawArena<T>>,
-    ledger: ArenaLedger,
-    free_on_drop: bool,
-}
-
-/// Counts whether one arena was retired (leaked on purpose) or actually freed. A clone outlives the arena,
-/// so a test can drop the parser and then assert `freed() == 0`. (Per arena, not process-global: the
-/// architecture ratchet forbids new global state.)
-#[derive(Clone, Default, Debug)]
-pub struct ArenaLedger(std::sync::Arc<LedgerCounts>);
-
-#[derive(Default, Debug)]
-struct LedgerCounts {
-    retired: std::sync::atomic::AtomicUsize,
-    freed: std::sync::atomic::AtomicUsize,
-}
-
-impl ArenaLedger {
-    /// Arenas intentionally leaked because their owner was dropped.
-    pub fn retired(&self) -> usize {
-        self.0.retired.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Arenas actually freed. Must stay 0 for every arena a `Parser` creates; a non-zero value means some
-    /// code path can invalidate a live `Program<'static>`.
-    pub fn freed(&self) -> usize {
-        self.0.freed.load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
-/// The ledgers of a parser's three arenas (expression, statement, pattern), summed.
-#[derive(Clone, Debug)]
-pub struct ParserArenaLedger(Vec<ArenaLedger>);
-
-impl ParserArenaLedger {
-    pub fn retired(&self) -> usize {
-        self.0.iter().map(ArenaLedger::retired).sum()
-    }
-    pub fn freed(&self) -> usize {
-        self.0.iter().map(ArenaLedger::freed).sum()
-    }
-}
-
-impl<T> Default for Arena<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> Arena<T> {
-    pub fn new() -> Self {
-        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: false }
-    }
-
-    /// The unsound behavior, kept only so a test can prove `ArenaLedger::freed()` detects it.
-    #[doc(hidden)]
-    pub fn new_freeing_for_mutation_test() -> Self {
-        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: true }
-    }
-
-    pub fn ledger(&self) -> ArenaLedger {
-        self.ledger.clone()
-    }
-}
-
-impl<T> std::ops::Deref for Arena<T> {
-    type Target = RawArena<T>;
-    fn deref(&self) -> &RawArena<T> {
-        &self.raw
-    }
-}
-
-impl<T> Drop for Arena<T> {
-    fn drop(&mut self) {
-        if self.free_on_drop {
-            // SAFETY: only reachable from `Arena::new_freeing_for_mutation_test`, whose arena nothing borrows.
-            unsafe { std::mem::ManuallyDrop::drop(&mut self.raw) };
-            self.ledger.0.freed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        } else {
-            self.ledger.0.retired.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        }
-    }
+    /// True while parsing the operand of a prefix operator (stops before `as`).
+    pub(crate) in_unary_operand: bool,
+    /// Node spans (off unless `enable_span_log()` was called).
+    pub(crate) span_log: std::cell::RefCell<Option<crate::parser::span_log::SpanLog>>,
 }
 
 impl Parser {
+    /// Index of the next unconsumed token (tests use it to check a parse consumed its input).
+    pub fn token_position(&self) -> usize {
+        self.position
+    }
+
+    /// 1-based (line, column) of the token the parser stopped at (for error reporting).
+    pub fn error_position(&self) -> Option<(usize, usize)> {
+        self.tokens
+            .get(self.position)
+            .or_else(|| self.tokens.last())
+            .map(|t| (t.src_line, t.src_column))
+    }
+
     /// Check if there was a newline before the current token (for ASI - Automatic Semicolon Insertion)
     pub(crate) fn had_newline_before_current(&self) -> bool {
         if self.position == 0 {
@@ -262,12 +167,16 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
-            expr_arena: Arena::new(),
-            stmt_arena: Arena::new(),
-            pattern_arena: Arena::new(),
-            span_log: std::cell::RefCell::new(None),
+            shorthand_frames: Vec::new(),
+            closure_depth: 0,
+            call_table: None,
+            saw_label: false,
+            arenas: Arc::new(AstArenas::new()),
+            _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
             recovering: false,
+            in_unary_operand: false,
+            span_log: std::cell::RefCell::new(None),
         }
     }
 
@@ -285,19 +194,23 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
-            expr_arena: Arena::new(),
-            stmt_arena: Arena::new(),
-            pattern_arena: Arena::new(),
-            span_log: std::cell::RefCell::new(None),
+            shorthand_frames: Vec::new(),
+            closure_depth: 0,
+            call_table: None,
+            saw_label: false,
+            arenas: Arc::new(AstArenas::new()),
+            _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
             recovering: false,
+            in_unary_operand: false,
+            span_log: std::cell::RefCell::new(None),
         }
     }
 
     /// `line L, column C` of the current token (the last token when past the end).
     pub(crate) fn pos_desc(&self) -> String {
         match self.tokens.get(self.position).or_else(|| self.tokens.last()) {
-            Some(t) => format!("line {}, column {}", t.line, t.column),
+            Some(t) => format!("line {}, column {}", t.src_line, t.src_column),
             None => "end of input".to_string(),
         }
     }
@@ -305,7 +218,7 @@ impl Parser {
     /// Guarantee `line L, column C` in a parse error (many call sites build bare messages).
     /// The position is that of the token the parser stopped at.
     pub(crate) fn with_position(&self, message: String) -> String {
-        if (message.contains("line ") && message.contains(", column ")) || message_has_line_col(&message) {
+        if message.contains("line ") && message.contains(", column ") {
             message
         } else {
             format!("{} (at {})", message, self.pos_desc())
@@ -459,40 +372,55 @@ impl Parser {
         });
     }
 
-    /// Handle that outlives this parser and reports whether its AST arenas were ever freed.
-    pub fn arena_ledger(&self) -> ParserArenaLedger {
-        ParserArenaLedger(vec![self.expr_arena.ledger(), self.stmt_arena.ledger(), self.pattern_arena.ledger()])
+    /// A sub-parser (string interpolation) that allocates into `parent`'s arena bundle, so its nodes are owned
+    /// by the `Program` the parent's `parse()` returns. Only used synchronously on the parent's thread.
+    pub(crate) fn new_sharing_arenas(tokens: Vec<crate::lexer::TokenWithLocation>, parent: &Parser) -> Self {
+        let mut p = Parser::new(tokens);
+        p.arenas = parent.arenas.clone();
+        p
     }
 
-    /// Allocate an expression in the arena
-    /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'ast (result lifetime)
-    /// This is safe because:
-    /// 1. The arena is never freed (`Arena` wrapper), so references outlive the Parser and any Program
-    /// 2. We use a separate 'ast lifetime (not tied to &self borrow) to allow multiple allocations
-    /// 3. The arena uses interior mutability (Cell), so &self is sufficient
+    /// Ledger of the arena bundle currently being filled (the one the next `parse()` will seal).
+    pub fn arena_ledger(&self) -> ArenaLedger {
+        self.arenas.ledger()
+    }
+
+    /// Hand the filled arena bundle to the caller and start a fresh one.
+    fn seal_arenas(&mut self) -> AstOwner {
+        AstOwner::of(std::mem::replace(&mut self.arenas, Arc::new(AstArenas::new())))
+    }
+
+    /// Mutation-test hook: re-introduce the old behaviour (arenas are never freed) for `program`'s storage.
+    #[doc(hidden)]
+    pub fn leak_arenas_for_mutation_test(&self, program: &Program<'static>) {
+        std::mem::forget(program.owner().clone());
+    }
+
+    /// Allocate an expression in the arena.
+    /// SAFETY of the lifetime extension: the reference points into `self.arenas`, which `parse()` moves into
+    /// the resulting `Program`'s `AstOwner`; the nodes are only observable through that program (or a program
+    /// built with `Program::from_items_of`), which keeps the arena alive. Boxed arena chunks never move.
     pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
         unsafe {
-            let ptr = self.expr_arena.alloc(expr);
+            let ptr = self.arenas.expr.alloc(expr);
             self.record_span(ptr as *const Expression<'static> as usize);
             std::mem::transmute(ptr)
         }
     }
 
-    /// Allocate a statement in the arena
-    /// SAFETY: Same as alloc_expr
+    /// Allocate a statement in the arena (same argument as `alloc_expr`).
     pub(crate) fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
         unsafe {
-            let ptr = self.stmt_arena.alloc(stmt);
+            let ptr = self.arenas.stmt.alloc(stmt);
             self.record_span(ptr as *const Statement<'static> as usize);
             std::mem::transmute(ptr)
         }
     }
 
-    /// Allocate a pattern in the arena
-    /// SAFETY: Same as alloc_expr
+    /// Allocate a pattern in the arena (same argument as `alloc_expr`).
     pub(crate) fn alloc_pattern<'ast>(&self, pattern: Pattern<'static>) -> &'ast Pattern<'ast> {
         unsafe {
-            let ptr = self.pattern_arena.alloc(pattern);
+            let ptr = self.arenas.pattern.alloc(pattern);
             std::mem::transmute(ptr)
         }
     }
@@ -550,12 +478,13 @@ impl Parser {
                 let mut first = shr.clone();
                 first.token = Token::Gt;
                 first.byte_end = shr.byte_start + 1;
-                first.end_line = shr.line;
-                first.end_column = shr.column + 1;
+                first.end_line = shr.src_line;
+                first.end_column = shr.src_column + 1;
                 let mut second = shr;
                 second.token = Token::Gt;
                 second.byte_start += 1;
                 second.column += 1;
+                second.src_column += 1;
 
                 self.tokens[self.position] = first;
                 self.tokens.insert(self.position + 1, second);
@@ -577,23 +506,7 @@ impl Parser {
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
 
-    /// Parse a whole program. Every error line carries a position: `(at line L, column C)` of the
-    /// token the parser was looking at when it failed, or the producer's own `file:L:C:` prefix.
     pub fn parse(&mut self) -> Result<Program<'static>, String> {
-        self.parse_program()
-    }
-
-    pub(crate) fn locate_error(&self, msg: String) -> String {
-        if message_has_line_col(&msg) {
-            return msg;
-        }
-        match self.tokens.get(self.position).or_else(|| self.tokens.last()) {
-            Some(t) => format!("{}:{}:{}: error: {}", self.filename, t.line, t.column, msg),
-            None => msg,
-        }
-    }
-
-    fn parse_program(&mut self) -> Result<Program<'static>, String> {
         let mut items = Vec::new();
 
         // Lexical errors first, each with line:column. Parsing a stream with invalid tokens
@@ -626,8 +539,18 @@ impl Parser {
             return Err(errors.join("\n"));
         }
 
+        let program = Program::new(items);
+        // ADR-0018 named arguments / defaults: parse again with the file's callee table (parser/named_args.rs).
+        if self.call_table.is_none() {
+            if let Some(table) = crate::parser::named_args::call_table(&program, self.saw_label) {
+                self.call_table = Some(table);
+                self.position = 0;
+                self.warnings.clear();
+                return self.parse();
+            }
+        }
         self.emit_surface_syntax_warnings();
-        Ok(Program { items })
+        Ok(Program::with_owner(program.items, self.seal_arenas()))
     }
 
     pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {
@@ -894,6 +817,7 @@ impl Parser {
                 } else {
                     return Err("Expected type alias name".to_string());
                 };
+                let type_params = self.parse_type_params()?;
                 self.expect(Token::Assign)?;
                 let target = self.parse_type()?;
                 // Semicolon optional (ASI)
@@ -902,6 +826,7 @@ impl Parser {
                 }
                 Ok(Item::TypeAlias {
                     name,
+                    type_params,
                     target,
                     is_pub,
                     location: self.current_location(),
@@ -981,17 +906,4 @@ impl Parser {
 
     // Helper: Extract a name from a pattern for backward compatibility
 
-    // Public wrapper methods for component compiler
-    /// Index of the next unconsumed token (tests use it to check a parse consumed its input).
-    pub fn token_position(&self) -> usize {
-        self.position
-    }
-
-    pub fn parse_expression_public(&mut self) -> Result<&'static Expression<'static>, String> {
-        self.parse_expression()
-    }
-
-    pub fn parse_function_public(&mut self) -> Result<FunctionDecl<'static>, String> {
-        self.parse_function()
-    }
 }

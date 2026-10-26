@@ -1,0 +1,676 @@
+# Promise registry: everything Windjammer tells users it does. Read by tests/promise_registry_test.rs
+# (see docs/testing/INVARIANTS.md, "Promise registry").
+#
+# - `wj <sub>` / `wj <sub> --<flag>` entries must match the clap tree of `wj` exactly; `code X` entries
+#   must match docs/reference/errors.md. A new flag, command or code fails the gate until it is listed here
+#   and has acceptance cases (PROMISES_BLESS=1 appends missing entries as pending).
+# - `feature <id>` entries quote the sentence that makes the promise; the quote must stay in `source`.
+# - Every promise needs >=1 positive and >=1 negative acceptance case in tests/promises/*.toml that passes
+#   through the installed binary (codes: >=1 negative case whose expected output contains the code).
+# - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
+
+max_pending = 38
+
+[[promise]]
+id = "feature ownership-inferred"
+source = "README.md"
+quote = "Parameters and `self` become `&`, `&mut` or moves automatically"
+
+[[promise]]
+id = "feature ownership-visible"
+source = "README.md"
+quote = "`wj build --no-cargo FILE` writes out the Rust"
+
+[[promise]]
+id = "feature interpret-instant"
+source = "README.md"
+quote = "`wj run` starts a whole multi-module project in milliseconds"
+
+[[promise]]
+id = "feature json-diagnostics"
+source = "README.md"
+quote = "Structured JSON diagnostics, offline docs search"
+
+[[promise]]
+id = "feature offline-docs"
+source = "README.md"
+quote = "look things up with `wj docs <terms>`"
+
+[[promise]]
+id = "feature multi-backend"
+source = "README.md"
+quote = "with Go, JavaScript and WebAssembly backends alongside"
+
+[[promise]]
+id = "code E0308"
+pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+
+[[promise]]
+id = "code E0384"
+pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+
+[[promise]]
+id = "code E0425"
+pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+
+[[promise]]
+id = "code W0001"
+
+[[promise]]
+id = "code W0002"
+
+[[promise]]
+id = "code W0003"
+
+[[promise]]
+id = "code W0004"
+
+[[promise]]
+id = "code W0005"
+
+[[promise]]
+id = "code W0006"
+
+[[promise]]
+id = "code W0007"
+
+[[promise]]
+id = "code W0008"
+
+[[promise]]
+id = "code W0010"
+
+[[promise]]
+id = "code WJ0001"
+
+[[promise]]
+id = "code WJ0002"
+
+[[promise]]
+id = "code WJ0003"
+
+[[promise]]
+id = "code WJ0004"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
+
+[[promise]]
+id = "code WJ0005"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
+
+[[promise]]
+id = "code WJ0006"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
+
+[[promise]]
+id = "code WJ0007"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
+
+[[promise]]
+id = "code WJ0008"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
+
+[[promise]]
+id = "code WJ0009"
+
+[[promise]]
+id = "code WJ0010"
+
+[[promise]]
+id = "wj add"
+statement = "Add a dependency to wj.toml"
+
+[[promise]]
+id = "wj add --features"
+statement = "Comma-separated list of features"
+
+[[promise]]
+id = "wj add --path"
+statement = "Local path dependency"
+
+[[promise]]
+id = "wj agent-index"
+statement = "Generate agent index artifacts for MCP (errors, stdlib, spec JSON)"
+
+[[promise]]
+id = "wj agent-index --output"
+statement = "Output directory"
+
+[[promise]]
+id = "wj build"
+statement = "Build a Windjammer project"
+
+[[promise]]
+id = "wj build --check"
+statement = "Run cargo build after transpilation and show errors"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --defer-drop"
+statement = "Defer drop optimization mode (auto, always, never)"
+
+[[promise]]
+id = "wj build --defer-drop-threshold"
+statement = "Defer drop threshold in bytes (default: 102400 = 100KB)"
+
+[[promise]]
+id = "wj build --filter-file"
+statement = "Filter errors by file path"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --filter-type"
+statement = "Filter errors by type (error, warning)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --fix"
+statement = "Automatically apply fixes for fixable errors"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --ir-shadow-validate"
+statement = "Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate)"
+
+[[promise]]
+id = "wj build --json"
+statement = "Output diagnostics as machine-readable JSON (for agent/IDE consumption)"
+
+[[promise]]
+id = "wj build --library"
+statement = "Library mode: exclude test main() functions from output"
+
+[[promise]]
+id = "wj build --metadata"
+statement = "External crate metadata for cross-crate type inference (NAME=PATH, repeatable)"
+
+[[promise]]
+id = "wj build --module-file"
+statement = "Auto-generate mod.rs with pub mod declarations and re-exports"
+
+[[promise]]
+id = "wj build --no-cargo"
+statement = "Skip cargo build after transpilation (transpile only)"
+
+[[promise]]
+id = "wj build --no-generate-cargo-toml"
+statement = "Skip Cargo.toml generation (use project-maintained manifest)"
+
+[[promise]]
+id = "wj build --no-lint"
+statement = "Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.)"
+
+[[promise]]
+id = "wj build --output"
+statement = "Output directory (default: ./build)"
+
+[[promise]]
+id = "wj build --quiet"
+statement = "Show only error count (suppress detailed output)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --raw-errors"
+statement = "Show raw Rust errors instead of translated Windjammer errors"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --release"
+statement = "Build in release mode"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --source-maps"
+statement = "Generate source maps"
+
+[[promise]]
+id = "wj build --target"
+statement = "Target platform (rust, javascript, wasm)"
+
+[[promise]]
+id = "wj build --tree-shake"
+statement = "Enable tree shaking (dead code elimination)"
+
+[[promise]]
+id = "wj build --verbose"
+statement = "Show verbose error output (includes all notes and suggestions)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj cache"
+statement = "Manage the shared Cargo target cache (outside application repos)"
+
+[[promise]]
+id = "wj cache path"
+statement = "Print the shared (or --verify) Cargo target directory"
+
+[[promise]]
+id = "wj cache path --verify"
+statement = "Use the ephemeral verify cache (integration / codegen cargo checks)"
+
+[[promise]]
+id = "wj cache prune"
+statement = "Reclaim space (old incremental; aggressive when disk is low)"
+
+[[promise]]
+id = "wj cache prune --aggressive"
+statement = "Also clear debug incremental trees when reclaiming"
+
+[[promise]]
+id = "wj cache setup"
+statement = "Write env.sh / env.ps1 for bare `cargo` invocations"
+
+[[promise]]
+id = "wj cache status"
+statement = "Show cache sizes and free disk"
+
+[[promise]]
+id = "wj check"
+statement = "Type check without building"
+
+[[promise]]
+id = "wj check --json"
+statement = "Output diagnostics as machine-readable JSON (for agent/IDE consumption)"
+
+[[promise]]
+id = "wj clean"
+statement = "Clean build artifacts and stale temp files"
+
+[[promise]]
+id = "wj clean --all"
+statement = "Also clean local target/ directories (deep clean)"
+
+[[promise]]
+id = "wj docs"
+statement = "Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation"
+
+[[promise]]
+id = "wj docs --format"
+statement = "Format (html, markdown, json)"
+
+[[promise]]
+id = "wj docs --json"
+statement = "Print search results as JSON"
+
+[[promise]]
+id = "wj docs --limit"
+statement = "Maximum number of search results"
+
+[[promise]]
+id = "wj docs --output"
+statement = "Output directory for generated docs"
+
+[[promise]]
+id = "wj errors"
+statement = "Browse the diagnostics of a file or project (summary by code, filterable)"
+
+[[promise]]
+id = "wj errors --code"
+statement = "Show only this diagnostic code (e.g. WJ0010, W0002)"
+
+[[promise]]
+id = "wj errors --severity"
+statement = "Show only this severity (error, warning)"
+
+[[promise]]
+id = "wj explain"
+statement = "Explain an error code"
+
+[[promise]]
+id = "wj fix"
+statement = "Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms"
+
+[[promise]]
+id = "wj fix --check"
+statement = "Do not write; exit non-zero if any file would change"
+
+[[promise]]
+id = "wj fix --docs"
+statement = "Also migrate ```windjammer / ```wj code fences in .md files"
+
+[[promise]]
+id = "wj reduce"
+statement = "Shrink a failing project to a minimal, anonymized reproduction (delta debugging)"
+
+[[promise]]
+id = "wj reduce --oracle"
+statement = "Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present)"
+
+[[promise]]
+id = "wj reduce --output"
+statement = "Output directory for the minimal project and repro.md"
+
+[[promise]]
+id = "wj reduce --jobs"
+statement = "Candidates evaluated in parallel"
+
+[[promise]]
+id = "wj reduce --seed"
+statement = "Seed for the deterministic candidate order"
+
+[[promise]]
+id = "wj reduce --max-steps"
+statement = "Maximum number of oracle runs"
+
+[[promise]]
+id = "wj reduce --time-budget"
+statement = "Wall-clock budget for the reduction search, in seconds"
+
+[[promise]]
+id = "wj reduce --candidate-timeout"
+statement = "Timeout for a single oracle run, in seconds"
+
+[[promise]]
+id = "wj reduce --keep-names"
+statement = "Accept a partially anonymized result when some names cannot be renamed without losing the bug"
+
+[[promise]]
+id = "wj reduce --wj-bin"
+statement = "Compiler binary used by the oracles (default: this executable)"
+
+[[promise]]
+id = "wj reduce --verbose"
+statement = "Print progress counts to stderr (never source text)"
+
+[[promise]]
+id = "wj fmt"
+statement = "Format Windjammer code"
+
+[[promise]]
+id = "wj fmt --check"
+statement = "Check formatting without applying changes (non-zero exit if changes are needed)"
+
+[[promise]]
+id = "wj fmt --rust"
+statement = "Format generated Rust crates with `cargo fmt --all` instead of .wj files"
+
+[[promise]]
+id = "wj lint"
+statement = "Run Rust leakage linter on .wj files (W0001-W0004)"
+
+[[promise]]
+id = "wj lint --strict"
+statement = "Fail on warnings (for CI)"
+
+[[promise]]
+id = "wj new"
+statement = "Create a new Windjammer project"
+
+[[promise]]
+id = "wj new --template"
+statement = "Project template (cli, web, lib, wasm)"
+
+[[promise]]
+id = "wj remove"
+statement = "Remove a dependency from wj.toml"
+
+[[promise]]
+id = "wj repl"
+statement = "Start the Windjammerscript REPL (interactive interpreter)"
+
+[[promise]]
+id = "wj run"
+statement = "Compile and run a Windjammer file"
+
+[[promise]]
+id = "wj run --defer-drop"
+statement = "Defer drop optimization mode (auto, always, never)"
+
+[[promise]]
+id = "wj run --defer-drop-threshold"
+statement = "Defer drop threshold in bytes (default: 102400 = 100KB)"
+
+[[promise]]
+id = "wj run --interpret"
+statement = "Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release"
+
+[[promise]]
+id = "wj run --target"
+statement = "Target platform (rust, javascript, wasm)"
+
+[[promise]]
+id = "wj self-install"
+statement = "Install wj and plugins to ~/.wj/bin/ and ensure PATH"
+
+[[promise]]
+id = "wj shader-compile"
+statement = "Compile .wjsl shader to WGSL (with type checking)"
+
+[[promise]]
+id = "wj shader-compile --output"
+statement = "Output path for .wgsl file (default: stdout)"
+
+[[promise]]
+id = "wj stats"
+statement = "Show error statistics"
+
+[[promise]]
+id = "wj stats --clear"
+statement = "Clear statistics"
+
+[[promise]]
+id = "wj stats --verbose"
+statement = "Show detailed statistics"
+
+[[promise]]
+id = "wj test"
+statement = "Run tests"
+
+[[promise]]
+id = "wj test --allow-empty"
+statement = "Exit 0 when no tests are found (default: finding none is an error)"
+pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo"
+
+[[promise]]
+id = "wj test --copy-runtime"
+statement = "Force copying windjammer-runtime into the temp tree (overrides path-dep inference)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --compiled"
+statement = "Also build and run each doctest through the Rust backend (default: interpreter only)"
+pending = "needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --doc"
+statement = "Run only the doctests (```wj examples in `///` doc comments)"
+
+[[promise]]
+id = "wj test --filter"
+statement = "Run only tests matching this pattern"
+
+[[promise]]
+id = "wj test --interpret"
+statement = "Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc"
+
+[[promise]]
+id = "wj test --json"
+statement = "Output results as JSON for tooling"
+pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo"
+
+[[promise]]
+id = "wj test --library"
+statement = "Compile the library under test (default when `src/` has `.wj` files)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --list"
+statement = "List discovered test files and functions, then exit without compiling"
+
+[[promise]]
+id = "wj test --module-file"
+statement = "Generate scoped `mod.rs` layout after transpile (same as `wj build --module-file`)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --no-generate-cargo-toml"
+statement = "Skip auto-generated Cargo.toml for library compile"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --no-runtime-copy"
+statement = "Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp). Also the default when `wj.toml` declares a path dep on `windjammer-runtime`"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --nocapture"
+statement = "Show output from passing tests"
+pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo"
+
+[[promise]]
+id = "wj test --output"
+statement = "Output directory for library compile (default: temp `{lib}/`)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --parallel"
+statement = "Run tests in parallel (default: true)"
+
+[[promise]]
+id = "wj test --runtime-path"
+statement = "Explicit path to windjammer-runtime (with `--no-runtime-copy`)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --use-build-dir"
+statement = "Use a pre-built outbound tree instead of recompiling the library"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --use-project-cargo"
+statement = "Merge `[dependencies]` from project root `Cargo.toml` into the test library crate"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj update"
+statement = "Update Windjammer to the latest version"
+pending = "needs network access to the release server; add a case against a local mirror"
+
+[[promise]]
+id = "wj update --check"
+statement = "Check for updates without installing"
+pending = "needs network access to the release server; add a case against a local mirror"
+
+[[promise]]
+id = "wj update --force"
+statement = "Force reinstall even if already up to date"
+pending = "needs network access to the release server; add a case against a local mirror"
+
+[[promise]]
+id = "wj validate-wjsl"
+statement = "Validate WJSL shader files (transpile to WGSL and check for errors)"
+
+[[promise]]
+id = "wj explain-ownership"
+statement = "Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)"
+
+[[promise]]
+id = "wj explain-ownership --fn"
+statement = "Only this function (`name` or `Type::name`)"
+
+[[promise]]
+id = "wj explain-ownership --json"
+statement = "Machine-readable JSON output"
+
+[[promise]]
+id = "wj explain-effects"
+statement = "Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs"
+
+[[promise]]
+id = "wj explain-effects --fn"
+statement = "Only this function (`name` or `Type::name`)"
+
+[[promise]]
+id = "wj explain-effects --json"
+statement = "Machine-readable JSON output"
+
+[[promise]]
+id = "wj caps"
+statement = "What the project's dependencies are known to do (per-package capabilities and the lock file)"
+
+[[promise]]
+id = "wj caps --json"
+statement = "Machine-readable JSON output (show)"
+
+[[promise]]
+id = "wj run --sandbox"
+statement = "Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021)"
+
+[[promise]]
+id = "wj run --caps"
+statement = "Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate"
+
+[[promise]]
+id = "wj run --allow"
+statement = "Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`"
+
+[[promise]]
+id = "wj check --fix"
+
+[[promise]]
+id = "wj check --watch"
+statement = "Re-check whenever a .wj file changes"
+pending = "long-running watch loop: needs a case that edits a file and reads the re-check"
+
+[[promise]]
+id = "wj run --allow-network"
+
+[[promise]]
+id = "wj run --deterministic-time"
+
+[[promise]]
+id = "wj run --mock-http"
+
+[[promise]]
+id = "wj run --sched-seed"
+
+[[promise]]
+id = "wj self-install --dry-run"
+
+[[promise]]
+id = "wj run --bin"
+statement = "Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)"
+
+[[promise]]
+id = "wj run --compiled"
+statement = "Transpile to Rust and run with cargo (the release path), skipping the interpreter"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --no-jit"
+statement = "Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as `WJ_JIT=0`); they run in the resolved engine's closures"
+
+[[promise]]
+id = "wj run --jit"
+statement = "Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020)"
+
+[[promise]]
+id = "wj run --engine"
+statement = "Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics)"
+
+[[promise]]
+id = "wj run --hash-seed"
+statement = "Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)"
+
+[[promise]]
+id = "wj run --hot"
+statement = "Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --release"
+statement = "Like --compiled, with optimizations"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --watch"
+statement = "Re-run on every source change (restarts long-running programs)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj test --watch"
+statement = "Re-run the tests on every source change"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --no-lint"
+statement = "Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it"

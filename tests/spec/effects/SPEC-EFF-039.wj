@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-039
+// mode: panic
+// profile: local
+// expect: start
+// expect-exit: 126
+// expect-error: capability denied: env.read(WJ_NEVER_SET)
+use std::env
+fn main() {
+    println("start")
+    let v = env::var("WJ_NEVER_SET")
+    println("not reached")
+}

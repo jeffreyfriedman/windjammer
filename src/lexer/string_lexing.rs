@@ -104,7 +104,12 @@ impl Lexer {
                     let mut expr = String::new();
                     let mut brace_depth = 1;
                     while let Some(expr_ch) = self.current_char {
-                        if expr_ch == '"' {
+                        if expr_ch == '\\' && self.peek(1) == Some('"') {
+                            // `\"` inside `${..}` is a quote of the expression (`"${f(\"x\")}"`).
+                            expr.push('"');
+                            self.advance();
+                            self.advance();
+                        } else if expr_ch == '"' {
                             self.copy_nested_string(&mut expr);
                         } else if expr_ch == '\'' && self.nested_char_literal_len() > 0 {
                             for _ in 0..self.nested_char_literal_len() {

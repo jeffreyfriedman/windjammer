@@ -2238,7 +2238,7 @@ fn bare_pass_hint_should_skip(
     // `extern fn` formals are the C/FFI boundary — bare-pass must never
     // demote them to Borrowed/`&Vec`. Doing so makes wrappers that forward bare into FFI
     // look like borrow-passthrough delegates and emit `&Vec` + bare into `Vec` (E0308).
-    if sig.is_extern {
+    if sig.is_extern || super::std_stubs::runtime_owns_formals(callee_key, &sig, programs) {
         return true;
     }
     // Path-dep / defining-module codegen already recorded owned emission for this
@@ -3460,10 +3460,8 @@ fn callee_arg_is_hard_owned_uncached(
         if formal.is_some_and(is_vec_container_type) {
             return true;
         }
-        // Custom formal: hard Owned only when the callee body consumes the binding.
-        if formal.is_some_and(|t| {
-            matches!(t, Type::Custom(_)) && !crate::codegen::rust::types::is_windjammer_text_type(t)
-        }) {
+        // Custom (or generic user type, `Handle<T>`) formal: hard Owned only when the callee body consumes the binding.
+        if formal.is_some_and(|t| matches!(t, Type::Custom(_) | Type::Parameterized(..)) && !crate::codegen::rust::types::is_windjammer_text_type(t)) {
             if let Some((pname, body)) = find_function_body_for_registry_key(programs, &key, pidx) {
                 if !param_is_readonly_custom_walk_body(body, pname) {
                     return true;

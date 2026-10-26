@@ -1,0 +1,7 @@
+error[WJ0020]: operator `-` cannot be applied to `string` and `int`
+  --> bad_operand.wj:4:13
+  |
+4 |     let b = a - 1
+  |             ^ operand here
+  = help: parse the string first, for example `s.parse::<int>()`
+  = explain: wj explain WJ0020

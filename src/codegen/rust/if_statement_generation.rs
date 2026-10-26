@@ -34,7 +34,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("if ");
         let prev_if_cond = self.in_if_condition;
         self.in_if_condition = true;
-        let cond_str = self.generate_expression(condition);
+        let cond_str = self.generate_value_operand(condition);
         self.in_if_condition = prev_if_cond;
         let cond_str = self.coerce_forward_ref_params_in_if_condition(condition, cond_str);
         let cond_str = self.coerce_owned_params_clone_in_if_condition(condition, cond_str);

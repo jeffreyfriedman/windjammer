@@ -242,8 +242,11 @@ impl<'ast> Analyzer<'ast> {
                                 Self::merge_borrow_trait_receivers(existing, merged_self)
                             })
                             .unwrap_or(merged_self);
-                        if !any_impl_mutates_self_fields
-                            && matches!(final_self, OwnershipMode::MutBorrowed)
+                        let widen_key = (trait_lookup_key.to_string(), method_name.clone());
+                        if any_impl_mutates_self_fields {
+                            self.trait_receiver_widened_by_impl.insert(widen_key);
+                        } else if matches!(final_self, OwnershipMode::MutBorrowed)
+                            && !self.trait_receiver_widened_by_impl.contains(&widen_key)
                         {
                             final_self = OwnershipMode::Borrowed;
                         }

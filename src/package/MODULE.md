@@ -1,16 +1,16 @@
 # src/package/
 
 ## Purpose
-Package management foundation: manifest parsing, dependency resolution stubs, registry client interface.
+Package manifest parsing (`wj.toml`). Resolver and registry client are design-only (ADR-0010) and not in the tree.
 
 ## Inputs/Outputs
 In: manifests. Out: resolved dependency descriptions.
 
 ## Invariants
-- Mostly stubs; no real registry yet.
+- No registry or resolver code until ADR-0010 is accepted.
 
 ## Owns
-Manifest and resolver types.
+Manifest types.
 
 ## Never decides
 Build orchestration.
@@ -20,7 +20,7 @@ Layer `tooling`. May import: every module in a lower layer (support < syntax < r
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`package/manifest.rs`, `resolver.rs`, `registry.rs`.
+`package/manifest.rs`. `graph::resolve`: the real dependency graph (path + git, git pinned in `wj.lock`, ADR-0010 option A), used by the interpreter, the host bridge and the build-order step of `wj build` / `wj test`. A path dependency named `../pkg/build` (the generated output of a Windjammer package) resolves to the package `../pkg` (`package_of_build_output`).
 
 ## Tests
 Inline unit tests; tests/package_flat_lib_wj_test_exports_test.rs covers library exports.

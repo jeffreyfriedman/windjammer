@@ -127,17 +127,12 @@ impl Parser {
                 });
             } else if self.current_token() == &Token::Mut && self.peek(1) == Some(&Token::Self_) {
                 // WINDJAMMER PHILOSOPHY: Reject `mut self` - ownership is inferred automatically
-                let (file, line, col) = self
-                    .current_location()
-                    .map(|loc| (format!("{}", loc.file.display()), loc.line, loc.column))
-                    .unwrap_or(("unknown".to_string(), 0, 0));
+                // Every line of a parser error carries its position (tests/lexer_parser_never_panic_test.rs).
+                let (line, col) = self.current_location().map(|loc| (loc.line, loc.column)).unwrap_or((0, 0));
                 return Err(format!(
-                    "error: `mut` is not needed for method parameters\n \
-                     --> {}:{}:{}\n  |\n \
-                     {} | fn ...(mut self) {{\n  |           ^^^ help: remove `mut`, ownership is inferred automatically\n  |\n \
-                     = note: Windjammer infers `&self`, `&mut self`, or owned based on usage\n \
-                     = note: Use `let mut x` for local variable mutability",
-                    file, line, col, line
+                    "error: `mut` is not needed for method parameters (at line {line}, column {col})\n\
+                     help: remove `mut`; ownership is inferred automatically (at line {line}, column {col})\n\
+                     note: Windjammer infers `&self`, `&mut self`, or owned based on usage; use `let mut x` for local variable mutability (at line {line}, column {col})"
                 ));
             } else {
                 // Regular parameter - could be a simple name or a pattern
@@ -191,6 +186,9 @@ impl Parser {
 
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
+                    // ADR-0018: `name: Type = default` (parser/named_args.rs)
+                    let mut decorators = decorators.clone();
+                    self.parse_parameter_default(&params, &mut decorators)?;
 
                     // CRITICAL FIX: Determine ownership from the type annotation
                     // If the type is explicitly &T or &mut T, use that.
@@ -221,6 +219,7 @@ impl Parser {
             }
         }
 
+        self.check_default_order(&params)?;
         self.record_param_spans(&params, &param_ranges);
         Ok(params)
     }

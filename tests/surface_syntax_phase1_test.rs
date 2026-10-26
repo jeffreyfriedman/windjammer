@@ -531,10 +531,11 @@ fn ts_backend_runs_intrinsics_like_rust() {
 fn portable_backends_reject_unsupported_format_specs() {
     let out = tempfile::tempdir().unwrap();
     let src = out.path().join("p.wj");
-    fs::write(&src, main_with("    println(\"${x:+}\")")).unwrap();
+    // `+`, `#` and pretty Debug are implemented (conformance 137/138); `E` (LowerExp) is not.
+    fs::write(&src, main_with("    println(\"${x:E}\")")).unwrap();
     for target in ["go", "javascript"] {
         let res = run_wj_command(["build", src.to_str().unwrap(), "-o", out.path().join(target).to_str().unwrap(), "--no-cargo", "-t", target]);
-        assert!(!res.status.success(), "{target}: `${{x:+}}` must be an explicit error");
+        assert!(!res.status.success(), "{target}: `${{x:E}}` must be an explicit error");
         assert!(String::from_utf8_lossy(&res.stderr).contains("unsupported"), "{}", String::from_utf8_lossy(&res.stderr));
     }
 }

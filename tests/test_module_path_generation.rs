@@ -61,9 +61,9 @@ pub mod test
     )
     .expect("Build should succeed");
 
-    // mod.wj generates _mod_items.rs, not mod.rs
-    let rust_code = std::fs::read_to_string(build.join("test/_mod_items.rs"))
-        .expect("Failed to read generated test/_mod_items.rs");
+    // A directory's mod.wj is emitted as that directory's mod.rs.
+    let rust_code = std::fs::read_to_string(build.join("test/mod.rs"))
+        .expect("Failed to read generated test/mod.rs");
 
     // ASSERT: Should NOT use `self::a game engine project`
     assert!(

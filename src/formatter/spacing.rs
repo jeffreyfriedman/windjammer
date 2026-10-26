@@ -13,7 +13,7 @@ const SPACE_BEFORE_PAREN: &[&str] = &[
 ];
 
 const MULTI_OPS: &[&str] = &[
-    "|>?", "<<=", ">>=", "..=", "<<", ">>", "<=", ">=", "==", "!=", "&&", "||", "|>", "+=", "-=", "*=",
+    "|>?", "??", "<<=", ">>=", "..=", "<<", ">>", "<=", ">=", "==", "!=", "&&", "||", "|>", "+=", "-=", "*=",
     "/=", "%=", "&=", "|=", "^=", "->", "<-", "=>", "::", "..", "//",
 ];
 
@@ -105,6 +105,10 @@ fn is_use_path_glue(toks: &[Tok], ls: usize, p: &Tok, n: &Tok) -> bool {
 
 /// Commas, colons, dots and paths.
 fn punctuation_rule(p: &Tok, n: &Tok) -> Option<bool> {
+    // `x |> .method()`: the method-form pipe stage keeps its space.
+    if n.is(".") && (p.is("|>") || p.is("|>?")) {
+        return Some(true);
+    }
     let tight_before = matches!(n.text.as_str(), "," | ";" | "?" | "." | "::" | ":");
     if n.kind == Kind::Punct && tight_before {
         return Some(false);

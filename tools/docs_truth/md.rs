@@ -1,43 +1,6 @@
 //! Minimal Markdown scanning: fences, headings, inline code, links. Line-based, no dependencies.
 
-#[derive(Debug, Clone)]
-pub struct Fence {
-    /// Raw info string after the backticks (e.g. `wj,should_fail=WJ0007`).
-    pub info: String,
-    /// 1-based line of the opening fence.
-    pub line: usize,
-    pub body: String,
-}
-
-/// Fences of a Markdown text. Handles indentation and ```/~~~ delimiters of >=3 chars.
-pub fn fences(text: &str) -> Vec<Fence> {
-    let mut out = Vec::new();
-    let mut open: Option<(char, usize, Fence)> = None;
-    for (i, raw) in text.lines().enumerate() {
-        let t = raw.trim_start();
-        let ch = t.chars().next().unwrap_or(' ');
-        let run = if ch == '`' || ch == '~' { t.chars().take_while(|&c| c == ch).count() } else { 0 };
-        match &mut open {
-            None if run >= 3 => {
-                let info = t[run..].trim().to_string();
-                if ch == '`' && info.contains('`') {
-                    continue;
-                }
-                open = Some((ch, run, Fence { info, line: i + 1, body: String::new() }));
-            }
-            Some((c, n, f)) => {
-                if ch == *c && run >= *n && t[run..].trim().is_empty() {
-                    out.push(open.take().unwrap().2);
-                } else {
-                    f.body.push_str(raw);
-                    f.body.push('\n');
-                }
-            }
-            None => {}
-        }
-    }
-    out
-}
+pub use windjammer::doctest::fence::{fences, Fence};
 
 /// Lines of `text` outside fences (1-based line numbers kept).
 pub fn prose_lines(text: &str) -> Vec<(usize, &str)> {

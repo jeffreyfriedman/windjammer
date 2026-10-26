@@ -19,11 +19,15 @@ pub mod analyzer;
 pub mod auto_clone;
 pub mod auto_fix;
 pub mod cargo_toml;
+pub mod check;
+pub mod reduce; // `wj reduce`: automatic test-case reducer
+pub mod diagnostics;
 pub mod codegen;
 pub mod component_analyzer;
 pub mod compiler_config;
 pub mod config;
 pub mod debug_env;
+pub mod doctest; // ADR-0018 fenced examples and doctests
 pub mod error;
 pub mod error_codes;
 pub mod errors;
@@ -48,6 +52,7 @@ pub mod resolve;
 pub mod source_map;
 pub mod embedded_assets;
 pub mod stdlib_scanner;
+pub mod stdlib_surface; // ADR-0018 declarative std surface tables
 #[cfg(feature = "highlighting")]
 pub mod syntax_highlighter;
 #[cfg(not(feature = "highlighting"))]
@@ -59,7 +64,6 @@ pub mod compiler_database;
 pub mod decorator_registry;
 pub mod ejector;
 pub mod error_mapper;
-pub mod lib_rs_generator;
 pub mod test_utils;
 pub mod type_classification;
 pub mod type_display;

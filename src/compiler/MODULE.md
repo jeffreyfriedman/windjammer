@@ -9,7 +9,8 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
 ## Invariants
 - Owns the multi-pass loop; later passes re-run analysis with global signatures.
 - `compilation_pipeline.rs` and `library_multipass.rs` are large; function-length ratchets apply.
-- `multipass_bare_pass_demotion.rs` contains ownership post-fixes that belong to the solver (WP 9).
+- `std_stubs.rs`: the `std/<module>.wj` stubs of a build (always re-analysed, never overriding declared runtime formals).
+- `multipass_bare_pass_demotion.rs` contains ownership post-fixes that belong to the solver (WP 9). A standard-library function's formals are the runtime's: bare-pass demotion never touches them (`server_serve(address: String, ..)`).
 
 ## Owns
 Pipeline sequencing, file/dependency discovery, incremental cache, metadata writing.

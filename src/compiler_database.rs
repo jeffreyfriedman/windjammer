@@ -119,17 +119,8 @@ pub fn parse_tokens<'db>(
 ) -> ParsedProgram<'db> {
     let tokens = token_stream.tokens(db);
 
-    // Create parser and leak it to keep arena alive for 'static lifetime
-    // This is necessary because Salsa stores the Program<'db> but the arena
-    // must outlive the parser. By leaking, we ensure the arena lives forever.
-    //
-    // NOTE: This is a memory leak, but acceptable because:
-    // 1. Salsa caches results, so we don't re-parse repeatedly
-    // 2. Tests create limited parsers
-    // 3. Real programs parse once per file
-    //
-    // TODO: Implement arena pooling or database-owned arenas for proper cleanup
-    let parser = Box::leak(Box::new(parser::Parser::new(tokens.clone())));
+    // The returned Program owns its arenas (`AstOwner`), so Salsa can store and evict it freely.
+    let mut parser = parser::Parser::new(tokens.clone());
 
     // Parse and handle errors
     let program = match parser.parse() {
@@ -137,7 +128,7 @@ pub fn parse_tokens<'db>(
         Err(e) => {
             eprintln!("Parse error: {}", e);
             // Return empty program on error for now
-            parser::Program { items: vec![] }
+            parser::Program::new(vec![])
         }
     };
 
@@ -327,13 +318,6 @@ pub struct CacheStats {
 }
 
 impl CacheStats {
-    pub fn cache_hit_rate(&self) -> f64 {
-        if self.total_queries == 0 {
-            0.0
-        } else {
-            (self.cache_hits as f64 / self.total_queries as f64) * 100.0
-        }
-    }
 }
 
 // ============================================================================

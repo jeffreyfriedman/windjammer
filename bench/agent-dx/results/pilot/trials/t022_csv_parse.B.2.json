@@ -1,0 +1,60 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn parse_line(line: string) -> Vec<string> {\n    let cs: Vec<char> = line.chars().collect()\n    let mut fields: Vec<string> = []\n    let mut cur = \"\"\n    let mut in_q = false\n    let mut i = 0\n    let n = cs.len()\n    while i < n {\n        let c = cs[i]\n        if in_q {\n            if c == '\"' {\n                if i + 1 < n && cs[i + 1] == '\"' {\n                    cur.push('\"')\n                    i += 1\n                } else {\n                    in_q = false\n                }\n            } else {\n                cur.push(c)\n            }\n        } else if c == '\"' {\n            in_q = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur.push(c)\n        }\n        i += 1\n    }\n    fields.push(cur)\n    fields\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let fields = parse_line(line)\n        let parts: Vec<string> = fields.map(|f| \"[${f}]\").collect()\n        println(\"${fields.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn parse_line(line: string) -> Vec<string> {\n    let cs: Vec<char> = line.chars().collect()\n    let mut fields: Vec<string> = []\n    let mut cur = \"\"\n    let mut in_q = false\n    let mut i = 0\n    let n = cs.len()\n    while i < n {\n        let c = cs[i]\n        if in_q {\n            if c == '\"' {\n                if i + 1 < n && cs[i + 1] == '\"' {\n                    cur.push('\"')\n                    i += 1\n                } else {\n                    in_q = false\n                }\n            } else {\n                cur.push(c)\n            }\n        } else if c == '\"' {\n            in_q = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur.push(c)\n        }\n        i += 1\n    }\n    fields.push(cur)\n    fields\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let fields = parse_line(line)\n        let parts: Vec<string> = fields.map(|f| \"[${f}]\").collect()\n        println(\"${fields.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 5.299,
+   "verb": "run"
+  }
+ ],
+ "mode_violations": 0,
+ "other_seconds": 2.96,
+ "pass_final": true,
+ "recorded_at": "2026-10-19T11:16:15",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 8.9,
+ "tool_wait_seconds": 5.3,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 8.9,
+  "cost_usd": 0.020866300000000004,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the CSV parser in `main.wj`. It compiled with `wj build` and gave the right output when I ran it with `wj run --compiled` on a four-line input.\n\nThat input had an empty line, a `,` line, a doubled-quote line (`\"he said \"\"hi\"\"\",1`) and a quoted-comma line (`\"x,y\",z`). The output was:\n\n```\n1: []\n2: []|[]\n2: [he said \"hi\"]|[1]\n2: [x,y]|[z]\n```\n\nI didn't run Example 1's `a,b,c` line separately",
+  "subtype": "success",
+  "tokens_in": 26629,
+  "tokens_out": 1109,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 17.16
+}

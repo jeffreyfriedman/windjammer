@@ -1,0 +1,89 @@
+# Acceptance cases for `wj new`, `wj add`, `wj remove` (tests/promise_registry_test.rs).
+
+[[case]]
+name = "new creates a runnable cli project"
+polarity = "positive"
+args = ["new", "app"]
+creates = ["app/wj.toml", "app/src/main.wj", "app/README.md"]
+
+[[case]]
+name = "new refuses to overwrite an existing directory"
+polarity = "negative"
+files = { "app/keep.txt" = "mine" }
+args = ["new", "app"]
+exit = 1
+output_has = ["already exists"]
+file_has = { "app/keep.txt" = "mine" }
+
+[[case]]
+name = "new --template lib creates a library"
+polarity = "positive"
+args = ["new", "mylib", "--template", "lib"]
+creates = ["mylib/src/lib.wj", "mylib/wj.toml"]
+
+[[case]]
+name = "new --template rejects an unknown template"
+polarity = "negative"
+args = ["new", "x", "-t", "nope"]
+exit = 1
+output_has = ["Invalid template 'nope'"]
+absent = ["x"]
+
+[[case]]
+name = "new rejects a name that is not a valid package name"
+polarity = "negative"
+args = ["new", "Bad Name"]
+exit = 1
+output_has = ["Invalid project name 'Bad Name'", "try `wj new bad-name`"]
+absent = ["Bad Name"]
+
+[[case]]
+name = "add records a dependency with version and features"
+polarity = "positive"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n" }
+args = ["add", "serde", "--version", "1.0", "--features", "derive"]
+file_has = { "wj.toml" = "features = [\"derive\"]" }
+
+[[case]]
+name = "add records a path dependency"
+polarity = "positive"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "dep/wj.toml" = "[package]\nname = \"dep\"\nversion = \"0.1.0\"\n" }
+args = ["add", "dep", "--path", "{w}/dep"]
+file_has = { "wj.toml" = "path = " }
+
+[[case]]
+name = "add outside a project fails"
+polarity = "negative"
+args = ["add", "serde", "-v", "1.0", "-f", "derive"]
+exit = 1
+output_has = ["wj.toml not found"]
+
+[[case]]
+name = "add --path rejects a path that does not exist"
+polarity = "negative"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n" }
+args = ["add", "dep", "-p", "{w}/missing"]
+exit = 1
+output_has = ["path not found"]
+
+[[case]]
+name = "remove deletes a dependency"
+polarity = "positive"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = \"1.0\"\n" }
+args = ["remove", "serde"]
+output_has = ["Removed serde"]
+
+[[case]]
+name = "remove of an unknown dependency fails"
+polarity = "negative"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n" }
+args = ["remove", "nothere"]
+exit = 1
+output_has = ["not found in wj.toml"]
+
+[[case]]
+name = "add --path outside a project fails"
+polarity = "negative"
+args = ["add", "dep", "--path", "{w}/dep"]
+exit = 1
+output_has = ["wj.toml not found"]

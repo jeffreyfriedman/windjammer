@@ -61,7 +61,11 @@ pub struct Collected<'a> {
     pub impls_of: HashMap<DefId, Vec<usize>>,
     /// Method name -> all `Method`/`TraitMethod` defs.
     pub methods_by_name: HashMap<String, Vec<DefId>>,
+    /// Function def -> its declaration (attributes, parameters, `extern`); data for fact passes.
+    pub decls: HashMap<DefId, &'a FunctionDecl<'a>>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Roots of dependency crates mounted under the program root: `crate::` inside one means that root.
+    pub crate_roots: std::collections::HashSet<DefId>,
 }
 
 pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
@@ -76,7 +80,9 @@ pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
         members: HashMap::new(),
         impls_of: HashMap::new(),
         methods_by_name: HashMap::new(),
+        decls: HashMap::new(),
         diagnostics: Vec::new(),
+        crate_roots: std::collections::HashSet::new(),
     };
     for f in files {
         let m = c.module_for_path(&f.module_path);
@@ -120,7 +126,7 @@ impl<'a> Collected<'a> {
         &self.defs.get(module).path
     }
 
-    fn module_for_path(&mut self, path: &[String]) -> DefId {
+    pub(crate) fn module_for_path(&mut self, path: &[String]) -> DefId {
         let mut cur = self.root;
         for seg in path {
             cur = self.child_module(cur, seg, true, None);
@@ -231,6 +237,7 @@ impl<'a> Collected<'a> {
                 target,
                 is_pub,
                 location,
+                ..
             } => {
                 let id = self.alloc_in(module, DefKind::TypeAlias, name, &mp, location);
                 self.defs_set_pub(id, *is_pub);
@@ -341,6 +348,7 @@ impl<'a> Collected<'a> {
         mut generics: Vec<String>,
     ) {
         generics.extend(decl.type_params.iter().map(|t| t.name.clone()));
+        self.decls.insert(owner, decl);
         self.bodies.push(Body {
             owner: Some(owner),
             module,

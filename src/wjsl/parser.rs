@@ -992,7 +992,15 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.advance(); // Skip unknown
+            // Stray `;` is harmless; `var` forms the private-var parser does not own are skipped;
+            // anything else at the top level is not WJSL and must not validate silently.
+            if !matches!(self.current, Token::Semicolon | Token::Var) {
+                return Err(self.error_with_location(format!(
+                    "unexpected {:?} at top level (expected struct, fn, const, @group/@binding, @vertex, @fragment or @compute)",
+                    self.current
+                )));
+            }
+            self.advance();
         }
 
         Ok(ShaderModule {

@@ -49,7 +49,7 @@ pub struct FloatInference {
     /// Errors detected during inference
     pub errors: Vec<String>,
     /// Function signature registry: name → (param_types, return_type)
-    function_signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
+    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
     /// Variable assignment tracking: variable name → initial value ExprId
     var_assignments: HashMap<String, ExprId>,
     /// Variable type tracking: variable name → explicit Type (for let x: Type = ...)
@@ -102,7 +102,7 @@ impl FloatInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: HashMap::new(),
+            function_signatures: std::collections::BTreeMap::new(),
             var_assignments: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
@@ -162,6 +162,12 @@ impl FloatInference {
     }
 
     /// Keys for `function_signatures` lookup on `Call` callees (`bar`, `Foo::new`).
+    /// Only an untyped float literal adopts a cast target (`1.5 as f32`); a typed operand (`w as f64`, `w: f32`)
+    /// is exactly what the cast converts.
+    fn is_float_literal(e: &Expression) -> bool {
+        matches!(e, Expression::Literal { value: crate::parser::Literal::Float(_), .. })
+    }
+
     fn call_signature_lookup_keys<'ast>(function: &Expression<'ast>) -> Vec<String> {
         match function {
             Expression::FieldAccess { object, field, .. } => {
@@ -171,10 +177,31 @@ impl FloatInference {
                 {
                     vec![format!("{}::{}", type_name, field)]
                 } else {
-                    Vec::new()
+                    // `ffi::api::f(..)` parses as a FieldAccess chain: try every trailing path suffix
+                    // (`ffi::api::f`, `api::f`, `f`) so nested-module signatures are found.
+                    let mut segs = vec![field.clone()];
+                    let mut cur: &Expression = object;
+                    loop {
+                        match cur {
+                            Expression::FieldAccess { object: o, field: f, .. } => {
+                                segs.push(f.clone());
+                                cur = o;
+                            }
+                            Expression::Identifier { name, .. } => {
+                                segs.push(name.clone());
+                                break;
+                            }
+                            _ => return Vec::new(),
+                        }
+                    }
+                    segs.reverse();
+                    (0..segs.len()).map(|i| segs[i..].join("::")).collect()
                 }
             }
-            Expression::Identifier { name, .. } => vec![name.clone()],
+            Expression::Identifier { name, .. } => {
+                let segs: Vec<&str> = name.split("::").collect();
+                (0..segs.len()).map(|i| segs[i..].join("::")).collect()
+            }
             _ => Vec::new(),
         }
     }
@@ -188,11 +215,6 @@ impl FloatInference {
         for (key, value) in signatures {
             self.function_signatures.insert(key, value);
         }
-    }
-
-    /// TDD FIX: Get all collected function signatures (for building global registry)
-    pub fn get_function_signatures(&self) -> &HashMap<String, (Vec<Type>, Option<Type>)> {
-        &self.function_signatures
     }
 
     /// Set source root for resolving metadata file paths

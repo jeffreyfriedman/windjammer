@@ -1,5 +1,5 @@
 // tags: iterators, enumerate, zip
-// rust: gap error[E0599]: no method named 'zip' found for struct 'Vec<String>' in the curren
+// rust: ok
 // expect: 0:a 1:b 2:c
 // expect: a=1 b=2 c=3
 fn main() {

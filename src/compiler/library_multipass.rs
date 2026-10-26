@@ -137,11 +137,6 @@ fn filter_shader_files(
     (filtered_modules_by_dir, shader_count)
 }
 
-/// Detect if source code imports from Windjammer stdlib (`std::*`)
-fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
-    crate::compiler::library_copy_registry::stdlib_modules_from_source(source)
-}
-
 /// Find Windjammer stdlib directory (`std/`).
 ///
 /// Shared by multipass + single-file API-type collection. Prefer env / crate
@@ -187,30 +182,13 @@ pub(crate) fn build_library_multipass(
 ) -> Result<()> {
     let phase_start = Instant::now();
 
-    // Step 0: Detect stdlib usage and prepend stdlib files
+    // Step 0: Detect stdlib usage and prepend stdlib files FIRST
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
-    let mut needed_stdlib_modules = HashSet::new();
-
-    // Quick scan: which stdlib modules does user code import?
-    for file in wj_files {
-        if let Ok(source) = std::fs::read_to_string(file) {
-            needed_stdlib_modules.extend(uses_windjammer_stdlib(&source));
-        }
-    }
-
-    // If stdlib is needed, prepend stdlib source files FIRST
-    if !needed_stdlib_modules.is_empty() {
-        if let Some(stdlib_dir) = find_stdlib_dir(config.stdlib_path.as_deref()) {
-            for module in &needed_stdlib_modules {
-                let stdlib_file = stdlib_dir.join(format!("{}.wj", module));
-                if stdlib_file.exists() {
-                    if let Ok(source) = std::fs::read_to_string(&stdlib_file) {
-                        sources.push((stdlib_file, source));
-                    }
-                }
-            }
-        }
-    }
+    let (needed_stdlib_modules, mut std_stubs) = super::std_stubs::StdStubs::prepend_sources(
+        wj_files,
+        find_stdlib_dir(config.stdlib_path.as_deref()),
+        &mut sources,
+    );
 
     // Step 1: Read all user source files (keep sources alive for lifetime safety)
     for file in wj_files {
@@ -331,7 +309,7 @@ pub(crate) fn build_library_multipass(
         eprintln!("⟳ Compiler changed — re-transpiling all sources");
     }
 
-    let reanalysis_set = super::incremental::compute_reanalysis_set(
+    let mut reanalysis_set = super::incremental::compute_reanalysis_set(
         &sources,
         &src_base,
         output,
@@ -346,6 +324,7 @@ pub(crate) fn build_library_multipass(
         );
         return Ok(());
     }
+    std_stubs.mark_reanalysis(&sources, &mut reanalysis_set);
     if reanalysis_set.len() < sources.len() {
         eprintln!(
             "⚡ Incremental analysis: {}/{} files need re-analysis",
@@ -496,6 +475,7 @@ pub(crate) fn build_library_multipass(
     let struct_defining_module_paths = std::sync::Arc::new(struct_defining_module_paths);
     let global_copy_structs = std::sync::Arc::new(global_copy_structs);
 
+    std_stubs.capture_contracts(&global_registry);
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
     let step3_start = Instant::now();
@@ -569,6 +549,7 @@ pub(crate) fn build_library_multipass(
                     .unwrap_or_default();
             let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
+                let sig = &*std_stubs.effective_sig(file, file_stem, name, sig);
                 // Skip passthrough entries inherited from the frozen global snapshot.
                 // analyze_program_with_global_arc clones the global registry, so
                 // file_registry contains ALL entries (global + file-specific).
@@ -1277,6 +1258,8 @@ pub(crate) fn build_library_multipass(
         std::collections::HashSet<usize>,
     > = std::collections::HashMap::new();
 
+    let mut converged_qualified_keys = super::converged_module_signatures::register_all_files(std::sync::Arc::make_mut(&mut final_global_registry), &sources, &src_base, |i| stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]), |i| step4b_analyses[i].as_ref().map(|a| &a.registry));
+
     for batch_start in (0..total_codegen).step_by(CODEGEN_BATCH_SIZE) {
         let batch_end = (batch_start + CODEGEN_BATCH_SIZE).min(total_codegen);
         let batch = &codegen_indices[batch_start..batch_end];
@@ -1324,6 +1307,7 @@ pub(crate) fn build_library_multipass(
                 std::sync::Arc::clone(&final_global_registry),
             );
             for (name, sig) in analysis.registry.signatures.iter() {
+                if converged_qualified_keys.contains(name) { continue; }
                 if let Some(existing) = full_registry.get_signature(name) {
                     if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
                         existing, sig,
@@ -1437,10 +1421,9 @@ pub(crate) fn build_library_multipass(
                 target,
                 &dep_roots,
                 Some(dep_epoch_snapshot),
-                parsers[*i].span_snapshot(),
             )?;
 
-            // Bin + lib package: `use crate::` in main must resolve via the lib crate name.
+            // Bin + lib package: `crate::` in main must resolve via the lib crate name.
             // Skip when there is no configured package name (temp/integration trees keep
             // `use crate::` for single-crate cargo-check harnesses).
             if is_crate_root_main {
@@ -1453,6 +1436,7 @@ pub(crate) fn build_library_multipass(
 
             let reg = std::sync::Arc::make_mut(&mut final_global_registry);
             reg.merge(&codegen.signature_registry);
+            super::converged_module_signatures::register_converged_module_qualified_signatures(reg, &crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file).unwrap_or_default(), program, &codegen.signature_registry, &mut converged_qualified_keys);
             for (name, indices) in &codegen.function_emitted_mut_arg_indices {
                 accumulated_emitted_mut_arg_indices
                     .entry(name.clone())
@@ -1766,15 +1750,46 @@ fn run_parallel_numeric_inference(
     global
 }
 
+/// The binary is its own crate: `crate::x` paths (in `use` and in expressions) name the package lib, and the
+/// lib's public modules are in scope as they are for the crate root in Windjammer (`util::f()` without `use`).
+fn bin_main_against_lib(content: &str, lib_name: &str) -> String {
+    let body = content.replace("crate::", &format!("{}::", lib_name));
+    let glob = format!("#[allow(unused_imports)]\nuse {}::*;\n", lib_name);
+    if body.contains(&glob) {
+        return body;
+    }
+    let split = body
+        .lines()
+        .take_while(|l| l.trim_start().starts_with("#!") || l.trim().is_empty())
+        .map(|l| l.len() + 1)
+        .sum::<usize>()
+        .min(body.len());
+    format!("{}{}{}", &body[..split], glob, &body[split..])
+}
+
 /// Rewrite `use crate::…` in a binary `main.rs` so it resolves against the package lib.
 fn rewrite_bin_crate_imports_to_lib(main_rs: &Path, lib_name: &str) -> Result<()> {
     if !main_rs.exists() {
         return Ok(());
     }
     let content = std::fs::read_to_string(main_rs)?;
-    let updated = content.replace("use crate::", &format!("use {}::", lib_name));
+    let updated = bin_main_against_lib(&content, lib_name);
     if updated != content {
         std::fs::write(main_rs, updated)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod bin_main_tests {
+    use super::bin_main_against_lib;
+
+    #[test]
+    fn bin_main_names_the_lib_for_crate_paths_and_sees_its_modules() {
+        let main = "#![allow(x)]\nuse crate::greet;\nfn main() {\n    crate::util::f();\n    util::g();\n}\n";
+        let out = bin_main_against_lib(main, "app");
+        assert!(out.starts_with("#![allow(x)]\n#[allow(unused_imports)]\nuse app::*;\n"), "{out}");
+        assert!(out.contains("use app::greet;") && out.contains("app::util::f();"), "{out}");
+        assert_eq!(bin_main_against_lib(&out, "app"), out, "idempotent");
+    }
 }

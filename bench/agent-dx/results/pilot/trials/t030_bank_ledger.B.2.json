@@ -1,0 +1,60 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::fs\nuse std::collections::BTreeMap\n\nfn amount_of(s: string) -> int {\n    s.parse::<int>().unwrap_or(0)\n}\n\nfn balance_of(m: BTreeMap<string, int>, name: string) -> int {\n    m.get(name).copied().unwrap_or(0)\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut accts: BTreeMap<string, int> = BTreeMap::new()\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|x| x.to_string()).collect()\n        if p.len() == 0 { continue }\n        let cmd = p[0]\n        if cmd == \"open\" && p.len() >= 3 {\n            let amt = amount_of(p[2])\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if accts.contains_key(p[1]) {\n                println(\"error: duplicate account\")\n            } else {\n                accts.insert(p[1], amt)\n                println(\"ok\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let amt = amount_of(p[2])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(p[1]) {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                let bal = balance_of(accts, p[1])\n                if cmd == \"deposit\" {\n                    accts.insert(p[1], bal + amt)\n                    println(\"ok\")\n                } else if amt > bal {\n                    println(\"error: insufficient funds\")\n                } else {\n                    accts.insert(p[1], bal - amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let amt = amount_of(p[3])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(p[1]) {\n                println(\"error: unknown account ${p[1]}\")\n            } else if !accts.contains_key(p[2]) {\n                println(\"error: unknown account ${p[2]}\")\n            } else if p[1] == p[2] {\n                println(\"error: same account\")\n            } else {\n                let fb = balance_of(accts, p[1])\n                let tb = balance_of(accts, p[2])\n                if amt > fb {\n                    println(\"error: insufficient funds\")\n                } else {\n                    accts.insert(p[1], fb - amt)\n                    accts.insert(p[2], tb + amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            if !accts.contains_key(p[1]) {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                println(\"${balance_of(accts, p[1])}\")\n            }\n        }\n    }\n    for (k, v) in accts {\n        println(\"${k} ${v}\")\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::BTreeMap\n\nfn amount_of(s: string) -> int {\n    s.parse::<int>().unwrap_or(0)\n}\n\nfn balance_of(m: BTreeMap<string, int>, name: string) -> int {\n    m.get(name).copied().unwrap_or(0)\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut accts: BTreeMap<string, int> = BTreeMap::new()\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|x| x.to_string()).collect()\n        if p.len() == 0 { continue }\n        let cmd = p[0]\n        if cmd == \"open\" && p.len() >= 3 {\n            let amt = amount_of(p[2])\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if accts.contains_key(p[1]) {\n                println(\"error: duplicate account\")\n            } else {\n                accts.insert(p[1], amt)\n                println(\"ok\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let amt = amount_of(p[2])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(p[1]) {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                let bal = balance_of(accts, p[1])\n                if cmd == \"deposit\" {\n                    accts.insert(p[1], bal + amt)\n                    println(\"ok\")\n                } else if amt > bal {\n                    println(\"error: insufficient funds\")\n                } else {\n                    accts.insert(p[1], bal - amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let amt = amount_of(p[3])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !accts.contains_key(p[1]) {\n                println(\"error: unknown account ${p[1]}\")\n            } else if !accts.contains_key(p[2]) {\n                println(\"error: unknown account ${p[2]}\")\n            } else if p[1] == p[2] {\n                println(\"error: same account\")\n            } else {\n                let fb = balance_of(accts, p[1])\n                let tb = balance_of(accts, p[2])\n                if amt > fb {\n                    println(\"error: insufficient funds\")\n                } else {\n                    accts.insert(p[1], fb - amt)\n                    accts.insert(p[2], tb + amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            if !accts.contains_key(p[1]) {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                println(\"${balance_of(accts, p[1])}\")\n            }\n        }\n    }\n    for (k, v) in accts {\n        println(\"${k} ${v}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 63.935,
+   "verb": "run"
+  }
+ ],
+ "mode_violations": 0,
+ "other_seconds": 5.73,
+ "pass_final": true,
+ "recorded_at": "2026-10-19T11:18:40",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 12.046,
+ "tool_wait_seconds": 63.94,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 12.046,
+  "cost_usd": 0.0292698,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.wj`. It builds and runs with `wj run --compiled`.\n\nI ran it on Example 1's commands plus a same-account transfer and a deposit to an unknown account. The output matched what the spec calls for: `ok`, `ok`, `ok`, `70`, `error: insufficient funds`, `ok`, `error: same account`, `error: unknown account z`, then the final balances `a 70` and `b 35`. I did not run Example 2",
+  "subtype": "success",
+  "tokens_in": 27605,
+  "tokens_out": 1713,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 81.72
+}

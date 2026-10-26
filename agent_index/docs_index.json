@@ -1322,6 +1322,24 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0160",
+    "signature": "Arena value escapes its arena",
+    "source": "",
+    "summary": "A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function th",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0161",
+    "signature": "`std::arena` is unstable",
+    "source": "",
+    "summary": "Arenas (ADR-0025) are behind the compiler feature `unstable_arenas`.",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",
@@ -2002,6 +2020,33 @@
   {
     "kind": "example",
     "module": "",
+    "name": "defer_panic_lifo",
+    "signature": "",
+    "source": "examples/verified/defer_panic_lifo.wj",
+    "summary": "verified program; first output line: open",
+    "tags": [
+      "control-flow",
+      "defer",
+      "panic"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "display_to_string",
+    "signature": "",
+    "source": "examples/verified/display_to_string.wj",
+    "summary": "verified program; first output line: (1, 2)",
+    "tags": [
+      "traits",
+      "display",
+      "to_string",
+      "interpolation"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "enum_basics",
     "signature": "",
     "source": "examples/verified/enum_basics.wj",
@@ -2240,6 +2285,20 @@
   {
     "kind": "example",
     "module": "",
+    "name": "idiom_agentdx_regressions",
+    "signature": "",
+    "source": "examples/verified/idiom_agentdx_regressions.wj",
+    "summary": "verified program; first output line: 1",
+    "tags": [
+      "idioms",
+      "regression",
+      "strings",
+      "sort"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "if_let_chain",
     "signature": "",
     "source": "examples/verified/if_let_chain.wj",
@@ -2248,6 +2307,19 @@
       "if-let",
       "option",
       "result"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "intrinsic_user_shadow",
+    "signature": "",
+    "source": "examples/verified/intrinsic_user_shadow.wj",
+    "summary": "verified program; first output line: custom: hi",
+    "tags": [
+      "intrinsics",
+      "shadowing",
+      "println"
     ]
   },
   {
@@ -2525,6 +2597,19 @@
       "mod",
       "use",
       "pub"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "module_nested_pub_mod",
+    "signature": "",
+    "source": "examples/verified/module_nested_pub_mod.wj",
+    "summary": "verified program; first output line: 9",
+    "tags": [
+      "modules",
+      "nested",
+      "pub mod"
     ]
   },
   {
@@ -3578,6 +3663,24 @@
   {
     "kind": "guide",
     "module": "WINDJAMMER_FOR_AGENTS",
+    "name": "Permissions: exit 126 and the fix line",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "summary": "`wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,",
+    "tags": []
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_FOR_AGENTS",
+    "name": "Reading input and arguments",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "summary": "Programs that read standard input should use one spelling that behaves the same under `wj run --interpret` and `wj build`:",
+    "tags": []
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_FOR_AGENTS",
     "name": "Structs, enums, traits",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
@@ -3599,7 +3702,7 @@
     "name": "The loop",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
-    "summary": "wj check --json FILE_OR_DIR     # parse + lint + transpile, no cargo; JSON diagnostics with spans",
+    "summary": "<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->",
     "tags": []
   },
   {
@@ -3946,6 +4049,138 @@
     "name": "test_vec_push",
     "signature": "fn test_vec_push()",
     "source": "std/basic_test.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Clock",
+    "signature": "struct Clock",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Env",
+    "signature": "struct Env",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Fs",
+    "signature": "struct Fs",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Net",
+    "signature": "struct Net",
+    "source": "std/cap.wj",
+    "summary": "std/cap - capability values (ADR-0021) Implementation: windjammer_runtime::cap (checked against the grant it was minted from) A capability value is an unforgeab",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Process",
+    "signature": "struct Process",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Rng",
+    "signature": "struct Rng",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "clock",
+    "signature": "fn clock() -> Clock",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "env",
+    "signature": "fn env() -> Env",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "fs",
+    "signature": "fn fs() -> Fs",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "net",
+    "signature": "fn net() -> Net",
+    "source": "std/cap.wj",
+    "summary": "Minting (checked against the running program's grant)",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "process",
+    "signature": "fn process() -> Process",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "rng",
+    "signature": "fn rng() -> Rng",
+    "source": "std/cap.wj",
     "summary": "",
     "tags": [
       "fn"
@@ -4364,7 +4599,18 @@
     "name": "hash_password",
     "signature": "fn hash_password(password: string) -> Result<string, string>",
     "source": "std/crypto.wj",
-    "summary": "Password Hashing (bcrypt)",
+    "summary": "Password Hashing (argon2id preferred; bcrypt verified for migration)",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "hash_password_argon2id",
+    "signature": "fn hash_password_argon2id(password: string) -> Result<string, string>",
+    "source": "std/crypto.wj",
+    "summary": "/ Argon2id with OWASP defaults (19 MiB, 2 iterations, 1 lane) and a random salt; returns a PHC string.",
     "tags": [
       "fn"
     ]
@@ -4376,6 +4622,17 @@
     "signature": "fn hash_password_with_cost(password: string, cost: int) -> Result<string, string>",
     "source": "std/crypto.wj",
     "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "password_hash_is_argon2id",
+    "signature": "fn password_hash_is_argon2id(hash: string) -> bool",
+    "source": "std/crypto.wj",
+    "summary": "/ True for `$argon2id$...` hashes. After a successful `verify_password` on a hash where this is / false, call `hash_password_argon2id` and store the result to m",
     "tags": [
       "fn"
     ]
@@ -4452,7 +4709,7 @@
     "name": "verify_password",
     "signature": "fn verify_password(password: string, hash: string) -> Result<bool, string>",
     "source": "std/crypto.wj",
-    "summary": "",
+    "summary": "/ Verify against a stored hash: bcrypt (`$2b$...`) or Argon2 PHC (`$argon2id$...`).",
     "tags": [
       "fn"
     ]
@@ -4562,7 +4819,7 @@
     "name": "connect",
     "signature": "fn connect(url: string) -> Result<Connection, string>",
     "source": "std/db.wj",
-    "summary": "/ Open postgres://, postgresql://, or sqlite path (:memory:, file.db).",
+    "summary": "/ Open postgres://, postgresql://, or sqlite path (:memory:, file.db). / Postgres connections share one process-wide pool per URL; each handle pins one pooled s",
     "tags": [
       "fn"
     ]
@@ -4807,6 +5064,17 @@
     "summary": "/ URL encode a component (more aggressive than url_encode)",
     "tags": [
       "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::enumerable",
+    "name": "Enumerable",
+    "signature": "trait Enumerable<T>",
+    "source": "std/enumerable.wj",
+    "summary": "std/enumerable - the enumerable collection methods (ADR-0018 feature 1, spec: docs/spec/collections.md). These methods are built in: every List, Set, Map (as (k",
+    "tags": [
+      "trait"
     ]
   },
   {
@@ -6092,6 +6360,17 @@
     "signature": "struct OrderedMap<K, V>",
     "source": "std/map.wj",
     "summary": "OrderedMap<K, V> — insertion-ordered map (Rust: BTreeMap)",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::map",
+    "name": "OrderedSet",
+    "signature": "struct OrderedSet<T>",
+    "source": "std/map.wj",
+    "summary": "OrderedSet<T> — insertion-ordered set (Rust: BTreeSet)",
     "tags": [
       "struct"
     ]

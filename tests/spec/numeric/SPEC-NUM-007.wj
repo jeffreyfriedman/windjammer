@@ -1,0 +1,8 @@
+// spec: SPEC-NUM-007
+// expect: 0.30000000000000004
+// expect: false
+fn main() {
+    let x = 0.1 + 0.2
+    println("${x}")
+    println("${x == 0.3}")
+}

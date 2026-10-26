@@ -53,8 +53,24 @@ Design: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/su
 9. Gates before commit: `cargo fmt --check`, `cargo clippy -- -D warnings`, targeted tests, `tests/architecture.rs`.
 10. Docs honesty: README and CLI help claim only what exists and is tested. Mark experimental backends (JS, Go, WASM,
     interpreter) as such.
-11. **A bug found by inspection lands with a class-level gate.** If you notice a defect by reading code, reading output or
+11. Promises are tested, not assumed: every `wj` subcommand and flag, documented error code and README feature claim
+    is listed in `docs/promises.toml` and has a positive AND a negative acceptance case in `tests/promises/*.toml`
+    that runs through the installed binary. Adding a flag without both fails `tests/promise_registry_test.rs`.
+12. Code no user can reach is a bug: `tests/capability_reachability_test.rs` fails on new modules or pub fns that no
+    entry point (`wj`, `wj-lint`, LSP, MCP) reaches. Wire it into `wj`, declare it in `docs/MODULE_MAP.toml`
+    `[library_api]`, or delete it. The legacy `windjammer` binary may not grow a subcommand `wj` lacks.
+13. A bug found by inspection lands with a class-level gate. If you notice a defect by reading code, reading output or
     spot-checking (a wrong column, an off-by-one line, a dummy span, a panic on odd input), a one-off regression test is
     not enough: add or extend an automated gate that fails for the whole class (an independent oracle, a corpus sweep,
     or a mutation-tested invariant), prove it can fail (mutation self-test), and list it in `docs/testing/INVARIANTS.md`.
     Ratchet files (`tests/span_oracle_ratchet/`) may only shrink.
+
+## Merge gate (mandatory)
+
+Run before merging any branch; targeted tests are not enough (that is how eject on the main CLI, `wj check` on type errors and
+`wj new` outside a checkout broke without anyone noticing). Gate list and oracles: [docs/testing/INVARIANTS.md](docs/testing/INVARIANTS.md).
+
+```bash
+scripts/merge_gate.sh           # build, fmt, architecture, docs-truth, promises, reachability, differential gates, smoke
+scripts/merge_gate.sh --full    # + cargo-backed cases, all backends, 6x determinism, whole-suite ratchet
+```

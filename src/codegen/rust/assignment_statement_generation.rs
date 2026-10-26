@@ -81,7 +81,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             self.set_assignment_int_target_from_compound_target(target);
-            let mut value_str = self.generate_expression(value);
+            let mut value_str = self.generate_value_expr(value);
 
             // Int counters compared with `.len()` must not accumulate via `1 as usize` (P3.304).
             if self
@@ -317,7 +317,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     self.set_assignment_int_target_from_compound_target(target);
-                    let mut right_str = self.generate_expression(right);
+                    let mut right_str = self.generate_value_expr(right);
                     if matches!(
                         right,
                         Expression::Literal {

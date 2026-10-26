@@ -91,7 +91,7 @@ W = WORKS, P = PARTIAL, B = BROKEN, A = ABSENT. Rust column is the corpus result
 `minifier`, `polyfills`, `source_maps`, `v8_optimizer`, `module_federation`, `web_workers`, `code_splitter`,
 `differential_loading` (JS), the old AST-templating Go/JS generators, `ir_lowering.rs` in both backends, and the legacy tests
 that asserted their output (`enhanced_javascript_tests.rs`, `conformance_{go,js}_test.rs`, `integration_backend_conformance_test.rs`
-+ `tests/integration_wj`). `--minify/--polyfills/--v8-optimize/--source-maps` now fail with an explanatory error.
++ `tests/integration_wj`). `--minify/--polyfills/--v8-optimize` were then removed from the CLI; `--source-maps` fails with an explanatory error on these backends (the Rust target writes a real map).
 
 ## Remaining gaps, ranked
 

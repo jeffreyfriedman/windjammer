@@ -411,7 +411,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             for param_name in &analyzed.str_ref_optimizable_params {
-                if self.str_ref_optimized_params.contains(param_name) {
+                if self.str_ref_optimized_params.contains(param_name)
+                    || !self.str_ref_optimizable_param(analyzed, param_name)
+                {
                     continue;
                 }
                 if analyzed.inferred_ownership.get(param_name)
@@ -424,6 +426,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else {
             for param_name in &analyzed.str_ref_optimizable_params {
+                if !self.str_ref_optimizable_param(analyzed, param_name) {
+                    continue;
+                }
                 if analyzed.inferred_ownership.get(param_name)
                     == Some(&crate::analyzer::OwnershipMode::Owned)
                 {
@@ -2879,7 +2884,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Phase-2 str_ref emits `&str` in Rust — register Borrowed so static
                 // `Self::helper(self.field)` call sites borrow instead of cloning fields.
                 // Never demote solver/analyzer Owned (enum payload, struct field store).
-                if analyzed.str_ref_optimizable_params.contains(&param.name)
+                if self.str_ref_optimizable_param(analyzed, &param.name)
                     && !matches!(ownership, crate::analyzer::OwnershipMode::Owned)
                     && analyzed.inferred_ownership.get(&param.name)
                         != Some(&crate::analyzer::OwnershipMode::Owned)
@@ -4897,15 +4902,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.param_only_forwarded_to_qualified_key_callee(body, param_name, func, true)
     }
 
-    pub(in crate::codegen::rust) fn param_only_forwarded_to_qualified_map_key_callee(
-        &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        self.param_only_forwarded_to_qualified_key_callee(body, param_name, func, false)
-    }
-
     fn param_only_forwarded_to_qualified_key_callee(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -6814,30 +6810,6 @@ impl<'ast> CodeGenerator<'ast> {
             }),
             _ => false,
         }
-    }
-
-    pub(in crate::codegen::rust) fn param_only_used_in_same_name_struct_field_return(
-        &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-    ) -> bool {
-        if body.len() != 1 {
-            return false;
-        }
-        let expr = match body[0] {
-            Statement::Expression { expr, .. }
-            | Statement::Return {
-                value: Some(expr), ..
-            } => expr,
-            _ => return false,
-        };
-        let Expression::StructLiteral { fields, .. } = expr else {
-            return false;
-        };
-        fields.iter().any(|(field, value)| {
-            field == param_name
-                && matches!(value, Expression::Identifier { name, .. } if name == param_name)
-        })
     }
 
     fn method_call_sibling_ast_expects_owned_arg(
@@ -10791,195 +10763,18 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
-    /// True when `param_name` is passed to `Vec`/`slice` search (`contains` / `binary_search`)
-    /// where the element type is a Windjammer string — Rust formal must be `&String`, not `&str`.
+    /// `Vec<string>.contains(param)` / `binary_search(param)` no longer force a `&String` formal: the search is lowered
+    /// to an element comparison that accepts `&str`, so string formals keep the `&str` form callers can pass.
     pub(in crate::codegen::rust) fn param_passed_to_slice_search_string_elem(
         &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-        func: &FunctionDecl<'ast>,
+        _body: &[&'ast Statement<'ast>],
+        _param_name: &str,
+        _func: &FunctionDecl<'ast>,
     ) -> bool {
-        body.iter().any(|stmt| {
-            self.statement_passes_param_to_slice_search_string_elem(stmt, param_name, func)
-        })
+        false
     }
 
-    fn statement_passes_param_to_slice_search_string_elem(
-        &self,
-        stmt: &Statement<'ast>,
-        param_name: &str,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        match stmt {
-            Statement::Expression { expr, .. }
-            | Statement::Return {
-                value: Some(expr), ..
-            } => self.expression_passes_param_to_slice_search_string_elem(expr, param_name, func),
-            Statement::Let {
-                value, else_block, ..
-            } => {
-                self.expression_passes_param_to_slice_search_string_elem(value, param_name, func)
-                    || else_block.as_ref().is_some_and(|b| {
-                        self.param_passed_to_slice_search_string_elem(
-                            b.as_slice(),
-                            param_name,
-                            func,
-                        )
-                    })
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.expression_passes_param_to_slice_search_string_elem(
-                    condition, param_name, func,
-                ) || self.param_passed_to_slice_search_string_elem(
-                    then_block.as_slice(),
-                    param_name,
-                    func,
-                ) || else_block.as_ref().is_some_and(|b| {
-                    self.param_passed_to_slice_search_string_elem(b.as_slice(), param_name, func)
-                })
-            }
-            Statement::While {
-                body, condition, ..
-            } => {
-                self.expression_passes_param_to_slice_search_string_elem(
-                    condition, param_name, func,
-                ) || self.param_passed_to_slice_search_string_elem(
-                    body.as_slice(),
-                    param_name,
-                    func,
-                )
-            }
-            Statement::For { body, .. } | Statement::Loop { body, .. } => {
-                self.param_passed_to_slice_search_string_elem(body.as_slice(), param_name, func)
-            }
-            Statement::Match { value, arms, .. } => {
-                self.expression_passes_param_to_slice_search_string_elem(value, param_name, func)
-                    || arms.iter().any(|arm| {
-                        self.expression_passes_param_to_slice_search_string_elem(
-                            &arm.body, param_name, func,
-                        )
-                    })
-            }
-            _ => false,
-        }
-    }
-
-    fn expression_passes_param_to_slice_search_string_elem(
-        &self,
-        expr: &Expression<'ast>,
-        param_name: &str,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        match expr {
-            Expression::MethodCall {
-                object,
-                method,
-                arguments,
-                ..
-            } => {
-                let receiver = self
-                    .mc_infer_method_receiver_type_name(object)
-                    .or_else(|| self.infer_type_name(object));
-                let is_slice_search =
-                    crate::analyzer::stdlib_method_traits::method_is_slice_search_qualified(
-                        method,
-                        receiver.as_deref(),
-                        &self.signature_registry,
-                    );
-                if is_slice_search {
-                    let arg0_is_param = arguments.first().is_some_and(|(_, a)| {
-                        matches!(a, Expression::Identifier { name, .. } if name == param_name)
-                            || matches!(
-                                a,
-                                Expression::Unary {
-                                    op: crate::parser::UnaryOp::Ref,
-                                    operand,
-                                    ..
-                                } if matches!(
-                                    &**operand,
-                                    Expression::Identifier { name, .. } if name == param_name
-                                )
-                            )
-                    });
-                    if arg0_is_param {
-                        let recv_is_string_vec = match &**object {
-                            Expression::Identifier { name, .. } => {
-                                func.parameters
-                                    .iter()
-                                    .find(|p| p.name == *name)
-                                    .is_some_and(|p| self.type_is_string_element_vec(&p.type_))
-                                    || self
-                                        .local_var_types
-                                        .get(name.as_str())
-                                        .is_some_and(|t| self.type_is_string_element_vec(t))
-                            }
-                            Expression::FieldAccess { field, .. } => {
-                                // Only when struct-field type registry says Vec<string>.
-                                self.current_struct_name
-                                    .as_ref()
-                                    .and_then(|sn| {
-                                        self.struct_field_types
-                                            .get(sn.as_str())
-                                            .and_then(|fields| fields.get(field.as_str()))
-                                    })
-                                    .is_some_and(|t| self.type_is_string_element_vec(t))
-                            }
-                            _ => false,
-                        };
-                        if recv_is_string_vec {
-                            return true;
-                        }
-                    }
-                }
-                self.expression_passes_param_to_slice_search_string_elem(object, param_name, func)
-                    || arguments.iter().any(|(_, a)| {
-                        self.expression_passes_param_to_slice_search_string_elem(
-                            a, param_name, func,
-                        )
-                    })
-            }
-            Expression::Call {
-                arguments,
-                function,
-                ..
-            } => {
-                self.expression_passes_param_to_slice_search_string_elem(function, param_name, func)
-                    || arguments.iter().any(|(_, a)| {
-                        self.expression_passes_param_to_slice_search_string_elem(
-                            a, param_name, func,
-                        )
-                    })
-            }
-            Expression::Binary { left, right, .. } => {
-                self.expression_passes_param_to_slice_search_string_elem(left, param_name, func)
-                    || self.expression_passes_param_to_slice_search_string_elem(
-                        right, param_name, func,
-                    )
-            }
-            Expression::Unary { operand, .. }
-            | Expression::FieldAccess {
-                object: operand, ..
-            }
-            | Expression::TryOp { expr: operand, .. }
-            | Expression::Await { expr: operand, .. }
-            | Expression::Cast { expr: operand, .. } => {
-                self.expression_passes_param_to_slice_search_string_elem(operand, param_name, func)
-            }
-            Expression::Block { statements, .. } => self.param_passed_to_slice_search_string_elem(
-                statements.as_slice(),
-                param_name,
-                func,
-            ),
-            _ => false,
-        }
-    }
-
-    fn type_is_string_element_vec(&self, ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_is_string_element_vec(&self, ty: &Type) -> bool {
         match ty {
             Type::Vec(inner) => {
                 matches!(inner.as_ref(), Type::String)

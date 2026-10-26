@@ -7,18 +7,97 @@ Module map and invariants: `src/interpreter/MODULE.md`.
 
 ## How to use it
 
+`wj run` interprets by default (ADR-0022): no cargo, no rustc, milliseconds to first output. When a program uses a
+feature listed as unsupported below, the load-time preflight detects it before `main` runs and `wj run` switches to
+the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
+
 | Command | Effect |
 |---------|--------|
-| `wj run --interpret FILE_OR_DIR [args]` | Run a file, or a project directory (`main.wj`, or `main.wj` under a `src` directory), with `use`/`mod` resolved across files. No cargo, no rustc. stdout is program output only. |
-| `wj test --interpret [PATH] [--filter S]` | Run `@test`, `@test_cases([...])` and `test_*` functions in `*_test.wj` files. cargo-test-like report, exit 1 on failure. |
+| `wj run` | Run the project containing the working directory: `wj.toml` is found upward, its default binary runs (`main.wj` under `src/` or at the root, the first `[[bin]]`). |
+| `wj run PATH [args]` | A `.wj` file, or a directory with `main.wj` at its root or under `src/` (`wj run ./cmd/tool`). Use `wj run . args` to pass arguments, as with `go run . args`. |
+| `wj run --bin NAME` | A `[[bin]]` entry of `wj.toml`, `cmd/NAME/main.wj` or a file named after NAME in `src/bin/`. |
+| `wj run --interpret ...` | Interpreter only: never fall back (an unsupported feature exits 2 naming it). |
+| `wj run --compiled ...` / `--release` | Transpile to Rust and run with cargo (`--release`: optimized). `wj build` is unchanged. |
+| `wj run --watch` | Re-run on every change to `.wj`, `.rs`, `wj.toml`, `wj.lock` under the project (restarts long-running programs). |
+| `wj run --hot` | Preview: keep the program running and swap in edited function bodies (state survives; ADR-0024). |
+| `wj test --interpret [PATH] [--filter S] [--list] [--watch]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
+| `wj run --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
+| `wj run --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
+| `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client and server calls from canned responses (no network capability needed) / allow network access, plain `http://` (default: denied with exit status 126). |
+| `wj run --sandbox` / `--allow EFFECT[=RESOURCE]` / `--caps enforce\|warn\|off` | Capabilities (ADR-0021): with no `[capabilities]` in `wj.toml` a run may use files inside the project directory, time, random and console, and nothing else; a denied call stops with exit status 126 and a message that contains the `--allow` flag and the `[capabilities]` block to add. `WJ_CAPS=warn` (run, warn once) and `WJ_CAPS=off` are explicit opt-outs. |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);
-N for `std::process::exit(N)`; 2 for "unsupported in the interpreter" (names the feature and points at `wj run`); 1 other.
+N for `std::process::exit(N)`; 2 for "unsupported in the interpreter" (names the feature, suggests `wj run --compiled`); 1 other.
+Arguments pass through (`std::env::args`), stdin is inherited. A test asserts the interpreter never spawns `cargo`/`rustc`
+(shims on `PATH` that leave a marker file); the one exception is the host bridge build below, done once per Rust change.
 
-Latency (same machine, heavily loaded, warm cargo cache): `wj run hello.wj` (transpile, cargo build, run) 13.9 s;
-`wj run --interpret hello.wj` 0.016 s. A test asserts the interpreter never spawns `cargo`/`rustc`
-(shims on `PATH` that leave a marker file).
+## Projects
+
+**One module system.** The interpreter loads a program with the compiler's own file walker and module paths
+(`module_system::sources`, the same walker behind the compiled build) and binds every `use` with the compiler's resolver
+(`resolve`, `DefId`s): nested modules, `mod.wj` with `pub mod`, directories without `mod.wj`, aliases, groups `{a, b}`, globs,
+`self`/`super`/`crate` paths, `pub use` re-exports, cyclic imports, and same-name functions in different modules. Visibility follows
+Rust's rule on the resolved definitions: calling or importing a private item from outside its module is
+``function `helper` is private (E0603)``, as rustc reports it for the compiled program. A `main.wj` owns its directory tree (every
+module in it is loaded, like the compiled build); a loose script loads the modules it `use`s.
+
+**Dependencies.** `wj.toml` `[dependencies]` with `path` or `git` (ADR-0010 option A) are resolved by `package::graph`: a
+Windjammer package (it has `wj.toml` or `.wj` sources) is loaded as source and mounted as a crate (`use textkit::banner`); git
+dependencies are cloned once into the wj cache and pinned in `wj.lock` (written on first resolution; later upstream commits are not
+picked up until the lock entry is removed). Rust-crate dependencies are reached through `extern fn` and the host bridge.
+
+**Rust code via the host bridge (ADR-0023).** When a project declares `extern fn`s and has hand-written Rust in `src/` or next to `wj.toml`
+(`ffi.rs`; the compiled build links it when the `extern fn`s are declared in a library module such as `native.wj`, not in `main.wj`), `wj run` compiles that Rust once into a cached dynamic library with one
+generated C-ABI shim per `extern fn`, loads it, and calls the same symbols the compiled binary calls. Integers, floats, `bool` and
+`string` cross the bridge; any other type is rejected before the program runs, naming the item, and `wj run` falls back to the
+compiled path. Measured on the `host_bridge` fixture (loaded machine): first run 214 s (cargo builds `windjammer-runtime` in release
+for the bridge crate), every later run 10 to 30 ms.
+
+**Performance** (`scripts/interpreter_project_bench.py`, median wall-clock on a loaded 10-agent machine, release `wj`):
+
+| Measurement | Time |
+|---|---|
+| `wj run hello.wj` (process start + load + run) | 30 ms |
+| `wj run` in a generated 50-file project (3 functions and a struct per module, cross-module calls), first run | 31 ms |
+| same, repeated runs | 35 ms |
+| `wj run --watch`: source edit to new output | 44 ms (poll interval 20 ms) |
+
+Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (records the keys `interpreter.run_hello_ms`,
+`interpreter.project_50_cold_ms`, `interpreter.project_50_warm_ms`, `interpreter.watch_restart_ms` in `docs/generated/measured.json`).
+
+**Parity gates** (ADR-0022; the default stays interpreted only while these are green):
+- `cargo test --release --test interpreter_features`: every registry probe behaves as registered, every `Unsupported` probe is caught
+  by the preflight at load time (so it triggers the fallback) and no `Supported` probe is.
+- `cargo test --release --test interpreter_projects`: the fixtures in `tests/interpreter_projects/` (nested modules, every `use` form,
+  same names and cycles, privacy error, binaries/args/exit codes, path dependency, host bridge) match hand-written expectations
+  interpreted and through the default `wj run` (which must not fall back); a seeded fuzzer generates 40 random module trees and
+  compares the interpreter with the generator's own model (self-test: a mutated program is detected). `WJ_PROJECT_COMPILED=1`
+  adds the compiled half for fixtures and the first fuzz seeds.
+
+**Compiled-path bugs found by the project gates** (fixed here unless marked open):
+- Fixed: `use greet` in a crate-root `main.wj` (under `src/`) was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
+  package lib in the binary).
+- Fixed: a user module named like a runtime std module (`util::math`) also got `use windjammer_runtime::math;` (E0252).
+- Fixed: `util::math::cube(3)` or `crate::x::f()` in the binary's `main.rs` did not resolve (the modules live in the package lib);
+  the binary now names the lib for `crate::` paths and glob-imports it.
+- Fixed: `wj run` (compiled) printed build progress on stdout; it now goes to stderr so both paths print the same bytes.
+- Fixed: a path dependency on a Windjammer source package was handed to Cargo as-is; `wj run --compiled` now builds it into the
+  package's `gen/` crate first and the generated `Cargo.toml` links that.
+- Open: `wj build .` on a project root (rather than `src/`) treats the `main.wj` under `src/` as a module and drops `fn main`; `wj run` passes the
+  source root, so it is unaffected.
+- Fixed: module aliases and `super::`/`self::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) reported
+  `missing boundary signature for m3::f0`; the callee is now resolved through `resolve::same_crate_callee_key`.
+- Open: a binary under `cmd/<name>/main.wj` compiled on its own keeps `use crate::helper` (E0432); the package-lib rewrite needs a `wj.toml` at its source root. Interpreted `--bin` is unaffected.
+- Open: directory modules without `mod.wj` that only hold children are declared in `lib.rs` without a `mod.rs` (E0433 `cannot find net in self`); the compiled fuzz half avoids them.
+- Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.
+- Open: `env::args().skip(1).collect()` into `Vec<string>` fails in rustc (iterates `&String`).
+
+**Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
+engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
+root. Compiled runs of a file in `src/bin/` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
+preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
+kept; other edits print a restart notice (use `--watch` for those).
 
 ## Measurement
 
@@ -29,13 +108,13 @@ Two oracles, neither of them a hand-typed number:
   Currently:
 
   <!-- wj:gen name=metric key=interpreter.features_supported -->
-26
+41
   <!-- wj:end -->
 
   supported entries, and
 
   <!-- wj:gen name=metric key=interpreter.features_unsupported -->
-2
+3
   <!-- wj:end -->
 
   entries that must fail with "unsupported".
@@ -62,12 +141,14 @@ Generated from the registry (do not edit; change `src/interpreter/features.rs`):
 - **Traits and generics**: traits with default methods; dynamic dispatch by runtime type; generic functions (erased; dispatch is dynamic); operator overloading via `add`, `neg`, `eq`, ...
 - **Functions**: closures capturing by reference, mutation of captures, function values; pipe operator `|>`; `?` on `Result`/`Option`
 - **Formatting**: `${}` interpolation; format specs: width, fill, align, precision, radix, `?`; `{:?}` and `{:#?}` on collections and structs
-- **Numbers**: integer widths with Rust overflow semantics (`wrapping_*`, `checked_*`, `as` casts); arithmetic overflow panics (exit 101)
-- **Collections**: `Vec` push/len/index/sort/dedup, `VecDeque`; `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet`, `entry` API; iterator adaptors (`map filter fold sum zip enumerate rev take skip chain flat_map windows chunks sort_by`), lazy `cycle`/`repeat`/`from_fn`; `Option`/`Result` combinators
+- **Numbers**: integer widths with Rust overflow semantics (`wrapping_*`, `checked_*`, `as` casts); arithmetic overflow panics (exit 101); `u128` over its full range
+- **Collections**: `Vec` push/len/index/sort/dedup, `VecDeque`; `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet`, `entry` API; iterator adaptors (`map filter fold sum zip enumerate rev take skip chain flat_map windows chunks sort_by`), lazy `cycle`/`repeat`/`from_fn`; `Option`/`Result` combinators; `OrderedMap`/`OrderedSet`: insertion order, `remove` keeps the order of the rest; `HashMap`/`HashSet` order is unspecified (`--hash-seed N` permutes it)
 - **Strings**: string and char methods, `split`, `parse`
-- **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability
-- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`)
+- **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability; `RefCell` borrow tracking with Rust's `BorrowMutError` panic; moves decide where destructors run: into collections, aggregates, `let`, partial moves, callee parameters
+- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`); `thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings); `mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone; `Arc<Mutex>`/`RwLock` guards (released at scope end), `Condvar`, `Barrier`, atomics; deadlocks are reported
 - **Intrinsics**: `assert`, `assert_eq`, `panic`, `todo`, `debug`
+- **Modules**: multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603)
+- **Std modules**: `Duration`, `Instant`, `SystemTime`, `std::time::DateTime` (chrono formats); `std::json` dynamic values and typed `to_string`/`parse_string::<T>`; `std::regex` (same engine as compiled programs); `std::fs` files, directories (`read_dir`, `metadata`), path helpers; `csv`, `url`, `mime`, `crypto` (sha/base64/bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`; `std::http` client and servers (`serve`, `serve_fn`, `Server::serve`) behind a capability port: refused by default, `--mock-http FILE` replays responses/requests, `--allow-network` uses real sockets; `std::config` (toml/yaml, same code as the runtime), `std::db` on SQLite, `std::subprocess` pipes, `std::cli` (clap)
 <!-- wj:end -->
 
 Also covered by the engine but not itemised in the registry yet: `std::{fs,env,process,io::stdin,time,mem,cmp,math,strings}` subsets and
@@ -100,8 +181,9 @@ location after consuming it, so the reported line can be the line after the fail
 `unsupported in the interpreter: ...` and exit 2:
 
 <!-- wj:gen name=interpreter_unsupported -->
+- **Modules**: two types with the same name in different modules (the interpreter keys types by name)
 - **Concurrency**: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)
-- **FFI**: calls to `extern fn`
+- **FFI**: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0023)
 <!-- wj:end -->
 
 Other unimplemented built-ins (for example std modules such as `http`, `json`, `ui`) fail the same way, with the name of the missing function.
@@ -149,46 +231,74 @@ Findings from running the same programs through the compiled path (compiler bugs
 
 ## Added in the interp-gaps work
 
-- **Generic static dispatch** (`generics.rs`): `T::new()`, `T::default()`, `T::CONST` resolve through a per-call table
-  `T -> concrete type`, bound from a turbofish, then argument runtime types, then the expected type (`let x: Foo = make()`,
-  a function's declared return type). An uninferable parameter is a located `unsupported` error naming the fix.
-  Impl-level parameters are bound the same way; they are not recovered from `&self` field types.
-- **`matches!(e, pat [if guard])`** is lowered by the parser to a `match` (all backends). Open ranges `(a..)` parse as
-  `std::ops::RangeFrom { start }` (the Rust backend emits `(a..)`).
-- **Lazy iterators** (`iter.rs`, `builtins/iter.rs`): adaptors are pull-based nodes, so `cycle`, unbounded ranges,
-  `repeat`, `from_fn`, `successors` work under `take`/`take_while`/`find`/`break`, and closure side effects interleave exactly as in
-  Rust. Materialising more than 50M items from one iterator is a loud error. `rev` is lazy for double-ended sources
-  and materialises otherwise.
-- **`impl Drop`** (`heap.rs`): destructors run at block/function exit in reverse declaration order, on reassignment, `drop(x)`,
-  discarded temporaries and `let _ =`; owner before fields, `Vec` elements in order. Ownership is answered by reachability from
-  the live frames (the value model has no move tracking), so a value passed into a callee is dropped when its last holder dies
-  (the caller's scope exit), not at the callee's end. Panics unwind through destructors; `process::exit` does not.
-- **`Rc`/`Arc`/`Weak`, `RefCell`/`Cell`/`Mutex`/`RwLock`** (`builtins/shared.rs`): `Rc` is a shared slot; `strong_count`,
-  `weak_count` and `Weak::upgrade` are computed by reachability, so they follow scope exit and `drop`. Reference cycles
-  are not leaked (a cycle with no outside holder is considered dead). `borrow_mut()` never panics with "already borrowed"
-  and `lock()` never blocks or poisons.
-- **`async fn` / `.await`**: calling an async function returns a lazy future; `.await` (and an `async fn main`) runs it
-  to completion, so order matches Rust for single-task programs. There is no executor: `spawn`, `async expr`, channels,
-  `thread {}` stay unsupported.
-- Recursion is bounded by stack bytes used on the 4 GiB interpreter thread (about 120k interpreted frames in a debug
-  build), not a frame count; exceeding it is a panic, never a native stack overflow.
-- Smaller: `None` patterns no longer match everything; `module.func()` and `Enum.Variant()` legacy spellings; bare names
-  from `use std::math`; `math::*` float functions; `fs::is_dir/is_file`; an implicit `self` in `fn f()` impl methods.
+- **Generic static dispatch** (`generics.rs`): `T::new()`, `T::default()`, `T::CONST` through a per-call table bound from a
+  turbofish, argument runtime types, then the expected type. Uninferable parameters are a located `unsupported` error.
+- **`matches!`** lowered by the parser; open ranges `(a..)` as `std::ops::RangeFrom`; `-a..b` read as `(-a)..b`.
+- **Lazy iterators** (`iter.rs`, `builtins/iter.rs`): pull-based adaptors, infinite sources, Rust's side-effect order.
+- **Concurrency** (`sched.rs`, `builtins/{thread,channel,sync,time}.rs`): `std::thread` (spawn, join, scope, sleep,
+  Builder), `mpsc` (channel, sync_channel, try/timeout receive, iteration), `Arc<Mutex/RwLock>` guards released at scope
+  end, `Condvar`, `Barrier`, atomics, and the ADR-0004 surface (`spawn f(x)`/`spawn { }`, `async f(x)`, `scope { }`,
+  `Task.wait()`/`.await`, `std::sync::channel()` with `send`/`recv` methods). One OS thread per task, but a baton runs
+  exactly one at a time: a run is a pure function of the program and `--sched-seed`. `sleep`/timeouts use a virtual clock
+  (no real waiting); a state where every task is blocked and none waits on time is reported as a deadlock. Properly
+  synchronised programs print the same output under every seed (tested over 10 seeds); a check-then-act race across two lock
+  acquisitions shows both outcomes across seeds (tested).
+- **Ownership and memory** (`heap.rs`, `moves.rs`, `locks.rs`, `builtins/shared.rs`): `impl Drop` at scope exit, on reassignment,
+  `drop(x)` (forced: the object dies even if an auto-borrowed alias remains), discarded temporaries, `let _ =`, and for elements a
+  mutating builtin discards (`clear`, `truncate`, `remove`, overwritten entries); `Rc`/`Arc` counts by reachability,
+  `Weak` is a real weak pointer so `Rc` cycles leak exactly as in Rust; `Rc::make_mut`/`get_mut`; `RefCell` borrow tracking
+  with Rust's `BorrowMutError`/`BorrowError` panics (guards are tokens that live as long as some copy of the guard value).
+  `mut` parameters are owned copies (Q-015). Moves decide where an object dies: `let y = x`, partial moves
+  (`let l = p.left`), aggregates (`S { f: x }`, tuples, arrays, variants) and consuming builtins (`push`, `insert`, `send`)
+  move a variable's ownership; a callee that moves its parameter (or owns it by rule: `owned`, `mut`, generic `T`) takes
+  the caller's object, so it dies at the callee's end; a parameter the callee only reads stays a borrow. Mutex poisoning:
+  a panic unwinding past a held guard poisons the lock (`PoisonError`, `is_poisoned`, `clear_poison`).
+- **Std modules**: `fs` (all of `std/fs.wj`, `read_dir`, metadata, path helpers), `path`, `env`, `process`, `time`
+  (`Duration`, `Instant`, `SystemTime`, `DateTime`), `json` (dynamic and typed `to_string`/`parse_string::<T>`), `regex`,
+  `csv`, `url`, `mime`, `crypto` (sha1/256/512, base64, bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`, `log`,
+  `strings`, `testing`; `http` client and servers behind a port (`--mock-http`, `--allow-network`; axum routing rules,
+  mock files replay recorded requests), `config` (the runtime's own code path), `db` on SQLite (Postgres is refused with an
+  error), `subprocess` line pipes, `cli` (clap), `u128` over its full range. Same crates as `windjammer-runtime`, so results
+  match compiled programs; tests use Python, rustc and runtime-code oracles (`interpreter_std_modules_test`,
+  `interpreter_http_server_test`, `interpreter_config_db_test`). Every top-level `std/*.wj` function has a builtin
+  (`std_interpreter_agreement_test`, ratchet at 0); the four legacy `config::get*` hooks and the two `csv::*_with_delimiter`
+  builders (no implementation in any backend) are loud errors.
+- **Language**: Rust's slicing panic messages (`v[a..b]`, `s[a..b]`, char boundaries), `char::to_lowercase()` displays,
+  top-level macro invocations are loud, `Type::default()` for `@derive(Default)` (Q-016), recursion bounded by stack bytes on
+  the interpreter thread (Q-023), `wj test --interpret` shares `wj test` discovery.
+- **Performance**: `wj run` uses the resolved engine (ADR-0020): each function is compiled to closures over slot-indexed
+  locals the first time it is called, integer code with a statically known width runs unboxed, calls pass arguments in
+  place, field reads and method calls have inline caches, and a construct it does not lower runs in the tree walker as an
+  island inside the compiled function. `--engine walker` runs the tree walker alone (the reference semantics; the parity test
+  compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 12x faster than in the walker,
+  faster than CPython on both; hot functions whose values are all `int` are compiled to machine code by Cranelift
+  (`wj run --no-jit` or `WJ_JIT=0` turns that off; `fib(30)` is about 37x the walker with it). `scripts/interp_bench.py`
+  is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
+  `wj test --interpret` uses the same engine.
+
+Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
+(first interp-gaps measurement: 222 of 382 on the smaller tree then). Of the 138 that do not: 40 are `__SEED__` corpus templates,
+35 panic on purpose (spec/error examples), 18 are parse errors in negative spec examples or syntax the shared parser rejects,
+9 time out (optimizer benchmark kernels), and about 30 need unimplemented libraries (UI/game engine, http servers,
+`std::cli`, subprocess pipes). `bench/agent-dx` reference solutions: 60/60 (was 54/60).
 
 ## Remaining gaps
 
-- Not interpreted: `spawn`/channels/threads (needs a settled ADR-0004 surface and a scheduler), extern/FFI, UI/http/json/db/regex/
-  subprocess std modules, wall-clock `time::now()` objects, `Rc::make_mut`/`get_mut`, RefCell borrow-state panics,
-  macros other than the built-in set plus `matches!`.
-- `u128` values above `i128::MAX` are not representable. `HashMap`/`HashSet` iterate in key order (Rust's order is
-  unspecified, so a correct program cannot depend on it; programs that print an unordered map differ from any single Rust run).
-- Drop/`Rc` reachability limits: values held only by a pending Rust-side temporary are invisible to the scan; a moved-in value
-  outlives the callee; iterator adaptors other than `Vec`-backed ones do not hold values alive for the scan.
-- Performance: a tree walker, roughly two orders of magnitude slower than compiled code; the optimizer kernel
-  benchmarks time out in debug builds.
-- Of the 382 repository `.wj` files with a `main`, 160 still do not exit 0: 37 are `__SEED__` corpus templates, about 25 are
-  tests that panic on purpose, and the rest need UI/engine/http/json/regex std modules or use syntax the shared parser rejects.
-  Re-measure with `scripts/interpreter_coverage.py`.
+- Not interpreted: extern/FFI; UI/game engine APIs; Postgres (`db::connect("postgres://..")`); `thread {}`/`async {}`
+  statement blocks (deprecated by ADR-0004); `Rc` cycles are leaked but their destructors are not distinguished from
+  reachable values in drop order.
+- Moves: a moved variable stays readable (a valid program never reads it; where Windjammer would auto-clone it, the
+  interpreter shares the object instead of copying it, so that clone's destructor does not run). Returning a parameter
+  does not move the caller's variable early (the object is reachable from the result either way). Values held only by
+  pending Rust-side temporaries are invisible to the reachability scan.
+- `HashMap`/`HashSet` iterate in key order by default (Rust's order is unspecified; ADR-0021 D6). `--hash-seed N` permutes it
+  deterministically, and `interpreter_hash_order_test` runs the verified examples, spec examples and conformance programs under
+  several seeds to flag order-dependent programs (`tests/data/hash_order_dependent.txt`, shrink-only, currently empty).
+  `OrderedMap`/`OrderedSet` iterate in insertion order (`remove` keeps the order of the rest, `swap_remove` does not).
+- `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error (owned by the parser stream; ignored test
+  `interpolation_escaped_quotes_test`).
+- Performance: integer kernels run within a few times of Node; closure bodies, `match`, floats and collection methods still
+  run at walker speed or close to it (ADR-0020, "What is left").
 
 ## ADR-0007
 
