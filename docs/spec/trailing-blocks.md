@@ -2,7 +2,7 @@
 
 Trailing block arguments ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 4). The parser appends the block as an ordinary closure argument.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/trailing-blocks/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/trailing-blocks/`.
 
 ## Trailing blocks
 

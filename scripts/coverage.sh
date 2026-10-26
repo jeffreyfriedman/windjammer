@@ -19,4 +19,4 @@ cargo llvm-cov clean --workspace >/dev/null 2>&1 || true
 # Tests run the real `wj` binary; llvm-cov instruments it and collects its profiles too.
 cargo llvm-cov --release --test all --json --summary-only --output-path "$out/cov.json" -- "${filters[@]}" >"$out/log" 2>&1 \
   || { tail -40 "$out/log"; echo "coverage run failed (test failures above?)"; exit 1; }
-python3 scripts/coverage_report.py "$mode" "$out/cov.json" docs/generated/coverage.json "${filters[*]}"
+"${WJ:-wj}" run scripts/wj/coverage_report.wj "$mode" "$out/cov.json" docs/generated/coverage.json "${filters[*]}"

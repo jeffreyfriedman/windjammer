@@ -2,7 +2,7 @@
 
 `string` is UTF-8 text. `${...}` interpolation and format specifiers replace Rust's `{}` templates (ADR-0014).
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/strings/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/strings/`.
 
 ## String type
 

@@ -2,7 +2,7 @@
 
 ADR-0015 section 1 (accepted): `int` is a 64-bit signed integer with overflow checking, `float` is IEEE-754 binary64, and explicit widths (`i8 ... u64 usize f32`) are first-class and never silently converted. ADR-0014 and 0015 are the authority; where the implementation differs it is listed in OPEN_QUESTIONS.md.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/numeric/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/numeric/`.
 
 ## Default integer
 

@@ -2,7 +2,7 @@
 
 What a programmer can observe and must write. How the compiler *infers* moves, borrows and clones is out of scope here: see [inference.md](inference.md) (placeholder owned by the inference stream). The binding principle is value semantics: the program behaves as if every assignment, argument pass and return copies.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/ownership/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/ownership/`.
 
 ## Value semantics
 

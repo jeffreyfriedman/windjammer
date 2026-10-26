@@ -12,16 +12,15 @@ Two audiences, one source:
 | Artifact | Checked by |
 |---|---|
 | `grammar.ebnf` vs the real lexer/parser | docs-truth check `tools/docs_truth/spec_grammar.rs` (`cargo test --release --test docs_truth spec_grammar`): derives every alternative plus a seeded random corpus, parses each with the real parser; lexical rules must lex as one token |
-| Every normative rule `**SPEC-AREA-NNN**` has an example; every example names a rule | `scripts/spec_check.sh` (also run by `tests/spec_conformance_test.rs`) |
+| Every normative rule `**SPEC-AREA-NNN**` has an example; every example names a rule | `scripts/wj/spec_check.wj` (also run by `tests/spec_conformance_test.rs`) |
 | Examples behave as their `// expect:` oracle says | `tests/spec_conformance_test.rs` (in-process lexer, parser, interpreter) |
 | Code blocks in chapters equal the test files | `rule_examples_in_chapters_match_the_test_files` |
 | Intrinsic list, stdlib index complete | `intrinsic_registry_is_documented`, `stdlib_index_lists_every_std_module` |
 | Known divergences cannot rot | examples marked `// xfail: Q-NNN` must fail; a pass fails the run |
 
-```bash
-scripts/spec_check.sh            # IDs, tests, matrix freshness (fast, no build)
-scripts/spec_check.sh --write    # regenerate CONFORMANCE_MATRIX.md
-scripts/spec_check.sh --run      # + cargo test --release --test spec_conformance, docs_truth spec_grammar
+```wj run scripts/wj/spec_check.wj            # IDs, tests, matrix freshness (fast, no build)
+wj run scripts/wj/spec_check.wj --write    # regenerate CONFORMANCE_MATRIX.md
+wj run scripts/wj/spec_check.wj --run      # + cargo test --release --test spec_conformance, docs_truth spec_grammar
 ```
 
 Example file format (`tests/spec/<area>/SPEC-XXX-NNN.wj`): header comments `// spec:`, `// mode:` (run, parse-ok, parse-error, panic), `// expect:` (stdout lines), `// expect-error:`, `// expect-exit:`, `// xfail:`. Oracles are derived by hand from the stated semantics (and cross-checked with Python/Rust arithmetic), never copied from interpreter output.

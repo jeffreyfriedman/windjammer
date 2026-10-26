@@ -65,7 +65,7 @@ function falls back, so the engines never disagree about what is supported).
   `examples/verified`, `tests/spec` and the interpreter corpus (every seed) under both engines and compares stdout,
   stderr and exit status.
 - Criterion 3 (size, no second builtin implementation): held. Builtins, the scheduler and error formats are shared.
-- Criterion 1 (>= 3x on `fib(30)` and the 5M loop): **not met**. Tracked by `scripts/interp_bench.py`
+- Criterion 1 (>= 3x on `fib(30)` and the 5M loop): **not met**. Tracked by `scripts/wj/interp_bench.wj`
   (median of 5, load average recorded, `--check` against `bench/interp/baseline.json`).
 
 Measurements (release `wj`, user time, median of 5, machine load average noted; the machine was shared with other
@@ -112,7 +112,7 @@ prints exactly what the walker prints.
 (2) the generated Rust does not compile (`E0308`; Rust backend gaps for these iterator/map shapes).
 
 With `--features jit` (step 7) `fib30` takes 0.02 s. The ratchet baseline `bench/interp/baseline.json` (walker / resolved per
-kernel, `scripts/interp_bench.py --check` fails below it minus 15%) was recorded at a load average of 12: `fib30` 9.4x,
+kernel, `scripts/wj/interp_bench.wj --check` fails below it minus 15%) was recorded at a load average of 12: `fib30` 9.4x,
 `loop5m` 12.2x, `sieve` 2.4x, `structs` 1.8x, `strings` 1.7x, `hashmap` 1.3x, `nbody` 1.3x, `closures` 1.2x.
 
 Milestone 1 measured `fib30` at 0.33 s and `loop5m` at 0.75 s on the resolved engine. The calls/loops goal (at least
@@ -219,7 +219,7 @@ check results per file content hash. Those modules belong to the convergence and
 
 ### Round 3, rung 4: startup
 Built step 8's lever, in the check gate rather than the interpreter. Fixture: a generated 200-module project, 20 functions per
-module (4k functions: the shape of `scripts/interpreter_project_bench.py --files 200` plus 17 filler functions per module,
+module (4k functions: the shape of `scripts/wj/interpreter_project_bench.wj --files 200` plus 17 filler functions per module,
 each an `if` and a call). Metric: CPU seconds (user + sys) of `wj run`, median of 5 after one warm-up, release build, with
 the 1-minute load average next to every number (the machine was shared with ~10 agents; CPU time is less load-sensitive than
 wall time, not immune).
@@ -314,7 +314,7 @@ for the memory-bound kernels: `sieve` 0.10 s (1.8x Node), `nbody` 0.10 s (1.9x),
 `sieve` is bound by memory: a `Vec<bool>` of a million 48-byte `Value`s (48 MB) is strided through by the inner loop, against
 Node's packed array; it is the most load-sensitive number here. A packed representation for `Vec`s of scalars is its lever.
 The ratchet (`bench/interp/baseline.json`, walker / resolved) was rewritten from the same run's measurement
-(`scripts/interp_bench.py --write`): `loop5m` 70.7x, `fib30` 36.7x, `sieve` 11.5x, `nbody` 9.8x.
+(`scripts/wj/interp_bench.wj --write`): `loop5m` 70.7x, `fib30` 36.7x, `sieve` 11.5x, `nbody` 9.8x.
 
 ### Rung 1: machine-code loops (met)
 A hot `while` or range `for` loop in any compiled function (`main` included) enters Cranelift code at its head: on-stack

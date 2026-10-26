@@ -53,7 +53,7 @@ Names come only from `crate::intrinsics::Intrinsic`; do not register them in `bu
 shapes return `unsupported` (exit 2). A user item or local of the same name shadows the intrinsic. New one: registry, then an arm in `eval_intrinsic`.
 
 ## Extending the stdlib: `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in `builtins/*.rs`.
-## Test (`tests/interpreter_engine_parity_test.rs`: both engines on every corpus; `scripts/interp_bench.py`: speed ratchet)
+## Test (`tests/interpreter_engine_parity_test.rs`: both engines on every corpus; `scripts/wj/interp_bench.wj`: speed ratchet)
 - `interpreter_semantics_test` hand-derived Rust semantics; `interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
 - `interpreter_cli_test`, `interpreter_concurrency_test`, `interpreter_std_modules_test` (Python oracles), `interpreter_rust_parity_test` (rustc oracle)
 - `interpreter_features` every registry entry's probe behaves as registered; `interpreter_projects` multi-file fixtures + module fuzzer (`WJ_PROJECT_COMPILED=1` adds cargo)

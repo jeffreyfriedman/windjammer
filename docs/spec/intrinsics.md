@@ -2,7 +2,7 @@
 
 Built-in functions that are part of the language, not the library (ADR-0014 phase 1). They are registered in one place, `src/intrinsics/mod.rs`, and lowered per backend.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/intrinsics/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/intrinsics/`.
 
 **Registry (checked against `Intrinsic::ALL` by `tests/spec_conformance_test.rs`):** `print`, `println`, `eprint`, `eprintln`, `format`, `panic`, `assert`, `assert_eq`, `assert_ne`, `todo`, `unreachable`, `debug`, `vec`.
 

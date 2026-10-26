@@ -8,7 +8,7 @@ passing. They are the acceptance tests of the later stages (E2 compiled-backend 
 E4 `durable fn`; E5 code mode). `--deterministic-time` and `--sched-seed` give a virtual clock, a seeded random
 generator and reproducible interleavings (SPEC-EFF-027, SPEC-EFF-028).
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's
 executable example is the code block below it, stored in `tests/spec/effects/`. Example modes specific to this chapter
 (see `tests/spec_conformance_test.rs`): `effects` (the compact `wj explain-effects` report), `check-ok`/`check-error`
 (`wj check`, with the `manifest:` header lines as `wj.toml`), `simulate`, `replay`.

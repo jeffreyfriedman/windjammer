@@ -2,7 +2,7 @@
 
 The language core is small; most behaviour is library. This chapter pins the portable core and indexes the rest. Only the portable core is covered by the conformance contract; the remaining modules are Rust-backend only until ADR-0008 tiers say otherwise.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/stdlib/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/stdlib/`.
 
 **Modules under `std/` (index checked against the directory):** `async`, `basic_test`, `cap`, `cli`, `collections`, `compress`, `compute`, `config`, `crypto`, `csv`, `db`, `dialog`, `encoding`, `enumerable`, `env`, `fs`, `http`, `json`, `jwt`, `log`, `map`, `math`, `mime`, `net`, `path`, `process`, `random`, `regex`, `runtime`, `storage`, `strings`, `subprocess`, `sync`, `test`, `test_simple`, `testing`, `time`, `url`, `uuid`, `yaml`.
 

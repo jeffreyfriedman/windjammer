@@ -1,4 +1,4 @@
-# Known failing tests for the CI ratchet (scripts/check-test-ratchet.sh).
+# Known failing tests for the CI ratchet (scripts/wj/check_test_ratchet.wj).
 #
 # Real, open compiler bugs (each one is a minimal repro of an ownership / integer-width
 # inference gap). Remove a line as soon as its test passes; never add a line for a test that
