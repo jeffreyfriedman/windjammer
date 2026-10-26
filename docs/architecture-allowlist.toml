@@ -110,11 +110,11 @@
 "src/analyzer/passthrough_inference.rs" = 2362
 "src/analyzer/signature_registry.rs" = 2539
 "src/analyzer/string_optimization.rs" = 2201
-"src/auto_clone.rs" = 2224
+"src/auto_clone.rs" = 2211
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4913
-"src/codegen/rust/function_generation_prepare.rs" = 13326
-"src/codegen/rust/generator.rs" = 5131
+"src/codegen/rust/function_generation_prepare.rs" = 13323
+"src/codegen/rust/generator.rs" = 5059
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
 "src/codegen/rust/ir_call_site.rs" = 10444
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2159
@@ -124,7 +124,6 @@
 "src/codegen/rust/stdlib_method_traits.rs" = 2437
 "src/codegen/rust/string_utilities.rs" = 2044
 "src/compiler/multipass_bare_pass_demotion.rs" = 4674
-"src/ir/constraint_gen.rs" = 2021
 "src/stdlib_scanner.rs" = 2156
 
 [long_functions]
@@ -153,7 +152,7 @@
 "src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 649
 "src/codegen/rust/for_statement_generation.rs::generate_for_statement" = 565
 "src/codegen/rust/function_formal_parameter_generation.rs::collect_additional_formal_parameter_strings" = 3772
-"src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 737
+"src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 734
 "src/codegen/rust/function_generation_prepare.rs::refresh_method_registry_from_emitted_formals" = 373
 "src/codegen/rust/function_wrapping_generation.rs::generate_wrapped_function_body" = 383
 "src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 390
