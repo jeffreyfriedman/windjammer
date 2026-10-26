@@ -499,6 +499,21 @@ JSON form as an export.
 
 **Kill / rethink.** Any escape in the red team is a stop-ship bug in the gate, not a tuning matter. Worse success at equal tokens in gate 4 keeps the sandbox and drops the code-mode positioning. If typed errors are not enough to let a model repair its own script in two rounds on the task set, the bindings need richer types before anything else.
 
+### E5 status (2026-10-26): implemented, gates measured (model comparison not measurable here)
+
+Delivered: `wj mcp bind` (`src/cli/mcp_bind.rs`), `std::mcp` (`std/mcp.wj`, `interpreter/builtins/std_mcp.rs`), `interpreter/mcp_host.rs` (mock and stdio endpoints), `interpreter/limits.rs`, `wj run --bind --limits --result-json`, `cli/code_mode.rs` (`execute`, `Policy`) and the `execute` tool of `windjammer-mcp`. Compiled builds of a program that uses `std::mcp` stop with an error, like `durable fn`.
+
+Differences from the design note: the tool effect is derived from the literal arguments of `mcp::call` by the effect pass and the run-time gate (no `@effect` on generated functions); `wj mcp bind --tool NAME` binds only the tools a program needs, because `wj check` reports every function in a file, so pasting bindings for tools the grant does not list is flagged; the `execute` tool's authority comes from the operator (`WJ_MCP_EXECUTE_ALLOW`, `_SERVERS`, `_LIMITS`), never from the request, since the model writes the request.
+
+| Gate | Result |
+|---|---|
+| Red team: 50 prompt-injected scripts, 0 escapes | **Met: 50 cases, 0 escapes** (tool names built from tool output, text from a tool used as a path, command, URL, environment name or another tool, direct file, environment, process, network and capability attempts, trying to survive a denial or a limit inside a thread, loops, output, call and memory floods, and cases that must keep working). Each case also checks that nothing outside the project changed |
+| Cold start of the in-process path under 5 ms | **Not met on this machine**: median 6.9 ms, p90 25 ms for `execute()` on a tiny script, measured at load above 20 (the check front end is most of it); to be re-measured on a quiet machine, with the process-per-run path reported next to it |
+| Typed errors first, 20 plausible mistakes, 100% | **Not met: 17 of 20** reported with a location by `wj check` before running. The checker was extended for this (a bare literal where `Option`/`Vec` is declared, also inside `Some(..)`; a struct literal of another struct as an argument; a `Result`/`Option` call used as a scalar). The three still missed (a field the result does not have, calling a field as a function, an unknown module path) need types for values bound by patterns and resolution of module paths in the checker; the test pins them as known gaps so fixing one forces the list to shrink |
+| Model comparison with TypeScript code mode | **Open**: needs model access and a task harness |
+
+Findings: `wj run --no-lint` let every `WJ` compile error through (it treated any code starting with `W` as a lint), so with it the static effect check and type errors did not stop a run; fixed. A suspected string-interpolation hole in the effect facts did not exist (see E4 findings), but locations of calls inside `${..}` had no file name; the facts now name the file of the enclosing function, and `tests/effects_spans_test.rs` validates the spans of WJ0040 to WJ0048 against their sources.
+
 ### E4 design (2026-10-26): `durable fn` on the interpreter first
 
 **Surface.** `durable fn` is a contextual keyword (an identifier directly before `fn`, at module level or in an `impl`). The parser records it as the marker attribute `@durable` on the function, so no AST shape changes and every layer sees it as a fact of the declaration. This follows the rule in section 3: the keyword changes execution; the attribute is how the declaration is carried.
