@@ -166,6 +166,10 @@ Open: a clone of an element or field (`svo[0].clone()`) is a place clone, not a 
 **Rule.** If a non-Copy value is passed to an owned formal (or moved into a store) and is used again later, a clone is
 inserted at the move, never at the later use.
 **Example.** `take(it); use(it)` emits `take(it.clone()); use(it)`.
+**Decided by.** The liveness fact `ir::liveness::read_after` (per statement: bindings read later, read in the next
+iteration of a loop they outlive, or kept alive by a derived binding such as a capturing closure). The Rust backend's
+reuse checks (`local_binding_reused_after_current_statement`, `param_has_later_owned_formal_pass`) read it instead of
+scanning the current block's later statements (which missed uses after the enclosing block and mixed statement indices).
 **Status.** Conforms for the earlier site; see MOVE-LAST-USE for the clone at the final site. Also diverges for values bound to a string literal (D-CLONE-STRLIT): `let t = s` followed by a use of `s`
 moves `s` and rustc rejects the program.
 
