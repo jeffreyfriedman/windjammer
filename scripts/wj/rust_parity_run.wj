@@ -1,0 +1,259 @@
+// Windjammer-vs-idiomatic-Rust parity harness.
+//
+// For every kernel K it builds three release (-C opt-level=3) binaries:
+//   baseline   generated_baseline/K.rs      (compiler output WITHOUT the optimizer; snapshot)
+//   optimized  optimize_rs(baseline)        (exactly what the compiler hook emits)
+//   idiomatic  rust/K.rs                    (hand-written Rust)
+// verifies all print identical output, then reports median/min/max/stdev of N
+// runs (default 11), binary size, source counts (.clone(), .to_string(), casts)
+// and heap allocation counts from a counting-allocator build.
+//
+//   wj run scripts/wj/rust_parity_run.wj --optimize-rs <path to built example> [--runs 11] [--out results.json] [--kernels a b ...]
+// Build the example first:  cargo build --release --example optimize_rs      (run from the repository root)
+use std::env
+use std::fs
+use std::process
+use std::regex
+use std::strings
+use std::time::Instant
+use wj_cli_args::long_flag_value
+use wj_cli_args::long_flag_value_or
+use wj_json_doc::Json
+use wj_json_doc::object
+use wj_json_doc::with
+use wj_json_doc::from_int
+use wj_json_doc::from_float
+use wj_json_doc::from_str
+use wj_json_doc::dumps
+use wj_json_doc::float_repr
+use wj_proc::capture
+use wj_proc::timed
+use wj_stats::median
+use wj_stats::min
+use wj_stats::max
+use wj_stats::pstdev
+use wj_table::fixed
+
+const HERE: string = "benchmarks/rust_parity"
+
+const COUNTING_ALLOC: string = "
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering};
+pub struct __Counting;
+pub static __ALLOCS: AtomicUsize = AtomicUsize::new(0);
+pub static __BYTES: AtomicUsize = AtomicUsize::new(0);
+unsafe impl GlobalAlloc for __Counting {
+    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+        __ALLOCS.fetch_add(1, Ordering::Relaxed);
+        __BYTES.fetch_add(l.size(), Ordering::Relaxed);
+        System.alloc(l)
+    }
+    unsafe fn dealloc(&self, p: *mut u8, l: Layout) { System.dealloc(p, l) }
+    unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
+        __ALLOCS.fetch_add(1, Ordering::Relaxed);
+        __BYTES.fetch_add(n, Ordering::Relaxed);
+        System.realloc(p, l, n)
+    }
+}
+#[global_allocator]
+static __A: __Counting = __Counting;
+fn main() {
+    __wj_main();
+    eprintln!(\"ALLOCS {} {}\", __ALLOCS.load(Ordering::Relaxed), __BYTES.load(Ordering::Relaxed));
+}
+"
+
+struct Timing {
+    walls: Vec<f64>,
+    cpus: Vec<f64>,
+    out: string,
+}
+
+fn die(msg: string) {
+    eprintln(msg)
+    process.exit(1)
+}
+
+fn build(src: string, out: string, counting: bool) {
+    let mut source = src
+    if counting {
+        let text = fs.read_to_string(src) ?? ""
+        let re = regex.compile("\\bfn main\\(\\)") ?? regex.compile("x") ?? panic("bad pattern")
+        let patched = re.replace(text, "fn __wj_main()") + COUNTING_ALLOC
+        source = out + ".rs"
+        let _ = fs.write(source, patched)
+    }
+    match capture("rustc", ["--edition", "2021", "-C", "opt-level=3", "-A", "warnings", "-o", out, source]) {
+        Ok(o) => {
+            if o.status != 0 {
+                die("rustc failed for ${source}:\n${o.stderr}")
+            }
+        },
+        Err(e) => die("cannot run rustc: ${e}"),
+    }
+}
+
+// non-comment source: lines whose stripped text does not start with `//`
+fn code_of(path: string) -> string {
+    let mut keep = Vec::new()
+    for l in strings.split_lines(fs.read_to_string(path) ?? "") {
+        if !strings.trim(l).starts_with("//") {
+            keep.push(l)
+        }
+    }
+    keep.join("\n")
+}
+
+fn occurrences(hay: string, needle: string) -> i64 {
+    let mut n = 0
+    let mut rest = hay
+    loop {
+        match rest.find(needle) {
+            Some(i) => {
+                n = n + 1
+                rest = rest[i + needle.len()..rest.len()].to_string()
+            },
+            None => break,
+        }
+    }
+    n
+}
+
+fn counts(path: string) -> Json {
+    let code = code_of(path)
+    let lines = strings.split_lines(code).len() as i64
+    with(with(with(with(with(object(), "clone", from_int(occurrences(code, ".clone()"))), "to_string", from_int(occurrences(code, ".to_string()"))), "as_cast", from_int(occurrences(code, " as "))), "format", from_int(occurrences(code, "format!("))), "lines", from_int(lines))
+}
+
+fn time_runs(binary: string, n: int) -> Timing {
+    let mut walls: Vec<f64> = Vec::new()
+    let mut cpus: Vec<f64> = Vec::new()
+    let mut out = ""
+    let mut i = 0
+    while i < n {
+        let t0 = Instant::now()
+        match timed(binary, []) {
+            Ok(t) => {
+                walls.push(t0.elapsed().as_secs_f64())
+                if t.output.status != 0 {
+                    die("${binary} exited with ${t.output.status}")
+                }
+                cpus.push(t.user + t.sys)
+                out = t.output.stdout
+            },
+            Err(e) => die("cannot run ${binary}: ${e}"),
+        }
+        i = i + 1
+    }
+    Timing { walls: walls, cpus: cpus, out: out }
+}
+
+fn summarize(xs: Vec<f64>) -> Json {
+    with(with(with(with(with(object(), "median", from_float(median(xs))), "min", from_float(min(xs))), "max", from_float(max(xs))), "stdev", from_float(pstdev(xs))), "n", from_int(xs.len() as i64))
+}
+
+fn alloc_count(binary: string) -> Json {
+    match capture("env", [binary]) {
+        Ok(o) => {
+            let re = regex.compile("ALLOCS (\\d+) (\\d+)") ?? regex.compile("x") ?? panic("bad pattern")
+            match re.captures(o.stderr) {
+                Some(c) => with(with(object(), "allocs", from_int((c.get(1) ?? "0").parse::<i64>() ?? 0)), "bytes", from_int((c.get(2) ?? "0").parse::<i64>() ?? 0)),
+                None => {
+                    die("no ALLOCS line from ${binary}")
+                    object()
+                },
+            }
+        },
+        Err(e) => {
+            die("cannot run ${binary}: ${e}")
+            object()
+        },
+    }
+}
+
+fn file_size(path: string) -> i64 {
+    match fs.metadata(path) {
+        Ok(m) => m.size() as i64,
+        Err(_) => 0,
+    }
+}
+
+fn round3(x: f64) -> string {
+    float_repr(fixed(x, 3).parse::<f64>() ?? x)
+}
+
+fn main() {
+    let args = env.args()
+    let optimize_rs = match long_flag_value(args, "optimize-rs") {
+        Some(p) => p,
+        None => {
+            eprintln("usage: rust_parity_run.wj --optimize-rs PATH [--runs N] [--out FILE] [--kernels a b ...]")
+            process.exit(2)
+            ""
+        },
+    }
+    let runs: int = (long_flag_value_or(args, "runs", "11")).parse::<int>() ?? 11
+    let out_path = long_flag_value_or(args, "out", HERE + "/results.json")
+    let mut kernels: Vec<string> = Vec::new()
+    let mut in_kernels = false
+    for a in args {
+        if a == "--kernels" {
+            in_kernels = true
+        } else if a.starts_with("--") {
+            in_kernels = false
+        } else if in_kernels {
+            kernels.push(a)
+        }
+    }
+    if kernels.len() == 0 {
+        kernels = ["sieve", "matmul", "collatz", "string_build", "fib", "vec_fill", "insertion_sort", "nbody", "byte_hash", "histogram"]
+    }
+    let work = "/tmp/wj-parity-${process.pid()}"
+    let _ = fs.create_dir_all(work)
+    let mut results = object()
+    for k in kernels {
+        let baseline = HERE + "/generated_baseline/" + k + ".rs"
+        let idiomatic = HERE + "/rust/" + k + ".rs"
+        let opt = work + "/" + k + "_optimized.rs"
+        match capture("env", [optimize_rs, baseline, opt]) {
+            Ok(o) => {
+                if o.status != 0 {
+                    die("optimize_rs failed for ${k}:\n${o.stderr}")
+                }
+            },
+            Err(e) => die("cannot run ${optimize_rs}: ${e}"),
+        }
+        let variants = ["baseline", "idiomatic", "optimized"]
+        let sources = [baseline, idiomatic, opt]
+        let mut row = object()
+        let mut outputs: Vec<string> = Vec::new()
+        let mut medians: Vec<string> = Vec::new()
+        let mut i = 0
+        while i < variants.len() {
+            let v = variants[i]
+            let src = sources[i]
+            let binary = work + "/" + k + "_" + v
+            build(src, binary, false)
+            let t = time_runs(binary, runs)
+            let cbin = binary + "_count"
+            build(src, cbin, true)
+            let entry = with(with(with(with(with(object(), "wall", summarize(t.walls)), "cpu", summarize(t.cpus)),
+                "binary_bytes", from_int(file_size(binary))), "source", counts(src)), "heap", alloc_count(cbin))
+            row = with(row, v, entry)
+            if !outputs.contains(t.out) {
+                outputs.push(t.out)
+            }
+            medians.push("'${v}': ${round3(median(t.walls))}")
+            i = i + 1
+        }
+        if outputs.len() != 1 {
+            die("AssertionError: ${k}: outputs differ ${outputs}")
+        }
+        row = with(row, "output", from_str(outputs[0].trim().to_string()))
+        results = with(results, k, row)
+        eprintln("${k} {${medians.join(", ")}}")
+    }
+    let doc = with(with(object(), "runs", from_int(runs as i64)), "kernels", results)
+    let _ = fs.write(out_path, dumps(doc, 1, false))
+    let _ = fs.remove_dir_all(work)
+}

@@ -1,0 +1,376 @@
+{
+ "data": [
+  {
+   "files": [
+    {
+     "filename": "@W@/src/lexer/mod.rs",
+     "summary": {
+      "lines": {
+       "count": 300,
+       "covered": 280,
+       "percent": 0.0
+      },
+      "branches": {
+       "count": 40,
+       "covered": 30,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/lexer/token.rs",
+     "summary": {
+      "lines": {
+       "count": 100,
+       "covered": 100,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/parser.rs",
+     "summary": {
+      "lines": {
+       "count": 900,
+       "covered": 450,
+       "percent": 0.0
+      },
+      "branches": {
+       "count": 10,
+       "covered": 5,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/main.rs",
+     "summary": {
+      "lines": {
+       "count": 50,
+       "covered": 10,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/bin/wj.rs",
+     "summary": {
+      "lines": {
+       "count": 400,
+       "covered": 100,
+       "percent": 0.0
+      },
+      "branches": {
+       "count": 8,
+       "covered": 2,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/interpreter/eval.rs",
+     "summary": {
+      "lines": {
+       "count": 2000,
+       "covered": 1500,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/interpreter/call.rs",
+     "summary": {
+      "lines": {
+       "count": 700,
+       "covered": 100,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/formatter/fmt.rs",
+     "summary": {
+      "lines": {
+       "count": 90,
+       "covered": 45,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/check/c.rs",
+     "summary": {
+      "lines": {
+       "count": 30,
+       "covered": 30,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/linter/l.rs",
+     "summary": {
+      "lines": {
+       "count": 60,
+       "covered": 0,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/test_runner/t.rs",
+     "summary": {
+      "lines": {
+       "count": 80,
+       "covered": 5,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/edge/a.rs",
+     "summary": {
+      "lines": {
+       "count": 200,
+       "covered": 199,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/edge2/a.rs",
+     "summary": {
+      "lines": {
+       "count": 200,
+       "covered": 198,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/tests/foo.rs",
+     "summary": {
+      "lines": {
+       "count": 1000,
+       "covered": 0,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "/usr/lib/outside.rs",
+     "summary": {
+      "lines": {
+       "count": 99,
+       "covered": 1,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/build.rs",
+     "summary": {
+      "lines": {
+       "count": 10,
+       "covered": 0,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/empty/zero.rs",
+     "summary": {
+      "lines": {
+       "count": 0,
+       "covered": 0,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd00.rs",
+     "summary": {
+      "lines": {
+       "count": 100,
+       "covered": 40,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd01.rs",
+     "summary": {
+      "lines": {
+       "count": 110,
+       "covered": 50,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd02.rs",
+     "summary": {
+      "lines": {
+       "count": 120,
+       "covered": 60,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd03.rs",
+     "summary": {
+      "lines": {
+       "count": 130,
+       "covered": 40,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd04.rs",
+     "summary": {
+      "lines": {
+       "count": 100,
+       "covered": 50,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd05.rs",
+     "summary": {
+      "lines": {
+       "count": 110,
+       "covered": 60,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd06.rs",
+     "summary": {
+      "lines": {
+       "count": 120,
+       "covered": 40,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd07.rs",
+     "summary": {
+      "lines": {
+       "count": 130,
+       "covered": 50,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd08.rs",
+     "summary": {
+      "lines": {
+       "count": 100,
+       "covered": 60,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd09.rs",
+     "summary": {
+      "lines": {
+       "count": 110,
+       "covered": 40,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd10.rs",
+     "summary": {
+      "lines": {
+       "count": 120,
+       "covered": 50,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd11.rs",
+     "summary": {
+      "lines": {
+       "count": 130,
+       "covered": 60,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd12.rs",
+     "summary": {
+      "lines": {
+       "count": 100,
+       "covered": 40,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd13.rs",
+     "summary": {
+      "lines": {
+       "count": 110,
+       "covered": 50,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd14.rs",
+     "summary": {
+      "lines": {
+       "count": 120,
+       "covered": 60,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd15.rs",
+     "summary": {
+      "lines": {
+       "count": 130,
+       "covered": 40,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd16.rs",
+     "summary": {
+      "lines": {
+       "count": 100,
+       "covered": 50,
+       "percent": 0.0
+      }
+     }
+    },
+    {
+     "filename": "@W@/src/cli/cmd17.rs",
+     "summary": {
+      "lines": {
+       "count": 110,
+       "covered": 60,
+       "percent": 0.0
+      }
+     }
+    }
+   ],
+   "totals": {}
+  }
+ ],
+ "type": "llvm.coverage.json.export",
+ "version": "2.0.1"
+}

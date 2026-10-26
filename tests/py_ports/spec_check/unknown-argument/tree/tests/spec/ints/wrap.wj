@@ -1,0 +1,4 @@
+// spec: SPEC-ALP-001
+// xfail: Q-001 reason
+
+fn main() {}

@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/gen-check-mutants.py > scripts/gen-check-mutants.py && (python3 scripts/gen-check-mutants.py && cd tests/check_negative/mutants && for f in *.wj; do echo "== $f"; cat "$f"; done); rc=$?; rm -rf tests scripts; exit $rc

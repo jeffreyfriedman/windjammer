@@ -1,0 +1,299 @@
+// Differential gates for the Windjammer ports of repository scripts.
+//
+// Every case under tests/py_ports/<port>/<case>/ describes one invocation of a port and the exact result it must
+// produce. The expectations were recorded from the original implementation (the case's `cmd.record` shows how, and
+// `--record` re-derives them), so the gate keeps comparing a port against its independent oracle after the original
+// is gone.
+//
+//   cmd              shell line that runs the port in the case's scratch directory ($W)
+//   cmd.record       shell line that runs the original instead (used by --record only)
+//   tree/            files copied into $W before the run (optional)
+//   ignore_stdout    marker file whose text states why stdout is not compared (a deliberate, reviewed divergence)
+//   ignore_stderr    the same for stderr (for example, the original prints a Python traceback or a tool's own message)
+//   normalize        one regex per line; matches are replaced by `#` in stdout and stderr before comparing (optional)
+//   expected.stdout  expected.stderr  expected.code      what the run must print and exit with
+//   expected_tree/   files that must exist after the run with exactly this content (after `normalize`); any other file the run created
+//                    or changed is a failure too (optional)
+//
+// Placeholders in cmd lines: $ORIG (the commit holding the original scripts, from tests/py_ports/ORIGIN), $WJ (the wj binary), $SCRIPTS (scripts/wj), $REPO (repository root), $W (scratch dir),
+// $ALLOW (--allow flags granting the scratch dir).
+//
+// `--time N` measures CPU time instead: each case is run N times as the original and as the port (the audit table).
+//
+//   wj run scripts/wj/port_gates.wj --wj PATH [--cases DIR] [--port NAME] [--case NAME] [--record | --time N]       (run from the repository root)
+use std::collections::HashSet
+use std::env
+use std::fs
+use std::process
+use std::regex
+use std::strings
+use wj_cli_args::long_flag_value
+use wj_cli_args::long_flag_value_or
+use wj_fs_walk::walk_files
+use wj_proc::sh
+use wj_proc::quote
+use wj_proc::timed
+use wj_proc::load_avg
+use wj_stats::median
+use wj_table::new
+use wj_table::add_row
+use wj_table::right_align
+use wj_table::markdown
+use wj_table::fixed
+
+
+fn read(path: string) -> string {
+    fs.read_to_string(path) ?? ""
+}
+
+fn sorted_dirs(root: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for e in fs.read_dir(root) ?? Vec::new() {
+        if e.is_dir() {
+            out.push(e.path())
+        }
+    }
+    out.sort()
+    out
+}
+
+fn rel(root: string, path: string) -> string {
+    path[root.len() + 1..path.len()].to_string()
+}
+
+// copy `from` into `to`, keeping file modes (fixture scripts must stay executable; `fs.write` would drop the bit)
+fn copy_tree(from: string, to: string) {
+    if !fs.is_dir(from) {
+        return
+    }
+    let _ = sh("cp -R " + quote(from + "/.") + " " + quote(to))
+}
+
+fn normalize(text: string, patterns_file: string) -> string {
+    let mut out = text
+    if fs.is_file(patterns_file) {
+        for p in strings.split_lines(read(patterns_file)) {
+            if p.len() == 0 {
+                continue
+            }
+            match regex.compile(p) {
+                Ok(re) => out = re.replace_all(out, "#"),
+                Err(e) => println("bad normalize pattern ${p}: ${e}"),
+            }
+        }
+    }
+    out
+}
+
+fn expand(cmd: string, wj: string, repo: string, w: string, cases_root: string) -> string {
+    let orig = strings.trim(read(cases_root + "/ORIGIN"))
+    // no quotes: cmd lines may keep the flags in a variable, where quotes would stay literal (scratch paths have no spaces)
+    let allow = "--allow fs.read=" + w + "/** --allow fs.write=" + w + "/**"
+    let mut out = cmd
+    out = strings.replace(out, "$ALLOW", allow)
+    out = strings.replace(out, "$SCRIPTS", repo + "/scripts/wj")
+    out = strings.replace(out, "$ORIG", orig)
+    out = strings.replace(out, "$REPO", repo)
+    out = strings.replace(out, "$WJ", wj)
+    out = strings.replace(out, "$W", w)
+    out
+}
+
+fn first_difference(want: string, got: string) -> string {
+    let a = strings.split_lines(want)
+    let b = strings.split_lines(got)
+    let mut i = 0
+    while i < a.len() || i < b.len() {
+        let x = if i < a.len() { a[i] } else { "<end>" }
+        let y = if i < b.len() { b[i] } else { "<end>" }
+        if x != y {
+            return "line ${i + 1}: expected [${x}] got [${y}]"
+        }
+        i = i + 1
+    }
+    if want != got {
+        return "trailing whitespace or newline differs"
+    }
+    "identical"
+}
+
+// files created or changed by the run: path relative to $W -> content
+fn changed_files(w: string, initial: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for f in walk_files(w) ?? Vec::new() {
+        let r = rel(w, f)
+        let before = initial + "/" + r
+        if !fs.is_file(before) || read(before) != read(f) {
+            out.push(r)
+        }
+    }
+    out.sort()
+    out
+}
+
+// run one case; the list of problems (empty = pass)
+fn run_case(case_dir: string, wj: string, repo: string, cases_root: string, record: bool) -> Vec<string> {
+    let mut problems: Vec<string> = Vec::new()
+    let w = "/tmp/wj-port-gate-${process.pid()}-" + (fs.file_name(fs.parent(case_dir) ?? "port") ?? "port") + "-" + (fs.file_name(case_dir) ?? "case")
+    let _ = fs.remove_dir_all(w)
+    let _ = fs.create_dir_all(w)
+    copy_tree(case_dir + "/tree", w)
+    let cmd_file = if record { case_dir + "/cmd.record" } else { case_dir + "/cmd" }
+    if !fs.is_file(cmd_file) {
+        problems.push("no ${cmd_file}")
+        return problems
+    }
+    let line = expand(strings.trim(read(cmd_file)), wj, repo, w, cases_root)
+    let ran = sh("cd " + quote(w) + " && (" + line + ")")
+    let (code, out, err) = match ran {
+        Ok(o) => (o.status, o.stdout, o.stderr),
+        Err(e) => (127, "", e),
+    }
+    let patterns = case_dir + "/normalize"
+    // the scratch directory's name carries the process id: outputs refer to it as $W
+    let got_out = normalize(strings.replace(strings.replace(out, "/private" + w, "$W"), w, "$W"), patterns)
+    let got_err = normalize(strings.replace(strings.replace(err, "/private" + w, "$W"), w, "$W"), patterns)
+    let changed = changed_files(w, case_dir + "/tree")
+    if record {
+        let _ = fs.write(case_dir + "/expected.stdout", got_out)
+        let _ = fs.write(case_dir + "/expected.stderr", got_err)
+        let _ = fs.write(case_dir + "/expected.code", "${code}\n")
+        let _ = fs.remove_dir_all(case_dir + "/expected_tree")
+        for r in changed {
+            let dest = case_dir + "/expected_tree/" + r
+            let _ = fs.create_dir_all(fs.parent(dest) ?? case_dir)
+            let _ = fs.write(dest, read(w + "/" + r))
+        }
+        let _ = fs.remove_dir_all(w)
+        return problems
+    }
+    let want_code = strings.trim(read(case_dir + "/expected.code"))
+    if want_code != "${code}" {
+        problems.push("exit code ${code}, expected ${want_code}; stderr: ${got_err}")
+    }
+    let want_out = read(case_dir + "/expected.stdout")
+    if fs.is_file(case_dir + "/ignore_stdout") {
+        if strings.trim(read(case_dir + "/ignore_stdout")).len() == 0 {
+            problems.push("ignore_stdout needs a reason")
+        }
+    } else if want_out != got_out {
+        problems.push("stdout differs: " + first_difference(want_out, got_out))
+    }
+    if fs.is_file(case_dir + "/ignore_stderr") && strings.trim(read(case_dir + "/ignore_stderr")).len() == 0 {
+        problems.push("ignore_stderr needs a reason")
+    }
+    if fs.is_file(case_dir + "/expected.stderr") && !fs.is_file(case_dir + "/ignore_stderr") {
+        let want_err = read(case_dir + "/expected.stderr")
+        if want_err != got_err {
+            problems.push("stderr differs: " + first_difference(want_err, got_err))
+        }
+    }
+    let expected_dir = case_dir + "/expected_tree"
+    let mut expected: HashSet<string> = HashSet::new()
+    if fs.is_dir(expected_dir) {
+        for f in walk_files(expected_dir) ?? Vec::new() {
+            let r = rel(expected_dir, f)
+            expected.insert(r)
+            let produced = w + "/" + r
+            if !fs.is_file(produced) {
+                problems.push("missing output file ${r}")
+            } else if normalize(read(produced), patterns) != normalize(read(f), patterns) {
+                problems.push("file ${r} differs: " + first_difference(normalize(read(f), patterns), normalize(read(produced), patterns)))
+            }
+        }
+    }
+    for r in changed {
+        if !expected.contains(r) {
+            problems.push("unexpected output file ${r}")
+        }
+    }
+    let _ = fs.remove_dir_all(w)
+    problems
+}
+
+// CPU seconds (user + sys, children included) of one run of the case's command, median of `reps`
+fn time_case(case_dir: string, wj: string, repo: string, cases_root: string, original: bool, reps: int) -> f64 {
+    let mut samples: Vec<f64> = Vec::new()
+    let mut k = 0
+    while k < reps {
+        let w = "/tmp/wj-port-time-${process.pid()}"
+        let _ = fs.remove_dir_all(w)
+        let _ = fs.create_dir_all(w)
+        copy_tree(case_dir + "/tree", w)
+        let file = if original { case_dir + "/cmd.record" } else { case_dir + "/cmd" }
+        let line = expand(strings.trim(read(file)), wj, repo, w, cases_root)
+        match timed("sh", ["-c", "cd " + quote(w) + " && (" + line + ") >/dev/null 2>&1"]) {
+            Ok(t) => samples.push(t.user + t.sys),
+            Err(_) => samples.push(0.0),
+        }
+        let _ = fs.remove_dir_all(w)
+        k = k + 1
+    }
+    median(samples)
+}
+
+fn main() {
+    let args = env.args()
+    let wj = match long_flag_value(args, "wj") {
+        Some(p) => p,
+        None => {
+            eprintln("usage: port_gates.wj --wj PATH [--port NAME] [--case NAME] [--record | --time N]")
+            process.exit(2)
+            ""
+        },
+    }
+    let cases_root = long_flag_value_or(args, "cases", "tests/py_ports")
+    let only_port = long_flag_value_or(args, "port", "")
+    let only_case = long_flag_value_or(args, "case", "")
+    let record = args.contains("--record")
+    let repo = env.current_dir()
+    let time_reps: int = (long_flag_value_or(args, "time", "0")).parse::<int>() ?? 0
+    if time_reps > 0 {
+        println("load average at start: ${fixed(load_avg(), 1)}; CPU seconds (user + sys), median of ${time_reps} runs per cell\n")
+        let mut t = right_align(new(["port", "case", "original (Python/shell)", "Windjammer port", "ratio"]), [2, 3, 4])
+        for port_dir in sorted_dirs(cases_root) {
+            let port = fs.file_name(port_dir) ?? ""
+            if only_port.len() > 0 && only_port != port {
+                continue
+            }
+            for case_dir in sorted_dirs(port_dir) {
+                let py = time_case(case_dir, wj, repo, cases_root, true, time_reps)
+                let wjt = time_case(case_dir, wj, repo, cases_root, false, time_reps)
+                let ratio = if py > 0.0 { fixed(wjt / py, 1) + "x" } else { "n/a" }
+                t = add_row(t, [port, fs.file_name(case_dir) ?? "", fixed(py, 2), fixed(wjt, 2), ratio])
+            }
+        }
+        println(markdown(t))
+        println("\nload average at end: ${fixed(load_avg(), 1)}")
+        process.exit(0)
+    }
+    let mut total = 0
+    let mut failed = 0
+    for port_dir in sorted_dirs(cases_root) {
+        let port = fs.file_name(port_dir) ?? ""
+        if only_port.len() > 0 && only_port != port {
+            continue
+        }
+        for case_dir in sorted_dirs(port_dir) {
+            let case = fs.file_name(case_dir) ?? ""
+            if only_case.len() > 0 && only_case != case {
+                continue
+            }
+            total = total + 1
+            let problems = run_case(case_dir, wj, repo, cases_root, record)
+            if problems.len() == 0 {
+                println(if record { "RECORDED ${port}/${case}" } else { "PASS ${port}/${case}" })
+            } else {
+                failed = failed + 1
+                println("FAIL ${port}/${case}")
+                for p in problems {
+                    println("  ${p}")
+                }
+            }
+        }
+    }
+    println("${total - failed}/${total} port gate cases ${if record { "recorded" } else { "passed" }}")
+    if failed > 0 || total == 0 {
+        process.exit(1)
+    }
+}

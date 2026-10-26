@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/bench_effects_overhead.py > scripts/bench_effects_overhead.py && (cd . && python3 scripts/bench_effects_overhead.py --wj $W/bin/fakewj --runs 2 --max-load 100000 --mode record); rc=$?; rm -rf scripts; exit $rc
