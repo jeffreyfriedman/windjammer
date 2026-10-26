@@ -102,8 +102,8 @@ fn test() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f32") || output.contains("1.0f32"),
-        "Unconstrained 1.0: compiler currently uses f32, got:\n{}",
+        output.contains("1.0_f64") || output.contains("1.0f64"),
+        "Unconstrained 1.0: default float is f64 (ADR-0015 #1), got:\n{}",
         output
     );
 }

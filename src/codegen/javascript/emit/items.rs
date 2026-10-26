@@ -15,7 +15,7 @@ impl<'m> Js<'m> {
             self.enum_classes(e)?;
         }
         for f in &m.fns {
-            self.function(f, false)?;
+            self.function(f, None)?;
         }
         for c in &m.consts {
             let v = self.expr(&c.value)?;
@@ -23,7 +23,10 @@ impl<'m> Js<'m> {
             self.line(&format!("export const {}{ann} = {v};", ident(&c.name)));
         }
         if m.fns.iter().any(|f| f.name == "main") {
-            self.line("$run(main);");
+            if let Some(install) = self.capability_install.clone() {
+                self.line(&format!("{install};"));
+            }
+            self.line("$run(main, import.meta.url);");
         }
         Ok(())
     }
@@ -31,16 +34,32 @@ impl<'m> Js<'m> {
     fn params(&self, f: &PFn) -> String {
         f.params
             .iter()
-            .map(|p| if self.ts { format!("{}: {}", ident(&p.name), self.ts_type(&p.ty)) } else { ident(&p.name) })
+            .map(|p| if self.ts { format!("{}: {}", ident(&p.name), self.param_ts(p)) } else { ident(&p.name) })
             .collect::<Vec<_>>()
             .join(", ")
     }
 
-    pub fn function(&mut self, f: &PFn, in_class: bool) -> PResult<()> {
+    /// Emit a free function (`owner: None`) or a method of the class `owner`.
+    pub fn function(&mut self, f: &PFn, owner: Option<&str>) -> PResult<()> {
+        let saved = self.enter_fn(f, owner);
+        let r = self.function_inner(f, owner);
+        self.leave_fn(saved);
+        r
+    }
+
+    fn function_inner(&mut self, f: &PFn, owner: Option<&str>) -> PResult<()> {
         let ret = if self.ts { format!(": {}", self.ts_type(&f.ret)) } else { String::new() };
-        let head = if in_class {
-            let kw = if f.recv.is_none() { "static " } else { "" };
-            format!("{kw}{}({}){ret} {{", self.method_name(&f.name), self.params(f))
+        let head = if let Some(o) = owner {
+            if self.is_enum_mut_method(o, f) {
+                // `&mut self` on an enum: the receiver is a cell (`self.v`), so a static function.
+                let ann = if self.ts { format!(": {{ v: {} }}", ident(o)) } else { String::new() };
+                let ps = self.params(f);
+                let sep = if ps.is_empty() { "" } else { ", " };
+                format!("static {}(self{ann}{sep}{ps}){ret} {{", self.method_name(&f.name))
+            } else {
+                let kw = if f.recv.is_none() { "static " } else { "" };
+                format!("{kw}{}({}){ret} {{", self.method_name(&f.name), self.params(f))
+            }
         } else {
             format!("export function {}({}){ret} {{", ident(&f.name), self.params(f))
         };
@@ -91,17 +110,20 @@ impl<'m> Js<'m> {
         self.line(&format!("clone() {{ return new {class}({}); }}", args.join(", ")));
     }
 
+    /// Derived `Debug`: `o` carries the caller's Formatter options to every field.
     fn dbg_method(&mut self, display: &str, fields: &[(String, Ty)], tuple: bool) -> PResult<()> {
         let body = if fields.is_empty() {
             js_string(display)
         } else if tuple {
-            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("{}(this.{})", self.dbg_fn(t)?, prop(n)))).collect();
-            format!("{} + {} + \")\"", js_string(&format!("{display}(")), parts?.join(" + \", \" + "))
+            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("{}(this.{}, o)", self.dbg_fn(t)?, prop(n)))).collect();
+            format!("$dbgTupleS({}, [{}], o)", js_string(display), parts?.join(", "))
         } else {
-            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("{} + {}(this.{})", js_string(&format!("{n}: ")), self.dbg_fn(t)?, prop(n)))).collect();
-            format!("{} + {} + \" }}\"", js_string(&format!("{display} {{ ")), parts?.join(" + \", \" + "))
+            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("[{}, {}(this.{}, o)]", js_string(n), self.dbg_fn(t)?, prop(n)))).collect();
+            format!("$dbgStruct({}, [{}], o)", js_string(display), parts?.join(", "))
         };
-        self.line(&format!("$dbg() {{ return {body}; }}"));
+        let param = if self.ts { "o?: any" } else { "o" };
+        let ret = if self.ts { ": string" } else { "" };
+        self.line(&format!("$dbg({param}){ret} {{ return {body}; }}"));
         Ok(())
     }
 
@@ -114,7 +136,7 @@ impl<'m> Js<'m> {
         self.clone_method(&name, &s.fields);
         self.dbg_method(&s.name, &s.fields, s.tuple)?;
         for m in &s.methods {
-            self.function(m, true)?;
+            self.function(m, Some(&s.name))?;
         }
         self.ind -= 1;
         self.line("}");
@@ -129,7 +151,7 @@ impl<'m> Js<'m> {
             self.line("$t!: string;");
         }
         for m in &e.methods {
-            self.function(m, true)?;
+            self.function(m, Some(&e.name))?;
         }
         self.ind -= 1;
         self.line("}");

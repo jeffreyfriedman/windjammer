@@ -1,0 +1,9 @@
+fn main() {
+    let s: String = String::from("hello");
+    println!("{}", &s[1..4]);
+    println!("{}", &s[0..3]);
+    println!("{}", &s[2..s.len()]);
+    println!("{:?}", s.find("e"));
+    println!("{:?}", s.find("z"));
+}
+

@@ -1,0 +1,17 @@
+// mutant: let_int_gets_string of examples/verified/from_conversion.wj
+struct Celsius { deg: float }
+struct Fahrenheit { deg: float }
+
+impl From<Celsius> for Fahrenheit {
+    fn from(c: Celsius) -> Fahrenheit {
+        Fahrenheit { deg: c.deg * 9.0 / 5.0 + 32.0 }
+    }
+}
+
+fn main() {
+    let f = Fahrenheit::from(Celsius { deg: 37.0 })
+    println("${f.deg:.1}")
+    let n: int = "oops"
+    let f2: float = n as float
+    println("${f2:.0}")
+}

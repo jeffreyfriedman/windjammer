@@ -12,14 +12,36 @@ fn range_of(k: IntKind) -> (i128, i128) {
 
 impl<'m> Js<'m> {
     pub fn method(&mut self, recv: &PExpr, name: &str, args: &[PExpr], res: &Resolution, ty: &Ty) -> PResult<String> {
-        if let Resolution::User { .. } = res {
+        if let Resolution::User { owner } = res {
+            let f = self.find_fn(Some(owner), name);
+            let a = self.args_for(f, args)?;
+            if let Some(f) = f.filter(|f| self.is_enum_mut_method(owner, f)) {
+                let cell = self.cell_of(recv)?;
+                let sep = if a.is_empty() { "" } else { ", " };
+                return Ok(format!("{}.{}({cell}{sep}{a})", super::names::ident(owner), self.method_name(&f.name)));
+            }
             let r = self.expr_recv(recv)?;
-            return Ok(format!("{r}.{}({})", self.method_name(name), self.args(args)?));
+            return Ok(format!("{r}.{}({a})", self.method_name(name)));
+        }
+        // A length typed as a narrow `int` (SPEC-NUM-014) is a Number, not a BigInt.
+        if matches!(name, "len" | "count" | "capacity") {
+            if let Ty::Int(k) = ty {
+                if !k.is_wide() {
+                    let n = self.method(recv, name, args, res, &Ty::usize())?;
+                    return Ok(format!("Number({n})"));
+                }
+            }
         }
         let r = self.expr(recv)?;
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
         if name == "to_string" {
             return self.display(recv, &FmtSpec::default());
+        }
+        if let Some(js) = self.enumerable_method(recv, name, &r, &a, args)? {
+            return Ok(js);
+        }
+        if let Some(s) = self.ordering_method(recv, name, &r, &a) {
+            return Ok(s);
         }
         match &recv.ty {
             Ty::Vec(t) => self.vec_method(recv, t, name, &r, &a, args, ty),
@@ -80,7 +102,7 @@ impl<'m> Js<'m> {
         })
     }
 
-    fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
+    pub(super) fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
         let mul = name == "product";
         match t {
             Ty::Int(k) => {
@@ -353,9 +375,9 @@ impl<'m> Js<'m> {
             "contains_key" => format!("{r}.has({})", a[0]),
             "remove" => format!("$mapRemove({r}, {})", a[0]),
             "clear" => format!("{r}.clear()"),
-            "keys" | "into_keys" => format!("Array.from({r}.keys())"),
-            "values" | "values_mut" | "into_values" => format!("Array.from({r}.values())"),
-            "iter" | "iter_mut" | "into_iter" => format!("Array.from({r})"),
+            "keys" | "into_keys" => format!("$sortedKeys({r})"),
+            "values" | "values_mut" | "into_values" => format!("$sortedValues({r})"),
+            "iter" | "iter_mut" | "into_iter" => format!("$sortedEntries({r})"),
             _ => return self.unsupported(format!("HashMap method `{name}`")),
         })
     }
@@ -368,18 +390,22 @@ impl<'m> Js<'m> {
             "contains" => format!("{r}.has({})", a[0]),
             "remove" => format!("{r}.delete({})", a[0]),
             "clear" => format!("{r}.clear()"),
-            "iter" | "into_iter" => format!("Array.from({r})"),
+            "iter" | "into_iter" => format!("$sortedKeys({r})"),
             _ => return self.unsupported(format!("HashSet method `{name}`")),
         })
     }
 
     pub fn builtin_static(&mut self, owner: &str, name: &str, a: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
+        if let Some(c) = self.ordering_const(owner, name) {
+            return Ok(c);
+        }
         if let Some(k) = IntKind::from_name(owner) {
             let (lo, hi) = range_of(k);
             return match name {
                 "MAX" => Ok(num::lit_int(hi, k)),
                 "MIN" => Ok(num::lit_int(lo, k)),
                 "from" => Ok(num::cast(&args[0].ty, &Ty::Int(k), a)),
+                "from_str_radix" => Ok(format!("$parseIntRadix({a}, {lo}n, {hi}n, {})", num::is_wide(k))),
                 _ => self.unsupported(format!("`{owner}::{name}`")),
             };
         }
@@ -395,6 +421,9 @@ impl<'m> Js<'m> {
             ("HashSet" | "BTreeSet", "new" | "with_capacity") => Ok("new Set()".into()),
             ("String" | "string", "new" | "with_capacity") => Ok("\"\"".into()),
             ("String" | "string", "from") => Ok(a.to_string()),
+            ("f32" | "f64", m) if crate::codegen::portable::builtins::float_const(owner, m).is_some() => {
+                Ok(num::float_lit(crate::codegen::portable::builtins::float_const(owner, m).unwrap_or(0.0), owner == "f32"))
+            }
             ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
             ("char", "from_u32") => Ok(format!("$charFromU32({a})")),
             _ => self.unsupported(format!("`{owner}::{name}`")),

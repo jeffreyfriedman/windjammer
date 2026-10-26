@@ -7,6 +7,46 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ## [Unreleased]
 
 ### Added
+- **Packages that link through `path = "../pkg/build"`**: the interpreter loads the Windjammer package `../pkg` (and its own
+  dependencies; `crate::` names the package's root), so apps interpret and `wj run` no longer falls back to cargo; `wj build` and
+  `wj test` build such a dependency first, in any directory order. Interpreter: `use` inside function bodies, `use std::m::*`,
+  module re-exports of child items, `std::thread::spawn(..)` paths, `mime.APPLICATION_JSON`-style constants, and the runtime's
+  `encoding`, `regex`, `path`, `sync`, `math` functions; the std/interpreter agreement gate checks the registry, qualified forms
+  and the runtime's public surface. Compiled: imported functions shadow same-named intrinsics (`use std::log::*` then
+  `debug(x)`), runtime-module calls follow the runtime signature (`http.get(req.url)`), owned handles forwarded through generic
+  wrappers stay owned, unused empty collections default to unit element types, `std::process::pid`.
+- **Faster `wj run`** (ADR-0020): the resolved engine is the default interpreter engine (closures over slot-indexed
+  locals, unboxed integers, inline caches; constructs it does not lower run in the tree walker inside the compiled
+  function), and hot integer functions are compiled to machine code by Cranelift. `fib(30)` runs about 37x and a
+  5M-iteration loop about 12x faster than in the tree walker. `--engine walker` selects the reference engine;
+  `--no-jit` / `WJ_JIT=0` keeps the resolved engine without machine code. `scripts/interp_compare.sh` compares the
+  `bench/interp` kernels with the generated Rust, Python and Node.
+- **`wj reduce`**: automatic test-case reducer. `wj reduce PROJECT --oracle <rustc-error E0308[:regex]|panic|miscompile|cmd '...'> -o OUT`
+  shrinks a failing multi-file project (hierarchical delta debugging over files, items, statements, match arms, fields,
+  parameters, generics, attributes; literals for expressions) while `wj check` stays in the original diagnostic class
+  and the oracle holds, then anonymizes identifiers, strings, comments and paths and re-checks the oracle on the
+  output. Parallel (`--jobs`), cached, resumable, deterministic (`--seed`), never prints input source. See
+  `src/reduce/MODULE.md`.
+- **Effects and capabilities, stage E1** (ADR-0021): the compiler infers what each function may do (`fs.read`, `fs.write`,
+  `net.connect`, `net.listen`, `env.read/write`, `process`, `time`, `random`, `console`, `ffi`, user `@effect`s) from one sink table;
+  `wj explain-effects` shows the effects, the call chain to each sink and how it is checked; `wj check` reports WJ0040-WJ0044
+  against `wj.toml [capabilities]` / `[policy]` and `@uses`/`@pure`; the interpreter enforces grants per host, path, variable
+  and program (`--sandbox`, `--allow EFFECT=RESOURCE`; exit status 126, not catchable). Without a `[capabilities]` table
+  `wj run` uses the local profile (files in the project directory + time/random/console) and ENFORCES it: a call outside it
+  stops with exit status 126 and a message with the copy-paste fix (`WJ_CAPS=warn|off` are the explicit opt-outs; `wj new` templates ship
+  a `[capabilities]` table or the commented lines to add). Spec chapter `docs/spec/effects.md`.
+- **Expressiveness Phase 2** (ADR-0018): enumerable collection methods (`group_by`, `count_by`, `tally`, `sum_by`,
+  `unique`, `chunk_by`, `each_slice`, `partition_by`, `intersperse`, `zip_with`, `index_of`, `sorted*`,
+  `sort_by_key_desc`, `to_list`) on every backend; `_` shorthand closures (`xs.map(_ * 2)`); named arguments with
+  parameter defaults; trailing block arguments (`run() { .. }`); `T?` and `x ?? default`; guard-only
+  `match { cond => .. }`; doctests (`wj test`, `wj test --doc`, `--compiled`). Spec chapters COLL, CLOS, ARGS, BLOCK,
+  OPT, MATCH, DOC.
+- **`wj check` is a real front-end check** (no cargo/rustc): `wj check [PATH] [--json] [--watch] [--fix]`.
+- **Diagnostics schema v2** (`docs/diagnostics-schema.json`): stable codes, spans with byte ranges, fixes with
+  applicability, `wj explain` links; shared by `wj check/build/test --json`, the LSP and the MCP `check_code` tool.
+  See `docs/DIAGNOSTICS.md`.
+- Error codes WJ0011-WJ0028, WJ0098, WJ0099 with `wj explain` entries; rustc errors are translated to WJ codes with
+  `.wj` locations, untranslatable ones become WJ0099.
 - Post-codegen, `syn`-based Rust optimizer (`src/optimizer/`) replacing the retired AST-level phases (ADR-0006).
 - `wj fmt` formats `.wj` files; `wj fix` migrates deprecated surface syntax (ADR-0014 phase 1); architecture fitness tests
   (`tests/architecture.rs`), orphan-test checker, per-module `MODULE.md` files, ADR-0001 to ADR-0015.
@@ -21,9 +61,27 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 - `wj new --template web` produced a project that failed `wj check` (forbidden `@derive(Serialize)`); `cli` template
   now runs under `wj run --interpret`; all templates are `wj fmt`-clean.
 
+- `wj run --interpret` runs the `wj check` front end first and refuses programs it rejects (the interpreter used to run
+  `let x: int = "s"`); `tests/interpreter_check_parity_test.rs` keeps the two in agreement.
+- `wj lint` exits non-zero when an error-level lint (W0001-W0004, W0006, ...) fires; `--strict` still also fails on warnings.
+- `wj fmt -` and `wj fmt FILE` refuse input that does not parse; `wj fmt --rust PATH` formats the crate at PATH.
+- `wj build --defer-drop` accepts only auto/always/never; `--metadata` rejects malformed `NAME=PATH` and missing paths;
+  `wj new` rejects invalid package names (with a suggestion); `wj add --path` rejects a missing path;
+  `wj validate-wjsl` rejects text that is not WJSL; `wj stats --verbose` shows per-code details; `wj docs` explains
+  which search term matched nothing.
+- `wj build --source-maps` writes `<out>/<file>.rs.map` for the Rust target (function and statement lines, aligned
+  from the generated text); `wj build --check` uses it to translate rustc errors.
+- `wj errors [PATH] [--code C] [--severity S]` is a real error browser (summary by code, filterable) instead of a stub.
+- WJ0015 no longer flags methods declared in the standard library (`status_code`, `with_header`, ...).
+
 ### Removed
+- `wj build --minify`, `--polyfills` and `--v8-optimize` (they always failed with "were removed").
+- The unused `ratatui`/`crossterm` dependencies and `src/error_tui.rs`.
 - Stale documentation, SDK/docker leftovers, committed binaries, game/UI-era examples and the per-ticket repro queue
   (2026-10-11 cleanup; history is in git).
+
+### Changed
+- `wj build --json` / `wj check --json` exit non-zero on errors and use diagnostics schema v2 (v1 was the legacy shape).
 
 ## [0.50.0] - 2026-07-07
 

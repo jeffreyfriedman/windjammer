@@ -102,7 +102,8 @@ pub(crate) fn write_cargo_toml(
     ];
 
     // Detect external crate imports from generated Rust source files
-    let external_deps = detect_external_crate_deps(output_dir, source_dir);
+    let mut external_deps = detect_external_crate_deps(output_dir, source_dir);
+    external_deps.sort();
     deps.extend(external_deps);
 
     // Propagate dependencies from source project's Cargo.toml (FFI deps, etc.)
@@ -114,7 +115,10 @@ pub(crate) fn write_cargo_toml(
         .iter()
         .filter_map(|d| d.split('=').next().map(|n| n.trim().to_string()))
         .collect();
-    for (name, spec) in &wj_config.dependencies {
+    // Sorted: the generated Cargo.toml must not depend on HashMap iteration order.
+    let mut wj_deps: Vec<_> = wj_config.dependencies.iter().collect();
+    wj_deps.sort_by(|a, b| a.0.cmp(b.0));
+    for (name, spec) in wj_deps {
         if !existing_dep_names.contains(name) {
             deps.push(dep_spec_to_cargo_line_with_base(
                 name,

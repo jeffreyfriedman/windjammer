@@ -1,0 +1,11 @@
+fn main() {
+    let mut v = vec![10_i64, 20_i64, 30_i64];
+    v.insert(1_usize, 99_i64);
+    println!("{:?}", v);
+    let removed = v.remove(2_usize);
+    println!("{}", removed);
+    println!("{:?}", v);
+    v.reverse();
+    println!("{:?}", v);
+}
+

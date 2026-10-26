@@ -1,0 +1,61 @@
+use std::fs
+
+struct Entry {
+    ts: string,
+    level: string,
+    comp: string,
+    msg: string,
+}
+
+fn valid_ts(t: string) -> bool {
+    let cs: Vec<char> = t.chars().collect()
+    if cs.len() != 19 {
+        return false
+    }
+    let mut ok = true
+    for (i, c) in cs.enumerate() {
+        let want = match {
+            i == 4 || i == 7 => c == '-',
+            i == 10 => c == 'T',
+            i == 13 || i == 16 => c == ':',
+            _ => c.is_ascii_digit(),
+        }
+        ok = ok && want
+    }
+    ok
+}
+
+fn parse(line: string) -> Entry? {
+    let parts: Vec<string> = line.splitn(4, " ").map(_.to_string()).collect()
+    if parts.len() < 3 || !valid_ts(parts[0].clone()) || parts[2].len() == 0 {
+        return None
+    }
+    if !["DEBUG", "INFO", "WARN", "ERROR"].contains(&parts[1].as_str()) {
+        return None
+    }
+    Some(Entry { ts: parts[0].clone(), level: parts[1].clone(), comp: parts[2].clone(), msg: parts.get(3).cloned() ?? "".to_string() })
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin") ?? ""
+    let lines: Vec<string> = text.lines().map(_.to_string()).collect()
+    let entries: Vec<Entry> = lines.filter_map(|l| parse(l.clone())).collect()
+    let malformed = lines.len() - entries.len()
+    let levels = entries.count_by(_.level.clone())
+    println("levels: DEBUG=${levels.get("DEBUG").cloned() ?? 0} INFO=${levels.get("INFO").cloned() ?? 0} WARN=${levels.get("WARN").cloned() ?? 0} ERROR=${levels.get("ERROR").cloned() ?? 0}")
+    println("top components:")
+    let mut comps: Vec<(string, int)> = entries.count_by(_.comp.clone()).into_iter().collect()
+    comps.sort_by_key(_.0.clone())
+    comps.sort_by_key_desc(_.1)
+    for (c, n) in comps.take(3) {
+        println("  ${c} ${n}")
+    }
+    let stamps: Vec<string> = entries.map(_.ts.clone()).collect()
+    println("first: ${stamps.sorted().first().cloned() ?? "-".to_string()}")
+    println("last: ${stamps.sorted().last().cloned() ?? "-".to_string()}")
+    println("errors:")
+    for e in entries.filter(_.level == "ERROR") {
+        println("  [${e.comp}] ${e.msg}")
+    }
+    println("malformed: ${malformed}")
+}

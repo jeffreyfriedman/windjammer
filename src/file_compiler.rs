@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 // Import compiler internals (ModuleCompiler is defined in this file)
 use crate::{analyzer, codegen};
-use crate::{lexer, parser, parser_impl, CompilationTarget};
+use crate::{lexer, parser, CompilationTarget};
 pub struct ModuleCompiler {
     pub compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     pub target: CompilationTarget,
@@ -29,9 +29,9 @@ pub struct ModuleCompiler {
     pub analyzer: analyzer::Analyzer<'static>, // WINDJAMMER FIX: Shared analyzer for cross-file trait analysis
     // THE WINDJAMMER WAY: Track ALL programs for cross-file trait inference
     pub all_programs: Vec<parser::Program<'static>>, // All parsed programs from all files
-    // ARENA FIX: Keep parsers alive to prevent use-after-free
-    pub _parsers: Vec<parser::Parser>, // Parsers that own the arenas for all_programs
-    pub _trait_parsers: Vec<parser_impl::Parser>, // ARENA FIX: Parsers for trait_registry
+    // Arena owners of every program whose nodes the shared analyzer / trait registry may still reference.
+    // (Programs own their arenas; this keeps them alive for the whole compilation.)
+    pub _arena_owners: Vec<parser::AstOwner>,
     // RECURSION GUARD: Track files currently being compiled to prevent circular dependencies
     // Use String instead of PathBuf for Windows UNC path compatibility
     pub compiling_files: HashSet<String>, // Normalized path strings in the current compilation chain
@@ -83,8 +83,7 @@ impl ModuleCompiler {
             copy_structs_registry: HashSet::new(),
             analyzer: analyzer::Analyzer::new(), // WINDJAMMER FIX: Shared analyzer instance
             all_programs: Vec::new(),            // THE WINDJAMMER WAY: Track all programs
-            _parsers: Vec::new(),                // ARENA FIX: Keep parsers alive
-            _trait_parsers: Vec::new(),          // ARENA FIX: Keep trait parsers alive
+            _arena_owners: Vec::new(),
             compiling_files: HashSet::new(),     // RECURSION GUARD: Track compilation chain
             global_signatures: analyzer::SignatureRegistry::new(), // BUG #8 FIX: Global signatures
             path_dep_signatures_loaded: false,
@@ -105,7 +104,7 @@ impl ModuleCompiler {
             all_items.extend(program.items.clone());
         }
 
-        let merged_program = parser::Program { items: all_items };
+        let merged_program = parser::Program::from_items_of(all_items, self.all_programs.iter());
 
         // Run the cross-file trait inference
         self.analyzer
@@ -260,6 +259,7 @@ impl ModuleCompiler {
         }
 
         // Register traits from this program into the global registry
+        self._arena_owners.push(program.owner().clone());
         for item in &program.items {
             if let parser::Item::Trait { decl, .. } = item {
                 self.trait_registry.insert(decl.name.clone(), decl.clone());
@@ -280,12 +280,10 @@ impl ModuleCompiler {
 
         // Register any newly discovered traits into the analyzer
         for trait_decl in self.trait_registry.values() {
-            let dummy_program = parser::Program {
-                items: vec![parser::Item::Trait {
-                    decl: trait_decl.clone(),
-                    location: parser::SourceLocation::default(),
-                }],
-            };
+            let dummy_program = parser::Program::new(vec![parser::Item::Trait {
+                decl: trait_decl.clone(),
+                location: parser::SourceLocation::default(),
+            }]);
             self.analyzer
                 .register_traits_from_program(&dummy_program)
                 .map_err(|e| anyhow::anyhow!("register_traits_from_program: {}", e))?;
@@ -343,7 +341,10 @@ impl ModuleCompiler {
         // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
         generator.set_copy_types_registry(self.copy_structs_registry.clone());
         let rust_code =
-            crate::optimizer::run_default(&generator.generate_program(&program, &analyzed));
+            crate::optimizer::run_with_auto_arena(
+                self.config.auto_arena,
+                &generator.generate_program(&program, &analyzed),
+            );
 
         generator.apply_self_receiver_upgrades(&mut self.global_signatures);
         self.global_signatures.merge(&generator.signature_registry);

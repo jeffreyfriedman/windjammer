@@ -23,41 +23,59 @@ impl<'m> Go<'m> {
         Ok(format!("({})", parts.join(" + ")))
     }
 
-    pub fn display(&mut self, e: &PExpr, spec: &FmtSpec) -> PResult<String> {
-        if spec.pretty && !matches!(e.ty, Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Bool | Ty::Str | Ty::Char | Ty::Unit) {
-            return self.unsupported("pretty Debug `{:#?}` of an aggregate (use `{:?}`)");
+    /// Rust `Formatter` options of a spec as a `*wjFmt` literal, or None when all are default.
+    fn fmt_opts(spec: &FmtSpec) -> Option<String> {
+        let default = spec.width.is_none() && spec.precision.is_none() && spec.fill.is_none() && spec.align.is_none() && !spec.zero_pad && !spec.plus && !spec.alternate;
+        if default {
+            return None;
         }
-        let v = self.expr(e)?;
-        let base = if spec.debug {
-            format!("wjDbg({v})")
-        } else if let Some(r) = spec.radix {
-            match &e.ty {
-                Ty::Int(_) => format!("wjRadix({v}, '{r}')"),
-                Ty::F64 | Ty::F32 if r == 'e' => format!("wjExpFmt(float64({v}))"),
-                _ => return self.unsupported("radix format on non-integer"),
-            }
-        } else {
-            self.plain_display(&e.ty, &v, spec)?
-        };
-        let Some(w) = spec.width else { return Ok(base) };
-        let fill = spec.fill.unwrap_or(if spec.zero_pad { '0' } else { ' ' });
-        let align = spec.align.unwrap_or(if e.ty.is_numeric() { '>' } else { '<' });
-        Ok(format!("wjPad({base}, {w}, {}, '{align}', {})", go_string(&fill.to_string()), spec.zero_pad))
+        let w = spec.width.map(|w| w as i64).unwrap_or(-1);
+        let p = spec.precision.map(|p| p as i64).unwrap_or(-1);
+        let fill = spec.fill.map(|c| c as u32).unwrap_or(0);
+        let align = spec.align.map(|c| c as u32).unwrap_or(0);
+        Some(format!("&wjFmt{{W: {w}, P: {p}, Fill: {fill}, Align: {align}, Zero: {}, Plus: {}, Alt: {}}}", spec.zero_pad, spec.plus, spec.alternate))
     }
 
-    fn plain_display(&mut self, t: &Ty, v: &str, spec: &FmtSpec) -> PResult<String> {
+    /// Display (or Debug / numeric-radix per spec) of one argument, with Rust's padding rules.
+    pub fn display(&mut self, e: &PExpr, spec: &FmtSpec) -> PResult<String> {
+        let v = self.expr(e)?;
+        let opts = Self::fmt_opts(spec);
+        if spec.debug {
+            return Ok(match opts {
+                Some(o) => format!("wjDbgO({v}, {o})"),
+                None => format!("wjDbg({v})"),
+            });
+        }
+        let o = opts.clone().unwrap_or_else(|| "nil".into());
+        if let Some(r) = spec.radix {
+            return match &e.ty {
+                Ty::Int(_) => Ok(format!("wjFmtInt({v}, '{r}', {o})")),
+                Ty::F64 | Ty::F32 if r == 'e' => Ok(match opts {
+                    Some(o) => format!("wjFmtFloat(float64({v}), 64, false, true, {o})"),
+                    None => format!("wjExpFmt(float64({v}))"),
+                }),
+                _ => self.unsupported("radix format on non-integer"),
+            };
+        }
+        let Some(o) = opts else { return self.plain_display(&e.ty, &v) };
+        Ok(match &e.ty {
+            Ty::Int(_) => format!("wjFmtInt({v}, 0, {o})"),
+            Ty::F64 => format!("wjFmtFloat({v}, 64, false, false, {o})"),
+            Ty::F32 => format!("wjFmtFloat(float64({v}), 32, false, false, {o})"),
+            _ => {
+                let s = self.plain_display(&e.ty, &v)?;
+                format!("wjFmtStr({s}, {o})")
+            }
+        })
+    }
+
+    fn plain_display(&mut self, t: &Ty, v: &str) -> PResult<String> {
         Ok(match t {
             Ty::Int(_) => format!("wjItoa({v})"),
-            Ty::F64 | Ty::F32 => match (spec.precision, t) {
-                (Some(p), _) => format!("wjFixed(float64({v}), {p})"),
-                (None, Ty::F32) => format!("wjF32({v})"),
-                _ => format!("wjF64({v})"),
-            },
+            Ty::F32 => format!("wjF32({v})"),
+            Ty::F64 => format!("wjF64({v})"),
             Ty::Bool => format!("wjBool({v})"),
-            Ty::Str => match spec.precision {
-                Some(p) => format!("wjTrunc({v}, {p})"),
-                None => v.to_string(),
-            },
+            Ty::Str => v.to_string(),
             Ty::Char => format!("string(rune({v}))"),
             Ty::Unit => "\"()\"".into(),
             Ty::Adt(n, _) => {

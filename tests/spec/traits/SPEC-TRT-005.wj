@@ -1,0 +1,9 @@
+// spec: SPEC-TRT-005
+// expect: true P { x: 1, s: "a" }
+@derive(Debug, Clone, PartialEq)
+struct P { x: int, s: string }
+fn main() {
+    let a = P { x: 1, s: "a" }
+    let b = a.clone()
+    println("${a == b} ${a:?}")
+}

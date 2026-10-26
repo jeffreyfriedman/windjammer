@@ -1,0 +1,12 @@
+// spec: SPEC-DOC-003
+// mode: parse-ok
+/// Not runnable on purpose.
+///
+/// ```wj,should_fail
+/// let x: int = "text" +
+/// ```
+fn noop() {}
+
+fn main() {
+    noop()
+}

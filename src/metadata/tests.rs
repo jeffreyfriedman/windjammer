@@ -277,3 +277,58 @@ fn stdlib_meta_string_file_deserializes_without_trait_impls_or_version() {
     );
     assert!(meta.functions.contains_key("String::chars"));
 }
+
+fn meta_with_fingerprint(compiler: String, content: u64) -> ModuleMetadata {
+    let mut m = ModuleMetadata::new("m".to_string());
+    m.analysis_fingerprint = Some(AnalysisFingerprint {
+        content_hash: content,
+        compiler_version: compiler,
+        dep_metadata_epoch: 0,
+        output_hash: 0,
+    });
+    m
+}
+
+#[test]
+fn wj_meta_sidecar_is_trusted_only_when_current() {
+    use crate::compiler::incremental::{compiler_build_identity, hash_source};
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("m.wj");
+    std::fs::write(&src, "fn f() {}\n").unwrap();
+    let meta_path = dir.path().join("m.wj.meta");
+    let now = compiler_build_identity();
+    let h = hash_source("fn f() {}\n");
+
+    assert!(wj_meta_is_current(&meta_path, &meta_with_fingerprint(now.clone(), h)), "matching sidecar is current");
+    assert!(
+        !wj_meta_is_current(&meta_path, &meta_with_fingerprint(now.clone(), h ^ 1)),
+        "source text changed since the sidecar was written: stale"
+    );
+    assert!(
+        !wj_meta_is_current(&meta_path, &meta_with_fingerprint("other-build".into(), h)),
+        "written by another compiler build: stale"
+    );
+    assert!(
+        wj_meta_is_current(&meta_path, &ModuleMetadata::new("m".into())),
+        "sidecars without a fingerprint (stdlib / hand-authored) are accepted"
+    );
+    // No sibling source (metadata shipped without sources): the compiler identity still gates it.
+    std::fs::remove_file(&src).unwrap();
+    assert!(wj_meta_is_current(&meta_path, &meta_with_fingerprint(now, h ^ 1)));
+}
+
+#[test]
+fn stale_sidecar_registers_no_signatures() {
+    use crate::compiler::incremental::compiler_build_identity;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("m.wj"), "fn f() {}\n").unwrap();
+    let mut meta = meta_with_fingerprint(compiler_build_identity(), 12345); // wrong content hash
+    meta.functions.insert(
+        "stale_fn".to_string(),
+        serde_json::from_str(r#"{"params":[],"return_type":null,"is_associated":false,"parent_type":null}"#).unwrap(),
+    );
+    std::fs::write(dir.path().join("m.wj.meta"), serde_json::to_string(&meta).unwrap()).unwrap();
+    let mut registry = crate::analyzer::SignatureRegistry::new();
+    merge_wj_meta_signatures_from_dir_only(dir.path(), &mut registry);
+    assert!(registry.get_signature("stale_fn").is_none(), "a stale sidecar must not feed the registry");
+}

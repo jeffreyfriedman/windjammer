@@ -1,4 +1,4 @@
-//! Standalone Copy / known-Copy-name checks (no [`TypeAnalyzer`] state).
+//! Standalone Copy / known-Copy-name checks (no analyzer state).
 
 use crate::parser::Type;
 

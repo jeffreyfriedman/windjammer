@@ -161,6 +161,6 @@ pub fn run_interpreter(wj: &Path, work: &Path, source: &str) -> Outcome {
         return Outcome::BuildFailed("write failed".into());
     }
     let mut c = Command::new(wj);
-    c.args(["run", "--interpret"]).arg(&src);
+    c.args(["run", "--interpret", "--no-lint"]).arg(&src);
     to_outcome(run_with_timeout(&mut c, RUN_BUDGET))
 }

@@ -53,14 +53,14 @@ impl Interpreter {
         let sem = |m: String| RuntimeError::new(ErrorKind::Semantic, m);
         if is_item_start(src) {
             let prog = parse_source(src, "<repl>").map_err(|e| sem(format!("parse error: {}", e)))?;
-            let prog: &'static crate::parser::Program<'static> = Box::leak(Box::new(prog));
+            let prog = self.retain_program(prog);
             self.register_items(0, &prog.items)?;
             self.finish_registration()?;
             return Ok(None);
         }
         let wrapped = format!("fn __repl__() {{\n{}\n}}", src);
         let prog = parse_source(&wrapped, "<repl>").map_err(|e| sem(format!("parse error: {}", e)))?;
-        let prog: &'static crate::parser::Program<'static> = Box::leak(Box::new(prog));
+        let prog = self.retain_program(prog);
         let Some(Item::Function { decl, .. }) = prog.items.first() else {
             return Err(sem("could not parse input".into()));
         };
@@ -84,13 +84,24 @@ impl Interpreter {
     }
 }
 
+/// A fresh REPL interpreter, sandboxed like `wj run` (ADR-0021): the working directory's `wj.toml` grant, else the
+/// local profile (files under the working directory, time, random, console).
+fn new_repl_interpreter() -> Interpreter {
+    let mut it = Interpreter::new();
+    it.guard_stack();
+    let here = std::env::current_dir().unwrap_or_default().join("repl.wj");
+    if let Ok(gate) = super::caps::gate_for_run(&here, false, &[], false, "") {
+        it.set_caps(gate.map(|g| g.for_tests()));
+    }
+    it
+}
+
 /// Interactive loop on stdin/stdout. Prompts are only printed when stdin is a terminal.
 pub fn run_repl_stdio() -> i32 {
     use std::io::{BufRead, IsTerminal, Write};
     super::runner::with_big_stack(|| {
         let interactive = std::io::stdin().is_terminal();
-        let mut it = Interpreter::new();
-        it.guard_stack();
+        let mut it = new_repl_interpreter();
         if interactive {
             println!("Windjammerscript REPL (interpreted, no cargo). Type :help for commands, exit or Ctrl-D to quit.");
         }
@@ -116,8 +127,7 @@ pub fn run_repl_stdio() -> i32 {
                         continue;
                     }
                     ":reset" => {
-                        it = Interpreter::new();
-                        it.guard_stack();
+                        it = new_repl_interpreter();
                         continue;
                     }
                     _ => {}

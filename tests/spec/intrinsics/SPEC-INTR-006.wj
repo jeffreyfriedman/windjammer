@@ -1,0 +1,8 @@
+// spec: SPEC-INTR-006
+// expect: 5 k k
+fn main() {
+    let a = debug(2 + 3)
+    let s = "k"
+    let t = debug(s)
+    println("${a} ${s} ${t}")
+}

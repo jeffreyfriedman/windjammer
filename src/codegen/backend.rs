@@ -103,17 +103,12 @@ pub struct CodegenConfig {
     /// Include comments in generated code
     pub include_comments: bool,
 
-    /// Minify output (JS target)
-    pub minify: bool,
-
     /// Enable tree shaking (dead code elimination)
     pub tree_shake: bool,
 
-    /// Include polyfills for older browsers (JS target)
-    pub polyfills: bool,
-
-    /// Apply V8-specific optimizations (JS target)
-    pub v8_optimize: bool,
+    /// Statement installing the program's capability grant before `main` (ADR-0021); `None` when every sink call
+    /// was proven inside the grant at compile time.
+    pub capability_install: Option<String>,
 }
 
 impl Default for CodegenConfig {
@@ -127,10 +122,8 @@ impl Default for CodegenConfig {
             idiomatic_output: true,
             pretty_print: true,
             include_comments: false,
-            minify: false,
             tree_shake: false,
-            polyfills: false,
-            v8_optimize: false,
+            capability_install: None,
         }
     }
 }
@@ -163,16 +156,6 @@ impl CodegenOutput {
             additional_files: Vec::new(),
             extension,
         }
-    }
-
-    pub fn with_source_map(mut self, source_map: String) -> Self {
-        self.source_map = Some(source_map);
-        self
-    }
-
-    pub fn with_type_definitions(mut self, type_defs: String) -> Self {
-        self.type_definitions = Some(type_defs);
-        self
     }
 
     pub fn add_file(&mut self, filename: String, content: String) {

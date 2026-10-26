@@ -1,0 +1,57 @@
+# Acceptance cases for `wj eject` (tests/promise_registry_test.rs). `{w}` is the scratch dir.
+
+[[case]]
+name = "eject writes a standalone Cargo project with the runtime vendored"
+polarity = "positive"
+covers = ["wj eject --output"]
+files = { "m.wj" = "fn main() {\n    println(\"hi ${40 + 2}\")\n}\n" }
+args = ["eject", "{w}/m.wj", "--output", "{w}/ejected"]
+creates = ["ejected/m.rs", "ejected/Cargo.toml", "ejected/vendor/windjammer-runtime/Cargo.toml", "ejected/README.md"]
+file_has = { "ejected/m.rs" = "fn main()", "ejected/Cargo.toml" = "path = \"vendor/windjammer-runtime\"" }
+absent = ["ejected/.wj-compiler-stamp"]
+
+[[case]]
+name = "eject --target wasm is accepted"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["eject", "{w}/m.wj", "-o", "{w}/ejected", "--target", "wasm"]
+creates = ["ejected/Cargo.toml"]
+
+[[case]]
+name = "eject --library emits a library crate"
+polarity = "positive"
+files = { "m.wj" = "pub fn answer() -> int {\n    42\n}\n" }
+args = ["eject", "{w}/m.wj", "-o", "{w}/ejected", "--library"]
+creates = ["ejected/Cargo.toml"]
+
+[[case]]
+name = "eject --module-file is accepted for a project directory"
+polarity = "positive"
+files = { "p/main.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["eject", "{w}/p", "-o", "{w}/ejected", "--module-file"]
+creates = ["ejected/Cargo.toml"]
+
+[[case]]
+name = "eject refuses a non-empty output directory"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n", "out/keep.txt" = "user data" }
+args = ["eject", "{w}/m.wj", "--output", "{w}/out"]
+exit = 1
+output_has = ["not empty"]
+absent = ["out/m.rs"]
+
+[[case]]
+name = "eject rejects an unsupported target"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["eject", "{w}/m.wj", "-o", "{w}/ejected", "--target", "go"]
+exit = 1
+output_has = ["supports --target rust or wasm"]
+absent = ["ejected/Cargo.toml"]
+
+[[case]]
+name = "eject of a missing input fails"
+polarity = "negative"
+args = ["eject", "{w}/nope.wj", "-o", "{w}/ejected"]
+exit = 1
+output_has = ["does not exist"]

@@ -1,0 +1,42 @@
+// Compiled closure bodies: captured locals are the creating scope's slots (writes are visible
+// outside), parameters bind whatever they are given, nested and escaping closures, `_` and
+// tuple parameters, `return` inside a closure.
+fn make_adder(k: int) -> fn(int) -> int {
+    let base = k * 2
+    move |x: int| x + base
+}
+
+fn main() {
+    let v = [1, 2, 3, 4, 5]
+    let mut count = 0
+    let mut seen: Vec<int> = Vec::new()
+    for x in v {
+        let mut bump = |d: int| {
+            count += d
+            seen.push(d * 10)
+        }
+        bump(x)
+    }
+    println("${count} ${seen:?}")
+    let r = 3
+    let scaled: Vec<int> = v.map(|x| x * r).filter(|x| x % 2 == 1).collect()
+    println("${scaled:?}")
+    let add5 = make_adder(5)
+    let add1 = make_adder(1)
+    println("${add5(1)} ${add1(1)} ${add5(add1(0))}")
+    let total = v.fold(0, |acc, x| {
+        if x == 3 { return acc }
+        acc + x
+    })
+    println("${total}")
+    let pairs = [(1, 2), (3, 4)]
+    let sums: Vec<int> = pairs.map(|(a, b)| a + b).collect()
+    let ignore: Vec<int> = v.map(|_| 7).collect()
+    println("${sums:?} ${ignore:?}")
+    let outer = 100
+    let nested = v.map(|x| {
+        let inner = |y: int| y + outer + x
+        inner(1)
+    }).sum::<int>()
+    println("${nested}")
+}

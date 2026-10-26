@@ -98,7 +98,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 gen.assignment_int_target_type = Some(peer);
             }
             let scope = gen.arg_gen_scope();
-            let mut arg_str = gen.generate_expression(arg);
+            let mut arg_str = gen.generate_value_operand(arg);
             gen.restore_arg_gen_scope(scope);
             gen.assignment_float_target_type = prev_arg_float_target;
             gen.assignment_int_target_type = prev_arg_int_target;

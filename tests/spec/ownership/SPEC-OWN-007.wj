@@ -1,0 +1,10 @@
+// spec: SPEC-OWN-007
+// expect: ann 3
+// expect: ann 3
+struct P { name: string, age: int }
+fn show(p: P) -> string { "${p.name} ${p.age}" }
+fn main() {
+    let p = P { name: "ann", age: 3 }
+    println(show(p))
+    println(show(p))
+}

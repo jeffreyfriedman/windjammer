@@ -1,5 +1,7 @@
 // tags: std, fs, io, file, result
 // rust: gap error[E0433]: cannot find module or crate 'windjammer_runtime' in this scope
+// allow: fs.read=/tmp/**
+// allow: fs.write=/tmp/**
 // expect: wrote 2 lines
 // expect: line1
 // expect: line2

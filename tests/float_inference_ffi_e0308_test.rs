@@ -73,8 +73,8 @@ fn main() {
 }
 
 #[test]
-fn test_unknown_function_defaults_float_to_f32() {
-    // Call to unknown function (e.g. cross-module) - default float args to f32
+fn test_unknown_function_defaults_float_to_f64() {
+    // Call to unknown function (e.g. cross-module) - default float args to f64 (SPEC-NUM-007)
     let source = r#"
 fn main() {
     // Simulates ffi::unknown_fn(1.0, 2.0) when signature not in registry
@@ -83,8 +83,8 @@ fn main() {
 "#;
     compile_and_assert(source, |rust_code| {
         assert!(
-            rust_code.contains("1.0_f32") && rust_code.contains("2.0_f32"),
-            "Unknown function should default float args to f32 (game/graphics convention), got:\n{}",
+            rust_code.contains("1.0_f64") && rust_code.contains("2.0_f64"),
+            "Unknown function should default float args to f64 (SPEC-NUM-007), got:\n{}",
             rust_code
         );
     });

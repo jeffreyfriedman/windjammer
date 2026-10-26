@@ -1,0 +1,13 @@
+// spec: SPEC-TRT-003
+// expect: woof meow 
+trait Animal { fn speak(self) -> string }
+struct Dog {}
+struct Cat {}
+impl Animal for Dog { fn speak(self) -> string { "woof" } }
+impl Animal for Cat { fn speak(self) -> string { "meow" } }
+fn main() {
+    let zoo: Vec<Box<dyn Animal>> = [Box::new(Dog {}), Box::new(Cat {})]
+    let mut out = ""
+    for a in zoo { out = out + a.speak() + " " }
+    println(out)
+}

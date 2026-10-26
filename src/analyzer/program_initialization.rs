@@ -153,6 +153,7 @@ fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, 
             generics: vec!["Rhs".to_string()],
             supertraits: vec![],
             methods: vec![TraitMethod {
+                type_params: vec![],
                 name: method.to_string(),
                 parameters: vec![
                     Parameter {
@@ -201,6 +202,7 @@ fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, 
             generics: vec![],
             supertraits: vec![],
             methods: vec![TraitMethod {
+                type_params: vec![],
                 name: "neg".to_string(),
                 parameters: vec![Parameter {
                     name: "self".to_string(),
@@ -232,6 +234,7 @@ fn build_stdlib_trait_definitions<'ast>(trait_definitions: &mut HashMap<String, 
             generics: vec![],
             supertraits: vec![],
             methods: vec![TraitMethod {
+                type_params: vec![],
                 name: "drop".to_string(),
                 parameters: vec![Parameter {
                     name: "self".to_string(),

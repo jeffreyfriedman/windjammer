@@ -1,0 +1,7 @@
+// spec: SPEC-ITEM-001
+// expect: 6
+fn main() {
+    println("${later(2)}")
+}
+fn later(x: int) -> int { helper(x) * 2 }
+fn helper(x: int) -> int { x + 1 }

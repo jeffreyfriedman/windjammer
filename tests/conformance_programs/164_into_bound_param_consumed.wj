@@ -1,0 +1,11 @@
+// expect: hi
+// expect: 42!
+fn label<T: Into<string>>(t: T) -> string {
+    t.into()
+}
+
+fn main() {
+    println(label("hi"))
+    let s: string = "42"
+    println(label(s) + "!")
+}

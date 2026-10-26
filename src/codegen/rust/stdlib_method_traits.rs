@@ -271,16 +271,6 @@ pub fn is_known_readonly_qualified(
     )
 }
 
-/// Is this a known method in the stdlib signatures?
-pub fn is_known_stdlib_method_qualified(
-    method: &str,
-    receiver_type: Option<&str>,
-    registry: &SignatureRegistry,
-) -> bool {
-    lookup_sig(method, receiver_type, registry).is_some()
-        || lookup_suffix(method, registry).is_some()
-}
-
 /// Clippy-style `len() == 0` → `is_empty()` rewrite is only valid when:
 /// 1. the left-hand method is `len` (or `capacity` on types that also expose `is_empty`)
 /// 2. the *receiver type* has an `is_empty` signature in the registry
@@ -522,15 +512,6 @@ pub fn method_is_storage_qualified(
     false
 }
 
-/// Does the first non-self argument need auto-borrowing (`&str` / `&[T]`)?
-pub fn method_auto_borrows_arg_qualified(
-    method: &str,
-    receiver_type: Option<&str>,
-    registry: &SignatureRegistry,
-) -> bool {
-    method_arg_needs_auto_borrow_at_index(method, receiver_type, registry, 0)
-}
-
 /// Does call argument `arg_index` (0 = first arg after receiver) need auto-borrowing?
 pub fn method_arg_needs_auto_borrow_at_index(
     method: &str,
@@ -692,25 +673,6 @@ pub fn method_is_map_key_qualified_with_project(
         return false;
     }
     receiver_type.is_some_and(|rt| borrowed_key_on_type(rt.split('<').next().unwrap_or(rt)))
-}
-
-/// Is this an option accessor that may need `.cloned()` on borrowed receivers?
-/// e.g. first, last, unwrap on borrowed Option/Vec
-pub fn method_is_option_accessor_qualified(
-    method: &str,
-    receiver_type: Option<&str>,
-    registry: &SignatureRegistry,
-) -> bool {
-    let sig =
-        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| {
-        s.has_self_receiver
-            && return_type_is(s, |ty| {
-                matches!(ty,
-                    Type::Option(inner) if matches!(&**inner, Type::Reference(_))
-                ) || matches!(ty, Type::Custom(n) if n == "T")
-            })
-    })
 }
 
 /// Is the first non-self param a capacity/index arg that should be cast to `usize`?
@@ -921,10 +883,6 @@ pub fn is_map_type(ty: &crate::parser::Type) -> bool {
         crate::parser::Type::Custom(name) => is_map_type_name(name),
         _ => false,
     }
-}
-
-pub fn is_closure_taking_method(method: &str) -> bool {
-    method_is_closure_taking_qualified(method, None, SignatureRegistry::stdlib())
 }
 
 /// Build `Module::method` / `Type::method` for signature/IR lookup at call sites.
@@ -1376,11 +1334,7 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     // codegen-confirmed owned emission when analyzing `std/json.wj`
     // (`is_array(value: Value) { false }` → `emitted_rust_ref_params=[false]`).
     // The real Rust API still takes `&Value`; multipass must auto-borrow.
-    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
-    if let Some(baseline) = stdlib
-        .get_signature(callee_name)
-        .or_else(|| stdlib.get_fallback_signature(callee_name))
-    {
+    if let Some(baseline) = super::runtime_signatures::runtime_signature(callee_name) {
         if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
             // Bare user APIs with a different payload shape (`join(string, string)` vs
             // `strings::join(Vec, str)`) must not inherit the runtime baseline borrow.

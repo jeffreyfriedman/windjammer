@@ -535,10 +535,10 @@ impl<'ast> CodeGenerator<'ast> {
                     emit_shared || self.inferred_borrowed_params.contains(name.as_str()),
                 )
             }
-            Expression::Unary {
-                op: crate::parser::UnaryOp::Ref,
-                ..
-            } => (true, true),
+            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+                let owned_key = self.ref_operand_is_owned_local(operand);
+                (!owned_key, !owned_key)
+            }
             _ => (false, false),
         };
         // Peel only on emit-truth demoted refs (`key: &str`). Owned `String` +
@@ -772,6 +772,7 @@ impl<'ast> CodeGenerator<'ast> {
         // even if a buggy callee key looks like `local_var::method`.
         if receiver_type_name.is_none()
             && Self::is_module_boundary_callee(callee_name)
+            && self.same_crate_callee_key(callee_name).is_none()
             && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     callee_name,
@@ -7274,17 +7275,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Signature-driven `(wants_shared_ref, wants_owned)` for a call-site slot.
-    /// Owned Copy-aggregate emission beats stale IR Ref (regression-060).
-    /// Runtime-std baseline borrow (`json::is_array` `&Value`) beats WJ Owned stubs.
-    pub(crate) fn call_site_slot_wants_ref_and_owned(
-        &self,
-        sig: &crate::analyzer::FunctionSignature,
-        arg_index: usize,
-    ) -> (bool, bool) {
-        self.call_site_slot_wants_ref_and_owned_for(sig, arg_index, &sig.name)
-    }
-
     pub(crate) fn call_site_slot_wants_ref_and_owned_for(
         &self,
         sig: &crate::analyzer::FunctionSignature,
@@ -8905,6 +8895,12 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()") {
             return SafetyType::owned(BaseType::String);
         }
+        // A module `const NAME: string` is emitted `&'static str`: borrowed text whatever its WJ type
+        // says. This is the one place that decides it; every owned position (call argument, field,
+        // vec! element, let, return) then gets `.to_string()` from the coercion engine.
+        if self.expression_is_static_str_value(arg_expr) {
+            return SafetyType::borrowed(BaseType::String, Region::fresh(13));
+        }
         if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
             arg_expr,
         ) {
@@ -10228,7 +10224,7 @@ fn safety_type_from_arg_expression(expr: &Expression) -> SafetyType {
         Expression::Literal { value, .. } => match value {
             Literal::String(_) => SafetyType::borrowed(BaseType::String, Region::fresh(2)),
             Literal::Int(_) => SafetyType::copy(BaseType::I32),
-            Literal::Float(_) => SafetyType::copy(BaseType::F32),
+            Literal::Float(_) => SafetyType::copy(BaseType::F64),
             Literal::Bool(_) => SafetyType::copy(BaseType::Bool),
             _ => SafetyType::owned(BaseType::Inferred),
         },

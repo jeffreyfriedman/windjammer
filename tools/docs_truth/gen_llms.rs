@@ -38,6 +38,29 @@ fn version(ctx: &Ctx) -> String {
         .unwrap_or_default()
 }
 
+/// Hand-written or generated documents inlined into `llms-full.txt`, in order (the MCP manifest is rendered separately).
+const FULL: &[&str] = &[
+    "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "docs/reference/cli.md",
+    "docs/reference/targets.md",
+    "docs/reference/keywords.md",
+    MCP_MANIFEST,
+    "docs/known-gaps.md",
+];
+
+const MCP_MANIFEST: &str = "crates/windjammer-mcp/tools/manifest.json";
+
+/// The generators' input contract, used by the scratch repository in tests/docs_truth_test.rs so adding a source
+/// cannot silently break the fixture: `llms.txt` links (must exist) and `llms-full.txt` inlined documents (must be
+/// non-empty).
+pub fn link_targets() -> impl Iterator<Item = &'static str> {
+    INDEX.iter().map(|(_, p, _, _)| *p)
+}
+
+pub fn inlined_sources() -> impl Iterator<Item = &'static str> {
+    FULL.iter().copied()
+}
+
 fn require(ctx: &Ctx, path: &str) -> Result<String, String> {
     let s = ctx.read(path);
     if s.is_empty() {
@@ -55,7 +78,9 @@ pub fn llms_txt(ctx: &Ctx) -> Result<String, String> {
     ));
     let mut section = "";
     for (sec, path, text, desc) in INDEX {
-        require(ctx, path)?;
+        if !ctx.root.join(path).is_file() {
+            return Err(format!("llms generator: index target `{path}` does not exist"));
+        }
         if *sec != section {
             out.push_str(&format!("\n## {sec}\n\n"));
             section = sec;
@@ -77,7 +102,7 @@ fn strip(doc: &str) -> String {
 }
 
 fn mcp_tools(ctx: &Ctx) -> Result<String, String> {
-    let v: serde_json::Value = serde_json::from_str(&require(ctx, "crates/windjammer-mcp/tools/manifest.json")?).map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&require(ctx, MCP_MANIFEST)?).map_err(|e| e.to_string())?;
     let mut out = String::from("The `windjammer-mcp` server (`cargo build --release -p windjammer-mcp`, stdio by default) exposes:\n\n");
     for t in v["tools"].as_array().into_iter().flatten() {
         let g = |k: &str| t[k].as_str().unwrap_or("");
@@ -88,14 +113,11 @@ fn mcp_tools(ctx: &Ctx) -> Result<String, String> {
 
 pub fn llms_full(ctx: &Ctx) -> Result<String, String> {
     let mut out = format!("# Windjammer (full context for LLM agents)\n\n> {TAGLINE}\n\nVersion {}. Assembled by `scripts/docs_gen.sh` from the files named in each section heading; do not edit. Index version: llms.txt.\n", version(ctx));
-    let mut sections: Vec<(String, String)> = vec![
-        ("docs/agent/WINDJAMMER_FOR_AGENTS.md".into(), strip(&require(ctx, "docs/agent/WINDJAMMER_FOR_AGENTS.md")?)),
-        ("docs/reference/cli.md".into(), strip(&require(ctx, "docs/reference/cli.md")?)),
-        ("docs/reference/targets.md".into(), strip(&require(ctx, "docs/reference/targets.md")?)),
-        ("docs/reference/keywords.md".into(), strip(&require(ctx, "docs/reference/keywords.md")?)),
-        ("crates/windjammer-mcp/tools/manifest.json".into(), mcp_tools(ctx)?),
-        ("docs/known-gaps.md".into(), strip(&require(ctx, "docs/known-gaps.md")?)),
-    ];
+    let mut sections: Vec<(String, String)> = Vec::new();
+    for path in FULL {
+        let body = if *path == MCP_MANIFEST { mcp_tools(ctx)? } else { strip(&require(ctx, path)?) };
+        sections.push((path.to_string(), body));
+    }
     for opt in ["docs/spec/compact.md", "docs/spec/COMPACT.md"] {
         let s = ctx.read(opt);
         if !s.is_empty() {

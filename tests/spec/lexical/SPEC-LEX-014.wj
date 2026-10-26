@@ -1,0 +1,6 @@
+// spec: SPEC-LEX-014
+// expect: a\nb ${x}
+fn main() {
+    let s = r#"a\nb ${x}"#
+    println(s)
+}

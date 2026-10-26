@@ -11,6 +11,7 @@ mod verify;
 mod wrap;
 
 pub use edits::{diff_lines, restrict_to_range, LineEdit};
+pub use tokens::{scan as scan_lossless, Kind as TokKind, Tok};
 pub use options::FormatOptions;
 
 use std::fmt;

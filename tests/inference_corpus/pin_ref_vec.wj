@@ -1,0 +1,6 @@
+// D-PIN-DOUBLE-REF: an explicit `&Vec<int>` pin is emitted as `&&[i64]`.
+fn count(v: &Vec<int>) -> int { v.len() }
+fn main() {
+    let v = vec![1, 2, 3]
+    println("${count(v)}")
+}

@@ -1,0 +1,8 @@
+// spec: SPEC-EFF-040
+// profile: local
+// expect: checked
+use std::fs
+fn main() {
+    let there = fs::exists("/dev/stdin")
+    println("checked")
+}

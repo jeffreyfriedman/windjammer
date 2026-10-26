@@ -1,0 +1,14 @@
+// mutant: unknown_method of examples/verified/strings_basics.wj
+fn main() {
+    let s = "Hello World"
+    println("${s.length_of()}")
+    println(s.to_uppercase())
+    println(s.to_lowercase())
+    let has_world = s.contains("World")
+    let has_prefix = s.starts_with("Hello")
+    println("${has_world}")
+    println("${has_prefix}")
+    println(s.to_lowercase().replace(" ", "_"))
+    let padded = "  padded  "
+    println("[${padded.trim()}]")
+}

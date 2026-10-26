@@ -727,7 +727,8 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
             _ => return generated.to_string(),
         };
-        if !self.is_type_copy(pointee) {
+        // `&str` is itself the value: `*s` would be the unsized `str`.
+        if !self.is_type_copy(pointee) || matches!(pointee, Type::Custom(n) if n == "str") {
             return generated.to_string();
         }
         if self.match_arm_bindings.contains(name.as_str()) {
@@ -956,6 +957,16 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.in_index_context {
                     return crate::codegen::rust::literals::generate_literal(lit);
                 }
+                // NUM-DEFAULT-INT (ADR-0015): the semantic layer proved that nothing (no declared
+                // type, call, index, field or return) constrains this literal's class, so it is `int`.
+                // This fact wins over the legacy collector, whose answer for such classes is its own
+                // i32 default.
+                if self.current_ir_function.as_ref().is_some_and(|f| {
+                    crate::ir::numeric_defaults::literal_key(expr)
+                        .is_some_and(|k| f.default_int_literals.contains(&k))
+                }) {
+                    return format!("{}_i64", i);
+                }
                 use crate::type_inference::IntType;
                 // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer
                 // must beat struct-field width. Otherwise `total_triangles: (total / 3) as u64`
@@ -1105,7 +1116,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 from_assignment
                                     .or(from_struct_field)
                                     .or(from_return)
-                                    .unwrap_or("f32"),
+                                    .unwrap_or("f64"),
                             )
                         }
                     };

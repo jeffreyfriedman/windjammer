@@ -18,12 +18,11 @@ fn strukt(name: &str, fields: Vec<(&str, Value)>) -> Value {
     }))
 }
 
-fn field(v: &Value, name: &str) -> Option<Value> {
-    if let Value::Struct(s) = v {
-        return s.fields.iter().find(|(n, _)| &**n == name).map(|(_, v)| v.clone());
-    }
-    None
+/// The one place the interpreter reads the host environment on a program's behalf.
+pub(crate) fn host_var(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|e| e.to_string())
 }
+
 
 fn io_err(e: std::io::Error) -> Value {
     Value::err(Value::str(e.to_string()))
@@ -53,11 +52,6 @@ pub fn register(r: &mut Registry) {
     });
     r.func("assert_false", |_, a| {
         if matches!(arg(&a, 0, "assert_false")?, Value::Bool(false)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_false failed")) }
-    });
-    r.func("assert_contains", |it, a| {
-        let items = it.to_items(arg(&a, 0, "assert_contains")?)?;
-        let x = arg(&a, 1, "assert_contains")?;
-        if items.iter().any(|y| y.structural_eq(&x)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_contains failed: item not found")) }
     });
     r.func("assert_empty", |it, a| {
         if it.to_items(arg(&a, 0, "assert_empty")?)?.is_empty() { Ok(Value::Unit) } else { Err(panic_ctl("assert_empty failed")) }
@@ -113,18 +107,20 @@ pub fn register(r: &mut Registry) {
         let bytes: Vec<u8> = it.to_items(arg(&a, 0, "from_utf8_lossy")?)?.into_iter().filter_map(|v| if let Value::Int(n, _) = v { Some(n as u8) } else { None }).collect();
         Ok(Value::str(String::from_utf8_lossy(&bytes).to_string()))
     });
-    for n in ["HashMap::new", "BTreeMap::new", "HashMap::with_capacity", "BTreeMap::with_capacity"] {
-        r.func(n, |_, _| Ok(Value::Map(Rc::new(BTreeMap::new()))));
+    for n in ["HashMap::new", "HashMap::with_capacity"] {
+        r.func(n, |_, _| Ok(Value::hash_map(BTreeMap::new())));
     }
-    for n in ["HashSet::new", "BTreeSet::new", "HashSet::with_capacity"] {
-        r.func(n, |_, _| Ok(Value::Set(Rc::new(BTreeMap::new()))));
+    for n in ["BTreeMap::new", "BTreeMap::with_capacity"] {
+        r.func(n, |_, _| Ok(Value::btree_map(BTreeMap::new())));
     }
-    for n in ["HashMap::from", "BTreeMap::from"] {
-        r.func(n, |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashMap".into()))));
+    for n in ["HashSet::new", "HashSet::with_capacity"] {
+        r.func(n, |_, _| Ok(Value::hash_set(BTreeMap::new())));
     }
-    for n in ["HashSet::from", "BTreeSet::from"] {
-        r.func(n, |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashSet".into()))));
-    }
+    r.func("BTreeSet::new", |_, _| Ok(Value::btree_set(BTreeMap::new())));
+    r.func("HashMap::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashMap".into()))));
+    r.func("BTreeMap::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("BTreeMap".into()))));
+    r.func("HashSet::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("HashSet".into()))));
+    r.func("BTreeSet::from", |it, a| super::seq::collect_into(it.to_items(arg(&a, 0, "from")?)?, Some(&crate::parser::Type::Custom("BTreeSet".into()))));
     for t in ["Vec", "String", "HashMap", "HashSet", "BTreeMap", "BTreeSet", "VecDeque", "Option", "Result", "Box", "Rc", "Arc", "char", "bool", "str"] {
         r.type_name(t);
     }
@@ -188,11 +184,29 @@ pub fn register(r: &mut Registry) {
     });
     r.func("env::var", |_, a| {
         let n = arg_str(&a, 0, "env::var")?;
-        Ok(match std::env::var(&*n) {
+        Ok(match host_var(&n) {
             Ok(v) => Value::ok(Value::str(v)),
-            Err(e) => Value::err(Value::str(e.to_string())),
+            Err(e) => Value::err(Value::str(e)),
         })
     });
+    // `std::env` (Windjammer API): get/get_or/set/remove/current_dir/home_dir/temp_dir
+    r.func("env::get", |_, a| Ok(Value::option(host_var(&arg_str(&a, 0, "get")?).ok().map(Value::str))));
+    r.func("env::get_or", |_, a| {
+        Ok(Value::str(host_var(&arg_str(&a, 0, "get_or")?).unwrap_or_else(|_| arg_str(&a, 1, "get_or").map(|s| (*s).clone()).unwrap_or_default())))
+    });
+    r.func("env::set", |_, a| {
+        std::env::set_var(arg_str(&a, 0, "set")?.as_str(), arg_str(&a, 1, "set")?.as_str());
+        Ok(Value::Unit)
+    });
+    r.func("env::remove", |_, a| {
+        std::env::remove_var(arg_str(&a, 0, "remove")?.as_str());
+        Ok(Value::Unit)
+    });
+    r.func("env::current_dir", |_, _| {
+        Ok(Value::str(std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()))
+    });
+    r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
+    r.func("env::temp_dir", |_, _| Ok(Value::str(std::env::temp_dir().to_string_lossy().to_string())));
     r.func("fs::read_to_string", |_, a| {
         let p = arg_str(&a, 0, "fs::read_to_string")?;
         Ok(match std::fs::read_to_string(&*p) {
@@ -228,10 +242,28 @@ pub fn register(r: &mut Registry) {
     });
     r.func("fs::exists", |_, a| Ok(Value::Bool(std::path::Path::new(&*arg_str(&a, 0, "fs::exists")?).exists())));
     r.func("io::stdin", |_, _| Ok(strukt("Stdin", vec![])));
-    r.pure(Kind::Struct, "read_line", |_, v, a| {
+    // Free-function forms the compiled runtime provides (`windjammer_runtime::io`).
+    r.func("io::read_line", |_, _| {
+        let mut line = String::new();
+        Ok(match std::io::stdin().read_line(&mut line) {
+            Ok(_) => Value::ok(Value::str(line.trim_end())),
+            Err(e) => io_err(e),
+        })
+    });
+    r.func("io::read_to_string", |_, _| {
+        use std::io::Read;
+        let mut buf = String::new();
+        Ok(match std::io::stdin().read_to_string(&mut buf) {
+            Ok(_) => Value::ok(Value::str(buf)),
+            Err(e) => io_err(e),
+        })
+    });
+    r.pure(Kind::Struct, "read_line", |it, v, a| {
         if !matches!(v, Value::Struct(s) if &*s.name == "Stdin") {
             return Err(semantic("`read_line` is only available on stdin"));
         }
+        // like a terminal-attached Rust program: a prompt printed before reading must be visible
+        it.flush();
         let mut line = String::new();
         let n = std::io::stdin().read_line(&mut line).map_err(|e| semantic(e.to_string()))?;
         if let Some(Value::Ref(p)) = a.first() {
@@ -244,33 +276,6 @@ pub fn register(r: &mut Registry) {
         }
         Ok(Value::ok(Value::usize(n)))
     });
-    r.func("time::Instant::now", |_, _| {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        Ok(strukt("Instant", vec![("t", Value::float(t))]))
-    });
-    r.func("Instant::now", |_, _| {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        Ok(strukt("Instant", vec![("t", Value::float(t))]))
-    });
-    r.pure(Kind::Struct, "elapsed", |_, v, _| {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        let t = match field(v, "t") {
-            Some(Value::Float(f, _)) => f,
-            _ => now,
-        };
-        Ok(strukt("Duration", vec![("secs", Value::float((now - t).max(0.0)))]))
-    });
-    fn secs(v: &Value) -> f64 {
-        match field(v, "secs") {
-            Some(Value::Float(f, _)) => f,
-            _ => 0.0,
-        }
-    }
-    r.pure(Kind::Struct, "as_secs_f64", |_, v, _| Ok(Value::float(secs(v))));
-    r.pure(Kind::Struct, "as_secs", |_, v, _| Ok(Value::Int(secs(v) as i128, IntTy::U64)));
-    r.pure(Kind::Struct, "as_millis", |_, v, _| Ok(Value::Int((secs(v) * 1e3) as i128, IntTy::U128)));
-    r.pure(Kind::Struct, "as_micros", |_, v, _| Ok(Value::Int((secs(v) * 1e6) as i128, IntTy::U128)));
-    r.pure(Kind::Struct, "as_nanos", |_, v, _| Ok(Value::Int((secs(v) * 1e9) as i128, IntTy::U128)));
     let _ = call;
     register_std_modules(r);
 }
@@ -353,11 +358,12 @@ fn register_std_modules(r: &mut Registry) {
     fn now() -> std::time::Duration {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
     }
-    r.func("time::now_millis", |_, _| Ok(Value::Int(now().as_millis() as i128, IntTy::I64)));
-    r.func("time::now_unix", |_, _| Ok(Value::Int(now().as_secs() as i128, IntTy::I64)));
-    r.func("time::now_unix_nano", |_, _| Ok(Value::Int(now().as_nanos() as i128, IntTy::I64)));
-    r.func("time::sleep_millis", |_, a| {
-        std::thread::sleep(std::time::Duration::from_millis(arg_int(&a, 0, "sleep_millis")?.max(0) as u64));
+    let _ = now;
+    r.func("time::now_millis", |it, _| Ok(Value::Int((it.wall_ns() / 1_000_000) as i128, IntTy::I64)));
+    r.func("time::now_unix", |it, _| Ok(Value::Int((it.wall_ns() / 1_000_000_000) as i128, IntTy::I64)));
+    r.func("time::now_unix_nano", |it, _| Ok(Value::Int(it.wall_ns() as i128, IntTy::I64)));
+    r.func("time::sleep_millis", |it, a| {
+        it.sleep_ns(arg_int(&a, 0, "sleep_millis")?.max(0) as u64 * 1_000_000)?;
         Ok(Value::Unit)
     });
     macro_rules! unary_math {
@@ -472,8 +478,10 @@ pub fn assoc_numeric(it: &mut Interpreter, path: &str, args: &[Value]) -> Option
     match (ty, method) {
         ("String" | "string" | "str", "default") => Some(Ok(Value::str(""))),
         ("Vec" | "VecDeque", "default") => Some(Ok(Value::vec(vec![]))),
-        ("HashMap" | "BTreeMap", "default") => Some(Ok(Value::Map(Rc::new(BTreeMap::new())))),
-        ("HashSet" | "BTreeSet", "default") => Some(Ok(Value::Set(Rc::new(BTreeMap::new())))),
+        ("HashMap", "default") => Some(Ok(Value::hash_map(BTreeMap::new()))),
+        ("BTreeMap", "default") => Some(Ok(Value::btree_map(BTreeMap::new()))),
+        ("HashSet", "default") => Some(Ok(Value::hash_set(BTreeMap::new()))),
+        ("BTreeSet", "default") => Some(Ok(Value::btree_set(BTreeMap::new()))),
         ("bool", "default") => Some(Ok(Value::Bool(false))),
         ("Option", "default") => Some(Ok(Value::none())),
         _ => None,

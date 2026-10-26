@@ -1,0 +1,8 @@
+// spec: SPEC-LEX-001
+// expect: a
+// expect: b
+fn main() {
+    // println("never")
+    println("a") // trailing
+    println("b")
+}

@@ -8,6 +8,7 @@
     "code": "WJ0001",
     "example": "// Wrong:\nprintln!(\"{}\", total)  // 'total' not declared\n\n// Correct:\nlet total = 100\nprintln!(\"{}\", total)",
     "explanation": "The compiler cannot find a variable with this name in the current scope. This usually means the variable hasn't been declared yet, or it's out of scope.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0425"
     ],
@@ -27,6 +28,7 @@
     "code": "WJ0002",
     "example": "// Wrong:\nproces_data(items)  // Typo: 'proces' instead of 'process'\n\n// Correct:\nprocess_data(items)",
     "explanation": "The compiler cannot find a function with this name. This might be because the function hasn't been defined, or the module containing it hasn't been imported.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0425"
     ],
@@ -46,6 +48,7 @@
     "code": "WJ0003",
     "example": "// Wrong:\nlet x: int = \"42\"  // String, not int\n\n// Correct:\nlet x: int = \"42\".parse()  // Convert to int",
     "explanation": "The compiler expected one type but found another. In Windjammer, types must match exactly. You may need to convert between types explicitly.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0308"
     ],
@@ -64,6 +67,7 @@
     "code": "WJ0004",
     "example": "// Wrong:\nlet x = 10\nx = 20  // Error: x is immutable\n\n// Correct:\nlet mut x = 10\nx = 20  // Works!",
     "explanation": "Variables in Windjammer are immutable by default. To modify a variable, you must declare it as mutable using 'let mut'.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0384",
       "E0596"
@@ -83,6 +87,7 @@
     "code": "WJ0005",
     "example": "// Wrong:\nlet map: HashMapp<string, int> = ...  // Typo\n\n// Correct:\nlet map: HashMap<string, int> = ...",
     "explanation": "The compiler cannot find a type with this name. This might be a typo, or the type might be defined in a module that hasn't been imported.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0412"
     ],
@@ -102,6 +107,7 @@
     "code": "WJ0006",
     "example": "// Wrong:\nuse std::colections::HashMap  // Typo\n\n// Correct:\nuse std::collections::HashMap",
     "explanation": "The compiler cannot find a module with this name. Check that the module exists and is in the correct location.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0433"
     ],
@@ -121,6 +127,7 @@
     "code": "WJ0007",
     "example": "// Usually handled automatically, but if not:\nlet data = vec![1, 2, 3]\nprocess(data.clone())  // Explicit clone\nprintln!(\"{}\", data.len())",
     "explanation": "This value was moved to another location and can no longer be used here. In Windjammer, most values can only be used once unless they implement Copy. However, the auto-clone system should handle most cases automatically.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0382"
     ],
@@ -139,6 +146,7 @@
     "code": "WJ0008",
     "example": "// Wrong:\nlet mut x = 5\nlet y = &x\nlet z = &mut x  // Error: already borrowed\n\n// Correct:\nlet mut x = 5\nlet y = &x\n// Use y first, then borrow mutably\nlet z = &mut x",
     "explanation": "You're trying to borrow a value as mutable, but it's already borrowed as immutable, or vice versa. Windjammer enforces Rust's borrowing rules to ensure memory safety.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0502",
       "E0503"
@@ -158,6 +166,7 @@
     "code": "WJ0009",
     "example": "// Wrong:\nlet user = User {\n    name: \"Alice\"\n    // Missing 'age' field\n}\n\n// Correct:\nlet user = User {\n    name: \"Alice\",\n    age: 30\n}",
     "explanation": "When creating a struct, you must provide values for all fields.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0063"
     ],
@@ -175,6 +184,7 @@
     "code": "WJ0010",
     "example": "// Wrong:\nmatch value {\n    Some(x) => println!(\"{}\", x)\n    // Missing None case\n}\n\n// Correct:\nmatch value {\n    Some(x) => println!(\"{}\", x),\n    None => println!(\"No value\")\n}",
     "explanation": "Your match expression doesn't cover all possible cases. Windjammer requires all patterns to be handled for safety.",
+    "maturity": "Proven",
     "rust_codes": [
       "E0004"
     ],
@@ -183,5 +193,40 @@
       "Add a wildcard pattern: _ => ..."
     ],
     "title": "Pattern match not exhaustive"
+  },
+  "WJ0160": {
+    "causes": [
+      "Returning a scratch string or a handle of a local arena",
+      "Pushing an arena value into a collection that outlives the arena",
+      "Reading a handle after `reset()`"
+    ],
+    "code": "WJ0160",
+    "example": "// Wrong:\nfn label() -> string {\n    let s = Scratch::new()\n    return s.str(\"x\")\n}\n\n// Correct:\nfn label() -> string {\n    let s = Scratch::new()\n    return s.str(\"x\").to_string()\n}",
+    "explanation": "A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function that declares the arena, stored in a variable, field or collection declared outside the arena's scope, used as the value of the block that declares the arena, or used after the arena's `reset()`.",
+    "maturity": "HighConfidence",
+    "rust_codes": [
+      "E0597",
+      "E0505"
+    ],
+    "solutions": [
+      "Copy the value out (`.to_string()`, `.to_vec()`) before the arena goes away",
+      "Declare the arena in the caller and pass it in",
+      "Allocate again after `reset()`, or use `try_get` for a handle that may be stale"
+    ],
+    "title": "Arena value escapes its arena"
+  },
+  "WJ0161": {
+    "causes": [
+      "`use std::arena` with a compiler built without `unstable_arenas`"
+    ],
+    "code": "WJ0161",
+    "example": null,
+    "explanation": "Arenas (ADR-0025) are behind the compiler feature `unstable_arenas`.",
+    "maturity": "Proven",
+    "rust_codes": [],
+    "solutions": [
+      "Build the compiler with `cargo build --features unstable_arenas`"
+    ],
+    "title": "`std::arena` is unstable"
   }
 }

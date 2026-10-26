@@ -4,7 +4,7 @@
 //! - Type casts (expr as Type)
 //! - Unary operators (!expr, -expr, *expr, &expr, &mut expr)
 
-use crate::parser::{Expression, OwnershipHint, Type};
+use crate::parser::{Expression, Literal, OwnershipHint, Type, UnaryOp};
 
 use super::{operators, CodeGenerator};
 
@@ -46,6 +46,17 @@ impl<'ast> CodeGenerator<'ast> {
         // because `as` has higher precedence than arithmetic in Rust:
         // `a + b as usize` is parsed as `a + (b as usize)`, not `(a + b) as usize`
         let mut expr_str = match expr {
+            // `-1 as u8`: Rust would type the literal from the cast target (E0600 on unsigned);
+            // Windjammer's unsuffixed literal is `int` (i64), so the operand is `(-1_i64)`.
+            Expression::Unary {
+                op: UnaryOp::Neg,
+                operand:
+                    Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    },
+                ..
+            } => format!("(-{}_i64)", n),
             Expression::Binary { .. } => {
                 format!("({})", self.generate_expression(expr))
             }
@@ -159,6 +170,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // `&v[a..b]`: the desugared slice already generates `&v[a..b]`.
+        if matches!(op, crate::parser::UnaryOp::Ref)
+            && matches!(operand, Expression::MethodCall { method, arguments, .. } if method == "slice" && arguments.len() == 2)
+        {
+            return self.generate_expression(operand);
+        }
+
         let op_str = operators::unary_op_to_rust(op);
 
         // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index
@@ -188,7 +206,8 @@ impl<'ast> CodeGenerator<'ast> {
         // CRITICAL: Preserve parentheses for binary expressions in unary context
         // !(a || b) should generate !(a || b), not !a || b
         // Binary operators have lower precedence than unary operators, so we need parens
-        let needs_parens = matches!(operand, Expression::Binary { .. });
+        // A cast operand too: `-(x as i64)` must not become `-x as i64` (`as` binds looser).
+        let needs_parens = matches!(operand, Expression::Binary { .. } | Expression::Cast { .. });
 
         if needs_parens {
             format!("{}({})", op_str, operand_str)

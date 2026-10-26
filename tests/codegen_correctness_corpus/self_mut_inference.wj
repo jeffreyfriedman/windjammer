@@ -1,0 +1,43 @@
+// `impl Iterator::next(self)`, recursive mutators and `self.helper(..)?` all infer `&mut self`.
+// expect: 6
+// expect: 3
+// expect: Ok(5)
+pub struct Count { n: int, limit: int }
+impl Iterator for Count {
+    type Item = int
+    fn next(self) -> Option<int> {
+        if self.n < self.limit {
+            self.n += 1
+            Some(self.n)
+        } else {
+            None
+        }
+    }
+}
+pub struct Tree { depth: int, hits: int }
+impl Tree {
+    pub fn walk(self, d: int) {
+        if d > 0 {
+            self.hits += 1
+            self.walk(d - 1)
+        }
+    }
+    fn change(self, d: int) -> Result<int, string> {
+        self.depth = d
+        Ok(d)
+    }
+    pub fn go(self, d: int) -> Result<int, string> {
+        let r = self.change(d)?
+        Ok(r)
+    }
+}
+fn main() {
+    let mut c = Count { n: 0, limit: 3 }
+    let mut total = 0
+    while let Some(x) = c.next() { total += x }
+    println("${total}")
+    let mut t = Tree { depth: 0, hits: 0 }
+    t.walk(3)
+    println("${t.hits}")
+    println("${t.go(5):?}")
+}

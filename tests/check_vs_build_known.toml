@@ -1,0 +1,4 @@
+# check-vs-build differential findings (tests/check_build_differential_test.rs). May only shrink.
+# class.operator = count over the generated seeds; CHECK_DIFF_BLESS=1 rewrites after an improvement.
+
+[known]

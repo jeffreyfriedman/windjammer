@@ -46,7 +46,7 @@ impl<'ast> CodeGenerator<'ast> {
         param: &Parameter,
         analyzed: &AnalyzedFunction<'ast>,
     ) -> String {
-        let type_str = self.type_to_rust(&param.type_);
+        let type_str = self.std_comparison_formal_type(self.type_to_rust(&param.type_));
         let auto_needs_mut = !param.is_mutable
             && (self.variable_needs_mut(&param.name)
                 || analyzed.mutated_parameters.contains(&param.name)
@@ -137,6 +137,9 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.remove(&param.name);
                     self.emitted_rust_ref_formals.remove(&param.name);
                     return self.format_trait_impl_owned_formal(param, analyzed);
+                }
+                if let Some(formal) = self.formal_from_ir_owned(param, param_idx, func, unused_params) {
+                    return formal;
                 }
                 if param.name != "self"
                     && self.param_has_forward_ref_keep_owned(
@@ -597,7 +600,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let converged_analyzer_borrow = matches!(
                     analyzed.inferred_ownership.get(&param.name),
                     Some(OwnershipMode::Borrowed)
-                ) || analyzed.str_ref_optimizable_params.contains(&param.name);
+                ) || self.str_ref_optimizable_param(analyzed, &param.name);
 
                 let field_move_forces_owned = self.param_has_field_or_index_move_binding(
                     func.body.as_slice(),
@@ -1045,7 +1048,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // callees do not already expect a borrow (fs AsRef<Path> demotes).
                 let asref_runtime_keep_owned = crate::codegen::rust::types::is_windjammer_text_type(
                     &param.type_,
-                ) && !analyzed.str_ref_optimizable_params.contains(&param.name)
+                ) && !self.str_ref_optimizable_param(analyzed, &param.name)
                     && self.param_asref_runtime_forces_owned_formal(
                     func.body.as_slice(),
                     &param.name,
@@ -1653,7 +1656,7 @@ impl<'ast> CodeGenerator<'ast> {
                             return format!("{}: {}", param.name, type_str);
                         }
                         let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
-                            || analyzed.str_ref_optimizable_params.contains(&param.name))
+                            || self.str_ref_optimizable_param(analyzed, &param.name))
                             && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
                                 func.body.as_slice(),
                                 &param.name,
@@ -1664,9 +1667,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !self.in_trait_impl
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && (!self.function_return_is_text(func)
-                                || analyzed
-                                    .str_ref_optimizable_params
-                                    .contains(&param.name))
+                                || self.str_ref_optimizable_param(analyzed, &param.name))
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
@@ -2031,7 +2032,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         if param.name != "self" {
                             let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
-                                || analyzed.str_ref_optimizable_params.contains(&param.name))
+                                || self.str_ref_optimizable_param(analyzed, &param.name))
                                 && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
                                     func.body.as_slice(),
                                     &param.name,
@@ -2042,9 +2043,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !self.in_trait_impl
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && (!self.function_return_is_text(func)
-                                    || analyzed
-                                        .str_ref_optimizable_params
-                                        .contains(&param.name))
+                                    || self.str_ref_optimizable_param(analyzed, &param.name))
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
@@ -3135,7 +3134,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         func,
                                     );
                             let str_ref_ok = (self.str_ref_optimized_params.contains(&param.name)
-                                || analyzed.str_ref_optimizable_params.contains(&param.name)
+                                || self.str_ref_optimizable_param(analyzed, &param.name)
                                 || format_only_string
                                 || self.param_only_forwards_to_borrowed_text_callees(
                                     func.body.as_slice(),
@@ -3831,6 +3830,54 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             })
             .collect()
+    }
+
+    /// ADR-0001: when the IR solver decided a non-Copy, non-text parameter is owned, the formal is
+    /// owned. The body-walking heuristics below can only demote it to a borrow, which is wrong for
+    /// values the body moves (stored in a field, returned, passed to a consuming sink).
+    fn formal_from_ir_owned(
+        &mut self,
+        param: &crate::parser::Parameter<'ast>,
+        param_idx: usize,
+        func: &FunctionDecl<'ast>,
+        unused_params: &HashSet<String>,
+    ) -> Option<String> {
+        use crate::analyzer::OwnershipMode;
+        if param.name == "self"
+            || param.pattern.is_some()
+            || matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
+            || (self.is_type_copy(&param.type_) && !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_))
+            || self.ir_param_ownership_definitive(&param.name) != Some(OwnershipMode::Owned)
+        {
+            return None;
+        }
+        // Text keeps the `impl Into<String>` builder formal where it applies; otherwise IR-owned is `String`.
+        // Pub free-fn text formals are registry-seeded Owned (multipass ABI lock) unless the param flows
+        // as a value into a `let`; that seed is not a solver decision, so the body-based demotion stays.
+        if crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_)
+            && (!self.ir_param_owned_by_solver(&param.name)
+                || (func.is_pub
+                && func.parent_type.is_none()
+                && !crate::analyzer::Analyzer::param_is_branch_value_of_let(&param.name, &func.body))
+                || self.param_should_emit_into_string_formal(func, param, true)
+                || self.param_should_emit_into_string_formal(func, param, false))
+        {
+            return None;
+        }
+        self.inferred_borrowed_params.remove(&param.name);
+        self.inferred_mut_borrowed_params.remove(&param.name);
+        self.emitted_rust_ref_formals.remove(&param.name);
+        self.str_ref_optimized_params.remove(&param.name);
+        let user_arg_idx = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .position(|p| p.name == param.name)
+            .unwrap_or(param_idx);
+        self.current_fn_emitted_mut_arg_indices.remove(&user_arg_idx);
+        let mut_prefix = if param.is_mutable || self.variable_needs_mut(&param.name) { "mut " } else { "" };
+        let name = if unused_params.contains(&param.name) && !func.is_pub { format!("_{}", param.name) } else { param.name.clone() };
+        Some(format!("{mut_prefix}{name}: {}", self.type_to_rust(&param.type_)))
     }
 
     /// Pub builder/setter formals that store owned WJ `string` into a custom return payload.
@@ -4812,7 +4859,7 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         // Phase-2 &str lowering already validated this param — beat stale mutation flags
         // from match/get patterns (`lookup_borrowed` key used only in `map.get(key)`).
-        if analyzed.str_ref_optimizable_params.contains(param_name) {
+        if self.str_ref_optimizable_param(analyzed, param_name) {
             return false;
         }
         if matches!(ownership_hint, Some(OwnershipMode::MutBorrowed)) {

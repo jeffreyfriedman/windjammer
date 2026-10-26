@@ -3,13 +3,14 @@
 use super::collect::{Body, BodyCode, Collected};
 use super::def::DefKind;
 use super::paths::Ctx;
-use super::res::{CallKind, CallResolution, ExprKey, Reason, Res};
+use super::res::{CallKind, CallResolution, ExprKey, FnRef, Reason, Res};
 use crate::parser::ast::core::{EnumPatternBinding, Expression, MatchArm, Pattern, Statement};
 use std::collections::HashSet;
 
 /// Resolve every call in every collected body.
-pub fn resolve_bodies(c: &Collected<'_>) -> Vec<CallResolution> {
+pub fn resolve_bodies(c: &Collected<'_>) -> (Vec<CallResolution>, Vec<FnRef>) {
     let mut out = Vec::new();
+    let mut refs = Vec::new();
     for body in &c.bodies {
         let generics: Vec<String> = body.generics.clone();
         let ctx = Ctx {
@@ -24,10 +25,11 @@ pub fn resolve_bodies(c: &Collected<'_>) -> Vec<CallResolution> {
             body,
             locals: vec![HashSet::new()],
             out: &mut out,
+            refs: &mut refs,
         };
         w.run();
     }
-    out
+    (out, refs)
 }
 
 struct Walker<'w, 'c, 'a> {
@@ -36,6 +38,7 @@ struct Walker<'w, 'c, 'a> {
     body: &'w Body<'a>,
     locals: Vec<HashSet<String>>,
     out: &'w mut Vec<CallResolution>,
+    refs: &'w mut Vec<FnRef>,
 }
 
 impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
@@ -144,7 +147,23 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             | Statement::Thread { body, .. }
             | Statement::Async { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
-            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+            Statement::Use { path, alias, .. } => self.bind_body_use(path, alias.as_deref()),
+            Statement::Break { .. } | Statement::Continue { .. } => {}
+        }
+    }
+
+    /// `use a::b::f` / `use a::b::{f, g}` / `use a::f as h` inside a body: the names are in scope for the rest of the block.
+    fn bind_body_use(&mut self, path: &[String], alias: Option<&str>) {
+        let joined = path.join("::");
+        if let Some((_, names)) = joined.split_once("::{") {
+            for n in names.trim_end_matches('}').split(',').map(str::trim).filter(|n| !n.is_empty()) {
+                let local = n.rsplit_once(" as ").map_or(n, |(_, a)| a);
+                self.bind(local);
+            }
+        } else if let Some(last) = alias.or_else(|| joined.rsplit("::").next()) {
+            if last != "*" {
+                self.bind(last);
+            }
         }
     }
 
@@ -210,6 +229,7 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
                 w.expr(body);
             }),
             Expression::Block { statements, .. } => self.block(statements),
+            Expression::Identifier { name, .. } => self.fn_ref(e, name),
             _ => self.expr_children(e),
         }
     }
@@ -255,6 +275,24 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
         }
     }
 
+    /// A free function or `mod::f` used as a value.
+    fn fn_ref(&mut self, e: &Expression<'_>, name: &str) {
+        if self.is_local(name) {
+            return;
+        }
+        let res = if name.contains("::") {
+            let segs: Vec<&str> = name.split("::").collect();
+            self.c.resolve_path(&self.ctx, &segs)
+        } else {
+            self.c.resolve_free(&self.ctx, name)
+        };
+        if let Res::Def(id) = res {
+            if matches!(self.c.defs.get(id).kind, DefKind::Fn | DefKind::ExternFn) {
+                self.refs.push(FnRef { enclosing: self.body.owner, def: id, location: e.location() });
+            }
+        }
+    }
+
     fn push(&mut self, e: &Expression<'_>, kind: CallKind, callee: String, argc: usize, res: Res) {
         self.out.push(CallResolution {
             key: ExprKey(e as *const Expression<'_> as usize),
@@ -265,6 +303,8 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             module: self.body.module,
             location: e.location(),
             res,
+            str_args: literal_string_args(e),
+            ident_args: ident_args(e),
         });
     }
 
@@ -326,4 +366,33 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
         };
         self.push(call, CallKind::Method, method.to_string(), argc, res);
     }
+}
+
+/// Plain string-literal arguments of a call expression (`None` for anything computed or interpolated).
+fn literal_string_args(e: &Expression<'_>) -> Vec<Option<String>> {
+    use crate::parser::ast::literals::Literal;
+    let args = match e {
+        Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => arguments,
+        _ => return Vec::new(),
+    };
+    args.iter()
+        .map(|(_, a)| match a {
+            Expression::Literal { value: Literal::String(s), .. } if !s.contains("${") => Some(s.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Plain identifier arguments of a call expression.
+fn ident_args(e: &Expression<'_>) -> Vec<Option<String>> {
+    let args = match e {
+        Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => arguments,
+        _ => return Vec::new(),
+    };
+    args.iter()
+        .map(|(_, a)| match a {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            _ => None,
+        })
+        .collect()
 }

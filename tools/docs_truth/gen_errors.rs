@@ -10,6 +10,8 @@ pub fn known_codes() -> Vec<String> {
     let mut v: Vec<String> = get_registry().all_codes().iter().map(|c| c.code.clone()).collect();
     v.extend(ErrorCatalog::new().errors.keys().cloned());
     v.extend(LINT_CODES.iter().map(|l| l.code.to_string()));
+    // The diagnostics registry (`wj check` / `wj explain`): WJ#### front-end codes and its W#### lints.
+    v.extend(windjammer::diagnostics::codes::all().map(|c| c.code.to_string()));
     v.sort();
     v.dedup();
     v

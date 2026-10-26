@@ -1,0 +1,6 @@
+// spec: SPEC-PIPE-002
+// expect: 5 4
+fn sub(a: int, b: int) -> int { a - b }
+fn main() {
+    println("${5 |> sub(10, _)} ${5 |> sub(_, 1)}")
+}

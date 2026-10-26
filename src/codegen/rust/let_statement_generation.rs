@@ -58,7 +58,10 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(base);
         };
 
+        // The function's return element type only describes a local that is itself returned.
+        let returned_local = var_name.is_some_and(|vn| self.local_is_returned(vn));
         let elem_from_return = match &self.current_function_return_type {
+            _ if !returned_local => None,
             Some(Type::Vec(inner))
                 if crate::type_classification::is_single_elem_iterable_base(collection_name) =>
             {
@@ -86,6 +89,118 @@ impl<'ast> CodeGenerator<'ast> {
         Some(base)
     }
 
+    /// A collection `let` ascription is emitted only for concrete types whose names resolve in this file.
+    fn collection_ascription_is_valid(&self, ty: &Type) -> bool {
+        !crate::codegen::rust::types::type_contains_unbound_generic_param(ty) && self.type_names_are_in_file_scope(ty)
+    }
+
+    /// False when `ty` names a non-std type that this file neither declares nor imports: an annotation
+    /// spelling it would not resolve (`let rules: Vec<Rule>` in a test that never imports `Rule`).
+    pub(in crate::codegen::rust) fn type_names_are_in_file_scope(&self, ty: &Type) -> bool {
+        if self.idiom.file_scope_is_open {
+            return true;
+        }
+        let named_ok = |n: &str| {
+            let leaf = crate::type_classification::type_name_leaf(n);
+            n.contains("::")
+                || self.idiom.file_scope_type_names.contains(leaf)
+                // Library modules import the crate types their annotations name (`format_auto_super_type_imports`).
+                || (self.is_module && self.type_defining_modules.contains_key(leaf))
+                || leaf.chars().count() <= 1
+                || leaf.chars().next().is_some_and(char::is_lowercase)
+                || crate::type_classification::is_set_type_name(leaf)
+                || crate::type_classification::is_map_type_name(leaf)
+                || crate::type_classification::is_single_elem_iterable_base(leaf)
+                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type(leaf).is_some()
+                || matches!(
+                    leaf,
+                    "String" | "Box" | "Rc" | "Arc" | "Weak" | "Mutex" | "RwLock" | "RefCell" | "Cell" | "Option"
+                        | "Result" | "Vec" | "Self" | "Duration" | "Instant"
+                )
+        };
+        match ty {
+            Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Reference(inner)
+            | Type::MutableReference(inner)
+            | Type::Array(inner, _) => self.type_names_are_in_file_scope(inner),
+            Type::Tuple(items) => items.iter().all(|t| self.type_names_are_in_file_scope(t)),
+            Type::Parameterized(base, args) => {
+                named_ok(base) && args.iter().all(|a| self.type_names_are_in_file_scope(a))
+            }
+            Type::Custom(n) => named_ok(n),
+            _ => true,
+        }
+    }
+
+    /// `let mut xs = Vec::new()` for a local that is not returned: the function's return type says nothing about it,
+    /// so the `Vec::<Return>::new()` turbofish must not be emitted (the element type follows from the pushes).
+    fn unreturned_empty_collection_local(&self, var_name: Option<&str>, value: &Expression<'ast>) -> bool {
+        var_name.is_some_and(|vn| !self.local_is_returned(vn))
+            && crate::codegen::rust::call_site_borrow::expression_is_stdlib_empty_default_constructor(value)
+    }
+
+    /// `let _empty = Vec::new()` that nothing reads has no element type to infer (E0282): `Some(Some(Vec<()>))`
+    /// defaults it. `None` when the binding has a type, is read, or is not an empty-collection constructor.
+    fn unused_empty_collection_default(
+        &self,
+        type_: &Option<Type>,
+        value: &Expression<'ast>,
+        location: &Option<crate::source_map::Location>,
+    ) -> Option<Option<Type>> {
+        let unused = location.as_ref().is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+        (type_.is_none() && unused).then(|| Self::unused_empty_collection_default_type(value)).filter(Option::is_some)
+    }
+
+    /// `Vec<()>` / `HashMap<(), ()>` for an empty-collection constructor call (`Vec::new()`, `HashMap::new()`, ...).
+    fn unused_empty_collection_default_type(value: &Expression<'ast>) -> Option<Type> {
+        let Expression::Call { function, arguments, .. } = value else { return None };
+        if !arguments.is_empty() {
+            return None;
+        }
+        let name = match &**function {
+            Expression::FieldAccess { object, .. } => match &**object {
+                Expression::Identifier { name, .. } => name.as_str(),
+                _ => return None,
+            },
+            Expression::Identifier { name, .. } => name.rsplit_once("::")?.0,
+            _ => return None,
+        };
+        let unit = || Type::Tuple(Vec::new());
+        match name {
+            "Vec" => Some(Type::Vec(Box::new(unit()))),
+            "HashMap" | "BTreeMap" => Some(Type::Parameterized(name.to_string(), vec![unit(), unit()])),
+            "HashSet" | "BTreeSet" | "VecDeque" => Some(Type::Parameterized(name.to_string(), vec![unit()])),
+            _ => None,
+        }
+    }
+
+    /// True when `name` is the tail expression of the current function body or the value of a `return`.
+    fn local_is_returned(&self, name: &str) -> bool {
+        fn is_name(e: &Expression<'_>, name: &str) -> bool {
+            matches!(e, Expression::Identifier { name: n, .. } if n == name)
+        }
+        fn has_return(stmts: &[&Statement<'_>], name: &str) -> bool {
+            stmts.iter().any(|st| match st {
+                Statement::Return { value: Some(v), .. } => is_name(v, name),
+                Statement::If { then_block, else_block, .. } => {
+                    has_return(then_block, name) || else_block.as_ref().is_some_and(|b| has_return(b, name))
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                    has_return(body, name)
+                }
+                _ => false,
+            })
+        }
+        let body: Vec<&Statement<'_>> = if self.full_function_body_snapshot.is_empty() {
+            self.current_function_body.iter().copied().collect()
+        } else {
+            self.full_function_body_snapshot.iter().copied().collect()
+        };
+        matches!(body.last(), Some(Statement::Expression { expr, .. }) if is_name(expr, name))
+            || has_return(&body, name)
+    }
+
     /// Generate code for a let statement
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_let_statement(
@@ -98,6 +213,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let mut output = self.indent();
         output.push_str("let ");
+
+        let defaulted_type = self.unused_empty_collection_default(type_, value, location);
+        let type_ = defaulted_type.as_ref().unwrap_or(type_);
 
         // Check if we need &mut for index access on borrowed fields
         // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
@@ -515,7 +633,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                if suppress_turbofish_here {
+                if suppress_turbofish_here || Self::string_collect_rhs(t, value) {
                     self.collect_target_type = Some(t.clone());
                 }
 
@@ -568,12 +686,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
+                    self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
@@ -596,9 +709,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && var_name.is_some_and(|vn| {
                         self.local_var_types.get(vn).is_some_and(|ty| {
                             matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))
-                                && !crate::codegen::rust::types::type_contains_unbound_generic_param(
-                                    ty,
-                                )
+                                && self.collection_ascription_is_valid(ty)
                         })
                     });
                 if needs_collection_ascription_sv {
@@ -608,7 +719,7 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
-                } else if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
+                } else if mutable && !self.solver_pins_int_literal_init(value) && Self::mut_let_rhs_is_return_width_counter(value) {
                     // later `x = u32` assign beats return-width i64 for untyped counters.
                     let later_peer = var_name
                         .and_then(|vn| self.mut_int_local_peer_width_from_later_assigns(vn));
@@ -731,7 +842,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = true;
 
                 let old_suppress = self.suppress_collection_turbofish;
-                if needs_collection_ascription_sv {
+                if needs_collection_ascription_sv || self.unreturned_empty_collection_local(var_name, value) {
                     self.suppress_collection_turbofish = true;
                 }
 
@@ -750,7 +861,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.local_var_types.get(vn),
                         Some(Type::Reference(_) | Type::MutableReference(_))
                     );
-                    if !rhs_is_ref {
+                    if !rhs_is_ref && !self.solver_pins_int_literal_init(value) {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
                             // `Vec<u64>` / `&Vec<u64>` is a collection formal. The integer
                             // suffix peer is the element; the binding stays `Vec<…>`.
@@ -769,7 +880,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
+                if mutable && !self.solver_pins_int_literal_init(value) && Self::mut_let_rhs_is_return_width_counter(value) {
                     // later u32 assign peer beats return i64 for `let mut x = 0`.
                     // P3.538: later `prev = m.version` (WJ int) beats i32 coord sentinel.
                     if let Some(vn) = var_name {
@@ -868,9 +979,8 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                if self.assignment_int_target_type.is_none()
-                    && self.function_prefers_i32_coord_locals()
-                {
+                if self.assignment_int_target_type.is_none() && self.solver_pins_int_literal_init(value) { self.stamp_solver_int_binding(var_name, value); }
+                if self.assignment_int_target_type.is_none() && self.function_prefers_i32_coord_locals() {
                     // negative int literal inits stay WJ `int` (i64), even in i32 builders.
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
                         self.assignment_int_target_type = Some(Type::Int);
@@ -957,7 +1067,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // String literals assigned to variables should become String (not &str)
                 // because they may be passed to functions expecting String later.
                 // This is safe because String auto-borrows to &str when needed.
+                let prev_owned_ctx = self.in_owned_value_context;
+                self.in_owned_value_context |= self.expression_yields_static_str(value);
                 let mut value_str = self.generate_expression(value);
+                self.in_owned_value_context = prev_owned_ctx;
                 self.assignment_int_target_type = prev_assign_int;
                 if u32_return_scan_counter && value_str.ends_with("_usize") {
                     value_str = value_str.replace("_usize", "_u32");
@@ -1026,12 +1139,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // P3.325: demoted `&str` formal `.clone()` is still `&str` — own it.
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
+                    self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
@@ -1079,7 +1187,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                if suppress_turbofish_here {
+                if suppress_turbofish_here || Self::string_collect_rhs(t, value) {
                     self.collect_target_type = Some(t.clone());
                 }
 
@@ -1127,7 +1235,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let needs_collection_ascription = var_name.is_some_and(|vn| {
                     self.local_var_types.get(vn).is_some_and(|ty| {
                         matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))
-                            && !crate::codegen::rust::types::type_contains_unbound_generic_param(ty)
+                            && self.collection_ascription_is_valid(ty)
                     })
                 });
                 if needs_collection_ascription {
@@ -1148,7 +1256,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = true;
 
                 let old_suppress = self.suppress_collection_turbofish;
-                if needs_collection_ascription {
+                if needs_collection_ascription || self.unreturned_empty_collection_local(var_name, value) {
                     self.suppress_collection_turbofish = true;
                 }
 
@@ -1215,12 +1323,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
+                    self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
@@ -1504,5 +1607,88 @@ impl<'ast> CodeGenerator<'ast> {
         };
         matches!((bound, init), (Some(b), Some(i)) if b == i)
             && (mutable || auto_needs_mut || matches!(pattern, Pattern::MutBinding(_)))
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// True when `value` is a bare integer literal (optionally negated) whose class the semantic
+    /// layer resolved to `int`: the numeric solver says i64 (a typed `int` field, parameter or
+    /// declared local is in its class) or NUM-DEFAULT-INT proves nothing constrains it.
+    pub(super) fn solver_pins_int_literal_init(&self, value: &Expression<'ast>) -> bool {
+        // `vec![1, 2, 3]` / `[1, 2, 3]`: the elements share one class; ask about the first.
+        let value = match value {
+            Expression::MacroInvocation { name, args, is_repeat: false, .. }
+                if name == "vec" && !args.is_empty() =>
+            {
+                args[0]
+            }
+            Expression::Array { elements, .. } if !elements.is_empty() => elements[0],
+            other => other,
+        };
+        let literal = match value {
+            Expression::Literal { value: Literal::Int(_), .. } => value,
+            Expression::Unary { op: crate::parser::UnaryOp::Neg, operand, .. }
+                if matches!(&**operand, Expression::Literal { value: Literal::Int(_), .. }) =>
+            {
+                *operand
+            }
+            _ => return false,
+        };
+        let solved_i64 = self
+            .numeric_inference
+            .as_ref()
+            .is_some_and(|ni| ni.get_int_type(literal) == crate::type_inference::IntType::I64);
+        let semantic_default = self.current_ir_function.as_ref().is_some_and(|f| {
+            crate::ir::numeric_defaults::literal_key(literal)
+                .is_some_and(|k| f.default_int_literals.contains(&k))
+        });
+        solved_i64 || semantic_default
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The solver resolved this literal init to `int`: the peer scans are width heuristics and must
+    /// not override it (C4, D-WIDTH-OWNERS). A scalar binding *is* an `int`; for a collection
+    /// literal only its elements are.
+    fn stamp_solver_int_binding(&mut self, name: Option<&str>, value: &Expression<'ast>) {
+        self.assignment_int_target_type = Some(Type::Int);
+        if let (Some(name), true) = (name, matches!(value, Expression::Literal { .. } | Expression::Unary { .. })) {
+            self.local_var_types.insert(name.to_string(), Type::Int);
+            self.codegen_i32_binding_names.remove(name);
+        }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `let mut body = line` where `line` is a `string` parameter emitted as `&str`: the local is
+    /// assigned owned strings later, so it must be an owned `String` at the binding (`line.to_string()`).
+    /// `.clone()` of such a parameter is still a `&str`, so it is converted for every binding.
+    pub(in crate::codegen::rust) fn own_borrowed_text_param_binding(
+        &self,
+        value_str: &mut String,
+        value: &Expression<'ast>,
+        is_mut: bool,
+    ) {
+        string_utilities::rewrite_borrowed_str_clone_to_to_string(
+            value_str,
+            value,
+            &self.emitted_rust_ref_formals,
+            &self.current_function_params,
+        );
+        let Expression::Identifier { name, .. } = value else { return };
+        if !string_utilities::demoted_wj_text_param_emits_rust_str_ref_extended(
+            name,
+            &self.emitted_rust_ref_formals,
+            Some(&self.str_ref_optimized_params),
+            Some(&self.inferred_borrowed_params),
+            &self.current_function_params,
+        ) {
+            return;
+        }
+        if value_str.ends_with(".clone()") {
+            *value_str = value_str.replacen(".clone()", ".to_string()", 1);
+        } else if is_mut && value_str.as_str() == name.as_str() {
+            *value_str = format!("{name}.to_string()");
+        }
     }
 }

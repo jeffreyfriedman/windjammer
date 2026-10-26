@@ -1,0 +1,385 @@
+{
+  "effects": [
+    {
+      "description": "Read from the filesystem",
+      "name": "fs_read"
+    },
+    {
+      "description": "Write to the filesystem",
+      "name": "fs_write"
+    },
+    {
+      "description": "Send data over the network",
+      "name": "net_egress"
+    },
+    {
+      "description": "Receive data from the network",
+      "name": "net_ingress"
+    },
+    {
+      "description": "Spawn a child process",
+      "name": "process_spawn"
+    },
+    {
+      "description": "Read environment variables",
+      "name": "env_read"
+    },
+    {
+      "description": "Write environment variables",
+      "name": "env_write"
+    },
+    {
+      "description": "Call foreign function interface",
+      "name": "ffi"
+    }
+  ],
+  "maturity_levels": [
+    {
+      "description": "Proven correct by constraint solver",
+      "level": "Proven"
+    },
+    {
+      "description": "Rare false positives",
+      "level": "HighConfidence"
+    },
+    {
+      "description": "Known edge cases, may need review",
+      "level": "Heuristic"
+    },
+    {
+      "description": "Best-effort, informational",
+      "level": "Hint"
+    }
+  ],
+  "sanitizers": [],
+  "taint_sources": [
+    {
+      "source_kind": "HttpRequestBody",
+      "var": "Request::body_json"
+    },
+    {
+      "source_kind": "HttpRequestBody",
+      "var": "std::Request::body_json"
+    },
+    {
+      "source_kind": "HttpRequestBody",
+      "var": "Request::body_string"
+    },
+    {
+      "source_kind": "HttpRequestBody",
+      "var": "std::Request::body_string"
+    },
+    {
+      "source_kind": "HttpRequestHeader",
+      "var": "Request::header"
+    },
+    {
+      "source_kind": "HttpRequestHeader",
+      "var": "std::Request::header"
+    },
+    {
+      "source_kind": "HttpRequestQuery",
+      "var": "Request::query_param"
+    },
+    {
+      "source_kind": "HttpRequestQuery",
+      "var": "std::Request::query_param"
+    },
+    {
+      "source_kind": "HttpRequestHeader",
+      "var": "ServerRequest::header"
+    },
+    {
+      "source_kind": "HttpRequestHeader",
+      "var": "std::ServerRequest::header"
+    },
+    {
+      "source_kind": "HttpRequestQuery",
+      "var": "ServerRequest::query"
+    },
+    {
+      "source_kind": "HttpRequestQuery",
+      "var": "std::ServerRequest::query"
+    },
+    {
+      "source_kind": "HttpRequestQuery",
+      "var": "ServerRequest::query_param"
+    },
+    {
+      "source_kind": "HttpRequestQuery",
+      "var": "std::ServerRequest::query_param"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "db::connect"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "std::db::connect"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "db::open"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "std::db::open"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "db::open_postgres"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "std::db::open_postgres"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "db::open_sqlite"
+    },
+    {
+      "source_kind": "DatabaseRow",
+      "var": "std::db::open_sqlite"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::args"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::args"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::current_dir"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::current_dir"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::current_exe"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::current_exe"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::get"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::get"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::get_or"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::get_or"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::var"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::var"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "env::vars"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::vars"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::exists"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::exists"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::is_dir"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::is_dir"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::is_file"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::is_file"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::read"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::read"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::read_bytes"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::read_bytes"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::read_dir"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::read_dir"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::read_to_string"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::read_to_string"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::buf_reader"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::buf_reader"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::buf_writer"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::buf_writer"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::eprint"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::eprint"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::eprintln"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::eprintln"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::flush"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::flush"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::print"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::print"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::println"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::println"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::read_all"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::read_all"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::read_line"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::read_line"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::read_lines"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::read_lines"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::read_to_string"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::read_to_string"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::stderr"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::stderr"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::stdin"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::stdin"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::stdout"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::stdout"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::write_all"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::write_all"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "io::write_str"
+    },
+    {
+      "source_kind": "UserInput",
+      "var": "std::io::write_str"
+    }
+  ]
+}

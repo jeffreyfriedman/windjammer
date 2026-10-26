@@ -22,7 +22,10 @@ impl<'m> Go<'m> {
         }
         for s in &m.structs {
             for f in &s.methods {
-                self.function(f, Some((&s.name, &s.type_params, true)))?;
+                // Go methods cannot declare type parameters: a generic method is a free function
+                // `Owner_name[..](self, ..)`, like enum methods.
+                let as_method = f.type_params.is_empty();
+                self.function(f, Some((&s.name, &s.type_params, as_method)))?;
             }
         }
         for e in &m.enums {
@@ -36,7 +39,10 @@ impl<'m> Go<'m> {
             self.line(&format!("var {} {t} = {v}", ident(&c.name)));
         }
         if m.fns.iter().any(|f| f.name == "main") {
-            self.line("func main() { wjRun(wj_main) }");
+            match self.capability_install.clone() {
+                Some(install) => self.line(&format!("func main() {{ {install}; wjRun(wj_main) }}")),
+                None => self.line("func main() { wjRun(wj_main) }"),
+            }
         }
         Ok(())
     }
@@ -80,7 +86,7 @@ impl<'m> Go<'m> {
     fn trait_iface(&mut self, t: &PTrait) -> PResult<()> {
         self.line(&format!("type {} interface {{", ident(&t.name)));
         self.ind += 1;
-        for m in &t.methods {
+        for m in t.methods.iter().filter(|m| m.type_params.is_empty()) {
             let ps: PResult<Vec<String>> = m.params.iter().map(|p| Ok(format!("{} {}", ident(&p.name), self.ty(&p.ty)?))).collect();
             let ret = if m.ret == Ty::Unit { String::new() } else { format!(" {}", self.ty(&m.ret)?) };
             self.line(&format!("{}({}){ret}", ident(&m.name), ps?.join(", ")));
@@ -90,16 +96,17 @@ impl<'m> Go<'m> {
         Ok(())
     }
 
+    /// Derived `Debug`: `f` carries the caller's Formatter options to every field.
     fn dbg_body(&mut self, display: &str, fields: &[(String, Ty)], tuple: bool, recv: &str) -> String {
         if fields.is_empty() {
             return go_string(display);
         }
+        let vals: Vec<String> = fields.iter().map(|(n, _)| format!("{recv}.{}", field(n))).collect();
         if tuple {
-            let parts: Vec<String> = fields.iter().map(|(n, _)| format!("wjDbg({recv}.{})", field(n))).collect();
-            format!("{} + {} + \")\"", go_string(&format!("{display}(")), parts.join(" + \", \" + "))
+            format!("wjDbgTupleS(f, {}, {})", go_string(display), vals.join(", "))
         } else {
-            let parts: Vec<String> = fields.iter().map(|(n, _)| format!("{} + wjDbg({recv}.{})", go_string(&format!("{n}: ")), field(n))).collect();
-            format!("{} + {} + \" }}\"", go_string(&format!("{display} {{ ")), parts.join(" + \", \" + "))
+            let names: Vec<String> = fields.iter().map(|(n, _)| go_string(n)).collect();
+            format!("wjDbgStruct(f, {}, []string{{{}}}, {})", go_string(display), names.join(", "), vals.join(", "))
         }
     }
 
@@ -116,7 +123,7 @@ impl<'m> Go<'m> {
         self.ind -= 1;
         self.line("}");
         let body = self.dbg_body(&s.name, &s.fields, s.tuple, "self");
-        self.line(&format!("func (self {name}{tu}) wjDbg() string {{ return {body} }}"));
+        self.line(&format!("func (self {name}{tu}) wjDbgF(f *wjFmt) string {{ return {body} }}"));
         Ok(())
     }
 
@@ -137,7 +144,7 @@ impl<'m> Go<'m> {
             self.line("}");
             self.line(&format!("func ({vt}{tu}) is{name}() {{}}"));
             let body = self.dbg_body(&v.name, &v.fields, !v.named, "self");
-            self.line(&format!("func (self {vt}{tu}) wjDbg() string {{ return {body} }}"));
+            self.line(&format!("func (self {vt}{tu}) wjDbgF(f *wjFmt) string {{ return {body} }}"));
         }
         Ok(())
     }

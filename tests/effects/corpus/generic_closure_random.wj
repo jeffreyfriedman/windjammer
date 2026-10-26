@@ -1,0 +1,3 @@
+use std::random
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() { println("${apply(|x| x + random::range(0, 1), 1)}") }

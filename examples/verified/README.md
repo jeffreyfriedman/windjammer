@@ -8,6 +8,7 @@ Header lines (all `//` comments at the top of the file):
 | Header | Meaning |
 |--------|---------|
 | `// tags: a, b` | retrieval tags (see `manifest.json`) |
+| `// allow: fs.read=/tmp/**` | a capability the program needs under `wj run` (repeatable; ADR-0021: the default sandbox allows only the project directory) |
 | `// expect: text` | one line of expected stdout, in order; an oracle derived independently of the interpreter (by hand or a Python model) |
 | `// exit: N` | expected exit status (default 0; panics are 101) |
 | `// rust: ok` | also compiled with `wj build --no-cargo` + `rustc`; output must equal the `expect` lines |

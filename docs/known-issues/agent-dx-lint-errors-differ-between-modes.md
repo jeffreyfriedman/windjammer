@@ -10,7 +10,7 @@ A program developed against the interpreter is rejected by the compiled path for
 | W0006 | `"literal".to_string()` | |
 | W0010 | the type name `String` (also inside `collect::<String>()`) | use `string` |
 | W0001 | explicit `&mut self` | but accepted inside `impl Trait for T` |
-| (error) | `.as_str()` | "forbidden in Windjammer source" |
+| W0012 (warning) | `.as_str()` | was a hard error; now a warning in every mode, removed by `wj fix` |
 
 Conversely the interpreter needs `.as_str()` before `s[a..b]` on `String` values and a collected `Vec` for `env::args()` indexing, while the
 compiled path forbids `.as_str()` and cannot `.collect()` `env::args()` (already a `Vec`: E0599). Programs that work in both modes need

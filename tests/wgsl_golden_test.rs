@@ -46,7 +46,6 @@ fn wjsl_corpus() -> Vec<PathBuf> {
         .map(|e| e.unwrap().path())
         .filter(|p| p.extension().is_some_and(|e| e == "wjsl"))
         .collect();
-    files.push(root.join("examples/pbr.wjsl"));
     files.sort();
     files
 }

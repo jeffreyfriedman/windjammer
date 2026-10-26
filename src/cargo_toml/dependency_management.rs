@@ -40,15 +40,6 @@ pub(crate) fn find_windjammer_runtime_path_with(override_path: Option<&Path>) ->
         .unwrap_or_else(|e| panic!("cannot materialize embedded windjammer-runtime: {e}"))
 }
 
-/// Convert a `DependencySpec` into a Cargo.toml dependency line.
-///
-/// Relative `path` entries are resolved against `base_dir` (the directory containing
-/// `wj.toml` / source `Cargo.toml`) and emitted as absolute paths so they remain valid
-/// when the generated manifest lives in `gen/` rather than the crate root.
-pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::DependencySpec) -> String {
-    dep_spec_to_cargo_line_with_base(name, spec, None)
-}
-
 pub(crate) fn dep_spec_to_cargo_line_with_base(
     name: &str,
     spec: &crate::config::DependencySpec,
@@ -76,7 +67,7 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
                 parts.push(format!("features = [{}]", feat_str.join(", ")));
             }
             if let Some(p) = path {
-                let resolved = resolve_dep_path_for_gen_manifest(p, base_dir);
+                let resolved = windjammer_package_build_dir(resolve_dep_path_for_gen_manifest(p, base_dir));
                 parts.push(format!("path = \"{}\"", resolved));
             }
             if let Some(g) = git {
@@ -91,6 +82,17 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
             format!("{} = {{ {} }}", name, parts.join(", "))
         }
     }
+}
+
+/// A path dependency on a Windjammer *source* package (`wj.toml`, no `Cargo.toml`) links its generated crate
+/// in `gen/` (written by `wj build <dep>/src -o <dep>/gen`, which `wj run --compiled` does for every
+/// Windjammer dependency first). Other paths are returned unchanged.
+pub(crate) fn windjammer_package_build_dir(resolved: String) -> String {
+    let dir = Path::new(&resolved);
+    if dir.join("wj.toml").is_file() && !dir.join("Cargo.toml").is_file() && dir.join("gen").join("Cargo.toml").is_file() {
+        return sanitize_path_for_toml(&dir.join("gen"));
+    }
+    resolved
 }
 
 /// Rewrite a path-dep string so it is valid from a generated `gen/Cargo.toml`.

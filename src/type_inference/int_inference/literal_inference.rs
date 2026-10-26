@@ -309,6 +309,12 @@ impl IntInference {
                 }
                 _ => false,
             };
+        // `Option<T>` algebra and `map.get(&k)`: the payload type flows through
+        // `get` / `copied` / `cloned` / `unwrap` / `unwrap_or`, so `m.get(&k).copied().unwrap_or(0)`
+        // gives the literal the map's value width instead of the generic default.
+        if let Some(sig) = self.builtin_option_method_signature(&receiver_type, method) {
+            return Some(sig);
+        }
         let (qualified, receiver_generics) =
             self.qualified_method_key_and_generics(&receiver_type, method);
 
@@ -362,14 +368,77 @@ impl IntInference {
             return None;
         }
 
-        self.function_signatures
+        // Suffix fallback: only when every homonym agrees. Picking "the first" of
+        // `i8::min` / `u16::min` / ... depended on map iteration order (nondeterministic output).
+        let mut candidates = self
+            .function_signatures
             .iter()
             .filter(|(func_name, (params, _))| {
                 func_name.split("::").last() == Some(method)
                     && (params.len() == arg_count + 1 || params.len() == arg_count)
             })
-            .map(|(_, (params, ret))| (substitute(params.clone()), ret.clone()))
-            .next()
+            .map(|(_, sig)| sig);
+        let first = candidates.next()?;
+        if candidates.any(|other| other != first) {
+            return None;
+        }
+        Some((substitute(first.0.clone()), first.1.clone()))
+    }
+
+    fn builtin_option_method_signature(
+        &self,
+        receiver: &Type,
+        method: &str,
+    ) -> Option<(Vec<Type>, Option<Type>)> {
+        fn peel(t: &Type) -> &Type {
+            match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => peel(inner),
+                other => other,
+            }
+        }
+        let receiver = peel(receiver);
+        // Integer receivers: the std numeric methods keep the receiver's width. Without this the
+        // by-name fallback below picks an arbitrary `X::max` from the registry (nondeterministic).
+        if matches!(receiver, Type::Int | Type::Int32 | Type::Uint)
+            || matches!(receiver, Type::Custom(n) if crate::type_classification::is_integer_type(n))
+        {
+            return match method {
+                "max" | "min" | "wrapping_add" | "wrapping_sub" | "wrapping_mul" | "saturating_add"
+                | "saturating_sub" | "saturating_mul" | "rem_euclid" | "div_euclid" | "abs_diff" => {
+                    Some((vec![receiver.clone()], Some(receiver.clone())))
+                }
+                "abs" | "signum" => Some((vec![], Some(receiver.clone()))),
+                "pow" => Some((vec![Type::Custom("u32".to_string())], Some(receiver.clone()))),
+                _ => None,
+            };
+        }
+        if let Some(value) = self.extract_map_value_type(receiver) {
+            if method == "get" {
+                return Some((vec![], Some(Type::Option(Box::new(value)))));
+            }
+        }
+        if let Some(elem) = self.extract_vec_element_type(receiver) {
+            match method {
+                "get" => {
+                    return Some((
+                        vec![Type::Custom("usize".to_string())],
+                        Some(Type::Option(Box::new(elem))),
+                    ))
+                }
+                "first" | "last" => return Some((vec![], Some(Type::Option(Box::new(elem))))),
+                _ => {}
+            }
+        }
+        if let Type::Option(inner) = receiver {
+            let payload = (**inner).clone();
+            return match method {
+                "copied" | "cloned" => Some((vec![], Some(Type::Option(Box::new(peel(&payload).clone()))))),
+                "unwrap" | "expect" => Some((vec![], Some(peel(&payload).clone()))),
+                "unwrap_or" => Some((vec![peel(&payload).clone()], Some(peel(&payload).clone()))),
+                _ => None,
+            };
+        }
+        None
     }
 
     fn qualified_method_key_and_generics(

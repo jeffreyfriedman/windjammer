@@ -9,7 +9,7 @@ An example that fits no mode is deleted. The verified idiom corpus is [verified/
 - `syntax_tests/` - numbered single-feature programs (package with tests).
 - `tests/` - small test-framework examples.
 - `hello_world/`, `pipe_operator/`, `cli_tool/`, `http_server/`, `file_server/` - small programs.
-- `wjfind/` (file search), `wschat/` (WebSocket chat), `taskflow/` (REST API): larger dogfooding programs.
+- Larger applications (a grep-style search tool, a task-management REST API, a chat core) live in the `windjammer-ecosystem` repository under `apps/` (`wj-grep`, `wj-taskflow`, `wj-chat`).
 - `wasm_hello/` - WebAssembly "hello" (`wj build ... --target wasm`).
 - `optimization_validation/` - inputs for the optimizer assessment.
 - Single files in this directory (`traits.wj`, `testing_examples.wj`, ...): feature demos, checked by the gate.

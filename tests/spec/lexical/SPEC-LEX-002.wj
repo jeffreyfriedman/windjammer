@@ -1,0 +1,8 @@
+// spec: SPEC-LEX-002
+// expect: 2
+/// Adds one.
+fn inc(x: int) -> int { x + 1 }
+
+fn main() {
+    println("${inc(1)}")
+}

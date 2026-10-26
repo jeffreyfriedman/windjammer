@@ -1,6 +1,8 @@
 //! AST -> portable IR lowering (typing, ownership/copy insertion, desugaring).
 
+mod arena;
 mod call;
+mod chain;
 mod expr;
 mod fmt;
 mod intrinsics;
@@ -11,11 +13,9 @@ mod stmt;
 use super::env::ItemEnv;
 use super::ir::*;
 use super::ty::Ty;
-use crate::analyzer::SignatureRegistry;
-use crate::parser::Program;
 use std::collections::HashMap;
 
-pub use items::lower_program;
+pub use items::{lower_program, lower_program_without_facts};
 
 #[derive(Clone)]
 pub(super) struct Local {
@@ -24,8 +24,9 @@ pub(super) struct Local {
     pub alias: bool,
     /// Unique emitted name (shadowed declarations get a numeric suffix).
     pub out: String,
-    /// Declared `mut` (closures snapshot such captures).
-    pub mutable: bool,
+    /// Holds an independent value (a `let` whose initializer was owned, or a by-value parameter),
+    /// so its last use may move instead of copying (ADR-0017 `last_use`).
+    pub fresh: bool,
 }
 
 pub(super) struct Lowerer<'e> {
@@ -44,8 +45,17 @@ pub(super) struct Lowerer<'e> {
     /// Inference variables introduced by integer / float literals (default to i64 / f64).
     pub int_vars: std::collections::HashSet<u32>,
     pub float_vars: std::collections::HashSet<u32>,
+    /// Variables of `len()`-like results (SPEC-NUM-014): they adopt the integer type their use
+    /// requires (`int` in `i < v.len()` with `i: int`) and default to `usize` (takes precedence over
+    /// a literal's `i64` default when both meet).
+    pub usize_vars: std::collections::HashSet<u32>,
     /// Enclosing loops, innermost last (for labels and `break value`).
     pub loop_stack: Vec<LoopCtx>,
+    /// Semantic fact from the IR layer (`ir::liveness::last_uses`): identifier reads, by AST node
+    /// identity, after which the binding is never read again.
+    pub last_uses: std::collections::BTreeSet<usize>,
+    /// Defensive copies elided because the fact proved the use was the last one (measurement).
+    pub elided_copies: usize,
 }
 
 /// One enclosing loop while lowering its body.
@@ -59,7 +69,7 @@ pub(super) struct LoopCtx {
 
 impl<'e> Lowerer<'e> {
     pub fn new(env: &'e ItemEnv) -> Self {
-        Lowerer { env, scopes: vec![HashMap::new()], rets: vec![], generics: vec![], bounds: HashMap::new(), owner: None, tmp: 0, line: 0, used: Default::default(), vars: vec![], int_vars: Default::default(), float_vars: Default::default(), loop_stack: vec![] }
+        Lowerer { env, scopes: vec![HashMap::new()], rets: vec![], generics: vec![], bounds: HashMap::new(), owner: None, tmp: 0, line: 0, used: Default::default(), vars: vec![], int_vars: Default::default(), float_vars: Default::default(), usize_vars: Default::default(), loop_stack: vec![], last_uses: Default::default(), elided_copies: 0 }
     }
 
     pub fn push(&mut self) {
@@ -79,13 +89,14 @@ impl<'e> Lowerer<'e> {
             out = format!("{name}_{n}");
         }
         self.used.insert(out.clone());
-        self.scopes.last_mut().unwrap().insert(name.to_string(), Local { ty, alias, out: out.clone(), mutable: false });
+        self.scopes.last_mut().unwrap().insert(name.to_string(), Local { ty, alias, out: out.clone(), fresh: false });
         out
     }
 
-    pub fn set_mutable(&mut self, name: &str) {
+    /// Mark the innermost `name` as holding an independent value (see [`Local::fresh`]).
+    pub fn set_fresh(&mut self, name: &str) {
         if let Some(l) = self.scopes.last_mut().and_then(|s| s.get_mut(name)) {
-            l.mutable = true;
+            l.fresh = true;
         }
     }
 
@@ -103,9 +114,29 @@ impl<'e> Lowerer<'e> {
         t
     }
 
+    /// A fresh variable for a `len()`-like result (see `usize_vars`).
+    pub fn len_var(&mut self) -> Ty {
+        let t = self.new_var();
+        if let Ty::Var(i) = t {
+            self.usize_vars.insert(i);
+        }
+        t
+    }
+
+    /// `from` was linked to `to`: the root keeps the strongest default (usize > int > float).
+    fn merge_defaults(&mut self, from: u32, to: u32) {
+        if self.usize_vars.contains(&from) {
+            self.usize_vars.insert(to);
+        }
+        if self.int_vars.contains(&from) && !self.float_vars.contains(&to) {
+            self.int_vars.insert(to);
+        }
+    }
+
     /// Resolve; unbound literal variables take their default type (i64 / f64).
     pub fn resolve_final(&self, t: &Ty) -> Ty {
         match self.resolve(t) {
+            Ty::Var(i) if self.usize_vars.contains(&i) => Ty::usize(),
             Ty::Var(i) if self.int_vars.contains(&i) => Ty::i64(),
             Ty::Var(i) if self.float_vars.contains(&i) => Ty::F64,
             Ty::Vec(a) => Ty::Vec(Box::new(self.resolve_final(&a))),
@@ -126,7 +157,7 @@ impl<'e> Lowerer<'e> {
     pub fn resolve_for_dispatch(&mut self, t: &Ty) -> Ty {
         let r = self.resolve(t);
         if let Ty::Var(i) = r {
-            let d = if self.int_vars.contains(&i) { Ty::i64() } else if self.float_vars.contains(&i) { Ty::F64 } else { return r };
+            let d = if self.usize_vars.contains(&i) { Ty::usize() } else if self.int_vars.contains(&i) { Ty::i64() } else if self.float_vars.contains(&i) { Ty::F64 } else { return r };
             self.vars[i as usize] = Some(d.clone());
             return d;
         }
@@ -175,6 +206,9 @@ impl<'e> Lowerer<'e> {
         match (&e, &a) {
             (Ty::Var(i), other) | (other, Ty::Var(i)) if !matches!(other, Ty::Var(j) if j == i) && !other.is_unknown() => {
                 self.vars[*i as usize] = Some(other.clone());
+                if let Ty::Var(j) = other {
+                    self.merge_defaults(*i, *j);
+                }
             }
             (Ty::Var(i), Ty::Var(j)) if i != j => self.vars[*i as usize] = Some(Ty::Var(*j)),
             (Ty::Vec(x), Ty::Vec(y)) | (Ty::Set(x), Ty::Set(y)) | (Ty::Option(x), Ty::Option(y)) | (Ty::Iter(x), Ty::Iter(y)) | (Ty::Range(x), Ty::Range(y)) => self.constrain(x, y),
@@ -225,7 +259,18 @@ impl<'e> Lowerer<'e> {
     }
 
     /// Use `e` as an owned value: places of aggregate type are copied (value semantics).
-    pub fn own(&self, e: PExpr) -> PExpr {
+    pub fn own(&mut self, e: PExpr) -> PExpr {
+        // Last use of an independent local: nothing can observe it again, so move it.
+        if e.last_use {
+            if let PK::Local(n) = &*e.kind {
+                if self.lookup(n).is_some_and(|l| l.fresh && !l.alias) {
+                    if self.needs_copy(&e.ty) {
+                        self.elided_copies += 1;
+                    }
+                    return e;
+                }
+            }
+        }
         if e.is_place() && self.needs_copy(&e.ty) {
             let (ty, line) = (e.ty.clone(), e.line);
             PExpr::new(ty, PK::Copy(e)).at(line)
@@ -235,7 +280,7 @@ impl<'e> Lowerer<'e> {
     }
 
     /// Owned use at a function exit: an own local dies there, aliases must be copied.
-    pub fn own_for_return(&self, e: PExpr) -> PExpr {
+    pub fn own_for_return(&mut self, e: PExpr) -> PExpr {
         if let PK::Local(n) = &*e.kind {
             if self.lookup(n).map(|l| !l.alias).unwrap_or(false) {
                 return e;

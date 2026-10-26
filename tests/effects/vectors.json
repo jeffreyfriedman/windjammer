@@ -1,0 +1,922 @@
+{
+ "schema": 1,
+ "note": "Conformance vectors for the capability model (ADR-0021). The Rust model (windjammer-runtime caps_core, shared with the compiler) and the portable runtimes (std/runtime/js/wj_std.mjs, std/runtime/go/wj_std.go) must agree on every case. Resources are absolute so results do not depend on the working directory; `portable: false` cases need effects Go/JS programs cannot perform.",
+ "root": "/proj",
+ "cases": [
+  {
+   "name": "read inside the tree",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/a.txt",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "read nested",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/sub/deep/a.txt",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "the directory itself",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "dotdot leaves the tree",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/../secret.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "dotdot that stays inside",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/sub/../a.txt",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "sibling with the same prefix",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data2/a.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "absolute path elsewhere",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/etc/hosts",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "write inside",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/out/x.txt",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "write outside",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/x.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "read is not write",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/data/a.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "write is not read",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/out/x.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "exact file",
+   "allow": {
+    "fs.read": [
+     "./config.toml"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/config.toml",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "exact file, other name",
+   "allow": {
+    "fs.read": [
+     "./config.toml"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/config.toml.bak",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "single-level glob",
+   "allow": {
+    "fs.read": [
+     "./data/*.json"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/a.json",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "single-level glob does not recurse",
+   "allow": {
+    "fs.read": [
+     "./data/*.json"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/sub/a.json",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "single-level glob, other extension",
+   "allow": {
+    "fs.read": [
+     "./data/*.json"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/a.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "double star in the middle",
+   "allow": {
+    "fs.read": [
+     "./a/**/c.txt"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/a/x/y/c.txt",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "double star matches zero components",
+   "allow": {
+    "fs.read": [
+     "./a/**/c.txt"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/a/c.txt",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "absolute pattern",
+   "allow": {
+    "fs.read": [
+     "/srv/data/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/srv/data/f",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "absolute pattern, outside",
+   "allow": {
+    "fs.read": [
+     "/srv/data/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/srv/other/f",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "everything",
+   "allow": {
+    "fs.read": [
+     "*"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/anywhere/at/all",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "empty list grants nothing",
+   "allow": {
+    "fs.read": []
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/a.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "not mentioned means denied",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/data/a.txt",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "missing resource cannot be shown inside a scope",
+   "allow": {
+    "fs.read": [
+     "./data/**"
+    ],
+    "fs.write": [
+     "./out/**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": null,
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "deny wins over allow",
+   "allow": {
+    "fs.read": [
+     "*"
+    ]
+   },
+   "deny": [
+    "fs.read"
+   ],
+   "kind": "fs.read",
+   "resource": "/proj/a",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "manifest is not writable through a glob",
+   "allow": {
+    "fs.write": [
+     "./**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/wj.toml",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "sources are not writable through a glob",
+   "allow": {
+    "fs.write": [
+     "./**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/src/main.wj",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "lock file is not writable through a glob",
+   "allow": {
+    "fs.write": [
+     "./**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/x.wj-capabilities.lock",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "an exact pattern may name a protected file",
+   "allow": {
+    "fs.write": [
+     "./wj.toml"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/proj/wj.toml",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "reading the manifest is fine",
+   "allow": {
+    "fs.read": [
+     "./**"
+    ]
+   },
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/proj/wj.toml",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "time is granted by default",
+   "allow": {},
+   "deny": [],
+   "kind": "time",
+   "resource": null,
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "random is granted by default",
+   "allow": {},
+   "deny": [],
+   "kind": "random",
+   "resource": null,
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "console is granted by default",
+   "allow": {},
+   "deny": [],
+   "kind": "console",
+   "resource": null,
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "default grants can be revoked",
+   "allow": {},
+   "deny": [
+    "time"
+   ],
+   "kind": "time",
+   "resource": null,
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "exact host",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://api.example.com/x",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "other host",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://other.example/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "userinfo trick",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://api.example.com@evil.example/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "subdomain of an exact host",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://evil.api.example.com/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "suffix trick",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://api.example.com.evil.example/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "wildcard subdomain with port",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "https://x.github.com/",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "wildcard does not match the apex",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "https://github.com/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "wrong port",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "https://x.github.com:444/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "scheme default port mismatch",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://x.github.com/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "localhost with the granted port",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://localhost:8080/",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "localhost with another port",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://localhost:9/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "ip literal not granted",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://127.0.0.1:8080/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "fragment trick",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://evil.example#@api.example.com/",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "query trick",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://evil.example?h=api.example.com",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "uppercase host",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "HTTP://API.EXAMPLE.COM/",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "trailing dot",
+   "allow": {
+    "net.connect": [
+     "api.example.com",
+     "*.github.com:443",
+     "localhost:8080"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://evil.example./",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "any host",
+   "allow": {
+    "net.connect": [
+     "*"
+    ]
+   },
+   "deny": [],
+   "kind": "net.connect",
+   "resource": "http://anything.example/",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "env exact",
+   "allow": {
+    "env.read": [
+     "HOME",
+     "APP_*"
+    ]
+   },
+   "deny": [],
+   "kind": "env.read",
+   "resource": "HOME",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "env prefix",
+   "allow": {
+    "env.read": [
+     "HOME",
+     "APP_*"
+    ]
+   },
+   "deny": [],
+   "kind": "env.read",
+   "resource": "APP_NAME",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "env other",
+   "allow": {
+    "env.read": [
+     "HOME",
+     "APP_*"
+    ]
+   },
+   "deny": [],
+   "kind": "env.read",
+   "resource": "SECRET_TOKEN",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "env write is separate",
+   "allow": {
+    "env.read": [
+     "HOME",
+     "APP_*"
+    ]
+   },
+   "deny": [],
+   "kind": "env.write",
+   "resource": "HOME",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "program by name",
+   "allow": {
+    "process": [
+     "echo",
+     "/usr/bin/git"
+    ]
+   },
+   "deny": [],
+   "kind": "process",
+   "resource": "echo",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "program by granted path",
+   "allow": {
+    "process": [
+     "echo",
+     "/usr/bin/git"
+    ]
+   },
+   "deny": [],
+   "kind": "process",
+   "resource": "/usr/bin/git",
+   "expect": "allow",
+   "portable": false
+  },
+  {
+   "name": "a path borrowing a granted name",
+   "allow": {
+    "process": [
+     "echo",
+     "/usr/bin/git"
+    ]
+   },
+   "deny": [],
+   "kind": "process",
+   "resource": "./echo",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "another program",
+   "allow": {
+    "process": [
+     "echo",
+     "/usr/bin/git"
+    ]
+   },
+   "deny": [],
+   "kind": "process",
+   "resource": "ls",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "the shell is not echo",
+   "allow": {
+    "process": [
+     "echo",
+     "/usr/bin/git"
+    ]
+   },
+   "deny": [],
+   "kind": "process",
+   "resource": "sh",
+   "expect": "deny",
+   "portable": false
+  },
+  {
+   "name": "stdin is the console, granted by default",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/dev/stdin",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "stdin follows the console grant",
+   "allow": {},
+   "deny": [
+    "console"
+   ],
+   "kind": "fs.read",
+   "resource": "/dev/stdin",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "stdout is the console",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/dev/stdout",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "null is always fine",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/dev/null",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "urandom is randomness",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/dev/urandom",
+   "expect": "allow",
+   "portable": true
+  },
+  {
+   "name": "urandom follows the random grant",
+   "allow": {},
+   "deny": [
+    "random"
+   ],
+   "kind": "fs.read",
+   "resource": "/dev/urandom",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "other devices are files",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.read",
+   "resource": "/dev/sda",
+   "expect": "deny",
+   "portable": true
+  },
+  {
+   "name": "writing stdin is not a device",
+   "allow": {},
+   "deny": [],
+   "kind": "fs.write",
+   "resource": "/dev/stdin",
+   "expect": "deny",
+   "portable": true
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+// spec: SPEC-EFF-029
+// mode: replay
+// xfail: Q-032
+use std::random
+use std::time
+fn main() {
+    println("${random::range(0, 1000000)}")
+    println("${time::now().timestamp()}")
+}

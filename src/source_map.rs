@@ -205,23 +205,6 @@ impl SourceMap {
             .collect()
     }
 
-    /// Get the Windjammer location for a given Rust line (backward compatibility)
-    ///
-    /// This is a convenience method that returns a Location struct instead of a Mapping.
-    /// Used by error_mapper.rs for translating Rust compiler errors.
-    pub fn get_location(&self, rust_line: usize) -> Option<Location> {
-        // Try to find any mapping with this line number (assumes single file project for now)
-        // TODO: Make this file-aware for multi-file projects
-        self.mappings_vec
-            .iter()
-            .find(|m| m.rust_line == rust_line)
-            .map(|m| Location {
-                file: m.wj_file.clone(),
-                line: m.wj_line,
-                column: m.wj_column,
-            })
-    }
-
     /// Map a Rust location to a Windjammer location
     ///
     /// This is the primary method used by error_mapper.rs to translate

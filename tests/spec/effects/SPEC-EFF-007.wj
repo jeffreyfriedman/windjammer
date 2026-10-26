@@ -1,0 +1,10 @@
+// spec: SPEC-EFF-007
+// mode: effects
+// expect: work: random
+// expect: main: console, random
+use std::random
+fn work() -> int { random::range(0, 5) }
+fn main() {
+    let t = spawn work()
+    println("${t.wait() < 5}")
+}

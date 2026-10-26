@@ -1,0 +1,16 @@
+// expect: 5
+// expect: true
+// expect: false
+// expect: 0 5
+use std::collections::HashMap
+fn main() {
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("a", 5)
+    let k = "a"
+    println("${m[k]}")
+    println("${m.contains_key(k)}")
+    println("${m.contains_key("zz")}")
+    let d = m.get(&"b").copied().unwrap_or(0)
+    let e = m.get(&"a").copied().unwrap_or(0)
+    println("${d} ${e}")
+}

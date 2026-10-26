@@ -11,6 +11,9 @@ pub use rand;
 pub mod platform;
 
 // Core modules (fully implemented)
+pub mod cap;
+pub mod caps;
+pub mod caps_core;
 pub mod fs;
 pub mod http;
 pub mod json;
@@ -21,6 +24,7 @@ pub mod mime;
 pub mod profiling;
 
 // Additional stdlib modules
+pub mod arena;
 pub mod async_runtime;
 pub mod bench;
 pub mod cli;
@@ -34,6 +38,7 @@ pub mod csv_mod;
 pub mod db;
 pub mod doc_test;
 pub mod encoding;
+pub mod enumerable;
 pub mod env;
 pub mod ffi;
 pub mod fixtures;

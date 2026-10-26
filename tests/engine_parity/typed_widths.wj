@@ -1,0 +1,54 @@
+// Typed integer paths of --engine=resolved: widths, retagging, mixed operands, casts, bit ops.
+fn add8(a: u8, b: u8) -> u8 {
+    a + b
+}
+fn mix(a: i32, b: i64) -> i64 {
+    let c = a as i64 * b
+    c - (b % 7) + (b / 3)
+}
+fn lit_tail(n: int) -> int {
+    let mut steps = 0
+    let mut k = n
+    while k > 1 {
+        if k % 2 == 0 { k = k / 2 } else { k = 3 * k + 1 }
+        steps += 1
+    }
+    steps
+}
+fn bits(x: u32, y: u32) -> u32 {
+    (x & y) | (x ^ y) | (x << 3) | (y >> 2)
+}
+fn neg(x: i16) -> i16 {
+    -x
+}
+fn main() {
+    println("${add8(100, 27)} ${mix(-40000, 123456789)} ${lit_tail(27)} ${bits(1234, 98765)} ${neg(-32767)}")
+    let mut a: i32 = 7
+    a = 9
+    a += 1000
+    a *= -3
+    let w = 300 as u8
+    let back = -1 as u32
+    let big = 5000000000 as i32
+    println("${a} ${w} ${back} ${big}")
+    let mut total = 0
+    for i in 0..10 { total += i * i }
+    for i in 1..=5 { total -= i }
+    let mut j: i8 = 0
+    for k in -3..3 { j += k as i8 }
+    println("${total} ${j}")
+    let mut s: i64 = 0
+    let mut i = 0
+    while i < 1000 && s >= 0 || i < 5 {
+        s += i * 3 % 7
+        i += 1
+    }
+    println("${s} ${i}")
+    let x = 7
+    let mut y: i64 = 0
+    y = x
+    y += x
+    let z: u16 = 65535
+    let lt = z > 100 && !(y == 3)
+    println("${y} ${z} ${lt}")
+}

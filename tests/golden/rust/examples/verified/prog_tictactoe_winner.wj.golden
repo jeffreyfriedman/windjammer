@@ -1,0 +1,26 @@
+#[inline]
+fn winner(b: &Vec<String>) -> String {
+    let lines = vec![vec![0, 1, 2], vec![3, 4, 5], vec![6, 7, 8], vec![0, 3, 6], vec![1, 4, 7], vec![2, 5, 8], vec![0, 4, 8], vec![2, 4, 6]];
+    for l in lines {
+        if b[l[0] as usize] != "." && b[l[0] as usize] == b[l[1] as usize] && b[l[1] as usize] == b[l[2] as usize] {
+            return format!("{} wins", &b[l[0] as usize]);
+        }
+    }
+    if b.iter().any(|m| *m == *".") {
+        String::from("in progress")
+    } else {
+        String::from("draw")
+    }
+}
+
+#[inline]
+fn board(s: &str) -> Vec<String> {
+    s.chars().map(|c| c.to_string()).collect::<Vec<String>>()
+}
+
+fn main() {
+    println!("{}", winner(&board("XXXOO....")));
+    println!("{}", winner(&board("XOXXOOOXX")));
+    println!("{}", winner(&board("XO..X....")));
+}
+

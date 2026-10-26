@@ -1,0 +1,60 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::fs\n\nfn find(names: Vec<string>, n: string) -> int {\n    let mut i = 0\n    while i < names.len() {\n        if names[i] == n {\n            return i\n        }\n        i += 1\n    }\n    -1\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut bals: Vec<int> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0]\n        if cmd == \"open\" && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if find(names, p[1]) >= 0 {\n                println(\"error: duplicate account\")\n            } else {\n                names.push(p[1])\n                bals.push(amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            let i = find(names, p[1])\n            if i < 0 {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                println(\"${bals[i]}\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(0)\n            let i = find(names, p[1])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if i < 0 {\n                println(\"error: unknown account ${p[1]}\")\n            } else if cmd == \"deposit\" {\n                bals[i] = bals[i] + amt\n                println(\"ok\")\n            } else if bals[i] < amt {\n                println(\"error: insufficient funds\")\n            } else {\n                bals[i] = bals[i] - amt\n                println(\"ok\")\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let amt = p[3].parse::<int>().unwrap_or(0)\n            let a = find(names, p[1])\n            let b = find(names, p[2])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if a < 0 {\n                println(\"error: unknown account ${p[1]}\")\n            } else if b < 0 {\n                println(\"error: unknown account ${p[2]}\")\n            } else if a == b {\n                println(\"error: same account\")\n            } else if bals[a] < amt {\n                println(\"error: insufficient funds\")\n            } else {\n                bals[a] = bals[a] - amt\n                bals[b] = bals[b] + amt\n                println(\"ok\")\n            }\n        }\n    }\n    let mut sorted: Vec<string> = []\n    for n in names {\n        sorted.push(n)\n    }\n    sorted.sort()\n    for n in sorted {\n        let i = find(names, n)\n        println(\"${n} ${bals[i]}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn find(names: Vec<string>, n: string) -> int {\n    let mut i = 0\n    while i < names.len() {\n        if names[i] == n {\n            return i\n        }\n        i += 1\n    }\n    -1\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut bals: Vec<int> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0]\n        if cmd == \"open\" && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if find(names, p[1]) >= 0 {\n                println(\"error: duplicate account\")\n            } else {\n                names.push(p[1])\n                bals.push(amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            let i = find(names, p[1])\n            if i < 0 {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                println(\"${bals[i]}\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let amt = p[2].parse::<int>().unwrap_or(0)\n            let i = find(names, p[1])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if i < 0 {\n                println(\"error: unknown account ${p[1]}\")\n            } else if cmd == \"deposit\" {\n                bals[i] = bals[i] + amt\n                println(\"ok\")\n            } else if bals[i] < amt {\n                println(\"error: insufficient funds\")\n            } else {\n                bals[i] = bals[i] - amt\n                println(\"ok\")\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let amt = p[3].parse::<int>().unwrap_or(0)\n            let a = find(names, p[1])\n            let b = find(names, p[2])\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if a < 0 {\n                println(\"error: unknown account ${p[1]}\")\n            } else if b < 0 {\n                println(\"error: unknown account ${p[2]}\")\n            } else if a == b {\n                println(\"error: same account\")\n            } else if bals[a] < amt {\n                println(\"error: insufficient funds\")\n            } else {\n                bals[a] = bals[a] - amt\n                bals[b] = bals[b] + amt\n                println(\"ok\")\n            }\n        }\n    }\n    let mut sorted: Vec<string> = []\n    for n in names {\n        sorted.push(n)\n    }\n    sorted.sort()\n    for n in sorted {\n        let i = find(names, n)\n        println(\"${n} ${bals[i]}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 20.889,
+   "verb": "run"
+  }
+ ],
+ "mode_violations": 0,
+ "other_seconds": 11.26,
+ "pass_final": true,
+ "recorded_at": "2026-10-19T10:48:13",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 12.107,
+ "tool_wait_seconds": 20.89,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 12.107,
+  "cost_usd": 0.0335495,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It compiles and runs with `wj run --compiled`.\n\nI ran Example 1 plus an extra `transfer a a 1` line, and the output was correct, including `error: same account` for the extra line. I did not run Example 2 or any other cases, such as an invalid amount, a duplicate `open`, or an unknown `TO` account.\n\nAccount names and balances are kept in two parallel lists with a",
+  "subtype": "success",
+  "tokens_in": 27594,
+  "tokens_out": 1645,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 44.26
+}

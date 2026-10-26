@@ -9,7 +9,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 fn wj_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj")
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 #[test]

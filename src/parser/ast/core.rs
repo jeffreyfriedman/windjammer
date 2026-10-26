@@ -481,6 +481,8 @@ pub struct TraitDecl<'ast> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitMethod<'ast> {
     pub name: String,
+    /// Generic parameters of the method itself: `fn map<U: Clone>(self, ..)`.
+    pub type_params: Vec<TypeParam>,
     pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
     pub is_async: bool,
@@ -578,6 +580,8 @@ pub enum Item<'ast> {
     }, // bound Printable = Display + Debug
     TypeAlias {
         name: String,
+        /// `type Pair<T> = (T, T)`: the alias's own generic parameters.
+        type_params: Vec<TypeParam>,
         target: Type,
         is_pub: bool,
         location: SourceLocation,
@@ -612,4 +616,32 @@ impl<'ast> Item<'ast> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Program<'ast> {
     pub items: Vec<Item<'ast>>,
+    /// Keeps the arenas `items` borrow from alive (see `owner.rs`). Not part of equality or printing.
+    pub(crate) owner: super::owner::AstOwner,
+}
+
+impl<'ast> Program<'ast> {
+    /// A program whose items borrow from no arena (empty programs, hand-built test fixtures).
+    pub fn new(items: Vec<Item<'ast>>) -> Self {
+        Program { items, owner: super::owner::AstOwner::none() }
+    }
+
+    /// A program built from items that borrow from the arenas `owner` keeps alive.
+    pub fn with_owner(items: Vec<Item<'ast>>, owner: super::owner::AstOwner) -> Self {
+        Program { items, owner }
+    }
+
+    /// A program assembled from the items of `sources` (merged modules, filtered copies): it co-owns every
+    /// arena the sources own, so the items cannot outlive their storage.
+    pub fn from_items_of<'p>(items: Vec<Item<'ast>>, sources: impl IntoIterator<Item = &'p Program<'ast>>) -> Self
+    where
+        'ast: 'p,
+    {
+        Program { items, owner: super::owner::AstOwner::merge(sources.into_iter().map(|p| &p.owner)) }
+    }
+
+    /// The owner handle; clone it to keep this program's arenas alive past the program itself.
+    pub fn owner(&self) -> &super::owner::AstOwner {
+        &self.owner
+    }
 }

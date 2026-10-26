@@ -1,0 +1,25 @@
+#[inline]
+fn min_max(xs: &Vec<i64>) -> (i64, i64) {
+    let mut lo = xs[0];
+    let mut hi = xs[0];
+    for x in xs.iter().copied() {
+        if x < lo {
+            lo = x;
+        }
+        if x > hi {
+            hi = x;
+        }
+    }
+    (lo, hi)
+}
+
+fn main() {
+    let p = (3_i32, 4_i32);
+    let (a, b) = p;
+    println!("{} {}", a, b);
+    let t = (1_i32, "hello");
+    println!("({}, {})", t.0, t.1);
+    let (lo, hi) = min_max(&vec![5_i64, 1_i64, 9_i64, 3_i64]);
+    println!("min={} max={}", lo, hi);
+}
+

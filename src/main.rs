@@ -9,6 +9,9 @@ pub mod build_utils;
 pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 pub mod cargo_toml;
+pub mod check;
+pub mod reduce; // `wj reduce`: automatic test-case reducer
+pub mod diagnostics;
 pub mod cli;
 pub mod cli_execution; // CLI execution (run, interpret, REPL)
 pub mod codegen;
@@ -24,6 +27,7 @@ pub mod compiler_database;
 pub mod compiler_config;
 pub mod config;
 pub mod debug_env;
+pub mod doctest; // ADR-0018 fenced examples and doctests
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
 pub mod error_codes;
@@ -37,7 +41,6 @@ pub mod project_paths; // Nested module system - The Windjammer Way! // Windjamm
 
 pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
-pub mod error_tui; // Interactive TUI for error navigation
 pub mod formatter; // .wj source formatter (wj fmt)
 pub mod resolve; // identity-based name resolver (shadow mode)
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
@@ -54,12 +57,11 @@ pub mod parser_impl; // Parser implementation (being migrated to parser/)
                      // Test utilities for arena-allocated AST construction (available for integration tests)
 pub mod agent_index;
 pub mod ide_analysis;
-pub mod parser_recovery;
 pub mod rust_integration_tests;
 pub mod source_map; // Source map for error message translation
-pub mod source_map_cache; // Source map caching for performance
 pub mod embedded_assets;
 pub mod stdlib_scanner;
+pub mod stdlib_surface; // ADR-0018 declarative std surface tables
 pub mod syntax_highlighter;
 pub mod test_module_gate;
 pub mod test_runner; // Test framework and execution

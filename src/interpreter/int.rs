@@ -106,14 +106,32 @@ impl IntTy {
                 (1i128 << (self.bits() - 1)) - 1
             }
         } else if self.bits() >= 127 {
-            i128::MAX // u128 values above i128::MAX are not representable (documented limit)
+            i128::MAX // the largest literal; larger u128 values are bit patterns (`u128ops.rs`)
         } else {
             (1i128 << self.bits()) - 1
         }
     }
 
+    #[inline(always)]
     pub fn fits(self, v: i128) -> bool {
-        v >= self.min() && v <= self.max()
+        // (min, max) per variant, in declaration order (hot: every checked operation)
+        const RANGE: [(i128, i128); 13] = [
+            (i8::MIN as i128, i8::MAX as i128),
+            (i16::MIN as i128, i16::MAX as i128),
+            (i32::MIN as i128, i32::MAX as i128),
+            (i64::MIN as i128, i64::MAX as i128),
+            (i128::MIN, i128::MAX),
+            (i64::MIN as i128, i64::MAX as i128),
+            (0, u8::MAX as i128),
+            (0, u16::MAX as i128),
+            (0, u32::MAX as i128),
+            (0, u64::MAX as i128),
+            (0, i128::MAX),
+            (0, u64::MAX as i128),
+            (i64::MIN as i128, i64::MAX as i128),
+        ];
+        let (lo, hi) = RANGE[self as usize];
+        v >= lo && v <= hi
     }
 
     /// Wrap `v` into this width (two's complement), as `as` and `wrapping_*` do.

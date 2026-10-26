@@ -1,0 +1,8 @@
+// expect: WJ0013
+fn one(a: int) -> int {
+    a
+}
+
+fn main() {
+    println("${one(1, 2, 3)}")
+}

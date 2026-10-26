@@ -72,10 +72,15 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli", "safety_typed_ir"]
-cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
+default = ["cli", "safety_typed_ir", "jit"]
+cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
+# Interpreter: Cranelift tier for hot integer functions (ADR-0020 step 7; on by default, `wj run --no-jit`
+# or WJ_JIT=0 turns it off at run time; lib-only builds such as `--no-default-features --features cli` omit it).
+jit = ["dep:cranelift-codegen", "dep:cranelift-frontend", "dep:cranelift-jit", "dep:cranelift-module", "dep:cranelift-native"]
+# std::arena (ADR-0016): arena types, escape check, interpreter support. Unstable surface.
+unstable_arenas = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
 # ownership/effect/taint as first-class types, and multi-target safety encodings.
 safety_typed_ir = []
@@ -94,7 +99,7 @@ integration_tests = []
 skip_fixtures = []
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -103,16 +108,36 @@ thiserror = "1.0"
 typed-arena = "2.0"
 colored = "2.0"
 chrono = "0.4"
+# interpreter std modules (regex, crypto, csv, url): same crates the runtime uses
+regex = "1"
+sha2 = "0.10"
+sha1 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+mime_guess = "2"
+serde_yaml = "0.9"
+flate2 = "1"
+bcrypt = "0.17"
+argon2 = { version = "0.5", features = ["std", "password-hash", "rand"] }
+jsonwebtoken = "9"
+url = "2"
+csv = "1"
+# std::db in the interpreter (SQLite; the same library sqlx bundles for windjammer-runtime)
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 once_cell = "1.19"
 rayon = "1.10"
 smallvec = "1.13"
 syn = { version = "2", default-features = false, features = ["full", "parsing", "visit", "printing", "clone-impls", "proc-macro"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
+libloading = "0.8"
+cranelift-codegen = { version = "0.130", optional = true }
+cranelift-frontend = { version = "0.130", optional = true }
+cranelift-jit = { version = "0.130", optional = true }
+cranelift-module = { version = "0.130", optional = true }
+cranelift-native = { version = "0.130", optional = true }
 
 tempfile = { version = "3.10", optional = true }
-crossterm = { version = "0.28", optional = true }
-ratatui = { version = "0.28", optional = true }
 syntect = { version = "5.2", optional = true }
 salsa = { version = "0.24", optional = true }
 env_logger = { version = "0.11", optional = true }
@@ -128,6 +153,14 @@ name = "optimize_rs"
 path = "benchmarks/rust_parity/optimize_rs.rs"
 
 [[test]]
+name = "check_negative_gate"
+path = "tests/check_negative_gate.rs"
+
+[[test]]
+name = "diagnostics_suite"
+path = "tests/diagnostics_suite.rs"
+
+[[test]]
 name = "all"
 path = "tests/all.rs"
 
@@ -136,6 +169,69 @@ path = "tests/all.rs"
 [[test]]
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
+
+# Convergence gates (golden emitted Rust, rustc-accepts, explain ratchet) also run standalone:
+#   cargo test --release --test convergence_gates
+[[test]]
+name = "convergence_gates"
+path = "tests/convergence_gates_test.rs"
+
+# Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
+[[test]]
+name = "meta_sidecar_consistency"
+path = "tests/meta_sidecar_consistency_test.rs"
+
+# ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
+[[test]]
+name = "semantic_facts_portable"
+path = "tests/semantic_facts_portable_test.rs"
+
+# Inference differential harness standalone: cargo test --release --test inference_differential
+[[test]]
+name = "inference_differential"
+path = "tests/inference_differential_test.rs"
+
+# Language specification (docs/spec): executable rule examples. The grammar is checked by docs_truth.
+#   cargo test --release --test spec_conformance
+[[test]]
+name = "spec_conformance"
+path = "tests/spec_conformance_test.rs"
+
+# Effects and capabilities (ADR-0021): sandbox escape suite (E1 gate: >= 60 cases, 0 escapes)
+#   cargo test --release --test effects_escape
+[[test]]
+name = "effects_escape"
+path = "tests/effects_escape_test.rs"
+
+# Compile-time enforcement and run-time guards in the compiled/portable backends (ADR-0021 E2)
+#   cargo test --release --test effects_compiled   (WJ_EFFECTS_COMPILED=1 also builds and runs the Rust program)
+[[test]]
+name = "effects_compiled"
+path = "tests/effects_compiled_test.rs"
+
+# Every OS-touching runtime function reaches a capability check (ADR-0021)
+#   cargo test --release --test effects_runtime_audit
+[[test]]
+name = "effects_runtime_audit"
+path = "tests/effects_runtime_audit_test.rs"
+
+# One table of capability vectors, every implementation (Rust model, JS runtime, Go runtime)
+#   cargo test --release --test effects_vectors
+[[test]]
+name = "effects_vectors"
+path = "tests/effects_vectors_test.rs"
+
+# Per-package grants and the lock file (ADR-0021 E2), through the wj binary
+#   cargo test --release --test effects_packages
+[[test]]
+name = "effects_packages"
+path = "tests/effects_packages_test.rs"
+
+# Effects soundness over the spec corpus: every effect performed at run time is in the inferred static set
+#   cargo test --release --test effects_soundness
+[[test]]
+name = "effects_soundness"
+path = "tests/effects_soundness_test.rs"
 
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
@@ -155,8 +251,69 @@ name = "interpreter_features"
 path = "tests/interpreter_features_test.rs"
 
 [[test]]
+name = "interpreter_projects"
+path = "tests/interpreter_projects_test.rs"
+
+[[test]]
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
+
+[[test]]
+name = "optimizer_scratch_reuse"
+path = "tests/optimizer_scratch_reuse_test.rs"
+
+[[test]]
+name = "arena_capability"
+path = "tests/arena_capability_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
+name = "arena_rust_backend"
+path = "tests/arena_rust_backend_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
+name = "interpreter_program_lifetime"
+path = "tests/interpreter_program_lifetime_test.rs"
+
+[[test]]
+name = "arena_backends"
+path = "tests/arena_backends_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
+name = "parser_arena_memory"
+path = "tests/parser_arena_memory_test.rs"
+
+[[bench]]
+name = "parser_throughput"
+harness = false
+
+# Codegen correctness gates (compiled Rust vs interpreter): also standalone for fast iteration.
+[[test]]
+name = "codegen_correctness"
+path = "tests/codegen_correctness_test.rs"
+
+# Ecosystem porting findings (docs/known-issues): cargo test --release --test ecosystem_findings
+[[test]]
+name = "ecosystem_findings"
+path = "tests/ecosystem_findings_test.rs"
+
+[[test]]
+name = "std_interpreter_agreement"
+path = "tests/std_interpreter_agreement_test.rs"
+
+[[test]]
+name = "ecosystem_findings2_interp"
+path = "tests/ecosystem_findings2_interp_test.rs"
+
+[[test]]
+name = "ecosystem_findings2"
+path = "tests/ecosystem_findings2_test.rs"
+
+[[test]]
+name = "ecosystem_findings_handoff"
+path = "tests/ecosystem_findings_handoff_test.rs"
 
 [[bench]]
 name = "string_optimization_bench"
