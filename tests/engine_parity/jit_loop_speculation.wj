@@ -1,0 +1,43 @@
+// Values whose width differs from what the machine code was built for: mixed literal and `i64`
+// elements, a literal stored into an `i32` local that does not fit, a loop entered with new types.
+fn sum(v: Vec<int>) -> int {
+    let mut s = 0
+    let mut i = 0
+    while i < v.len() {
+        s += v[i]
+        i += 1
+    }
+    s
+}
+fn main() {
+    let mut v: Vec<int> = Vec::new()
+    let mut k = 0
+    while k < 600 {
+        v.push(k)
+        k += 1
+    }
+    let big: int = 5
+    v.push(big)
+    println("${sum(v)}")
+    let mut x: i32 = 0
+    let mut t = 0
+    let mut i = 0
+    while i < 800 {
+        x = i
+        t += x as int
+        i += 1
+    }
+    println("${t} ${x}")
+    let mut f = 0
+    let mut r = 0
+    while r < 3 {
+        let mut q = 0
+        while q < 400 {
+            f += q
+            q += 1
+        }
+        f = f % 1000
+        r += 1
+    }
+    println("${f}")
+}

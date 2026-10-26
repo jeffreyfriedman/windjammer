@@ -77,6 +77,9 @@ pub fn run(cli: Cli) -> Result<()> {
             engine,
             no_jit,
             jit,
+            jit_loop_hot,
+            jit_debug,
+            jit_mutant,
             no_lint,
             deterministic_time,
             allow_network,
@@ -105,7 +108,7 @@ pub fn run(cli: Cli) -> Result<()> {
             let lint = windjammer::cli_execution::report_build_lints;
             let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
                 std::process::exit(code);
@@ -266,6 +269,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
+        Commands::Eject(a) => {
+            windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?
+        }
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;
         }

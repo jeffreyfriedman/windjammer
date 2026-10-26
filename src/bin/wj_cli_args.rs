@@ -183,6 +183,19 @@ pub enum Commands {
         #[arg(long, value_name = "on|off", env = "WJ_JIT", default_value = "on", hide = true)]
         jit: String,
 
+        /// Interpreted runs: closure-engine iterations before a hot loop enters machine code (testing:
+        /// 0 makes every loop try at its first iteration)
+        #[arg(long, value_name = "N", env = "WJ_JIT_LOOP_HOT", hide = true)]
+        jit_loop_hot: Option<u32>,
+
+        /// Interpreted runs: report on stderr which loops run as machine code and why others do not
+        #[arg(long, env = "WJ_JIT_DEBUG", hide = true, action = clap::ArgAction::SetTrue, value_parser = clap::builder::FalseyValueParser::new())]
+        jit_debug: bool,
+
+        /// Interpreted runs (debug builds only): leave one machine-code check out (mutation tests)
+        #[arg(long, value_name = "NAME", env = "WJ_JIT_MUTANT", hide = true)]
+        jit_mutant: Option<String>,
+
         /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
         /// compile errors still refuse it
         #[arg(long)]
@@ -622,6 +635,9 @@ pub enum Commands {
         path: PathBuf,
     },
 
+    /// Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies)
+    Eject(EjectArgs),
+
     /// Clean build artifacts and stale temp files
     Clean {
         /// Also clean local target/ directories (deep clean)
@@ -666,4 +682,28 @@ pub enum CacheCommand {
     },
     /// Write env.sh / env.ps1 for bare `cargo` invocations
     Setup,
+}
+
+/// Arguments of `wj eject`.
+#[derive(clap::Args, Debug)]
+pub struct EjectArgs {
+    /// Windjammer file or project directory
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+
+    /// Output directory (must be absent or empty)
+    #[arg(short, long)]
+    pub output: PathBuf,
+
+    /// Target platform (rust, wasm)
+    #[arg(short, long, default_value = "rust")]
+    pub target: String,
+
+    /// Library crate (as `wj build --library`)
+    #[arg(long)]
+    pub library: bool,
+
+    /// Generate mod.rs re-exports (as `wj build --module-file`)
+    #[arg(long)]
+    pub module_file: bool,
 }

@@ -1,5 +1,7 @@
 //! Whole-project phases: name resolution, semantic checks, analyzer, numeric inference, IR.
 
+use super::file_cache::FileMemo;
+use crate::ir::stdlib_tables::StdlibTables;
 use super::front::Parsed;
 use super::locate::Locator;
 use super::semantic::{self, FileInput, Index};
@@ -20,7 +22,8 @@ fn is_shader(p: &Parsed) -> bool {
     })
 }
 
-pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>) {
+/// `memo`: per-file reuse of the analysis phase (`file_cache.rs`); `None` computes everything.
+pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Option<&mut FileMemo>) {
     let parsed: Vec<&Parsed> = all.iter().filter(|p| !is_shader(p)).collect();
     let parsed = parsed.as_slice();
     let by_file: HashMap<String, &Parsed> = parsed.iter().map(|p| (p.file.clone(), *p)).collect();
@@ -35,13 +38,23 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>) {
             out,
         );
     }
+    // Session-shared stdlib tables, computed on the first analysis that is not reused from the memo.
+    let tables = std::cell::OnceCell::new();
     for p in parsed {
         // A file that already has errors would only add cascading analyzer noise.
         let has_errors = out
             .iter()
             .any(|d| d.is_error() && d.primary_span.as_ref().is_some_and(|s| s.file == p.file));
         if !has_errors {
-            analysis_phase(p, out);
+            let reused = memo.as_ref().and_then(|m| m.get(&p.file, &p.text));
+            let found = reused.unwrap_or_else(|| {
+                let d = analysis_phase(p, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::compute())).clone());
+                if let Some(m) = memo.as_mut() {
+                    m.put(&p.file, &p.text, &d);
+                }
+                d
+            });
+            out.extend(found);
         }
     }
 }
@@ -157,7 +170,9 @@ fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Par
     }
 }
 
-fn analysis_phase(p: &Parsed, out: &mut Vec<Diagnostic>) {
+/// Input: this file and the stdlib only (see `file_cache.rs`); keep it that way or key the memo on the new input.
+fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
     use crate::analyzer::{Analyzer, SignatureRegistry};
     let mut analyzer = Analyzer::new();
     let sigs = SignatureRegistry::new();
@@ -171,7 +186,7 @@ fn analysis_phase(p: &Parsed, out: &mut Vec<Diagnostic>) {
                         .with_note(format!("in {}", p.file)),
                 );
             }
-            let mut pipeline = crate::ir::IrPipeline::new();
+            let mut pipeline = crate::ir::IrPipeline::new().with_stdlib_tables(tables);
             let module = pipeline.lower_to_ir(&analyzed, &registry, None);
             use crate::ir::pipeline::DiagnosticSeverity as S;
             for d in &module.diagnostics {
@@ -190,4 +205,5 @@ fn analysis_phase(p: &Parsed, out: &mut Vec<Diagnostic>) {
             Diagnostic::error("WJ0028", format!("{e}")).with_note(format!("in {}", p.file)),
         ),
     }
+    out
 }

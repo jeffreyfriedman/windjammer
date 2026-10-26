@@ -945,6 +945,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
                 let obj_var = self.walk_expression(object);
+                self.emit_consuming_method_on_generic_param(object, method, obj_var);
                 let mut arg_vars = Vec::new();
                 for (_label, arg_expr) in arguments {
                     arg_vars.push(self.walk_expression(arg_expr));
@@ -1260,6 +1261,31 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Pattern::Reference(inner) => self.bind_pattern(inner),
             Pattern::Ref(name) | Pattern::RefMut(name) => self.resolve_var(name),
+        }
+    }
+
+    /// OWN-CONSUMING-METHOD (convergence plan C5, category 5): `t.into()` where `t: T` and `T` is one of
+    /// the function's type parameters. The trait method takes `self` by value, so `t` is owned.
+    fn emit_consuming_method_on_generic_param(&mut self, object: &Expression, method: &str, obj_var: ConstraintVar) {
+        if !matches!(method, "into" | "try_into" | "into_iter") {
+            return;
+        }
+        let Expression::Identifier { name, .. } = object else { return };
+        let Some(param) = self.analyzed.decl.parameters.iter().find(|p| &p.name == name) else { return };
+        let generic = match &param.type_ {
+            Type::Generic(g) => Some(g.as_str()),
+            Type::Custom(g) => Some(g.as_str()),
+            _ => None,
+        };
+        if generic.is_some_and(|g| self.analyzed.decl.type_params.iter().any(|tp| tp.name == g)) {
+            self.cs.add_because(
+                Constraint::OwnershipIs(obj_var, OwnedType::Owned),
+                origin(
+                    "OWN-CONSUMING-METHOD",
+                    format!("`{}.{}()` consumes the generic parameter `{}`", name, method, name),
+                    &object.location(),
+                ),
+            );
         }
     }
 

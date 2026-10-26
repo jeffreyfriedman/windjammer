@@ -1565,20 +1565,6 @@ impl<'ast> CodeGenerator<'ast> {
         let free_fn = !func.parameters.iter().any(|p| p.name == "self");
         let sig_ok =
             |sig: &crate::analyzer::FunctionSignature| !(free_fn && sig.has_self_receiver_slot());
-        if let Some(sig) = global.get_signature(&func.name).filter(|s| sig_ok(s)) {
-            return Some(sig);
-        }
-        if let Some(stem) = self.current_wj_file.file_stem() {
-            let stem = stem.to_string_lossy();
-            if !stem.is_empty() {
-                if let Some(sig) = global
-                    .get_signature(&format!("{stem}::{}", func.name))
-                    .filter(|s| sig_ok(s))
-                {
-                    return Some(sig);
-                }
-            }
-        }
         if let Some(root) = self.library_source_root.as_ref() {
             if let Some(module) =
                 crate::analyzer::type_collector::wj_file_to_module_path(root, &self.current_wj_file)
@@ -1591,6 +1577,21 @@ impl<'ast> CodeGenerator<'ast> {
                     return Some(sig);
                 }
             }
+        }
+        if let Some(stem) = self.current_wj_file.file_stem() {
+            let stem = stem.to_string_lossy();
+            if !stem.is_empty() {
+                if let Some(sig) = global
+                    .get_signature(&format!("{stem}::{}", func.name))
+                    .filter(|s| sig_ok(s))
+                {
+                    return Some(sig);
+                }
+            }
+        }
+        // Module-qualified keys win; the bare name is a homonym across modules (`a::show` vs `b::show`).
+        if let Some(sig) = global.get_signature(&func.name).filter(|s| sig_ok(s)) {
+            return Some(sig);
         }
         None
     }
@@ -2808,12 +2809,12 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(sig) = registry
             .get_signature(callee_name)
             .or_else(|| registry.lookup_method(callee_name))
-            .or_else(|| registry.find_signature_ending_with(simple))
+            .or_else(|| registry.find_unique_signature_ending_with(simple))
             .or_else(|| {
                 self.signature_registry
                     .get_signature(callee_name)
                     .or_else(|| self.signature_registry.lookup_method(callee_name))
-                    .or_else(|| self.signature_registry.find_signature_ending_with(simple))
+                    .or_else(|| self.signature_registry.find_unique_signature_ending_with(simple))
             })
         else {
             return false;

@@ -788,7 +788,7 @@ pub(crate) fn global_trait_owned_plain_string_arg(
     arg_index: usize,
 ) -> bool {
     for (_key, trait_sig) in trait_definition_sigs_for_method(global, method) {
-        if !trait_sig.has_self_receiver {
+            if !trait_sig.has_self_receiver {
             continue;
         }
         let pidx = trait_sig.arg_param_index(arg_index);

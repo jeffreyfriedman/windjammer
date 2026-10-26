@@ -9,6 +9,7 @@ In: analyzed program (`analyzer`) and `parser` AST. Out: `IrModule` with solved 
 ## Invariants
 - Every compilation runs the pipeline; solvers must be deterministic and idempotent.
 - The IR is meant to be the single owner of ownership/clone/numeric decisions (`solver.rs`; the unused `numeric_solver.rs` was deleted in C4, widths now flow through the unified solver and the legacy collectors until WP 8 finishes), but legacy analyzer/codegen paths still decide too.
+- The stdlib tables (effect declarations, taint sources/sinks) depend on the stdlib registry only: a session computes them once (`stdlib_tables::StdlibTables`) and passes them to its pipelines (`IrPipeline::with_stdlib_tables`); no process-global memo. Gate: tests/stdlib_tables_test.rs.
 - `ir` must not depend on `codegen`; the current imports are tracked debt (WP 4: neutral `ir_contract`).
 
 ## Owns
