@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Nearest `wj.toml` at or above `root` (a project directory or a single file).
-pub(super) fn manifest_path(root: &Path) -> Option<PathBuf> {
+pub fn manifest_path(root: &Path) -> Option<PathBuf> {
     let mut cur = if root.is_dir() { Some(root) } else { root.parent() };
     while let Some(d) = cur {
         let p = d.join("wj.toml");
