@@ -173,9 +173,31 @@ ${x}
 7
 ```
 
+## Unicode and NUL escapes
+
+**SPEC-LEX-016** Inside a string or char literal, `\u{H}` with one to six hexadecimal digits denotes the Unicode scalar value with that code point, and `\0` denotes NUL. A `\u` that is not followed by a well-formed `{digits}` naming a scalar value is an ordinary escape (LEX-010): `"\u{zz}"` is `u{zz}`.
+
+<!-- example: tests/spec/lexical/SPEC-LEX-016.wj -->
+```windjammer
+fn main() {
+    let word = "caf\u{e9}"
+    println("${word.len()} ${word.chars().count()}")
+    println("${'\u{41}'}${'\u{1F600}'}")
+    println("${"a\0b".len()}")
+    println("bad \u{zz}")
+}
+```
+Output:
+```text
+5 4
+A😀
+3
+bad u{zz}
+```
+
 ## Other escapes
 
-**SPEC-LEX-010** A backslash followed by any character not listed in LEX-008 denotes that character itself. (Hex escapes `\xNN` do not exist; see OPEN_QUESTIONS Q-001.)
+**SPEC-LEX-010** A backslash followed by any character not listed in LEX-008 or LEX-016 denotes that character itself. (Hex escapes `\xNN` do not exist; see OPEN_QUESTIONS Q-001.)
 
 <!-- example: tests/spec/lexical/SPEC-LEX-010.wj -->
 ```windjammer

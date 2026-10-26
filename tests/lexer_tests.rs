@@ -232,17 +232,17 @@ fn test_realistic_function() {
 }
 
 #[test]
-fn test_numeric_and_nul_escapes_in_strings_and_chars() {
-    let input = r#""caf\u{e9} \x41\0z" '\u{e9}' '\x7f' '\0' "\u{1F600}" "bad \u{zz} \xZ" '"'"#;
+fn test_unicode_and_nul_escapes_in_strings_and_chars() {
+    let input = r#""caf\u{e9} \x41\0z" '\u{e9}' '\0' "\u{1F600}" "bad \u{zz} \u{} \u{110000}" '"'"#;
     let mut lexer = Lexer::new(input);
     let tokens = lexer.tokenize_with_locations();
 
-    assert_eq!(tokens[0].token, Token::StringLiteral("caf\u{e9} A\0z".to_string()));
+    // `\x41` is not an escape (Q-001): it stays the characters `x41`
+    assert_eq!(tokens[0].token, Token::StringLiteral("caf\u{e9} x41\0z".to_string()));
     assert_eq!(tokens[1].token, Token::CharLiteral('\u{e9}'));
-    assert_eq!(tokens[2].token, Token::CharLiteral('\u{7f}'));
-    assert_eq!(tokens[3].token, Token::CharLiteral('\0'));
-    assert_eq!(tokens[4].token, Token::StringLiteral("\u{1F600}".to_string()));
-    // malformed escapes keep their old meaning: the escaped character itself
-    assert_eq!(tokens[5].token, Token::StringLiteral("bad u{zz} xZ".to_string()));
-    assert_eq!(tokens[6].token, Token::CharLiteral('"'));
+    assert_eq!(tokens[2].token, Token::CharLiteral('\0'));
+    assert_eq!(tokens[3].token, Token::StringLiteral("\u{1F600}".to_string()));
+    // malformed or out-of-range escapes keep their old meaning: the escaped character itself
+    assert_eq!(tokens[4].token, Token::StringLiteral("bad u{zz} u{} u{110000}".to_string()));
+    assert_eq!(tokens[5].token, Token::CharLiteral('"'));
 }
