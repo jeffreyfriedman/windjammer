@@ -1,5 +1,5 @@
 // tags: program, matrix, nested-vec
-// rust: gap error[E0308]: mismatched types
+// rust: ok
 // expect: 1 4
 // expect: 2 5
 // expect: 3 6

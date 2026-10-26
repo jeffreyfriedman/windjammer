@@ -177,7 +177,7 @@ fn compiled(h: &ExampleHeader, path: &Path) -> Result<Vec<String>, String> {
 
 /// Ratchet: the compiled-path gap count only shrinks. Lower this when a gap is fixed; never raise it.
 /// North star: zero (`// rust: gap` must disappear from the corpus).
-const MAX_RUST_GAPS: usize = 47;
+const MAX_RUST_GAPS: usize = 29;
 
 #[test]
 fn rust_gap_count_only_shrinks() {

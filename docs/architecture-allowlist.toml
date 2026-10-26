@@ -43,6 +43,7 @@
 "src/debug_env.rs" = 2
 "src/error_statistics.rs" = 1
 "src/interpreter/builtins/std_fns.rs" = 1
+"src/interpreter/builtins/std_legacy.rs" = 1
 "src/test_runner/mod.rs" = 2
 
 [forbidden_edges]
@@ -54,6 +55,7 @@
 "analyzer->metadata src/analyzer/signature_registry.rs" = 1
 "auto_clone->codegen src/auto_clone.rs" = 3
 "auto_clone_tests->test_utils src/auto_clone_tests.rs" = 1
+"check->interpreter src/check/semantic/std_methods.rs" = 1
 "codegen->compiler src/codegen/portable/tests.rs" = 2
 "codegen->compiler src/codegen/rust/collection_detection.rs" = 1
 "codegen->compiler src/codegen/rust/function_generation_prepare.rs" = 3
@@ -178,7 +180,7 @@
 "src/compiler/library_copy_registry.rs::collect_global_enum_variant_types_for_library" = 359
 "src/compiler/library_multipass.rs::build_library_multipass" = 1429
 "src/file_compilation_pipeline.rs::compile_file_impl" = 401
-"src/interpreter/builtins/option.rs::register" = 316
+"src/interpreter/builtins/option.rs::register" = 313
 "src/interpreter/builtins/seq.rs::register_vec" = 360
 "src/ir/constraint_gen.rs::walk_expression" = 360
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
