@@ -203,8 +203,8 @@ class Budget(unittest.TestCase):
     def test_cli_requires_yes_and_refuses_oversize(self):
         with mock.patch.object(pilot, "run_pilot") as rp:
             self.assertEqual(cli.main(["pilot", "--out", "/nonexistent"]), 3)
-            self.assertEqual(cli.main(["pilot", "--trials", "4", "--yes"]), 2)
-            self.assertEqual(cli.main(["pilot", "--arms", "A,B,C", "--yes"]), 2)   # 90 trials
+            self.assertEqual(cli.main(["pilot", "--trials", "13", "--yes"]), 2)   # 260 > ceiling
+            self.assertEqual(cli.main(["pilot", "--arms", "A,B,C,D,P,G,R", "--trials", "4", "--yes"]), 2)   # 280 trials
             rp.assert_not_called()
             with tempfile.TemporaryDirectory() as d:
                 rp.return_value = {"completed": 60, "aborted_reason": None, "spent_usd": 1}

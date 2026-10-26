@@ -1,7 +1,7 @@
 """Cost estimate and hard budget gate for live agent runs."""
 import threading
 
-PILOT_MAX_TRIALS = 60   # absolute ceiling for the pilot; raising it is a code change on purpose
+PILOT_MAX_TRIALS = 240  # absolute ceiling; raising it is a code change on purpose (60 for pilot 1; 240 = 7 arms x 10 tasks x 3 trials, owner-approved 2026-10-26, with headroom)
 
 # USD per million tokens. Assumed Sonnet-class list pricing; the live per-trial cost comes from the
 # Claude Code JSON (`total_cost_usd`), and the guard projects from observed cost once trials complete.
@@ -13,7 +13,7 @@ class BudgetExceeded(Exception):
     pass
 
 
-def estimate_trial(pack_chars, max_turns, expected_turn_fraction=0.6, out_tokens_per_turn=400, growth_per_turn=1500):
+def estimate_trial(pack_chars, max_turns, expected_turn_fraction=0.2, out_tokens_per_turn=400, growth_per_turn=1500):
     """-> {"expected": usd, "worst": usd}; worst assumes every turn is used."""
     ctx0 = BASE_CONTEXT_TOKENS + pack_chars / 3.5 + 1200
 

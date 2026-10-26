@@ -87,6 +87,7 @@ def main(argv=None):
     prg.add_argument("--trials-dir", required=True)
     pr = sub.add_parser("pilot-report")
     pr.add_argument("--trials-dir", required=True)
+    pr.add_argument("--prev", help="trials dir of a previous pilot; adds a delta table")
     pr.add_argument("--md")
     pr.add_argument("--json")
     p = sub.add_parser("replay", help="re-grade recorded transcripts deterministically (no LLM)")
@@ -127,7 +128,7 @@ def main(argv=None):
         print("changed:", PL.regrade_failures(a.trials_dir))
     elif a.cmd == "pilot-report":
         trs = PL.load_trials(a.trials_dir)
-        md, js = PR.build_report(trs)
+        md, js = PR.build_report(trs, prev=PL.load_trials(a.prev) if a.prev else None)
         open(a.md, "w").write(md) if a.md else print(md)
         if a.json:
             json.dump(js, open(a.json, "w"), indent=1, default=str)
