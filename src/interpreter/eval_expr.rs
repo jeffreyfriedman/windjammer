@@ -111,6 +111,9 @@ impl Interpreter {
     }
 
     pub(crate) fn eval_raw(&mut self, e: &'static Expression<'static>) -> R {
+        if self.durable_enabled() && self.is_durable_step(e) {
+            return self.durable_step(e);
+        }
         match e {
             Expression::Literal { value, .. } => Ok(self.literal(value)),
 
@@ -158,7 +161,7 @@ impl Interpreter {
                     let en = self.eval(end)?;
                     match (s, en) {
                         (Value::Int(a, at), Value::Int(b, bt)) => {
-                            Ok(Value::Range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
+                            Ok(Value::range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
                         }
                         _ => Err(unsupported("range over non-integer values")),
                     }
@@ -179,7 +182,7 @@ impl Interpreter {
                 UnaryOp::Ref => self.eval(operand),
                 UnaryOp::MutRef => {
                     if let Some(p) = self.resolve_place(operand)? {
-                        Ok(Value::Ref(p))
+                        Ok(Value::Ref(Box::new(p)))
                     } else {
                         self.eval(operand)
                     }
@@ -231,7 +234,7 @@ impl Interpreter {
                 match (&s, &en) {
                     (Value::Int(a, at), Value::Int(b, bt)) => {
                         let ty = IntTy::unify(*at, *bt);
-                        Ok(Value::Range(*a, if *inclusive { *b + 1 } else { *b }, ty))
+                        Ok(Value::range(*a, if *inclusive { *b + 1 } else { *b }, ty))
                     }
                     (Value::Char(a), Value::Char(b)) => {
                         let hi = if *inclusive { *b as u32 + 1 } else { *b as u32 };
@@ -365,7 +368,7 @@ impl Interpreter {
         if let Some(Type::Result(_, er)) = self.scope.ret_ty {
             if let Type::Custom(target) = &**er {
                 if e.type_name() != *target {
-                    if let Some(f) = self.methods.get(&(target.clone(), "from".to_string())).cloned() {
+                    if let Some(f) = self.from_impl_for(target, &e).or_else(|| self.methods.get(&(target.clone(), "from".to_string())).cloned()) {
                         return self.call_func(&f, vec![e], None);
                     }
                 }
@@ -425,14 +428,15 @@ impl Interpreter {
                 }
                 Ok(v[*i as usize].clone())
             }
-            (Value::Vec(v), Value::Range(a, b, _)) => {
-                let (a, b) = (*a, *b);
+            (Value::Vec(v), Value::Range(r, _)) => {
+                let (a, b) = **r;
                 if let Some(msg) = super::slicing::slice_error(a, b, v.len()) {
                     return Err(panic_ctl(msg));
                 }
                 Ok(Value::vec(v[a as usize..b as usize].to_vec()))
             }
-            (Value::Str(s), Value::Range(a, b, _)) => {
+            (Value::Str(s), Value::Range(r, _)) => {
+                let (a, b) = (&r.0, &r.1);
                 if let Some(msg) = super::slicing::str_slice_error(s, *a, *b) {
                     return Err(panic_ctl(msg));
                 }
@@ -465,21 +469,33 @@ impl Interpreter {
             // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
             return match fields {
                 [(f, ex)] if f == "start" => match env.eval(self, ex)? {
-                    Value::Int(a, t) => Ok(Value::Range(a, i128::MAX, t)),
+                    Value::Int(a, t) => Ok(Value::range(a, i128::MAX, t)),
                     other => Err(unsupported(format!("`..` range from {}", other.type_name()))),
                 },
                 _ => Err(semantic("malformed RangeFrom")),
             };
         }
         let mut name = name.to_string();
+        let mut is_key = false; // `name` already holds type keys (`Self`, or resolved below)
         if let Some(rest) = name.strip_prefix("Self::") {
             name = format!("{}::{}", self.scope.self_ty.as_deref().unwrap_or("Self"), rest);
+            is_key = true;
         } else if name == "Self" {
             name = self.scope.self_ty.as_deref().unwrap_or("Self").to_string();
+            is_key = true;
+        } else if !self.dup_types.is_empty() {
+            // two modules declare a type of this name: the written path picks one (`type_keys.rs`)
+            let module = self.scope.module;
+            name = match name.rsplit_once("::") {
+                Some((head, var)) if self.enums.contains_key(&self.type_key(module, head)) => format!("{}::{}", self.type_key(module, head), var),
+                _ => self.type_key(module, &name),
+            };
+            is_key = true;
         }
         // enum struct variant: Enum::Variant { .. }
-        if let Some((en, var)) = name.rsplit_once("::") {
-            let en = en.rsplit("::").next().unwrap_or(en).to_string();
+        let is_struct = is_key && self.structs.contains_key(&name);
+        if let (false, Some((en, var))) = (is_struct, name.rsplit_once("::")) {
+            let en = if is_key { en.to_string() } else { en.rsplit("::").next().unwrap_or(en).to_string() };
             let target = self.type_aliases.get(&en).and_then(|t| if let Type::Custom(n) = t { Some(n.clone()) } else { None }).unwrap_or(en);
             let variant_fields = self.enums.get(&target).and_then(|def| {
                 def.variants.iter().enumerate().find(|(_, v)| v.name == var).and_then(|(idx, vd)| match &vd.kind {

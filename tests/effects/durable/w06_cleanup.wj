@@ -1,0 +1,29 @@
+// workflow: nightly cleanup: create temp files, list them, remove them
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn make(n: int) {
+    fs::create_dir_all("tmpdir") ?? ()
+    fs::write("tmpdir/t${n}.tmp", "x") ?? ()
+}
+fn names() -> int {
+    let mut names = Vec::new()
+    for e in fs::read_dir("tmpdir") ?? [] { names.push(e.name()) }
+    names.len()
+}
+fn wipe() { fs::remove_dir_all("tmpdir") ?? () }
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    make(1)
+    make(2)
+    make(3)
+    let n = names()
+    println("found ${n} temp files")
+    wipe()
+    "cleaned ${n}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

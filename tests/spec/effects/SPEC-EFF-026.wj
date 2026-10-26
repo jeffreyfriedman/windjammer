@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-026
 // mode: check-error
-// xfail: Q-032
 // expect-error: WJ0048: iteration over `HashMap` has no stable order
 use std::collections::HashMap
 durable fn first_key(m: HashMap<string, int>) -> string {

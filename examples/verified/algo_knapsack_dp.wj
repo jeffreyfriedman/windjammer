@@ -1,5 +1,5 @@
 // tags: algorithm, dynamic-programming
-// rust: gap error[E0308]: arguments to this function are incorrect
+// rust: ok
 // expect: best value: 9
 fn knapsack(weights: Vec<int>, values: Vec<int>, cap: int) -> int {
     let mut dp = [0; 8]

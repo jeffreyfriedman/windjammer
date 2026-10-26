@@ -15,6 +15,7 @@ use std::path::Path;
 /// The discovered tests as interpreter specs, filtered like the compiled run (a test is selected
 /// when its name or display path contains the filter).
 pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
+    let mut sites: std::collections::HashMap<std::path::PathBuf, Vec<(std::path::PathBuf, usize, usize)>> = std::collections::HashMap::new();
     select_files(&discovery.files, filter)
         .into_iter()
         .flat_map(|f| f.tests.iter())
@@ -31,6 +32,7 @@ pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
                 TestScope::Assoc(ty) => Some(ty.clone()),
                 _ => None,
             },
+            durable_sites: sites.entry(t.file.clone()).or_insert_with(|| crate::check::durable_sites::discover(&t.file).unwrap_or_default()).clone(),
         })
         .collect()
 }

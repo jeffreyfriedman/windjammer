@@ -72,6 +72,20 @@ time_native!(Duration, "Duration");
 time_native!(Instant, "Instant");
 time_native!(SystemTime, "SystemTime");
 
+/// (`"Instant" | "SystemTime" | "Duration"`, nanoseconds) of a clock value, for the effect log and the durable journal.
+pub(crate) fn time_parts(v: &Value) -> Option<(&'static str, i128)> {
+    downcast::<Instant>(v).map(|x| ("Instant", x.0)).or_else(|| downcast::<SystemTime>(v).map(|x| ("SystemTime", x.0))).or_else(|| downcast::<Duration>(v).map(|x| ("Duration", x.0)))
+}
+
+pub(crate) fn time_from_parts(kind: &str, ns: i128) -> Option<Value> {
+    Some(match kind {
+        "Instant" => Value::Native(Rc::new(Instant(ns))),
+        "SystemTime" => Value::Native(Rc::new(SystemTime(ns))),
+        "Duration" => duration(ns),
+        _ => return None,
+    })
+}
+
 pub fn duration(ns: i128) -> Value {
     Value::Native(Rc::new(Duration(ns)))
 }

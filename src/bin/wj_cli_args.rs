@@ -228,6 +228,16 @@ pub enum Commands {
         #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
         faults: f64,
 
+        /// Interpreted runs: keep the step journals of `durable fn` runs in DIR, so a crashed run resumes where it stopped
+        /// (default: in memory)
+        #[arg(long, value_name = "DIR")]
+        journal: Option<PathBuf>,
+
+        /// Interpreted runs: exit abruptly (status 137) after the N-th journaled step of a `durable fn`, or with `N:mid`
+        /// after performing it but before journaling it (tests crash recovery)
+        #[arg(long, value_name = "N[:mid]", requires = "journal")]
+        crash_after: Option<String>,
+
         /// Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`)
         #[arg(long)]
         allow_network: bool,

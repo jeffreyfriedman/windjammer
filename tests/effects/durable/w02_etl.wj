@@ -1,0 +1,30 @@
+// workflow: ETL batch: read input rows, transform, write output, summary
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn load() -> string {
+    fs::write("input.csv", "a,1\nb,2\nc,3\n") ?? ()
+    fs::read_to_string("input.csv") ?? ""
+}
+fn save(text: string) -> int {
+    fs::write("output.csv", text) ?? ()
+    text.len()
+}
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let raw = load()
+    let mut out = ""
+    for line in raw.lines() {
+        let parts = line.split(",").collect::<Vec<_>>()
+        let n = parts[1].parse::<int>().unwrap_or(0)
+        out = "${out}${parts[0]}:${n * 10}\n"
+    }
+    let bytes = save(out)
+    println("saved ${bytes} bytes")
+    "etl ${bytes}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

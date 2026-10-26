@@ -182,7 +182,7 @@ fn register_vec(r: &mut Registry) {
     r.pure(Kind::Vec, "capacity", |_, v, _| Ok(Value::usize(vec_of(v).capacity())));
     r.pure(Kind::Vec, "slice", |it, v, a| {
         let (x, y) = (arg_int(&a, 0, "slice")?, arg_int(&a, 1, "slice")?);
-        it.index_value(v, &Value::Range(x, y, IntTy::Usize))
+        it.index_value(v, &Value::range(x, y, IntTy::Usize))
     });
     r.pure(Kind::Vec, "iter", |_, v, _| Ok(Value::Iter(IterState::from_rc(vec_of(v)))));
     r.pure(Kind::Vec, "into_iter", |_, v, _| Ok(Value::Iter(IterState::from_rc(vec_of(v)))));
@@ -195,9 +195,9 @@ fn register_vec(r: &mut Registry) {
     r.pure(Kind::Vec, "back", |_, v, _| Ok(Value::option(vec_of(v).last().cloned())));
     r.pure(Kind::Vec, "get", |_, v, a| match arg(&a, 0, "get")? {
         Value::Int(i, _) => Ok(Value::option(usize::try_from(i).ok().and_then(|i| vec_of(v).get(i).cloned()))),
-        Value::Range(x, y, _) => {
+        Value::Range(r, _) => {
             let vv = vec_of(v);
-            let (x, y) = (x as usize, y as usize);
+            let (x, y) = (r.0 as usize, r.1 as usize);
             Ok(if x <= y && y <= vv.len() { Value::some(Value::vec(vv[x..y].to_vec())) } else { Value::none() })
         }
         _ => Err(semantic("`get` expects an index")),
@@ -468,7 +468,7 @@ fn register_vec(r: &mut Registry) {
     r.mutating(Kind::Vec, "drain", |_, v, a| {
         let vv = vec_mut(v);
         let (x, y) = match a.first() {
-            Some(Value::Range(x, y, _)) => (*x as usize, *y as usize),
+            Some(Value::Range(r, _)) => (r.0 as usize, r.1 as usize),
             None => (0, vv.len()),
             _ => return Err(semantic("`drain` expects a range")),
         };
@@ -512,27 +512,27 @@ fn register_vec(r: &mut Registry) {
     }
     r.place(Kind::Vec, "iter_mut", |_, p, _| {
         let n = vec_of(&p.read()?).len();
-        Ok(new_iter((0..n).map(|i| Value::Ref(p.proj(Proj::Index(i)))).collect()))
+        Ok(new_iter((0..n).map(|i| Value::Ref(Box::new(p.proj(Proj::Index(i))))).collect()))
     });
     r.place(Kind::Vec, "get_mut", |_, p, a| {
         let i = arg_int(&a, 0, "get_mut")?;
         let n = vec_of(&p.read()?).len() as i128;
-        Ok(if i >= 0 && i < n { Value::some(Value::Ref(p.proj(Proj::Index(i as usize)))) } else { Value::none() })
+        Ok(if i >= 0 && i < n { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(i as usize))))) } else { Value::none() })
     });
     r.place(Kind::Vec, "first_mut", |_, p, _| {
         let n = vec_of(&p.read()?).len();
-        Ok(if n > 0 { Value::some(Value::Ref(p.proj(Proj::Index(0)))) } else { Value::none() })
+        Ok(if n > 0 { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(0))))) } else { Value::none() })
     });
     r.place(Kind::Vec, "last_mut", |_, p, _| {
         let n = vec_of(&p.read()?).len();
-        Ok(if n > 0 { Value::some(Value::Ref(p.proj(Proj::Index(n - 1)))) } else { Value::none() })
+        Ok(if n > 0 { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(n - 1))))) } else { Value::none() })
     });
     r.place(Kind::Vec, "front_mut", |_, p, _| {
         let n = vec_of(&p.read()?).len();
-        Ok(if n > 0 { Value::some(Value::Ref(p.proj(Proj::Index(0)))) } else { Value::none() })
+        Ok(if n > 0 { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(0))))) } else { Value::none() })
     });
     r.place(Kind::Vec, "back_mut", |_, p, _| {
         let n = vec_of(&p.read()?).len();
-        Ok(if n > 0 { Value::some(Value::Ref(p.proj(Proj::Index(n - 1)))) } else { Value::none() })
+        Ok(if n > 0 { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(n - 1))))) } else { Value::none() })
     });
 }

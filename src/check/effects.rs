@@ -9,6 +9,7 @@ use crate::diagnostics::{Diagnostic, SourceIndex, Span};
 use crate::ir::effect_facts::policy::{self, PolicyFinding};
 use crate::ir::effect_facts::violations::{self, Finding};
 use crate::ir::effect_facts::analysis::EffectFacts;
+use crate::ir::effect_facts::durable;
 use crate::ir::effect_facts::lock::LOCK_FILE;
 use crate::ir::effect_facts::{analyze, CapLock, PackageGrants};
 use crate::resolve::{self, ParsedFile};
@@ -199,6 +200,14 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 out.push(d.with_help(format!("add `ffi = [\"{callee}\"]` under [capabilities] in wj.toml, or declare what the extern does with `@uses(..)` / `@pure`")));
             }
         }
+    }
+    let durable = durable::analyze(r, facts);
+    for f in &durable.findings {
+        let mut d = Diagnostic::error(f.code, f.message.clone());
+        if let Some(sp) = span_for(&f.site, &f.word) {
+            d = d.at(sp.with_label(format!("in durable fn `{}`", f.function)));
+        }
+        out.push(d.with_help(f.help.clone()));
     }
     if let Some(p) = &a.policy {
         for f in policy::check(r, facts, p) {

@@ -1,0 +1,25 @@
+// workflow: order checkout: quote, reserve stock, charge, receipt file
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn quote(items: int) -> int { items * 25 + random::range(0, 5) }
+fn reserve(order: string) -> string {
+    fs::write("reserved-${order}.txt", "reserved") ?? ()
+    "res-${order}"
+}
+fn charge(total: int) -> string { "charge-${total}-${time::now_unix()}" }
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let total = quote(3)
+    println("quoted ${total}")
+    let res = reserve("A1")
+    let ch = charge(total)
+    fs::write("receipt.txt", "${res} ${ch}") ?? ()
+    println("receipt written")
+    "${res} ${ch}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

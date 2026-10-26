@@ -46,6 +46,7 @@ pub const RULES: &[Rule] = rules![
     ("OWN-STORED", ParamMode, "A parameter moved into a struct, enum, tuple or collection is owned"),
     ("OWN-COPY-SEED", ParamMode, "Copy scalars are passed by value"),
     ("OWN-READ-FIELD", ParamMode, "Reading a field of a parameter borrows it"),
+    ("OWN-CONSUMING-METHOD", ParamMode, "A consuming trait method (`into`, `try_into`, `into_iter`) on a generic parameter takes it by value"),
     ("OWN-CALL-FORMAL", ParamMode, "Passing a parameter on to a callee inherits the callee's formal mode"),
     ("OWN-STR-REF", ParamMode, "Read-only `string` parameters are `&str`"),
     ("OWN-PIN-REF", ParamMode, "An explicit `&T` annotation is a pin"),

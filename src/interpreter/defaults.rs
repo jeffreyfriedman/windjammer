@@ -42,6 +42,14 @@ impl Interpreter {
                     "Option" => return Ok(Value::none()),
                     _ => {}
                 }
+                // a name shared by several modules: the written (or already resolved) path picks the type
+                let base = if self.dup_types.is_empty() {
+                    base
+                } else if self.structs.contains_key(n.as_str()) {
+                    n.clone()
+                } else {
+                    self.type_key(self.scope.module, n)
+                };
                 if let Some(f) = self.methods.get(&(base.clone(), "default".to_string())).cloned() {
                     return self.call_func(&f, vec![], None);
                 }
@@ -68,8 +76,8 @@ impl Interpreter {
             Value::Bool(_) => Value::Bool(false),
             Value::Str(_) => Value::str(""),
             Value::Vec(_) => Value::vec(vec![]),
-            Value::Map(m) => Value::Map(Rc::new(KMap { m: BTreeMap::new(), hashed: m.hashed })),
-            Value::Set(m) => Value::Set(Rc::new(KMap { m: BTreeMap::new(), hashed: m.hashed })),
+            Value::Map(m) => Value::Map(Rc::new(m.empty_like())),
+            Value::Set(m) => Value::Set(Rc::new(m.empty_like())),
             Value::Char(_) => Value::Char('\0'),
             Value::Enum(e) if &*e.ty == "Option" => Value::none(),
             Value::Struct(s) => self.default_for(&Type::Custom(s.name.to_string()))?,

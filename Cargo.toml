@@ -153,6 +153,10 @@ name = "optimize_rs"
 path = "benchmarks/rust_parity/optimize_rs.rs"
 
 [[test]]
+name = "span_oracle_suite"
+path = "tests/span_oracle_suite.rs"
+
+[[test]]
 name = "check_negative_gate"
 path = "tests/check_negative_gate.rs"
 
@@ -254,6 +258,12 @@ path = "tests/effect_replay_test.rs"
 [[test]]
 name = "effect_simulation"
 path = "tests/effect_simulation_test.rs"
+
+# durable fn: crash recovery and the mutation study (ADR-0021 E4)
+#   cargo test --release --test effect_durable
+[[test]]
+name = "effect_durable"
+path = "tests/effect_durable_test.rs"
 
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages

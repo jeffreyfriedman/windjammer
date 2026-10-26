@@ -71,7 +71,9 @@ pub fn execute(opts: &RunOptions) -> i32 {
                     return 2;
                 }
             };
-            let eo = runner::EntryOptions { fallback: auto, host, hot: opts.hot, run: opts.interp.clone() };
+            let mut interp = opts.interp.clone();
+            interp.durable_sites = crate::check::durable_sites::discover(&target.entry).unwrap_or_default();
+            let eo = runner::EntryOptions { fallback: auto, host, hot: opts.hot, run: interp };
             match runner::run_entry(&target.entry, opts.args.clone(), eo) {
                 RunOutcome::Exited(c) => c,
                 RunOutcome::NeedsCompiled(e) => {

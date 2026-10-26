@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-023
 // mode: check-error
-// xfail: Q-032
 // expect-error: WJ0045: step result of type `fn() -> int` cannot be journaled
 use std::random
 fn make_counter() -> fn() -> int {

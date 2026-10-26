@@ -1,0 +1,7 @@
+// expect: WJ0004
+fn main() {
+    let x = 10
+    x = 20
+//~@5+1 WARN WJ0004 `x` is assigned after
+    println("${x}")
+}

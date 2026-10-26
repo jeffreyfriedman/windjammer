@@ -1,0 +1,13 @@
+// expect: WJ0021
+fn helper() -> int {
+    1
+}
+
+fn helper() -> int {
+//~@4+6 ERROR WJ0021 the name `helper` is
+    2
+}
+
+fn main() {
+    println("${helper()}")
+}

@@ -13,6 +13,15 @@ impl Parser {
     pub(in crate::parser) fn parse_match_value_atom(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let r = self.parse_match_value_atom_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_match_value_atom_inner(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
         let left = if self.current_token() == &Token::Bang {
             self.advance();
             let inner = self.with_unary_operand(|p| p.parse_match_value_atom())?;
@@ -168,7 +177,9 @@ impl Parser {
         // Like `parse_binary_expression`: a full match value (e.g. inside parentheses) is never a
         // prefix operator's operand, so its own `as` casts stay inside.
         let saved = std::mem::replace(&mut self.in_unary_operand, false);
+        self.span_enter();
         let r = self.parse_match_value_inner();
+        self.span_exit();
         self.in_unary_operand = saved;
         r
     }

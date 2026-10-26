@@ -1,0 +1,6 @@
+// expect: WJ0015
+fn main() {
+    let s = "hello"
+    println("${s.frobnicate()}")
+//~@18+10 ERROR WJ0015 no method named `frobnicate`
+}

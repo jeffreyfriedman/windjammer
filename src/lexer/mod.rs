@@ -12,6 +12,10 @@ pub struct Lexer {
     pub(in crate::lexer) current_char: Option<char>,
     pub(in crate::lexer) line: usize,
     pub(in crate::lexer) column: usize,
+    /// Byte offset of `position` in the original text (0-based).
+    pub(in crate::lexer) byte_pos: usize,
+    /// `(line, column, byte)` of the start of each `${...}` body seen in the current token.
+    pub(in crate::lexer) interp_starts: Vec<(usize, usize, usize)>,
     /// After a `.` token, the next numeric literal is a tuple/field index: do not merge `0.0` into
     /// one float (so `outer.0.0` tokenizes as `0` `.` `0`, not `0.0`).
     pub(in crate::lexer) numeric_field_index_after_dot: bool,
@@ -21,6 +25,11 @@ impl Lexer {
     /// 1-based (line, column) the lexer has reached (used to locate lexing failures).
     pub fn position(&self) -> (usize, usize) {
         (self.line, self.column)
+    }
+
+    /// 0-based byte offset the lexer has reached.
+    pub fn byte_offset(&self) -> usize {
+        self.byte_pos
     }
 
     pub fn new(input: &str) -> Self {
@@ -33,8 +42,32 @@ impl Lexer {
             current_char,
             line: 1,
             column: 1,
+            byte_pos: 0,
+            interp_starts: Vec::new(),
             numeric_field_index_after_dot: false,
         }
+    }
+
+    /// A lexer for text that starts at `(line, column, byte)` of a larger source (the body of a
+    /// string interpolation), so its tokens carry positions in the original file.
+    pub fn with_origin(input: &str, line: usize, column: usize, byte: usize) -> Self {
+        let mut lx = Self::new(input);
+        lx.line = line;
+        lx.column = column;
+        lx.byte_pos = byte;
+        lx
+    }
+
+    /// Source text from char index `start` up to the current position.
+    pub(in crate::lexer) fn text_since(&self, start: usize) -> String {
+        self.input[start..self.position].iter().collect()
+    }
+
+    /// True at a `//` comment that is not a doc comment (`///` not followed by a third `/`).
+    fn at_plain_comment(&self) -> bool {
+        self.current_char == Some('/')
+            && self.peek(1) == Some('/')
+            && !(self.peek(2) == Some('/') && self.peek(3) != Some('/'))
     }
 
     pub(in crate::lexer) fn advance(&mut self) {
@@ -46,6 +79,7 @@ impl Lexer {
             self.column += 1;
         }
 
+        self.byte_pos += self.current_char.map_or(0, char::len_utf8);
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
     }
@@ -469,25 +503,45 @@ impl Lexer {
         }
     }
 
-    /// Get next token with its source location
+    /// Get next token with its source location.
+    ///
+    /// Span convention (see docs/testing/INVARIANTS.md): lines and columns are 1-based, columns
+    /// count Unicode scalar values (not bytes, not UTF-16 units), lines end at `\n` only, and byte
+    /// offsets are 0-based and half-open. Whitespace and `//` / `/* */` comments are trivia and
+    /// belong to no token: the span starts at the token itself.
     pub fn next_token_with_location(&mut self) -> TokenWithLocation {
-        // Leading blanks and block comments belong to no token: the span starts at the token.
-        self.skip_whitespace();
-        while self.current_char == Some('/') && self.peek(1) == Some('*') {
-            let (line, column) = (self.line, self.column);
-            if !self.skip_block_comment() {
-                let token = Token::Invalid("unterminated block comment (missing `*/`)".to_string());
-                return TokenWithLocation { token, line, column };
-            }
+        loop {
             self.skip_whitespace();
+            if self.at_plain_comment() {
+                self.skip_comment();
+            } else if self.current_char == Some('/') && self.peek(1) == Some('*') {
+                let (line, column, byte_start) = (self.line, self.column, self.byte_pos);
+                if !self.skip_block_comment() {
+                    let token = Token::Invalid("unterminated block comment (missing `*/`)".to_string());
+                    return self.finish_located(token, line, column, byte_start);
+                }
+            } else {
+                break;
+            }
         }
-        let line = self.line;
-        let column = self.column;
+        let (line, column, byte_start) = (self.line, self.column, self.byte_pos);
+        self.interp_starts.clear();
         let token = self.next_token();
+        self.finish_located(token, line, column, byte_start)
+    }
+
+    fn finish_located(&mut self, token: Token, line: usize, column: usize, byte_start: usize) -> TokenWithLocation {
         TokenWithLocation {
             token,
             line,
             column,
+            src_line: line,
+            src_column: column,
+            byte_start,
+            byte_end: self.byte_pos,
+            end_line: self.line,
+            end_column: self.column,
+            interpolation_starts: std::mem::take(&mut self.interp_starts),
         }
     }
 

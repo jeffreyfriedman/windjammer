@@ -1,0 +1,23 @@
+// workflow: report generation: gather sections, stamp, write file
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn section(name: string) -> string {
+    fs::write("sec-${name}.txt", "body of ${name}") ?? ()
+    fs::read_to_string("sec-${name}.txt") ?? ""
+}
+fn stamp() -> int { time::now_unix() }
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let a = section("intro")
+    let b = section("data")
+    let at = stamp()
+    fs::write("report.txt", "${a}|${b}|${at}") ?? ()
+    println("report done")
+    "report ${a.len() + b.len()}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

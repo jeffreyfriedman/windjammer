@@ -72,6 +72,7 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     // environment
     ("env::var", &[u(EnvRead, P0)]),
     ("env::get", &[u(EnvRead, P0)]),
+    ("env::vars", &[u(EnvRead, Res::Fixed("*"))]),
     ("env::get_or", &[u(EnvRead, P0)]),
     ("env::set", &[u(EnvWrite, P0)]),
     ("env::set_var", &[u(EnvWrite, P0)]),
@@ -149,6 +150,11 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("log::warn_with", &[u(Console, Res::None)]),
 ];
 
+/// Sinks that hand back a live handle (a child process, a listener, a database connection). Their later use is
+/// not an event the port can see, so a run that makes one cannot be recorded, replayed or simulated: it stops here,
+/// naming the call, instead of replaying something that did not happen.
+pub static HANDLE_SINKS: &[&str] = &["subprocess::spawn", "http::serve", "http::serve_fn", "http::server_serve", "db::connect"];
+
 /// Library functions in effect-relevant modules that are deliberately NOT sinks (pure string/value
 /// work, handle operations on an already-authorized handle, deterministic generators).
 /// `interpreter_sinks_are_classified` (tests) requires every interpreter builtin of an authority module
@@ -159,7 +165,11 @@ pub static NOT_SINKS: &[&str] = &[
     "path::from_str", "path::has_extension", "path::is_absolute", "path::is_relative", "path::join_path", "path::new",
     "path::parent", "path::strip_prefix", "path::to_string", "path::to_string_lossy",
     "fs::current_dir", "env::args", "env::current_dir", "env::temp_dir", "path::join", "path::file_name", "path::glob_match",
-    "process::exit", "process::pid", "random::seeded", "uuid::v7_from_timestamp", "thread::spawn", "thread::scope",
+    "process::exit", "process::pid", "random::seeded",
+    // refusals: they stop the run before any effect (`builtins/std_legacy.rs`)
+    "random::random", "net::get", "net::get_async", "net::post", "net::post_async", "net::download", "net::upload",
+    "process::execute", "process::spawn", "fs::read_file", "fs::write_file", "fs::list_directory", "fs::create_directory",
+    "fs::delete_file", "fs::file_exists", "uuid::v7_from_timestamp", "thread::spawn", "thread::scope",
     "thread::current", "thread::panicking", "thread::yield_now", "thread::Builder::new", "time::format", "time::parse",
     "time::parse_rfc3339", "time::to_rfc3339", "time::parse_duration_ms", "time::format_duration_ms", "time::duration_days",
     "time::duration_hours", "time::duration_minutes", "time::duration_seconds", "subprocess::close",

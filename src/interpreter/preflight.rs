@@ -26,32 +26,12 @@ pub(crate) fn err(id: &str, what: String, file: &std::path::Path, line: usize, c
 /// First registry-unsupported feature used by the program, if any.
 /// `std_fn`: does the interpreter implement this `std::module::function` path.
 pub fn check(
-    files: &[LoadedFile],
+    _files: &[LoadedFile],
     resolved: &ResolvedProgram<'static>,
     rust_crates: &[String],
     bridged: &dyn Fn(&str) -> bool,
     std_fn: &dyn Fn(&str) -> bool,
 ) -> Result<(), RuntimeError> {
-    for f in files {
-        let Ok(src) = std::fs::read_to_string(&f.file) else { continue };
-        let toks = crate::lexer::Lexer::new(&src).tokenize_with_locations();
-        for w in toks.windows(2) {
-            let kw = match &w[0].token {
-                Token::Thread => "thread",
-                Token::Async => "async",
-                _ => continue,
-            };
-            if matches!(&w[1].token, Token::LBrace) || matches!(&w[1].token, Token::Ident(m) if m == "move") {
-                return Err(err(
-                    "concurrency.thread_block",
-                    format!("`{} {{}}` blocks", kw),
-                    &f.file,
-                    w[0].line,
-                    w[0].column,
-                ));
-            }
-        }
-    }
     for call in &resolved.calls {
         let loc = call.location.as_ref();
         let at = |id: &str, what: String| {
@@ -62,7 +42,7 @@ pub fn check(
             Res::Def(d) if resolved.collected.defs.get(*d).kind == DefKind::ExternFn => {
                 let name = &resolved.collected.defs.get(*d).name;
                 if !bridged(name) {
-                    return Err(at("ffi.extern_fn", format!("call to `extern fn {}` (no host bridge loaded)", name)));
+                    return Err(at("ffi.extern_fn", format!("call to `extern fn {}` (no host bridge provides it and the C library cannot serve its signature)", name)));
                 }
             }
             Res::Unresolved(Reason::External(path)) => {

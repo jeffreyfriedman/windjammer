@@ -29,6 +29,15 @@ pub fn prepare(path: &Path, library: bool) -> Result<Option<String>> {
 pub fn prepare_for(path: &Path, library: bool, flavor: Flavor) -> Result<Option<String>> {
     let Ok(inputs) = parse_app_inputs(path) else { return Ok(None) }; // not a checkable project: the build reports why
     let a = analyze_project(path, inputs, false);
+    let durable = crate::ir::effect_facts::durable::analyze(&a.resolved, &a.facts);
+    if !durable.functions.is_empty() {
+        // Journaling needs the step wrapper in every backend; until the compiled runtimes have it, a build that silently
+        // dropped the journal would lose progress on a crash, so it stops instead (ADR-0021 E4).
+        bail!(
+            "`durable fn` ({}) runs only in the interpreter in this release: compiled backends do not journal steps yet, and a build without the journal would lose progress on a crash\n  = help: run it with `wj run --interpret`, or remove `durable`",
+            durable.functions.join(", ")
+        );
+    }
     if a.grants.app.is_none() && !a.grants.enforce_deps {
         return Ok(None); // no [capabilities], no lock file: nothing to enforce
     }

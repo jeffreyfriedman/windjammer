@@ -1,0 +1,24 @@
+// workflow: invoice numbering: read counter, allocate, write invoice
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn next_number() -> int {
+    let current = match fs::read_to_string("counter.txt") {
+        Ok(s) => s.trim().parse::<int>().unwrap_or(0),
+        Err(_) => 0,
+    }
+    fs::write("counter.txt", "${current + 1}") ?? ()
+    current + 1
+}
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let n = next_number()
+    fs::write("invoice-${n}.txt", "invoice ${n}") ?? ()
+    println("invoice ${n}")
+    "invoice ${n}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

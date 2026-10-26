@@ -122,15 +122,22 @@ pub struct Parser {
     pub(crate) recovering: bool,
     /// True while parsing the operand of a prefix operator (stops before `as`).
     pub(crate) in_unary_operand: bool,
+    /// Node spans (on for `new_with_source`, off for `new` unless `enable_span_log()` is called).
+    pub(crate) span_log: std::cell::RefCell<Option<crate::parser::span_log::SpanLog>>,
 }
 
 impl Parser {
+    /// Index of the next unconsumed token (tests use it to check a parse consumed its input).
+    pub fn token_position(&self) -> usize {
+        self.position
+    }
+
     /// 1-based (line, column) of the token the parser stopped at (for error reporting).
     pub fn error_position(&self) -> Option<(usize, usize)> {
         self.tokens
             .get(self.position)
             .or_else(|| self.tokens.last())
-            .map(|t| (t.line, t.column))
+            .map(|t| (t.src_line, t.src_column))
     }
 
     /// Check if there was a newline before the current token (for ASI - Automatic Semicolon Insertion)
@@ -169,6 +176,7 @@ impl Parser {
             recovered_errors: Vec::new(),
             recovering: false,
             in_unary_operand: false,
+            span_log: std::cell::RefCell::new(None),
         }
     }
 
@@ -195,13 +203,14 @@ impl Parser {
             recovered_errors: Vec::new(),
             recovering: false,
             in_unary_operand: false,
+            span_log: std::cell::RefCell::new(Some(crate::parser::span_log::SpanLog::default())),
         }
     }
 
     /// `line L, column C` of the current token (the last token when past the end).
     pub(crate) fn pos_desc(&self) -> String {
         match self.tokens.get(self.position).or_else(|| self.tokens.last()) {
-            Some(t) => format!("line {}, column {}", t.line, t.column),
+            Some(t) => format!("line {}, column {}", t.src_line, t.src_column),
             None => "end of input".to_string(),
         }
     }
@@ -332,6 +341,9 @@ impl Parser {
         line: Option<usize>,
         column: Option<usize>,
     ) {
+        if let (Some(l), Some(c)) = (line, column) {
+            crate::error::span_check::assert_location("parser diagnostic", l, c);
+        }
         self.warnings.push(ParseWarning {
             message,
             file,
@@ -348,6 +360,9 @@ impl Parser {
         line: Option<usize>,
         column: Option<usize>,
     ) {
+        if let (Some(l), Some(c)) = (line, column) {
+            crate::error::span_check::assert_location("parser diagnostic", l, c);
+        }
         self.warnings.push(ParseWarning {
             message,
             file,
@@ -388,6 +403,7 @@ impl Parser {
     pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
         unsafe {
             let ptr = self.arenas.expr.alloc(expr);
+            self.record_span(ptr as *const Expression<'static> as usize);
             std::mem::transmute(ptr)
         }
     }
@@ -396,6 +412,7 @@ impl Parser {
     pub(crate) fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
         unsafe {
             let ptr = self.arenas.stmt.alloc(stmt);
+            self.record_span(ptr as *const Statement<'static> as usize);
             std::mem::transmute(ptr)
         }
     }
@@ -456,15 +473,21 @@ impl Parser {
             Token::Shr => {
                 // Split >> into two > tokens
                 // We consume one > and insert another > after it
-                let current_location = self.tokens[self.position].clone();
-                let mut gt_token = current_location.clone();
-                gt_token.token = Token::Gt;
+                // The two halves partition the `>>` span: `>` at [s, s+1) and `>` at [s+1, s+2).
+                let shr = self.tokens[self.position].clone();
+                let mut first = shr.clone();
+                first.token = Token::Gt;
+                first.byte_end = shr.byte_start + 1;
+                first.end_line = shr.src_line;
+                first.end_column = shr.src_column + 1;
+                let mut second = shr;
+                second.token = Token::Gt;
+                second.byte_start += 1;
+                second.column += 1;
+                second.src_column += 1;
 
-                // Replace current Shr with Gt
-                self.tokens[self.position] = gt_token.clone();
-
-                // Insert another Gt right after this position
-                self.tokens.insert(self.position + 1, gt_token);
+                self.tokens[self.position] = first;
+                self.tokens.insert(self.position + 1, second);
 
                 // Advance to consume the first >
                 self.advance();
@@ -584,6 +607,11 @@ impl Parser {
             false
         };
 
+        // `durable fn`: a contextual keyword; it becomes the `@durable` marker attribute (ADR-0021 section 9)
+        if matches!(self.current_token(), Token::Ident(n) if n == "durable") && self.peek(1) == Some(&Token::Fn) {
+            self.advance();
+            decorators.push(Decorator { name: "durable".to_string(), arguments: Vec::new() });
+        }
         match self.current_token() {
             Token::Fn => {
                 self.advance(); // Consume the Fn token

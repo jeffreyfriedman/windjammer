@@ -1,0 +1,10 @@
+// expect: WJ0017
+struct Opaque {
+    n: int,
+}
+
+fn main() {
+    let o = Opaque { n: 1 }
+    println("${o}")
+//~@16+1 ERROR WJ0017 `Opaque` cannot be formatted
+}

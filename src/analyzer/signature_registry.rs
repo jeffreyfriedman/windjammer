@@ -1015,7 +1015,9 @@ impl SignatureRegistry {
         if let Some(g) = self.global_fallback.as_ref() {
             keys.extend(g.all_trait_method_keys());
         }
-        keys.into_iter().collect()
+        let mut out: Vec<String> = keys.into_iter().collect();
+        out.sort();
+        out
     }
 
     /// Record that `key` is a `Trait::method` definition (not an inherent impl).
@@ -1058,6 +1060,7 @@ impl SignatureRegistry {
     /// `Type::method` keys from `impl Trait for Type` on this layer plus fallback.
     pub fn all_trait_impl_method_keys(&self) -> Vec<String> {
         let mut keys: Vec<String> = self.trait_impl_method_keys.iter().cloned().collect();
+        keys.sort();
         if let Some(g) = self.global_fallback.as_ref() {
             for k in g.all_trait_impl_method_keys() {
                 if !keys.iter().any(|e| e == &k) {
@@ -1065,11 +1068,15 @@ impl SignatureRegistry {
                 }
             }
         }
+        keys.sort();
         keys
     }
 
+    /// Every local signature in key order (never hash order).
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
-        self.signatures.iter()
+        let mut all: Vec<_> = self.signatures.iter().collect();
+        all.sort_by(|a, b| a.0.cmp(b.0));
+        all.into_iter()
     }
 
     /// Local signatures plus global fallback entries not shadowed locally.
@@ -1103,8 +1110,9 @@ impl SignatureRegistry {
     /// This is the canonical lookup most call sites should use instead of
     /// `get_signature(m).or_else(|| find_signature_ending_with(m))`.
     pub fn lookup_method(&self, name: &str) -> Option<&FunctionSignature> {
+        // Homonyms (`a::show` vs `b::show`, `Vec::insert` vs `HashMap::insert`) are ambiguous: no guess.
         self.get_signature(name)
-            .or_else(|| self.find_signature_ending_with(name))
+            .or_else(|| self.find_unique_signature_ending_with(name))
     }
 
     /// Fallback lookup: find a signature whose key ends with `::name`.
