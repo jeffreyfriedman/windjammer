@@ -9,6 +9,13 @@ fn oracle_dir() -> std::path::PathBuf {
     repo_root().join("tests/diagnostics_oracle")
 }
 
+/// `CODE,CODE` of the distinct diagnostic codes (ratchet entries name the codes so that a new,
+/// different diagnostic in an already-listed file is a new violation).
+fn codes_of(found: &[Found]) -> String {
+    let set: BTreeSet<&str> = found.iter().map(|f| f.code.as_str()).collect();
+    set.into_iter().collect::<Vec<_>>().join(",")
+}
+
 fn marker_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut files: Vec<_> = std::fs::read_dir(dir).map(|rd| rd.flatten().map(|e| e.path()).collect()).unwrap_or_default();
     files.retain(|p| p.extension().is_some_and(|x| x == "wj"));
@@ -73,7 +80,7 @@ fn repo_wide_check_diagnostics_are_annotated_or_ratcheted() {
                 broken.push(format!("{name}: {}", v.join("; ")));
             }
         } else if !found.is_empty() {
-            unannotated.insert(name);
+            unannotated.insert(format!("{name} {}", codes_of(&found)));
         }
     }
     assert!(broken.is_empty(), "annotated files out of sync:\n{}", broken.join("\n"));
@@ -101,7 +108,7 @@ fn repo_wide_diagnostics_are_annotated_or_ratcheted() {
                 broken.push(format!("{name}: {}", v.join("; ")));
             }
         } else if !found.is_empty() {
-            unannotated.insert(name);
+            unannotated.insert(format!("{name} {}", codes_of(&found)));
         }
     }
     assert!(broken.is_empty(), "annotated files out of sync:\n{}", broken.join("\n"));
@@ -216,4 +223,59 @@ fn dump_check_cases() {
             }
         }
     }
+}
+
+/// Developer aid: drafts `tests/diagnostics_oracle/check/*.wj` from tests/diagnostics/cases by
+/// inserting one `//~@col+len` marker after each diagnostic's line. The result must be reviewed
+/// (the dump above shows each underline) before it is committed; after that the markers are the
+/// oracle and the checker has to keep matching them.
+#[test]
+#[ignore]
+fn generate_check_markers() {
+    let out = oracle_dir().join("check");
+    std::fs::create_dir_all(&out).unwrap();
+    for p in marker_files(&repo_root().join("tests/diagnostics/cases")) {
+        let src = std::fs::read_to_string(&p).unwrap();
+        let mut found = collect_check(&rel(&p), &src);
+        found.retain(|f| f.line > 0);
+        if found.is_empty() {
+            continue;
+        }
+        let lines: Vec<&str> = src.split_inclusive('\n').collect();
+        let mut text = String::new();
+        for (i, l) in lines.iter().enumerate() {
+            text.push_str(l);
+            if !l.ends_with('\n') {
+                text.push('\n');
+            }
+            for f in found.iter().filter(|f| f.line == i + 1) {
+                let len = f.len.map(|n| format!("+{n}")).unwrap_or_default();
+                let sev = f.severity.as_str();
+                let msg: Vec<&str> = f.message.split_whitespace().take(4).collect();
+                text.push_str(&format!("//~@{}{} {} {} {}\n", f.col, len, sev, f.code, msg.join(" ")));
+            }
+        }
+        // diagnostics reported past the last line (EOF) use the `@eof` form
+        for f in found.iter().filter(|f| f.line > lines.len()) {
+            let msg: Vec<&str> = f.message.split_whitespace().take(4).collect();
+            text.push_str(&format!("//~@eof {} {} {}\n", f.severity, f.code, msg.join(" ")));
+        }
+        std::fs::write(out.join(p.file_name().unwrap()), text).unwrap();
+    }
+}
+
+#[test]
+fn diagnostics_with_invalid_spans_panic_in_strict_mode() {
+    use windjammer::diagnostics::{Diagnostic, Span};
+    windjammer::error::span_check::set_strict(true);
+    let span = |ls, cs, le, ce, bs, be| Span { file: "f.wj".into(), byte_start: bs, byte_end: be, line_start: ls, col_start: cs, line_end: le, col_end: ce, label: None };
+    let at = |s: Span| std::panic::catch_unwind(move || Diagnostic::error("WJ0001", "x").at(s)).is_ok();
+    assert!(at(span(1, 1, 1, 2, 0, 1)));
+    assert!(!at(span(0, 1, 1, 2, 0, 1)), "line 0");
+    assert!(!at(span(1, 0, 1, 2, 0, 1)), "column 0");
+    assert!(!at(span(2, 1, 1, 5, 0, 1)), "end line before start line");
+    assert!(!at(span(1, 5, 1, 2, 0, 1)), "end column before start column");
+    assert!(!at(span(1, 1, 1, 2, 5, 1)), "byte_start after byte_end");
+    let sec = std::panic::catch_unwind(|| Diagnostic::error("WJ0001", "x").with_secondary(span(0, 0, 0, 0, 0, 0))).is_ok();
+    assert!(!sec, "secondary spans are checked too");
 }

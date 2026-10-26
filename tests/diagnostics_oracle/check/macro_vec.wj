@@ -1,0 +1,6 @@
+// expect: W0007
+fn main() {
+    let v = vec![1, 2, 3]
+//~@13+13 WARN W0007 `vec!` is deprecated: use
+    println("${v.len()}")
+}

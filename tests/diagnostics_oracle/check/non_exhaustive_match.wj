@@ -1,0 +1,16 @@
+// expect: WJ0010
+enum Color {
+    Red,
+    Green,
+}
+
+fn name(c: Color) -> string {
+    match c {
+//~@5+5 ERROR WJ0010 non-exhaustive match: `Color::Green` not
+        Color::Red => "red",
+    }
+}
+
+fn main() {
+    println("${name(Color::Red)}")
+}

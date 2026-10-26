@@ -1,0 +1,13 @@
+// expect: WJ0006
+mod util {
+    pub fn helper() -> int {
+        1
+    }
+}
+
+use util::missing
+//~@11+7 ERROR WJ0006 unresolved import `util::missing`
+
+fn main() {
+    println("hi")
+}

@@ -1,0 +1,14 @@
+// expect: WJ0030
+enum Shape {
+    Circle(int),
+    Square(int),
+}
+
+fn main() {
+    let s = Shape::Triangle(3)
+//~@20+8 ERROR WJ0030 enum `Shape` has no
+    match s {
+        Shape::Circle(r) => println("${r}"),
+        Shape::Square(a) => println("${a}"),
+    }
+}
