@@ -176,6 +176,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-LEX-013 | lexical.md | `lexical/SPEC-LEX-013.wj` |
 | SPEC-LEX-014 | lexical.md | `lexical/SPEC-LEX-014.wj` |
 | SPEC-LEX-015 | lexical.md | `lexical/SPEC-LEX-015.wj` |
+| SPEC-LEX-016 | lexical.md | `lexical/SPEC-LEX-016.wj` |
 | SPEC-MATCH-001 | guard-match.md | `guard-match/SPEC-MATCH-001.wj` |
 | SPEC-MATCH-002 | guard-match.md | `guard-match/SPEC-MATCH-002.wj` |
 | SPEC-MATCH-003 | guard-match.md | `guard-match/SPEC-MATCH-003.wj` |
