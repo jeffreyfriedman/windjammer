@@ -2,7 +2,7 @@
 
 How source text becomes tokens. Windjammer source is UTF-8. Whitespace separates tokens; a newline ends a statement (see GRAM-003).
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/lexical/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/lexical/`.
 
 **Reserved words:** `fn let mut const static struct enum trait impl match if else for in while loop return break continue use mod extern thread async await defer pub self unsafe as where type dyn true false` and the type words `int int32 uint float bool string`. `Self` is a type name, not a keyword. `bound`, `spawn`, `scope`, `select` are ordinary identifiers today.
 

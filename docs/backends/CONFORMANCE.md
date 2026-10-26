@@ -112,7 +112,7 @@ statements, wrap in blocks, split into temporaries, extract through a helper) an
 
 1. Create `tests/conformance_programs/<NN>_<name>.wj`. Known-answer: add `// expect:` lines (and `// exit: N` for panics).
    Seeded: use `__SEED__`, write `NN_name.ref.py` (reads the seed from `argv[1]`, prints the expected stdout) and run
-   `python3 tests/conformance_programs/regen_vectors.py`.
+   `wj run scripts/wj/regen_conformance_vectors.wj`.
 2. If a backend cannot run it, add a `[[unsupported]]` entry to `SUPPORT.toml` with the missing capability as the reason.
 3. Make sure any new method/AST kind is listed in `FEATURES.toml`.
 4. `cargo test --release --test all backend_conformance`.

@@ -57,7 +57,7 @@ generated C-ABI shim per `extern fn`, loads it, and calls the same symbols the c
 compiled path. Measured on the `host_bridge` fixture (loaded machine): first run 214 s (cargo builds `windjammer-runtime` in release
 for the bridge crate), every later run 10 to 30 ms.
 
-**Performance** (`scripts/interpreter_project_bench.py`, median wall-clock on a loaded 10-agent machine, release `wj`):
+**Performance** (`scripts/wj/interpreter_project_bench.wj`, median wall-clock on a loaded 10-agent machine, release `wj`):
 
 | Measurement | Time |
 |---|---|
@@ -66,7 +66,7 @@ for the bridge crate), every later run 10 to 30 ms.
 | same, repeated runs | 35 ms |
 | `wj run --watch`: source edit to new output | 44 ms (poll interval 20 ms) |
 
-Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (records the keys `interpreter.run_hello_ms`,
+Regenerate with `wj run scripts/wj/interpreter_project_bench.wj <wj> --write` (records the keys `interpreter.run_hello_ms`,
 `interpreter.project_50_cold_ms`, `interpreter.project_50_warm_ms`, `interpreter.watch_restart_ms` in `docs/generated/measured.json`).
 
 **Parity gates** (ADR-0022; the default stays interpreted only while these are green):
@@ -277,7 +277,7 @@ Findings from running the same programs through the compiled path (compiler bugs
   and hot `while` / range `for` loops in any function (integers of every width up to 64 bits, `f64`, `bool`, `Vec` elements,
   struct fields, `push`/`len`); a loop leaves machine code at the statement where anything unusual happens and the closures
   finish it, so results, panics and backtraces are the walker's. `loop5m` and `fib30` run faster than Node, `sieve` and
-  `nbody` within about 2-3x of it (`wj run --no-jit` or `WJ_JIT=0` turns machine code off). `scripts/interp_bench.py`
+  `nbody` within about 2-3x of it (`wj run --no-jit` or `WJ_JIT=0` turns machine code off). `scripts/wj/interp_bench.wj`
   is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
   `wj test --interpret` uses the same engine.
 

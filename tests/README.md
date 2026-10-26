@@ -1,7 +1,7 @@
 # Windjammer compiler tests
 
 **A test is one file in the right place.** Nothing is registered by hand, and a file that no
-runner reaches fails CI (`scripts/check-orphan-tests.sh`).
+runner reaches fails CI (`scripts/wj/check_orphan_tests.wj`).
 
 ## What runs, and how a file is found
 
@@ -24,8 +24,8 @@ or delete the test.
 cargo test --release --test all                         # whole compiler suite
 cargo test --release --test all -- ownership_method     # one module / test
 cargo test --release --workspace                        # + crates/*/tests and unit tests
-scripts/check-orphan-tests.sh                           # fail on unreached test files
-scripts/check-test-ratchet.sh --release --test all      # fail only on NEW failures
+wj run scripts/wj/check_orphan_tests.wj                           # fail on unreached test files
+wj run scripts/wj/check_test_ratchet.wj --release --test all      # fail only on NEW failures
 ```
 
 **Never run tests with `--all-features`.** See "Feature groups" below; use `--all-features`
@@ -62,5 +62,5 @@ path-derived module names (`a/util_test.wj` and `b/util_test.wj` become `a__util
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --release --test all
-scripts/check-orphan-tests.sh
+wj run scripts/wj/check_orphan_tests.wj
 ```
