@@ -10,6 +10,7 @@ In: `Program` + analyzer output + registry. Out: a Rust source string.
 - Largest and most heuristic part of the compiler: `function_generation_prepare.rs`, `ir_call_site.rs`, `generator.rs` exceed the 2,000-line limit (ratcheted in docs/architecture-allowlist.toml).
 - Functions over 300 lines are allow-listed and may not grow.
 - New code must not add ownership/clone/width decisions here; put them in the IR solvers.
+- Clone insertion is converging on the semantic layer (convergence plan C6): `move_at_last_use.rs` publishes the liveness fact (`ir::liveness`) to every reuse-clone query, so the last use of an owned binding always moves; "is it read again?" questions go to `read_after_current_statement` (the same fact), never to a statement scan.
 
 ## Owns
 Rust text emission: `expression_generation`, `statement` files, `function_generation_*`, `data_structure_generation`, `call_expression_generation/`, `ir_call_site`, `signature_promotion`.

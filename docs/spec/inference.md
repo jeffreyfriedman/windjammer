@@ -159,14 +159,24 @@ the better contract (no clone at the call site), so the parameter case should fo
 ### MOVE-LAST-USE
 **Rule.** The last use of an owned non-Copy value moves it. No clone is emitted at the last use.
 **Example.** `let b2 = consume(b)` with `b` unused afterwards emits `consume(b)`.
-**Status.** Diverges (D-CLONE-LASTUSE): after earlier borrowing uses the last use is still cloned
-(`take(it); take(it)` emits `take(it.clone()); take(it.clone())`; `let w = keep(v.clone())` where `v` is never used again; `wrap(b.clone(), ..)` after `push_bag(&mut b, ..)`), and
-arguments inside interpolation are not considered last uses.
+**Decided by.** The liveness fact `ir::liveness::last_moves` (per read, by node identity; parameters and plain
+`let` bindings only; a read is not last inside a loop the binding outlives, inside a closure, or while a binding
+initialised from it may still hold a borrow). The Rust backend hands the bindings that die in each statement to every reuse-clone
+query (`codegen/rust/move_at_last_use.rs`), so no statement-index heuristic can re-add a clone there.
+**Status.** Conforms for bare owned bindings (`tests/inference_corpus/move_at_last_use.wj`: `wrap(b, ..)`
+after `push_bag(&mut b, ..)`, `self.touch(k)` after `self.order.push(k.clone())`). Mutation check: a
+liveness that marks every read last is rejected by rustc (`mutation_always_move_liveness_is_rejected`).
+Open: a clone of an element or field (`svo[0].clone()`) is a place clone, not a last-use decision
+(CLONE-BORROWED-TO-OWNED); `explain` still reports it as D-CLONE-LASTUSE.
 
 ### CLONE-USE-AFTER-MOVE
 **Rule.** If a non-Copy value is passed to an owned formal (or moved into a store) and is used again later, a clone is
 inserted at the move, never at the later use.
 **Example.** `take(it); use(it)` emits `take(it.clone()); use(it)`.
+**Decided by.** The liveness fact `ir::liveness::read_after` (per statement: bindings read later, read in the next
+iteration of a loop they outlive, or kept alive by a derived binding such as a capturing closure). The Rust backend's
+reuse checks (`local_binding_reused_after_current_statement`, `param_has_later_owned_formal_pass`) read it instead of
+scanning the current block's later statements (which missed uses after the enclosing block and mixed statement indices).
 **Status.** Conforms for the earlier site; see MOVE-LAST-USE for the clone at the final site. Also diverges for values bound to a string literal (D-CLONE-STRLIT): `let t = s` followed by a use of `s`
 moves `s` and rustc rejects the program.
 
@@ -182,8 +192,9 @@ parameter or `self`; passing a borrowed parameter to an owned formal), the value
 **Status.** Conforms. Over-clones exist where the clone is applied and then borrowed again: `prefix + &self.name.clone()`
 (D-CLONE-REDUNDANT).
 
-### CLONE-ANALYZER, CLONE-MULTI-USE
-Implementation seeds for the solver's `NeedsClone` constraint (analyzer `auto_clone` sites; use counting). The solver's
+### CLONE-ANALYZER
+Implementation seed for the solver's `NeedsClone` constraint (analyzer `auto_clone` sites; the never-called
+use counting `CLONE-MULTI-USE` was deleted in C6). The solver's
 clone result is not consumed by any code (D-CLONE-OWNERS); clones come from `auto_clone.rs` and about two thousand
 `.clone()` emission sites in codegen. These IDs exist so `explain` can show the constraint that *would* decide.
 
@@ -207,6 +218,9 @@ it names. A let-bound closure that never leaves the function borrows its capture
 **Example.** `fn f(v: Vec<int>) -> int { let g = |i: int| v[i]; g(0) }` emits `let g = |i: i64| v[i as usize]`.
 **Status.** Implementation-defined (no ADR); the escape test is `codegen/rust/closure_escape.rs`. Still over-owns the
 captured parameter (D-CLOS-OVEROWN): `v` above is inferred `Vec<i64>` although the non-escaping closure only reads it.
+Captures come from the liveness layer (`ir::liveness::captures`); a closure whose captured non-Copy binding is read
+after the closure's statement (`ir::liveness::read_after`) borrows instead of moving, because `move` would be E0382
+(`self.order.retain(|x| *x != k); self.order.push(k)`).
 
 ### CLOS-MUT-CAPTURE
 **Rule.** A closure that mutates a captured variable needs the variable and the closure binding to be mutable.
