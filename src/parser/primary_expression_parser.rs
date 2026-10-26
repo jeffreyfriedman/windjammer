@@ -19,6 +19,15 @@ impl Parser {
     pub(in crate::parser) fn parse_primary_expression(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let r = self.parse_primary_expression_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_primary_expression_inner(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
         let expr = match self.current_token() {
             // `_`: a shorthand-closure parameter or a `|>` placeholder (parser/shorthand_closure.rs).
             Token::Underscore => self.shorthand_hole()?,
@@ -187,8 +196,9 @@ impl Parser {
             }
             Token::InterpolatedString(parts) => {
                 let parts = parts.clone();
+                let starts = self.tokens[self.position].interpolation_starts.clone();
                 self.advance();
-                self.finish_interpolated_string(parts)?
+                self.finish_interpolated_string(parts, starts)?
             }
             Token::BoolLiteral(b) => {
                 let b = *b;

@@ -1,0 +1,7 @@
+// A parameter is reported at the parameter itself, not at the start of the file.
+
+fn takes_ref(x: &int) {
+//~@14 ERROR W0001 explicit ownership annotation
+//~@14 ERROR W0001 explicit reference type in parameter
+    print(x)
+}

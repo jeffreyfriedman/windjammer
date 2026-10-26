@@ -1,0 +1,4 @@
+// expect: WJ0011
+fn main() {
+    println("hi")
+//~@17+1 ERROR WJ0011 expected `}`, found end

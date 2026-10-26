@@ -1,0 +1,5 @@
+// expect: WJ0011
+fn main() {
+    let x = 
+}
+//~@1+1 ERROR WJ0011 unexpected token in expression:

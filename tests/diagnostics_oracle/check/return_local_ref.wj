@@ -1,0 +1,10 @@
+// expect: rustc:WJ0022
+fn longest() -> &string {
+    let s = "hi"
+    &s
+}
+//~@1+1 ERROR W0011 function `longest` declares a
+
+fn main() {
+    println("x")
+}

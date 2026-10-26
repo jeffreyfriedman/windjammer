@@ -97,6 +97,7 @@ impl Lexer {
                     // Skip ${
                     self.advance();
                     self.advance();
+                    self.interp_starts.push((self.line, self.column, self.byte_pos));
 
                     // Read expression until the matching }, skipping over nested string and
                     // char literals so quotes and braces inside them do not end the expression.
@@ -209,7 +210,18 @@ impl Lexer {
     }
 
     pub(in crate::lexer) fn read_char(&mut self) -> Token {
+        let start = self.position;
         self.advance(); // Skip opening quote
+
+        // `''` is an empty char literal, not the char `'`; a quote at the end of a line or file
+        // opens nothing (the newline is not its character).
+        if self.current_char == Some('\'') {
+            self.advance();
+            return Token::Invalid("empty char literal `''`".to_string());
+        }
+        if matches!(self.current_char, None | Some('\n')) {
+            return Token::Invalid("unterminated char literal `'`".to_string());
+        }
 
         let ch = if let Some(c) = self.current_char {
             if c == '\\' {
@@ -239,11 +251,12 @@ impl Lexer {
             '\0'
         };
 
-        // Skip closing quote
+        // The closing quote is required: `'a` followed by anything else is malformed.
         if self.current_char == Some('\'') {
             self.advance();
+            Token::CharLiteral(ch)
+        } else {
+            Token::Invalid(format!("unterminated char literal `{}`", self.text_since(start).escape_debug()))
         }
-
-        Token::CharLiteral(ch)
     }
 }

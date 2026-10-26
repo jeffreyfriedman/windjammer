@@ -64,8 +64,8 @@ pub(super) fn for_stmt(cx: &mut Cx, s: S, pattern: &'static Pattern<'static>, it
     let (slot, kind, body) = var_and_body(cx, s, pattern, None, body)?;
     Some(Box::new(move |it, b| {
         let v = src(it, b)?;
-        if let Value::Range(lo, hi, ty) = v {
-            return range(it, b, (lo, hi, ty), (slot, kind), &body, label, &site);
+        if let Value::Range(r, ty) = v {
+            return range(it, b, (r.0, r.1, ty), (slot, kind), &body, label, &site);
         }
         let iter = crate::interpreter::iter::as_iter(it, v)?;
         while let Some(x) = crate::interpreter::iter::next(it, &iter)? {

@@ -1,0 +1,11 @@
+// expect: WJ0019
+mod shapes {
+    fn hidden() -> int {
+        1
+    }
+}
+
+fn main() {
+    println("${shapes::hidden()}")
+//~@24+6 ERROR WJ0019 function `shapes::hidden` is private
+}

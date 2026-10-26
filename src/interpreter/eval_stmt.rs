@@ -288,14 +288,14 @@ impl Interpreter {
                 let cur = p.read()?;
                 match cur {
                     Value::Vec(items) => {
-                        let refs: Vec<Value> = (0..items.len()).map(|i| Value::Ref(p.proj(Proj::Index(i)))).collect();
+                        let refs: Vec<Value> = (0..items.len()).map(|i| Value::Ref(Box::new(p.proj(Proj::Index(i))))).collect();
                         Value::vec(refs)
                     }
                     Value::Map(m) => {
                         let items: Vec<Value> = m
                             .ordered_keys(self.hash_seed)
                             .into_iter()
-                            .map(|k| Value::tuple(vec![k.clone(), Value::Ref(p.proj(Proj::Key(k)))]))
+                            .map(|k| Value::tuple(vec![k.clone(), Value::Ref(Box::new(p.proj(Proj::Key(k))))]))
                             .collect();
                         Value::vec(items)
                     }
@@ -305,8 +305,8 @@ impl Interpreter {
             other => other,
         };
         // lazy integer ranges
-        if let Value::Range(a, b, ty) = &src {
-            let (mut i, end, ty) = (*a, *b, *ty);
+        if let Value::Range(r, ty) = &src {
+            let (mut i, end, ty) = (r.0, r.1, *ty);
             while i < end {
                 if self.run_iteration(pattern, Value::Int(i, ty), body, label)?.is_some() {
                     break;
@@ -359,7 +359,8 @@ impl Interpreter {
     pub(crate) fn to_items(&mut self, v: Value) -> R<Vec<Value>> {
         match deref_value(v)? {
             Value::Vec(v) => Ok(v.to_vec()),
-            Value::Range(a, b, ty) => {
+            Value::Range(r, ty) => {
+                let (a, b) = *r;
                 if b - a > 50_000_000 {
                     return Err(unsupported("materialising a range of more than 50M elements"));
                 }
@@ -412,7 +413,7 @@ impl Interpreter {
             match raw {
                 Value::Ref(p) => {
                     by_ref = true;
-                    let p = self.chase(p)?;
+                    let p = self.chase(*p)?;
                     let v = p.read()?;
                     place = Some(p);
                     v
