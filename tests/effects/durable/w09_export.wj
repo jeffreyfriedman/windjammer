@@ -7,7 +7,7 @@ use std::sync
 use std::time
 fn row(i: int) -> string {
     let line = "row ${i} at ${time::now_millis()}\n"
-    fs::append("export.csv", line) ?? ()
+    fs::append("export.csv", line).unwrap_or(())
     line
 }
 durable fn run() -> string {
@@ -17,7 +17,7 @@ durable fn run() -> string {
     for i in 0..4 {
         total += row(i).len()
     }
-    let back = fs::read_to_string("export.csv") ?? ""
+    let back = fs::read_to_string("export.csv").unwrap_or("")
     println("exported ${back.lines().count()} rows")
     "export ${total}${wj_taint}"
 }

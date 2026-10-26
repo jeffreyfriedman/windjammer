@@ -10,5 +10,5 @@ fn main() {
         Ok(_) => println("written"),
         Err(e) => println("write failed: ${e}"),
     }
-    println("read back: ${fs::read_to_string("short.txt") ?? "?"}")
+    println("read back: ${fs::read_to_string("short.txt").unwrap_or("?")}")
 }

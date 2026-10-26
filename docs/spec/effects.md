@@ -631,7 +631,7 @@ fn main() {
 ```windjammer
 use std::process
 fn listing() -> string {
-    "ls says ${process::run("ls") ?? ""}"
+    "ls says ${process::run("ls").unwrap_or("")}"
 }
 fn main() {
     println(listing())
@@ -706,9 +706,9 @@ Recorded, then replayed from the effect log: both runs print the same lines and 
 ```windjammer
 use std::fs
 fn main() {
-    fs::write("sim-note.txt", "kept in memory") ?? ()
-    println(fs::read_to_string("sim-note.txt") ?? "?")
-    fs::remove_file("sim-note.txt") ?? ()
+    fs::write("sim-note.txt", "kept in memory").unwrap_or(())
+    println(fs::read_to_string("sim-note.txt").unwrap_or("?"))
+    fs::remove_file("sim-note.txt").unwrap_or(())
     println("${fs::exists("sim-note.txt")}")
 }
 ```
@@ -728,7 +728,7 @@ fn main() {
         Ok(_) => println("written"),
         Err(e) => println("write failed: ${e}"),
     }
-    println("read back: ${fs::read_to_string("short.txt") ?? "?"}")
+    println("read back: ${fs::read_to_string("short.txt").unwrap_or("?")}")
 }
 ```
 Simulated with seed 9 and fault rate 0.5 (the seed decides which calls fail), the output is:

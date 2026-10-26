@@ -230,7 +230,15 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
 
     for c in &r.calls {
         let Some(owner) = c.enclosing else { continue };
-        let site = c.location.clone();
+        // the nodes of a `${..}` part carry no file name: name the file of the function that contains the string
+        let site = c.location.clone().map(|mut l| {
+            if l.file.as_os_str().is_empty() {
+                if let Some(fl) = facts.fns.get(&owner).and_then(|f| f.location.as_ref()) {
+                    l.file = fl.file.clone();
+                }
+            }
+            l
+        });
         let mut edge = |callee: DefId, name: &str, rule: &'static str| {
             edges.entry(owner).or_default().push(Edge { callee, site: site.clone(), name: name.to_string(), rule, idents: c.ident_args.clone() });
         };
@@ -305,7 +313,7 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
         if let Some(f) = facts.fns.get_mut(&owner) {
             for (kind, resource) in direct {
                 let callee = c.callee.clone();
-                f.effects.entry(EffectRef { kind, resource }).or_insert(Origin { rule: "SPEC-EFF-002", site: c.location.clone(), callee, via: None });
+                f.effects.entry(EffectRef { kind, resource }).or_insert(Origin { rule: "SPEC-EFF-002", site: site.clone(), callee, via: None });
             }
         }
     }

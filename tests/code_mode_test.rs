@@ -151,7 +151,7 @@ fn main() {
         Err(e) => println("error ${e}"),
     }
     match get_user(GetUserArgs { login: "ann" }) {
-        Ok(u) => println("user ${u.login} ${u.id} ${u.admin} ${u.score}"),
+        Ok(u) => println("user ${u.login} ${u.id} ${u.admin ?? false} ${u.score ?? 0.0}"),
         Err(e) => println("error ${e}"),
     }
     println("ping ${ping() ?? "error"}")
@@ -163,7 +163,7 @@ fn main() {
     assert_eq!(o.code, 0, "{o:?}");
     assert_eq!(
         o.stdout,
-        "issues [{\"n\":1},{\"n\":2}]\nmade 42 https://example.test/42 2\nuser ann 7 Some(true) Some(2.5)\nping pong\n",
+        "issues [{\"n\":1},{\"n\":2}]\nmade 42 https://example.test/42 2\nuser ann 7 true 2.5\nping pong\n",
         "{o:?}"
     );
 }

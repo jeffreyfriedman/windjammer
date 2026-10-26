@@ -5,7 +5,7 @@ fn banner() -> string {
     "built at ${time::now_millis()}"
 }
 fn file_len() -> string {
-    "len=${fs::read_to_string("note.txt") ?? ""}"
+    "len=${fs::read_to_string("note.txt").unwrap_or("")}"
 }
 fn main() {
     println(banner())
