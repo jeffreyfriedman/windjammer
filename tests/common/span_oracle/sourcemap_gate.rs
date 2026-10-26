@@ -2,8 +2,7 @@
 //!
 //! Oracle (independent of the generator): for every mapping, the Rust line exists; the `.wj`
 //! (line, column) is the start of a lexed token of the `.wj` source (checked with the naive
-//! lexer-stream oracle); mappings are monotonic (later Rust lines map to later-or-equal source
-//! positions); and the first word of the mapped statement (`let x`, `for`, `foo(`) occurs on the
+//! lexer-stream oracle; codegen may reorder functions, so no monotonicity is assumed); and the first word of the mapped statement (`let x`, `for`, `foo(`) occurs on the
 //! mapped Rust line.
 
 use super::span_oracle::corpus::*;
@@ -60,7 +59,6 @@ pub fn verify(wj_src: &str, rust_src: &str, maps: &[Map]) -> Vec<String> {
     let wj_lines: Vec<&str> = wj_src.lines().collect();
     let mut sorted: Vec<&Map> = maps.iter().collect();
     sorted.sort_by_key(|m| m.rust_line);
-    let mut prev: Option<(usize, usize, usize)> = None;
     for m in &sorted {
         let at = format!("rust line {} -> wj {}:{}", m.rust_line, m.wj_line, m.wj_column);
         if m.rust_line == 0 || m.rust_line > rust_lines.len() {
@@ -71,12 +69,6 @@ pub fn verify(wj_src: &str, rust_src: &str, maps: &[Map]) -> Vec<String> {
             v.push(format!("{at}: not the start of any .wj token"));
             continue;
         }
-        if let Some((pl, wl, wc)) = prev {
-            if (m.wj_line, m.wj_column) < (wl, wc) && m.rust_line > pl {
-                v.push(format!("{at}: source position goes backwards relative to rust line {pl}"));
-            }
-        }
-        prev = Some((m.rust_line, m.wj_line, m.wj_column));
         // First word of the statement must occur on the mapped Rust line.
         let wj_line = wj_lines.get(m.wj_line - 1).copied().unwrap_or("");
         let rest: String = wj_line.chars().skip(m.wj_column - 1).collect();

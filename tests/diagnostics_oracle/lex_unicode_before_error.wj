@@ -1,4 +1,5 @@
 fn main() {
     let é日本😀 = 1 # 2
-//~@12 ERROR parse
+//~@12 ERROR parse unexpected character
+//~@18 ERROR parse unexpected character
 }
