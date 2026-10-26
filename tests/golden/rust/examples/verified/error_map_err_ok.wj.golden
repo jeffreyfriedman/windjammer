@@ -1,6 +1,6 @@
 #[inline]
 fn parse(s: &str) -> Result<i64, String> {
-    { s.parse::<i64>().map_err(|_| format!("bad: {}", s)) }
+    { s.parse::<i64>().map_err(move |_| format!("bad: {}", s)) }
 }
 
 #[inline]

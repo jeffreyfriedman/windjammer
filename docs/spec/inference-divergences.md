@@ -42,7 +42,7 @@ The solver's `NeedsClone` result (`CloneRequirements`) is computed and never rea
 `auto_clone_analysis` between `analyzed.auto_clone_analysis` and `ir_fn.optimizations.auto_clone`, which is a copy of the
 same analyzer data (`OptimizationHints::from_analyzed`). Clones are emitted by `auto_clone.rs` plus ~2000 `.clone()`
 sites in `src/codegen` (`grep -rn "clone()" src/codegen | wc -l`). `constraint_gen::track_owned_use` (the solver's own
-use counting) is never called, so `CLONE-MULTI-USE` is dead; `CLONE-ANALYZER` is the only live source.
+use counting) was never called; C6 deleted it (`CLONE-MULTI-USE`). `CLONE-ANALYZER` is the only seed.
 Repro: `wj explain-ownership` prints `D-CLONE-OUTSIDE-SOLVER` for any variable cloned in the output without a solver
 `NeedsClone`.
 
@@ -61,6 +61,12 @@ is dead, and arguments inside `println` interpolation are cloned (`field_str(cfg
 `D-CLONE-LASTUSE` per call argument (rule `CALL-CLONE`, `used_later=false`). Not S1; costs allocations and hides
 that ownership flowed. Cause: `auto_clone.rs` decides per statement index and treats a use after a `&mut` call or inside
 a macro conservatively.
+**C6 (2026-10-26): fixed for bare owned bindings.** The liveness fact (`ir::liveness::last_moves`, `dying_in`) now
+vetoes every reuse-clone query in the Rust backend at a last use (`codegen/rust/move_at_last_use.rs`): `wrap(b, ..)`,
+`self.touch(k)` and the corpus `prog_text_wrap`/`prog_lru_cache` goldens move. Corpus
+`tests/inference_corpus/move_at_last_use.wj` (rustc + interpreter oracles); mutation check: an always-move liveness is
+rejected by rustc. Remaining finding (ratchet 1): `decode_node(svo[0].clone())` in `tests/svo_convert_test.wj` is an
+element clone of unknown type (CLONE-BORROWED-TO-OWNED / type inference), not a last-use decision.
 
 ## D-CLONE-STRLIT A literal-bound string variable is assumed Copy (S1)
 `tests/inference_corpus/string_literal_move_then_use.wj`:

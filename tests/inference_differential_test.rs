@@ -303,6 +303,17 @@ fn check_source(
     expect: &[(String, Vec<(String, Mode)>)],
     use_interpreter: bool,
 ) -> Result<(), Failure> {
+    check_source_env(src, dir, expect, use_interpreter, &[]).map(|_| ())
+}
+
+/// [`check_source`] with extra environment for the compiler; returns the emitted Rust.
+fn check_source_env(
+    src: &str,
+    dir: &Path,
+    expect: &[(String, Vec<(String, Mode)>)],
+    use_interpreter: bool,
+    env: &[(&str, &str)],
+) -> Result<String, Failure> {
     std::fs::create_dir_all(dir).unwrap();
     let wj_file = dir.join("prog.wj");
     std::fs::write(&wj_file, src).unwrap();
@@ -312,6 +323,7 @@ fn check_source(
         {
             let mut c = Command::new(wj());
             c.args(["build"]).arg(&wj_file).args(["--no-cargo", "--no-lint", "--quiet", "-o"]).arg(&out_dir);
+            c.envs(env.iter().copied());
             c
         },
         Duration::from_secs(120),
@@ -353,7 +365,7 @@ fn check_source(
     }
     // Oracle 2: interpreter vs compiled output.
     if !use_interpreter {
-        return Ok(());
+        return Ok(rust);
     }
     let compiled = run(Command::new(&bin), Duration::from_secs(20));
     let interp = run(
@@ -372,7 +384,7 @@ fn check_source(
     if interp_out.trim() != compiled_out.trim() {
         return Err(Failure::Mismatch { interp: interp_out, compiled: compiled_out });
     }
-    Ok(())
+    Ok(rust)
 }
 
 fn expectations(p: &Program) -> Vec<(String, Vec<(String, Mode)>)> {
@@ -530,6 +542,44 @@ fn corpus_check_with(name: &str, use_interpreter: bool) {
 #[test]
 fn corpus_for_accumulator_width_matches_element_width() {
     corpus_check("for_accumulator_width");
+}
+
+/// MOVE-LAST-USE (C6): the liveness fact decides; the last use of an owned binding moves and every
+/// earlier owned use that is followed by another use clones. Oracles: rustc (borrow checker) and
+/// interpreter-vs-compiled output, plus the clone count in the emitted Rust.
+#[test]
+fn corpus_last_use_moves_and_earlier_uses_clone() {
+    let name = "move_at_last_use";
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/inference_corpus").join(format!("{name}.wj"));
+    let src = std::fs::read_to_string(&path).unwrap();
+    let dir = work_dir(name);
+    let r = check_source_env(&src, &dir, &[], true, &[]);
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = r.unwrap_or_else(|f| panic!("corpus `{name}` fails oracle {}: {:?}", f.class(), f));
+    // `it` is used twice by an owned formal: one clone, the last use moves.
+    assert!(rust.contains("take(it.clone())") && rust.contains("take(it)"), "{rust}");
+    // `b` after a `&mut` call and `k` after an owned push are moved at their last use.
+    assert!(rust.contains("wrap(b,") && rust.contains("self.touch(k)"), "{rust}");
+    // CLONE-LOOP: a binding declared outside the loop is cloned at a move inside it.
+    assert!(rust.contains("take(looped.clone())"), "{rust}");
+    // CLOS-MOVE-CAPTURE: `k` is read after the `retain` closure, so the closure borrows it.
+    assert!(rust.contains("retain(|x|"), "{rust}");
+}
+
+/// Mutation check: a deliberately wrong liveness (every read is a last use, so everything
+/// moves) must be caught by the oracles. If this passes the gates cannot see liveness bugs.
+#[test]
+fn mutation_always_move_liveness_is_rejected() {
+    let name = "move_at_last_use";
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/inference_corpus").join(format!("{name}.wj"));
+    let src = std::fs::read_to_string(&path).unwrap();
+    let dir = work_dir("move_at_last_use_mutant");
+    let r = check_source_env(&src, &dir, &[], true, &[("WJ_LIVENESS_MUTATION", "always-move")]);
+    let _ = std::fs::remove_dir_all(&dir);
+    match r {
+        Err(Failure::Rustc(e)) => assert!(e.contains("E0382") || e.contains("E0505"), "{e}"),
+        other => panic!("always-move liveness was not rejected by rustc: {:?}", other.map(|_| ())),
+    }
 }
 
 #[test]

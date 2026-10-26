@@ -62,7 +62,6 @@ pub const RULES: &[Rule] = rules![
     ("CLONE-LOOP", Clone, "A value moved inside a loop body but declared outside it is cloned"),
     ("CLONE-BORROWED-TO-OWNED", Clone, "Producing an owned value from a borrowed one clones it"),
     ("CLONE-ANALYZER", Clone, "Clone site recorded by the analyzer's auto-clone pass (implementation seed)"),
-    ("CLONE-MULTI-USE", Clone, "Variable used at several owned sites (solver-side heuristic)"),
     ("RET-OWNED", Return, "Function results are owned values"),
     ("RET-NO-BORROW", Return, "A function never returns a borrow of its parameters"),
     ("CLOS-MOVE-CAPTURE", Closure, "A closure captures the variables it names by move"),

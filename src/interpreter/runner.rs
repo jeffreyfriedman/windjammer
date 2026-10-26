@@ -23,6 +23,11 @@ pub fn exit_code_for(e: &RuntimeError) -> i32 {
 
 /// Find the entry `.wj` file for a path: a file, or a project directory (`main.wj`, `src/main.wj`, or the
 /// default binary of its `wj.toml`). Discovery is `module_system::project`, shared with the compiled `wj run`.
+/// The one place the runner reads the process environment for `env::vars()`.
+fn host_env() -> Vec<(String, String)> {
+    std::env::vars().collect()
+}
+
 pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().unwrap_or_default();
     crate::module_system::project::resolve_run_target(Some(path), &cwd, None).map(|t| t.entry)
@@ -141,6 +146,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
     with_big_stack(move || {
         let EntryOptions { fallback, host, hot, run: opts } = opts;
         let mut it = Interpreter::new();
+        it.set_env_snapshot(host_env()); // host input, like `args`
         it.guard_stack();
         it.hash_seed = opts.hash_seed;
         it.set_sched_seed(opts.sched_seed);
@@ -376,6 +382,7 @@ fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
 fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>) -> TestResult {
     let spec = spec.clone();
     let mut it = Interpreter::new_capturing();
+    it.set_env_snapshot(host_env());
     it.guard_stack();
     // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
     it.set_engine_resolved(true);

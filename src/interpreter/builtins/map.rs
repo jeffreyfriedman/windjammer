@@ -3,9 +3,8 @@
 //! Maps are ordered by key (a valid HashMap iteration order; programs must not depend on it).
 
 use super::*;
-use std::collections::BTreeMap;
 
-type M = BTreeMap<Key, Value>;
+type M = KMap;
 
 fn map_of(v: &Value) -> Rc<KMap> {
     match v {
@@ -16,7 +15,7 @@ fn map_of(v: &Value) -> Rc<KMap> {
 
 fn map_mut(v: &mut Value) -> &mut M {
     match v {
-        Value::Map(m) | Value::Set(m) => &mut Rc::make_mut(m).m,
+        Value::Map(m) | Value::Set(m) => Rc::make_mut(m),
         _ => unreachable!("map method on non-map"),
     }
 }
@@ -93,7 +92,7 @@ pub fn register(r: &mut Registry) {
     r.mutating(Kind::Map, "retain", |it, v, a| {
         let f = arg(&a, 0, "retain")?;
         let src: Vec<(Key, Value)> = map_of(v).iter().map(|(k, x)| (k.clone(), x.clone())).collect();
-        let mut out = M::new();
+        let mut out = map_of(v).empty_like();
         for (k, x) in src {
             let keep = it.call_value(&f, vec![k.0.clone(), x.clone()])?;
             if matches!(keep, Value::Bool(true)) {
@@ -221,7 +220,8 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Set, "is_superset", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_superset")?);
         let m = map_of(v);
-        Ok(Value::Bool(o.keys().all(|k| m.contains_key(k))))
+        let all = o.keys().all(|k| m.contains_key(k));
+        Ok(Value::Bool(all))
     });
     r.pure(Kind::Set, "is_disjoint", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_disjoint")?);
@@ -247,7 +247,7 @@ pub fn register(r: &mut Registry) {
     r.mutating(Kind::Set, "retain", |it, v, a| {
         let f = arg(&a, 0, "retain")?;
         let src: Vec<Key> = map_of(v).keys().cloned().collect();
-        let mut out = M::new();
+        let mut out = map_of(v).empty_like();
         for k in src {
             if matches!(it.call_value(&f, vec![k.0.clone()])?, Value::Bool(true)) {
                 out.insert(k, Value::Unit);

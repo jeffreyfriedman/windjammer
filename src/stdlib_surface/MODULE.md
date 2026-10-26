@@ -1,7 +1,7 @@
 # src/stdlib_surface/
 
 ## Purpose
-Declarative tables of the built-in standard-library surface (ADR-0018). Today: the enumerable collection methods
+Declarative tables of the built-in standard-library surface (ADR-0018). Today: the known-method name table (`known_methods.rs`, shared by `wj check` WJ0015 and the interpreter parity gate) and the enumerable collection methods
 (`group_by`, `count_by`, `unique`, ...) with argument kinds, result shapes and the Rust runtime name.
 
 ## Inputs/Outputs
