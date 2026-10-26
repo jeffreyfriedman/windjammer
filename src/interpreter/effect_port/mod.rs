@@ -12,6 +12,7 @@
 pub mod codec;
 pub mod log;
 pub mod sim;
+pub mod sim_fs;
 
 use super::engine::Interpreter;
 use super::error::{Ctl, ErrorKind, RuntimeError};
@@ -403,6 +404,7 @@ mod tests {
         ("builtins/std_http_server.rs", "TcpStream", "http::serve* are HANDLE_SINKS: refused under the port"),
         ("caps.rs", "env::current_dir", "resolving the project directory for the grant"),
         ("runner.rs", "env::current_dir", "locating the entry file"),
+        ("runner.rs", "env::temp_dir", "the simulated world's temp directory when no scratch directory could be made; the program sees the world's"),
         ("runner.rs", "OsRng", "choosing the seed that --record puts in the header"),
     ];
 

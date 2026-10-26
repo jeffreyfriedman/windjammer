@@ -1,0 +1,17 @@
+// bug: two sequential calls share a 150 ms budget, but each is only assumed to be fast (up to 100 ms of latency)
+use std::random
+use std::time
+
+fn call_backend() -> int {
+    time::sleep_millis(random::range(0, 100))
+    1
+}
+
+@test
+fn both_calls_finish_inside_the_budget() {
+    let start = time::now_millis()
+    call_backend()
+    call_backend()
+    let elapsed = time::now_millis() - start
+    assert(elapsed <= 150)
+}

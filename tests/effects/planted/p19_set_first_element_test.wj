@@ -1,0 +1,14 @@
+// bug: the leader is "the first element" of a HashSet of node ids, which is only the smallest id by luck
+use std::collections::HashSet
+
+@test
+fn leader_is_the_smallest_node() {
+    let mut nodes = HashSet::new()
+    for id in [7, 3, 9, 1, 5] { nodes.insert(id) }
+    let mut leader = -1
+    for id in nodes.iter() {
+        leader = *id
+        break
+    }
+    assert_eq(leader, 1)
+}

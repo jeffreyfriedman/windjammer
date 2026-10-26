@@ -93,6 +93,10 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-041 | effects.md | `effects/SPEC-EFF-041.wj` |
 | SPEC-EFF-042 | effects.md | `effects/SPEC-EFF-042.wj` |
 | SPEC-EFF-043 | effects.md | untestable |
+| SPEC-EFF-044 | effects.md | `effects/SPEC-EFF-044.wj` |
+| SPEC-EFF-045 | effects.md | `effects/SPEC-EFF-045.wj` |
+| SPEC-EFF-046 | effects.md | untestable |
+| SPEC-EFF-047 | effects.md | untestable |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
 | SPEC-ERR-002 | errors.md | `errors/SPEC-ERR-002.wj` |
 | SPEC-ERR-003 | errors.md | `errors/SPEC-ERR-003.wj` |

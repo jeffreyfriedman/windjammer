@@ -1,0 +1,25 @@
+// bug: a record is appended in two pieces, so a failure between them leaves a truncated record on disk
+// faults: 0.15
+use std::fs
+
+fn append_record(path: string, key: string, value: string) -> bool {
+    match fs::append(path, "${key}=") {
+        Ok(_) => {}
+        Err(_) => return false
+    }
+    match fs::append(path, "${value}\n") {
+        Ok(_) => true,
+        Err(_) => false
+    }
+}
+
+@test
+fn the_log_only_holds_whole_records() {
+    let _ = fs::remove_file("records.log")
+    append_record("records.log", "a", "1")
+    append_record("records.log", "b", "2")
+    let text = fs::read_to_string("records.log") ?? ""
+    for line in text.lines() {
+        assert(line.contains("=") && line.len() >= 3)
+    }
+}

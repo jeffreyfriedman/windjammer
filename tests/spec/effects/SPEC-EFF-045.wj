@@ -1,0 +1,14 @@
+// spec: SPEC-EFF-045
+// mode: simulate
+// seed: 9
+// faults: 0.5
+// expect: write failed: No space left on device (os error 28)
+// expect: read back: abcd
+use std::fs
+fn main() {
+    match fs::write("short.txt", "abcdefgh") {
+        Ok(_) => println("written"),
+        Err(e) => println("write failed: ${e}"),
+    }
+    println("read back: ${fs::read_to_string("short.txt") ?? "?"}")
+}

@@ -1,0 +1,17 @@
+// bug: creating the output directory is allowed to fail silently, and the write that follows then reports a confusing error
+// faults: 0.15
+use std::fs
+
+fn export(name: string, body: string) -> bool {
+    let _ = fs::create_dir_all("out/reports")
+    match fs::write("out/reports/${name}.txt", body) {
+        Ok(_) => true,
+        Err(_) => false
+    }
+}
+
+@test
+fn export_writes_the_report() {
+    assert(export("daily", "42"))
+    assert(fs::exists("out/reports/daily.txt"))
+}

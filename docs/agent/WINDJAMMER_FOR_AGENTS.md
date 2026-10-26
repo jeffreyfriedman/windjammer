@@ -283,6 +283,20 @@ or work around it; 126 is a policy fault, not an error value. `wj explain-effect
 reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_CAPS=warn|off` is the explicit opt-out. Hand untrusted
 helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
 
+
+## Races, flaky tests and replays: `--simulate`, `--record`, `--replay`
+
+A test that passes "usually" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a
+world that is a function of the seed (virtual clock from Unix time 1700000000, seeded random numbers, task interleavings and `HashMap` order, in-memory
+files, no network, and with `--faults` seeded I/O failures). The first failing seed is printed with the command that reproduces it; run that command and the
+same failure comes back every time. Put inputs the test needs in a `fixtures/` directory next to the project (it is preloaded into the in-memory files).
+`wj run --interpret --simulate --seed N` does the same for a program.
+
+To keep a live run for later, `wj run --interpret --record run.wjlog PROGRAM` writes every effect it performed; `--replay run.wjlog` re-runs the program
+answering all of them from the log and performing none, so a run that hit the network or the clock can be debugged offline and gives the same output.
+A replay that asks for something the log does not have stops with `WJ0049` and shows both requests. Calls that return a live handle
+(`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded; the error names the call.
+
 ## The 25 things agents get wrong first
 
 1. `println!("{}", x)`: macros do not exist. Write `println("${x}")` (W0007/W0008, ADR-0014).

@@ -15,6 +15,7 @@
 //!   expect-exit: N          expected exit status for panic mode (default 101)
 //!   manifest: TOML-LINE     one line of the program's wj.toml (repeatable; ADR-0021 `[capabilities]`, `[policy]`)
 //!   seed: N                 simulation seed (simulate mode, default 1)
+//!   faults: P               probability that a file or network call fails (simulate mode, default 0)
 //!   profile: local         run under the default local profile (project directory + time/random/console), enforced
 //!   xfail: Q-NNN            the implementation currently contradicts the spec (docs/spec/OPEN_QUESTIONS.md);
 //!                           the example must FAIL, and the run fails if it starts passing
@@ -41,6 +42,7 @@ struct Spec {
     manifest: Vec<String>,
     profile: Option<String>,
     seed: Option<u64>,
+    faults: Option<f64>,
     src: String,
 }
 
@@ -78,6 +80,7 @@ fn load(path: &Path) -> Spec {
             "xfail" => s.xfail = Some(v.trim().to_string()),
             "manifest" => s.manifest.push(v.trim().to_string()),
             "seed" => s.seed = Some(v.trim().parse().expect("seed")),
+            "faults" => s.faults = Some(v.trim().parse().expect("faults")),
             "profile" => s.profile = Some(v.trim().to_string()),
             _ => {}
         }
@@ -244,6 +247,7 @@ fn check_front_end(s: &Spec) -> Result<(), String> {
 /// Run twice in the deterministic world with the same seed; the runs must agree and match `expect:`.
 fn simulate(s: &Spec) -> Result<(), String> {
     let seed = s.seed.unwrap_or(1);
+    let faults = s.faults.unwrap_or(0.0);
     let once = || {
         let src = s.src.clone();
         let name = s.path.display().to_string();
@@ -256,8 +260,10 @@ fn simulate(s: &Spec) -> Result<(), String> {
                 ));
                 let program = parser.parse().map_err(|e| format!("parse error: {e}"))?;
                 let mut it = Interpreter::new_capturing();
-                it.set_deterministic_time(true);
-                it.set_sched_seed(seed);
+                // the same world `wj test --simulate` builds: virtual clock, seeded random numbers and scheduler, in-memory files
+                let cfg = windjammer::interpreter::effect_port::sim::SimConfig { seed, faults };
+                let here = std::env::current_dir().unwrap_or_default();
+                windjammer::interpreter::runner::install_simulation(&mut it, &cfg, &here, &here.join(".wj-sim"));
                 it.run_checked(&program).map_err(|e| e.render())?;
                 Ok::<String, String>(it.get_output())
             }))
@@ -415,7 +421,7 @@ fn rule_examples_in_chapters_match_the_test_files() {
 }
 
 fn is_header(l: &str) -> bool {
-    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "profile"]
+    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "faults", "profile"]
         .iter()
         .any(|k| l.strip_prefix("// ").is_some_and(|r| r.starts_with(&format!("{k}:"))))
 }

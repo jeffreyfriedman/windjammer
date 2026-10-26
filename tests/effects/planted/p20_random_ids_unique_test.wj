@@ -1,0 +1,14 @@
+// bug: six session tokens are drawn from a range of 1000 and assumed to be distinct
+use std::collections::HashSet
+use std::random
+
+@test
+fn session_tokens_are_distinct() {
+    let mut seen = HashSet::new()
+    let mut i = 0
+    while i < 6 {
+        seen.insert(random::range(0, 1000))
+        i += 1
+    }
+    assert_eq(seen.len(), 6)
+}

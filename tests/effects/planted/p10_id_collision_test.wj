@@ -1,0 +1,17 @@
+// bug: record ids are the current millisecond, so two records created in the same millisecond collide
+use std::collections::HashSet
+use std::random
+use std::time
+
+@test
+fn record_ids_are_unique() {
+    let mut seen = HashSet::new()
+    let mut i = 0
+    while i < 20 {
+        let id = time::now_millis()
+        assert(!seen.contains(id))
+        seen.insert(id)
+        time::sleep_millis(random::range(0, 300))
+        i += 1
+    }
+}
