@@ -4456,6 +4456,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "jsonwebtoken",
+ "libc",
  "libloading",
  "libsqlite3-sys",
  "mime_guess",

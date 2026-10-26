@@ -391,6 +391,10 @@ pub(super) fn full_path(external: &str, callee: &str) -> String {
 
 /// Effects a call to the sink at `path` performs, with resources read from the call's literal arguments.
 pub(super) fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind, Resource)> {
+    if path.ends_with("mcp::call") {
+        let lit = |i: usize| c.str_args.get(i).and_then(|a| a.as_deref());
+        return vec![(EffectKind::User(sinks::mcp_effect_name(lit(0), lit(1))), Resource::None)];
+    }
     let Some(uses) = sinks::lookup(path) else { return Vec::new() };
     uses.iter()
         .map(|u| {

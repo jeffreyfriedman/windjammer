@@ -17,6 +17,7 @@ pub fn exit_code_for(e: &RuntimeError) -> i32 {
         ErrorKind::Unsupported => 2,
         ErrorKind::Semantic => 1,
         ErrorKind::CapabilityDenied => 126,
+        ErrorKind::Limit => 124,
     }
 }
 
@@ -76,6 +77,12 @@ pub struct RunOptions {
     pub journal: Option<PathBuf>,
     /// `--crash-after N[:mid]`: exit abruptly after the N-th journaled step (tests of crash recovery).
     pub crash_after: Option<String>,
+    /// `--bind NAME=ENDPOINT` (repeatable): MCP servers `mcp::call` may reach (`mock:FILE`, `stdio:COMMAND ARGS`).
+    pub binds: Vec<String>,
+    /// `--limits fuel=N,wall=SECS,output=BYTES,calls=N,mem=MB`.
+    pub limits: Option<String>,
+    /// `--result-json FILE`: exit status, effects used and resource use, as JSON.
+    pub result_json: Option<PathBuf>,
     /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
     pub no_jit: bool,
     /// `WJ_JIT_LOOP_HOT`: closure iterations before a loop enters machine code (default 256).
@@ -172,6 +179,10 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);
         }
+        if let Err(m) = setup_code_mode(&mut it, &opts) {
+            eprintln!("error: {m}");
+            return RunOutcome::Exited(1);
+        }
         if let Err(m) = setup_durable(&mut it, &opts, &entry) {
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);
@@ -205,8 +216,31 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             }
         };
         it.flush();
+        if let Some(p) = &opts.result_json {
+            let (steps, effect_calls, output_bytes) = it.usage();
+            let doc = serde_json::json!({ "exit": code, "effects_used": it.effects_used(), "steps": steps, "effect_calls": effect_calls, "output_bytes": output_bytes });
+            if let Err(e) = std::fs::write(p, doc.to_string()) {
+                eprintln!("error: cannot write {}: {e}", p.display());
+            }
+        }
         RunOutcome::Exited(code)
     })
+}
+
+/// `--bind` and `--limits` (ADR-0021 section 12): the tool bridge and the resource limits of a code-mode run.
+fn setup_code_mode(it: &mut Interpreter, opts: &RunOptions) -> Result<(), String> {
+    if let Some(text) = &opts.limits {
+        it.set_limits(super::limits::LimitSpec::parse(text)?);
+        it.set_engine_resolved(false); // fuel ticks in the tree walker; the compiled engine would not be counted
+    }
+    if opts.limits.is_none() && opts.result_json.is_some() {
+        it.set_limits(super::limits::LimitSpec::default()); // no limits, but the run counts its steps and effect calls
+    }
+    for b in &opts.binds {
+        let (name, spec) = b.split_once('=').ok_or_else(|| format!("--bind takes NAME=ENDPOINT, found `{b}`"))?;
+        it.bind_mcp(name, spec)?;
+    }
+    Ok(())
 }
 
 /// `durable fn`: find the journaled steps of the program and install the journal (ADR-0021 E4).

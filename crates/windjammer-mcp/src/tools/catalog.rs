@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use super::registry::ToolStability;
 use super::{
-    analyze_ssr_routing, check_code, docs_search, format_code, run_code, test_code, analyze_types, explain_error, generate_code, generate_component,
+    analyze_ssr_routing, check_code, docs_search, execute, format_code, run_code, test_code, analyze_types, explain_error, generate_code, generate_component,
     generate_game_entity, get_definition, get_language_info, parse_code, patch_change_type,
     patch_insert_statement, query_diagnostics, query_effects, refactor_extract_function,
     refactor_inline_variable, refactor_rename_symbol, search_workspace,
@@ -125,6 +125,12 @@ pub fn all_tool_specs() -> &'static [ToolSpec] {
             stability: ToolStability::Stable,
         },
         ToolSpec {
+            name: "execute",
+            description: "Code mode: run a Windjammer program that calls MCP tools through typed bindings, inside the operator's capability grant and resource limits",
+            category: "agent-loop",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
             name: "test_code",
             description: "Run @test / test_* functions in the interpreter (wj test --interpret)",
             category: "agent-loop",
@@ -177,6 +183,7 @@ pub fn input_schema_for(name: &str) -> Option<Value> {
         "query_effects" => schema_for!(query_effects::QueryEffectsRequest),
         "check_code" => schema_for!(check_code::CheckCodeRequest),
         "run_code" => schema_for!(run_code::RunCodeRequest),
+        "execute" => schema_for!(execute::ExecuteRequest),
         "test_code" => schema_for!(test_code::TestCodeRequest),
         "format_code" => schema_for!(format_code::FormatCodeRequest),
         "docs_search" => schema_for!(docs_search::DocsSearchRequest),

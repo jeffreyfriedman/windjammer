@@ -27,6 +27,8 @@ pub enum ErrorKind {
     Semantic,
     /// A sink was called without the capability (ADR-0021). Not catchable; exit status 126.
     CapabilityDenied,
+    /// A resource limit of a sandboxed run was exceeded (`--limits`). Not catchable; exit status 124.
+    Limit,
     /// `std::process::exit(code)`
     Exit(i32),
 }
@@ -66,6 +68,9 @@ impl RuntimeError {
                 out.push_str(&format!("thread 'main' panicked:\n{}", self.message))
             }
             (ErrorKind::CapabilityDenied, s) => {
+                out.push_str(&format!("error: {}{}", self.message, s.as_ref().map(|s| format!("\n  --> {}", s)).unwrap_or_default()))
+            }
+            (ErrorKind::Limit, s) => {
                 out.push_str(&format!("error: {}{}", self.message, s.as_ref().map(|s| format!("\n  --> {}", s)).unwrap_or_default()))
             }
             (ErrorKind::Unsupported, s) => {

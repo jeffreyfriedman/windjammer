@@ -6,6 +6,7 @@ pub mod analyze_types;
 pub mod check_code;
 pub mod docs_search;
 pub mod format_code;
+pub mod execute;
 pub mod run_code;
 pub mod test_code;
 pub mod catalog;
@@ -136,6 +137,7 @@ impl ToolRegistry {
             }),
             "check_code" => Box::new(move |d, args| Box::pin(check_code::handle(d, args))),
             "run_code" => Box::new(move |d, args| Box::pin(run_code::handle(d, args))),
+            "execute" => Box::new(move |d, args| Box::pin(execute::handle(d, args))),
             "test_code" => Box::new(move |d, args| Box::pin(test_code::handle(d, args))),
             "format_code" => Box::new(move |d, args| Box::pin(format_code::handle(d, args))),
             "docs_search" => Box::new(move |d, args| Box::pin(docs_search::handle(d, args))),

@@ -179,6 +179,10 @@ pub struct Interpreter {
     pub(crate) port: Option<std::cell::RefCell<super::effect_port::EffectPort>>,
     /// Journal of `durable fn` steps (`durable_rt`); `None` until a durable function is called or `enable_durable`.
     pub(crate) durable: Option<Box<super::durable_rt::DurableRt>>,
+    /// Resource limits of a sandboxed run (`limits.rs`); `None` = unlimited.
+    pub(crate) limits: Option<Box<super::limits::Limits>>,
+    /// MCP servers a script may call through `mcp::call` (`mcp_host.rs`).
+    pub(crate) mcp: Option<Box<super::mcp_host::McpHost>>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -270,6 +274,8 @@ impl Interpreter {
             caps: None,
             port: None,
             durable: None,
+            limits: None,
+            mcp: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
@@ -356,6 +362,9 @@ impl Interpreter {
     }
 
     pub(crate) fn write_out(&mut self, s: &str) {
+        if self.limits.is_some() {
+            self.limit_output(s.len());
+        }
         if self.capture_output {
             self.output.push(s.to_string());
         } else {

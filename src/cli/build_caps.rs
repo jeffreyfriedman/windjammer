@@ -38,6 +38,10 @@ pub fn prepare_for(path: &Path, library: bool, flavor: Flavor) -> Result<Option<
             durable.functions.join(", ")
         );
     }
+    let uses_mcp = a.facts.fns.values().any(|f| f.effects.keys().any(|e| e.kind.name().starts_with("mcp.")));
+    if uses_mcp {
+        bail!("`std::mcp` (code mode) runs only in the interpreter in this release: compiled backends have no MCP bridge\n  = help: run it with `wj run --interpret --bind NAME=ENDPOINT`");
+    }
     if a.grants.app.is_none() && !a.grants.enforce_deps {
         return Ok(None); // no [capabilities], no lock file: nothing to enforce
     }

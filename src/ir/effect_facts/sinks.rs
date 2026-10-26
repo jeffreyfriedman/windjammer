@@ -159,6 +159,7 @@ pub static HANDLE_SINKS: &[&str] = &["subprocess::spawn", "http::serve", "http::
 /// `interpreter_sinks_are_classified` (tests) requires every interpreter builtin of an authority module
 /// to be either in `SINKS` or here, so a new builtin cannot silently bypass the gate.
 pub static NOT_SINKS: &[&str] = &[
+    "mcp::quote", "mcp::get_string", "mcp::get_int", "mcp::get_float", "mcp::get_bool", "mcp::get_raw", "mcp::get_items", "mcp::get_strings", "mcp::get_ints",
     "fs::join", "fs::extension", "fs::file_name", "fs::file_stem", "fs::parent", "fs::is_absolute", "fs::is_relative",
     "path::as_os_str", "path::components", "path::current_dir", "path::extension", "path::file_name_path", "path::file_stem",
     "path::from_str", "path::has_extension", "path::is_absolute", "path::is_relative", "path::join_path", "path::new",
@@ -173,9 +174,21 @@ pub static NOT_SINKS: &[&str] = &[
     "subprocess::write_line", "cli::app", "cli::args", "log::debug_enabled", "log::error_enabled", "log::info_enabled", "log::trace_enabled", "log::warn_enabled", 
 ];
 
+/// Sinks whose effect is computed from their literal arguments, not looked up in `SINKS`: `mcp::call(server, tool, json)` performs the
+/// user effect `mcp.<server>.<tool>` (ADR-0021 section 12). The effect pass and the run-time gate both special-case them.
+pub static DYNAMIC_SINKS: &[&str] = &["mcp::call"];
+
+/// The effect `mcp::call` performs for these (possibly non-literal) arguments: `mcp.<server>.<tool>`, or `mcp.*` when either is computed.
+pub fn mcp_effect_name(server: Option<&str>, tool: Option<&str>) -> String {
+    match (server, tool) {
+        (Some(s), Some(t)) => format!("mcp.{s}.{t}"),
+        _ => "mcp.*".to_string(),
+    }
+}
+
 /// Modules whose builtins carry authority and must therefore be classified one way or the other.
 pub static AUTHORITY_MODULES: &[&str] =
-    &["fs", "env", "process", "subprocess", "http", "net", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime"];
+    &["fs", "env", "process", "subprocess", "http", "net", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime", "mcp"];
 
 /// Cheap pre-filter for hot paths: can `path` possibly be a sink? Every row is `module::function` (or a bare console
 /// intrinsic), and lookup only drops LEADING segments, so the module is always the second-to-last segment: two steps
@@ -190,7 +203,7 @@ pub fn may_be_sink(path: &str) -> bool {
     match from_end.next() {
         Some(module) => matches!(
             module,
-            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap"
+            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap" | "mcp"
         ),
         None => false,
     }
@@ -230,7 +243,7 @@ pub fn canonical(path: &str) -> String {
 pub fn is_not_sink(path: &str) -> bool {
     let mut p = path;
     loop {
-        if NOT_SINKS.contains(&p) {
+        if NOT_SINKS.contains(&p) || DYNAMIC_SINKS.contains(&p) {
             return true;
         }
         match p.split_once("::") {

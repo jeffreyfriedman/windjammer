@@ -201,6 +201,11 @@ impl Drop for Scratch {
 }
 
 impl Interpreter {
+    /// The effects the run used so far, by name (`fs.read`, `mcp.github.list_issues`), for `--result-json` and code mode.
+    pub fn effects_used(&self) -> Vec<String> {
+        self.caps.as_ref().map(|g| g.seen.iter().map(|k| k.name()).collect()).unwrap_or_default()
+    }
+
     pub fn set_caps(&mut self, gate: Option<CapGate>) {
         self.caps = gate;
     }
@@ -288,7 +293,20 @@ impl Interpreter {
         if !sinks::may_be_sink(path) {
             return Ok(());
         }
+        if path.ends_with("mcp::call") {
+            // the tool is the effect: `mcp.<server>.<tool>`; a name computed by the program is not a literal and matches no grant that lists tools
+            self.limit_call()?;
+            let name = |i: usize| match args.get(i) {
+                Some(Value::Str(s)) => Some((**s).clone()),
+                _ => None,
+            };
+            let kind = EffectKind::User(sinks::mcp_effect_name(name(0).as_deref(), name(1).as_deref()));
+            return self.cap_decide(&kind, None);
+        }
         let Some(uses) = sinks::lookup(path) else { return Ok(()) };
+        if self.limits.is_some() && uses.iter().any(|u| u.effect != EffectKind::Console) {
+            self.limit_call()?;
+        }
         for u in uses {
             let resource: Option<String> = match u.res {
                 // minting a capability value: `cap_mint` checks it (against the minting package's scope)
