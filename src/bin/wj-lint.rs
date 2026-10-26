@@ -19,7 +19,6 @@ fn lint_file(path: &Path, strict: bool) -> Result<(), Box<dyn std::error::Error>
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = Parser::new_with_source(tokens, file_name.clone(), source.clone());
-    parser.enable_span_log();
     let program = parser.parse().map_err(|e| format!("Parse error: {}", e))?;
 
     let mut linter = RustLeakageLinter::new(&file_name).with_spans(parser.span_snapshot());

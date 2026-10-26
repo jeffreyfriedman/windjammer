@@ -213,10 +213,14 @@ impl Lexer {
         let start = self.position;
         self.advance(); // Skip opening quote
 
-        // `''` is an empty char literal, not the char `'`.
+        // `''` is an empty char literal, not the char `'`; a quote at the end of a line or file
+        // opens nothing (the newline is not its character).
         if self.current_char == Some('\'') {
             self.advance();
             return Token::Invalid("empty char literal `''`".to_string());
+        }
+        if matches!(self.current_char, None | Some('\n')) {
+            return Token::Invalid("unterminated char literal `'`".to_string());
         }
 
         let ch = if let Some(c) = self.current_char {
@@ -252,7 +256,7 @@ impl Lexer {
             self.advance();
             Token::CharLiteral(ch)
         } else {
-            Token::Invalid(format!("unterminated char literal `{}`", self.text_since(start)))
+            Token::Invalid(format!("unterminated char literal `{}`", self.text_since(start).escape_debug()))
         }
     }
 }

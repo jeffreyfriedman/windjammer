@@ -183,7 +183,7 @@
 "src/lexer/mod.rs::next_token" = 301
 "src/parser/call_expression_parser.rs::parse_postfix_chain" = 459
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
-"src/parser/primary_expression_parser.rs::parse_primary_expression" = 542
+"src/parser/primary_expression_parser.rs::parse_primary_expression_inner" = 543
 "src/parser/type_parser.rs::parse_type_core" = 428
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 427
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433
@@ -220,6 +220,7 @@
 [static_state]
 "src/analyzer/program_initialization.rs" = 1
 "src/analyzer/signature_registry.rs" = 1
+"src/error/span_check.rs" = 1
 "src/error_codes.rs" = 1
 "src/ir/constraint_gen.rs" = 1
 
