@@ -1,0 +1,11 @@
+// A comment that mentions the name before the use must not attract the diagnostic.
+// missing_fn( is not defined anywhere; neither is `also_missing`.
+fn main() {
+    let note = "missing_fn is only text here"
+    println("${note}")
+    let r = missing_fn(1)
+//~@13+10 ERROR WJ0002 cannot find function `missing_fn`
+    /* also_missing */
+    let s = also_missing + 1
+//~@13+12 ERROR WJ0001 cannot find value `also_missing`
+}

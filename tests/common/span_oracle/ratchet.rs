@@ -23,13 +23,19 @@ fn path(name: &str) -> std::path::PathBuf {
 /// `SPAN_ORACLE_BLESS=1` rewrites a ratchet file to the current violations, but only to TIGHTEN
 /// it (never to add entries or raise counts). A file that is still empty may be initialised.
 fn bless_allowed() -> bool {
-    std::env::var("SPAN_ORACLE_BLESS").is_ok_and(|v| v == "1")
+    std::env::var("SPAN_ORACLE_BLESS").is_ok_and(|v| v == "1" || v == "force")
+}
+
+/// `SPAN_ORACLE_BLESS=force` re-baselines after a merge brought in code or corpora from other
+/// branches (the diff of the ratchet file is then reviewed like any other change).
+fn force() -> bool {
+    std::env::var("SPAN_ORACLE_BLESS").is_ok_and(|v| v == "force")
 }
 
 /// Compare `actual` violations against the ratchet file; panic with an actionable message.
 pub fn enforce(name: &str, actual: &BTreeSet<String>) {
     let allowed = load(name);
-    if bless_allowed() && (allowed.is_empty() || actual.is_subset(&allowed)) {
+    if bless_allowed() && (force() || allowed.is_empty() || actual.is_subset(&allowed)) {
         let header = "# Known violations. May only shrink: fix the code, then delete the line.\n";
         let body: String = actual.iter().map(|l| format!("{l}\n")).collect();
         std::fs::write(path(name), format!("{header}{body}")).unwrap();
@@ -63,7 +69,7 @@ pub fn enforce_counts(name: &str, actual: &std::collections::BTreeMap<String, us
             Some((k.trim().to_string(), n.parse().ok()?))
         })
         .collect();
-    if bless_allowed() && (allowed.is_empty() || actual.iter().all(|(k, n)| allowed.get(k).is_some_and(|a| n <= a))) {
+    if bless_allowed() && (force() || allowed.is_empty() || actual.iter().all(|(k, n)| allowed.get(k).is_some_and(|a| n <= a))) {
         let header = "# class count. Counts may only shrink: fix the code, then lower or delete the line.\n";
         let body: String = actual.iter().map(|(k, n)| format!("{k} {n}\n")).collect();
         std::fs::write(path(name), format!("{header}{body}")).unwrap();

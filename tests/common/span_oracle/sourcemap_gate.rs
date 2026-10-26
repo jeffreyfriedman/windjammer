@@ -66,7 +66,7 @@ pub fn verify(wj_src: &str, rust_src: &str, maps: &[Map]) -> Vec<String> {
             continue;
         }
         // The aligned map is line-level (column 0); a column, when present, must be a token start.
-        let line_has_token = tokens.iter().any(|t| t.line == m.wj_line && t.token != windjammer::lexer::Token::Newline);
+        let line_has_token = tokens.iter().any(|t| t.line == m.wj_line && !matches!(t.token, windjammer::lexer::Token::Newline | windjammer::lexer::Token::Eof));
         let ok = if m.wj_column == 0 { line_has_token } else { starts.contains(&(m.wj_line, m.wj_column)) };
         if !ok {
             v.push(format!("{at}: not a .wj line with code / not the start of any .wj token"));

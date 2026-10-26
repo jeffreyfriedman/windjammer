@@ -1,0 +1,11 @@
+// expect: WJ0014
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let p = Point { x: 1, z: 2 }
+//~@27+1 ERROR WJ0014 struct `Point` has no
+    println("${p.x}")
+}

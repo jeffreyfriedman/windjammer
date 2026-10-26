@@ -1,0 +1,6 @@
+// expect: WJ0012
+fn main() {
+    let x = 1 # one
+//~@15+1 ERROR WJ0012 unexpected character '#': Windjammer
+    println("${x}")
+}
