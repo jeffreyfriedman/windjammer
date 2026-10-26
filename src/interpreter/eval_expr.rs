@@ -158,7 +158,7 @@ impl Interpreter {
                     let en = self.eval(end)?;
                     match (s, en) {
                         (Value::Int(a, at), Value::Int(b, bt)) => {
-                            Ok(Value::Range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
+                            Ok(Value::range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
                         }
                         _ => Err(unsupported("range over non-integer values")),
                     }
@@ -179,7 +179,7 @@ impl Interpreter {
                 UnaryOp::Ref => self.eval(operand),
                 UnaryOp::MutRef => {
                     if let Some(p) = self.resolve_place(operand)? {
-                        Ok(Value::Ref(p))
+                        Ok(Value::Ref(Box::new(p)))
                     } else {
                         self.eval(operand)
                     }
@@ -231,7 +231,7 @@ impl Interpreter {
                 match (&s, &en) {
                     (Value::Int(a, at), Value::Int(b, bt)) => {
                         let ty = IntTy::unify(*at, *bt);
-                        Ok(Value::Range(*a, if *inclusive { *b + 1 } else { *b }, ty))
+                        Ok(Value::range(*a, if *inclusive { *b + 1 } else { *b }, ty))
                     }
                     (Value::Char(a), Value::Char(b)) => {
                         let hi = if *inclusive { *b as u32 + 1 } else { *b as u32 };
@@ -425,14 +425,15 @@ impl Interpreter {
                 }
                 Ok(v[*i as usize].clone())
             }
-            (Value::Vec(v), Value::Range(a, b, _)) => {
-                let (a, b) = (*a, *b);
+            (Value::Vec(v), Value::Range(r, _)) => {
+                let (a, b) = **r;
                 if let Some(msg) = super::slicing::slice_error(a, b, v.len()) {
                     return Err(panic_ctl(msg));
                 }
                 Ok(Value::vec(v[a as usize..b as usize].to_vec()))
             }
-            (Value::Str(s), Value::Range(a, b, _)) => {
+            (Value::Str(s), Value::Range(r, _)) => {
+                let (a, b) = (&r.0, &r.1);
                 if let Some(msg) = super::slicing::str_slice_error(s, *a, *b) {
                     return Err(panic_ctl(msg));
                 }
@@ -465,7 +466,7 @@ impl Interpreter {
             // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
             return match fields {
                 [(f, ex)] if f == "start" => match env.eval(self, ex)? {
-                    Value::Int(a, t) => Ok(Value::Range(a, i128::MAX, t)),
+                    Value::Int(a, t) => Ok(Value::range(a, i128::MAX, t)),
                     other => Err(unsupported(format!("`..` range from {}", other.type_name()))),
                 },
                 _ => Err(semantic("malformed RangeFrom")),

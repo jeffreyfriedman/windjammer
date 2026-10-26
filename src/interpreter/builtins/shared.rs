@@ -77,7 +77,7 @@ pub fn register(r: &mut Registry) {
             let v = raw(&a, 0, "get_mut")?;
             let slot = rc_slot(&v, "get_mut")?;
             Ok(if it.strong_count(&slot) <= 1 && it.weak_count(&slot) == 0 {
-                Value::some(Value::Ref(Place::of_slot(slot)))
+                Value::some(Value::Ref(Box::new(Place::of_slot(slot))))
             } else {
                 Value::none()
             })
@@ -92,13 +92,13 @@ pub fn register(r: &mut Registry) {
             };
             let slot = rc_slot(&place.read()?, "make_mut")?;
             if it.strong_count(&slot) <= 1 {
-                return Ok(Value::Ref(Place::of_slot(slot)));
+                return Ok(Value::Ref(Box::new(Place::of_slot(slot))));
             }
             // shared: clone the contents into a fresh allocation owned by this handle
             let inner = slot.borrow().clone();
             let fresh = new_slot(it.fresh_identities(&inner));
             place.write(Value::Rc(fresh.clone()))?;
-            Ok(Value::Ref(Place::of_slot(fresh)))
+            Ok(Value::Ref(Box::new(Place::of_slot(fresh))))
         });
     }
     r.func("RefCell::new", |_, a| Ok(new_cell(CellKind::RefCell, raw(&a, 0, "new")?)));
@@ -133,11 +133,11 @@ fn cell_slot(v: &Value) -> R<(CellKind, Slot)> {
 }
 
 fn guard(slot: Slot, tok: Rc<GuardToken>) -> Value {
-    Value::Ref(Place { slot, path: Vec::new(), guard: Some(tok) })
+    Value::Ref(Box::new(Place { slot, path: Vec::new(), guard: Some(tok) }))
 }
 
 fn plain_ref(slot: Slot) -> Value {
-    Value::Ref(Place::of_slot(slot))
+    Value::Ref(Box::new(Place::of_slot(slot)))
 }
 
 fn borrow(v: &Value, exclusive: bool) -> Result<Value, &'static str> {

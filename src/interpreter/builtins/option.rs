@@ -152,7 +152,7 @@ pub fn register(r: &mut Registry) {
     });
     r.place(Kind::Option, "as_mut", |_, p, _| {
         let cur = p.read()?;
-        Ok(if is_some(&cur) { Value::some(Value::Ref(p.proj(Proj::Index(0)))) } else { Value::none() })
+        Ok(if is_some(&cur) { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(0))))) } else { Value::none() })
     });
     r.place(Kind::Option, "get_or_insert_with", |it, p, a| {
         let cur = p.read()?;
@@ -161,7 +161,7 @@ pub fn register(r: &mut Registry) {
             let x = call(it, &f, vec![])?;
             p.write(Value::some(x))?;
         }
-        Ok(Value::Ref(p.proj(Proj::Index(0))))
+        Ok(Value::Ref(Box::new(p.proj(Proj::Index(0)))))
     });
 
     // ---------------- Result ----------------

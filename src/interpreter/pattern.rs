@@ -79,7 +79,7 @@ impl Interpreter {
         };
         let bind_val = |name: &'static str, binds: &mut Binds, v: &Value, place: Option<&Place>, by_ref: bool| {
             match (by_ref, place) {
-                (true, Some(p)) if !matches!(v, Value::Unit) => binds.push((name, Value::Ref(p.clone()))),
+                (true, Some(p)) if !matches!(v, Value::Unit) => binds.push((name, Value::Ref(Box::new(p.clone())))),
                 _ => binds.push((name, v.clone())),
             }
         };
@@ -99,7 +99,7 @@ impl Interpreter {
             }
             Pattern::RefMut(name) => {
                 match place {
-                    Some(p) => binds.push((name.as_str(), Value::Ref(p.clone()))),
+                    Some(p) => binds.push((name.as_str(), Value::Ref(Box::new(p.clone())))),
                     None => binds.push((name.as_str(), v.clone())),
                 }
                 true
@@ -176,7 +176,7 @@ impl Interpreter {
                     if let Some((_, fv)) = s.fields.first() {
                         let sub = place.map(|p| p.proj(Proj::Field(s.fields[0].0.clone())));
                         match (by_ref, &sub) {
-                            (true, Some(sp)) => binds.push((b.as_str(), Value::Ref(sp.clone()))),
+                            (true, Some(sp)) => binds.push((b.as_str(), Value::Ref(Box::new(sp.clone())))),
                             _ => binds.push((b.as_str(), fv.clone())),
                         }
                         true
@@ -220,7 +220,7 @@ impl Interpreter {
                 }
                 let sub = place.map(|p| p.proj(Proj::Index(0)));
                 match (by_ref, &sub) {
-                    (true, Some(sp)) => binds.push((b.as_str(), Value::Ref(sp.clone()))),
+                    (true, Some(sp)) => binds.push((b.as_str(), Value::Ref(Box::new(sp.clone())))),
                     _ => binds.push((b.as_str(), vs[0].clone())),
                 }
                 true

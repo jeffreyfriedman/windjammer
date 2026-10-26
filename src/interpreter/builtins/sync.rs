@@ -81,7 +81,7 @@ fn guard_arg(a: &[Value], what: &str) -> R<Value> {
 fn guard_parts(v: &Value) -> R<(Place, Rc<crate::interpreter::locks::GuardToken>)> {
     match v {
         Value::Ref(p) => match &p.guard {
-            Some(t) => Ok((p.clone(), t.clone())),
+            Some(t) => Ok((*p.clone(), t.clone())),
             None => Err(semantic("Condvar::wait needs a MutexGuard")),
         },
         _ => Err(semantic("Condvar::wait needs a MutexGuard")),

@@ -347,7 +347,7 @@ impl Interpreter {
             };
             if want_ref && Self::is_place_expr(a) {
                 if let Some(p) = self.resolve_place(a)? {
-                    out.push(Value::Ref(p));
+                    out.push(Value::Ref(Box::new(p)));
                     continue;
                 }
             }
@@ -865,7 +865,7 @@ impl Interpreter {
             None => self.eval_raw(object)?,
         };
         let place = match (&place, &recv) {
-            (None, Value::Ref(p)) => Some(self.chase(p.clone())?),
+            (None, Value::Ref(p)) => Some(self.chase(*p.clone())?),
             _ => place,
         };
         if method == "clone" && matches!(recv, Value::Rc(_)) {
@@ -907,7 +907,7 @@ impl Interpreter {
         let self_val = if place.is_some() && self.self_mutation(f) {
             // release our clone of the receiver so in-place mutation stays copy-free
             drop(recv);
-            Value::Ref(place.unwrap())
+            Value::Ref(Box::new(place.unwrap()))
         } else {
             recv
         };
