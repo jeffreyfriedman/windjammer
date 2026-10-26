@@ -116,7 +116,9 @@ impl Lo<'_, '_> {
         }
         self.b.switch_to_block(rhs);
         self.b.seal_block(rhs);
+        self.open_joins += 1;
         let r = self.cond(right)?;
+        self.open_joins -= 1;
         self.b.ins().jump(join, &[r.into()]);
         self.b.switch_to_block(join);
         self.b.seal_block(join);

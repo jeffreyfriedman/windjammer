@@ -21,6 +21,11 @@ pub(crate) struct Ctx {
     pub(crate) it: *mut Interpreter,
     pub(crate) base: usize,
     pub(crate) fail: i64,
+    /// The running unit's plan and registry (for closure-run statements).
+    pub(crate) plan: *const super::lower::Plan,
+    pub(crate) reg: *const crate::interpreter::resolved::osr::Reg,
+    /// What a closure-run statement raised (the unit then leaves after it).
+    pub(crate) raised: Option<crate::interpreter::error::Ctl>,
 }
 
 pub(crate) const FAIL: i32 = std::mem::offset_of!(Ctx, fail) as i32;
@@ -265,6 +270,38 @@ pub(crate) unsafe extern "C" fn int_op(c: *mut Ctx, op: i64, a: i64, at: i64, b:
             0
         }
     }
+}
+
+/// Run closure-run statement `k` of the plan: its variables go to their slots, its code runs (marked
+/// as `seq` marks it), and they come back to the spill buffer. Nonzero: leave after the statement (it
+/// raised, `raised` holds what; or a variable no longer has its type).
+pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
+    // SAFETY: as in `with_slot`; `plan`/`reg` outlive the call, `buf` has `nbuf` slots.
+    let ctx = unsafe { &mut *c };
+    let (it, plan, reg, b) = unsafe { (&mut *ctx.it, &*ctx.plan, &*ctx.reg, ctx.base) };
+    let buf = buf as *mut i64;
+    let st = &plan.stmts[k as usize];
+    let at = |i: usize| unsafe { buf.add(i) };
+    for sp in st.spills.iter().filter(|sp| sp.slot != super::lower::NO_SLOT) {
+        let v = value(unsafe { *at(sp.buf) }, sp.ty);
+        super::osr::write(it, b + sp.slot, reg.kind(sp.slot), v, false);
+    }
+    it.mark(crate::interpreter::resolved::osr::loc(st.stmt));
+    let r = match reg.code(st.stmt) {
+        Some(code) => code(it, b),
+        None => Err(crate::interpreter::error::semantic("internal: a machine-code loop ran an unregistered statement")),
+    };
+    if let Err(e) = r {
+        ctx.raised = Some(e);
+        return 1;
+    }
+    for sp in st.spills.iter().filter(|sp| sp.slot != super::lower::NO_SLOT) {
+        match super::osr::read(it, b + sp.slot, reg.kind(sp.slot)).and_then(|v| bits(&v, sp.ty)) {
+            Some(x) => unsafe { *at(sp.buf) = x },
+            None => return 1,
+        }
+    }
+    0
 }
 
 pub(crate) extern "C" fn fmod(a: f64, b: f64) -> f64 {

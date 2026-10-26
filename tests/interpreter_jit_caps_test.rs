@@ -83,11 +83,12 @@ fn wj_jit_0_and_no_jit_agree_with_the_default() {
     assert!(String::from_utf8_lossy(&bad.stderr).contains("WJ_JIT"));
 }
 
-/// Machine-code loops (ADR-0020 round 3) never run a sink either: a loop whose body can reach one is
-/// outside the lowering subset (it has no calls), so it stays in the closure engine and the capability
-/// gate sees the late sink. Every loop tries machine code at its first iteration here.
+/// Machine-code loops (ADR-0020 round 3) never run a sink either: a statement that can reach one is
+/// outside the lowering subset (machine code has no calls), so it runs as its closure code from inside
+/// the loop, and the capability gate sees the late sink exactly as without machine code. Every loop
+/// tries machine code at its first iteration here.
 #[test]
-fn a_loop_reaching_a_sink_stays_in_the_closures() {
+fn a_loop_reaching_a_sink_runs_it_through_the_closures() {
     let tmp = tempfile::TempDir::new().unwrap();
     let src = "use std::fs\nfn main() {\n    let mut total = 0\n    let mut i = 0\n    while i < 3000 {\n        total += i % 7\n        if i == 2500 {\n            println(\"late print ${total}\")\n        }\n        if i == 2900 {\n            if fs::exists(\".\") { total += 1 }\n        }\n        i += 1\n    }\n    let mut j = 0\n    while j < 3000 {\n        total += j % 3\n        j += 1\n    }\n    println(\"total ${total}\")\n}\n";
     let p = tmp.path().join("loop.wj");
@@ -108,11 +109,7 @@ fn a_loop_reaching_a_sink_stays_in_the_closures() {
     assert!(jit.1.contains("capability denied"), "stderr: {}", jit.1);
     assert_eq!(jit.2, Some(126));
     assert_eq!(jit, nojit, "machine code changed the outcome");
-    // the sink loop was refused; with the sink gone the same shape runs as machine code
-    let dbg = run(&[], true).1;
-    assert!(dbg.lines().any(|l| l.starts_with("[jit] loop") && l.contains("loop.wj:5") && l.contains("outside the subset")), "{dbg}");
-    let pure = src.replace("            println(\"late print ${total}\")\n", "            total += 2\n").replace("            if fs::exists(\".\") { total += 1 }\n", "            total += 3\n");
-    std::fs::write(&p, pure).unwrap();
+    // the loop with the sinks did run as machine code (the sink statements through their closures)
     let dbg = run(&[], true).1;
     assert!(dbg.lines().any(|l| l.starts_with("[jit] loop") && l.contains("loop.wj:5: compiled")), "{dbg}");
 }

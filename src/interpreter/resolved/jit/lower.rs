@@ -58,6 +58,16 @@ pub(crate) struct Exit {
     pub(crate) spills: Vec<Spill>,
     /// `break`/`continue`/`return` or the loop's end, not a failed check.
     pub(crate) planned: bool,
+    /// Left after a closure-run statement (`Plan::stmts`): the slots already hold the variables
+    /// (nothing is written back) and the path names the statement after it.
+    pub(crate) after: bool,
+}
+
+/// A statement outside the machine-code subset run by its closure code from inside machine code:
+/// the variables in scope go to their slots before it runs and come back after.
+pub(crate) struct StmtRun {
+    pub(crate) stmt: S,
+    pub(crate) spills: Vec<Spill>,
 }
 
 /// A variable an exit writes back: its spill buffer index, slot and type; `fresh` for a `let` of the
@@ -76,6 +86,7 @@ pub(crate) struct Plan {
     /// A `for` unit: the spill buffer index of its counter (the end follows it), filled at entry.
     pub(crate) counter: Option<usize>,
     pub(crate) exits: Vec<Exit>,
+    pub(crate) stmts: Vec<StmtRun>,
     pub(crate) nbuf: usize,
 }
 
@@ -129,6 +140,9 @@ pub(super) struct Lo<'a, 'i> {
     loops: Vec<LoopCtx>,
     /// The unit loop's label.
     unit_label: Option<&'static str>,
+    stmts: Vec<StmtRun>,
+    /// `&&`/`||` blocks opened and not yet joined (a statement that fails inside one cannot fall back).
+    pub(super) open_joins: usize,
 }
 
 /// A loop being lowered: where `continue` goes (the head, or a `for` loop's increment), where `break`
@@ -182,6 +196,8 @@ pub(crate) fn lower(
         sigs: HashMap::new(),
         why: None,
         loops: Vec::new(),
+        stmts: Vec::new(),
+        open_joins: 0,
         unit_label: match stmt {
             Statement::While { label, .. } | Statement::For { label, .. } => label.as_deref(),
             _ => None,
@@ -226,7 +242,7 @@ pub(crate) fn lower(
     }
     lo.b.seal_all_blocks();
     lo.b.finalize();
-    Ok(Plan { live, counter, nbuf: lo.vars.len(), exits: lo.exits })
+    Ok(Plan { live, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts })
 }
 
 impl Lo<'_, '_> {
@@ -275,7 +291,7 @@ impl Lo<'_, '_> {
         }
     }
 
-    fn new_exit(&mut self, planned: bool) -> usize {
+    fn in_scope(&self) -> Vec<Spill> {
         let mut spills = Vec::new();
         for scope in &self.scopes {
             for (_, bind) in scope {
@@ -285,8 +301,49 @@ impl Lo<'_, '_> {
                 }
             }
         }
-        self.exits.push(Exit { path: self.path.clone(), spills, planned });
+        spills
+    }
+
+    fn new_exit(&mut self, planned: bool) -> usize {
+        let spills = self.in_scope();
+        self.exits.push(Exit { path: self.path.clone(), spills, planned, after: false });
         self.exits.len() - 1
+    }
+
+    /// Run statement `s` with its closure code: spill the variables in scope (the helper writes them
+    /// to their slots), call, reload them. A statement that raised (an error, `return`, `break`...)
+    /// or left a variable with another type leaves machine code after it.
+    fn run_stmt(&mut self, s: S) -> Option<()> {
+        let spills = self.in_scope();
+        // a loop `let` that is a walker slot gets a fresh one per binding: only its own closures can
+        if spills.iter().any(|sp| sp.fresh && sp.slot != NO_SLOT && self.reg.kind(sp.slot) == Some(crate::interpreter::resolved::osr::SlotKind::Boxed)) {
+            return None;
+        }
+        for sp in &spills {
+            let x = self.b.use_var(self.vars[sp.buf].var);
+            let x = self.to_bits(x, sp.ty);
+            self.b.ins().store(MemFlags::trusted(), x, self.buf, (sp.buf * 8) as i32);
+        }
+        self.stmts.push(StmtRun { stmt: s, spills: spills.clone() });
+        let k = self.b.ins().iconst(types::I64, (self.stmts.len() - 1) as i64);
+        let buf = self.buf;
+        let status = self.call("run_stmt", rt::run_stmt as *const () as usize, &[buf, k], false, false);
+        // after the statement: an exit that resumes at the next one
+        let mut path = self.path.clone();
+        path.last_mut()?.idx += 1;
+        self.exits.push(Exit { path, spills: Vec::new(), planned: true, after: true });
+        let id = self.exits.len() - 1;
+        let (ex, cont) = (self.b.create_block(), self.b.create_block());
+        self.b.ins().brif(status, ex, &[], cont, &[]);
+        self.pending.push((ex, id));
+        self.b.switch_to_block(cont);
+        self.b.seal_block(cont);
+        for sp in &spills {
+            let x = self.b.ins().load(types::I64, MemFlags::trusted(), self.buf, (sp.buf * 8) as i32);
+            let x = self.from_bits(x, sp.ty);
+            self.b.def_var(self.vars[sp.buf].var, x);
+        }
+        Some(())
     }
 
     /// Store the variables of exit `id` and return its number (emitted after the loop is lowered).
@@ -469,6 +526,30 @@ impl Lo<'_, '_> {
     }
 
     fn stmt_in(&mut self, s: S) -> Option<bool> {
+        let joins = self.open_joins;
+        let r = self.native(s);
+        // a simple statement outside the subset runs in the closures, if nothing was left half-built
+        if r.is_none() && self.open_joins == joins {
+            // a `let` binds its name to the slot the closure code fills (opaque to machine code)
+            let binds = match s {
+                Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), .. } => Some(Some((n.as_str(), self.reg.let_slot(s)?))),
+                Statement::Let { .. } => None,
+                Statement::Assignment { .. } | Statement::Expression { .. } => Some(None),
+                _ => None,
+            };
+            if let Some(bind) = binds {
+                if self.run_stmt(s).is_some() {
+                    if let Some((n, slot)) = bind {
+                        self.scopes.last_mut()?.push((n, Bind::Handle(slot, Class::Opaque)));
+                    }
+                    return Some(false);
+                }
+            }
+        }
+        r
+    }
+
+    fn native(&mut self, s: S) -> Option<bool> {
         match s {
             Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_, value, else_block: None, .. } => {
                 let slot = self.reg.let_slot(s)?;
