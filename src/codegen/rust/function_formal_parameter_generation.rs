@@ -600,7 +600,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let converged_analyzer_borrow = matches!(
                     analyzed.inferred_ownership.get(&param.name),
                     Some(OwnershipMode::Borrowed)
-                ) || analyzed.str_ref_optimizable_params.contains(&param.name);
+                ) || self.str_ref_optimizable_param(analyzed, &param.name);
 
                 let field_move_forces_owned = self.param_has_field_or_index_move_binding(
                     func.body.as_slice(),
@@ -1048,7 +1048,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // callees do not already expect a borrow (fs AsRef<Path> demotes).
                 let asref_runtime_keep_owned = crate::codegen::rust::types::is_windjammer_text_type(
                     &param.type_,
-                ) && !analyzed.str_ref_optimizable_params.contains(&param.name)
+                ) && !self.str_ref_optimizable_param(analyzed, &param.name)
                     && self.param_asref_runtime_forces_owned_formal(
                     func.body.as_slice(),
                     &param.name,
@@ -1656,7 +1656,7 @@ impl<'ast> CodeGenerator<'ast> {
                             return format!("{}: {}", param.name, type_str);
                         }
                         let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
-                            || analyzed.str_ref_optimizable_params.contains(&param.name))
+                            || self.str_ref_optimizable_param(analyzed, &param.name))
                             && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
                                 func.body.as_slice(),
                                 &param.name,
@@ -1667,9 +1667,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !self.in_trait_impl
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && (!self.function_return_is_text(func)
-                                || analyzed
-                                    .str_ref_optimizable_params
-                                    .contains(&param.name))
+                                || self.str_ref_optimizable_param(analyzed, &param.name))
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
@@ -2034,7 +2032,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         if param.name != "self" {
                             let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
-                                || analyzed.str_ref_optimizable_params.contains(&param.name))
+                                || self.str_ref_optimizable_param(analyzed, &param.name))
                                 && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
                                     func.body.as_slice(),
                                     &param.name,
@@ -2045,9 +2043,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !self.in_trait_impl
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && (!self.function_return_is_text(func)
-                                    || analyzed
-                                        .str_ref_optimizable_params
-                                        .contains(&param.name))
+                                    || self.str_ref_optimizable_param(analyzed, &param.name))
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
@@ -3138,7 +3134,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         func,
                                     );
                             let str_ref_ok = (self.str_ref_optimized_params.contains(&param.name)
-                                || analyzed.str_ref_optimizable_params.contains(&param.name)
+                                || self.str_ref_optimizable_param(analyzed, &param.name)
                                 || format_only_string
                                 || self.param_only_forwards_to_borrowed_text_callees(
                                     func.body.as_slice(),
@@ -3850,9 +3846,21 @@ impl<'ast> CodeGenerator<'ast> {
         if param.name == "self"
             || param.pattern.is_some()
             || matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
-            || self.is_type_copy(&param.type_)
-            || crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_)
+            || (self.is_type_copy(&param.type_) && !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_))
             || self.ir_param_ownership_definitive(&param.name) != Some(OwnershipMode::Owned)
+        {
+            return None;
+        }
+        // Text keeps the `impl Into<String>` builder formal where it applies; otherwise IR-owned is `String`.
+        // Pub free-fn text formals are registry-seeded Owned (multipass ABI lock) unless the param flows
+        // as a value into a `let`; that seed is not a solver decision, so the body-based demotion stays.
+        if crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_)
+            && (!self.ir_param_owned_by_solver(&param.name)
+                || (func.is_pub
+                && func.parent_type.is_none()
+                && !crate::analyzer::Analyzer::param_is_branch_value_of_let(&param.name, &func.body))
+                || self.param_should_emit_into_string_formal(func, param, true)
+                || self.param_should_emit_into_string_formal(func, param, false))
         {
             return None;
         }
@@ -4851,7 +4859,7 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         // Phase-2 &str lowering already validated this param — beat stale mutation flags
         // from match/get patterns (`lookup_borrowed` key used only in `map.get(key)`).
-        if analyzed.str_ref_optimizable_params.contains(param_name) {
+        if self.str_ref_optimizable_param(analyzed, param_name) {
             return false;
         }
         if matches!(ownership_hint, Some(OwnershipMode::MutBorrowed)) {
