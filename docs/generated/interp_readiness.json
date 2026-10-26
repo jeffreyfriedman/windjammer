@@ -1,23 +1,23 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-26T11:07:12Z",
- "commit": "38457b193ab08d0b811ce4f959a588f0897d77a6",
+ "generated_at": "2026-10-26T14:03:52Z",
+ "commit": "8b6bdb63d0ebb05fd5d74a97f8edbcf8cde83c16",
  "mode": "full",
- "load_avg_1m": 74.6,
+ "load_avg_1m": 79.4,
  "wj_profile": "release",
  "criteria": [
   {
    "id": "R1",
    "title": "Test suites pass interpreted",
    "target": ">= 99.0% of compiled-passing tests",
-   "percent": 97.7,
-   "status": "fail",
+   "percent": 100.0,
+   "status": "unmeasured",
    "detail": {
     "projects": [
      {
       "project": "wj-base64",
-      "interp_secs": 0.4,
-      "compiled_secs": 332.5,
+      "interp_secs": 0.0,
+      "compiled_secs": 10.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -32,8 +32,8 @@
      },
      {
       "project": "wj-cli-args",
-      "interp_secs": 0.8,
-      "compiled_secs": 55.8,
+      "interp_secs": 0.2,
+      "compiled_secs": 7.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -48,8 +48,8 @@
      },
      {
       "project": "wj-compress",
-      "interp_secs": 0.9,
-      "compiled_secs": 27.7,
+      "interp_secs": 0.1,
+      "compiled_secs": 10.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -64,8 +64,8 @@
      },
      {
       "project": "wj-config",
-      "interp_secs": 0.5,
-      "compiled_secs": 27.3,
+      "interp_secs": 0.0,
+      "compiled_secs": 6.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -80,8 +80,8 @@
      },
      {
       "project": "wj-cookie",
-      "interp_secs": 0.5,
-      "compiled_secs": 14.5,
+      "interp_secs": 0.1,
+      "compiled_secs": 4.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -96,8 +96,8 @@
      },
      {
       "project": "wj-cors",
-      "interp_secs": 0.2,
-      "compiled_secs": 26.3,
+      "interp_secs": 0.1,
+      "compiled_secs": 11.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -112,8 +112,8 @@
      },
      {
       "project": "wj-cron",
-      "interp_secs": 1.7,
-      "compiled_secs": 14.7,
+      "interp_secs": 0.2,
+      "compiled_secs": 7.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -128,8 +128,8 @@
      },
      {
       "project": "wj-csv",
-      "interp_secs": 0.0,
-      "compiled_secs": 14.0,
+      "interp_secs": 0.1,
+      "compiled_secs": 6.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -145,7 +145,7 @@
      {
       "project": "wj-dotenv",
       "interp_secs": 0.1,
-      "compiled_secs": 16.8,
+      "compiled_secs": 4.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -160,8 +160,8 @@
      },
      {
       "project": "wj-duration",
-      "interp_secs": 0.4,
-      "compiled_secs": 40.2,
+      "interp_secs": 0.2,
+      "compiled_secs": 7.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -176,8 +176,8 @@
      },
      {
       "project": "wj-event",
-      "interp_secs": 0.3,
-      "compiled_secs": 21.0,
+      "interp_secs": 0.1,
+      "compiled_secs": 7.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -192,8 +192,8 @@
      },
      {
       "project": "wj-fs-walk",
-      "interp_secs": 0.8,
-      "compiled_secs": 8.0,
+      "interp_secs": 0.3,
+      "compiled_secs": 4.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -208,8 +208,8 @@
      },
      {
       "project": "wj-gitignore",
-      "interp_secs": 0.0,
-      "compiled_secs": 4.1,
+      "interp_secs": 0.2,
+      "compiled_secs": 3.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -224,8 +224,8 @@
      },
      {
       "project": "wj-glob",
-      "interp_secs": 0.0,
-      "compiled_secs": 6.1,
+      "interp_secs": 0.1,
+      "compiled_secs": 5.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -240,8 +240,8 @@
      },
      {
       "project": "wj-hash",
-      "interp_secs": 21.4,
-      "compiled_secs": 94.9,
+      "interp_secs": 6.1,
+      "compiled_secs": 23.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -256,8 +256,8 @@
      },
      {
       "project": "wj-headers",
-      "interp_secs": 0.7,
-      "compiled_secs": 68.8,
+      "interp_secs": 0.1,
+      "compiled_secs": 18.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -272,8 +272,8 @@
      },
      {
       "project": "wj-http-client",
-      "interp_secs": 0.2,
-      "compiled_secs": 43.5,
+      "interp_secs": 0.1,
+      "compiled_secs": 11.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -288,8 +288,8 @@
      },
      {
       "project": "wj-inflect",
-      "interp_secs": 0.6,
-      "compiled_secs": 15.9,
+      "interp_secs": 0.3,
+      "compiled_secs": 11.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -304,8 +304,8 @@
      },
      {
       "project": "wj-json-util",
-      "interp_secs": 0.3,
-      "compiled_secs": 21.0,
+      "interp_secs": 0.4,
+      "compiled_secs": 8.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -320,8 +320,8 @@
      },
      {
       "project": "wj-jwt",
-      "interp_secs": 0.3,
-      "compiled_secs": 32.6,
+      "interp_secs": 0.0,
+      "compiled_secs": 9.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -336,8 +336,8 @@
      },
      {
       "project": "wj-log",
-      "interp_secs": 0.2,
-      "compiled_secs": 35.7,
+      "interp_secs": 0.0,
+      "compiled_secs": 6.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -352,8 +352,8 @@
      },
      {
       "project": "wj-migrate",
-      "interp_secs": 1.0,
-      "compiled_secs": 366.5,
+      "interp_secs": 0.1,
+      "compiled_secs": 12.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -368,8 +368,8 @@
      },
      {
       "project": "wj-mime",
-      "interp_secs": 1.0,
-      "compiled_secs": 46.8,
+      "interp_secs": 0.3,
+      "compiled_secs": 7.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -384,8 +384,8 @@
      },
      {
       "project": "wj-multipart",
-      "interp_secs": 2.5,
-      "compiled_secs": 46.6,
+      "interp_secs": 0.1,
+      "compiled_secs": 4.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -400,8 +400,8 @@
      },
      {
       "project": "wj-path",
-      "interp_secs": 0.5,
-      "compiled_secs": 31.8,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -416,8 +416,8 @@
      },
      {
       "project": "wj-querystring",
-      "interp_secs": 1.4,
-      "compiled_secs": 33.9,
+      "interp_secs": 0.1,
+      "compiled_secs": 5.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -432,8 +432,8 @@
      },
      {
       "project": "wj-rate-limit",
-      "interp_secs": 0.2,
-      "compiled_secs": 56.9,
+      "interp_secs": 0.0,
+      "compiled_secs": 5.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -448,8 +448,8 @@
      },
      {
       "project": "wj-regex",
-      "interp_secs": 0.4,
-      "compiled_secs": 35.5,
+      "interp_secs": 0.0,
+      "compiled_secs": 5.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -465,7 +465,7 @@
      {
       "project": "wj-retry",
       "interp_secs": 0.2,
-      "compiled_secs": 39.1,
+      "compiled_secs": 5.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -480,8 +480,8 @@
      },
      {
       "project": "wj-router",
-      "interp_secs": 0.5,
-      "compiled_secs": 35.1,
+      "interp_secs": 0.1,
+      "compiled_secs": 13.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -496,8 +496,8 @@
      },
      {
       "project": "wj-semver",
-      "interp_secs": 0.4,
-      "compiled_secs": 24.3,
+      "interp_secs": 0.1,
+      "compiled_secs": 4.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -512,8 +512,8 @@
      },
      {
       "project": "wj-sha",
-      "interp_secs": 0.2,
-      "compiled_secs": 21.1,
+      "interp_secs": 0.0,
+      "compiled_secs": 4.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -528,8 +528,8 @@
      },
      {
       "project": "wj-sync",
-      "interp_secs": 4.8,
-      "compiled_secs": 33.2,
+      "interp_secs": 1.9,
+      "compiled_secs": 22.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -545,7 +545,7 @@
      {
       "project": "wj-template",
       "interp_secs": 0.3,
-      "compiled_secs": 101.4,
+      "compiled_secs": 7.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -560,8 +560,8 @@
      },
      {
       "project": "wj-timefmt",
-      "interp_secs": 0.5,
-      "compiled_secs": 183.3,
+      "interp_secs": 0.1,
+      "compiled_secs": 4.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -576,8 +576,8 @@
      },
      {
       "project": "wj-toml",
-      "interp_secs": 2.1,
-      "compiled_secs": 54.9,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -592,8 +592,8 @@
      },
      {
       "project": "wj-url",
-      "interp_secs": 1.0,
-      "compiled_secs": 73.0,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -608,8 +608,8 @@
      },
      {
       "project": "wj-uuid",
-      "interp_secs": 2.2,
-      "compiled_secs": 195.3,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -624,8 +624,8 @@
      },
      {
       "project": "wj-validate",
-      "interp_secs": 0.8,
-      "compiled_secs": 13.6,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -640,8 +640,8 @@
      },
      {
       "project": "wj-yaml",
-      "interp_secs": 0.3,
-      "compiled_secs": 14.2,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -656,8 +656,8 @@
      },
      {
       "project": "wj-auth-api",
-      "interp_secs": 91.0,
-      "compiled_secs": 161.4,
+      "interp_secs": 13.8,
+      "compiled_secs": 36.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -672,8 +672,8 @@
      },
      {
       "project": "wj-chat",
-      "interp_secs": 0.6,
-      "compiled_secs": 249.5,
+      "interp_secs": 0.2,
+      "compiled_secs": 12.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -688,8 +688,8 @@
      },
      {
       "project": "wj-fetch",
-      "interp_secs": 1.3,
-      "compiled_secs": 78.6,
+      "interp_secs": 0.4,
+      "compiled_secs": 11.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -704,8 +704,8 @@
      },
      {
       "project": "wj-find",
-      "interp_secs": 0.5,
-      "compiled_secs": 17.0,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -720,8 +720,8 @@
      },
      {
       "project": "wj-first-hour",
-      "interp_secs": 0.2,
-      "compiled_secs": 52.4,
+      "interp_secs": 0.0,
+      "compiled_secs": 4.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -736,8 +736,8 @@
      },
      {
       "project": "wj-form-parse",
-      "interp_secs": 0.5,
-      "compiled_secs": 21.6,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -752,8 +752,8 @@
      },
      {
       "project": "wj-grep",
-      "interp_secs": 1.3,
-      "compiled_secs": 96.5,
+      "interp_secs": 0.6,
+      "compiled_secs": 13.9,
       "measured": false,
       "compiled_cache": "warm",
       "status": "unmeasured",
@@ -764,8 +764,8 @@
      },
      {
       "project": "wj-hello",
-      "interp_secs": 0.9,
-      "compiled_secs": 136.1,
+      "interp_secs": 0.0,
+      "compiled_secs": 24.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -780,8 +780,8 @@
      },
      {
       "project": "wj-migrate-cli",
-      "interp_secs": 3.4,
-      "compiled_secs": 167.1,
+      "interp_secs": 0.2,
+      "compiled_secs": 12.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -796,8 +796,8 @@
      },
      {
       "project": "wj-notes-api",
-      "interp_secs": 14.7,
-      "compiled_secs": 116.7,
+      "interp_secs": 2.6,
+      "compiled_secs": 17.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -812,8 +812,8 @@
      },
      {
       "project": "wj-pipeline",
-      "interp_secs": 1.6,
-      "compiled_secs": 102.7,
+      "interp_secs": 0.1,
+      "compiled_secs": 16.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -828,8 +828,8 @@
      },
      {
       "project": "wj-proxy",
-      "interp_secs": 3.2,
-      "compiled_secs": 127.9,
+      "interp_secs": 0.3,
+      "compiled_secs": 13.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -844,8 +844,8 @@
      },
      {
       "project": "wj-scheduler",
-      "interp_secs": 2.6,
-      "compiled_secs": 133.3,
+      "interp_secs": 0.6,
+      "compiled_secs": 8.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -860,8 +860,8 @@
      },
      {
       "project": "wj-sitegen",
-      "interp_secs": 1.3,
-      "compiled_secs": 131.1,
+      "interp_secs": 0.1,
+      "compiled_secs": 11.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -876,145 +876,24 @@
      },
      {
       "project": "wj-taskflow",
-      "interp_secs": 120.5,
-      "compiled_secs": 348.1,
+      "interp_secs": 29.5,
+      "compiled_secs": 47.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
-      "sets_equal": false,
+      "sets_equal": true,
       "unsupported": [],
       "compiled_total": 30,
       "compiled_pass": 30,
-      "both_pass": 0,
-      "interp_pass": 0,
-      "mismatches": [
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_acceptance_team_workflow",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_assignment_requires_a_project_member",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_duplicate_registration_conflicts",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_health_is_open",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_list_filters_by_query_string",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_login_rejects_wrong_password_and_unknown_user",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_me_requires_a_valid_bearer_token",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_member_role_must_be_known_and_user_must_exist",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_non_members_cannot_see_a_project",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_project_lifecycle",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_project_name_is_validated",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_protected_routes_need_authentication",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_rate_limit_returns_429_with_retry_after",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_register_never_returns_the_password_hash",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_register_validation_errors",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_roles_gate_task_writes_and_project_admin",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_task_lifecycle_and_defaults",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_task_validation",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/api_test.wj::test_unknown_route_and_method",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/migrations_test.wj::test_pending_versions_skips_applied",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/migrations_test.wj::test_schema_files_are_ordered_and_parse",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_creator_becomes_project_owner",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_deleting_a_project_removes_its_tasks_and_memberships",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_emails_are_unique_case_insensitively",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_filter_by_status_priority_assignee_and_text",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_ids_are_assigned_per_entity_starting_at_one",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_members_can_be_added_and_replaced",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_projects_for_user_lists_owned_and_joined",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_update_task_changes_only_given_fields",
-        "reason": "interpreted run produced no test list: "
-       },
-       {
-        "program": "wj-taskflow:tests/store_test.wj::test_usernames_are_unique",
-        "reason": "interpreted run produced no test list: "
-       }
-      ],
+      "both_pass": 30,
+      "interp_pass": 30,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-todo-cli",
-      "interp_secs": 2.5,
-      "compiled_secs": 125.4,
+      "interp_secs": 1.1,
+      "compiled_secs": 62.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1029,8 +908,8 @@
      },
      {
       "project": "wj-webhook",
-      "interp_secs": 2.0,
-      "compiled_secs": 124.4,
+      "interp_secs": 0.1,
+      "compiled_secs": 30.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1045,129 +924,9 @@
      }
     ],
     "tests_compared": 1311,
-    "tests_agree": 1281
+    "tests_agree": 1311
    },
    "blockers": [
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_acceptance_team_workflow",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_assignment_requires_a_project_member",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_duplicate_registration_conflicts",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_health_is_open",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_list_filters_by_query_string",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_login_rejects_wrong_password_and_unknown_user",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_me_requires_a_valid_bearer_token",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_member_role_must_be_known_and_user_must_exist",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_non_members_cannot_see_a_project",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_project_lifecycle",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_project_name_is_validated",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_protected_routes_need_authentication",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_rate_limit_returns_429_with_retry_after",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_register_never_returns_the_password_hash",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_register_validation_errors",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_roles_gate_task_writes_and_project_admin",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_task_lifecycle_and_defaults",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_task_validation",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/api_test.wj::test_unknown_route_and_method",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/migrations_test.wj::test_pending_versions_skips_applied",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/migrations_test.wj::test_schema_files_are_ordered_and_parse",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_creator_becomes_project_owner",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_deleting_a_project_removes_its_tasks_and_memberships",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_emails_are_unique_case_insensitively",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_filter_by_status_priority_assignee_and_text",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_ids_are_assigned_per_entity_starting_at_one",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_members_can_be_added_and_replaced",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_projects_for_user_lists_owned_and_joined",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_update_task_changes_only_given_fields",
-     "reason": "interpreted run produced no test list: "
-    },
-    {
-     "program": "wj-taskflow:tests/store_test.wj::test_usernames_are_unique",
-     "reason": "interpreted run produced no test list: "
-    },
     {
      "program": "wj-grep",
      "reason": "unmeasured: compiled test run failed before reporting results: error[E0308]: mismatched types"
@@ -1178,13 +937,13 @@
    "id": "R2",
    "title": "No silent divergence",
    "target": "0 divergent programs",
-   "percent": 97.7,
+   "percent": 98.2,
    "status": "fail",
    "detail": {
-    "divergences": 28,
+    "divergences": 15,
     "unmeasured": 0,
     "checked": 839,
-    "compiled_checked": 395,
+    "compiled_checked": 394,
     "generated_seeds": 312,
     "compiled_build_failures": 102,
     "build_failures": 102,
@@ -1210,59 +969,7 @@
    },
    "blockers": [
     {
-     "program": "verified/std_fs_roundtrip.wj",
-     "reason": "[oracle] line 1: interpreted '<end>' vs expected 'wrote 2 lines'"
-    },
-    {
-     "program": "verified/std_fs_roundtrip.wj",
-     "reason": "[oracle] exit 126, expected 0"
-    },
-    {
-     "program": "verified/std_fs_roundtrip.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '<end>' vs expected 'wrote 2 lines'"
-    },
-    {
-     "program": "verified/std_fs_roundtrip.wj",
-     "reason": "[compiled-exit] exit 126 interpreted vs 0 compiled"
-    },
-    {
-     "program": "spec/SPEC-EFF-039.wj",
-     "reason": "[compiled-stdout] line 2: interpreted '<end>' vs expected 'not reached'"
-    },
-    {
-     "program": "spec/SPEC-EFF-039.wj",
-     "reason": "[compiled-exit] exit 126 interpreted vs 0 compiled"
-    },
-    {
-     "program": "generated/deep_recursion.wj@136",
-     "reason": "[hash-seed 2] output depends on hash order"
-    },
-    {
-     "program": "generated/deep_recursion.wj@136",
-     "reason": "[hash-seed 3] output depends on hash order"
-    },
-    {
-     "program": "generated/deep_recursion.wj@143",
-     "reason": "[oracle] line 1: interpreted '<end>' vs expected '5720000'"
-    },
-    {
-     "program": "generated/deep_recursion.wj@143",
-     "reason": "[oracle] exit -9, expected 0"
-    },
-    {
-     "program": "generated/deep_recursion.wj@150",
-     "reason": "[oracle] line 1: interpreted '<end>' vs expected '6000000'"
-    },
-    {
-     "program": "generated/deep_recursion.wj@150",
-     "reason": "[oracle] exit -9, expected 0"
-    },
-    {
-     "program": "generated/deep_recursion.wj@150",
-     "reason": "[hash-seed 2] output depends on hash order"
-    },
-    {
-     "program": "generated/deep_recursion.wj@150",
+     "program": "generated/deep_recursion.wj@115",
      "reason": "[hash-seed 3] output depends on hash order"
     },
     {
@@ -1738,7 +1445,7 @@
    "percent": 100.0,
    "status": "pass",
    "detail": {
-    "invocations": 1778,
+    "invocations": 1808,
     "fallbacks": 0,
     "fallback_rate_pct": 0.0,
     "silent": [],
@@ -1750,284 +1457,284 @@
    "id": "R4",
    "title": "Fast enough",
    "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
-   "percent": 89.4,
+   "percent": 90.9,
    "status": "fail",
    "detail": {
     "projects": [
      {
       "project": "wj-base64",
-      "interp_s": 0.4,
-      "compiled_s": 332.5,
+      "interp_s": 0.0,
+      "compiled_s": 10.9,
       "met": true
      },
      {
       "project": "wj-cli-args",
-      "interp_s": 0.8,
-      "compiled_s": 55.8,
+      "interp_s": 0.2,
+      "compiled_s": 7.9,
       "met": true
      },
      {
       "project": "wj-compress",
-      "interp_s": 0.9,
-      "compiled_s": 27.7,
+      "interp_s": 0.1,
+      "compiled_s": 10.0,
       "met": true
      },
      {
       "project": "wj-config",
-      "interp_s": 0.5,
-      "compiled_s": 27.3,
+      "interp_s": 0.0,
+      "compiled_s": 6.7,
       "met": true
      },
      {
       "project": "wj-cookie",
-      "interp_s": 0.5,
-      "compiled_s": 14.5,
+      "interp_s": 0.1,
+      "compiled_s": 4.8,
       "met": true
      },
      {
       "project": "wj-cors",
-      "interp_s": 0.2,
-      "compiled_s": 26.3,
+      "interp_s": 0.1,
+      "compiled_s": 11.8,
       "met": true
      },
      {
       "project": "wj-cron",
-      "interp_s": 1.7,
-      "compiled_s": 14.7,
+      "interp_s": 0.2,
+      "compiled_s": 7.1,
       "met": true
      },
      {
       "project": "wj-csv",
-      "interp_s": 0.0,
-      "compiled_s": 14.0,
+      "interp_s": 0.1,
+      "compiled_s": 6.9,
       "met": true
      },
      {
       "project": "wj-dotenv",
       "interp_s": 0.1,
-      "compiled_s": 16.8,
+      "compiled_s": 4.9,
       "met": true
      },
      {
       "project": "wj-duration",
-      "interp_s": 0.4,
-      "compiled_s": 40.2,
+      "interp_s": 0.2,
+      "compiled_s": 7.8,
       "met": true
      },
      {
       "project": "wj-event",
-      "interp_s": 0.3,
-      "compiled_s": 21.0,
+      "interp_s": 0.1,
+      "compiled_s": 7.0,
       "met": true
      },
      {
       "project": "wj-fs-walk",
-      "interp_s": 0.8,
-      "compiled_s": 8.0,
+      "interp_s": 0.3,
+      "compiled_s": 4.9,
       "met": true
      },
      {
       "project": "wj-gitignore",
-      "interp_s": 0.0,
-      "compiled_s": 4.1,
+      "interp_s": 0.2,
+      "compiled_s": 3.3,
       "met": true
      },
      {
       "project": "wj-glob",
-      "interp_s": 0.0,
-      "compiled_s": 6.1,
+      "interp_s": 0.1,
+      "compiled_s": 5.2,
       "met": true
      },
      {
       "project": "wj-hash",
-      "interp_s": 21.4,
-      "compiled_s": 94.9,
+      "interp_s": 6.1,
+      "compiled_s": 23.1,
       "met": true
      },
      {
       "project": "wj-headers",
-      "interp_s": 0.7,
-      "compiled_s": 68.8,
+      "interp_s": 0.1,
+      "compiled_s": 18.5,
       "met": true
      },
      {
       "project": "wj-http-client",
-      "interp_s": 0.2,
-      "compiled_s": 43.5,
+      "interp_s": 0.1,
+      "compiled_s": 11.5,
       "met": true
      },
      {
       "project": "wj-inflect",
-      "interp_s": 0.6,
-      "compiled_s": 15.9,
+      "interp_s": 0.3,
+      "compiled_s": 11.0,
       "met": true
      },
      {
       "project": "wj-json-util",
-      "interp_s": 0.3,
-      "compiled_s": 21.0,
+      "interp_s": 0.4,
+      "compiled_s": 8.6,
       "met": true
      },
      {
       "project": "wj-jwt",
-      "interp_s": 0.3,
-      "compiled_s": 32.6,
+      "interp_s": 0.0,
+      "compiled_s": 9.2,
       "met": true
      },
      {
       "project": "wj-log",
-      "interp_s": 0.2,
-      "compiled_s": 35.7,
+      "interp_s": 0.0,
+      "compiled_s": 6.6,
       "met": true
      },
      {
       "project": "wj-migrate",
-      "interp_s": 1.0,
-      "compiled_s": 366.5,
+      "interp_s": 0.1,
+      "compiled_s": 12.2,
       "met": true
      },
      {
       "project": "wj-mime",
-      "interp_s": 1.0,
-      "compiled_s": 46.8,
+      "interp_s": 0.3,
+      "compiled_s": 7.1,
       "met": true
      },
      {
       "project": "wj-multipart",
-      "interp_s": 2.5,
-      "compiled_s": 46.6,
+      "interp_s": 0.1,
+      "compiled_s": 4.3,
       "met": true
      },
      {
       "project": "wj-path",
-      "interp_s": 0.5,
-      "compiled_s": 31.8,
+      "interp_s": 0.1,
+      "compiled_s": 3.0,
       "met": true
      },
      {
       "project": "wj-querystring",
-      "interp_s": 1.4,
-      "compiled_s": 33.9,
+      "interp_s": 0.1,
+      "compiled_s": 5.8,
       "met": true
      },
      {
       "project": "wj-rate-limit",
-      "interp_s": 0.2,
-      "compiled_s": 56.9,
+      "interp_s": 0.0,
+      "compiled_s": 5.1,
       "met": true
      },
      {
       "project": "wj-regex",
-      "interp_s": 0.4,
-      "compiled_s": 35.5,
+      "interp_s": 0.0,
+      "compiled_s": 5.0,
       "met": true
      },
      {
       "project": "wj-retry",
       "interp_s": 0.2,
-      "compiled_s": 39.1,
+      "compiled_s": 5.7,
       "met": true
      },
      {
       "project": "wj-router",
-      "interp_s": 0.5,
-      "compiled_s": 35.1,
+      "interp_s": 0.1,
+      "compiled_s": 13.9,
       "met": true
      },
      {
       "project": "wj-semver",
-      "interp_s": 0.4,
-      "compiled_s": 24.3,
+      "interp_s": 0.1,
+      "compiled_s": 4.0,
       "met": true
      },
      {
       "project": "wj-sha",
-      "interp_s": 0.2,
-      "compiled_s": 21.1,
+      "interp_s": 0.0,
+      "compiled_s": 4.2,
       "met": true
      },
      {
       "project": "wj-sync",
-      "interp_s": 4.8,
-      "compiled_s": 33.2,
+      "interp_s": 1.9,
+      "compiled_s": 22.1,
       "met": true
      },
      {
       "project": "wj-template",
       "interp_s": 0.3,
-      "compiled_s": 101.4,
+      "compiled_s": 7.2,
       "met": true
      },
      {
       "project": "wj-timefmt",
-      "interp_s": 0.5,
-      "compiled_s": 183.3,
+      "interp_s": 0.1,
+      "compiled_s": 4.1,
       "met": true
      },
      {
       "project": "wj-toml",
-      "interp_s": 2.1,
-      "compiled_s": 54.9,
+      "interp_s": 0.1,
+      "compiled_s": 3.4,
       "met": true
      },
      {
       "project": "wj-url",
-      "interp_s": 1.0,
-      "compiled_s": 73.0,
+      "interp_s": 0.1,
+      "compiled_s": 3.9,
       "met": true
      },
      {
       "project": "wj-uuid",
-      "interp_s": 2.2,
-      "compiled_s": 195.3,
+      "interp_s": 0.1,
+      "compiled_s": 3.3,
       "met": true
      },
      {
       "project": "wj-validate",
-      "interp_s": 0.8,
-      "compiled_s": 13.6,
+      "interp_s": 0.1,
+      "compiled_s": 3.3,
       "met": true
      },
      {
       "project": "wj-yaml",
-      "interp_s": 0.3,
-      "compiled_s": 14.2,
+      "interp_s": 0.1,
+      "compiled_s": 3.6,
       "met": true
      },
      {
       "project": "wj-auth-api",
-      "interp_s": 91.0,
-      "compiled_s": 161.4,
+      "interp_s": 13.8,
+      "compiled_s": 36.7,
       "met": true
      },
      {
       "project": "wj-chat",
-      "interp_s": 0.6,
-      "compiled_s": 249.5,
+      "interp_s": 0.2,
+      "compiled_s": 12.4,
       "met": true
      },
      {
       "project": "wj-fetch",
-      "interp_s": 1.3,
-      "compiled_s": 78.6,
+      "interp_s": 0.4,
+      "compiled_s": 11.0,
       "met": true
      },
      {
       "project": "wj-find",
-      "interp_s": 0.5,
-      "compiled_s": 17.0,
+      "interp_s": 0.1,
+      "compiled_s": 3.1,
       "met": true
      },
      {
       "project": "wj-first-hour",
-      "interp_s": 0.2,
-      "compiled_s": 52.4,
+      "interp_s": 0.0,
+      "compiled_s": 4.6,
       "met": true
      },
      {
       "project": "wj-form-parse",
-      "interp_s": 0.5,
-      "compiled_s": 21.6,
+      "interp_s": 0.1,
+      "compiled_s": 3.8,
       "met": true
      },
      {
@@ -2036,141 +1743,141 @@
      },
      {
       "project": "wj-hello",
-      "interp_s": 0.9,
-      "compiled_s": 136.1,
+      "interp_s": 0.0,
+      "compiled_s": 24.1,
       "met": true
      },
      {
       "project": "wj-migrate-cli",
-      "interp_s": 3.4,
-      "compiled_s": 167.1,
+      "interp_s": 0.2,
+      "compiled_s": 12.4,
       "met": true
      },
      {
       "project": "wj-notes-api",
-      "interp_s": 14.7,
-      "compiled_s": 116.7,
+      "interp_s": 2.6,
+      "compiled_s": 17.9,
       "met": true
      },
      {
       "project": "wj-pipeline",
-      "interp_s": 1.6,
-      "compiled_s": 102.7,
+      "interp_s": 0.1,
+      "compiled_s": 16.7,
       "met": true
      },
      {
       "project": "wj-proxy",
-      "interp_s": 3.2,
-      "compiled_s": 127.9,
+      "interp_s": 0.3,
+      "compiled_s": 13.2,
       "met": true
      },
      {
       "project": "wj-scheduler",
-      "interp_s": 2.6,
-      "compiled_s": 133.3,
+      "interp_s": 0.6,
+      "compiled_s": 8.3,
       "met": true
      },
      {
       "project": "wj-sitegen",
-      "interp_s": 1.3,
-      "compiled_s": 131.1,
+      "interp_s": 0.1,
+      "compiled_s": 11.4,
       "met": true
      },
      {
       "project": "wj-taskflow",
-      "interp_s": 120.5,
-      "compiled_s": 348.1,
+      "interp_s": 29.5,
+      "compiled_s": 47.2,
       "met": true
      },
      {
       "project": "wj-todo-cli",
-      "interp_s": 2.5,
-      "compiled_s": 125.4,
+      "interp_s": 1.1,
+      "compiled_s": 62.9,
       "met": true
      },
      {
       "project": "wj-webhook",
-      "interp_s": 2.0,
-      "compiled_s": 124.4,
+      "interp_s": 0.1,
+      "compiled_s": 30.5,
       "met": true
      }
     ],
     "warm_loop": {
      "project": "wj-sync",
      "files": 24,
-     "median_s": 1.68
+     "median_s": 0.71
     },
     "startup": {
-     "hello_s": 0.103,
+     "hello_s": 0.023,
      "target_s": 0.25,
      "project": "wj-sync",
      "files": 24,
-     "check_s": 0.038,
-     "interp_test_s": 1.616,
-     "check_share": 0.02
+     "check_s": 0.005,
+     "interp_test_s": 0.694,
+     "check_share": 0.01
     },
     "kernels": [
      {
       "kernel": "closures.wj",
-      "interp_cpu_s": 0.16,
-      "python_cpu_s": 0.06,
-      "ratio": 2.6,
+      "interp_cpu_s": 0.14,
+      "python_cpu_s": 0.04,
+      "ratio": 3.5,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "fib30.wj",
       "interp_cpu_s": 0.03,
-      "python_cpu_s": 0.17,
+      "python_cpu_s": 0.13,
       "ratio": 0.2,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "hashmap.wj",
-      "interp_cpu_s": 0.23,
-      "python_cpu_s": 0.06,
-      "ratio": 3.7,
+      "interp_cpu_s": 0.2,
+      "python_cpu_s": 0.05,
+      "ratio": 4.1,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "loop5m.wj",
-      "interp_cpu_s": 0.22,
-      "python_cpu_s": 1.13,
+      "interp_cpu_s": 0.18,
+      "python_cpu_s": 0.91,
       "ratio": 0.2,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "nbody.wj",
-      "interp_cpu_s": 1.04,
-      "python_cpu_s": 0.14,
-      "ratio": 7.4,
+      "interp_cpu_s": 0.82,
+      "python_cpu_s": 0.11,
+      "ratio": 7.2,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "sieve.wj",
-      "interp_cpu_s": 0.62,
-      "python_cpu_s": 0.44,
-      "ratio": 1.4,
+      "interp_cpu_s": 0.53,
+      "python_cpu_s": 0.36,
+      "ratio": 1.5,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "strings.wj",
-      "interp_cpu_s": 0.12,
-      "python_cpu_s": 0.09,
-      "ratio": 1.4,
+      "interp_cpu_s": 0.11,
+      "python_cpu_s": 0.07,
+      "ratio": 1.6,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "structs.wj",
-      "interp_cpu_s": 0.44,
-      "python_cpu_s": 0.2,
-      "ratio": 2.2,
+      "interp_cpu_s": 0.37,
+      "python_cpu_s": 0.16,
+      "ratio": 2.3,
       "outputs_match": true,
       "met": false
      }
@@ -2184,31 +1891,27 @@
     },
     {
      "program": "bench/closures.wj",
-     "reason": "interpreter 0.16s vs python 0.06s CPU (2.6x slower)"
+     "reason": "interpreter 0.14s vs python 0.04s CPU (3.5x slower)"
     },
     {
      "program": "bench/hashmap.wj",
-     "reason": "interpreter 0.23s vs python 0.06s CPU (3.7x slower)"
+     "reason": "interpreter 0.20s vs python 0.05s CPU (4.1x slower)"
     },
     {
      "program": "bench/nbody.wj",
-     "reason": "interpreter 1.04s vs python 0.14s CPU (7.4x slower)"
+     "reason": "interpreter 0.82s vs python 0.11s CPU (7.2x slower)"
     },
     {
      "program": "bench/sieve.wj",
-     "reason": "interpreter 0.62s vs python 0.44s CPU (1.4x slower)"
+     "reason": "interpreter 0.53s vs python 0.36s CPU (1.5x slower)"
     },
     {
      "program": "bench/strings.wj",
-     "reason": "interpreter 0.12s vs python 0.09s CPU (1.4x slower)"
+     "reason": "interpreter 0.11s vs python 0.07s CPU (1.6x slower)"
     },
     {
      "program": "bench/structs.wj",
-     "reason": "interpreter 0.44s vs python 0.20s CPU (2.2x slower)"
-    },
-    {
-     "program": "wj-sync",
-     "reason": "warm edit-run loop 1.68s > 1.0s (24 files)"
+     "reason": "interpreter 0.37s vs python 0.16s CPU (2.3x slower)"
     }
    ]
   },
@@ -2394,233 +2097,16 @@
    "id": "R6",
    "title": "Stdlib and project coverage",
    "target": "0 std items without builtin/refusal; crate deps run via host bridge",
-   "percent": 79.1,
-   "status": "fail",
+   "percent": 100.0,
+   "status": "pass",
    "detail": {
     "std_declared": 258,
-    "std_missing": 54,
+    "std_missing": 0,
     "unsupported_features": [],
     "crate_dependency_projects": 1,
     "crate_projects_uncovered": 0
    },
-   "blockers": [
-    {
-     "program": "std::async::block_on",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::async::spawn",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::compute::background",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::compute::join",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::compute::map_reduce",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::compute::num_workers",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::compute::parallel",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::dialog::open_directory",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::dialog::open_file",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::dialog::save_file",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::dialog::show_confirm",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::dialog::show_message",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::encoding::json_decode",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::encoding::json_encode",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::encoding::json_encode_pretty",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::env::vars",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::fs::create_directory",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::fs::delete_file",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::fs::file_exists",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::fs::list_directory",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::fs::read_file",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::fs::write_file",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::net::download",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::net::get",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::net::get_async",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::net::post",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::net::post_async",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::net::upload",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::process::execute",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::process::spawn",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::random::random",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::clear",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::clear_with_backend",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::get",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::get_bytes",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::get_json",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::get_with_backend",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::get_with_ttl",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::has",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::keys",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::keys_with_backend",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::remove",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::remove_with_backend",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::set",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::set_bytes",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::set_json",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::set_with_backend",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::storage::set_with_ttl",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::test::assert",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::test::assert_eq",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::test::assert_msg",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::test::assert_ne",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::testing::assert_eq",
-     "reason": "no interpreter builtin and no capability refusal"
-    },
-    {
-     "program": "std::testing::assert_ne",
-     "reason": "no interpreter builtin and no capability refusal"
-    }
-   ]
+   "blockers": []
   },
   {
    "id": "R7",
@@ -2632,9 +2118,13 @@
     "window": 20,
     "commits_in_window": 20,
     "commits_passing": 0,
-    "commits_recorded": 1
+    "commits_recorded": 2
    },
    "blockers": [
+    {
+     "program": "8b6bdb63d0",
+     "reason": "failed R1,R2,R4,R5"
+    },
     {
      "program": "38457b193a",
      "reason": "failed R1,R2,R4,R5,R6"
@@ -2710,18 +2200,12 @@
     {
      "program": "512b6e4067",
      "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "219b0bf1f8",
-     "reason": "no full readiness run recorded for this commit"
     }
    ]
   }
  ],
  "selfcheck": {
-  "issues": [
-   "R1 wj-taskflow: interpreted and compiled runs discovered different test sets"
-  ]
+  "issues": []
  },
- "verdict": "SUSPECT"
+ "verdict": "NOT READY"
 }
