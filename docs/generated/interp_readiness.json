@@ -1,23 +1,23 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-19T23:38:16Z",
- "commit": "ceeebb2da7efa2ce1973adb4e5e060c5e0ec6f9a",
+ "generated_at": "2026-10-26T11:07:12Z",
+ "commit": "38457b193ab08d0b811ce4f959a588f0897d77a6",
  "mode": "full",
- "load_avg_1m": 100.3,
+ "load_avg_1m": 74.6,
  "wj_profile": "release",
  "criteria": [
   {
    "id": "R1",
    "title": "Test suites pass interpreted",
    "target": ">= 99.0% of compiled-passing tests",
-   "percent": 85.0,
+   "percent": 97.7,
    "status": "fail",
    "detail": {
     "projects": [
      {
       "project": "wj-base64",
       "interp_secs": 0.4,
-      "compiled_secs": 31.4,
+      "compiled_secs": 332.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -25,64 +25,15 @@
       "unsupported": [],
       "compiled_total": 14,
       "compiled_pass": 14,
-      "both_pass": 2,
-      "interp_pass": 2,
-      "mismatches": [
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_basic_auth_header",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_bearer_auth_header",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_decode_hello",
-        "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_decode_or",
-        "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_decode_rejects_garbage",
-        "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_encode_bytes_roundtrip",
-        "reason": "error: no method named `base64_encode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_encode_hello",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_is_basic_auth_header",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_looks_like_base64_and_is_encoded",
-        "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_require_bearer",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_roundtrip_empty",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       },
-       {
-        "program": "wj-base64:tests/base64_test.wj::test_roundtrip_punctuation",
-        "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
-       }
-      ],
+      "both_pass": 14,
+      "interp_pass": 14,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-cli-args",
-      "interp_secs": 0.0,
-      "compiled_secs": 32.7,
+      "interp_secs": 0.8,
+      "compiled_secs": 55.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -97,8 +48,8 @@
      },
      {
       "project": "wj-compress",
-      "interp_secs": 0.0,
-      "compiled_secs": 33.8,
+      "interp_secs": 0.9,
+      "compiled_secs": 27.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -113,8 +64,8 @@
      },
      {
       "project": "wj-config",
-      "interp_secs": 0.0,
-      "compiled_secs": 34.6,
+      "interp_secs": 0.5,
+      "compiled_secs": 27.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -129,8 +80,8 @@
      },
      {
       "project": "wj-cookie",
-      "interp_secs": 0.0,
-      "compiled_secs": 35.3,
+      "interp_secs": 0.5,
+      "compiled_secs": 14.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -145,8 +96,8 @@
      },
      {
       "project": "wj-cors",
-      "interp_secs": 0.0,
-      "compiled_secs": 50.1,
+      "interp_secs": 0.2,
+      "compiled_secs": 26.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -161,8 +112,8 @@
      },
      {
       "project": "wj-cron",
-      "interp_secs": 0.1,
-      "compiled_secs": 56.7,
+      "interp_secs": 1.7,
+      "compiled_secs": 14.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -178,7 +129,7 @@
      {
       "project": "wj-csv",
       "interp_secs": 0.0,
-      "compiled_secs": 42.2,
+      "compiled_secs": 14.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -186,20 +137,15 @@
       "unsupported": [],
       "compiled_total": 16,
       "compiled_pass": 16,
-      "both_pass": 15,
-      "interp_pass": 15,
-      "mismatches": [
-       {
-        "program": "wj-csv:tests/csv_test.wj::test_last_row_and_rectangular",
-        "reason": "error: cannot find function `is_rectangular` in this scope"
-       }
-      ],
+      "both_pass": 16,
+      "interp_pass": 16,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-dotenv",
-      "interp_secs": 0.0,
-      "compiled_secs": 58.6,
+      "interp_secs": 0.1,
+      "compiled_secs": 16.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -214,8 +160,8 @@
      },
      {
       "project": "wj-duration",
-      "interp_secs": 0.0,
-      "compiled_secs": 3.3,
+      "interp_secs": 0.4,
+      "compiled_secs": 40.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -223,20 +169,15 @@
       "unsupported": [],
       "compiled_total": 25,
       "compiled_pass": 25,
-      "both_pass": 24,
-      "interp_pass": 24,
-      "mismatches": [
-       {
-        "program": "wj-duration:tests/duration_test.wj::test_bounds_and_require_nonneg",
-        "reason": "error: cannot find function `is_at_least` in this scope"
-       }
-      ],
+      "both_pass": 25,
+      "interp_pass": 25,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-event",
-      "interp_secs": 0.1,
-      "compiled_secs": 4.1,
+      "interp_secs": 0.3,
+      "compiled_secs": 21.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -251,8 +192,8 @@
      },
      {
       "project": "wj-fs-walk",
-      "interp_secs": 0.1,
-      "compiled_secs": 20.1,
+      "interp_secs": 0.8,
+      "compiled_secs": 8.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -268,19 +209,23 @@
      {
       "project": "wj-gitignore",
       "interp_secs": 0.0,
-      "compiled_secs": 34.4,
-      "measured": false,
+      "compiled_secs": 4.1,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 12,
+      "compiled_pass": 12,
+      "both_pass": 12,
+      "interp_pass": 12,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-glob",
-      "interp_secs": 0.1,
-      "compiled_secs": 41.1,
+      "interp_secs": 0.0,
+      "compiled_secs": 6.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -288,48 +233,15 @@
       "unsupported": [],
       "compiled_total": 28,
       "compiled_pass": 28,
-      "both_pass": 20,
-      "interp_pass": 20,
-      "mismatches": [
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_double_star_crosses_segments",
-        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:73:11:"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_double_star_prefix",
-        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:81:11:"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_double_star_suffix_glob",
-        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:89:11:"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_filter_with_double_star",
-        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:108:14:"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_multi_segment_stars",
-        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:58:11:"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_require_exact",
-        "reason": "error: cannot find function `require_exact` in this scope"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_require_match_and_has_meta",
-        "reason": "error: cannot find function `has_meta` in this scope"
-       },
-       {
-        "program": "wj-glob:tests/glob_test.wj::test_star_does_not_cross_slash",
-        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:46:11:"
-       }
-      ],
+      "both_pass": 28,
+      "interp_pass": 28,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-hash",
-      "interp_secs": 2.6,
-      "compiled_secs": 55.1,
+      "interp_secs": 21.4,
+      "compiled_secs": 94.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -344,8 +256,8 @@
      },
      {
       "project": "wj-headers",
-      "interp_secs": 0.1,
-      "compiled_secs": 52.7,
+      "interp_secs": 0.7,
+      "compiled_secs": 68.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -360,8 +272,8 @@
      },
      {
       "project": "wj-http-client",
-      "interp_secs": 0.1,
-      "compiled_secs": 54.2,
+      "interp_secs": 0.2,
+      "compiled_secs": 43.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -376,8 +288,8 @@
      },
      {
       "project": "wj-inflect",
-      "interp_secs": 0.0,
-      "compiled_secs": 55.0,
+      "interp_secs": 0.6,
+      "compiled_secs": 15.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -392,8 +304,8 @@
      },
      {
       "project": "wj-json-util",
-      "interp_secs": 0.1,
-      "compiled_secs": 92.3,
+      "interp_secs": 0.3,
+      "compiled_secs": 21.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -408,8 +320,8 @@
      },
      {
       "project": "wj-jwt",
-      "interp_secs": 0.1,
-      "compiled_secs": 94.3,
+      "interp_secs": 0.3,
+      "compiled_secs": 32.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -424,20 +336,24 @@
      },
      {
       "project": "wj-log",
-      "interp_secs": 0.0,
-      "compiled_secs": 75.9,
-      "measured": false,
+      "interp_secs": 0.2,
+      "compiled_secs": 35.7,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error[E0308]: mismatched types",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 17,
+      "compiled_pass": 17,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-migrate",
-      "interp_secs": 0.1,
-      "compiled_secs": 42.8,
+      "interp_secs": 1.0,
+      "compiled_secs": 366.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -445,20 +361,15 @@
       "unsupported": [],
       "compiled_total": 25,
       "compiled_pass": 25,
-      "both_pass": 24,
-      "interp_pass": 24,
-      "mismatches": [
-       {
-        "program": "wj-migrate:tests/migrate_test.wj::test_require_name",
-        "reason": "error: cannot find function `require_name` in this scope"
-       }
-      ],
+      "both_pass": 25,
+      "interp_pass": 25,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-mime",
-      "interp_secs": 0.0,
-      "compiled_secs": 19.5,
+      "interp_secs": 1.0,
+      "compiled_secs": 46.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -466,56 +377,31 @@
       "unsupported": [],
       "compiled_total": 24,
       "compiled_pass": 24,
-      "both_pass": 17,
-      "interp_pass": 17,
-      "mismatches": [
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_content_type_header",
-        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
-       },
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_content_type_json_and_html",
-        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
-       },
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_html_constant",
-        "reason": "error: no field `TEXT_HTML` on value of type `fn`"
-       },
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_is_octet_stream",
-        "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
-       },
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_json_constant",
-        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
-       },
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_octet_stream_constant",
-        "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
-       },
-       {
-        "program": "wj-mime:tests/mime_test.wj::test_require_plain",
-        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
-       }
-      ],
+      "both_pass": 24,
+      "interp_pass": 24,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-multipart",
-      "interp_secs": 0.1,
-      "compiled_secs": 41.7,
-      "measured": false,
+      "interp_secs": 2.5,
+      "compiled_secs": 46.6,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error[E0282]: type annotations needed for `Vec<_>`",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 21,
+      "compiled_pass": 21,
+      "both_pass": 21,
+      "interp_pass": 21,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-path",
-      "interp_secs": 0.0,
-      "compiled_secs": 9.0,
+      "interp_secs": 0.5,
+      "compiled_secs": 31.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -530,8 +416,8 @@
      },
      {
       "project": "wj-querystring",
-      "interp_secs": 0.3,
-      "compiled_secs": 83.3,
+      "interp_secs": 1.4,
+      "compiled_secs": 33.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -539,132 +425,15 @@
       "unsupported": [],
       "compiled_total": 29,
       "compiled_pass": 29,
-      "both_pass": 0,
-      "interp_pass": 0,
-      "mismatches": [
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_append_keeps_existing",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_get_all_repeated_keys",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_get_first_value",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_get_or_default",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_has_true_false",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_is_empty_and_pair_count",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_keys_unique_in_order",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_last_key_and_is_singleton",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_last_value_and_require_singleton",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_parse_empty",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_parse_key_without_value",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_parse_percent_encoded_value",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_parse_plus_as_space",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_parse_simple_pairs",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_parse_strips_leading_question",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_remove_drops_all_matching_keys",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_count",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_empty",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_first_key",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_last_key",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_last_value",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_pair_count",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_require_unique",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_set_replaces_existing_key",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_ampersand_in_value",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_spaces",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_stringify_roundtrip",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       },
-       {
-        "program": "wj-querystring:tests/querystring_test.wj::test_unique_key_count_and_value_count",
-        "reason": "error: no method named `form_parse` found for value of type `fn`"
-       }
-      ],
+      "both_pass": 29,
+      "interp_pass": 29,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-rate-limit",
-      "interp_secs": 0.0,
-      "compiled_secs": 100.7,
+      "interp_secs": 0.2,
+      "compiled_secs": 56.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -679,8 +448,8 @@
      },
      {
       "project": "wj-regex",
-      "interp_secs": 0.0,
-      "compiled_secs": 55.2,
+      "interp_secs": 0.4,
+      "compiled_secs": 35.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -688,48 +457,15 @@
       "unsupported": [],
       "compiled_total": 16,
       "compiled_pass": 16,
-      "both_pass": 8,
-      "interp_pass": 8,
-      "mismatches": [
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_escape_specials",
-        "reason": "error: no method named `escape` found for value of type `fn`"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_find_all",
-        "reason": "error: no method named `find_all` found for value of type `fn`"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_has_matches_and_none_match",
-        "reason": "error: no method named `find_all` found for value of type `fn`"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_match_count",
-        "reason": "error: no method named `find_all` found for value of type `fn`"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_require_at_least",
-        "reason": "error: no method named `find_all` found for value of type `fn`"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_require_exact_count",
-        "reason": "error: cannot find function `require_exact_count` in this scope"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_require_matches",
-        "reason": "error: no method named `find_all` found for value of type `fn`"
-       },
-       {
-        "program": "wj-regex:tests/regex_test.wj::test_require_none",
-        "reason": "error: no method named `find_all` found for value of type `fn`"
-       }
-      ],
+      "both_pass": 16,
+      "interp_pass": 16,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-retry",
-      "interp_secs": 0.0,
-      "compiled_secs": 53.3,
+      "interp_secs": 0.2,
+      "compiled_secs": 39.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -737,20 +473,15 @@
       "unsupported": [],
       "compiled_total": 26,
       "compiled_pass": 26,
-      "both_pass": 25,
-      "interp_pass": 25,
-      "mismatches": [
-       {
-        "program": "wj-retry:tests/retry_test.wj::test_require_retry",
-        "reason": "error: cannot find function `require_retry` in this scope"
-       }
-      ],
+      "both_pass": 26,
+      "interp_pass": 26,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-router",
-      "interp_secs": 0.0,
-      "compiled_secs": 127.8,
+      "interp_secs": 0.5,
+      "compiled_secs": 35.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -765,8 +496,8 @@
      },
      {
       "project": "wj-semver",
-      "interp_secs": 0.0,
-      "compiled_secs": 55.1,
+      "interp_secs": 0.4,
+      "compiled_secs": 24.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -781,8 +512,8 @@
      },
      {
       "project": "wj-sha",
-      "interp_secs": 0.0,
-      "compiled_secs": 67.8,
+      "interp_secs": 0.2,
+      "compiled_secs": 21.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -797,8 +528,8 @@
      },
      {
       "project": "wj-sync",
-      "interp_secs": 0.6,
-      "compiled_secs": 76.8,
+      "interp_secs": 4.8,
+      "compiled_secs": 33.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -806,124 +537,31 @@
       "unsupported": [],
       "compiled_total": 50,
       "compiled_pass": 50,
-      "both_pass": 26,
-      "interp_pass": 26,
-      "mismatches": [
-       {
-        "program": "wj-sync:tests/bench_smoke_test.wj::test_pool_sum_double_bench_smoke",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/bench_throughput_test.wj::test_bench_pool_shared_inbox_5k",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/bounded_test.wj::test_bounded_capacity_two",
-        "reason": "error: no method named `sync_channel` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/bounded_test.wj::test_bounded_send_recv",
-        "reason": "error: no method named `sync_channel` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_generic_test.wj::test_generic_clone_sender_fanout",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_generic_test.wj::test_generic_int_roundtrip",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_generic_test.wj::test_generic_try_recv_empty",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_test.wj::test_clone_sender_fan_in",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_test.wj::test_try_recv_after_send",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_test.wj::test_try_recv_empty",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/channel_test.wj::test_unbounded_send_recv",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/pending_generic_test.wj::test_parallel_add_compat",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pending_generic_test.wj::test_pending_wait_option",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pending_generic_test.wj::test_task_int_alias",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pending_test.wj::test_parallel_add_waits_for_result",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pending_test.wj::test_parallel_shared_add",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pipeline_test.wj::test_drain_empty_sentinel_only",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/pipeline_test.wj::test_send_recv_api_drain_sum",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/pool_shutdown_test.wj::test_pool_sum_still_works_before_shutdown",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pool_test.wj::test_pool_doubles_jobs",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pool_test.wj::test_pool_shared_inbox_sum",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/pool_test.wj::test_pool_sum_double",
-        "reason": "error: cannot find value `std` in this scope"
-       },
-       {
-        "program": "wj-sync:tests/stress_test.wj::test_fan_in_three_senders",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       },
-       {
-        "program": "wj-sync:tests/stress_test.wj::test_try_recv_drain_until_empty",
-        "reason": "error: no method named `unbounded` found for value of type `fn`"
-       }
-      ],
+      "both_pass": 50,
+      "interp_pass": 50,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-template",
-      "interp_secs": 0.1,
-      "compiled_secs": 40.0,
-      "measured": false,
+      "interp_secs": 0.3,
+      "compiled_secs": 101.4,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error[E0282]: type annotations needed for `HashMap<_, _>`",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 23,
+      "compiled_pass": 23,
+      "both_pass": 23,
+      "interp_pass": 23,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-timefmt",
-      "interp_secs": 0.2,
-      "compiled_secs": 160.4,
+      "interp_secs": 0.5,
+      "compiled_secs": 183.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -931,20 +569,15 @@
       "unsupported": [],
       "compiled_total": 27,
       "compiled_pass": 27,
-      "both_pass": 26,
-      "interp_pass": 26,
-      "mismatches": [
-       {
-        "program": "wj-timefmt:tests/timefmt_test.wj::test_minute_second_and_midnight",
-        "reason": "error: cannot find function `minute_of` in this scope"
-       }
-      ],
+      "both_pass": 27,
+      "interp_pass": 27,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-toml",
-      "interp_secs": 0.2,
-      "compiled_secs": 90.9,
+      "interp_secs": 2.1,
+      "compiled_secs": 54.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -952,20 +585,15 @@
       "unsupported": [],
       "compiled_total": 30,
       "compiled_pass": 30,
-      "both_pass": 29,
-      "interp_pass": 29,
-      "mismatches": [
-       {
-        "program": "wj-toml:tests/toml_test.wj::test_require_nonblank",
-        "reason": "error: cannot find function `require_nonblank` in this scope"
-       }
-      ],
+      "both_pass": 30,
+      "interp_pass": 30,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-url",
-      "interp_secs": 0.1,
-      "compiled_secs": 76.5,
+      "interp_secs": 1.0,
+      "compiled_secs": 73.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -973,52 +601,15 @@
       "unsupported": [],
       "compiled_total": 22,
       "compiled_pass": 22,
-      "both_pass": 13,
-      "interp_pass": 13,
-      "mismatches": [
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_get_decodes_percent_and_plus",
-        "reason": "error: no method named `url_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_get_finds_key",
-        "reason": "error: no method named `url_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_get_missing_key",
-        "reason": "error: no method named `url_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_get_or",
-        "reason": "error: no method named `url_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_has",
-        "reason": "error: no method named `url_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_remove_drops_key",
-        "reason": "error: no method named `url_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_set_adds_and_replaces",
-        "reason": "error: no method named `url_encode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_query_set_encodes_spaces_and_ampersand",
-        "reason": "error: no method named `url_encode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-url:tests/url_test.wj::test_scheme_host_and_require_https",
-        "reason": "error: cannot find function `scheme_of` in this scope"
-       }
-      ],
+      "both_pass": 22,
+      "interp_pass": 22,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-uuid",
-      "interp_secs": 0.1,
-      "compiled_secs": 97.0,
+      "interp_secs": 2.2,
+      "compiled_secs": 195.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1026,36 +617,15 @@
       "unsupported": [],
       "compiled_total": 24,
       "compiled_pass": 24,
-      "both_pass": 19,
-      "interp_pass": 19,
-      "mismatches": [
-       {
-        "program": "wj-uuid:tests/uuid_test.wj::test_v1_from_timestamp_known_vector",
-        "reason": "error: no method named `hex_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-uuid:tests/uuid_test.wj::test_v1_now_has_version_one",
-        "reason": "error: no method named `hex_encode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-uuid:tests/uuid_test.wj::test_v5_dns_rfc4122_vector",
-        "reason": "error: no method named `hex_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-uuid:tests/uuid_test.wj::test_v5_is_deterministic",
-        "reason": "error: no method named `hex_decode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-uuid:tests/uuid_test.wj::test_v5_url_rfc4122_vector",
-        "reason": "error: no method named `hex_decode` found for value of type `fn`"
-       }
-      ],
+      "both_pass": 24,
+      "interp_pass": 24,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-validate",
-      "interp_secs": 0.1,
-      "compiled_secs": 102.3,
+      "interp_secs": 0.8,
+      "compiled_secs": 13.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1063,24 +633,15 @@
       "unsupported": [],
       "compiled_total": 36,
       "compiled_pass": 36,
-      "both_pass": 34,
-      "interp_pass": 34,
-      "mismatches": [
-       {
-        "program": "wj-validate:tests/validate_test.wj::test_last_error_and_require_clean",
-        "reason": "error: cannot find function `last_error` in this scope"
-       },
-       {
-        "program": "wj-validate:tests/validate_test.wj::test_only_error",
-        "reason": "error: cannot find function `only_error` in this scope"
-       }
-      ],
+      "both_pass": 36,
+      "interp_pass": 36,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-yaml",
-      "interp_secs": 0.0,
-      "compiled_secs": 51.3,
+      "interp_secs": 0.3,
+      "compiled_secs": 14.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1088,68 +649,79 @@
       "unsupported": [],
       "compiled_total": 26,
       "compiled_pass": 26,
-      "both_pass": 25,
-      "interp_pass": 25,
-      "mismatches": [
-       {
-        "program": "wj-yaml:tests/yaml_test.wj::test_require_valid",
-        "reason": "error: cannot find function `require_valid` in this scope"
-       }
-      ],
+      "both_pass": 26,
+      "interp_pass": 26,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-auth-api",
-      "interp_secs": 0.3,
-      "compiled_secs": 30.1,
-      "measured": false,
+      "interp_secs": 91.0,
+      "compiled_secs": 161.4,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 48,
+      "compiled_pass": 48,
+      "both_pass": 48,
+      "interp_pass": 48,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-chat",
-      "interp_secs": 0.1,
-      "compiled_secs": 22.7,
-      "measured": false,
+      "interp_secs": 0.6,
+      "compiled_secs": 249.5,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 20,
+      "compiled_pass": 20,
+      "both_pass": 20,
+      "interp_pass": 20,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-fetch",
-      "interp_secs": 0.2,
-      "compiled_secs": 4.5,
-      "measured": false,
+      "interp_secs": 1.3,
+      "compiled_secs": 78.6,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 37,
+      "compiled_pass": 37,
+      "both_pass": 37,
+      "interp_pass": 37,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-find",
-      "interp_secs": 0.0,
-      "compiled_secs": 0.9,
-      "measured": false,
+      "interp_secs": 0.5,
+      "compiled_secs": 17.0,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 12,
+      "compiled_pass": 12,
+      "both_pass": 12,
+      "interp_pass": 12,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-first-hour",
-      "interp_secs": 0.0,
-      "compiled_secs": 35.8,
+      "interp_secs": 0.2,
+      "compiled_secs": 52.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1157,52 +729,43 @@
       "unsupported": [],
       "compiled_total": 4,
       "compiled_pass": 4,
-      "both_pass": 1,
-      "interp_pass": 1,
-      "mismatches": [
-       {
-        "program": "wj-first-hour:tests/card_test.wj::test_build_card_ok",
-        "reason": "error: no method named `url_encode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-first-hour:tests/card_test.wj::test_build_card_query_is_urlencoded",
-        "reason": "error: no method named `url_encode` found for value of type `fn`"
-       },
-       {
-        "program": "wj-first-hour:tests/card_test.wj::test_card_id_path_query_and_has_id",
-        "reason": "error: no method named `url_encode` found for value of type `fn`"
-       }
-      ],
+      "both_pass": 4,
+      "interp_pass": 4,
+      "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-form-parse",
-      "interp_secs": 0.0,
-      "compiled_secs": 1.9,
-      "measured": false,
+      "interp_secs": 0.5,
+      "compiled_secs": 21.6,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 12,
+      "compiled_pass": 12,
+      "both_pass": 12,
+      "interp_pass": 12,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-grep",
-      "interp_secs": 0.1,
-      "compiled_secs": 1.8,
+      "interp_secs": 1.3,
+      "compiled_secs": 96.5,
       "measured": false,
       "compiled_cache": "warm",
       "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found",
+      "reason": "compiled test run failed before reporting results: error[E0308]: mismatched types",
       "compiled_pass": 0,
       "both_pass": 0,
       "mismatches": []
      },
      {
       "project": "wj-hello",
-      "interp_secs": 0.0,
-      "compiled_secs": 49.2,
+      "interp_secs": 0.9,
+      "compiled_secs": 136.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -1210,704 +773,404 @@
       "unsupported": [],
       "compiled_total": 8,
       "compiled_pass": 8,
-      "both_pass": 2,
-      "interp_pass": 2,
+      "both_pass": 8,
+      "interp_pass": 8,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-migrate-cli",
+      "interp_secs": 3.4,
+      "compiled_secs": 167.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 27,
+      "compiled_pass": 27,
+      "both_pass": 27,
+      "interp_pass": 27,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-notes-api",
+      "interp_secs": 14.7,
+      "compiled_secs": 116.7,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 62,
+      "compiled_pass": 62,
+      "both_pass": 62,
+      "interp_pass": 62,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-pipeline",
+      "interp_secs": 1.6,
+      "compiled_secs": 102.7,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 11,
+      "compiled_pass": 11,
+      "both_pass": 11,
+      "interp_pass": 11,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-proxy",
+      "interp_secs": 3.2,
+      "compiled_secs": 127.9,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 27,
+      "compiled_pass": 27,
+      "both_pass": 27,
+      "interp_pass": 27,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-scheduler",
+      "interp_secs": 2.6,
+      "compiled_secs": 133.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 43,
+      "compiled_pass": 43,
+      "both_pass": 43,
+      "interp_pass": 43,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-sitegen",
+      "interp_secs": 1.3,
+      "compiled_secs": 131.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 26,
+      "compiled_pass": 26,
+      "both_pass": 26,
+      "interp_pass": 26,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-taskflow",
+      "interp_secs": 120.5,
+      "compiled_secs": 348.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": false,
+      "unsupported": [],
+      "compiled_total": 30,
+      "compiled_pass": 30,
+      "both_pass": 0,
+      "interp_pass": 0,
       "mismatches": [
        {
-        "program": "wj-hello:tests/version_test.wj::test_crate_name_and_semver",
-        "reason": "error: cannot find function `version` in this scope"
+        "program": "wj-taskflow:tests/api_test.wj::test_acceptance_team_workflow",
+        "reason": "interpreted run produced no test list: "
        },
        {
-        "program": "wj-hello:tests/version_test.wj::test_is_zero_major_and_matches_identity",
-        "reason": "error: cannot find function `is_zero_major` in this scope"
+        "program": "wj-taskflow:tests/api_test.wj::test_assignment_requires_a_project_member",
+        "reason": "interpreted run produced no test list: "
        },
        {
-        "program": "wj-hello:tests/version_test.wj::test_require_crate",
-        "reason": "error: cannot find function `require_crate` in this scope"
+        "program": "wj-taskflow:tests/api_test.wj::test_duplicate_registration_conflicts",
+        "reason": "interpreted run produced no test list: "
        },
        {
-        "program": "wj-hello:tests/version_test.wj::test_require_semver_and_is_smoke_identity",
-        "reason": "error: cannot find function `require_semver` in this scope"
+        "program": "wj-taskflow:tests/api_test.wj::test_health_is_open",
+        "reason": "interpreted run produced no test list: "
        },
        {
-        "program": "wj-hello:tests/version_test.wj::test_version_is_non_empty",
-        "reason": "error: cannot find function `version` in this scope"
+        "program": "wj-taskflow:tests/api_test.wj::test_list_filters_by_query_string",
+        "reason": "interpreted run produced no test list: "
        },
        {
-        "program": "wj-hello:tests/version_test.wj::test_version_string",
-        "reason": "error: cannot find function `version` in this scope"
+        "program": "wj-taskflow:tests/api_test.wj::test_login_rejects_wrong_password_and_unknown_user",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_me_requires_a_valid_bearer_token",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_member_role_must_be_known_and_user_must_exist",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_non_members_cannot_see_a_project",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_project_lifecycle",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_project_name_is_validated",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_protected_routes_need_authentication",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_rate_limit_returns_429_with_retry_after",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_register_never_returns_the_password_hash",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_register_validation_errors",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_roles_gate_task_writes_and_project_admin",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_task_lifecycle_and_defaults",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_task_validation",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/api_test.wj::test_unknown_route_and_method",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/migrations_test.wj::test_pending_versions_skips_applied",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/migrations_test.wj::test_schema_files_are_ordered_and_parse",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_creator_becomes_project_owner",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_deleting_a_project_removes_its_tasks_and_memberships",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_emails_are_unique_case_insensitively",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_filter_by_status_priority_assignee_and_text",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_ids_are_assigned_per_entity_starting_at_one",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_members_can_be_added_and_replaced",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_projects_for_user_lists_owned_and_joined",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_update_task_changes_only_given_fields",
+        "reason": "interpreted run produced no test list: "
+       },
+       {
+        "program": "wj-taskflow:tests/store_test.wj::test_usernames_are_unique",
+        "reason": "interpreted run produced no test list: "
        }
       ],
       "interp_only_pass": []
      },
      {
-      "project": "wj-migrate-cli",
-      "interp_secs": 0.1,
-      "compiled_secs": 4.3,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
-      "project": "wj-notes-api",
-      "interp_secs": 0.4,
-      "compiled_secs": 3.7,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
-      "project": "wj-pipeline",
-      "interp_secs": 0.0,
-      "compiled_secs": 9.5,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
-      "project": "wj-proxy",
-      "interp_secs": 0.1,
-      "compiled_secs": 3.5,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
-      "project": "wj-scheduler",
-      "interp_secs": 0.2,
-      "compiled_secs": 3.9,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
-      "project": "wj-sitegen",
-      "interp_secs": 0.1,
-      "compiled_secs": 14.1,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
-      "project": "wj-taskflow",
-      "interp_secs": 0.2,
-      "compiled_secs": 15.6,
-      "measured": false,
-      "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
-     },
-     {
       "project": "wj-todo-cli",
-      "interp_secs": 0.2,
-      "compiled_secs": 5.7,
-      "measured": false,
+      "interp_secs": 2.5,
+      "compiled_secs": 125.4,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 65,
+      "compiled_pass": 65,
+      "both_pass": 65,
+      "interp_pass": 65,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-webhook",
-      "interp_secs": 0.1,
-      "compiled_secs": 20.0,
-      "measured": false,
+      "interp_secs": 2.0,
+      "compiled_secs": 124.4,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 17,
+      "compiled_pass": 17,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [],
+      "interp_only_pass": []
      }
     ],
-    "tests_compared": 801,
-    "tests_agree": 681
+    "tests_compared": 1311,
+    "tests_agree": 1281
    },
    "blockers": [
     {
-     "program": "wj-base64:tests/base64_test.wj::test_basic_auth_header",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_acceptance_team_workflow",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_bearer_auth_header",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_assignment_requires_a_project_member",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_decode_hello",
-     "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_duplicate_registration_conflicts",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_decode_or",
-     "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_health_is_open",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_decode_rejects_garbage",
-     "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_list_filters_by_query_string",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_encode_bytes_roundtrip",
-     "reason": "error: no method named `base64_encode` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_login_rejects_wrong_password_and_unknown_user",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_encode_hello",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_me_requires_a_valid_bearer_token",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_is_basic_auth_header",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_member_role_must_be_known_and_user_must_exist",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_looks_like_base64_and_is_encoded",
-     "reason": "error: no method named `base64_decode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_non_members_cannot_see_a_project",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_require_bearer",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_project_lifecycle",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_roundtrip_empty",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_project_name_is_validated",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-base64:tests/base64_test.wj::test_roundtrip_punctuation",
-     "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
+     "program": "wj-taskflow:tests/api_test.wj::test_protected_routes_need_authentication",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-csv:tests/csv_test.wj::test_last_row_and_rectangular",
-     "reason": "error: cannot find function `is_rectangular` in this scope"
+     "program": "wj-taskflow:tests/api_test.wj::test_rate_limit_returns_429_with_retry_after",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-duration:tests/duration_test.wj::test_bounds_and_require_nonneg",
-     "reason": "error: cannot find function `is_at_least` in this scope"
+     "program": "wj-taskflow:tests/api_test.wj::test_register_never_returns_the_password_hash",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_double_star_crosses_segments",
-     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:73:11:"
+     "program": "wj-taskflow:tests/api_test.wj::test_register_validation_errors",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_double_star_prefix",
-     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:81:11:"
+     "program": "wj-taskflow:tests/api_test.wj::test_roles_gate_task_writes_and_project_admin",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_double_star_suffix_glob",
-     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:89:11:"
+     "program": "wj-taskflow:tests/api_test.wj::test_task_lifecycle_and_defaults",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_filter_with_double_star",
-     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:108:14:"
+     "program": "wj-taskflow:tests/api_test.wj::test_task_validation",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_multi_segment_stars",
-     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:58:11:"
+     "program": "wj-taskflow:tests/api_test.wj::test_unknown_route_and_method",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_require_exact",
-     "reason": "error: cannot find function `require_exact` in this scope"
+     "program": "wj-taskflow:tests/migrations_test.wj::test_pending_versions_skips_applied",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_require_match_and_has_meta",
-     "reason": "error: cannot find function `has_meta` in this scope"
+     "program": "wj-taskflow:tests/migrations_test.wj::test_schema_files_are_ordered_and_parse",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-glob:tests/glob_test.wj::test_star_does_not_cross_slash",
-     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:46:11:"
+     "program": "wj-taskflow:tests/store_test.wj::test_creator_becomes_project_owner",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-migrate:tests/migrate_test.wj::test_require_name",
-     "reason": "error: cannot find function `require_name` in this scope"
+     "program": "wj-taskflow:tests/store_test.wj::test_deleting_a_project_removes_its_tasks_and_memberships",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_content_type_header",
-     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+     "program": "wj-taskflow:tests/store_test.wj::test_emails_are_unique_case_insensitively",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_content_type_json_and_html",
-     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+     "program": "wj-taskflow:tests/store_test.wj::test_filter_by_status_priority_assignee_and_text",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_html_constant",
-     "reason": "error: no field `TEXT_HTML` on value of type `fn`"
+     "program": "wj-taskflow:tests/store_test.wj::test_ids_are_assigned_per_entity_starting_at_one",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_is_octet_stream",
-     "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
+     "program": "wj-taskflow:tests/store_test.wj::test_members_can_be_added_and_replaced",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_json_constant",
-     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+     "program": "wj-taskflow:tests/store_test.wj::test_projects_for_user_lists_owned_and_joined",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_octet_stream_constant",
-     "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
+     "program": "wj-taskflow:tests/store_test.wj::test_update_task_changes_only_given_fields",
+     "reason": "interpreted run produced no test list: "
     },
     {
-     "program": "wj-mime:tests/mime_test.wj::test_require_plain",
-     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_append_keeps_existing",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_get_all_repeated_keys",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_get_first_value",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_get_or_default",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_has_true_false",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_is_empty_and_pair_count",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_keys_unique_in_order",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_last_key_and_is_singleton",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_last_value_and_require_singleton",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_parse_empty",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_parse_key_without_value",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_parse_percent_encoded_value",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_parse_plus_as_space",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_parse_simple_pairs",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_parse_strips_leading_question",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_remove_drops_all_matching_keys",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_count",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_empty",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_first_key",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_last_key",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_last_value",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_pair_count",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_require_unique",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_set_replaces_existing_key",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_ampersand_in_value",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_spaces",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_stringify_roundtrip",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-querystring:tests/querystring_test.wj::test_unique_key_count_and_value_count",
-     "reason": "error: no method named `form_parse` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_escape_specials",
-     "reason": "error: no method named `escape` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_find_all",
-     "reason": "error: no method named `find_all` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_has_matches_and_none_match",
-     "reason": "error: no method named `find_all` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_match_count",
-     "reason": "error: no method named `find_all` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_require_at_least",
-     "reason": "error: no method named `find_all` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_require_exact_count",
-     "reason": "error: cannot find function `require_exact_count` in this scope"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_require_matches",
-     "reason": "error: no method named `find_all` found for value of type `fn`"
-    },
-    {
-     "program": "wj-regex:tests/regex_test.wj::test_require_none",
-     "reason": "error: no method named `find_all` found for value of type `fn`"
-    },
-    {
-     "program": "wj-retry:tests/retry_test.wj::test_require_retry",
-     "reason": "error: cannot find function `require_retry` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/bench_smoke_test.wj::test_pool_sum_double_bench_smoke",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/bench_throughput_test.wj::test_bench_pool_shared_inbox_5k",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/bounded_test.wj::test_bounded_capacity_two",
-     "reason": "error: no method named `sync_channel` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/bounded_test.wj::test_bounded_send_recv",
-     "reason": "error: no method named `sync_channel` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_generic_test.wj::test_generic_clone_sender_fanout",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_generic_test.wj::test_generic_int_roundtrip",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_generic_test.wj::test_generic_try_recv_empty",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_test.wj::test_clone_sender_fan_in",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_test.wj::test_try_recv_after_send",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_test.wj::test_try_recv_empty",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/channel_test.wj::test_unbounded_send_recv",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/pending_generic_test.wj::test_parallel_add_compat",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pending_generic_test.wj::test_pending_wait_option",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pending_generic_test.wj::test_task_int_alias",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pending_test.wj::test_parallel_add_waits_for_result",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pending_test.wj::test_parallel_shared_add",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pipeline_test.wj::test_drain_empty_sentinel_only",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/pipeline_test.wj::test_send_recv_api_drain_sum",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/pool_shutdown_test.wj::test_pool_sum_still_works_before_shutdown",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pool_test.wj::test_pool_doubles_jobs",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pool_test.wj::test_pool_shared_inbox_sum",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/pool_test.wj::test_pool_sum_double",
-     "reason": "error: cannot find value `std` in this scope"
-    },
-    {
-     "program": "wj-sync:tests/stress_test.wj::test_fan_in_three_senders",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-sync:tests/stress_test.wj::test_try_recv_drain_until_empty",
-     "reason": "error: no method named `unbounded` found for value of type `fn`"
-    },
-    {
-     "program": "wj-timefmt:tests/timefmt_test.wj::test_minute_second_and_midnight",
-     "reason": "error: cannot find function `minute_of` in this scope"
-    },
-    {
-     "program": "wj-toml:tests/toml_test.wj::test_require_nonblank",
-     "reason": "error: cannot find function `require_nonblank` in this scope"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_get_decodes_percent_and_plus",
-     "reason": "error: no method named `url_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_get_finds_key",
-     "reason": "error: no method named `url_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_get_missing_key",
-     "reason": "error: no method named `url_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_get_or",
-     "reason": "error: no method named `url_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_has",
-     "reason": "error: no method named `url_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_remove_drops_key",
-     "reason": "error: no method named `url_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_set_adds_and_replaces",
-     "reason": "error: no method named `url_encode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_query_set_encodes_spaces_and_ampersand",
-     "reason": "error: no method named `url_encode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-url:tests/url_test.wj::test_scheme_host_and_require_https",
-     "reason": "error: cannot find function `scheme_of` in this scope"
-    },
-    {
-     "program": "wj-uuid:tests/uuid_test.wj::test_v1_from_timestamp_known_vector",
-     "reason": "error: no method named `hex_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-uuid:tests/uuid_test.wj::test_v1_now_has_version_one",
-     "reason": "error: no method named `hex_encode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-uuid:tests/uuid_test.wj::test_v5_dns_rfc4122_vector",
-     "reason": "error: no method named `hex_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-uuid:tests/uuid_test.wj::test_v5_is_deterministic",
-     "reason": "error: no method named `hex_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-uuid:tests/uuid_test.wj::test_v5_url_rfc4122_vector",
-     "reason": "error: no method named `hex_decode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-validate:tests/validate_test.wj::test_last_error_and_require_clean",
-     "reason": "error: cannot find function `last_error` in this scope"
-    },
-    {
-     "program": "wj-validate:tests/validate_test.wj::test_only_error",
-     "reason": "error: cannot find function `only_error` in this scope"
-    },
-    {
-     "program": "wj-yaml:tests/yaml_test.wj::test_require_valid",
-     "reason": "error: cannot find function `require_valid` in this scope"
-    },
-    {
-     "program": "wj-first-hour:tests/card_test.wj::test_build_card_ok",
-     "reason": "error: no method named `url_encode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-first-hour:tests/card_test.wj::test_build_card_query_is_urlencoded",
-     "reason": "error: no method named `url_encode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-first-hour:tests/card_test.wj::test_card_id_path_query_and_has_id",
-     "reason": "error: no method named `url_encode` found for value of type `fn`"
-    },
-    {
-     "program": "wj-hello:tests/version_test.wj::test_crate_name_and_semver",
-     "reason": "error: cannot find function `version` in this scope"
-    },
-    {
-     "program": "wj-hello:tests/version_test.wj::test_is_zero_major_and_matches_identity",
-     "reason": "error: cannot find function `is_zero_major` in this scope"
-    },
-    {
-     "program": "wj-hello:tests/version_test.wj::test_require_crate",
-     "reason": "error: cannot find function `require_crate` in this scope"
-    },
-    {
-     "program": "wj-hello:tests/version_test.wj::test_require_semver_and_is_smoke_identity",
-     "reason": "error: cannot find function `require_semver` in this scope"
-    },
-    {
-     "program": "wj-hello:tests/version_test.wj::test_version_is_non_empty",
-     "reason": "error: cannot find function `version` in this scope"
-    },
-    {
-     "program": "wj-hello:tests/version_test.wj::test_version_string",
-     "reason": "error: cannot find function `version` in this scope"
-    },
-    {
-     "program": "wj-gitignore",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-log",
-     "reason": "unmeasured: compiled test run failed before reporting results: error[E0308]: mismatched types"
-    },
-    {
-     "program": "wj-multipart",
-     "reason": "unmeasured: compiled test run failed before reporting results: error[E0282]: type annotations needed for `Vec<_>`"
-    },
-    {
-     "program": "wj-template",
-     "reason": "unmeasured: compiled test run failed before reporting results: error[E0282]: type annotations needed for `HashMap<_, _>`"
-    },
-    {
-     "program": "wj-auth-api",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-chat",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-fetch",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-find",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found"
-    },
-    {
-     "program": "wj-form-parse",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+     "program": "wj-taskflow:tests/store_test.wj::test_usernames_are_unique",
+     "reason": "interpreted run produced no test list: "
     },
     {
      "program": "wj-grep",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found"
-    },
-    {
-     "program": "wj-migrate-cli",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-notes-api",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-pipeline",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-proxy",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-scheduler",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-sitegen",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-taskflow",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-todo-cli",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
-    },
-    {
-     "program": "wj-webhook",
-     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+     "reason": "unmeasured: compiled test run failed before reporting results: error[E0308]: mismatched types"
     }
    ]
   },
@@ -1915,13 +1178,13 @@
    "id": "R2",
    "title": "No silent divergence",
    "target": "0 divergent programs",
-   "percent": 97.8,
+   "percent": 97.7,
    "status": "fail",
    "detail": {
-    "divergences": 21,
+    "divergences": 28,
     "unmeasured": 0,
-    "checked": 837,
-    "compiled_checked": 393,
+    "checked": 839,
+    "compiled_checked": 395,
     "generated_seeds": 312,
     "compiled_build_failures": 102,
     "build_failures": 102,
@@ -1947,36 +1210,64 @@
    },
    "blockers": [
     {
-     "program": "conformance/171_format_flags_padding.wj",
-     "reason": "[oracle] line 1: interpreted '[5    ] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [' vs expected '[00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] ['"
+     "program": "verified/std_fs_roundtrip.wj",
+     "reason": "[oracle] line 1: interpreted '<end>' vs expected 'wrote 2 lines'"
     },
     {
-     "program": "conformance/171_format_flags_padding.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '[5    ] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [' vs expected '[00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] ['"
+     "program": "verified/std_fs_roundtrip.wj",
+     "reason": "[oracle] exit 126, expected 0"
     },
     {
-     "program": "conformance/172_pretty_debug_aggregates.wj",
-     "reason": "[oracle] line 55: interpreted '    1,' vs expected '        1,'"
+     "program": "verified/std_fs_roundtrip.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '<end>' vs expected 'wrote 2 lines'"
     },
     {
-     "program": "conformance/176_from_conversions.wj",
-     "reason": "[oracle] line 2: interpreted 'parse: 70' vs expected 'code 70'"
+     "program": "verified/std_fs_roundtrip.wj",
+     "reason": "[compiled-exit] exit 126 interpreted vs 0 compiled"
     },
     {
-     "program": "conformance/176_from_conversions.wj",
-     "reason": "[oracle] exit 101, expected 0"
+     "program": "spec/SPEC-EFF-039.wj",
+     "reason": "[compiled-stdout] line 2: interpreted '<end>' vs expected 'not reached'"
     },
     {
-     "program": "conformance/58_parse_numbers.wj",
-     "reason": "[oracle] line 4: interpreted 'number too large or too small to fit in target typ' vs expected 'number too large to fit in target type'"
+     "program": "spec/SPEC-EFF-039.wj",
+     "reason": "[compiled-exit] exit 126 interpreted vs 0 compiled"
     },
     {
-     "program": "conformance/58_parse_numbers.wj",
-     "reason": "[compiled-stdout] line 4: interpreted 'number too large or too small to fit in target typ' vs expected 'number too large to fit in target type'"
+     "program": "generated/deep_recursion.wj@136",
+     "reason": "[hash-seed 2] output depends on hash order"
     },
     {
-     "program": "conformance/71_explicit_panic.wj",
-     "reason": "[compiled-stderr] panic message 'value too large: 5' vs 'value too large: {}'"
+     "program": "generated/deep_recursion.wj@136",
+     "reason": "[hash-seed 3] output depends on hash order"
+    },
+    {
+     "program": "generated/deep_recursion.wj@143",
+     "reason": "[oracle] line 1: interpreted '<end>' vs expected '5720000'"
+    },
+    {
+     "program": "generated/deep_recursion.wj@143",
+     "reason": "[oracle] exit -9, expected 0"
+    },
+    {
+     "program": "generated/deep_recursion.wj@150",
+     "reason": "[oracle] line 1: interpreted '<end>' vs expected '6000000'"
+    },
+    {
+     "program": "generated/deep_recursion.wj@150",
+     "reason": "[oracle] exit -9, expected 0"
+    },
+    {
+     "program": "generated/deep_recursion.wj@150",
+     "reason": "[hash-seed 2] output depends on hash order"
+    },
+    {
+     "program": "generated/deep_recursion.wj@150",
+     "reason": "[hash-seed 3] output depends on hash order"
+    },
+    {
+     "program": "generated/deep_recursion.wj@157",
+     "reason": "[hash-seed 3] output depends on hash order"
     },
     {
      "program": "pilot/t006_base_convert.A.0",
@@ -2447,7 +1738,7 @@
    "percent": 100.0,
    "status": "pass",
    "detail": {
-    "invocations": 1176,
+    "invocations": 1778,
     "fallbacks": 0,
     "fallback_rate_pct": 0.0,
     "silent": [],
@@ -2459,267 +1750,285 @@
    "id": "R4",
    "title": "Fast enough",
    "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
-   "percent": 85.4,
+   "percent": 89.4,
    "status": "fail",
    "detail": {
     "projects": [
      {
       "project": "wj-base64",
       "interp_s": 0.4,
-      "compiled_s": 31.4,
+      "compiled_s": 332.5,
       "met": true
      },
      {
       "project": "wj-cli-args",
-      "interp_s": 0.0,
-      "compiled_s": 32.7,
+      "interp_s": 0.8,
+      "compiled_s": 55.8,
       "met": true
      },
      {
       "project": "wj-compress",
-      "interp_s": 0.0,
-      "compiled_s": 33.8,
+      "interp_s": 0.9,
+      "compiled_s": 27.7,
       "met": true
      },
      {
       "project": "wj-config",
-      "interp_s": 0.0,
-      "compiled_s": 34.6,
+      "interp_s": 0.5,
+      "compiled_s": 27.3,
       "met": true
      },
      {
       "project": "wj-cookie",
-      "interp_s": 0.0,
-      "compiled_s": 35.3,
+      "interp_s": 0.5,
+      "compiled_s": 14.5,
       "met": true
      },
      {
       "project": "wj-cors",
-      "interp_s": 0.0,
-      "compiled_s": 50.1,
+      "interp_s": 0.2,
+      "compiled_s": 26.3,
       "met": true
      },
      {
       "project": "wj-cron",
-      "interp_s": 0.1,
-      "compiled_s": 56.7,
+      "interp_s": 1.7,
+      "compiled_s": 14.7,
       "met": true
      },
      {
       "project": "wj-csv",
       "interp_s": 0.0,
-      "compiled_s": 42.2,
+      "compiled_s": 14.0,
       "met": true
      },
      {
       "project": "wj-dotenv",
-      "interp_s": 0.0,
-      "compiled_s": 58.6,
+      "interp_s": 0.1,
+      "compiled_s": 16.8,
       "met": true
      },
      {
       "project": "wj-duration",
-      "interp_s": 0.0,
-      "compiled_s": 3.3,
+      "interp_s": 0.4,
+      "compiled_s": 40.2,
       "met": true
      },
      {
       "project": "wj-event",
-      "interp_s": 0.1,
-      "compiled_s": 4.1,
+      "interp_s": 0.3,
+      "compiled_s": 21.0,
       "met": true
      },
      {
       "project": "wj-fs-walk",
-      "interp_s": 0.1,
-      "compiled_s": 20.1,
+      "interp_s": 0.8,
+      "compiled_s": 8.0,
       "met": true
      },
      {
       "project": "wj-gitignore",
-      "met": null
+      "interp_s": 0.0,
+      "compiled_s": 4.1,
+      "met": true
      },
      {
       "project": "wj-glob",
-      "interp_s": 0.1,
-      "compiled_s": 41.1,
+      "interp_s": 0.0,
+      "compiled_s": 6.1,
       "met": true
      },
      {
       "project": "wj-hash",
-      "interp_s": 2.6,
-      "compiled_s": 55.1,
+      "interp_s": 21.4,
+      "compiled_s": 94.9,
       "met": true
      },
      {
       "project": "wj-headers",
-      "interp_s": 0.1,
-      "compiled_s": 52.7,
+      "interp_s": 0.7,
+      "compiled_s": 68.8,
       "met": true
      },
      {
       "project": "wj-http-client",
-      "interp_s": 0.1,
-      "compiled_s": 54.2,
+      "interp_s": 0.2,
+      "compiled_s": 43.5,
       "met": true
      },
      {
       "project": "wj-inflect",
-      "interp_s": 0.0,
-      "compiled_s": 55.0,
+      "interp_s": 0.6,
+      "compiled_s": 15.9,
       "met": true
      },
      {
       "project": "wj-json-util",
-      "interp_s": 0.1,
-      "compiled_s": 92.3,
+      "interp_s": 0.3,
+      "compiled_s": 21.0,
       "met": true
      },
      {
       "project": "wj-jwt",
-      "interp_s": 0.1,
-      "compiled_s": 94.3,
+      "interp_s": 0.3,
+      "compiled_s": 32.6,
       "met": true
      },
      {
       "project": "wj-log",
-      "met": null
+      "interp_s": 0.2,
+      "compiled_s": 35.7,
+      "met": true
      },
      {
       "project": "wj-migrate",
-      "interp_s": 0.1,
-      "compiled_s": 42.8,
+      "interp_s": 1.0,
+      "compiled_s": 366.5,
       "met": true
      },
      {
       "project": "wj-mime",
-      "interp_s": 0.0,
-      "compiled_s": 19.5,
+      "interp_s": 1.0,
+      "compiled_s": 46.8,
       "met": true
      },
      {
       "project": "wj-multipart",
-      "met": null
+      "interp_s": 2.5,
+      "compiled_s": 46.6,
+      "met": true
      },
      {
       "project": "wj-path",
-      "interp_s": 0.0,
-      "compiled_s": 9.0,
+      "interp_s": 0.5,
+      "compiled_s": 31.8,
       "met": true
      },
      {
       "project": "wj-querystring",
-      "interp_s": 0.3,
-      "compiled_s": 83.3,
+      "interp_s": 1.4,
+      "compiled_s": 33.9,
       "met": true
      },
      {
       "project": "wj-rate-limit",
-      "interp_s": 0.0,
-      "compiled_s": 100.7,
+      "interp_s": 0.2,
+      "compiled_s": 56.9,
       "met": true
      },
      {
       "project": "wj-regex",
-      "interp_s": 0.0,
-      "compiled_s": 55.2,
+      "interp_s": 0.4,
+      "compiled_s": 35.5,
       "met": true
      },
      {
       "project": "wj-retry",
-      "interp_s": 0.0,
-      "compiled_s": 53.3,
+      "interp_s": 0.2,
+      "compiled_s": 39.1,
       "met": true
      },
      {
       "project": "wj-router",
-      "interp_s": 0.0,
-      "compiled_s": 127.8,
+      "interp_s": 0.5,
+      "compiled_s": 35.1,
       "met": true
      },
      {
       "project": "wj-semver",
-      "interp_s": 0.0,
-      "compiled_s": 55.1,
+      "interp_s": 0.4,
+      "compiled_s": 24.3,
       "met": true
      },
      {
       "project": "wj-sha",
-      "interp_s": 0.0,
-      "compiled_s": 67.8,
+      "interp_s": 0.2,
+      "compiled_s": 21.1,
       "met": true
      },
      {
       "project": "wj-sync",
-      "interp_s": 0.6,
-      "compiled_s": 76.8,
+      "interp_s": 4.8,
+      "compiled_s": 33.2,
       "met": true
      },
      {
       "project": "wj-template",
-      "met": null
+      "interp_s": 0.3,
+      "compiled_s": 101.4,
+      "met": true
      },
      {
       "project": "wj-timefmt",
-      "interp_s": 0.2,
-      "compiled_s": 160.4,
+      "interp_s": 0.5,
+      "compiled_s": 183.3,
       "met": true
      },
      {
       "project": "wj-toml",
-      "interp_s": 0.2,
-      "compiled_s": 90.9,
+      "interp_s": 2.1,
+      "compiled_s": 54.9,
       "met": true
      },
      {
       "project": "wj-url",
-      "interp_s": 0.1,
-      "compiled_s": 76.5,
+      "interp_s": 1.0,
+      "compiled_s": 73.0,
       "met": true
      },
      {
       "project": "wj-uuid",
-      "interp_s": 0.1,
-      "compiled_s": 97.0,
+      "interp_s": 2.2,
+      "compiled_s": 195.3,
       "met": true
      },
      {
       "project": "wj-validate",
-      "interp_s": 0.1,
-      "compiled_s": 102.3,
+      "interp_s": 0.8,
+      "compiled_s": 13.6,
       "met": true
      },
      {
       "project": "wj-yaml",
-      "interp_s": 0.0,
-      "compiled_s": 51.3,
+      "interp_s": 0.3,
+      "compiled_s": 14.2,
       "met": true
      },
      {
       "project": "wj-auth-api",
-      "met": null
+      "interp_s": 91.0,
+      "compiled_s": 161.4,
+      "met": true
      },
      {
       "project": "wj-chat",
-      "met": null
+      "interp_s": 0.6,
+      "compiled_s": 249.5,
+      "met": true
      },
      {
       "project": "wj-fetch",
-      "met": null
+      "interp_s": 1.3,
+      "compiled_s": 78.6,
+      "met": true
      },
      {
       "project": "wj-find",
-      "met": null
+      "interp_s": 0.5,
+      "compiled_s": 17.0,
+      "met": true
      },
      {
       "project": "wj-first-hour",
-      "interp_s": 0.0,
-      "compiled_s": 35.8,
+      "interp_s": 0.2,
+      "compiled_s": 52.4,
       "met": true
      },
      {
       "project": "wj-form-parse",
-      "met": null
+      "interp_s": 0.5,
+      "compiled_s": 21.6,
+      "met": true
      },
      {
       "project": "wj-grep",
@@ -2727,106 +2036,124 @@
      },
      {
       "project": "wj-hello",
-      "interp_s": 0.0,
-      "compiled_s": 49.2,
+      "interp_s": 0.9,
+      "compiled_s": 136.1,
       "met": true
      },
      {
       "project": "wj-migrate-cli",
-      "met": null
+      "interp_s": 3.4,
+      "compiled_s": 167.1,
+      "met": true
      },
      {
       "project": "wj-notes-api",
-      "met": null
+      "interp_s": 14.7,
+      "compiled_s": 116.7,
+      "met": true
      },
      {
       "project": "wj-pipeline",
-      "met": null
+      "interp_s": 1.6,
+      "compiled_s": 102.7,
+      "met": true
      },
      {
       "project": "wj-proxy",
-      "met": null
+      "interp_s": 3.2,
+      "compiled_s": 127.9,
+      "met": true
      },
      {
       "project": "wj-scheduler",
-      "met": null
+      "interp_s": 2.6,
+      "compiled_s": 133.3,
+      "met": true
      },
      {
       "project": "wj-sitegen",
-      "met": null
+      "interp_s": 1.3,
+      "compiled_s": 131.1,
+      "met": true
      },
      {
       "project": "wj-taskflow",
-      "met": null
+      "interp_s": 120.5,
+      "compiled_s": 348.1,
+      "met": true
      },
      {
       "project": "wj-todo-cli",
-      "met": null
+      "interp_s": 2.5,
+      "compiled_s": 125.4,
+      "met": true
      },
      {
       "project": "wj-webhook",
-      "met": null
+      "interp_s": 2.0,
+      "compiled_s": 124.4,
+      "met": true
      }
     ],
     "warm_loop": {
      "project": "wj-sync",
      "files": 24,
-     "median_s": 2.07
+     "median_s": 1.68
     },
     "startup": {
-     "hello_s": 0.033,
+     "hello_s": 0.103,
      "target_s": 0.25,
      "project": "wj-sync",
      "files": 24,
-     "check_s": 0.017,
-     "interp_test_s": 1.409,
-     "check_share": 0.01
+     "check_s": 0.038,
+     "interp_test_s": 1.616,
+     "check_share": 0.02
     },
     "kernels": [
      {
       "kernel": "closures.wj",
       "interp_cpu_s": 0.16,
-      "python_cpu_s": 0.05,
-      "ratio": 3.1,
+      "python_cpu_s": 0.06,
+      "ratio": 2.6,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "fib30.wj",
-      "interp_cpu_s": 0.09,
-      "python_cpu_s": 0.16,
-      "ratio": 0.6,
+      "interp_cpu_s": 0.03,
+      "python_cpu_s": 0.17,
+      "ratio": 0.2,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "hashmap.wj",
-      "interp_cpu_s": 0.21,
+      "interp_cpu_s": 0.23,
       "python_cpu_s": 0.06,
-      "ratio": 3.8,
+      "ratio": 3.7,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "loop5m.wj",
-      "interp_cpu_s": 0.2,
-      "python_cpu_s": 1.04,
+      "interp_cpu_s": 0.22,
+      "python_cpu_s": 1.13,
       "ratio": 0.2,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "nbody.wj",
-      "interp_cpu_s": 0.92,
-      "python_cpu_s": 0.13,
-      "ratio": 7.3,
+      "interp_cpu_s": 1.04,
+      "python_cpu_s": 0.14,
+      "ratio": 7.4,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "sieve.wj",
-      "interp_cpu_s": 0.58,
-      "python_cpu_s": 0.4,
+      "interp_cpu_s": 0.62,
+      "python_cpu_s": 0.44,
       "ratio": 1.4,
       "outputs_match": true,
       "met": false
@@ -2834,16 +2161,16 @@
      {
       "kernel": "strings.wj",
       "interp_cpu_s": 0.12,
-      "python_cpu_s": 0.08,
-      "ratio": 1.5,
+      "python_cpu_s": 0.09,
+      "ratio": 1.4,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "structs.wj",
-      "interp_cpu_s": 0.4,
-      "python_cpu_s": 0.19,
-      "ratio": 2.1,
+      "interp_cpu_s": 0.44,
+      "python_cpu_s": 0.2,
+      "ratio": 2.2,
       "outputs_match": true,
       "met": false
      }
@@ -2852,108 +2179,36 @@
    },
    "blockers": [
     {
-     "program": "wj-gitignore",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-log",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-multipart",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-template",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-auth-api",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-chat",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-fetch",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-find",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-form-parse",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
      "program": "wj-grep",
      "reason": "unmeasured: compiled run unavailable"
     },
     {
-     "program": "wj-migrate-cli",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-notes-api",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-pipeline",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-proxy",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-scheduler",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-sitegen",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-taskflow",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-todo-cli",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
-     "program": "wj-webhook",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
      "program": "bench/closures.wj",
-     "reason": "interpreter 0.16s vs python 0.05s CPU (3.1x slower)"
+     "reason": "interpreter 0.16s vs python 0.06s CPU (2.6x slower)"
     },
     {
      "program": "bench/hashmap.wj",
-     "reason": "interpreter 0.21s vs python 0.06s CPU (3.8x slower)"
+     "reason": "interpreter 0.23s vs python 0.06s CPU (3.7x slower)"
     },
     {
      "program": "bench/nbody.wj",
-     "reason": "interpreter 0.92s vs python 0.13s CPU (7.3x slower)"
+     "reason": "interpreter 1.04s vs python 0.14s CPU (7.4x slower)"
     },
     {
      "program": "bench/sieve.wj",
-     "reason": "interpreter 0.58s vs python 0.40s CPU (1.4x slower)"
+     "reason": "interpreter 0.62s vs python 0.44s CPU (1.4x slower)"
     },
     {
      "program": "bench/strings.wj",
-     "reason": "interpreter 0.12s vs python 0.08s CPU (1.5x slower)"
+     "reason": "interpreter 0.12s vs python 0.09s CPU (1.4x slower)"
     },
     {
      "program": "bench/structs.wj",
-     "reason": "interpreter 0.40s vs python 0.19s CPU (2.1x slower)"
+     "reason": "interpreter 0.44s vs python 0.20s CPU (2.2x slower)"
     },
     {
      "program": "wj-sync",
-     "reason": "warm edit-run loop 2.07s > 1.0s (24 files)"
+     "reason": "warm edit-run loop 1.68s > 1.0s (24 files)"
     }
    ]
   },
@@ -2968,7 +2223,7 @@
     "parity_agree": 300,
     "build_checked": 169,
     "negative_programs": 131,
-    "gap_headers_now_accepted": 20,
+    "gap_headers_now_accepted": 2,
     "cargo_gates": null,
     "agent_pilot_check_misses": 13
    },
@@ -3139,35 +2394,231 @@
    "id": "R6",
    "title": "Stdlib and project coverage",
    "target": "0 std items without builtin/refusal; crate deps run via host bridge",
-   "percent": 100.0,
+   "percent": 79.1,
    "status": "fail",
    "detail": {
-    "std_declared": 252,
-    "std_missing": 0,
-    "unsupported_features": [
-     "modules.same_name_types",
-     "concurrency.thread_block",
-     "ffi.extern_fn"
-    ],
+    "std_declared": 258,
+    "std_missing": 54,
+    "unsupported_features": [],
     "crate_dependency_projects": 1,
-    "crate_projects_uncovered": 1
+    "crate_projects_uncovered": 0
    },
    "blockers": [
     {
-     "program": "feature:modules.same_name_types",
-     "reason": "unsupported: two types with the same name in different modules (the interpreter keys types by name)"
+     "program": "std::async::block_on",
+     "reason": "no interpreter builtin and no capability refusal"
     },
     {
-     "program": "feature:concurrency.thread_block",
-     "reason": "unsupported: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.a"
+     "program": "std::async::spawn",
+     "reason": "no interpreter builtin and no capability refusal"
     },
     {
-     "program": "feature:ffi.extern_fn",
-     "reason": "unsupported: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds "
+     "program": "std::compute::background",
+     "reason": "no interpreter builtin and no capability refusal"
     },
     {
-     "program": "wj-sync",
-     "reason": "Rust-crate dependency project not fully passing interpreted"
+     "program": "std::compute::join",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::compute::map_reduce",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::compute::num_workers",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::compute::parallel",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::dialog::open_directory",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::dialog::open_file",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::dialog::save_file",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::dialog::show_confirm",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::dialog::show_message",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::encoding::json_decode",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::encoding::json_encode",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::encoding::json_encode_pretty",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::env::vars",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::fs::create_directory",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::fs::delete_file",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::fs::file_exists",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::fs::list_directory",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::fs::read_file",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::fs::write_file",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::net::download",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::net::get",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::net::get_async",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::net::post",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::net::post_async",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::net::upload",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::process::execute",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::process::spawn",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::random::random",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::clear",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::clear_with_backend",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::get",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::get_bytes",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::get_json",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::get_with_backend",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::get_with_ttl",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::has",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::keys",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::keys_with_backend",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::remove",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::remove_with_backend",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::set",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::set_bytes",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::set_json",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::set_with_backend",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::storage::set_with_ttl",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::test::assert",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::test::assert_eq",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::test::assert_msg",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::test::assert_ne",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::testing::assert_eq",
+     "reason": "no interpreter builtin and no capability refusal"
+    },
+    {
+     "program": "std::testing::assert_ne",
+     "reason": "no interpreter builtin and no capability refusal"
     }
    ]
   },
@@ -3181,71 +2632,35 @@
     "window": 20,
     "commits_in_window": 20,
     "commits_passing": 0,
-    "commits_recorded": 5
+    "commits_recorded": 1
    },
    "blockers": [
     {
-     "program": "ceeebb2da7",
+     "program": "38457b193a",
      "reason": "failed R1,R2,R4,R5,R6"
     },
     {
-     "program": "52ae8d1fa2",
-     "reason": "failed R1,R2,R4,R5,R6"
-    },
-    {
-     "program": "fab6f0580f",
-     "reason": "failed R1,R2,R4,R5,R6"
-    },
-    {
-     "program": "736e392eec",
+     "program": "ac74af8094",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "e56c64c4b5",
-     "reason": "failed R1,R2,R4,R5,R6"
-    },
-    {
-     "program": "730f4fb0bc",
-     "reason": "failed R1,R2,R4,R5,R6"
-    },
-    {
-     "program": "078d738e01",
+     "program": "2d10ec9501",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "56961cd722",
+     "program": "2088c1e69c",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "2f2f13b9d3",
+     "program": "bec953e66b",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "b2781a2fba",
+     "program": "15f00f3246",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "e6af2c79d4",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "77f7dfafe7",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "11ef184bf4",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "9347d60dc6",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "c50c3aa234",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "f1ba91a728",
+     "program": "ff69307b0c",
      "reason": "no full readiness run recorded for this commit"
     },
     {
@@ -3263,12 +2678,50 @@
     {
      "program": "c57b15bc74",
      "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "7f9afe1f5f",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "0634ac951a",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "6f9b2b3d3c",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "6b0cb01077",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "a52a35982d",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "1cff105244",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "04c2443b02",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "512b6e4067",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "219b0bf1f8",
+     "reason": "no full readiness run recorded for this commit"
     }
    ]
   }
  ],
  "selfcheck": {
-  "issues": []
+  "issues": [
+   "R1 wj-taskflow: interpreted and compiled runs discovered different test sets"
+  ]
  },
- "verdict": "NOT READY"
+ "verdict": "SUSPECT"
 }

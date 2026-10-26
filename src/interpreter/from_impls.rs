@@ -67,4 +67,16 @@ impl Interpreter {
         }
         self.from_impl_for(ty, arg).filter(|p| !Rc::ptr_eq(p, f))
     }
+
+    /// `v.into()`: the declared type's `From` impl chosen by `v`, else the plain coercion to that type.
+    pub(crate) fn convert_into(&mut self, v: &Value) -> super::error::R {
+        match self.type_hint.take() {
+            Some(Type::Custom(target)) if v.type_name() != target && self.from_impl_for(&target, v).is_some() => {
+                let f = self.from_impl_for(&target, v).expect("checked");
+                self.call_func(&f, vec![v.clone()], None)
+            }
+            Some(t) => self.coerce(v.clone(), &t),
+            None => Ok(v.clone()),
+        }
+    }
 }

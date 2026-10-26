@@ -30,15 +30,29 @@ def first_diff(a, b):
     return "output differs"
 
 
+def allow_flags(path):
+    """`// allow: fs.read=/tmp/**` header lines: the capabilities a program declares it needs (ADR-0021), as `--allow` flags."""
+    flags = []
+    try:
+        for line in open(path, errors="replace"):
+            if line.startswith("// allow:"):
+                flags += ["--allow", line[len("// allow:"):].strip()]
+            elif not line.startswith("//"):
+                break
+    except OSError:
+        pass
+    return flags
+
+
 def interp(ctx, path, src_hash, hash_seed=0):
     return ctx.cached_run(f"r2-interp-h{hash_seed}", src_hash,
-                          [ctx.wj, "run", "--interpret", "--no-lint", "--hash-seed", str(hash_seed), path],
+                          [ctx.wj, "run", "--interpret", "--no-lint", *allow_flags(path), "--hash-seed", str(hash_seed), path],
                           ctx.timeouts["interp"], cwd=os.path.dirname(path))
 
 
 def compiled(ctx, path, src_hash):
     path = ctx.isolated(path)
-    return ctx.cached_run("r2-compiled-tmp", src_hash, [ctx.wj, "run", "--compiled", path], ctx.timeouts["compiled"],
+    return ctx.cached_run("r2-compiled-tmp", src_hash, [ctx.wj, "run", "--compiled", "--no-lint", path], ctx.timeouts["compiled"],
                           cwd=os.path.dirname(path), env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
 
 
@@ -84,7 +98,8 @@ def check_program(ctx, p, hash_seeds, compile_it, results):
         r = interp(ctx, p.path, h, hs)
         if (r.out, r.rc) != (base.out, base.rc):
             results["divergences"].append({"program": p.name, "kind": f"hash-seed {hs}", "reason": first_diff(r.out, base.out) if r.out != base.out else f"exit {r.rc} vs {base.rc}"})
-    if compile_it:
+    # exit 126 is the capability gate (ADR-0021) doing its job; the compiled path has no such gate to compare with
+    if compile_it and base.rc != 126:
         c = compiled(ctx, p.path, h)
         if c.timed_out:
             results["unmeasured"].append({"program": p.name, "reason": "compiled run timed out or was skipped (budget/disk)"})
