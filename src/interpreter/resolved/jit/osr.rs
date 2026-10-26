@@ -13,7 +13,7 @@ use super::rt::Ctx;
 use super::kinds::{bits, class_of, int_value, ty_of, value, Class, Ty};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::engine::Interpreter;
-use crate::interpreter::error::R;
+use crate::interpreter::error::{Ctl, R};
 use crate::interpreter::eval_stmt::loop_exit;
 use crate::interpreter::resolved::osr::{close_block, loc, ForInfo, OsrSite, Reg, SlotKind};
 use crate::interpreter::value::Value;
@@ -61,10 +61,10 @@ fn debug(it: &Interpreter, site: &OsrSite, what: &str) {
 /// slots and the iteration it stopped in has been finished); `Ok(false)`: it did not run.
 pub(crate) fn enter(it: &mut Interpreter, b: usize, site: &OsrSite) -> R<bool> {
     let Some((reg, unit)) = unit_for(it, b, site, None) else { return Ok(false) };
-    let Some((exit, buf)) = execute(it, b, site, &reg, &unit, &[]) else { return Ok(false) };
+    let Some((exit, buf, raised)) = execute(it, b, site, &reg, &unit, &[]) else { return Ok(false) };
     let path = &unit.plan.exits[exit].path;
     if !path.is_empty() {
-        resume(it, b, &reg, path, &buf)?;
+        resume(it, b, &reg, path, &buf, raised)?;
     }
     Ok(true)
 }
@@ -79,7 +79,7 @@ pub(crate) fn enter_for(it: &mut Interpreter, b: usize, site: &OsrSite, i: i128,
     };
     let Some((reg, unit)) = unit_for(it, b, site, Some(ty)) else { return Ok(None) };
     let c = unit.plan.counter.expect("a for unit has a counter");
-    let Some((exit, buf)) = execute(it, b, site, &reg, &unit, &[(c, ib), (c + 1, hb)]) else { return Ok(None) };
+    let Some((exit, buf, raised)) = execute(it, b, site, &reg, &unit, &[(c, ib), (c + 1, hb)]) else { return Ok(None) };
     let at = int_value(buf[c], ty);
     let path = &unit.plan.exits[exit].path;
     if path.is_empty() {
@@ -87,7 +87,7 @@ pub(crate) fn enter_for(it: &mut Interpreter, b: usize, site: &OsrSite, i: i128,
     }
     let Statement::For { label, .. } = site.stmt else { unreachable!("a for site") };
     let info = reg.for_info(site.stmt).ok_or_else(internal)?;
-    let r = resume(it, b, &reg, path, &buf);
+    let r = resume(it, b, &reg, path, &buf, raised);
     let r = close_block(it, b, Some(&info.scope), r);
     Ok(Some(match loop_exit(r.map(|_| Value::Unit), label.as_deref())? {
         Some(_) => hi,
@@ -144,8 +144,9 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
 }
 
 /// Run the machine code: fill the spill buffer (the live-ins, then `init`), call, write the exit's
-/// variables back. `None`: a live-in no longer has the classified type (nothing ran).
-fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Unit, init: &[(usize, i64)]) -> Option<(usize, Vec<i64>)> {
+/// variables back. `None`: a live-in no longer has the classified type (nothing ran). The third
+/// value is what a closure-run statement raised, when the exit follows one.
+fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Unit, init: &[(usize, i64)]) -> Option<(usize, Vec<i64>, Option<Ctl>)> {
     let mut buf = vec![0i64; unit.plan.nbuf.max(1)];
     for (i, slot, t) in &unit.plan.live {
         buf[*i] = read(it, b + slot, reg.kind(*slot)).and_then(|v| bits(&v, *t))?;
@@ -153,12 +154,13 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     for (i, x) in init {
         buf[*i] = *x;
     }
-    let mut ctx = Ctx { it: it as *mut Interpreter, base: b, fail: 0 };
+    let mut ctx = Ctx { it: it as *mut Interpreter, base: b, fail: 0, plan: &unit.plan, reg, raised: None };
     // SAFETY: `f` is finalized code of the module `it.jit` keeps alive, with the `UnitFn` signature;
     // `ctx` and `buf` (`nbuf` slots) outlive the call.
     let exit = unsafe { (unit.f)(&mut ctx, buf.as_mut_ptr()) } as usize;
+    let raised = ctx.raised.take();
     let e = &unit.plan.exits[exit];
-    for sp in e.spills.iter().filter(|sp| sp.slot != NO_SLOT) {
+    for sp in e.spills.iter().filter(|sp| sp.slot != NO_SLOT && !e.after) {
         write(it, b + sp.slot, reg.kind(sp.slot), value(buf[sp.buf], sp.ty), sp.fresh);
     }
     if !e.planned {
@@ -169,11 +171,11 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
             debug(it, site, "too many failed checks: back to the closures");
         }
     }
-    Some((exit, buf))
+    Some((exit, buf, raised))
 }
 
 /// A scalar local's value (a boxed one's walker slot holds it).
-fn read(it: &Interpreter, i: usize, kind: Option<SlotKind>) -> Option<Value> {
+pub(super) fn read(it: &Interpreter, i: usize, kind: Option<SlotKind>) -> Option<Value> {
     match (kind?, &it.rstack[i]) {
         (SlotKind::Boxed, Value::Ref(p)) => p.slot.try_borrow().ok().map(|v| v.clone()),
         (SlotKind::Boxed, _) => None,
@@ -182,7 +184,7 @@ fn read(it: &Interpreter, i: usize, kind: Option<SlotKind>) -> Option<Value> {
 }
 
 /// Write a variable back; a `fresh` boxed one (bound in the loop) gets a new walker slot.
-fn write(it: &mut Interpreter, i: usize, kind: Option<SlotKind>, v: Value, fresh: bool) {
+pub(super) fn write(it: &mut Interpreter, i: usize, kind: Option<SlotKind>, v: Value, fresh: bool) {
     match kind {
         Some(SlotKind::Boxed) if fresh => it.rstack[i] = crate::interpreter::resolved::island::boxed(v),
         Some(SlotKind::Boxed) => {
@@ -288,19 +290,19 @@ fn compile(it: &mut Interpreter, site: &OsrSite, reg: &Reg, refs: &[(&'static st
 
 /// Finish the iteration the machine code stopped in, from the statement `path` names (`buf`: the
 /// exit's spill buffer, for the counters of `for` loops on the path).
-fn resume(it: &mut Interpreter, b: usize, reg: &Reg, path: &Path, buf: &[i64]) -> R<()> {
-    level(it, b, reg, path, buf, 0)
+fn resume(it: &mut Interpreter, b: usize, reg: &Reg, path: &Path, buf: &[i64], raised: Option<Ctl>) -> R<()> {
+    level(it, b, reg, path, buf, 0, raised)
 }
 
 /// Run block `path[l]` from its statement on (the one at `path[l + 1]`'s container is partly done:
 /// its nested block is finished first), then release the block's locals as `scoped` does.
-fn level(it: &mut Interpreter, b: usize, reg: &Reg, path: &Path, buf: &[i64], l: usize) -> R<()> {
+fn level(it: &mut Interpreter, b: usize, reg: &Reg, path: &Path, buf: &[i64], l: usize, raised: Option<Ctl>) -> R<()> {
     let Level { list, idx, for_ } = path[l];
     let r = (|| {
         let mut start = idx;
         if l + 1 < path.len() {
             let s = list[idx];
-            let r = level(it, b, reg, path, buf, l + 1);
+            let r = level(it, b, reg, path, buf, l + 1, raised);
             match s {
                 Statement::While { label, .. } => {
                     if loop_exit(r.map(|_| Value::Unit), label.as_deref())?.is_none() {
@@ -320,6 +322,8 @@ fn level(it: &mut Interpreter, b: usize, reg: &Reg, path: &Path, buf: &[i64], l:
                 _ => r?,
             }
             start = idx + 1;
+        } else if let Some(e) = raised {
+            return Err(e); // the closure-run statement before `idx` raised: the block ends with it
         }
         statements(it, b, reg, &list[start..])
     })();

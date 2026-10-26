@@ -97,7 +97,7 @@ fn cond_leaf(r: &mut Rng) -> String {
 fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
     let late = iters - 1 - r.below(iters / 4);
     let k = loop {
-        let k = r.below(24);
+        let k = r.below(27);
         let ok = match k {
             19 => !inner,
             21 => depth < 2 && !inner,
@@ -131,6 +131,10 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
         // a literal-typed value stored into the `i32` local keeps `i32` only while it fits (`retag`)
         22 => format!("a = i * {}", r.pick(&["3", "3000000", "-1000000"])),
         23 => "a = a + 1".into(),
+        // statements outside the machine-code subset run as closure code from inside the loop
+        24 => format!("b = h(b) + {}", r.below(5)),
+        25 => format!("if i % {} == 0 {{ println(\"p ${{b}} ${{x}}\") }}", 97 + r.below(200)),
+        26 => format!("let w = h(a as int)\nb = (b + w) % 1000003"),
         18 => format!("let t = {}\nb = (b + t) % 1000003", int_expr(r, 2)),
         19 => format!("if {} {{ continue }}", cond_leaf(r)),
         20 => format!("if i == {late} {{ break }}"),
@@ -157,7 +161,9 @@ fn planted(kind: u64, late: u64) -> String {
         2 => format!("if i == {late} {{ c = c - 1000000 }}"),
         3 => format!("if i == {late} {{ a = a * 100000 * 100000 }}"),
         4 => format!("if i == {late} {{ u = u + 255 }}"),
-        _ => format!("if i == {late} {{ v[{late} % {LEN} + {LEN}] = 1 }}"),
+        5 => format!("if i == {late} {{ v[{late} % {LEN} + {LEN}] = 1 }}"),
+        // a panic inside a function a closure-run statement calls (its frame is in the backtrace)
+        _ => format!("if i == {late} {{ b = h(-1) }}"),
     }
 }
 
@@ -171,11 +177,11 @@ fn program(seed: u64) -> String {
     }
     // every third program has one edge of each kind in turn, so each kind is exercised
     if seed % 3 == 0 {
-        body += &planted((seed / 3) % 6, iters - 1 - r.below(iters / 4));
+        body += &planted((seed / 3) % 7, iters - 1 - r.below(iters / 4));
         body.push('\n');
     }
     format!(
-        "struct P {{\n    x: f64,\n    n: int,\n}}\n\nfn main() {{
+        "struct P {{\n    x: f64,\n    n: int,\n}}\n\nfn h(x: int) -> int {{\n    if x < 0 {{ return 1000 / (x + 1) }}\n    x % 1000 + 1\n}}\n\nfn main() {{
     let mut v: Vec<int> = Vec::new()
     let mut fs: Vec<f64> = Vec::new()
     let mut bs: Vec<bool> = Vec::new()
