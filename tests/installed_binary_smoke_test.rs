@@ -358,6 +358,19 @@ fn cases() -> Vec<Case> {
             expect_in_output: None,
         });
         v.push(Case {
+            name: Box::leak(format!("eject {name}").into_boxed_str()),
+            setup,
+            args: vec![
+                "eject".into(),
+                src.clone(),
+                "-o".into(),
+                "{w}/ejected".into(),
+            ],
+            stdin: None,
+            expect_code: 0,
+            expect_in_output: Some("vendored windjammer-runtime"),
+        });
+        v.push(Case {
             name: Box::leak(format!("fix --check {name}").into_boxed_str()),
             setup,
             args: vec!["fix".into(), "--check".into(), src.clone()],
@@ -690,10 +703,16 @@ fn source_tree_has_no_runtime_checkout_reads() {
         "Path::new(\"crates/windjammer-runtime",
     ];
     // Reviewed exceptions (file suffix, reason). Keep this list tiny.
-    let allow: [(&str, &str); 1] = [(
-        "agent_index/mod.rs",
-        "maintainer-only: `wj agent-index` regenerates repo artifacts from a checkout",
-    )];
+    let allow: [(&str, &str); 2] = [
+        (
+            "agent_index/mod.rs",
+            "maintainer-only: `wj agent-index` regenerates repo artifacts from a checkout",
+        ),
+        (
+            "bin/wj-docs.rs",
+            "maintainer-only: `wj-docs` regenerates and checks the repository's docs",
+        ),
+    ];
     let mut hits = Vec::new();
     fn walk(d: &Path, out: &mut Vec<PathBuf>) {
         for e in fs::read_dir(d).unwrap().flatten() {

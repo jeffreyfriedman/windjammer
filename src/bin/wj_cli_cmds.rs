@@ -184,6 +184,15 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
         Commands::Errors { file, output } => cmd_errors_tui(&file, &output)?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
+        Commands::Eject {
+            path,
+            output,
+            target,
+            library,
+            module_file,
+        } => {
+            windjammer::cli::eject::execute(&path, &output, &target, library, module_file)?;
+        }
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;
         }

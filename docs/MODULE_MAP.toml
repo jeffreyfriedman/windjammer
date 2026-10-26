@@ -78,7 +78,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "command-line subcommands"
 module_md = "src/cli/MODULE.md"
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "formatter", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "ejector", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "formatter", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
 known_violations = []
 
 [modules.cli_args]
@@ -169,7 +169,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "driver support"
 module_md = ""
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
 known_violations = []
 
 [modules.error]
