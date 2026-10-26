@@ -13,12 +13,12 @@ fn new() -> Inventory {
 #[inline]
 fn add(&mut self, item: String, n: i64) {
         let cur = self.stock.get(&item).copied().unwrap_or(0_i64);
-        self.stock.insert(item.clone(), cur + n);
+        self.stock.insert(item, cur + n);
 }
 #[inline]
 fn take(&mut self, item: String, n: i64) {
         let cur = self.stock.get(&item).copied().unwrap_or(0_i64);
-        self.stock.insert(item.clone(), cur - n);
+        self.stock.insert(item, cur - n);
 }
 #[inline]
 fn report(&self, item: &str) -> String {

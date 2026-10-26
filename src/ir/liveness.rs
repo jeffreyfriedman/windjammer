@@ -49,6 +49,10 @@ struct Collector {
     sources: Option<BTreeSet<String>>,
     /// Per binding, the names its initializer mentioned (it may borrow from them).
     derived_from: BTreeMap<String, BTreeSet<String>>,
+    /// Per visited statement: its source position, last mention seq and enclosing loops.
+    spans: Vec<(Option<(usize, usize)>, usize, Vec<usize>)>,
+    /// Per loop id, the (first, last) mention seq of its body.
+    loop_ranges: BTreeMap<usize, (usize, usize)>,
 }
 
 impl Collector {
@@ -113,10 +117,15 @@ impl Collector {
         let id = self.loop_parents.len() + 1;
         self.loop_parents.push(self.current_loop());
         self.loop_stack.push(id);
+        self.loop_ranges.insert(id, (self.seq + 1, usize::MAX));
     }
 
     fn exit_loop(&mut self) {
-        self.loop_stack.pop();
+        if let Some(id) = self.loop_stack.pop() {
+            if let Some(r) = self.loop_ranges.get_mut(&id) {
+                r.1 = self.seq;
+            }
+        }
     }
 
     /// Is loop `inner` (or a loop nested in it) inside loop `outer`'s body, i.e. does a binding
@@ -138,6 +147,8 @@ impl Collector {
     fn stmts(&mut self, body: &[&Statement<'_>]) {
         for s in body {
             self.stmt(s);
+            let key = s.location().as_ref().map(|l| (l.line, l.column));
+            self.spans.push((key, self.seq, self.loop_stack.clone()));
         }
     }
 
@@ -241,9 +252,10 @@ impl Collector {
             }
             Expression::Unary { operand, .. } => self.expr(operand),
             Expression::Call { function, arguments, .. } => {
-                // A callee name is not a value read.
-                if !matches!(function, Expression::Identifier { .. }) {
-                    self.expr(function);
+                // A callee name is not a value read, unless it names a local (a closure binding).
+                match function {
+                    Expression::Identifier { name, .. } if !self.declared_in.contains_key(name) => {}
+                    _ => self.expr(function),
                 }
                 // RET-NO-BORROW: a function result never borrows from its arguments, so a
                 // binding initialised by a call does not keep the arguments alive.
@@ -251,9 +263,8 @@ impl Collector {
             }
             Expression::MethodCall { object, arguments, .. } => {
                 self.expr(object);
-                for (_, a) in arguments {
-                    self.expr(a);
-                }
+                // A method result may borrow from its receiver, never from its arguments.
+                self.without_sources(|c| arguments.iter().for_each(|(_, a)| c.expr(a)));
             }
             Expression::FieldAccess { object, .. } => self.expr(object),
             // No reference fields (RET-NO-BORROW): a struct value never borrows its field sources.
@@ -366,6 +377,41 @@ pub fn dying_in(stmt: &Statement<'_>, last: &BTreeSet<(usize, usize)>) -> BTreeS
             (reads.next().is_none() && only.key.is_some_and(|k| last.contains(&k))).then(|| name.clone())
         })
         .collect()
+}
+
+/// Per statement (by source position), the bindings read again after it: later in the function
+/// before being rebound, in the next iteration of an enclosing loop the binding outlives, or
+/// through a later read of a binding derived from it (a closure that captured it, a borrow).
+/// A consumer that moves a binding in the statement must clone it when it is listed.
+/// `always_move` is the gate self-test mutation: nothing is ever read again.
+pub fn read_after(entry: &[&str], body: &[&Statement<'_>], always_move: bool) -> BTreeMap<(usize, usize), BTreeSet<String>> {
+    let mut c = Collector::default();
+    for p in entry {
+        c.declared_in.insert(p.to_string(), 0);
+    }
+    c.stmts(body);
+    let mut out: BTreeMap<(usize, usize), BTreeSet<String>> = BTreeMap::new();
+    for (key, end, loops) in &c.spans {
+        let Some(key) = key else { continue };
+        let names = out.entry(*key).or_default();
+        if always_move {
+            continue;
+        }
+        for (name, ms) in &c.mentions {
+            let later = ms.iter().find(|m| m.seq > *end).is_some_and(|m| m.node.is_some());
+            let decl = c.declared_in.get(name).copied().unwrap_or(0);
+            let carried = loops.iter().any(|l| {
+                let outlives = decl != *l && !c.loop_inside(decl, *l);
+                let (lo, hi) = c.loop_ranges.get(l).copied().unwrap_or((0, 0));
+                outlives && ms.iter().any(|m| m.node.is_some() && m.seq >= lo && m.seq <= hi)
+            });
+            // A binding derived from `name` (a closure capturing it, a borrow) read later keeps it live.
+            if later || carried || borrowed_by_later_live_binding(&c, name, *end) {
+                names.insert(name.clone());
+            }
+        }
+    }
+    out
 }
 
 /// A binding derived (transitively) from `name` is mentioned after `seq`: it may hold a
@@ -506,6 +552,54 @@ mod tests {
         let last = last_use_keys(&[], &decl.body, false);
         assert!(dying_in(decl.body[1], &last).is_empty());
         assert_eq!(dying_in(decl.body[2], &last).into_iter().collect::<Vec<_>>(), vec!["v".to_string()]);
+    }
+
+    #[test]
+    fn read_after_sees_later_reads_and_the_next_loop_iteration() {
+        let src = "fn take(v: Vec<int>) {}\nfn main() {\n let v = vec![1]\n let w = vec![2]\n take(v)\n for i in 0..2 {\n  take(w)\n }\n println(\"${v.len()}\")\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        let ra = read_after(&[], &decl.body, false);
+        let at = |s: &Statement<'_>| {
+            let l = s.location().unwrap();
+            ra.get(&(l.line, l.column)).cloned().unwrap_or_default()
+        };
+        assert!(at(decl.body[2]).contains("v"), "v is printed later");
+        let Statement::For { body, .. } = decl.body[3] else { panic!() };
+        assert!(at(body[0]).contains("w"), "w is moved again in the next iteration");
+        assert!(!at(decl.body[4]).contains("v"), "nothing reads v after the print");
+    }
+
+    #[test]
+    fn read_after_follows_captures_not_closure_parameters() {
+        let src = "fn take(v: Vec<int>) {}\nfn main() {\n let v = vec![1]\n let f = |i: int| v.len() + i\n take(v)\n println(\"${f(1)}\")\n let w = [vec![1]].map(|t| t.len())\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        let ra = read_after(&[], &decl.body, false);
+        let at = |s: &Statement<'_>| {
+            let l = s.location().unwrap();
+            ra.get(&(l.line, l.column)).cloned().unwrap_or_default()
+        };
+        assert!(at(decl.body[2]).contains("v"), "the closure `f` captured v and runs later");
+        assert!(!at(decl.body[4]).contains("t"), "a closure parameter is not live after the statement");
     }
 
     #[test]

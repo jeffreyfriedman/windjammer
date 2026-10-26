@@ -32,8 +32,17 @@ impl<'ast> CodeGenerator<'ast> {
         self.local_var_types.get(name).is_some_and(|t| !is_ref(t))
     }
 
+    /// CLONE-USE-AFTER-MOVE: `name` is read after the statement being emitted (no fact: assume so).
+    pub(in crate::codegen::rust) fn read_after_current_statement(&self, name: &str) -> bool {
+        match self.read_after.1.last().copied().flatten() {
+            Some(k) => self.read_after.0.get(&k).is_none_or(|names| names.contains(name)),
+            None => true,
+        }
+    }
+
     /// Publish the bindings that die in `stmt`; returns the enclosing statement's set.
     pub(in crate::codegen::rust) fn enter_statement_liveness(&mut self, stmt: &Statement<'_>) -> HashSet<String> {
+        self.read_after.1.push(stmt.location().as_ref().map(|l| (l.line, l.column)));
         if crate::debug_env::enabled("WJ_DEBUG_LIVENESS") {
             eprintln!("liveness {:?}: {} last-use keys, analysis {}", self.current_function_name, self.last_use_keys.len(), self.auto_clone_analysis.is_some());
         }
@@ -54,6 +63,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(in crate::codegen::rust) fn exit_statement_liveness(&mut self, outer: HashSet<String>) {
+        self.read_after.1.pop();
         if let Some(a) = self.auto_clone_analysis.as_mut() {
             a.dying_here = outer;
         }
