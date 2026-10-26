@@ -35,7 +35,17 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 fn run(path: &Path, engine: &str, cwd: &Path) -> (Vec<u8>, Vec<u8>, Option<i32>) {
-    let o = Command::new(WJ)
+    run_env(path, engine, cwd, None)
+}
+
+/// `loop_hot`: `WJ_JIT_LOOP_HOT` (0: every loop enters machine code at its first iteration).
+fn run_env(path: &Path, engine: &str, cwd: &Path, loop_hot: Option<&str>) -> (Vec<u8>, Vec<u8>, Option<i32>) {
+    let mut c = Command::new(WJ);
+    c.env_remove("WJ_JIT_LOOP_HOT");
+    if let Some(h) = loop_hot {
+        c.env("WJ_JIT_LOOP_HOT", h);
+    }
+    let o = c
         .args(["run", "--interpret", "--no-lint", "--deterministic-time", "--engine", engine])
         .arg(path)
         .current_dir(cwd)
@@ -47,6 +57,18 @@ fn run(path: &Path, engine: &str, cwd: &Path) -> (Vec<u8>, Vec<u8>, Option<i32>)
 
 #[test]
 fn resolved_engine_matches_the_walker_on_every_corpus() {
+    corpus_parity(None);
+}
+
+/// The same with every loop entering machine code at its first iteration (ADR-0020 round 3), so the
+/// machine-code loop tier and its exits are exercised on every corpus program, not only on hot loops.
+#[cfg(feature = "jit")]
+#[test]
+fn eager_machine_code_loops_match_the_walker_on_every_corpus() {
+    corpus_parity(Some("0"));
+}
+
+fn corpus_parity(loop_hot: Option<&str>) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tmp = tempfile::TempDir::new().unwrap();
     let mut programs = Vec::new();
@@ -73,7 +95,7 @@ fn resolved_engine_matches_the_walker_on_every_corpus() {
             continue;
         }
         let a = run(p, "walker", tmp.path());
-        let b = run(p, "resolved", tmp.path());
+        let b = run_env(p, "resolved", tmp.path(), loop_hot);
         compared += 1;
         if a != b {
             diffs.push(format!(
