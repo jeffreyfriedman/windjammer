@@ -1,0 +1,8 @@
+use std::time
+fn main() {
+    let a = time::now_millis()
+    time::sleep_millis(250)
+    let b = time::now_millis()
+    println("slept at least 250: ${b - a >= 250}")
+    println("a=${a} b=${b}")
+}

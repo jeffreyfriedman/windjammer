@@ -1,0 +1,6 @@
+use std::fs
+fn main() {
+    fs::create_dir_all("a/b/c").unwrap()
+    println("dir: ${fs::is_dir("a/b/c")}")
+    println("file: ${fs::is_file("a/b/c")}")
+}

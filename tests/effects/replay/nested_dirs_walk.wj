@@ -1,0 +1,19 @@
+use std::fs
+fn walk(dir: string, depth: int) {
+    let mut names = Vec::new()
+    for entry in fs::read_dir(dir).unwrap() {
+        names.push(entry.name())
+    }
+    names.sort()
+    for n in names {
+        let p = "${dir}/${n}"
+        println("${depth}:${p}")
+        if fs::is_dir(p) { walk(p, depth + 1) }
+    }
+}
+fn main() {
+    fs::create_dir_all("root/x/y").unwrap()
+    fs::write("root/x/y/leaf.txt", "l").unwrap()
+    fs::write("root/top.txt", "t").unwrap()
+    walk("root", 0)
+}

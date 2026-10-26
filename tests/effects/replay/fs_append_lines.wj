@@ -1,0 +1,10 @@
+use std::fs
+fn main() {
+    fs::write("log.txt", "one\n").unwrap()
+    fs::append("log.txt", "two\n").unwrap()
+    fs::append("log.txt", "three\n").unwrap()
+    let text = fs::read_to_string("log.txt").unwrap()
+    for line in text.lines() {
+        println("line: ${line}")
+    }
+}

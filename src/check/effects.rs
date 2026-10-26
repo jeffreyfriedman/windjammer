@@ -184,7 +184,7 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 out.push(d.with_help(help));
             }
             Finding::Undeclared { function, effect, chain, site, def_site: _ } => {
-                let mut d = Diagnostic::error("WJ0042", format!("`{function}` performs `{effect}`, which its @uses/@pure declaration does not allow"));
+                let mut d = Diagnostic::error("WJ0042", format!("`{function}` performs `{effect}`, which its @uses/@pure declaration (or the trait's bound) does not allow"));
                 if let Some(sp) = span_for(&site, &chain.last().map(|c| last(&c.2)).unwrap_or_default()) {
                     d = d.at(sp.with_label(format!("performs {effect}")));
                 }

@@ -26,7 +26,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `resolved/`            default engine of `wj run` (ADR-0020): closures over `rstack` slots; `typed.rs` unboxed ints, `island.rs` walker islands, `method.rs`/`place.rs` via the walker's own routines, `jit.rs` (default feature `jit`; `--no-jit`)
 - `sched.rs`, `locks.rs`, `native.rs`, `slicing.rs`  task scheduler (virtual clock), guard tokens + poisoning, host objects, panic texts `arena` (`std::arena`: Arena/Handle/Scratch with debug-build handle checks).
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
-- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists; `caps.rs` = capability gate (ADR-0021): every sink builtin is checked against the run's grant (`ir::effect_facts`) before it runs, denial = exit 126, uncatchable
+- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists; `caps.rs` = capability gate (ADR-0021): every sink builtin is checked against the run's grant (`ir::effect_facts`) before it runs, denial = exit 126, uncatchable; `effect_port/` = effect port (ADR-0021 E3): `--record`/`--replay` logs (`log.rs`, `codec.rs`), `sim.rs` seeded world; one choke point per effect; `HANDLE_SINKS` refused; a test audits every host read
 
 ## Invariants
 - Values are immutable trees behind `Rc` with copy-on-write; `&mut` is a `Place` (slot + projections).

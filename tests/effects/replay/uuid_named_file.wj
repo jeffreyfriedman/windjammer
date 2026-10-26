@@ -1,0 +1,7 @@
+use std::fs
+use std::uuid
+fn main() {
+    let name = "${uuid::v4()}.tmp"
+    fs::write(name, "data").unwrap()
+    println("exists: ${fs::exists(name)} name: ${name}")
+}
