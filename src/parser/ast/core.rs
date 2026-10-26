@@ -488,6 +488,8 @@ pub struct TraitMethod<'ast> {
     pub is_async: bool,
     pub body: Option<Vec<&'ast Statement<'ast>>>, // None for trait definitions, Some for default impls
     pub doc_comment: Option<String>,              // Documentation comment (/// lines)
+    /// Attributes on the method: `@uses(fs.read)`, `@pure` (ADR-0021 effect bounds), `@deprecated`, ...
+    pub decorators: Vec<Decorator<'ast>>,
 }
 
 // ============================================================================

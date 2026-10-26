@@ -1,0 +1,25 @@
+// bug: lost update, the counter is read and written under two separate lock acquisitions
+use std::sync::{Arc, Mutex}
+use std::thread
+
+fn bump(c: Arc<Mutex<i64>>) -> i64 {
+    let seen = match c.lock() { Ok(g) => *g, Err(_) => 0 }
+    match c.lock() {
+        Ok(mut g) => { *g = seen + 1 }
+        Err(_) => {}
+    }
+    0
+}
+
+@test
+fn two_increments_add_up() {
+    let c = Arc::new(Mutex::new(0))
+    let a = c.clone()
+    let b = c.clone()
+    let h1 = thread::spawn(move || { return bump(a) })
+    let h2 = thread::spawn(move || { return bump(b) })
+    h1.join()
+    h2.join()
+    let v = match c.lock() { Ok(g) => *g, Err(_) => -1 }
+    assert_eq(v, 2)
+}

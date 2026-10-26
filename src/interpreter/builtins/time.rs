@@ -83,7 +83,7 @@ pub fn duration_ns(v: &Value) -> R<i128> {
 impl Interpreter {
     /// Monotonic nanoseconds since the interpreter started (virtual sleep included).
     pub(crate) fn mono_ns(&self) -> i128 {
-        let real = if self.sched.deterministic { 0 } else { self.epoch.elapsed().as_nanos() as i128 };
+        let real = if self.sched.deterministic { 0 } else { self.clock_reading("clock.elapsed", || self.epoch.elapsed().as_nanos() as i128) };
         real + self.sched.clock as i128
     }
     /// Wall-clock nanoseconds since the Unix epoch.
@@ -91,7 +91,9 @@ impl Interpreter {
         let base = if self.sched.deterministic {
             FIXED_EPOCH_NS
         } else {
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as i128).unwrap_or(0) - self.epoch.elapsed().as_nanos() as i128
+            self.clock_reading("clock.wall_base", || {
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as i128).unwrap_or(0) - self.epoch.elapsed().as_nanos() as i128
+            })
         };
         base + self.mono_ns()
     }

@@ -1,0 +1,6 @@
+use std::random
+fn main() {
+    println("${random::float_range(0.0, 1.0)}")
+    println("${random::bool_with_probability(0.5)}")
+    println("${random::range_inclusive(5, 9)}")
+}

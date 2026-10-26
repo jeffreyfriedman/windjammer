@@ -1,0 +1,5 @@
+use std::fs
+fn main() {
+    fs::write("note.txt", "hello replay").unwrap()
+    println(fs::read_to_string("note.txt").unwrap())
+}

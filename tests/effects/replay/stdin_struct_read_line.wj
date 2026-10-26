@@ -1,0 +1,8 @@
+// stdin: 42\n
+use std::io
+fn main() {
+    let mut line = String::new()
+    io::stdin().read_line(&mut line).unwrap()
+    let n = line.trim().parse::<int>().unwrap_or(0)
+    println("doubled: ${n * 2}")
+}

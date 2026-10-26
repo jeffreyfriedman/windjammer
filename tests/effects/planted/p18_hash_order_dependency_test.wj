@@ -1,0 +1,16 @@
+// bug: the summary line joins HashMap entries in iteration order and the expected text assumes alphabetical order
+use std::collections::HashMap
+
+@test
+fn summary_lists_names_alphabetically() {
+    let mut stock = HashMap::new()
+    stock.insert("pear", 3)
+    stock.insert("apple", 5)
+    stock.insert("fig", 1)
+    stock.insert("plum", 9)
+    let mut parts = Vec::new()
+    for (name, n) in stock.iter() {
+        parts.push("${name}:${n}")
+    }
+    assert_eq(parts.join(","), "apple:5,fig:1,pear:3,plum:9")
+}
