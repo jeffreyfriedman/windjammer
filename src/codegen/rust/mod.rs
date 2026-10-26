@@ -40,6 +40,7 @@ pub mod copy_semantics;
 pub mod data_structure_generation;
 pub mod defer_drop_generation;
 pub mod defer_lowering;
+pub mod durable_lowering;
 pub mod display_from_to_string;
 pub mod expression_generation;
 pub mod expression_helpers;

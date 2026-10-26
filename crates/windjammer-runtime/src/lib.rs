@@ -14,6 +14,8 @@ pub mod platform;
 pub mod cap;
 pub mod caps;
 pub mod caps_core;
+pub mod durable;
+pub mod durable_core;
 pub mod fs;
 pub mod http;
 pub mod json;

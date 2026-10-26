@@ -290,6 +290,12 @@ path = "tests/effects_spans_test.rs"
 name = "check_semantic_types"
 path = "tests/check_semantic_types_test.rs"
 
+# durable fn in the compiled backend and the journal shared with the interpreter (ADR-0021 E4b)
+#   WJ_DURABLE_COMPILED=1 cargo test --release --test durable_compiled
+[[test]]
+name = "durable_compiled"
+path = "tests/durable_compiled_test.rs"
+
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages
 [[test]]

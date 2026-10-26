@@ -846,6 +846,7 @@ impl<'ast> CodeGenerator<'ast> {
         let expr_to_generate = folded_expr.as_ref().unwrap_or(expr);
 
         let result = self.generate_expression_impl(expr_to_generate);
+        let result = self.wrap_durable_step(expr, result);
         self.exit_recursion();
         result
     }

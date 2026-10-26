@@ -1,0 +1,18 @@
+[
+  {"name": "unit", "json": null},
+  {"name": "bool", "json": true},
+  {"name": "int i64", "json": {"i": "i64", "v": "5"}},
+  {"name": "negative int", "json": {"i": "i64", "v": "-12"}},
+  {"name": "int u8", "json": {"i": "u8", "v": "200"}},
+  {"name": "float", "json": {"f": "f64", "bits": "3fb999999999999a"}},
+  {"name": "negative zero", "json": {"f": "f64", "bits": "8000000000000000"}},
+  {"name": "char", "json": {"c": "é"}},
+  {"name": "string", "json": "a \"quoted\"\nline"},
+  {"name": "list", "json": {"vec": [{"i": "i64", "v": "1"}, {"i": "i64", "v": "2"}, {"i": "i64", "v": "3"}]}},
+  {"name": "tuple", "json": {"tup": ["x", {"i": "i64", "v": "7"}]}},
+  {"name": "some", "json": {"en": "Option", "var": "Some", "idx": 1, "p": {"t": ["s"]}}},
+  {"name": "none", "json": {"en": "Option", "var": "None", "idx": 0, "p": null}},
+  {"name": "ok", "json": {"en": "Result", "var": "Ok", "idx": 0, "p": {"t": [{"i": "i64", "v": "3"}]}}},
+  {"name": "err", "json": {"en": "Result", "var": "Err", "idx": 1, "p": {"t": ["no"]}}},
+  {"name": "nested", "json": {"vec": [{"en": "Option", "var": "Some", "idx": 1, "p": {"t": [{"tup": [{"i": "i64", "v": "1"}, true]}]}}, {"en": "Option", "var": "None", "idx": 0, "p": null}]}}
+]
