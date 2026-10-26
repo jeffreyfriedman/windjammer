@@ -99,19 +99,9 @@ pub fn run(cli: Cli) -> Result<()> {
                 let root = windjammer::cli::watch::watch_root(path.as_deref());
                 std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
             }
-            let mode = if compiled || release {
-                Mode::Compiled { release }
-            } else if interpret || hot || record.is_some() || replay.is_some() {
-                Mode::Interpret
-            } else {
-                Mode::Auto
-            };
+            let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some());
             let lint = windjammer::cli_execution::report_build_lints;
-            let engine_resolved = match engine.as_str() {
-                "resolved" => true,
-                "walker" => false,
-                other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
-            };
+            let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
             let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
@@ -550,4 +540,23 @@ fn sim_run(simulate: bool, seeds: Option<String>, seed: Option<u64>, faults: f64
         }
     };
     Ok(Some(windjammer::interpreter::runner::SimRun { seeds, faults }))
+}
+
+fn run_mode(compiled: bool, release: bool, interpret: bool) -> windjammer::cli::run_dev::Mode {
+    use windjammer::cli::run_dev::Mode;
+    if compiled || release {
+        Mode::Compiled { release }
+    } else if interpret {
+        Mode::Interpret
+    } else {
+        Mode::Auto
+    }
+}
+
+fn engine_is_resolved(engine: &str) -> anyhow::Result<bool> {
+    match engine {
+        "resolved" => Ok(true),
+        "walker" => Ok(false),
+        other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
+    }
 }
