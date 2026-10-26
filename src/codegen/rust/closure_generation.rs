@@ -10,7 +10,7 @@
 //! - Closures that capture `self` → no `move` (borrow from method receiver)
 //! - Compiler-generated wrappers (__params) → always `move`
 
-use crate::parser::Expression;
+use crate::parser::{Expression, Type};
 
 use super::CodeGenerator;
 
@@ -55,6 +55,8 @@ impl<'ast> CodeGenerator<'ast> {
         let is_compiler_generated = parameters.iter().any(|p| p.starts_with("__"));
         let captures_self = self.expression_references_self(body);
         let captured = crate::ir::liveness::captures(parameters, body);
+        // A `FnOnce` slot (`thread::spawn`) needs `'static`: it keeps `move` whatever is read later.
+        let fn_once = matches!(self.call_arg_expected_type.as_ref(), Some(Type::Custom(n)) if n == "FnOnce");
         let captures_outer = !captured.is_empty();
 
         // For user-written closures, set flag and track params to suppress transformations
@@ -130,7 +132,11 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             // CLOS-MOVE-CAPTURE from liveness: a captured non-Copy binding that is read after
             // this statement must stay with its owner, so the closure borrows (`move` is E0382).
-            captures_outer && !captured.iter().any(|n| self.binding_known_non_copy(n) && self.read_after_current_statement(n))
+            captures_outer
+                && (fn_once
+                    || !captured
+                        .iter()
+                        .any(|n| self.binding_known_non_copy(n) && self.read_after_current_statement(n)))
         };
 
         if needs_move {

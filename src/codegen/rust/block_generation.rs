@@ -46,7 +46,6 @@ impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
         self.prepass_mark_loop_counter_usize_variables(stmts);
-        if stmts.len() == 1 {}
         let mut output = String::new();
         let len = stmts.len();
         let saved_body = self.current_function_body.clone();
@@ -55,9 +54,7 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_skips = std::mem::take(&mut self.skip_block_indices);
         self.current_function_body = stmts.to_vec();
         for (i, stmt) in stmts.iter().enumerate() {
-            self.current_statement_idx = self.auto_clone_counter;
-            self.current_block_local_idx = i;
-            self.auto_clone_counter += 1;
+            self.begin_block_statement(i);
 
             // Skip statements folded into a preceding .take() or .replace()
             if self.skip_block_indices.contains(&i) {
@@ -382,6 +379,13 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_block_local_idx = saved_local_idx;
         self.skip_block_indices = saved_skips;
         output
+    }
+
+    /// Statement bookkeeping shared by the block emitters: auto-clone index and block position.
+    fn begin_block_statement(&mut self, i: usize) {
+        self.current_statement_idx = self.auto_clone_counter;
+        self.current_block_local_idx = i;
+        self.auto_clone_counter += 1;
     }
 
     pub(crate) fn generate_statement(&mut self, stmt: &Statement<'ast>) -> String {
@@ -806,9 +810,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let len = stmts.len();
         for (i, stmt) in stmts.iter().enumerate() {
-            self.current_statement_idx = self.auto_clone_counter;
-            self.current_block_local_idx = i;
-            self.auto_clone_counter += 1;
+            self.begin_block_statement(i);
 
             let is_last = i == len - 1;
             let outer_dying = self.enter_statement_liveness(stmt);

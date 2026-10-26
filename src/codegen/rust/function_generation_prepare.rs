@@ -99,7 +99,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.auto_clone_counter = 0;
         let entry: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
         let always_move = self.config.liveness_mutation_always_move;
-        self.last_use_keys = crate::ir::liveness::last_use_keys(&entry, &func.body, always_move);
+        self.last_use_nodes = crate::ir::liveness::last_moves(&entry, &func.body, always_move);
         self.read_after = (crate::ir::liveness::read_after(&entry, &func.body, always_move), Vec::new());
 
         self.current_function_params = func.parameters.clone();

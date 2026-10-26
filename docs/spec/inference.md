@@ -152,9 +152,9 @@ the better contract (no clone at the call site), so the parameter case should fo
 ### MOVE-LAST-USE
 **Rule.** The last use of an owned non-Copy value moves it. No clone is emitted at the last use.
 **Example.** `let b2 = consume(b)` with `b` unused afterwards emits `consume(b)`.
-**Decided by.** The liveness fact `ir::liveness::last_use_keys` (per read, by source position; a read is
-not last inside a loop the binding outlives, inside a closure, or while a binding initialised from it may
-still hold a borrow). The Rust backend hands the bindings that die in each statement to every reuse-clone
+**Decided by.** The liveness fact `ir::liveness::last_moves` (per read, by node identity; parameters and plain
+`let` bindings only; a read is not last inside a loop the binding outlives, inside a closure, or while a binding
+initialised from it may still hold a borrow). The Rust backend hands the bindings that die in each statement to every reuse-clone
 query (`codegen/rust/move_at_last_use.rs`), so no statement-index heuristic can re-add a clone there.
 **Status.** Conforms for bare owned bindings (`tests/inference_corpus/move_at_last_use.wj`: `wrap(b, ..)`
 after `push_bag(&mut b, ..)`, `self.touch(k)` after `self.order.push(k.clone())`). Mutation check: a
