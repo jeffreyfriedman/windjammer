@@ -1,0 +1,10 @@
+// expect: WJ0003
+fn describe(n: int) -> string {
+    "number"
+}
+
+fn main() {
+    let bad: int = describe(3)
+//~@20+8 ERROR WJ0003 mismatched types: expected `int`,
+    println("${bad}")
+}

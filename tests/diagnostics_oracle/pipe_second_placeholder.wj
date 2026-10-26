@@ -1,0 +1,4 @@
+fn main() {
+    let r = x |> f(_, _)
+//~@23 ERROR parse at most one
+}

@@ -1,0 +1,11 @@
+// expect: WJ0003
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let p = Point { x: 1, y: "two" }
+//~@30+5 ERROR WJ0003 mismatched types: expected `int`,
+    println("${p.x}")
+}

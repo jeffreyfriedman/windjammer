@@ -1,0 +1,7 @@
+// expect: WJ0001
+fn main() {
+    let a = 1
+    let b = missing + a
+//~@13+7 ERROR WJ0001 cannot find value `missing`
+    println("${b}")
+}

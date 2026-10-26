@@ -1,0 +1,6 @@
+// expect: WJ0003
+fn main() {
+    let y: string = 42
+//~@21+2 ERROR WJ0003 mismatched types: expected `string`,
+    println("y = ${y}")
+}

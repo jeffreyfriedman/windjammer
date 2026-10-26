@@ -62,7 +62,7 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
         let raw = scrut(it, b)?;
         let (v, place, by_ref) = match raw {
             Value::Ref(p) => {
-                let p = it.chase(p)?;
+                let p = it.chase(*p)?;
                 (p.read()?, Some(p), true)
             }
             other => (other, None, false),

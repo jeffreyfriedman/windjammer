@@ -182,13 +182,19 @@ fn forbidden(msg: &str, ix: &SourceIndex) -> Diagnostic {
 }
 
 
-/// Span of the token the parser stopped at; at end of file, the last character of the text.
+/// Span of the token the parser stopped at; at end of file, the last character of the last token
+/// (trailing whitespace and comments are not code).
 fn error_span(ix: &SourceIndex, l: usize, c: usize) -> crate::diagnostics::Span {
     let sp = ix.word_span_from(ix.skip_ws(ix.offset(l, c)));
     if sp.byte_end > sp.byte_start {
         return sp;
     }
-    let end = ix.text().trim_end().len();
+    let last = Lexer::new(ix.text())
+        .tokenize_with_locations()
+        .into_iter()
+        .rev()
+        .find(|t| !matches!(t.token, crate::lexer::Token::Eof | crate::lexer::Token::Newline));
+    let end = last.map_or(ix.text().trim_end().len(), |t| t.byte_end);
     let start = ix.text()[..end].char_indices().next_back().map_or(0, |(i, _)| i);
     ix.span(start, end)
 }

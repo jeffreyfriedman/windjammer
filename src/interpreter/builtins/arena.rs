@@ -209,7 +209,7 @@ pub(super) fn register(r: &mut Registry) {
         let h = arg(&a, 0, "get_mut")?;
         let i = checked_index(&v, &h)?;
         Ok(Value::Ref(
-            p.proj(Proj::Field(Rc::from("items"))).proj(Proj::Index(i)),
+            Box::new(p.proj(Proj::Field(Rc::from("items"))).proj(Proj::Index(i))),
         ))
     });
     r.place(Kind::Struct, "iter_mut", |_, p, _| {
@@ -224,7 +224,7 @@ pub(super) fn register(r: &mut Registry) {
         let items = p.proj(Proj::Field(Rc::from("items")));
         Ok(new_iter(
             (0..n)
-                .map(|i| Value::Ref(items.proj(Proj::Index(i))))
+                .map(|i| Value::Ref(Box::new(items.proj(Proj::Index(i)))))
                 .collect(),
         ))
     });

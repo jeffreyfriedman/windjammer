@@ -7,6 +7,8 @@
 mod generated;
 #[path = "check_cache/support.rs"]
 mod support;
+#[path = "check_cache/effects.rs"]
+mod effects;
 
 use generated::Project;
 use std::path::Path;

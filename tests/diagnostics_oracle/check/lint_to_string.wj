@@ -1,0 +1,6 @@
+// expect: W0006
+fn main() {
+    let s = "hello".to_string()
+//~@21+9 ERROR W0006 string literal `.to_string()` is
+    println("${s}")
+}

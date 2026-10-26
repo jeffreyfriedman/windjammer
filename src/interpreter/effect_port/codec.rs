@@ -41,7 +41,7 @@ pub fn encode(v: &Value) -> Result<Json, String> {
             };
             json!({ "en": &*e.ty, "var": &*e.variant, "idx": e.idx, "p": payload })
         }
-        Value::Range(a, b, t) => json!({ "range": [a.to_string(), b.to_string(), t.name()] }),
+        Value::Range(r, t) => json!({ "range": [r.0.to_string(), r.1.to_string(), t.name()] }),
         Value::Native(_) => match (metadata_parts(v), dirent_path(v)) {
             (Some((len, file, dir, ro)), _) => json!({ "meta": [len, file, dir, ro] }),
             (_, Some(path)) => json!({ "dirent": path }),
@@ -129,7 +129,7 @@ fn decode_object(m: &Map<String, Json>, bad: &dyn Fn(&str) -> String) -> Result<
     if let Some(r) = m.get("range").and_then(|r| r.as_array()) {
         let n = |i: usize| r.get(i).and_then(|x| x.as_str()).and_then(|x| x.parse::<i128>().ok()).ok_or_else(|| bad("range"));
         let ty = int_ty(r.get(2).and_then(|t| t.as_str()).unwrap_or("")).ok_or_else(|| bad("range type"))?;
-        return Ok(Value::Range(n(0)?, n(1)?, ty));
+        return Ok(Value::range(n(0)?, n(1)?, ty));
     }
     if let Some(kind) = m.get("time").and_then(|k| k.as_str()) {
         let ns: i128 = m.get("ns").and_then(|n| n.as_str()).and_then(|n| n.parse().ok()).ok_or_else(|| bad("time value"))?;
@@ -171,7 +171,7 @@ mod tests {
         rt(Value::ok(Value::tuple(vec![Value::int(1), Value::Bool(false)])));
         rt(Value::err(Value::str("No such file or directory (os error 2)")));
         rt(Value::none());
-        rt(Value::Range(0, 9, IntTy::Usize));
+        rt(Value::range(0, 9, IntTy::Usize));
         rt(metadata_from_parts(12, true, false, false));
         rt(dirent_value("a/b.txt".into()));
         rt(time_from_parts("Instant", 1234).unwrap());

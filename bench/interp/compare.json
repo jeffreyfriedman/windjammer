@@ -1,5 +1,5 @@
 {
- "load_avg_1m": 36.1,
+ "load_avg_1m": 60.3,
  "runs": 5,
  "versions": {
   "python3": "Python 3.13.5",
@@ -9,126 +9,126 @@
  "kernels": {
   "closures": {
    "cpu_s": {
-    "walker": 0.21810000000000002,
-    "resolved": 0.1481140000000032,
-    "python3": 0.05573999999999302,
-    "node": 0.05212400000002049
+    "walker": 0.189889,
+    "resolved": 0.11852300000000326,
+    "python3": 0.05191499999999394,
+    "node": 0.04284599999998662
    },
    "notes": [
     "rust: error[E0308]: mismatched types"
    ],
    "ratios": {
-    "resolved_over_node": 2.84,
-    "resolved_over_python3": 2.66,
-    "resolved_over_walker": 0.68
+    "resolved_over_node": 2.77,
+    "resolved_over_python3": 2.28,
+    "resolved_over_walker": 0.62
    }
   },
   "fib30": {
    "cpu_s": {
-    "walker": 0.9059030000000128,
-    "resolved": 0.0378639999999848,
-    "rust": 0.005056000000013938,
-    "python3": 0.15835099999998192,
-    "node": 0.04248699999999417
+    "walker": 0.8743479999999835,
+    "resolved": 0.033503000000010275,
+    "rust": 0.004567000000001542,
+    "python3": 0.1485740000000071,
+    "node": 0.04435100000001313
    },
    "notes": [],
    "ratios": {
-    "resolved_over_node": 0.89,
-    "resolved_over_python3": 0.24,
+    "resolved_over_node": 0.76,
+    "resolved_over_python3": 0.23,
     "resolved_over_walker": 0.04
    }
   },
   "hashmap": {
    "cpu_s": {
-    "walker": 0.31119900000000555,
-    "resolved": 0.20555900000002936,
-    "python3": 0.06343799999999788,
-    "node": 0.04752999999997343
+    "walker": 0.2710970000000117,
+    "resolved": 0.1616850000000234,
+    "python3": 0.05775499999998246,
+    "node": 0.04242000000002122
    },
    "notes": [
     "rust: error[E0308]: mismatched types"
    ],
    "ratios": {
-    "resolved_over_node": 4.32,
-    "resolved_over_python3": 3.24,
-    "resolved_over_walker": 0.66
+    "resolved_over_node": 3.81,
+    "resolved_over_python3": 2.8,
+    "resolved_over_walker": 0.6
    }
   },
   "loop5m": {
    "cpu_s": {
-    "walker": 2.3688970000000324,
-    "resolved": 0.04171800000001724,
-    "rust": 0.005721999999948935,
-    "python3": 1.1016420000000267,
-    "node": 0.04839499999997798
+    "walker": 2.096623000000008,
+    "resolved": 0.03505399999997394,
+    "rust": 0.003610999999985154,
+    "python3": 0.9731330000000042,
+    "node": 0.04452499999996462
    },
    "notes": [],
    "ratios": {
-    "resolved_over_node": 0.86,
+    "resolved_over_node": 0.79,
     "resolved_over_python3": 0.04,
     "resolved_over_walker": 0.02
    }
   },
   "nbody": {
    "cpu_s": {
-    "walker": 1.3519520000000043,
-    "resolved": 0.1325040000000186,
-    "rust": 0.0028400000000345926,
-    "python3": 0.1521829999999582,
-    "node": 0.05018499999999193
+    "walker": 1.1873799999999974,
+    "resolved": 0.11563399999999291,
+    "rust": 0.004154000000028191,
+    "python3": 0.12290199999999629,
+    "node": 0.0491970000000066
    },
    "notes": [],
    "ratios": {
-    "resolved_over_node": 2.64,
-    "resolved_over_python3": 0.87,
+    "resolved_over_node": 2.35,
+    "resolved_over_python3": 0.94,
     "resolved_over_walker": 0.1
    }
   },
   "sieve": {
    "cpu_s": {
-    "walker": 1.520131000000049,
-    "resolved": 0.19724199999997438,
+    "walker": 1.3334730000000405,
+    "resolved": 0.1178679999999801,
     "rust": null,
-    "python3": 0.4578690000000023,
-    "node": 0.056146000000026675
+    "python3": 0.3919530000000151,
+    "node": 0.05106600000002004
    },
    "notes": [
     "rust failed"
    ],
    "ratios": {
-    "resolved_over_node": 3.51,
-    "resolved_over_python3": 0.43,
-    "resolved_over_walker": 0.13
+    "resolved_over_node": 2.31,
+    "resolved_over_python3": 0.3,
+    "resolved_over_walker": 0.09
    }
   },
   "strings": {
    "cpu_s": {
-    "walker": 0.22604600000003217,
-    "resolved": 0.11240900000002085,
-    "rust": 0.009054999999996483,
-    "python3": 0.06986199999998632,
-    "node": 0.03417599999997378
+    "walker": 0.17913399999999058,
+    "resolved": 0.08280600000002636,
+    "rust": 0.008844999999993775,
+    "python3": 0.07344299999997617,
+    "node": 0.036370000000012226
    },
    "notes": [],
    "ratios": {
-    "resolved_over_node": 3.29,
-    "resolved_over_python3": 1.61,
-    "resolved_over_walker": 0.5
+    "resolved_over_node": 2.28,
+    "resolved_over_python3": 1.13,
+    "resolved_over_walker": 0.46
    }
   },
   "structs": {
    "cpu_s": {
-    "walker": 0.7097600000000241,
-    "resolved": 0.37209900000002705,
-    "rust": 0.002353000000027805,
-    "python3": 0.18835900000004102,
-    "node": 0.042299000000014075
+    "walker": 0.6537519999999901,
+    "resolved": 0.3009909999999749,
+    "rust": 0.002119000000014637,
+    "python3": 0.17021999999998627,
+    "node": 0.04229600000000033
    },
    "notes": [],
    "ratios": {
-    "resolved_over_node": 8.8,
-    "resolved_over_python3": 1.98,
-    "resolved_over_walker": 0.52
+    "resolved_over_node": 7.12,
+    "resolved_over_python3": 1.77,
+    "resolved_over_walker": 0.46
    }
   }
  }

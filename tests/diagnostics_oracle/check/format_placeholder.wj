@@ -1,0 +1,6 @@
+// expect: W0008
+fn main() {
+    let x = 1
+    println("x = {}", x)
+//~@5+20 WARN W0008 `println` with a `{}`
+}

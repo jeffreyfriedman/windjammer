@@ -282,7 +282,7 @@ impl Interpreter {
             }
             let ty = val.type_name();
             let Some(f) = self.methods.get(&(ty, "drop".to_string())).cloned() else { continue };
-            let me = Value::Ref(Place::temp(val));
+            let me = Value::Ref(Box::new(Place::temp(val)));
             if let Err(e) = self.call_func(&f, vec![], Some(me)) {
                 if first_err.is_none() {
                     first_err = Some(e);

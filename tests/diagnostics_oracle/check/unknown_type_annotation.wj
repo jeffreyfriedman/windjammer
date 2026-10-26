@@ -1,0 +1,6 @@
+// expect: WJ0005
+fn main() {
+    let bad: Widget = 5
+//~@14+6 ERROR WJ0005 cannot find type `Widget`
+    println("${bad}")
+}

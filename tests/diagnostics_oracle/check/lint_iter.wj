@@ -1,0 +1,8 @@
+// expect: W0003
+fn main() {
+    let v = [1, 2]
+    for x in v.iter() {
+//~@16+4 ERROR W0003 explicit .iter() call
+        println("${x}")
+    }
+}

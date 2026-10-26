@@ -1,0 +1,6 @@
+fn main() {
+    for x in items.iter() {
+//~@14 ERROR W0003 explicit .iter() call
+        print(x)
+    }
+}

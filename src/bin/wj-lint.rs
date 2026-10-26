@@ -21,7 +21,7 @@ fn lint_file(path: &Path, strict: bool) -> Result<(), Box<dyn std::error::Error>
     let mut parser = Parser::new_with_source(tokens, file_name.clone(), source.clone());
     let program = parser.parse().map_err(|e| format!("Parse error: {}", e))?;
 
-    let mut linter = RustLeakageLinter::new(&file_name);
+    let mut linter = RustLeakageLinter::new(&file_name).with_spans(parser.span_snapshot());
     linter.lint_program(&program);
     linter.lint_source(&source);
     let warnings = linter.into_diagnostics();
