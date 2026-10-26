@@ -63,8 +63,7 @@ pub fn run(cli: Cli) -> Result<()> {
             )?;
         }
         Commands::Run {
-            path,
-            args,
+            path_and_args,
             bin,
             target,
             interpret,
@@ -99,6 +98,7 @@ pub fn run(cli: Cli) -> Result<()> {
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
+            let (path, args) = split_path_and_args(path_and_args);
             if watch {
                 let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
                 let root = windjammer::cli::watch::watch_root(path.as_deref());
@@ -567,4 +567,17 @@ fn engine_is_resolved(engine: &str) -> anyhow::Result<bool> {
         "walker" => Ok(false),
         other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
     }
+}
+
+/// `wj run [flags] PATH [ARGS]...`: the first value is the path, the rest belongs to the program (a leading `--`
+/// separator, as older invocations wrote it, is dropped).
+fn split_path_and_args(mut rest: Vec<String>) -> (Option<std::path::PathBuf>, Vec<String>) {
+    if rest.is_empty() {
+        return (None, rest);
+    }
+    let path = std::path::PathBuf::from(rest.remove(0));
+    if rest.first().is_some_and(|a| a == "--") {
+        rest.remove(0);
+    }
+    (Some(path), rest)
 }

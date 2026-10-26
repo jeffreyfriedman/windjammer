@@ -246,8 +246,15 @@ fn run_passes_program_flags_after_the_path_and_args_is_a_vec() {
     let o = wj(&["run", "--interpret", "argv.wj", "--name", "value", "positional"], d.path());
     assert!(o.status.success(), "{}", err(&o));
     assert_eq!(out(&o), "4 --name value positional\n");
+    // everything after the path is the program's, wj's own flag names included; the old `--` separator is accepted
+    let o = wj(&["run", "argv.wj", "--release", "--interpret", "x"], d.path());
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "4 --release --interpret x\n");
+    let o = wj(&["run", "argv.wj", "--", "--name", "v", "w"], d.path());
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "4 --name v w\n");
     // wj's own flags before the path still belong to wj
-    let o = wj(&["run", "argv.wj", "--interpret", "a", "b", "c"], d.path());
+    let o = wj(&["run", "--interpret", "argv.wj", "a", "b", "c"], d.path());
     assert!(o.status.success(), "{}", err(&o));
     assert_eq!(out(&o), "4 a b c\n");
 }
