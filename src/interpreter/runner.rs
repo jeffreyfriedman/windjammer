@@ -70,6 +70,10 @@ pub struct RunOptions {
     pub replay: Option<PathBuf>,
     /// `--simulate` (with `--seed`, `--faults`): run in the seeded world instead of the live one.
     pub simulate: Option<super::effect_port::sim::SimConfig>,
+    /// `--journal DIR`: where `durable fn` runs keep their step journals (default: in memory).
+    pub journal: Option<PathBuf>,
+    /// `--crash-after N[:mid]`: exit abruptly after the N-th journaled step (tests of crash recovery).
+    pub crash_after: Option<String>,
     /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
     pub no_jit: bool,
 }
@@ -155,6 +159,10 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);
         }
+        if let Err(m) = setup_durable(&mut it, &opts, &entry) {
+            eprintln!("error: {m}");
+            return RunOutcome::Exited(1);
+        }
         if let Some((lib, sigs)) = host {
             match super::host_bridge::HostLib::open(&lib, &sigs) {
                 Ok(h) => it.attach_host(h),
@@ -186,6 +194,22 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.flush();
         RunOutcome::Exited(code)
     })
+}
+
+/// `durable fn`: find the journaled steps of the program and install the journal (ADR-0021 E4).
+fn setup_durable(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Result<(), String> {
+    use super::durable_rt::{discover_sites, DurableCfg};
+    let mut cfg = DurableCfg { dir: opts.journal.clone(), ..DurableCfg::default() };
+    if let Some(c) = &opts.crash_after {
+        let (n, mid) = DurableCfg::parse_crash(c)?;
+        cfg.crash_after = Some(n);
+        cfg.crash_mid = mid;
+    }
+    let sites = discover_sites(entry)?;
+    if !sites.is_empty() || cfg.dir.is_some() {
+        it.enable_durable(sites, cfg);
+    }
+    Ok(())
 }
 
 /// `--record` / `--replay`: install the effect port. A replay takes the seeds, the time mode and the arguments from the
@@ -317,6 +341,11 @@ fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig
             }
         })),
         Err(m) => return TestResult { file: spec.file, name: spec.display_name, passed: false, message: m },
+    }
+    if let Ok(sites) = super::durable_rt::discover_sites(&spec.file) {
+        if !sites.is_empty() {
+            it.enable_durable(sites, Default::default());
+        }
     }
     if let Some(cfg) = sim {
         let tmp = scratch.as_ref().map(|s| s.path().to_path_buf()).unwrap_or_else(std::env::temp_dir);

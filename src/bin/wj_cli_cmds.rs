@@ -83,6 +83,8 @@ pub fn run(cli: Cli) -> Result<()> {
             mock_http,
             record,
             replay,
+            journal,
+            crash_after,
             simulate,
             seed,
             faults,
@@ -99,11 +101,11 @@ pub fn run(cli: Cli) -> Result<()> {
                 let root = windjammer::cli::watch::watch_root(path.as_deref());
                 std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
             }
-            let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some());
+            let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some() || journal.is_some());
             let lint = windjammer::cli_execution::report_build_lints;
             let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
                 std::process::exit(code);

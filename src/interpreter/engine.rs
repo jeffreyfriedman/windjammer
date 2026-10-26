@@ -165,6 +165,8 @@ pub struct Interpreter {
     pub(crate) caps: Option<super::caps::CapGate>,
     /// Record / replay / simulate port for effects (`effect_port`); `None` = effects are live.
     pub(crate) port: Option<std::cell::RefCell<super::effect_port::EffectPort>>,
+    /// Journal of `durable fn` steps (`durable_rt`); `None` until a durable function is called or `enable_durable`.
+    pub(crate) durable: Option<Box<super::durable_rt::DurableRt>>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -251,6 +253,7 @@ impl Interpreter {
             http: Default::default(),
             caps: None,
             port: None,
+            durable: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,

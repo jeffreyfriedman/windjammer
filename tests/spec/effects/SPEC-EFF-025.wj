@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-025
 // mode: check-error
-// xfail: Q-032
 // expect-error: WJ0047: durable fn `consume` receives from a channel
 use std::sync
 durable fn consume(rx: sync::Receiver<int>) -> int {

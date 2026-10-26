@@ -693,6 +693,9 @@ impl Interpreter {
         if self.hot.is_some() {
             self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
+        if f.decorators.iter().any(|d| d.name == "durable") {
+            return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
+        }
         if self.engine_resolved && targs.is_empty() && Self::compiled_call_ok(f, &self_val) {
             if let Some(c) = self.compiled_for(f) {
                 return self.run_compiled(f, &c, args, self_val);

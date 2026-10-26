@@ -380,7 +380,7 @@ fn unknown_resource(k: EffectKind) -> (EffectKind, Resource) {
 }
 
 /// The resolver reports the module an external callee came from (`std::fs`); the callee's last segment completes it.
-fn full_path(external: &str, callee: &str) -> String {
+pub(super) fn full_path(external: &str, callee: &str) -> String {
     let last = callee.rsplit("::").next().unwrap_or(callee);
     if external == last || external.ends_with(&format!("::{last}")) {
         external.to_string()
@@ -390,7 +390,7 @@ fn full_path(external: &str, callee: &str) -> String {
 }
 
 /// Effects a call to the sink at `path` performs, with resources read from the call's literal arguments.
-fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind, Resource)> {
+pub(super) fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind, Resource)> {
     let Some(uses) = sinks::lookup(path) else { return Vec::new() };
     uses.iter()
         .map(|u| {
