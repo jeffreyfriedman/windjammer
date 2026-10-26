@@ -12,7 +12,7 @@ use crate::parser::*;
 use std::collections::{HashMap, HashSet};
 
 /// Tracks where automatic clones should be inserted
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AutoCloneAnalysis {
     /// Variables that need to be cloned at specific usage sites
     /// Key: (variable_name, statement_index)
@@ -25,33 +25,20 @@ pub struct AutoCloneAnalysis {
     /// Any other bare identifier is a module-level item (const/static/fn) rather than a
     /// local, which the usage analysis cannot see the definition of.
     pub bound_names: std::collections::HashSet<String>,
+    /// MOVE-LAST-USE: bindings whose last use (`ir::liveness::dying_in`) is in the statement being
+    /// emitted (set per statement by the Rust backend); no reuse clone is ever needed there.
+    pub dying_here: std::collections::HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CloneReason {
     /// Value is moved here but used again later
     MovedButUsedLater,
-    /// Value is passed to function that takes ownership
-    PassedToOwningFunction,
-    /// Value is stored in collection
-    StoredInCollection,
-    /// Value is returned but also used in function
-    ReturnedButUsedAgain,
-}
-
-impl Default for AutoCloneAnalysis {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl AutoCloneAnalysis {
     pub fn new() -> Self {
-        AutoCloneAnalysis {
-            clone_sites: HashMap::new(),
-            string_literal_vars: std::collections::HashSet::new(),
-            bound_names: std::collections::HashSet::new(),
-        }
+        Self::default()
     }
 
     /// Drop clone sites recorded for module-level items mistaken for locals. A `const` is
@@ -2095,7 +2082,7 @@ impl AutoCloneAnalysis {
     /// Check if a variable needs to be cloned at a specific statement
     pub fn needs_clone(&self, var_name: &str, statement_idx: usize) -> Option<&CloneReason> {
         // Don't clone string literal variables (they're just &str references)
-        if self.string_literal_vars.contains(var_name) {
+        if self.string_literal_vars.contains(var_name) || self.dying_here.contains(var_name) {
             return None;
         }
         self.clone_sites.get(&(var_name.to_string(), statement_idx))
@@ -2104,7 +2091,7 @@ impl AutoCloneAnalysis {
     /// True when analysis recorded any clone site for this binding (used when nested
     /// statement indices in codegen don't match flat auto_clone indices).
     pub fn needs_clone_anywhere(&self, var_name: &str) -> bool {
-        if self.string_literal_vars.contains(var_name) {
+        if self.string_literal_vars.contains(var_name) || self.dying_here.contains(var_name) {
             return false;
         }
         self.clone_sites.keys().any(|(n, _)| n == var_name)

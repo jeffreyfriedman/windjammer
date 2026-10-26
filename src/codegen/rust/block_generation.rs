@@ -79,6 +79,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             let is_last = i == len - 1;
+            // The tail expression is emitted without `generate_statement`: publish its liveness here.
+            let outer_dying = self.enter_statement_liveness(stmt);
             // TDD: Track if this is the last statement (used by If handler)
             self.current_is_last_statement = is_last;
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
@@ -373,6 +375,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Preserve in_expression_context so inner branches retain correct semicolon behavior
                 output.push_str(&self.generate_statement(stmt));
             }
+            self.exit_statement_liveness(outer_dying);
         }
         self.current_function_body = saved_body;
         self.current_statement_idx = saved_idx;
@@ -388,7 +391,9 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("/* {} */", e);
         }
 
+        let outer_dying = self.enter_statement_liveness(stmt);
         let result = self.generate_statement_impl(stmt);
+        self.exit_statement_liveness(outer_dying);
         self.exit_recursion();
         result
     }
@@ -806,6 +811,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.auto_clone_counter += 1;
 
             let is_last = i == len - 1;
+            let outer_dying = self.enter_statement_liveness(stmt);
             if is_last
                 && !self.in_void_block
                 && matches!(
@@ -898,6 +904,7 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 output.push_str(&self.generate_statement(stmt));
             }
+            self.exit_statement_liveness(outer_dying);
         }
 
         self.auto_clone_counter = saved_auto_clone;

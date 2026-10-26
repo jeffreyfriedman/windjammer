@@ -8,7 +8,7 @@
 //!   - `OwnershipIs` from usage patterns (field mutation, method calls)
 //!   - `SharesRegion` for aliasing detection (multiple refs to same variable)
 //!   - `IsNumeric`/`IsInteger`/`IsFloat` for arithmetic expressions
-//!   - `NeedsClone` when a variable is used at multiple owned sites
+//!   - `NeedsClone` from the analyzer's clone sites (CLONE-ANALYZER, until C6 makes liveness the owner)
 //!   - `HasEffects`/`EffectsUnion` for call-graph effect propagation
 //!
 //! Analyzer metadata is no longer seeded as ownership constraints — the solver
@@ -90,7 +90,6 @@ struct AstConstraintWalker<'a, 'ast> {
     local_vars: HashMap<String, ConstraintVar>,
     return_var: ConstraintVar,
     region_counter: u32,
-    owned_use_counts: HashMap<String, u32>,
     analyzed: &'a AnalyzedFunction<'ast>,
     /// Qualified callee names from call expressions (for effect call-graph).
     call_targets: Vec<String>,
@@ -280,7 +279,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             local_vars: HashMap::new(),
             return_var,
             region_counter,
-            owned_use_counts: HashMap::new(),
             analyzed,
             call_targets: Vec::new(),
             taint_constraints: Vec::new(),
@@ -1322,35 +1320,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
-    /// Track variable usage for clone detection.
-    fn track_owned_use(&mut self, name: &str) {
-        let count = self.owned_use_counts.entry(name.to_string()).or_insert(0);
-        *count += 1;
-    }
-
-    /// Emit NeedsClone constraints for variables used multiple times in owned contexts.
-    /// Also incorporates analyzer's auto_clone_analysis as secondary source.
+    /// Emit NeedsClone constraints from the analyzer's clone sites.
     fn emit_clone_constraints(&mut self) {
-        for (var_name, count) in &self.owned_use_counts {
-            if *count > 1 {
-                if let Some(var) = self
-                    .param_vars
-                    .get(var_name)
-                    .copied()
-                    .or_else(|| self.local_vars.get(var_name).copied())
-                {
-                    self.cs.add_because(
-                        Constraint::NeedsClone(var),
-                        origin(
-                            "CLONE-MULTI-USE",
-                            format!("`{}` is used at {} owned sites", var_name, count),
-                            &None,
-                        ),
-                    );
-                }
-            }
-        }
-        // From analyzer's auto_clone_analysis (secondary, will be removed in Phase 1F)
         for ((var_name, stmt_idx), reason) in &self.analyzed.auto_clone_analysis.clone_sites {
             let var = self.resolve_var(var_name);
             self.cs.add_because(
@@ -1593,9 +1564,10 @@ mod tests {
     fn analyze_source(source: &str) -> Vec<crate::analyzer::AnalyzedFunction<'static>> {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        // Leak the parser so its arena allocators keep AST nodes alive
+        // Leak the parser and the program: the analyzed functions borrow both for 'static
+        // (dropping `program` here was a use-after-free that segfaulted the tests below).
         let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
         analyzed

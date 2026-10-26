@@ -97,13 +97,9 @@ impl<'ast> CodeGenerator<'ast> {
             self.auto_clone_analysis = Some(self.without_module_item_clones(analyzed.auto_clone_analysis.clone()));
         }
         self.auto_clone_counter = 0;
-
-        // PHASE 2 OPTIMIZATION: Load clone optimizations for this function
-        // Variables in this set can safely avoid .clone() calls
-        self.clone_optimizations.clear();
-        for opt in &analyzed.clone_optimizations {
-            self.clone_optimizations.insert(opt.variable.clone());
-        }
+        let entry: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
+        let always_move = self.config.liveness_mutation_always_move;
+        self.last_use_keys = crate::ir::liveness::last_use_keys(&entry, &func.body, always_move);
 
         self.current_function_params = func.parameters.clone();
         self.current_function_name = Some(func.name.to_string());

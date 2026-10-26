@@ -152,9 +152,15 @@ the better contract (no clone at the call site), so the parameter case should fo
 ### MOVE-LAST-USE
 **Rule.** The last use of an owned non-Copy value moves it. No clone is emitted at the last use.
 **Example.** `let b2 = consume(b)` with `b` unused afterwards emits `consume(b)`.
-**Status.** Diverges (D-CLONE-LASTUSE): after earlier borrowing uses the last use is still cloned
-(`take(it); take(it)` emits `take(it.clone()); take(it.clone())`; `let w = keep(v.clone())` where `v` is never used again; `wrap(b.clone(), ..)` after `push_bag(&mut b, ..)`), and
-arguments inside interpolation are not considered last uses.
+**Decided by.** The liveness fact `ir::liveness::last_use_keys` (per read, by source position; a read is
+not last inside a loop the binding outlives, inside a closure, or while a binding initialised from it may
+still hold a borrow). The Rust backend hands the bindings that die in each statement to every reuse-clone
+query (`codegen/rust/move_at_last_use.rs`), so no statement-index heuristic can re-add a clone there.
+**Status.** Conforms for bare owned bindings (`tests/inference_corpus/move_at_last_use.wj`: `wrap(b, ..)`
+after `push_bag(&mut b, ..)`, `self.touch(k)` after `self.order.push(k.clone())`). Mutation check: a
+liveness that marks every read last is rejected by rustc (`mutation_always_move_liveness_is_rejected`).
+Open: a clone of an element or field (`svo[0].clone()`) is a place clone, not a last-use decision
+(CLONE-BORROWED-TO-OWNED); `explain` still reports it as D-CLONE-LASTUSE.
 
 ### CLONE-USE-AFTER-MOVE
 **Rule.** If a non-Copy value is passed to an owned formal (or moved into a store) and is used again later, a clone is
@@ -175,8 +181,9 @@ parameter or `self`; passing a borrowed parameter to an owned formal), the value
 **Status.** Conforms. Over-clones exist where the clone is applied and then borrowed again: `prefix + &self.name.clone()`
 (D-CLONE-REDUNDANT).
 
-### CLONE-ANALYZER, CLONE-MULTI-USE
-Implementation seeds for the solver's `NeedsClone` constraint (analyzer `auto_clone` sites; use counting). The solver's
+### CLONE-ANALYZER
+Implementation seed for the solver's `NeedsClone` constraint (analyzer `auto_clone` sites; the never-called
+use counting `CLONE-MULTI-USE` was deleted in C6). The solver's
 clone result is not consumed by any code (D-CLONE-OWNERS); clones come from `auto_clone.rs` and about two thousand
 `.clone()` emission sites in codegen. These IDs exist so `explain` can show the constraint that *would* decide.
 

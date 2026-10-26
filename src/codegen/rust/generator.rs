@@ -47,8 +47,6 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
     pub(crate) bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
-    // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
-    pub(crate) clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
     // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
     pub(crate) struct_mapping_hints:
         std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
@@ -396,6 +394,8 @@ pub struct CodeGenerator<'ast> {
     /// Per-function IR data, populated when the IR pipeline runs alongside legacy codegen.
     /// When set and a cutover flag is enabled, the corresponding codegen reads from here.
     pub(crate) current_ir_function: Option<crate::ir::IrFunction>,
+    /// MOVE-LAST-USE fact (`ir::liveness::last_use_keys`) for the function being emitted.
+    pub(crate) last_use_keys: std::collections::BTreeSet<(usize, usize)>,
     /// Full IR module (all functions), set when cutover is active. Functions are looked up
     /// by name when codegen begins processing each AnalyzedFunction.
     pub(crate) ir_module_functions: Vec<crate::ir::IrFunction>,
@@ -657,7 +657,6 @@ impl<'ast> CodeGenerator<'ast> {
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
             bound_aliases: std::collections::HashMap::new(),
-            clone_optimizations: std::collections::HashSet::new(),
             struct_mapping_hints: std::collections::HashMap::new(),
             string_capacity_hints: std::collections::HashMap::new(),
             assignment_optimizations: std::collections::HashMap::new(),
@@ -797,6 +796,7 @@ impl<'ast> CodeGenerator<'ast> {
             ir_cutover: IrCutoverConfig::production(),
             config: crate::compiler_config::CompilerConfig::default(),
             current_ir_function: None,
+            last_use_keys: std::collections::BTreeSet::new(),
             ir_module_functions: Vec::new(),
             ir_module: None,
             boundary_signature_errors: std::cell::RefCell::new(Vec::new()),
