@@ -111,6 +111,9 @@ impl Interpreter {
     }
 
     pub(crate) fn eval_raw(&mut self, e: &'static Expression<'static>) -> R {
+        if self.durable_enabled() && self.is_durable_step(e) {
+            return self.durable_step(e);
+        }
         match e {
             Expression::Literal { value, .. } => Ok(self.literal(value)),
 

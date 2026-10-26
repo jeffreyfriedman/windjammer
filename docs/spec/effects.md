@@ -513,11 +513,10 @@ checked
 
 ## Durable functions
 
-**SPEC-EFF-021** [PLANNED ADR-0021] `durable fn` declares a function whose progress survives crashes. When nothing fails it behaves exactly like the same function without `durable`.
+**SPEC-EFF-021** `durable fn` declares a function whose progress survives crashes. When nothing fails it behaves exactly like the same function without `durable`.
 
 <!-- example: tests/spec/effects/SPEC-EFF-021.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 durable fn total(xs: Vec<int>) -> int {
     let mut s = 0
     for x in xs {
@@ -533,13 +532,11 @@ Output:
 ```text
 6
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-022** [PLANNED ADR-0021] Every call from a durable body to a function with effects (or an effect-open call) is a step: its result is journaled, and on re-execution after a crash a completed step returns its journaled result without running. `step { }` groups several calls into one step. Ordinary code with clock, random and file reads is therefore accepted.
+**SPEC-EFF-022** Every call from a durable body to a function with effects (or an effect-open call) is a step: its result is journaled, and on re-execution after a crash a completed step returns its journaled result without running. A call that performs no effect is not a step; an explicit `step { }` block that groups several calls is planned. Ordinary code with clock, random and file reads is therefore accepted.
 
 <!-- example: tests/spec/effects/SPEC-EFF-022.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::time
 use std::random
 use std::fs
@@ -555,13 +552,11 @@ fn main() {
 }
 ```
 `wj check` reports no error.
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-023** [PLANNED ADR-0021] A step's result, the durable function's arguments and its result must be journalable (primitives, strings, collections, and structs/enums of journalable types); otherwise `WJ0045`.
+**SPEC-EFF-023** A step's result, the durable function's arguments and its result must be journalable (primitives, strings, collections, and structs/enums of journalable types); otherwise `WJ0045`.
 
 <!-- example: tests/spec/effects/SPEC-EFF-023.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 fn make_counter() -> fn() -> int {
     let n = random::range(0, 9)
@@ -576,13 +571,11 @@ fn main() {
 }
 ```
 `wj check` reports an error containing: `WJ0045: step result of type `fn() -> int` cannot be journaled`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-024** [PLANNED ADR-0021] A step may not mutate a binding of the durable body (a `&mut` argument, as inferred by ownership inference), because replay would skip the mutation (`WJ0046`).
+**SPEC-EFF-024** A step may not mutate a binding of the durable body (a `&mut` argument, as inferred by ownership inference), because replay would skip the mutation (`WJ0046`).
 
 <!-- example: tests/spec/effects/SPEC-EFF-024.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 fn add_noise(acc: Vec<int>) { acc.push(random::range(0, 9)) }
 durable fn sample() -> int {
@@ -595,13 +588,11 @@ fn main() {
 }
 ```
 `wj check` reports an error containing: `WJ0046: step `add_noise` mutates `acc``
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-025** [PLANNED ADR-0021] A durable body may not read state it does not own: channel receives, `select`, shared cells, locks, atomics and mutable globals (`WJ0047`).
+**SPEC-EFF-025** A durable body may not read state it does not own: channel receives, `select`, shared cells, locks, atomics and mutable globals (`WJ0047`).
 
 <!-- example: tests/spec/effects/SPEC-EFF-025.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::sync
 durable fn consume(rx: sync::Receiver<int>) -> int {
     rx.recv()
@@ -613,13 +604,11 @@ fn main() {
 }
 ```
 `wj check` reports an error containing: `WJ0047: durable fn `consume` receives from a channel`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-026** [PLANNED ADR-0021] A durable body may not iterate a `HashMap` or `HashSet` outside a step, because the order is not stable across backends and runs (`WJ0048`). [ADR-0021 D6 decided: `HashMap` keeps Rust's unspecified order; use `OrderedMap`/`OrderedSet` or `BTreeMap` in durable code.]
+**SPEC-EFF-026** A durable body may not iterate a `HashMap` or `HashSet` outside a step, because the order is not stable across backends and runs (`WJ0048`). [ADR-0021 D6 decided: `HashMap` keeps Rust's unspecified order; use `OrderedMap`/`OrderedSet` or `BTreeMap` in durable code.]
 
 <!-- example: tests/spec/effects/SPEC-EFF-026.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::collections::HashMap
 durable fn first_key(m: HashMap<string, int>) -> string {
     let mut out = ""
@@ -635,7 +624,6 @@ fn main() {
 }
 ```
 `wj check` reports an error containing: `WJ0048: iteration over `HashMap` has no stable order`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Simulation and replay
 

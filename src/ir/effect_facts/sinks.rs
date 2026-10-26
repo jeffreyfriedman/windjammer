@@ -149,6 +149,11 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("log::warn_with", &[u(Console, Res::None)]),
 ];
 
+/// Sinks that hand back a live handle (a child process, a listener, a database connection). Their later use is
+/// not an event the port can see, so a run that makes one cannot be recorded, replayed or simulated: it stops here,
+/// naming the call, instead of replaying something that did not happen.
+pub static HANDLE_SINKS: &[&str] = &["subprocess::spawn", "http::serve", "http::serve_fn", "http::server_serve", "db::connect"];
+
 /// Library functions in effect-relevant modules that are deliberately NOT sinks (pure string/value
 /// work, handle operations on an already-authorized handle, deterministic generators).
 /// `interpreter_sinks_are_classified` (tests) requires every interpreter builtin of an authority module

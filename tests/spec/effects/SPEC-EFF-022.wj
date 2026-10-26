@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-022
 // mode: check-ok
-// xfail: Q-032
 use std::time
 use std::random
 use std::fs
