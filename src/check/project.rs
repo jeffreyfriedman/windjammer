@@ -22,6 +22,23 @@ fn is_shader(p: &Parsed) -> bool {
     })
 }
 
+/// Heads of qualified paths that name standard-library modules the compiler resolves without a declaration here.
+const STD_LIKE_HEADS: &[&str] = &["io", "thread", "mem", "cmp", "fmt", "iter", "ops", "str", "char", "slice", "ptr", "sync", "hash", "convert", "num", "ffi", "os", "mpsc", "atomic", "rc", "cell", "boxed", "vec", "string", "option", "result", "default", "marker", "any", "borrow", "error", "future", "pin", "task", "alloc", "array", "ascii", "panic", "primitive", "prelude", "usize", "isize", "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "f32", "f64", "bool", "wj", "windjammer"];
+
+/// Names of the dependencies in the nearest `wj.toml` (`-` written as `_`, as a path names them).
+fn manifest_deps(root: &Path) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let Some(m) = super::effects::manifest_path(root) else { return out };
+    let Ok(text) = std::fs::read_to_string(m) else { return out };
+    let Ok(doc) = text.parse::<toml::Value>() else { return out };
+    for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(t) = doc.get(table).and_then(|t| t.as_table()) {
+            out.extend(t.keys().map(|k| k.replace('-', "_")));
+        }
+    }
+    out
+}
+
 /// `memo`: per-file reuse of the analysis phase (`file_cache.rs`); `None` computes everything.
 pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Option<&mut FileMemo>) {
     let parsed: Vec<&Parsed> = all.iter().filter(|p| !is_shader(p)).collect();
@@ -76,8 +93,26 @@ fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Par
         let sl = Some(l.clone());
         Locator::new(&ix).word(&sl, word)
     };
+    let deps = manifest_deps(root);
     for c in &r.calls {
         match &c.res {
+            // `github::list_issues()` where nothing named `github` is declared, imported, a dependency or part of std
+            Res::Unresolved(Reason::External(_)) if c.kind == resolve::CallKind::Path => {
+                let head = c.callee.split("::").next().unwrap_or("");
+                let lowercase = head.chars().next().is_some_and(|ch| ch.is_lowercase());
+                let known = super::semantic::is_std_name(head)
+                    || STD_LIKE_HEADS.contains(&head)
+                    || matches!(head, "self" | "super" | "crate")
+                    || deps.contains(head)
+                    || !r.collected.lookup(c.module, head, resolve::Ns::Type).is_empty();
+                if lowercase && !known {
+                    let mut d = Diagnostic::error("WJ0002", format!("cannot find module `{head}` in this scope (in `{}`)", c.callee));
+                    if let Some(sp) = span_for(&c.location, head) {
+                        d = d.at(sp.with_label("no module with this name"));
+                    }
+                    out.push(d.with_help(format!("declare `mod {head}`, import it with `use`, or add `{head}` to [dependencies] in wj.toml")));
+                }
+            }
             // Language intrinsics (`debug`, `todo`, ...) are provided by the compiler, not the program.
             Res::Unresolved(Reason::NotFound(_))
                 if c.kind == resolve::CallKind::Free

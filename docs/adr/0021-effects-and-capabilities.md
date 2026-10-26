@@ -562,6 +562,24 @@ Differences from the design note above, and why:
 
 Kill criteria: none triggered. Replay stayed at 100% after routing the sources the audit found; the study found far more than half.
 
+### E4b design (2026-10-27): `durable fn` in the compiled Rust backend
+
+**One journal, two implementations of everything around it.** The journal itself (file layout, run identity, step numbering, replay, the `done` record, the divergence message) is one piece of code, `crates/windjammer-runtime/src/durable_core/`, compiled into both the interpreter (through `#[path]`, like `caps_core`) and `windjammer-runtime`. It deals only in `serde_json::Value`, so it cannot disagree with itself. What differs is the adapter: the interpreter turns its `Value`s into JSON with `effect_port::codec`; compiled code turns Rust values into JSON with a trait, `windjammer_runtime::durable::Journalable`, implemented for `()`, `bool`, all integer and float types, `char`, `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, tuples and maps of journalable types. Both encode an integer as `{"i": type, "v": "n"}` and decode any integer tag into any integer type that holds the value, so a journal written by one implementation is read by the other.
+
+**Lowering.** The facts are the ones the interpreter uses (`durable::analyze`: the step positions and the four checks). A lowering pass between the analyzer and the code generator rewrites each durable function: its body becomes the closure given to `windjammer_runtime::durable::run("qualified::name", [argument JSON], || body)`, and every call at a step position becomes `windjammer_runtime::durable::step("callee", || call)`. The pass works on the AST so the Rust generator, ownership inference and the portable backends see ordinary code (a call of two runtime functions and two closures). `return` inside the body returns from the closure, which is the right scope.
+
+**Run time.** `run` opens a run exactly as the interpreter does; `step` replays a journaled result or runs the closure, journals the result and honours the crash knob. The location of the journal is `WJ_JOURNAL_DIR` (the compiled program has no command line of its own for it), the crash knob `WJ_CRASH_AFTER=N[:mid]` (exit status 137), both documented next to `wj run --journal`. With neither, the journal is in memory, as in the interpreter.
+
+**What compiled runs do not do.** The interpreter re-derives the random stream per step and restores the virtual clock so that a resumed run in a deterministic world equals an uninterrupted one. Compiled programs use the operating system's generators and clocks; their journaled values are stable across a resume, nothing more is promised. Step results of user-defined struct and enum types are not journalable in this slice: the build stops with an error naming the step and the type (a derive for user types is the next step).
+
+**Gates.**
+1. One journal: a journal written by the interpreter's run that crashed at step k is resumed by the compiled program (and the other way round) and the combined output equals an uninterrupted run, for every k, on at least five sample workflows. This is the cross-implementation test.
+2. Vectors: a table of journal scenarios (`tests/effects/durable_vectors.json`: header, steps, done, divergence, truncated and corrupted lines) run against the core as compiled into the interpreter and into the runtime with identical results, like `tests/effects/vectors.json` for capabilities.
+3. Emitted code: a program with a `durable fn` builds with `wj build` and the generated Rust contains exactly one `durable::run` per durable function and one `durable::step` per step position; a program without durable functions compiles to byte-identical Rust.
+4. Cost: the compiled file-backed journal costs at most 2x per step over the compiled in-memory one.
+
+**Kill / rethink.** If the lowered closures change the meaning of ordinary code (ownership inference moving a value into the closure, a `break` or `?` crossing the closure boundary) in more than 10% of the sample workflows, lower later, in the code generator, where the control flow is known. If a journal written by one implementation cannot be read by the other in a single case, the shared core is wrong: fix the core, never add a compatibility shim. If the cost exceeds 2x, batch writes.
+
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 
 Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
