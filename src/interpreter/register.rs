@@ -90,6 +90,7 @@ impl Interpreter {
     ) -> Result<(), RuntimeError> {
         // `std::arena` (ADR-0025): the compiler's feature gate and escape check apply here too.
         crate::analyzer::arena_escape::gate(program).map_err(|e| RuntimeError::new(super::error::ErrorKind::Semantic, e))?;
+        self.note_duplicate_types(&[(self.module_path_string(module), &program.items)]);
         self.register_items(module, &program.items)?;
         self.finish_registration()?;
         Ok(())
@@ -120,9 +121,10 @@ impl Interpreter {
                         decl.fields.iter().map(|f| (f.name.as_str(), f.field_type.clone())).collect()
                     };
                     let rc_fields = fields.iter().map(|(n, _)| Rc::from(*n)).collect();
+                    let key = self.declared_type_key(module, &decl.name);
                     self.structs.insert(
-                        decl.name.clone(),
-                        StructDef { fields: fields.into(), rc_name: Rc::from(decl.name.as_str()), rc_fields, tuple, copy: has_copy_derive(decl) },
+                        key.clone(),
+                        StructDef { fields: fields.into(), rc_name: Rc::from(key.as_str()), rc_fields, tuple, copy: has_copy_derive(decl) },
                     );
                 }
                 Item::Enum { decl, .. } => {
@@ -140,7 +142,8 @@ impl Interpreter {
                             },
                         })
                         .collect();
-                    self.enums.insert(decl.name.clone(), EnumDef { variants });
+                    let key = self.declared_type_key(module, &decl.name);
+                    self.enums.insert(key, EnumDef { variants });
                 }
                 Item::Trait { decl, .. } => {
                     self.traits.insert(
@@ -151,12 +154,17 @@ impl Interpreter {
                         .insert(decl.name.clone(), decl.methods.iter().collect());
                 }
                 Item::Impl { block, .. } => {
+                    let ty = self.type_key(module, &base_type_name(&block.type_name));
                     if block.trait_name.as_deref() == Some("Drop") {
-                        self.drop_types.insert(base_type_name(&block.type_name));
+                        self.drop_types.insert(ty.clone());
                     }
-                    let ty = base_type_name(&block.type_name);
                     for func in &block.functions {
                         let f = self.func_from_decl(func, module, Some(&ty), &block.type_params);
+                        if let (Some("From"), Some([src]), "from") =
+                            (block.trait_name.as_deref(), block.trait_type_args.as_deref(), func.name.as_str())
+                        {
+                            self.from_impls.entry(ty.clone()).or_default().push((src.clone(), f.clone()));
+                        }
                         if let Some(tr) = &block.trait_name {
                             // trait-qualified key disambiguates e.g. Display::fmt vs Debug::fmt
                             self.methods.insert((ty.clone(), format!("{}::{}", base_type_name(tr), func.name)), f.clone());

@@ -106,8 +106,11 @@ fn parse_target(it: &mut Interpreter, text: &str) -> Value {
     if let Some(ty) = int_ty {
         let parsed = if t.starts_with('+') { t[1..].parse::<i128>() } else { t.parse::<i128>() };
         return match parsed {
-            Ok(n) if ty.fits(n) && !(t.starts_with('-') && !ty.signed()) => Value::ok(Value::Int(n, ty)),
-            Ok(_) => Value::err(Value::str("number too large or too small to fit in target type")),
+            // rustc's `ParseIntError` kinds: a `-` on an unsigned type is an invalid digit; otherwise the sign of the overflow
+            Ok(_) if t.starts_with('-') && !ty.signed() => Value::err(Value::str("invalid digit found in string")),
+            Ok(n) if ty.fits(n) => Value::ok(Value::Int(n, ty)),
+            Ok(n) if n < 0 => Value::err(Value::str("number too small to fit in target type")),
+            Ok(_) => Value::err(Value::str("number too large to fit in target type")),
             Err(e) => Value::err(Value::str(e.to_string())),
         };
     }

@@ -93,8 +93,8 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 - Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.
 - Open: `env::args().skip(1).collect()` into `Vec<string>` fails in rustc (iterates `&String`).
 
-**Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
-engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
+**Known gaps.** Two *traits* with the same name in different modules are still keyed by name (the preflight sends such programs to
+the compiled path); structs and enums with a shared name are keyed by module path. `crate::` inside a dependency resolves against the program
 root. Compiled runs of a file in `src/bin/` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0024) is a
 preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
 kept; other edits print a restart notice (use `--watch` for those).
@@ -177,8 +177,8 @@ re-derives the two facts it needs, locally and testably:
 `called Option::unwrap() on a None value`, `attempt to add with overflow`) and the Windjammer call stack. The parser records a node's
 location after consuming it, so the reported line can be the line after the failing expression.
 
-**Unsupported means an error, never a guess.** Registered unsupported features (generated from the registry) produce
-`unsupported in the interpreter: ...` and exit 2:
+**Unsupported means an error, never a guess.** A feature the registry lists as unsupported (generated below; none today)
+produces `unsupported in the interpreter: ...` and exit 2, and `wj run` falls back to the compiled path:
 
 <!-- wj:gen name=interpreter_unsupported -->
 - **Modules**: two types with the same name in different modules (the interpreter keys types by name)
@@ -284,8 +284,9 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
 
 ## Remaining gaps
 
-- Not interpreted: extern/FFI; UI/game engine APIs; Postgres (`db::connect("postgres://..")`); `thread {}`/`async {}`
-  statement blocks (deprecated by ADR-0004); `Rc` cycles are leaked but their destructors are not distinguished from
+- Not interpreted: `extern fn` symbols that neither the project's Rust (host bridge) nor the C library provides with a
+  scalar signature (they do not link when compiled either); UI/game engine APIs; Postgres (`db::connect("postgres://..")`);
+  `Rc` cycles are leaked but their destructors are not distinguished from
   reachable values in drop order.
 - Moves: a moved variable stays readable (a valid program never reads it; where Windjammer would auto-clone it, the
   interpreter shares the object instead of copying it, so that clone's destructor does not run). Returning a parameter

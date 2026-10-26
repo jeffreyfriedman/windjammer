@@ -116,8 +116,8 @@ pub const FEATURES: &[Feature] = &[
        "fn main() {\n    assert(1 + 1 == 2)\n    assert_eq(2, 2)\n    println(\"ok\")\n}\n", "ok"),
     ok("modules.use_forms", "Modules", "multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603)",
        "mod geo {\n    pub mod metric {\n        pub fn abs(v: int) -> int { if v < 0 { -v } else { v } }\n    }\n    pub use self::metric::abs\n    pub fn twice(v: int) -> int { super::util::double(v) }\n}\nmod util {\n    pub fn double(v: int) -> int { v * 2 }\n    pub fn triple(v: int) -> int { v * 3 }\n}\nuse geo::abs\nuse util::{double, triple}\nuse crate::geo::metric as m\nfn main() {\n    println(\"${abs(-4)} ${double(2)} ${triple(2)} ${m::abs(-1)} ${geo::twice(5)}\")\n}\n", "4 4 6 1 10"),
-    no("modules.same_name_types", "Modules", "two types with the same name in different modules (the interpreter keys types by name)",
-       "mod a {\n    pub struct P { pub x: int }\n}\nmod b {\n    pub struct P { pub y: int }\n}\nfn main() {\n    let p = a::P { x: 1 }\n    println(\"${p.x}\")\n}\n", "defined in two modules"),
+    ok("modules.same_name_types", "Modules", "two structs or enums with the same name in different modules (each is keyed by its module path; `use`, `as` and qualified paths pick one)",
+       "mod a {\n    pub struct P { pub x: int }\n    impl P {\n        pub fn show(self) -> int { self.x }\n    }\n}\nmod b {\n    pub struct P { pub y: int }\n    impl P {\n        pub fn show(self) -> int { self.y * 10 }\n    }\n}\nuse a::P as AP\nfn main() {\n    let p = a::P { x: 1 }\n    let q = b::P { y: 2 }\n    let r = AP { x: 3 }\n    println(\"${p.show()} ${q.show()} ${r.show()} ${q:?}\")\n}\n", "1 20 3 P { y: 2 }"),
     ok("concurrency.threads", "Concurrency", "`thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings)",
        "use std::thread\nuse std::thread::JoinHandle\nfn main() {\n    let mut hs: Vec<JoinHandle<int>> = Vec::new()\n    for i in 0..3 {\n        hs.push(thread::spawn(move || { return i * 10 }))\n    }\n    let mut t = 0\n    for h in hs { t += h.join().unwrap_or(0) }\n    println(\"${t}\")\n}\n", "30"),
     ok("concurrency.channels", "Concurrency", "`mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone",
@@ -146,10 +146,10 @@ pub const FEATURES: &[Feature] = &[
        "fn main() {\n    let m = u128::MAX\n    println(\"${m} ${m / 3}\")\n}\n", "340282366920938463463374607431768211455 113427455640312821154458202477256070485"),
     ok("collections.ordered", "Collections", "`OrderedMap`/`OrderedSet`: insertion order, `remove` keeps the order of the rest; `HashMap`/`HashSet` order is unspecified (`--hash-seed N` permutes it)",
        "fn main() {\n    let mut m: OrderedMap<string, int> = OrderedMap::new()\n    m.insert(\"b\", 2)\n    m.insert(\"a\", 1)\n    m.insert(\"c\", 3)\n    m.remove(\"a\")\n    for k in m.keys() { println(k) }\n}\n", "b\nc"),
-    no("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)",
-       "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\n", "thread {}"),
-    no("ffi.extern_fn", "FFI", "calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0023)",
-       "extern fn c_abs(x: int) -> int\nfn main() {\n    println(\"${c_abs(-1)}\")\n}\n", "`extern fn c_abs`"),
+    ok("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` statements: the body runs as a `move` task started like `thread::spawn(move || { ... })`; nothing joins it",
+       "use std::sync::mpsc\nfn main() {\n    let (tx, rx) = mpsc::channel()\n    thread {\n        tx.send(42)\n    }\n    println(\"${rx.recv().unwrap_or(0)}\")\n}\n", "42"),
+    ok("ffi.extern_fn", "FFI", "`extern fn`: host-bridge functions (a cached bridge library links the project's Rust, ADR-0023) and scalar C-library symbols (`abs`, `sqrt`, ...) called through the dynamic loader, as the compiled path links them; a symbol neither provides is refused before `main` (it would not link when compiled either)",
+       "extern fn abs(x: i32) -> i32\nextern fn sqrt(x: f64) -> f64\nfn main() {\n    println(\"${abs(-7)} ${sqrt(9.0)}\")\n}\n", "7 3"),
 ];
 
 pub fn supported() -> impl Iterator<Item = &'static Feature> {

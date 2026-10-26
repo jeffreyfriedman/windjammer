@@ -121,7 +121,7 @@ impl Interpreter {
                 };
                 let v = deref_value(v)?;
                 let body = self.render_with_spec(&v, &spec)?;
-                out.push_str(&pad(&body, &spec, is_numeric(&v)));
+                out.push_str(&if spec.ty == "?" { body } else { pad_to(&body, &spec, is_numeric(&v)) });
             } else if c == '}' {
                 if chars.get(i + 1) == Some(&'}') {
                     i += 2;
@@ -152,16 +152,11 @@ impl Interpreter {
                 };
                 Ok(sign(s, v, spec))
             }
+            // Debug hands the whole spec to the elements (see `debug_fmt_leaf`); the result is already padded
             "?" => {
-                let s = match (v, spec.precision) {
-                    (Value::Float(f, _), Some(p)) => format!("{:.*?}", p, f),
-                    _ => {
-                        let mut out = String::new();
-                        self.debug_fmt(v, spec.alt, 0, &mut out)?;
-                        out
-                    }
-                };
-                Ok(sign(s, v, spec))
+                let mut out = String::new();
+                self.debug_fmt_leaf(v, spec.alt, 0, &mut out, Some(spec))?;
+                Ok(out)
             }
             "x" | "X" | "b" | "o" => {
                 let Value::Int(n, t) = v else {
@@ -175,11 +170,11 @@ impl Interpreter {
                     "b" => (format!("{:b}", u), "0b"),
                     _ => (format!("{:o}", u), "0o"),
                 };
-                Ok(if spec.alt { format!("{}{}", prefix, digits) } else { digits })
+                Ok(sign(if spec.alt { format!("{}{}", prefix, digits) } else { digits }, v, spec))
             }
             "e" | "E" => match v {
-                Value::Float(f, _) => Ok(if spec.ty == "e" { format!("{:e}", f) } else { format!("{:E}", f) }),
-                Value::Int(n, _) => Ok(if spec.ty == "e" { format!("{:e}", n) } else { format!("{:E}", n) }),
+                Value::Float(f, _) => Ok(sign(if spec.ty == "e" { format!("{:e}", f) } else { format!("{:E}", f) }, v, spec)),
+                Value::Int(n, _) => Ok(sign(if spec.ty == "e" { format!("{:e}", n) } else { format!("{:E}", n) }, v, spec)),
                 _ => Err(semantic("`{:e}` needs a number")),
             },
             other => Err(semantic(format!("unknown format trait `{}`", other))),
@@ -262,7 +257,27 @@ impl Interpreter {
     }
 
     pub(crate) fn debug_fmt(&mut self, v: &Value, pretty: bool, ind: usize, out: &mut String) -> R<()> {
+        self.debug_fmt_leaf(v, pretty, ind, out, None)
+    }
+
+    /// Debug rendering where `leaf` (when given) is the caller's format spec: like rustc's derived/std
+    /// `Debug`, it reaches every number/bool/unit element (`{:5?}` pads each element, `{:+?}` signs them),
+    /// while strings and chars ignore width, and aggregates are never padded as a whole.
+    fn debug_fmt_leaf(&mut self, v: &Value, pretty: bool, ind: usize, out: &mut String, leaf: Option<&Spec>) -> R<()> {
         let pad = |n: usize| "    ".repeat(n);
+        if let (Some(spec), Value::Int(..) | Value::Float(..) | Value::Bool(_) | Value::Unit) = (leaf, v) {
+            let body = match (v, spec.precision) {
+                (Value::Float(f, FloatTy::F32), Some(p)) => format!("{:.*?}", p, *f as f32),
+                (Value::Float(f, _), Some(p)) => format!("{:.*?}", p, f),
+                _ => {
+                    let mut s = String::new();
+                    self.debug_fmt_leaf(v, pretty, ind, &mut s, None)?;
+                    s
+                }
+            };
+            out.push_str(&pad_to(&sign(body, v, spec), spec, is_numeric(v)));
+            return Ok(());
+        }
         match v {
             Value::Unit => out.push_str("()"),
             Value::Bool(b) => out.push_str(&b.to_string()),
@@ -274,21 +289,21 @@ impl Interpreter {
             Value::Str(s) => out.push_str(&format!("{:?}", s.as_str())),
             Value::Ref(p) => {
                 let inner = p.read()?;
-                self.debug_fmt(&inner, pretty, ind, out)?;
+                self.debug_fmt_leaf(&inner, pretty, ind, out, leaf)?;
             }
-            Value::Vec(items) => self.debug_seq("[", "]", items.iter(), pretty, ind, out)?,
+            Value::Vec(items) => self.debug_seq(leaf, "[", "]", items.iter(), pretty, ind, out)?,
             Value::Tuple(items) => {
                 if items.len() == 1 && !pretty {
                     out.push('(');
-                    self.debug_fmt(&items[0], pretty, ind, out)?;
+                    self.debug_fmt_leaf(&items[0], pretty, ind, out, leaf)?;
                     out.push_str(",)");
                 } else {
-                    self.debug_seq("(", ")", items.iter(), pretty, ind, out)?;
+                    self.debug_seq(leaf, "(", ")", items.iter(), pretty, ind, out)?;
                 }
             }
             Value::Set(m) => {
                 let items: Vec<Value> = m.ordered_keys(self.hash_seed);
-                self.debug_seq("{", "}", items.iter(), pretty, ind, out)?
+                self.debug_seq(leaf, "{", "}", items.iter(), pretty, ind, out)?
             }
             Value::Map(m) => {
                 if m.is_empty() {
@@ -297,9 +312,9 @@ impl Interpreter {
                     out.push_str("{\n");
                     for (k, val) in m.ordered(self.hash_seed) {
                         out.push_str(&pad(ind + 1));
-                        self.debug_fmt(&k.0, true, ind + 1, out)?;
+                        self.debug_fmt_leaf(&k.0, true, ind + 1, out, leaf)?;
                         out.push_str(": ");
-                        self.debug_fmt(val, true, ind + 1, out)?;
+                        self.debug_fmt_leaf(val, true, ind + 1, out, leaf)?;
                         out.push_str(",\n");
                     }
                     out.push_str(&pad(ind));
@@ -310,9 +325,9 @@ impl Interpreter {
                         if n > 0 {
                             out.push_str(", ");
                         }
-                        self.debug_fmt(&k.0, false, ind, out)?;
+                        self.debug_fmt_leaf(&k.0, false, ind, out, leaf)?;
                         out.push_str(": ");
-                        self.debug_fmt(val, false, ind, out)?;
+                        self.debug_fmt_leaf(val, false, ind, out, leaf)?;
                     }
                     out.push('}');
                 }
@@ -323,15 +338,16 @@ impl Interpreter {
                     out.push_str(&u);
                     return Ok(());
                 }
+                let shown = super::type_keys::display_type_name(&s.name);
                 if s.fields.is_empty() {
-                    out.push_str(&s.name);
+                    out.push_str(shown);
                 } else if s.fields.iter().enumerate().all(|(i, (n, _))| **n == i.to_string()) {
-                    out.push_str(&s.name);
+                    out.push_str(shown);
                     let items: Vec<Value> = s.fields.iter().map(|(_, v)| v.clone()).collect();
-                    self.debug_seq("(", ")", items.iter(), pretty, ind, out)?;
+                    self.debug_seq(leaf, "(", ")", items.iter(), pretty, ind, out)?;
                 } else {
-                    out.push_str(&s.name);
-                    self.debug_fields(s.fields.iter().map(|(n, v)| (n.to_string(), v.clone())).collect(), pretty, ind, out)?;
+                    out.push_str(shown);
+                    self.debug_fields(leaf, s.fields.iter().map(|(n, v)| (n.to_string(), v.clone())).collect(), pretty, ind, out)?;
                 }
             }
             Value::Enum(e) => {
@@ -342,15 +358,15 @@ impl Interpreter {
                 out.push_str(&e.variant);
                 match &e.payload {
                     Payload::Unit => {}
-                    Payload::Tuple(items) => self.debug_seq("(", ")", items.iter(), pretty, ind, out)?,
+                    Payload::Tuple(items) => self.debug_seq(leaf, "(", ")", items.iter(), pretty, ind, out)?,
                     Payload::Struct(fs) => {
-                        self.debug_fields(fs.iter().map(|(n, v)| (n.to_string(), v.clone())).collect(), pretty, ind, out)?
+                        self.debug_fields(leaf, fs.iter().map(|(n, v)| (n.to_string(), v.clone())).collect(), pretty, ind, out)?
                     }
                 }
             }
             Value::Rc(slot) => {
                 let inner = slot.borrow().clone();
-                self.debug_fmt(&inner, pretty, ind, out)?;
+                self.debug_fmt_leaf(&inner, pretty, ind, out, leaf)?;
             }
             Value::Weak(_) => out.push_str("(Weak)"),
             Value::Native(n) if n.debug_entries().is_some() => {
@@ -364,22 +380,22 @@ impl Interpreter {
                                 out.push_str(", ");
                             }
                             if let Value::Tuple(t) = p {
-                                self.debug_fmt(&t[0], false, ind, out)?;
+                                self.debug_fmt_leaf(&t[0], false, ind, out, leaf)?;
                                 out.push_str(": ");
-                                self.debug_fmt(&t[1], false, ind, out)?;
+                                self.debug_fmt_leaf(&t[1], false, ind, out, leaf)?;
                             }
                         }
                     }
                     out.push('}');
                 } else {
                     let items: Vec<Value> = entries.into_iter().map(|(k, _)| k).collect();
-                    self.debug_seq("{", "}", items.iter(), pretty, ind, out)?
+                    self.debug_seq(leaf, "{", "}", items.iter(), pretty, ind, out)?
                 }
             }
             Value::Native(n) => out.push_str(&n.debug()),
             Value::Cell(CellKind::Atomic, slot, _) => {
                 let inner = slot.borrow().clone();
-                self.debug_fmt(&inner, pretty, ind, out)?;
+                self.debug_fmt_leaf(&inner, pretty, ind, out, leaf)?;
             }
             Value::Cell(kind, slot, _) => {
                 let inner = slot.borrow().clone();
@@ -395,7 +411,7 @@ impl Interpreter {
                 if matches!(kind, CellKind::Mutex | CellKind::RwLock) {
                     fields.push(("poisoned".to_string(), Value::Bool(false)));
                 }
-                self.debug_fields(fields, pretty, ind, out)?;
+                self.debug_fields(leaf, fields, pretty, ind, out)?;
                 if matches!(kind, CellKind::Mutex | CellKind::RwLock) {
                     // rustc prints `, .. }` after the poison flag
                     if pretty {
@@ -420,6 +436,7 @@ impl Interpreter {
 
     fn debug_seq<'a>(
         &mut self,
+        leaf: Option<&Spec>,
         open: &str,
         close: &str,
         items: impl Iterator<Item = &'a Value>,
@@ -437,7 +454,7 @@ impl Interpreter {
             out.push('\n');
             for x in items {
                 out.push_str(&"    ".repeat(ind + 1));
-                self.debug_fmt(x, true, ind + 1, out)?;
+                self.debug_fmt_leaf(x, true, ind + 1, out, leaf)?;
                 out.push_str(",\n");
             }
             out.push_str(&"    ".repeat(ind));
@@ -446,21 +463,21 @@ impl Interpreter {
                 if i > 0 {
                     out.push_str(", ");
                 }
-                self.debug_fmt(x, false, ind, out)?;
+                self.debug_fmt_leaf(x, false, ind, out, leaf)?;
             }
         }
         out.push_str(close);
         Ok(())
     }
 
-    fn debug_fields(&mut self, fields: Vec<(String, Value)>, pretty: bool, ind: usize, out: &mut String) -> R<()> {
+    fn debug_fields(&mut self, leaf: Option<&Spec>, fields: Vec<(String, Value)>, pretty: bool, ind: usize, out: &mut String) -> R<()> {
         if pretty {
             out.push_str(" {\n");
             for (n, v) in fields {
                 out.push_str(&"    ".repeat(ind + 1));
                 out.push_str(&n);
                 out.push_str(": ");
-                self.debug_fmt(&v, true, ind + 1, out)?;
+                self.debug_fmt_leaf(&v, true, ind + 1, out, leaf)?;
                 out.push_str(",\n");
             }
             out.push_str(&"    ".repeat(ind));
@@ -473,7 +490,7 @@ impl Interpreter {
                 }
                 out.push_str(n);
                 out.push_str(": ");
-                self.debug_fmt(v, false, ind, out)?;
+                self.debug_fmt_leaf(v, false, ind, out, leaf)?;
             }
             out.push_str(" }");
         }
@@ -486,21 +503,24 @@ fn is_numeric(v: &Value) -> bool {
 }
 
 fn sign(s: String, v: &Value, spec: &Spec) -> String {
-    if spec.plus && is_numeric(v) && !s.starts_with('-') {
+    // rustc never signs NaN
+    let nan = matches!(v, Value::Float(f, _) if f.is_nan());
+    if spec.plus && is_numeric(v) && !nan && !s.starts_with('-') {
         format!("+{}", s)
     } else {
         s
     }
 }
 
-fn pad(body: &str, spec: &Spec, numeric: bool) -> String {
+fn pad_to(body: &str, spec: &Spec, numeric: bool) -> String {
     let Some(w) = spec.width else { return body.to_string() };
     let len = body.chars().count();
     if len >= w {
         return body.to_string();
     }
     let fill_n = w - len;
-    if spec.zero && numeric && spec.align.is_none() {
+    // the `0` flag overrides fill and alignment for numbers
+    if spec.zero && numeric {
         let (sgn, rest) = match body.chars().next() {
             Some(c @ ('-' | '+')) => (c.to_string(), &body[1..]),
             _ => (String::new(), body),

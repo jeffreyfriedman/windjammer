@@ -250,6 +250,16 @@ impl Registry {
             }
         }
     }
+    /// Every method name the interpreter implements (builtin kinds and host-object methods), sorted and deduplicated.
+    /// The method-parity gate (`check::semantic::std_methods`) holds each one against the surface table.
+    #[cfg(test)]
+    pub fn method_names(&self) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = self.methods.keys().map(|(_, n)| *n).collect();
+        v.extend(self.natives.values().flat_map(|m| m.keys().copied()));
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
     /// Every registered function path, sorted (audits: `caps.rs` requires each authority-module builtin to be classified).
     #[cfg(test)]
     pub fn function_paths(&self) -> Vec<&'static str> {

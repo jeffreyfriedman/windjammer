@@ -100,10 +100,12 @@ impl Interpreter {
         let mut module = module;
         let mut first = first.to_string();
         let mut rest: Vec<&str> = rest.to_vec();
+        let mut is_key = false; // `Self` already names a type key
         match first.as_str() {
             "Self" => {
                 if let Some(t) = self.scope.self_ty.clone() {
                     first = t.to_string();
+                    is_key = true;
                 }
             }
             "crate" => {
@@ -141,6 +143,9 @@ impl Interpreter {
         }
         if let Some(Type::Custom(n)) = self.type_aliases.get(&first) {
             first = n.clone();
+        }
+        if !is_key && !self.dup_types.is_empty() {
+            first = self.type_key(module, &first);
         }
         if rest.is_empty() {
             if let Some(f) = self.modules[module].funcs.get(&first) {
@@ -679,7 +684,21 @@ impl Interpreter {
         targs: &[Type],
         expected: Option<Type>,
     ) -> R {
+        let picked;
+        let f = match (f.name == "from", args.first()) {
+            (true, Some(a)) => match self.pick_from(f, a) {
+                Some(p) => {
+                    picked = p;
+                    &picked
+                }
+                None => f,
+            },
+            _ => f,
+        };
         if f.is_extern {
+            if !self.has_host_fn(&f.name) {
+                return self.call_c_library(f, args);
+            }
             return self.call_host(&f.name, args); // ADR-0023 host bridge (unsupported when none is loaded)
         }
         if self.hot.is_some() {
@@ -869,6 +888,10 @@ impl Interpreter {
         let args = self.eval_args(arguments, user.as_ref(), true)?;
         self.mark(loc);
         self.type_hint = type_args.and_then(|t| t.first().cloned());
+        if method == "into" && self.type_hint.is_none() {
+            // `let e: AppErr = x.into()`: the declared type picks the `From` impl
+            self.type_hint = self.take_expected(whole);
+        }
         if let Some(f) = user {
             self.prepare_arg_moves(&f, arguments, 0);
             return self.call_user_method(&f, recv, place, args);

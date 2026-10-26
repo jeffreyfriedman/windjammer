@@ -303,6 +303,10 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Any, "clone", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Any, "to_owned", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Any, "into", |it, v, _| match it.type_hint.take() {
+        Some(crate::parser::Type::Custom(target)) if it.from_impl_for(&target, v).is_some_and(|f| v.type_name() != target && f.self_ty.is_some()) => {
+            let f = it.from_impl_for(&target, v).expect("checked");
+            it.call_func(&f, vec![v.clone()], None)
+        }
         Some(t) => it.coerce(v.clone(), &t),
         None => Ok(v.clone()),
     });
@@ -314,7 +318,7 @@ pub fn register(r: &mut Registry) {
         },
         _ => Ok(Value::ok(v.clone())),
     });
-    for name in ["borrow", "borrow_mut", "as_ref", "as_mut", "deref", "to_vec", "unwrap_ref", "iter_ref", "lock_unwrap"] {
+    for name in ["borrow", "borrow_mut", "as_ref", "as_mut", "deref", "to_vec"] {
         r.pure(Kind::Any, name, |_, v, _| Ok(v.clone()));
     }
     r.pure(Kind::Any, "to_string", |it, v, _| Ok(Value::str(it.display_string(v)?)));
