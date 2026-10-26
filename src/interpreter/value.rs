@@ -42,10 +42,53 @@ pub enum Payload {
 
 #[derive(Clone, Debug)]
 pub struct EnumVal {
-    pub ty: Rc<str>,
-    pub variant: Rc<str>,
+    pub ty: Name,
+    pub variant: Name,
     pub idx: u32,
     pub payload: Payload,
+}
+
+/// A type or variant name: the standard library's are static (building an `Option` allocates no
+/// name), a program's are interned in its definitions (`EnumDef`).
+#[derive(Clone, Debug)]
+pub enum Name {
+    Static(&'static str),
+    Shared(Rc<str>),
+}
+
+impl std::ops::Deref for Name {
+    type Target = str;
+    #[inline]
+    fn deref(&self) -> &str {
+        match self {
+            Name::Static(s) => s,
+            Name::Shared(s) => s,
+        }
+    }
+}
+
+impl PartialEq for Name {
+    fn eq(&self, o: &Name) -> bool {
+        **self == **o
+    }
+}
+
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self)
+    }
+}
+
+impl From<&str> for Name {
+    fn from(s: &str) -> Name {
+        Name::Shared(Rc::from(s))
+    }
+}
+
+impl From<Rc<str>> for Name {
+    fn from(s: Rc<str>) -> Name {
+        Name::Shared(s)
+    }
 }
 
 /// A map or set body. `hashed` marks `HashMap`/`HashSet`, whose iteration order is unspecified in Rust
@@ -115,7 +158,7 @@ pub struct Key(pub Value);
 
 impl PartialEq for Key {
     fn eq(&self, o: &Key) -> bool {
-        self.0.structural_cmp(&o.0) == Ordering::Equal
+        self.cmp(o) == Ordering::Equal
     }
 }
 impl Eq for Key {}
@@ -125,7 +168,14 @@ impl PartialOrd for Key {
     }
 }
 impl Ord for Key {
+    #[inline]
     fn cmp(&self, o: &Key) -> Ordering {
+        // integer keys (the common case) inline: `structural_cmp`'s order for them
+        if let (Value::Int(a, ta), Value::Int(b, tb)) = (&self.0, &o.0) {
+            if *ta != IntTy::U128 && *tb != IntTy::U128 {
+                return a.cmp(b);
+            }
+        }
         self.0.structural_cmp(&o.0)
     }
 }
@@ -285,17 +335,21 @@ impl Value {
             payload,
         }))
     }
+    /// A standard-library enum value (static names: no allocation for them).
+    pub fn std_enum(ty: &'static str, variant: &'static str, idx: u32, payload: Payload) -> Value {
+        Value::Enum(Rc::new(EnumVal { ty: Name::Static(ty), variant: Name::Static(variant), idx, payload }))
+    }
     pub fn some(v: Value) -> Value {
-        Value::enum_val("Option", "Some", 1, Payload::Tuple(vec![v]))
+        Value::std_enum("Option", "Some", 1, Payload::Tuple(vec![v]))
     }
     pub fn none() -> Value {
-        Value::enum_val("Option", "None", 0, Payload::Unit)
+        Value::std_enum("Option", "None", 0, Payload::Unit)
     }
     pub fn ok(v: Value) -> Value {
-        Value::enum_val("Result", "Ok", 0, Payload::Tuple(vec![v]))
+        Value::std_enum("Result", "Ok", 0, Payload::Tuple(vec![v]))
     }
     pub fn err(v: Value) -> Value {
-        Value::enum_val("Result", "Err", 1, Payload::Tuple(vec![v]))
+        Value::std_enum("Result", "Err", 1, Payload::Tuple(vec![v]))
     }
     pub fn option(v: Option<Value>) -> Value {
         match v {

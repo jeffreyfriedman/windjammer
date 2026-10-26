@@ -77,10 +77,18 @@ pub fn run(cli: Cli) -> Result<()> {
             engine,
             no_jit,
             jit,
+            jit_loop_hot,
+            jit_debug,
+            jit_mutant,
             no_lint,
             deterministic_time,
             allow_network,
             mock_http,
+            record,
+            replay,
+            simulate,
+            seed,
+            faults,
             sandbox,
             allow,
             caps,
@@ -94,21 +102,11 @@ pub fn run(cli: Cli) -> Result<()> {
                 let root = windjammer::cli::watch::watch_root(path.as_deref());
                 std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
             }
-            let mode = if compiled || release {
-                Mode::Compiled { release }
-            } else if interpret || hot {
-                Mode::Interpret
-            } else {
-                Mode::Auto
-            };
+            let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some());
             let lint = windjammer::cli_execution::report_build_lints;
-            let engine_resolved = match engine.as_str() {
-                "resolved" => true,
-                "walker" => false,
-                other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
-            };
+            let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, no_jit: !jit_on };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
                 std::process::exit(code);
@@ -135,6 +133,10 @@ pub fn run(cli: Cli) -> Result<()> {
             list,
             allow_empty,
             interpret,
+            simulate,
+            seed,
+            seeds,
+            faults,
             watch,
             doc,
             compiled,
@@ -151,7 +153,8 @@ pub fn run(cli: Cli) -> Result<()> {
             }
             let allow_empty = allow_empty || doc_count > 0;
             if interpret {
-                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json);
+                let sim = sim_run(simulate, seeds, seed, faults)?;
+                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json, sim);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -264,6 +267,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
+        Commands::Eject(a) => {
+            windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?
+        }
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;
         }
@@ -508,5 +514,55 @@ fn jit_setting(jit: &str, no_jit: bool) -> anyhow::Result<bool> {
         "on" | "1" | "true" => Ok(!no_jit),
         "off" | "0" | "false" => Ok(false),
         other => anyhow::bail!("unknown WJ_JIT / --jit value {other:?}: use on or off (or 1 / 0)"),
+    }
+}
+
+/// `--seeds 1..200` (or a single number): an inclusive range of simulation seeds.
+fn parse_seed_range(text: &str) -> anyhow::Result<std::ops::RangeInclusive<u64>> {
+    let bad = || anyhow::anyhow!("--seeds takes A..B (for example 1..200), found {text:?}");
+    let (a, b) = match text.split_once("..") {
+        Some((a, b)) => (a.trim().parse::<u64>().map_err(|_| bad())?, b.trim().trim_start_matches('=').parse::<u64>().map_err(|_| bad())?),
+        None => {
+            let n = text.trim().parse::<u64>().map_err(|_| bad())?;
+            (n, n)
+        }
+    };
+    if a > b {
+        return Err(bad());
+    }
+    Ok(a..=b)
+}
+
+/// `wj test --simulate` options: the seeds to try and the fault rate.
+fn sim_run(simulate: bool, seeds: Option<String>, seed: Option<u64>, faults: f64) -> anyhow::Result<Option<windjammer::interpreter::runner::SimRun>> {
+    if !simulate {
+        return Ok(None);
+    }
+    let seeds = match (seeds, seed) {
+        (Some(r), _) => parse_seed_range(&r)?,
+        (None, s) => {
+            let s = s.unwrap_or(1);
+            s..=s
+        }
+    };
+    Ok(Some(windjammer::interpreter::runner::SimRun { seeds, faults }))
+}
+
+fn run_mode(compiled: bool, release: bool, interpret: bool) -> windjammer::cli::run_dev::Mode {
+    use windjammer::cli::run_dev::Mode;
+    if compiled || release {
+        Mode::Compiled { release }
+    } else if interpret {
+        Mode::Interpret
+    } else {
+        Mode::Auto
+    }
+}
+
+fn engine_is_resolved(engine: &str) -> anyhow::Result<bool> {
+    match engine {
+        "resolved" => Ok(true),
+        "walker" => Ok(false),
+        other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
     }
 }

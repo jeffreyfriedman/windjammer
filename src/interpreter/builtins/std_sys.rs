@@ -57,6 +57,23 @@ macro_rules! native {
 native!(DirEntryObj, "DirEntry");
 native!(MetadataObj, "Metadata");
 
+/// `(len, is_file, is_dir, readonly)` of a `Metadata` value (the effect log stores it as these four fields).
+pub(crate) fn metadata_parts(v: &Value) -> Option<(u64, bool, bool, bool)> {
+    downcast::<MetadataObj>(v).map(|m| (m.len, m.file, m.dir, m.readonly))
+}
+
+pub(crate) fn dirent_path(v: &Value) -> Option<String> {
+    downcast::<DirEntryObj>(v).map(|e| e.path.clone())
+}
+
+pub(crate) fn dirent_value(path: String) -> Value {
+    Value::Native(Rc::new(DirEntryObj { path }))
+}
+
+pub(crate) fn metadata_from_parts(len: u64, file: bool, dir: bool, readonly: bool) -> Value {
+    Value::Native(Rc::new(MetadataObj { len, file, dir, readonly }))
+}
+
 fn entry(v: &Value) -> R<&DirEntryObj> {
     downcast::<DirEntryObj>(v).ok_or_else(|| semantic("expected a DirEntry"))
 }
@@ -191,9 +208,20 @@ fn register_fs(r: &mut Registry) {
             Ok(s(&Path::new(&entry(v)?.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()))
         });
     }
-    r.native("DirEntry", "is_file", |_, v, _| Ok(Value::Bool(Path::new(&entry(v)?.path).is_file())));
-    r.native("DirEntry", "is_dir", |_, v, _| Ok(Value::Bool(Path::new(&entry(v)?.path).is_dir())));
-    r.native("DirEntry", "metadata", |_, v, _| Ok(meta_value(&entry(v)?.path)));
+    // these look at the file system again, so they go through the same builtins as `fs::is_file` (the effect port sees them);
+    // the entry came from a granted `read_dir`, so the ambient gate is not asked a second time
+    r.native("DirEntry", "is_file", |it, v, _| {
+        let p = entry(v)?.path.clone();
+        it.cap_bypass(|it| it.call_builtin_fn("fs::is_file", vec![Value::str(p)]))
+    });
+    r.native("DirEntry", "is_dir", |it, v, _| {
+        let p = entry(v)?.path.clone();
+        it.cap_bypass(|it| it.call_builtin_fn("fs::is_dir", vec![Value::str(p)]))
+    });
+    r.native("DirEntry", "metadata", |it, v, _| {
+        let p = entry(v)?.path.clone();
+        it.cap_bypass(|it| it.call_builtin_fn("fs::metadata", vec![Value::str(p)]))
+    });
     fn meta(v: &Value) -> R<&MetadataObj> {
         downcast::<MetadataObj>(v).ok_or_else(|| semantic("expected Metadata"))
     }

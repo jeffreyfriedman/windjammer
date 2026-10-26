@@ -1,0 +1,16 @@
+// bug: the new version is written to a temporary file and renamed over the good copy even when the write failed
+// faults: 0.15
+use std::fs
+
+fn replace(path: string, text: string) {
+    let _ = fs::write("next.tmp", text)
+    let _ = fs::rename("next.tmp", path)
+}
+
+@test
+fn a_failed_update_keeps_the_old_contents_or_the_new_ones() {
+    fs::write("config.txt", "version=1").unwrap_or(())
+    replace("config.txt", "version=2")
+    let now = fs::read_to_string("config.txt") ?? ""
+    assert(now == "version=1" || now == "version=2")
+}

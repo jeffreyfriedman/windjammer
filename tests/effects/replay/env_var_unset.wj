@@ -1,0 +1,6 @@
+// allow: env.read=WJ_REPLAY_NEVER_SET
+use std::env
+fn main() {
+    println("${env::get("WJ_REPLAY_NEVER_SET").is_none()}")
+    println(env::get_or("WJ_REPLAY_NEVER_SET", "fallback"))
+}

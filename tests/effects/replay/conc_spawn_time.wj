@@ -1,0 +1,9 @@
+use std::time
+fn stamp() -> int { time::now_millis() }
+fn main() {
+    let t1 = spawn stamp()
+    let t2 = spawn stamp()
+    let a = t1.wait()
+    let b = t2.wait()
+    println("${a} ${b} ${b >= a}")
+}

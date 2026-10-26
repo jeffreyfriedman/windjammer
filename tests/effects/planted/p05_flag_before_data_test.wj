@@ -1,0 +1,29 @@
+// bug: the writer publishes the ready flag before the data, a reader in between sees ready with stale data
+use std::sync::{Arc, Mutex}
+use std::thread
+
+@test
+fn reader_sees_data_when_ready() {
+    let ready = Arc::new(Mutex::new(false))
+    let data = Arc::new(Mutex::new(0))
+    let seen = Arc::new(Mutex::new(-1))
+    let (r1, d1) = (ready.clone(), data.clone())
+    let (r2, d2, s2) = (ready.clone(), data.clone(), seen.clone())
+    let writer = thread::spawn(move || {
+        match r1.lock() { Ok(mut g) => { *g = true } Err(_) => {} }
+        match d1.lock() { Ok(mut g) => { *g = 99 } Err(_) => {} }
+        return 0
+    })
+    let reader = thread::spawn(move || {
+        let is_ready = match r2.lock() { Ok(g) => *g, Err(_) => false }
+        if is_ready {
+            let v = match d2.lock() { Ok(g) => *g, Err(_) => -2 }
+            match s2.lock() { Ok(mut g) => { *g = v } Err(_) => {} }
+        }
+        return 0
+    })
+    writer.join()
+    reader.join()
+    let v = match seen.lock() { Ok(g) => *g, Err(_) => -3 }
+    assert(v == -1 || v == 99)
+}

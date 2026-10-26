@@ -39,6 +39,7 @@ pub mod safety_type;
 pub mod shadow;
 pub mod signature_bridge;
 pub mod solver;
+pub mod stdlib_tables;
 pub mod taint;
 pub mod target_encodings;
 

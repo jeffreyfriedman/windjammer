@@ -44,6 +44,8 @@ pub struct CapGate {
     local_profile: bool,
     /// `wj test`: there are no `--allow` / `WJ_CAPS` knobs there, so messages offer only the `wj.toml` fix.
     for_tests: bool,
+    /// Private per-run scratch directory (tests and the REPL): granted for reading and writing, returned by `env::temp_dir()`.
+    scratch: Option<PathBuf>,
 }
 
 impl CapGate {
@@ -60,10 +62,21 @@ impl CapGate {
         self
     }
 
+    /// Give the run a private scratch directory: `<dir>/**` is granted for reading and writing even when the project
+    /// has a `[capabilities]` table, and `env::temp_dir()` returns it. Tests and the REPL use this instead of the
+    /// shared system temp directory.
+    pub fn with_scratch(mut self, dir: &Path) -> CapGate {
+        let pattern = format!("{}/**", dir.display());
+        self.grant.allow(EffectKind::FsRead, &pattern);
+        self.grant.allow(EffectKind::FsWrite, &pattern);
+        self.scratch = Some(dir.to_path_buf());
+        self
+    }
+
     pub fn new(grant: Grant, mode: CapMode) -> CapGate {
         let console_open = grant.check(&EffectKind::Console, None).is_ok()
             && grant.scope(&EffectKind::Console).is_none_or(|s| matches!(s, crate::ir::effect_facts::Scope::Any));
-        CapGate { grant, deps: BTreeMap::new(), default_dep: None, mode, warned: HashSet::new(), seen: BTreeSet::new(), console_open, console_seen: false, bypass: 0, local_profile: false, for_tests: false }
+        CapGate { grant, deps: BTreeMap::new(), default_dep: None, mode, warned: HashSet::new(), seen: BTreeSet::new(), console_open, console_seen: false, bypass: 0, local_profile: false, for_tests: false, scratch: None }
     }
 
     /// Per-package grants: each dependency's code is checked against its own grant (lexical attribution).
@@ -83,6 +96,13 @@ impl CapGate {
             _ => &self.grant,
         }
     }
+}
+
+/// The project directory of a run: the nearest `wj.toml` at or above the entry file, else the entry's directory (canonical).
+pub fn project_root(entry: &Path) -> PathBuf {
+    let root = manifest_dir(entry).or_else(|| entry.parent().map(Path::to_path_buf)).unwrap_or_default();
+    let root = if root.as_os_str().is_empty() { std::env::current_dir().unwrap_or_default() } else { root };
+    std::fs::canonicalize(&root).unwrap_or(root)
 }
 
 /// The directory of the nearest `wj.toml` at or above `start`.
@@ -150,9 +170,44 @@ pub fn gate_for_run(entry: &Path, sandbox: bool, allow: &[String], allow_network
     }))
 }
 
+/// A fresh private directory under the system temp directory, removed when the guard is dropped.
+pub struct Scratch(PathBuf);
+
+impl Scratch {
+    pub fn new() -> Option<Scratch> {
+        // `create_dir` fails when the name exists, so a clash retries with another name; no shared counter needed
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+        let dir = (0..32u32)
+            .map(|i| std::env::temp_dir().join(format!("wj-scratch-{}-{:x}", std::process::id(), nanos.wrapping_add(i.wrapping_mul(7919)))))
+            .find(|d| std::fs::create_dir(d).is_ok())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        }
+        // the canonical form: grants compare canonical paths (macOS /var is /private/var)
+        Some(Scratch(std::fs::canonicalize(&dir).unwrap_or(dir)))
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 impl Interpreter {
     pub fn set_caps(&mut self, gate: Option<CapGate>) {
         self.caps = gate;
+    }
+
+    /// The private scratch directory of this run, if it has one (`env::temp_dir()`).
+    pub(crate) fn scratch_dir(&self) -> Option<PathBuf> {
+        self.caps.as_ref().and_then(|g| g.scratch.clone())
     }
 
     /// Effect kinds exercised so far (empty without a gate).
@@ -276,7 +331,7 @@ impl Interpreter {
             let who = package.as_deref().map(|p| format!(" (dependency `{p}`)")).unwrap_or_default();
             let text = if gate.local_profile && gate.for_tests {
                 format!(
-                    "capability denied: {}{who}\n  = why: this project has no [capabilities] in wj.toml, so this session may use files inside the project directory (plus time, random and console) and nothing else\n  = to allow it, put this in wj.toml:\n        [capabilities]\n        fs.read = [\"./**\"]\n        fs.write = [\"./**\"]\n        {}",
+                    "capability denied: {}{who}\n  = why: this project has no [capabilities] in wj.toml, so this session may use files inside the project directory, its private scratch directory (`env::temp_dir()`), time, random and console, and nothing else\n  = to allow it, put this in wj.toml:\n        [capabilities]\n        fs.read = [\"./**\"]\n        fs.write = [\"./**\"]\n        {}",
                     d.subject(),
                     d.entry()
                 )

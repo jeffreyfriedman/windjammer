@@ -1,0 +1,29 @@
+// bug: two threads take the same two locks in opposite orders, which deadlocks when each holds one
+use std::sync::{Arc, Mutex}
+use std::thread
+
+@test
+fn both_transfers_complete() {
+    let a = Arc::new(Mutex::new(10))
+    let b = Arc::new(Mutex::new(10))
+    let (a1, b1) = (a.clone(), b.clone())
+    let (a2, b2) = (a.clone(), b.clone())
+    let t1 = thread::spawn(move || {
+        let mut x = match a1.lock() { Ok(g) => g, Err(_) => return 1 }
+        let mut y = match b1.lock() { Ok(g) => g, Err(_) => return 1 }
+        *x = *x - 1
+        *y = *y + 1
+        return 0
+    })
+    let t2 = thread::spawn(move || {
+        let mut y = match b2.lock() { Ok(g) => g, Err(_) => return 1 }
+        let mut x = match a2.lock() { Ok(g) => g, Err(_) => return 1 }
+        *y = *y - 1
+        *x = *x + 1
+        return 0
+    })
+    t1.join()
+    t2.join()
+    let total = match a.lock() { Ok(g) => *g, Err(_) => 0 } + match b.lock() { Ok(g) => *g, Err(_) => 0 }
+    assert_eq(total, 20)
+}

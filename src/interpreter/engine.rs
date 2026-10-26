@@ -58,6 +58,9 @@ pub enum VariantKind {
 
 pub struct EnumDef {
     pub variants: Vec<VariantDef>,
+    /// The type and variant names, interned: every value built by `make_variant` shares them.
+    pub rc_name: Rc<str>,
+    pub rc_variants: Vec<Rc<str>>,
 }
 
 pub struct TraitDef {
@@ -146,6 +149,15 @@ pub struct Interpreter {
     pub(crate) rstack: Vec<Value>,
     /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
     pub(crate) jit_enabled: bool,
+    /// Closure-engine iterations after which a loop enters machine code (`WJ_JIT_LOOP_HOT` in the CLI
+    /// overrides it: 0 makes every loop try at its first iteration, which the jit stress tests use).
+    pub(crate) jit_loop_hot: u32,
+    /// Report machine-code loop decisions on stderr (`WJ_JIT_DEBUG`).
+    pub(crate) jit_debug: bool,
+    /// A machine-code check to leave out (`WJ_JIT_MUTANT`; honoured in debug builds only).
+    pub(crate) jit_mutant: Option<String>,
+    /// Statement registries of compiled code (`resolved/osr.rs`), alive as long as the code is.
+    pub(crate) osr_regs: Vec<Rc<super::resolved::osr::Reg>>,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
     #[cfg(feature = "jit")]
     pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
@@ -163,6 +175,8 @@ pub struct Interpreter {
     pub(crate) http: super::builtins::std_http::HttpMode,
     /// Capability gate for sink calls (`caps.rs`); `None` = unrestricted (library and test use).
     pub(crate) caps: Option<super::caps::CapGate>,
+    /// Record / replay / simulate port for effects (`effect_port`); `None` = effects are live.
+    pub(crate) port: Option<std::cell::RefCell<super::effect_port::EffectPort>>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -238,6 +252,10 @@ impl Interpreter {
             compiled_closures: HashMap::default(),
             rstack: Vec::new(),
             jit_enabled: true,
+            osr_regs: Vec::new(),
+            jit_loop_hot: 256,
+            jit_debug: false,
+            jit_mutant: None,
             #[cfg(feature = "jit")]
             jit: None,
             subprocesses: HashMap::new(),
@@ -248,6 +266,7 @@ impl Interpreter {
             log_level: None,
             http: Default::default(),
             caps: None,
+            port: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
@@ -384,7 +403,11 @@ impl Interpreter {
             Err(_) => Ok(Value::Unit),
         };
         self.flush();
-        out
+        // a replay that did not use the whole log is a divergence; a recording is flushed to disk
+        match (out, self.finish_port()) {
+            (Ok(_), Err(e)) => Err(e),
+            (out, _) => out,
+        }
     }
 
     pub(crate) fn span_of(&self, loc: Option<&'static Location>) -> Option<Span> {

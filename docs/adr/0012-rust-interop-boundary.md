@@ -11,7 +11,7 @@ last_verified: 3406ef05bb35
 ## Context
 README promised "100% Rust compatibility - use any Rust crate". What exists: an `extern` keyword in the lexer and parser (declarations
 of external functions), `DependencySpec` entries forwarded into the generated `Cargo.toml` (including a `package` rename), `windjammer-runtime`
-as the standard Rust-side support crate, `src/ffi/` for C bindings from an IDL (WJ-IMPL-02), and `windjammer eject` (legacy binary only, not `wj`) that emits a Rust
+as the standard Rust-side support crate, `src/ffi/` for C bindings from an IDL (WJ-IMPL-02), and `wj eject` that emits a Rust
 project. What is undefined: how a `.wj` file names a Rust type or trait from a crate, who writes the signatures the ownership solver needs (the IR
 doc shows missing signatures turn into `compile_error!("missing boundary signature ...")`), what effect an external call has (ADR-0009), and how the Rust
 boundary works on non-Rust targets (ADR-0007).

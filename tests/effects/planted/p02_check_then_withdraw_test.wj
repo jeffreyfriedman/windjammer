@@ -1,0 +1,27 @@
+// bug: check-then-act, the balance is checked and debited under separate locks, so two withdrawals can both pass the check
+use std::sync::{Arc, Mutex}
+use std::thread
+
+fn withdraw(acct: Arc<Mutex<i64>>, amount: i64) -> i64 {
+    let enough = match acct.lock() { Ok(g) => *g >= amount, Err(_) => false }
+    if enough {
+        match acct.lock() {
+            Ok(mut g) => { *g = *g - amount }
+            Err(_) => {}
+        }
+    }
+    0
+}
+
+@test
+fn balance_never_goes_negative() {
+    let acct = Arc::new(Mutex::new(100))
+    let a = acct.clone()
+    let b = acct.clone()
+    let h1 = thread::spawn(move || { return withdraw(a, 80) })
+    let h2 = thread::spawn(move || { return withdraw(b, 80) })
+    h1.join()
+    h2.join()
+    let v = match acct.lock() { Ok(g) => *g, Err(_) => 0 }
+    assert(v >= 0)
+}

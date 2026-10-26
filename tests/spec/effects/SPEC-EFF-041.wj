@@ -1,0 +1,16 @@
+// spec: SPEC-EFF-041
+// mode: effects
+// expect: read_any: fs.read
+use std::fs
+trait Source {
+    @uses(fs.read)
+    fn get(self) -> string
+}
+struct Fixed { text: string }
+struct Cached { text: string }
+impl Source for Fixed { fn get(self) -> string { self.text } }
+impl Source for Cached { fn get(self) -> string { self.text } }
+fn read_any<S: Source>(s: S) -> string { s.get() }
+fn main() {
+    println(read_any(Fixed { text: "x" }))
+}

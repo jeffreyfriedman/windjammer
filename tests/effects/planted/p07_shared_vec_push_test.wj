@@ -1,0 +1,26 @@
+// bug: each worker copies the shared list, appends its result and writes the copy back
+use std::sync::{Arc, Mutex}
+use std::thread
+
+fn add_result(shared: Arc<Mutex<Vec<i64>>>, v: i64) -> i64 {
+    let mut copy = match shared.lock() { Ok(g) => g.clone(), Err(_) => Vec::new() }
+    copy.push(v)
+    match shared.lock() {
+        Ok(mut g) => { *g = copy }
+        Err(_) => {}
+    }
+    0
+}
+
+@test
+fn all_results_are_collected() {
+    let shared = Arc::new(Mutex::new(Vec::new()))
+    let mut hs = Vec::new()
+    for i in 0..3 {
+        let s = shared.clone()
+        hs.push(thread::spawn(move || { return add_result(s, i) }))
+    }
+    for h in hs { h.join() }
+    let n = match shared.lock() { Ok(g) => g.len(), Err(_) => 0 }
+    assert_eq(n, 3)
+}

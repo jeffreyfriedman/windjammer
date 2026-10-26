@@ -1,0 +1,2 @@
+use std::env
+fn main() { println("temp: ${env::temp_dir()}") }
