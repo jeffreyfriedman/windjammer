@@ -197,7 +197,12 @@ mod tests {
         assert!(gen.check(&EffectKind::FsWrite, Some("out/mutants/a__op.wj")).is_ok(), "`*.wj` says sources out loud");
         assert!(gen.check(&EffectKind::FsWrite, Some("out/mutants/a.txt")).is_err(), "other files stay outside the pattern");
         assert!(gen.check(&EffectKind::FsWrite, Some("src/main.wj")).is_err(), "other directories stay outside it");
-        assert!(gen.check(&EffectKind::FsWrite, Some("wj.toml")).is_err(), "the manifest still needs its exact name");
+        assert!(gen.check(&EffectKind::FsWrite, Some("wj.toml")).is_err(), "`*.wj` does not name manifests");
+        let mut manifests = Grant::sandbox(&root());
+        manifests.allow(EffectKind::FsWrite, "./out/**/wj.toml");
+        assert!(manifests.check(&EffectKind::FsWrite, Some("out/proj/wj.toml")).is_ok(), "a last segment `wj.toml` says manifests out loud");
+        assert!(manifests.check(&EffectKind::FsWrite, Some("out/proj/src/main.wj")).is_err(), "and nothing else");
+        assert!(manifests.check(&EffectKind::FsWrite, Some("wj.toml")).is_err(), "outside the pattern");
         let mut broad = Grant::sandbox(&root());
         broad.allow(EffectKind::FsWrite, "./out/**");
         assert!(broad.check(&EffectKind::FsWrite, Some("out/mutants/a.wj")).is_err(), "`**` alone never reaches sources");

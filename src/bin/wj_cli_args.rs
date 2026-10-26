@@ -123,13 +123,11 @@ pub enum Commands {
 
     /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// A .wj file or a directory; omitted: the project containing the current directory (wj.toml)
-        #[arg(value_name = "PATH")]
-        path: Option<PathBuf>,
-
-        /// Arguments to pass to the program (flags the program defines, such as `--wj`, pass through after the path)
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
+        /// A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's
+        /// arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own
+        /// flags go before PATH.
+        #[arg(value_name = "PATH [ARGS]...", trailing_var_arg = true, allow_hyphen_values = true)]
+        path_and_args: Vec<String>,
 
         /// Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)
         #[arg(long, value_name = "NAME")]
