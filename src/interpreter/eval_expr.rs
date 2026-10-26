@@ -568,8 +568,10 @@ impl Interpreter {
     pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {
         let def = self.enums.get(enum_name).ok_or_else(|| semantic(format!("unknown enum `{}`", enum_name)))?;
         let vd = &def.variants[idx];
+        let (ty, variant) = (Name::Shared(def.rc_name.clone()), Name::Shared(def.rc_variants[idx].clone()));
+        let named = move |payload| Value::Enum(Rc::new(EnumVal { ty, variant, idx: idx as u32, payload }));
         match &vd.kind {
-            VariantKind::Unit => Ok(Value::enum_val(enum_name, vd.name, idx as u32, Payload::Unit)),
+            VariantKind::Unit => Ok(named(Payload::Unit)),
             VariantKind::Tuple(tys) => {
                 if tys.len() != args.len() {
                     return Err(semantic(format!(
@@ -581,12 +583,11 @@ impl Interpreter {
                     )));
                 }
                 let tys = tys.clone();
-                let name = vd.name;
                 let mut out = Vec::new();
                 for (a, t) in args.into_iter().zip(tys.iter()) {
                     out.push(self.coerce(a, t)?);
                 }
-                Ok(Value::enum_val(enum_name, name, idx as u32, Payload::Tuple(out)))
+                Ok(named(Payload::Tuple(out)))
             }
             VariantKind::Struct(_) => Err(semantic("struct variant needs braces")),
         }

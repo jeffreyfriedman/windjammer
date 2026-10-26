@@ -183,6 +183,19 @@ pub enum Commands {
         #[arg(long, value_name = "on|off", env = "WJ_JIT", default_value = "on", hide = true)]
         jit: String,
 
+        /// Interpreted runs: closure-engine iterations before a hot loop enters machine code (testing:
+        /// 0 makes every loop try at its first iteration)
+        #[arg(long, value_name = "N", env = "WJ_JIT_LOOP_HOT", hide = true)]
+        jit_loop_hot: Option<u32>,
+
+        /// Interpreted runs: report on stderr which loops run as machine code and why others do not
+        #[arg(long, env = "WJ_JIT_DEBUG", hide = true, action = clap::ArgAction::SetTrue, value_parser = clap::builder::FalseyValueParser::new())]
+        jit_debug: bool,
+
+        /// Interpreted runs (debug builds only): leave one machine-code check out (mutation tests)
+        #[arg(long, value_name = "NAME", env = "WJ_JIT_MUTANT", hide = true)]
+        jit_mutant: Option<String>,
+
         /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
         /// compile errors still refuse it
         #[arg(long)]
