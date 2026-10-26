@@ -129,7 +129,7 @@ pub fn check_lexeme(tok: &Token, lexeme: &str, at_eof: bool) -> Result<(), Strin
         | StarAssign | SlashAssign | PercentAssign | AndAssign | OrAssign | XorAssign
         | ShlAssign | ShrAssign | Arrow | LeftArrow | FatArrow | At | LParen | RParen | LBrace
         | RBrace | LBracket | RBracket | Comma | Dot | DotDot | DotDotEq | Colon | ColonColon
-        | Semicolon | Question | Ampersand | Pipe | PipeOp | PipeTry | Underscore | Bang => {
+        | Semicolon | Question | QuestionQuestion | Ampersand | Pipe | PipeOp | PipeTry | Underscore | Bang => {
             Err(format!("{tok:?} missing from fixed_text table"))
         }
     }
@@ -289,6 +289,7 @@ pub fn fixed_text(tok: &Token) -> Option<&'static str> {
         ColonColon => "::",
         Semicolon => ";",
         Question => "?",
+        QuestionQuestion => "??",
         Ampersand => "&",
         Pipe => "|",
         PipeOp => "|>",

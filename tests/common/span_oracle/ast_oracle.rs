@@ -348,15 +348,23 @@ impl<'a> Ctx<'a> {
         let text = self.slice(r).to_string();
         let want = kind;
         let res = std::panic::catch_unwind(move || {
-            let tokens = Lexer::new(&text).tokenize_with_locations();
-            let n = tokens.len();
-            let mut p = Parser::new_with_source(tokens, String::new(), text.clone());
-            let e = p.parse_expression_public();
-            let consumed_all = p.token_position() + 1 >= n;
-            e.map(|e| (expr_kind(e), consumed_all))
+            // Parse the slice as the only statement of a function body (no public expression entry
+            // point exists, and none is needed): it must be exactly one expression statement.
+            let wrapped = format!("fn __t() {{\n{text}\n}}\n");
+            let tokens = Lexer::new(&wrapped).tokenize_with_locations();
+            let mut p = Parser::new_with_source(tokens, String::new(), wrapped);
+            p.parse().map(|prog| match prog.items.first() {
+                Some(Item::Function { decl, .. }) if decl.body.len() == 1 => match decl.body[0] {
+                    Statement::Expression { expr, .. } => Some((expr_kind(expr), true)),
+                    _ => None,
+                },
+                Some(Item::Function { decl, .. }) if decl.body.len() > 1 => Some(("<several statements>", false)),
+                _ => None,
+            })
         });
         match res {
-            Ok(Ok((got, all))) => {
+            Ok(Ok(None)) => {} // the slice is a statement form (let/if/match...), not an expression
+            Ok(Ok(Some((got, all)))) => {
                 if got != want {
                     f.add("reparse-kind-mismatch", kind, format!("{:?} re-parses as {got}", self.slice(r).chars().take(40).collect::<String>()));
                 } else if !all {
