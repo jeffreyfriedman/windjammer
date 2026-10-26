@@ -625,6 +625,24 @@ fn main() {
 ```
 `wj check` reports an error containing: `WJ0048: iteration over `HashMap` has no stable order`
 
+**SPEC-EFF-049** A call inside a string interpolation (`"${...}"`) is a call of the function that contains the string: its effects count for inference, grants, `@pure` and the durable step rules exactly as if it stood on its own line.
+
+<!-- example: tests/spec/effects/SPEC-EFF-049.wj -->
+```windjammer
+use std::process
+fn listing() -> string {
+    "ls says ${process::run("ls") ?? ""}"
+}
+fn main() {
+    println(listing())
+}
+```
+Manifest (`wj.toml`):
+```toml
+[capabilities]
+```
+`wj check` reports an error containing: `WJ0040: effect `process` is not granted`
+
 ## Simulation and replay
 
 **SPEC-EFF-027** In the simulated world the wall clock starts at Unix time 1700000000 and advances only through sleeps and timeouts (the interpreter's `--deterministic-time` clock).

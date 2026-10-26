@@ -1,0 +1,11 @@
+// spec: SPEC-EFF-049
+// mode: check-error
+// manifest: [capabilities]
+// expect-error: WJ0040: effect `process` is not granted
+use std::process
+fn listing() -> string {
+    "ls says ${process::run("ls") ?? ""}"
+}
+fn main() {
+    println(listing())
+}
