@@ -1,0 +1,20 @@
+use std::fs
+fn post(entry: string) -> int {
+    fs::append("ledger.txt", "${entry}\n").unwrap_or(())
+    entry.len()
+}
+fn balance() -> int {
+    let text = fs::read_to_string("ledger.txt").unwrap_or("")
+    text.lines().count()
+}
+durable fn run() -> string {
+    let a = post("open")
+    println("posted open")
+    let b = post("deposit 10")
+    println("posted deposit")
+    let c = post("close")
+    let n = balance()
+    println("entries ${n}")
+    "ledger ${a + b + c} ${n}"
+}
+fn main() { println("RESULT ${run()}") }

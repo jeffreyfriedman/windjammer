@@ -5,22 +5,22 @@
 //! when the function is called again with the same arguments, steps already in the journal return their recorded result without
 //! running, and the first missing step runs live. A run that completed returns its recorded result without running at all.
 //!
-//! The journal is JSON Lines, one file per run in `--journal DIR` (or in memory without it):
-//! `{"wj_durable":1,"fn":..,"args":..}`, then `{"step":N,"callee":..,"result":..,"vt_ns":..}` per step, then `{"done":..}`.
+//! The journal itself (file layout, numbering, replay, divergence) is `durable_core`, the same source the compiled runtime
+//! uses; this file adapts it to interpreter values and adds the determinism of a resumed run.
 //! Delivery is at-least-once: a crash between performing a step and journaling it re-executes it. After each step the
 //! random stream is re-derived from (run seed, step number) and the virtual clock is restored from the journal, so a
 //! resumed run draws the same numbers and reads the same times as an uninterrupted one in a deterministic world.
 
-use super::effect_port::{codec, log};
+use super::durable_core::{self as core, Opened, RunJournal, Step};
+use super::effect_port::codec;
 use super::engine::{FuncDef, Interpreter};
 use super::error::{Ctl, ErrorKind, RuntimeError};
 use super::value::Value;
 use crate::parser::ast::core::Expression;
 use crate::parser::ast::types::Type;
 use rand::SeedableRng;
-use serde_json::{json, Value as Json};
+use serde_json::Value as Json;
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -39,20 +39,12 @@ pub struct DurableCfg {
 impl DurableCfg {
     /// `--crash-after N` or `N:mid`.
     pub fn parse_crash(text: &str) -> Result<(usize, bool), String> {
-        let (n, mid) = match text.split_once(':') {
-            Some((n, "mid")) => (n, true),
-            Some(_) => return Err(format!("--crash-after takes N or N:mid, found {text:?}")),
-            None => (text, false),
-        };
-        n.trim().parse::<usize>().map(|n| (n, mid)).map_err(|_| format!("--crash-after takes N or N:mid, found {text:?}"))
+        core::parse_crash(text).map_err(|m| format!("--crash-after: {m}"))
     }
 }
 
 struct Run {
-    path: Option<PathBuf>,
-    file: Option<std::fs::File>,
-    steps: HashMap<usize, (String, Json, u64)>,
-    next: usize,
+    journal: RunJournal,
     seed: u64,
 }
 
@@ -85,12 +77,8 @@ fn mix(a: u64, b: u64) -> u64 {
     x.wrapping_mul(0x94D0_49BB_1331_11EB) ^ (x >> 31)
 }
 
-fn is_durable(f: &FuncDef) -> bool {
-    f.decorators.iter().any(|d| d.name == "durable")
-}
-
 impl Interpreter {
-    /// Install the journal for this run. `sites` come from [`discover_sites`].
+    /// Install the journal for this run. `sites` come from `check::durable_sites::discover`.
     pub fn enable_durable(&mut self, sites: Vec<(PathBuf, usize, usize)>, cfg: DurableCfg) {
         let mut rt = DurableRt { cfg, ..DurableRt::default() };
         for (f, l, c) in sites {
@@ -127,47 +115,24 @@ impl Interpreter {
             .map(codec::encode)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|what| fail(format!("durable fn `{}`: an argument is {what}, which cannot be journaled (WJ0045)", f.name)))?;
-        let key = format!("{}|{}", f.qual, log::canon(&Json::Array(arg_json.clone())));
+        let key = format!("{}|{}", f.qual, core::canon(&Json::Array(arg_json.clone())));
         let occurrence = {
-            let n = rt.occurrences.entry(key.clone()).or_insert(0);
+            let n = rt.occurrences.entry(key).or_insert(0);
             *n += 1;
             *n - 1
         };
-        let id = format!("{}-{}", f.qual.replace("::", "."), &log::digest(format!("{key}#{occurrence}").as_bytes())[..12]);
-        let seed = mix(rt.base_seed, u64::from_str_radix(&id[id.len() - 12..], 16).unwrap_or(0));
-        let mut run = Run { path: None, file: None, steps: HashMap::new(), next: 0, seed };
-        if let Some(dir) = rt.cfg.dir.clone() {
-            std::fs::create_dir_all(&dir).map_err(|e| fail(format!("cannot create the journal directory {}: {e}", dir.display())))?;
-            let path = dir.join(format!("{id}.wjlog"));
-            if let Ok(text) = std::fs::read_to_string(&path) {
-                for line in text.lines().skip(1) {
-                    let Ok(j) = serde_json::from_str::<Json>(line) else { continue };
-                    if let Some(done) = j.get("done") {
-                        return codec::decode(done).map_err(fail);
-                    }
-                    if let Some(n) = j.get("step").and_then(|n| n.as_u64()) {
-                        run.steps.insert(n as usize, (j["callee"].as_str().unwrap_or("").to_string(), j["result"].clone(), j["vt_ns"].as_u64().unwrap_or(0)));
-                    }
-                }
-            }
-            let fresh = !path.exists();
-            let mut file = std::fs::OpenOptions::new().create(true).append(true).open(&path).map_err(|e| fail(format!("cannot open the journal {}: {e}", path.display())))?;
-            if fresh {
-                let head = log::canon(&json!({ "wj_durable": 1, "fn": &*f.qual, "args": arg_json }));
-                writeln!(file, "{head}").map_err(|e| fail(e.to_string()))?;
-            }
-            run.path = Some(path);
-            run.file = Some(file);
-        }
-        self.durable.as_mut().expect("durable runtime").runs.push(run);
+        let id = core::run_id(&f.qual, &arg_json, occurrence);
+        let seed = mix(rt.base_seed, core::hash64(id.as_bytes()));
+        let journal = match RunJournal::open(rt.cfg.dir.as_deref(), &id, &f.qual, &arg_json).map_err(fail)? {
+            Opened::Done(result) => return codec::decode(&result).map_err(fail),
+            Opened::Run(j) => *j,
+        };
+        self.durable.as_mut().expect("durable runtime").runs.push(Run { journal, seed });
         let result = self.call_func_body(f, args, self_val, targs, expected);
         let run = self.durable.as_mut().expect("durable runtime").runs.pop().expect("durable run");
         let v = result?;
         let done = codec::encode(&v).map_err(|what| fail(format!("durable fn `{}` returns {what}, which cannot be journaled (WJ0045)", f.name)))?;
-        if let Some(mut file) = run.file {
-            let line = log::canon(&json!({ "done": done }));
-            writeln!(file, "{line}").and_then(|_| file.flush()).map_err(|e| fail(format!("cannot write the journal: {e}")))?;
-        }
+        run.journal.finish(&done).map_err(fail)?;
         Ok(v)
     }
 
@@ -178,31 +143,19 @@ impl Interpreter {
 
     /// Run or replay the step `e`.
     pub(crate) fn durable_step(&mut self, e: &'static Expression<'static>) -> R {
-        let callee = match e {
-            Expression::Call { function, .. } => match function {
-                Expression::Identifier { name, .. } => name.clone(),
-                _ => "<expr>".to_string(),
-            },
-            Expression::MethodCall { method, .. } => method.clone(),
-            Expression::MacroInvocation { name, .. } => name.clone(),
-            _ => String::new(),
-        };
+        let callee = crate::ir::effect_facts::durable::step_callee(e);
         let rt = self.durable.as_mut().expect("durable runtime");
         let run = rt.runs.last_mut().expect("durable run");
-        let idx = run.next;
-        run.next += 1;
-        let seed = mix(run.seed, idx as u64 + 1);
-        if let Some((name, result, vt)) = run.steps.get(&idx).cloned() {
-            if name != callee {
-                return Err(fail(format!(
-                    "WJ0049: durable replay diverged at step {idx}: the journal has `{name}`, the program now calls `{callee}`\n  help: delete the journal to start over, or restore the program that wrote it"
-                )));
+        let seed_base = run.seed;
+        let idx = match run.journal.next_step(&callee).map_err(fail)? {
+            Step::Replay { result, vt_ns, .. } => {
+                self.sched.clock = self.sched.clock.max(vt_ns);
+                return codec::decode(&result).map_err(fail);
             }
-            self.sched.clock = self.sched.clock.max(vt);
-            return codec::decode(&result).map_err(fail);
-        }
+            Step::Live { idx } => idx,
+        };
         // live: the step's random numbers are a function of (run, step), whatever ran before in this process
-        self.rng = Some(rand::rngs::StdRng::seed_from_u64(seed));
+        self.rng = Some(rand::rngs::StdRng::seed_from_u64(mix(seed_base, idx as u64 + 1)));
         self.durable.as_mut().expect("durable runtime").in_step += 1;
         let r = self.eval_keep_ref(e);
         self.durable.as_mut().expect("durable runtime").in_step -= 1;
@@ -217,12 +170,7 @@ impl Interpreter {
             self.crash_now();
         }
         let rt = self.durable.as_mut().expect("durable runtime");
-        let run = rt.runs.last_mut().expect("durable run");
-        if let Some(file) = run.file.as_mut() {
-            let line = log::canon(&json!({ "step": idx, "callee": callee, "result": result, "vt_ns": vt }));
-            writeln!(file, "{line}").and_then(|_| file.flush()).map_err(|e| fail(format!("cannot write the journal: {e}")))?;
-        }
-        run.steps.insert(idx, (callee, result, vt));
+        rt.runs.last_mut().expect("durable run").journal.record(idx, &callee, result, vt).map_err(fail)?;
         rt.appended += 1;
         if crash_after_now {
             self.crash_now();

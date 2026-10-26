@@ -1,0 +1,21 @@
+use std::fs
+fn read_count() -> int {
+    let text = fs::read_to_string("count.txt").unwrap_or("0")
+    text.trim().parse::<int>().unwrap_or(0)
+}
+fn write_count(n: int) -> bool {
+    fs::write("count.txt", "${n}").is_ok()
+}
+durable fn run(times: int) -> int {
+    let mut total = 0
+    let mut i = 0
+    while i < times {
+        let before = read_count()
+        write_count(before + 1)
+        println("tick ${before + 1}")
+        total += before + 1
+        i += 1
+    }
+    total
+}
+fn main() { println("RESULT ${run(3)}") }
