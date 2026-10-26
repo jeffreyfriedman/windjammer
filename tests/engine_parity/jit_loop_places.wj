@@ -1,0 +1,55 @@
+// Machine-code loops writing through places: a local a closure captured (its walker slot), fields
+// of `self` in a method that mutates it, a `&mut` Vec parameter, and a Vec shared with another
+// local before the loop (copy-on-write keeps the other one unchanged).
+struct Counter {
+    hits: int,
+    sum: f64,
+}
+
+impl Counter {
+    fn run(self, n: int) {
+        let mut i = 0
+        while i < n {
+            self.hits += 1
+            self.sum += 0.5
+            i += 1
+        }
+    }
+}
+
+fn fill(v: Vec<int>, n: int) {
+    let mut i = 0
+    while i < n {
+        v.push(i * 3 % 11)
+        i += 1
+    }
+    let mut j = 0
+    while j < v.len() {
+        v[j] = v[j] * 2
+        j += 1
+    }
+}
+
+fn main() {
+    let mut count = 0
+    let peek = |x: int| x + count
+    let mut i = 0
+    while i < 2000 {
+        count += i % 3
+        i += 1
+    }
+    println("${count} ${peek(1)}")
+    let mut c = Counter { hits: 0, sum: 0.0 }
+    c.run(1500)
+    c.run(10)
+    println("${c.hits} ${c.sum}")
+    let mut v: Vec<int> = Vec::new()
+    fill(v, 1200)
+    let snapshot = v
+    let mut k = 0
+    while k < 1200 {
+        v[k] = v[k] + 1
+        k += 1
+    }
+    println("${v.len()} ${v[5]} ${snapshot[5]} ${v[1199]} ${snapshot[1199]}")
+}

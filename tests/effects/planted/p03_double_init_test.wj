@@ -1,0 +1,32 @@
+// bug: lazy initialisation checked and performed under separate locks, so the expensive setup can run twice
+use std::sync::{Arc, Mutex}
+use std::thread
+
+fn get_or_init(slot: Arc<Mutex<i64>>, inits: Arc<Mutex<i64>>) -> i64 {
+    let ready = match slot.lock() { Ok(g) => *g != 0, Err(_) => false }
+    if !ready {
+        match inits.lock() {
+            Ok(mut n) => { *n = *n + 1 }
+            Err(_) => {}
+        }
+        match slot.lock() {
+            Ok(mut g) => { *g = 7 }
+            Err(_) => {}
+        }
+    }
+    0
+}
+
+@test
+fn setup_runs_once() {
+    let slot = Arc::new(Mutex::new(0))
+    let inits = Arc::new(Mutex::new(0))
+    let (s1, i1) = (slot.clone(), inits.clone())
+    let (s2, i2) = (slot.clone(), inits.clone())
+    let h1 = thread::spawn(move || { return get_or_init(s1, i1) })
+    let h2 = thread::spawn(move || { return get_or_init(s2, i2) })
+    h1.join()
+    h2.join()
+    let n = match inits.lock() { Ok(g) => *g, Err(_) => -1 }
+    assert_eq(n, 1)
+}

@@ -1,0 +1,24 @@
+// workflow: export: write rows with timestamps, verify the file
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn row(i: int) -> string {
+    let line = "row ${i} at ${time::now_millis()}\n"
+    fs::append("export.csv", line) ?? ()
+    line
+}
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let mut total = 0
+    for i in 0..4 {
+        total += row(i).len()
+    }
+    let back = fs::read_to_string("export.csv") ?? ""
+    println("exported ${back.lines().count()} rows")
+    "export ${total}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

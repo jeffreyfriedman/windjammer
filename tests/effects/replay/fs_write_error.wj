@@ -1,0 +1,7 @@
+use std::fs
+fn main() {
+    match fs::write("no-such-dir/f.txt", "x") {
+        Ok(_) => println("wrote"),
+        Err(e) => println("write failed: ${e}"),
+    }
+}

@@ -607,6 +607,11 @@ impl Parser {
             false
         };
 
+        // `durable fn`: a contextual keyword; it becomes the `@durable` marker attribute (ADR-0021 section 9)
+        if matches!(self.current_token(), Token::Ident(n) if n == "durable") && self.peek(1) == Some(&Token::Fn) {
+            self.advance();
+            decorators.push(Decorator { name: "durable".to_string(), arguments: Vec::new() });
+        }
         match self.current_token() {
             Token::Fn => {
                 self.advance(); // Consume the Fn token

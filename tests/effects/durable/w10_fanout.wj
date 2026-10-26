@@ -1,0 +1,23 @@
+// workflow: notification fan-out: one message file per recipient, then a digest
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn notify(who: string, id: int) -> string {
+    fs::write("msg-${who}.txt", "hello ${who} #${id}") ?? ()
+    "sent-${who}"
+}
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let id = random::range(1, 100)
+    let mut sent = Vec::new()
+    for who in ["ann", "bob", "cy"] {
+        sent.push(notify(who, id))
+    }
+    println("notified ${sent.len()}")
+    "digest ${sent.join(",")}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

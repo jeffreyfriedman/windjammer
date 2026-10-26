@@ -509,6 +509,14 @@ impl Interpreter {
         if self.caps.is_some() {
             self.cap_gate(path, &args)?;
         }
+        if self.port.is_some() && super::effect_port::routed(path) {
+            return self.port_call(path, args);
+        }
+        self.call_builtin_live(path, args)
+    }
+
+    /// The builtin itself, after the capability gate and the effect port.
+    pub(crate) fn call_builtin_live(&mut self, path: &str, args: Vec<Value>) -> R {
         if let Some(r) = super::builtins::assoc_numeric(self, path, &args) {
             return r;
         }
@@ -694,7 +702,15 @@ impl Interpreter {
     }
 
     /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
-    pub(crate) fn call_func_walk(
+    pub(crate) fn call_func_walk(&mut self, f: &Rc<FuncDef>, args: Vec<Value>, self_val: Option<Value>, targs: &[Type], expected: Option<Type>) -> R {
+        if f.decorators.iter().any(|d| d.name == "durable") {
+            return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
+        }
+        self.call_func_body(f, args, self_val, targs, expected)
+    }
+
+    /// The walker's call proper (a durable function's body runs through here, inside its journal).
+    pub(crate) fn call_func_body(
         &mut self,
         f: &Rc<FuncDef>,
         mut args: Vec<Value>,
@@ -940,6 +956,25 @@ impl Interpreter {
         }
         let kind = Kind::of(&recv);
         let imp = self.builtins.method(kind, method);
+        self.run_builtin_method(imp, kind, recv, place, method, args)
+    }
+
+    /// Does `call_builtin_method` dispatch `recv` by its kind alone (so the implementation found for
+    /// a kind can be reused for every receiver of that kind)?
+    pub(crate) fn builtin_by_kind(recv: &Value) -> bool {
+        !matches!(recv, Value::Int(_, super::int::IntTy::U128) | Value::Native(_) | Value::Struct(_))
+    }
+
+    /// The second half of `call_builtin_method`: run `imp`, the registry's method `method` for `kind`.
+    pub(crate) fn run_builtin_method(
+        &mut self,
+        imp: Option<MethodImpl>,
+        kind: Kind,
+        recv: Value,
+        place: Option<Place>,
+        method: &str,
+        args: Vec<Value>,
+    ) -> R {
         match imp {
             Some(MethodImpl::Pure(f)) => f(self, &recv, args),
             Some(MethodImpl::Mut(f)) => {

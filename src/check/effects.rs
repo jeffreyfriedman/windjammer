@@ -9,6 +9,7 @@ use crate::diagnostics::{Diagnostic, SourceIndex, Span};
 use crate::ir::effect_facts::policy::{self, PolicyFinding};
 use crate::ir::effect_facts::violations::{self, Finding};
 use crate::ir::effect_facts::analysis::EffectFacts;
+use crate::ir::effect_facts::durable;
 use crate::ir::effect_facts::lock::LOCK_FILE;
 use crate::ir::effect_facts::{analyze, CapLock, PackageGrants};
 use crate::resolve::{self, ParsedFile};
@@ -17,7 +18,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Nearest `wj.toml` at or above `root` (a project directory or a single file).
-pub(super) fn manifest_path(root: &Path) -> Option<PathBuf> {
+pub fn manifest_path(root: &Path) -> Option<PathBuf> {
     let mut cur = if root.is_dir() { Some(root) } else { root.parent() };
     while let Some(d) = cur {
         let p = d.join("wj.toml");
@@ -184,7 +185,7 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 out.push(d.with_help(help));
             }
             Finding::Undeclared { function, effect, chain, site, def_site: _ } => {
-                let mut d = Diagnostic::error("WJ0042", format!("`{function}` performs `{effect}`, which its @uses/@pure declaration does not allow"));
+                let mut d = Diagnostic::error("WJ0042", format!("`{function}` performs `{effect}`, which its @uses/@pure declaration (or the trait's bound) does not allow"));
                 if let Some(sp) = span_for(&site, &chain.last().map(|c| last(&c.2)).unwrap_or_default()) {
                     d = d.at(sp.with_label(format!("performs {effect}")));
                 }
@@ -199,6 +200,14 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 out.push(d.with_help(format!("add `ffi = [\"{callee}\"]` under [capabilities] in wj.toml, or declare what the extern does with `@uses(..)` / `@pure`")));
             }
         }
+    }
+    let durable = durable::analyze(r, facts);
+    for f in &durable.findings {
+        let mut d = Diagnostic::error(f.code, f.message.clone());
+        if let Some(sp) = span_for(&f.site, &f.word) {
+            d = d.at(sp.with_label(format!("in durable fn `{}`", f.function)));
+        }
+        out.push(d.with_help(f.help.clone()));
     }
     if let Some(p) = &a.policy {
         for f in policy::check(r, facts, p) {

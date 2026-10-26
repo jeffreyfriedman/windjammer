@@ -1,0 +1,7 @@
+use std::fs
+fn main() {
+    fs::write("tmp.txt", "x").unwrap()
+    println("before: ${fs::exists("tmp.txt")}")
+    fs::remove_file("tmp.txt").unwrap()
+    println("after: ${fs::exists("tmp.txt")}")
+}

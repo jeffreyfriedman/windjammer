@@ -82,3 +82,34 @@ fn wj_jit_0_and_no_jit_agree_with_the_default() {
     assert_ne!(bad.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&bad.stderr).contains("WJ_JIT"));
 }
+
+/// Machine-code loops (ADR-0020 round 3) never run a sink either: a statement that can reach one is
+/// outside the lowering subset (machine code has no calls), so it runs as its closure code from inside
+/// the loop, and the capability gate sees the late sink exactly as without machine code. Every loop
+/// tries machine code at its first iteration here.
+#[test]
+fn a_loop_reaching_a_sink_runs_it_through_the_closures() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let src = "use std::fs\nfn main() {\n    let mut total = 0\n    let mut i = 0\n    while i < 3000 {\n        total += i % 7\n        if i == 2500 {\n            println(\"late print ${total}\")\n        }\n        if i == 2900 {\n            let seen = fs::exists(\".\")\n            println(\"seen ${seen}\")\n        }\n        i += 1\n    }\n    let mut j = 0\n    while j < 3000 {\n        total += j % 3\n        j += 1\n    }\n    println(\"total ${total}\")\n}\n";
+    let p = tmp.path().join("loop.wj");
+    std::fs::write(&p, src).unwrap();
+    let run = |extra: &[&str], debug: bool| {
+        let mut c = Command::new(WJ);
+        c.args(["run", "--interpret", "--no-lint", "--caps", "enforce", "--sandbox"]).args(extra).arg(&p).current_dir(tmp.path());
+        c.env("WJ_JIT_LOOP_HOT", "0").env_remove("WJ_JIT");
+        if debug {
+            c.env("WJ_JIT_DEBUG", "1");
+        }
+        let o = c.output().unwrap();
+        (String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned(), o.status.code())
+    };
+    let jit = run(&[], false);
+    let nojit = run(&["--no-jit"], false);
+    assert!(jit.0.contains("late print"), "stdout: {}\nstderr: {}", jit.0, jit.1);
+    assert!(jit.1.contains("capability denied"), "stderr: {}", jit.1);
+    assert_eq!(jit.2, Some(126));
+    assert_eq!(jit, nojit, "machine code changed the outcome");
+    // the loop with the sinks did run as machine code (the sink statements through their closures)
+    let dbg = run(&[], true).1;
+    assert!(dbg.lines().any(|l| l.starts_with("[jit] loop") && l.contains("loop.wj:5: compiled")), "{dbg}");
+}

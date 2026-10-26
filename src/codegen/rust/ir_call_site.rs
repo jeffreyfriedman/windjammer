@@ -9187,12 +9187,12 @@ impl<'ast> CodeGenerator<'ast> {
         let sig = registry
             .get_signature(callee_name)
             .or_else(|| registry.lookup_method(callee_name))
-            .or_else(|| registry.find_signature_ending_with(simple))
+            .or_else(|| registry.find_unique_signature_ending_with(simple))
             .or_else(|| {
                 self.global_signature_registry.as_ref().and_then(|g| {
                     g.get_signature(callee_name)
                         .or_else(|| g.lookup_method(callee_name))
-                        .or_else(|| g.find_signature_ending_with(simple))
+                        .or_else(|| g.find_unique_signature_ending_with(simple))
                 })
             });
         let Some(sig) = sig else {

@@ -6,7 +6,7 @@ This is the single versioning document. The cross-repository policy is a proposa
 - The workspace version is `0.50.0` (`[workspace.package] version` in `Cargo.toml`). The compiler (`windjammer`), `windjammer-runtime`,
   `windjammer-lsp` and `windjammer-mcp` use `version.workspace = true`, so they cannot drift.
 - `scripts/check-versions.sh` and `scripts/sync-version.sh` check and propagate the version (`make check-versions`).
-- Binaries: `wj` (unified CLI), `windjammer` (older CLI, includes `eject`), `wj-lint`.
+- Binaries: `wj` (unified CLI), `windjammer` (older CLI), `wj-lint`.
 - The standard library in `std/` is versioned with the compiler; it is not published separately.
 - Related projects (`windjammer-ui`, the game engine, the database, example applications) live in other repositories with their own
   versions and pin the compiler themselves.

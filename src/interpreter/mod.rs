@@ -5,6 +5,8 @@
 mod analysis;
 pub mod builtins;
 pub mod caps;
+pub mod durable_rt;
+pub mod effect_port;
 mod call;
 mod coerce;
 mod defaults;

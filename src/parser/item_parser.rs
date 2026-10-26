@@ -205,6 +205,10 @@ impl Parser {
                 false
             };
 
+            if matches!(self.current_token(), Token::Ident(n) if n == "durable") && self.peek(1) == Some(&Token::Fn) {
+                self.advance();
+                decorators.push(Decorator { name: "durable".to_string(), arguments: Vec::new() });
+            }
             let is_async = if self.current_token() == &Token::Async {
                 self.advance();
                 true

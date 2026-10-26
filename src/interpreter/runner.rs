@@ -64,8 +64,26 @@ pub struct RunOptions {
     pub allow: Vec<String>,
     /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given (default: enforce).
     pub caps_mode: String,
+    /// `--record LOG`: run live and write every effect to `LOG` (ADR-0021 E3).
+    pub record: Option<PathBuf>,
+    /// `--replay LOG`: answer every effect from `LOG`, perform none; seeds and arguments come from the log's header.
+    pub replay: Option<PathBuf>,
+    /// `--simulate` (with `--seed`, `--faults`): run in the seeded world instead of the live one.
+    pub simulate: Option<super::effect_port::sim::SimConfig>,
+    /// Source positions of the journaled steps of `durable fn`s (`check::durable_sites::discover`).
+    pub durable_sites: Vec<(PathBuf, usize, usize)>,
+    /// `--journal DIR`: where `durable fn` runs keep their step journals (default: in memory).
+    pub journal: Option<PathBuf>,
+    /// `--crash-after N[:mid]`: exit abruptly after the N-th journaled step (tests of crash recovery).
+    pub crash_after: Option<String>,
     /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
     pub no_jit: bool,
+    /// `WJ_JIT_LOOP_HOT`: closure iterations before a loop enters machine code (default 256).
+    pub jit_loop_hot: Option<u32>,
+    /// `WJ_JIT_DEBUG`: report machine-code loop decisions on stderr.
+    pub jit_debug: bool,
+    /// `WJ_JIT_MUTANT` (debug builds): a machine-code check to leave out, for mutation tests.
+    pub jit_mutant: Option<String>,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -122,6 +140,11 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.set_deterministic_time(opts.deterministic_time);
         it.set_engine_resolved(opts.engine_resolved);
         it.set_jit(!opts.no_jit);
+        if let Some(n) = opts.jit_loop_hot {
+            it.jit_loop_hot = n;
+        }
+        it.jit_debug = opts.jit_debug;
+        it.jit_mutant = opts.jit_mutant.clone();
         if let Some(p) = &opts.mock_http {
             match super::builtins::std_http::HttpMode::mock_from_file(p) {
                 Ok(m) => it.set_http_mode(m),
@@ -145,6 +168,14 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             it.set_http_mode(super::builtins::std_http::HttpMode::Real);
         }
         it.set_args(args);
+        if let Err(m) = setup_effect_port(&mut it, &opts, &entry) {
+            eprintln!("error: {m}");
+            return RunOutcome::Exited(1);
+        }
+        if let Err(m) = setup_durable(&mut it, &opts, &entry) {
+            eprintln!("error: {m}");
+            return RunOutcome::Exited(1);
+        }
         if let Some((lib, sigs)) = host {
             match super::host_bridge::HostLib::open(&lib, &sigs) {
                 Ok(h) => it.attach_host(h),
@@ -178,6 +209,67 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
     })
 }
 
+/// `durable fn`: find the journaled steps of the program and install the journal (ADR-0021 E4).
+fn setup_durable(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Result<(), String> {
+    use super::durable_rt::DurableCfg;
+    let mut cfg = DurableCfg { dir: opts.journal.clone(), ..DurableCfg::default() };
+    if let Some(c) = &opts.crash_after {
+        let (n, mid) = DurableCfg::parse_crash(c)?;
+        cfg.crash_after = Some(n);
+        cfg.crash_mid = mid;
+    }
+    let _ = entry;
+    if !opts.durable_sites.is_empty() || cfg.dir.is_some() {
+        it.enable_durable(opts.durable_sites.clone(), cfg);
+    }
+    Ok(())
+}
+
+/// `--record` / `--replay`: install the effect port. A replay takes the seeds, the time mode and the arguments from the
+/// log's header, because they are part of what the recorded run was a function of.
+pub fn setup_effect_port(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Result<(), String> {
+    use super::effect_port::{log, EffectPort};
+    use rand::{RngCore, SeedableRng};
+    if opts.record.is_some() && opts.replay.is_some() {
+        return Err("--record and --replay cannot be used together".into());
+    }
+    if let Some(cfg) = &opts.simulate {
+        if opts.record.is_some() || opts.replay.is_some() {
+            return Err("--simulate cannot be combined with --record or --replay".into());
+        }
+        let root = super::caps::project_root(entry);
+        let tmp = root.join(".wj-sim").join("tmp");
+        install_simulation(it, cfg, &root, &tmp);
+        return Ok(());
+    }
+    let program = log::digest(&std::fs::read(entry).map_err(|e| format!("cannot read {}: {e}", entry.display()))?);
+    if let Some(path) = &opts.record {
+        let rng_seed = rand::rngs::OsRng.next_u64();
+        let header = log::Header {
+            program,
+            compiler: env!("CARGO_PKG_VERSION").to_string(),
+            sched_seed: opts.sched_seed,
+            sim_seed: None,
+            hash_seed: opts.hash_seed,
+            rng_seed,
+            deterministic_time: opts.deterministic_time,
+            args: it.args.clone(),
+        };
+        it.rng = Some(rand::rngs::StdRng::seed_from_u64(rng_seed));
+        it.set_port(EffectPort::record(path, header).map_err(|e| format!("cannot write {}: {e}", path.display()))?);
+    } else if let Some(path) = &opts.replay {
+        let port = EffectPort::replay(path, &program)?;
+        let h = port.header.clone();
+        it.hash_seed = h.hash_seed;
+        it.set_sched_seed(h.sched_seed);
+        it.set_deterministic_time(h.deterministic_time);
+        it.set_args(h.args);
+        it.rng = Some(rand::rngs::StdRng::seed_from_u64(h.rng_seed));
+        it.set_port(port);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct TestResult {
     pub file: PathBuf,
@@ -198,40 +290,118 @@ pub struct TestSpec {
     pub mods: Vec<String>,
     /// `Some(type)` for a receiver-less associated function `Type::name()`.
     pub assoc: Option<String>,
+    /// Journaled step positions of the file's `durable fn`s (empty without any).
+    pub durable_sites: Vec<(PathBuf, usize, usize)>,
 }
 
 /// Run the given tests (each against a fresh interpreter, files loaded once per test).
 pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
+    run_specs_simulated(specs, None)
+}
+
+/// `wj test --simulate`: every test runs in the seeded world (ADR-0021 E3). With a seed range a test passes only if it passes
+/// under every seed; the first failing seed ends that test's run and is named in the message with the command that reproduces it.
+pub fn run_specs_simulated(specs: Vec<TestSpec>, sim: Option<SimRun>) -> Vec<TestResult> {
     with_big_stack(move || {
         let mut results = Vec::new();
         for spec in specs {
-            let mut it = Interpreter::new_capturing();
-            it.guard_stack();
-            // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
-            it.set_engine_resolved(true);
-            // tests are sandboxed like `wj run` (ADR-0021): the project's [capabilities], else the local profile
-            match super::caps::gate_for_run(&spec.file, false, &[], false, "") {
-                Ok(gate) => it.set_caps(gate.map(|g| g.for_tests())),
-                Err(m) => {
-                    results.push(TestResult { file: spec.file, name: spec.display_name, passed: false, message: m });
-                    continue;
-                }
-            }
-            let outcome = match it.load_test_program(&spec.file) {
-                Ok(mut path) => {
-                    path.extend(spec.mods.iter().cloned());
-                    it.run_test(&path, spec.assoc.as_deref(), &spec.name)
-                }
-                Err(e) => Err(e),
-            };
-            let (passed, message) = match outcome {
-                Ok(()) => (true, String::new()),
-                Err(e) => (false, e.render()),
-            };
-            results.push(TestResult { file: spec.file, name: spec.display_name, passed, message });
+            results.push(match &sim {
+                None => run_one_test(&spec, None),
+                Some(s) => run_seeds(&spec, s),
+            });
         }
         results
     })
+}
+
+/// Seeds and fault rate of a simulated test run.
+#[derive(Clone, Debug)]
+pub struct SimRun {
+    pub seeds: std::ops::RangeInclusive<u64>,
+    pub faults: f64,
+}
+
+fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
+    for seed in s.seeds.clone() {
+        let cfg = super::effect_port::sim::SimConfig { seed, faults: s.faults };
+        let r = run_one_test(spec, Some(&cfg));
+        if !r.passed {
+            let faults = if s.faults > 0.0 { format!(" --faults {}", s.faults) } else { String::new() };
+            let message = format!(
+                "{}\nseed {seed} failed; reproduce: wj test --interpret --simulate --seed {seed}{faults} --filter {} {}",
+                r.message,
+                spec.display_name,
+                spec.file.display()
+            );
+            return TestResult { message, ..r };
+        }
+    }
+    TestResult { file: spec.file.clone(), name: spec.display_name.clone(), passed: true, message: String::new() }
+}
+
+fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>) -> TestResult {
+    let spec = spec.clone();
+    let mut it = Interpreter::new_capturing();
+    it.guard_stack();
+    // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
+    it.set_engine_resolved(true);
+    // tests are sandboxed like `wj run` (ADR-0021): the project's [capabilities], else the local profile
+    let scratch = super::caps::Scratch::new();
+    match super::caps::gate_for_run(&spec.file, false, &[], false, "") {
+        Ok(gate) => it.set_caps(gate.map(|g| {
+            let g = g.for_tests();
+            match &scratch {
+                Some(s) => g.with_scratch(s.path()),
+                None => g,
+            }
+        })),
+        Err(m) => return TestResult { file: spec.file, name: spec.display_name, passed: false, message: m },
+    }
+    if !spec.durable_sites.is_empty() {
+        it.enable_durable(spec.durable_sites.clone(), Default::default());
+    }
+    if let Some(cfg) = sim {
+        let tmp = scratch.as_ref().map(|s| s.path().to_path_buf()).unwrap_or_else(std::env::temp_dir);
+        install_simulation(&mut it, cfg, &super::caps::project_root(&spec.file), &tmp);
+    }
+    let outcome = match it.load_test_program(&spec.file) {
+        Ok(mut path) => {
+            path.extend(spec.mods.iter().cloned());
+            it.run_test(&path, spec.assoc.as_deref(), &spec.name)
+        }
+        Err(e) => Err(e),
+    };
+    let (passed, message) = match outcome {
+        Ok(()) => (true, String::new()),
+        Err(e) => (false, e.render()),
+    };
+    TestResult { file: spec.file, name: spec.display_name, passed, message }
+}
+
+/// Put the interpreter in the simulated world for `cfg.seed`: virtual clock, seeded random numbers, scheduler and hash
+/// order, in-memory file system rooted at `project` (with its `fixtures/`), `tmp` as the temp directory.
+pub fn install_simulation(it: &mut Interpreter, cfg: &super::effect_port::sim::SimConfig, project: &Path, tmp: &Path) {
+    use super::effect_port::{log, sim::World, EffectPort};
+    use rand::SeedableRng;
+    it.hash_seed = cfg.seed;
+    it.set_sched_seed(cfg.seed);
+    it.set_deterministic_time(true);
+    it.rng = Some(rand::rngs::StdRng::seed_from_u64(cfg.seed));
+    // relative paths resolve where the capability gate resolves them: the process's working directory
+    let cwd = std::fs::canonicalize(std::env::current_dir().unwrap_or_default()).unwrap_or_default();
+    let mut world = World::new(cfg, &cwd, tmp);
+    world.load_fixtures(project);
+    let header = log::Header {
+        program: String::new(),
+        compiler: env!("CARGO_PKG_VERSION").to_string(),
+        sched_seed: cfg.seed,
+        sim_seed: Some(cfg.seed),
+        hash_seed: cfg.seed,
+        rng_seed: cfg.seed,
+        deterministic_time: true,
+        args: Vec::new(),
+    };
+    it.set_port(EffectPort::simulate(world, header));
 }
 
 /// Print a cargo-test-like report. Returns the process exit code.

@@ -8,7 +8,7 @@ use crate::parser::Type;
 use std::rc::Rc;
 
 impl Interpreter {
-    fn resolve_alias<'t>(&'t self, t: &'t Type) -> &'t Type {
+    pub(crate) fn resolve_alias<'t>(&'t self, t: &'t Type) -> &'t Type {
         if self.type_aliases.is_empty() {
             return t;
         }

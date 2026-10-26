@@ -72,6 +72,20 @@ time_native!(Duration, "Duration");
 time_native!(Instant, "Instant");
 time_native!(SystemTime, "SystemTime");
 
+/// (`"Instant" | "SystemTime" | "Duration"`, nanoseconds) of a clock value, for the effect log and the durable journal.
+pub(crate) fn time_parts(v: &Value) -> Option<(&'static str, i128)> {
+    downcast::<Instant>(v).map(|x| ("Instant", x.0)).or_else(|| downcast::<SystemTime>(v).map(|x| ("SystemTime", x.0))).or_else(|| downcast::<Duration>(v).map(|x| ("Duration", x.0)))
+}
+
+pub(crate) fn time_from_parts(kind: &str, ns: i128) -> Option<Value> {
+    Some(match kind {
+        "Instant" => Value::Native(Rc::new(Instant(ns))),
+        "SystemTime" => Value::Native(Rc::new(SystemTime(ns))),
+        "Duration" => duration(ns),
+        _ => return None,
+    })
+}
+
 pub fn duration(ns: i128) -> Value {
     Value::Native(Rc::new(Duration(ns)))
 }
@@ -83,7 +97,7 @@ pub fn duration_ns(v: &Value) -> R<i128> {
 impl Interpreter {
     /// Monotonic nanoseconds since the interpreter started (virtual sleep included).
     pub(crate) fn mono_ns(&self) -> i128 {
-        let real = if self.sched.deterministic { 0 } else { self.epoch.elapsed().as_nanos() as i128 };
+        let real = if self.sched.deterministic { 0 } else { self.clock_reading("clock.elapsed", || self.epoch.elapsed().as_nanos() as i128) };
         real + self.sched.clock as i128
     }
     /// Wall-clock nanoseconds since the Unix epoch.
@@ -91,7 +105,9 @@ impl Interpreter {
         let base = if self.sched.deterministic {
             FIXED_EPOCH_NS
         } else {
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as i128).unwrap_or(0) - self.epoch.elapsed().as_nanos() as i128
+            self.clock_reading("clock.wall_base", || {
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as i128).unwrap_or(0) - self.epoch.elapsed().as_nanos() as i128
+            })
         };
         base + self.mono_ns()
     }

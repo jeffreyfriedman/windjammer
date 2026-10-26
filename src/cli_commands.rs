@@ -3,7 +3,6 @@
 use crate::build_utils;
 use crate::cargo_integration;
 use crate::cli_execution;
-use crate::ejector;
 use crate::error_handling;
 use crate::lexer;
 use crate::parser;
@@ -79,16 +78,6 @@ pub fn run_main_cli() -> Result<()> {
                 json,
                 fix,
             )?;
-        }
-        Commands::Eject {
-            path,
-            output,
-            target,
-            format,
-            comments,
-            no_cargo_toml,
-        } => {
-            eject_project(&path, &output, target, format, comments, !no_cargo_toml)?;
         }
         Commands::Run {
             file,
@@ -191,25 +180,3 @@ fn check_file(file_path: &Path) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-#[allow(clippy::too_many_arguments)]
-fn eject_project(
-    path: &Path,
-    output: &Path,
-    target: CompilationTarget,
-    format: bool,
-    comments: bool,
-    generate_cargo_toml: bool,
-) -> Result<()> {
-    let config = ejector::EjectConfig {
-        format,
-        comments,
-        generate_cargo_toml,
-        target,
-    };
-
-    let mut ejector = ejector::Ejector::new(config);
-    ejector.eject_project(path, output)?;
-
-    Ok(())
-}

@@ -206,7 +206,8 @@ pub fn register(r: &mut Registry) {
         Ok(Value::str(std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()))
     });
     r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
-    r.func("env::temp_dir", |_, _| Ok(Value::str(std::env::temp_dir().to_string_lossy().to_string())));
+    // a sandboxed test/REPL session has a private scratch directory (ADR-0021); everyone else gets the system one
+    r.func("env::temp_dir", |it, _| Ok(Value::str(it.scratch_dir().unwrap_or_else(std::env::temp_dir).to_string_lossy().to_string())));
     r.func("fs::read_to_string", |_, a| {
         let p = arg_str(&a, 0, "fs::read_to_string")?;
         Ok(match std::fs::read_to_string(&*p) {
@@ -264,8 +265,8 @@ pub fn register(r: &mut Registry) {
         }
         // like a terminal-attached Rust program: a prompt printed before reading must be visible
         it.flush();
-        let mut line = String::new();
-        let n = std::io::stdin().read_line(&mut line).map_err(|e| semantic(e.to_string()))?;
+        let line = it.stdin_line().map_err(semantic)?;
+        let n = line.len();
         if let Some(Value::Ref(p)) = a.first() {
             p.with_mut(|t| {
                 if let Value::Str(s) = t {
