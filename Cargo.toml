@@ -278,6 +278,12 @@ path = "tests/resolve_positions_test.rs"
 name = "code_mode"
 path = "tests/code_mode_test.rs"
 
+# Spans of the effect diagnostics WJ0040-WJ0048 are validated against their sources
+#   cargo test --release --test effects_spans
+[[test]]
+name = "effects_spans"
+path = "tests/effects_spans_test.rs"
+
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages
 [[test]]
