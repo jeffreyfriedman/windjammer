@@ -64,6 +64,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// Expected element type for `vec![…]` from return type or call-arg context.
     fn vec_macro_expected_element_type(&self) -> Option<Type> {
         for ctx_ty in [
+            // `let v: Vec<string> = vec![..]`: the annotation is the nearest expectation.
+            self.collect_target_type.as_ref(),
             self.current_function_return_type.as_ref(),
             self.call_arg_expected_type.as_ref(),
         ]
