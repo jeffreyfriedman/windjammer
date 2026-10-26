@@ -433,9 +433,8 @@ fn plausible_agent_mistakes_are_reported_before_running() {
         ("unknown struct", "fn main() {\n    let r = ping2(PingArgs { })\n}\n"),
         ("unknown module", "fn main() {\n    let r = github::list_issues()\n}\n"),
     ];
-    // Mistakes the checker cannot see yet (it has no types for values bound by patterns, and does not resolve module paths).
-    // The list is a ratchet: fixing one of them must remove it from here.
-    const KNOWN_GAPS: [&str; 3] = ["field that the result does not have", "calling a field as a function", "unknown module"];
+    // Mistakes the checker cannot see yet. The list is a ratchet: fixing one of them must remove it from here.
+    const KNOWN_GAPS: [&str; 0] = [];
     let mut missed = Vec::new();
     let mut reported = 0;
     for (name, script) in mistakes {

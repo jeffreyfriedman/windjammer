@@ -284,6 +284,12 @@ path = "tests/code_mode_test.rs"
 name = "effects_spans"
 path = "tests/effects_spans_test.rs"
 
+# wj check: types for pattern-bound values, fields called as methods, unknown module paths
+#   cargo test --release --test check_semantic_types
+[[test]]
+name = "check_semantic_types"
+path = "tests/check_semantic_types_test.rs"
+
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages
 [[test]]

@@ -248,7 +248,42 @@ impl Visitor for Collect<'_> {
                 .for_each(|w| self.bind(w));
         }
     }
+    /// The user struct inside the `Result`/`Option` a plain call of a project function returns (`fn get(..) -> Result<User, string>`).
+    fn wrapped_struct(&self, e: &Expression<'_>) -> Option<String> {
+        let Expression::Call { function, .. } = e else { return None };
+        let Expression::Identifier { name, .. } = &**function else { return None };
+        if name.contains("::") {
+            return None;
+        }
+        let Some([info]) = self.idx.fns.get(name).map(Vec::as_slice) else { return None };
+        if info.generic {
+            return None;
+        }
+        let inner = match info.ret.as_ref()? {
+            Type::Result(t, _) => &**t,
+            Type::Option(t) => &**t,
+            _ => return None,
+        };
+        let Type::Custom(s) = inner else { return None };
+        match self.idx.structs.get(s).map(Vec::as_slice) {
+            Some([si]) if !si.generic => Some(s.clone()),
+            _ => None,
+        }
+    }
+
     fn stmt(&mut self, s: &Statement<'_>) {
+        // `match get(..) { Ok(u) => .., }`: `u` is the struct inside the Result / Option
+        if let Statement::Match { value, arms, .. } = s {
+            if let Some(st) = self.wrapped_struct(value) {
+                for arm in arms {
+                    if let Pattern::EnumVariant(v, crate::parser::EnumPatternBinding::Single(n)) = &arm.pattern {
+                        if matches!(v.as_str(), "Ok" | "Some") {
+                            self.let_types.insert(n.clone(), st.clone());
+                        }
+                    }
+                }
+            }
+        }
         if let Statement::Let { pattern: Pattern::Identifier(n), mutable: false, .. } = s {
             self.immutable.insert(n.clone());
         }
@@ -261,6 +296,9 @@ impl Visitor for Collect<'_> {
         {
             let ty = type_.as_ref().and_then(type_name).map(str::to_string).or_else(|| match value {
                 Expression::StructLiteral { name, .. } if !name.contains("::") => Some(name.clone()),
+                // `let u = get(..)?` / `.unwrap()` / `.expect(..)` / `.unwrap_or(..)`
+                Expression::TryOp { expr, .. } => self.wrapped_struct(expr),
+                Expression::MethodCall { object, method, .. } if matches!(method.as_str(), "unwrap" | "expect" | "unwrap_or" | "unwrap_or_else" | "unwrap_or_default") => self.wrapped_struct(object),
                 _ => None,
             });
             if let Some(t) = ty {
@@ -516,10 +554,11 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         if known.is_some_and(|m| m.contains(method))
             || idx.blanket_methods.contains(method)
             || UNIVERSAL.contains(&method)
-            || self.known_struct_fields(&ty).is_some_and(|f| f.iter().any(|(n, _)| n == method))
+            || self.known_struct_fields(&ty).is_some_and(|f| f.iter().any(|(n, t)| n == method && may_be_callable(t)))
         {
             return;
         }
+        let field_named_so = self.known_struct_fields(&ty).is_some_and(|f| f.iter().any(|(n, _)| n == method));
         if !super::std_methods::is_known(method) && !idx.declares_member(method) && !self.cx.names.external {
             return; // already reported as unknown everywhere
         }
@@ -529,6 +568,12 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             d = d.at(sp.clone().with_label("method not found"));
         }
         let candidates: Vec<String> = known.map(|m| m.iter().cloned().collect()).unwrap_or_default();
+        if field_named_so {
+            let obj = if let Expression::Identifier { name, .. } = object { name.as_str() } else { "value" };
+            d = d.with_help(format!("`{method}` is a field of `{ty}`, not a method: read it as `{obj}.{method}`, without parentheses"));
+            self.cx.out.push(d);
+            return;
+        }
         match (closest(method, candidates.iter()), span) {
             (Some(best), Some(sp)) => {
                 d = d.with_help(format!("a method with a similar name exists: `{best}`"));
@@ -840,6 +885,11 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             }
         }
     }
+}
+
+/// Could a field of this declared type hold something callable? Scalars, lists, options and tuples cannot.
+fn may_be_callable(t: &Type) -> bool {
+    !matches!(t, Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String | Type::Vec(_) | Type::Array(..) | Type::Tuple(_) | Type::Option(_) | Type::Result(..))
 }
 
 const PRELUDE_TYPES: &[&str] = &[

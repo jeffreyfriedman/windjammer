@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Overhead of the capability gate (ADR-0021 gates: interpreter overhead <= 5% on general programs).
 
-  scripts/bench_effects_overhead.py [--wj PATH] [--runs N] [--max-load L] [--json OUT] [--mode caps|record]
+  scripts/bench_effects_overhead.py [--wj PATH] [--runs N] [--max-load L] [--json OUT] [--mode caps|record|replay]
 
 `--mode caps` (default) compares WJ_CAPS=off with enforce. `--mode record` compares a plain run with `--record LOG` (ADR-0021 E3 gate:
 record overhead <= 2x on the sink-dense program, <= +3% on the non-sink one; the log is written to a temporary file).
+`--mode replay` compares a plain run with `--replay LOG` of a log recorded once per workload (no effect is performed on replay).
 
 Arms are interleaved (off, on, on, off, ...) and measured in child CPU time (user + sys), median of N runs; both
 arms must print identical output. The run REFUSES to produce a verdict when the 1-minute load average exceeds
@@ -20,8 +21,17 @@ WORKLOADS = {
 }
 
 
+LOGS = {}
+
+
 def run(wj, prog, caps, mode="caps"):
-    if mode == "record":
+    if mode == "replay":
+        env = dict(os.environ, WJ_CAPS="enforce")
+        if prog not in LOGS:
+            LOGS[prog] = tempfile.mktemp(suffix=".wjlog")
+            subprocess.run([wj, "run", "--interpret", prog, "--record", LOGS[prog]], env=env, capture_output=True, cwd=ROOT, check=True)
+        cmd = [wj, "run", "--interpret", prog] + (["--replay", LOGS[prog]] if caps == "replay" else [])
+    elif mode == "record":
         env = dict(os.environ, WJ_CAPS="enforce")
         log = tempfile.mktemp(suffix=".wjlog")
         cmd = [wj, "run", "--interpret", prog] + (["--record", log] if caps == "record" else [])
@@ -44,12 +54,12 @@ def main():
     ap.add_argument("--runs", type=int, default=9)
     ap.add_argument("--max-load", type=float, default=20.0)
     ap.add_argument("--json")
-    ap.add_argument("--mode", choices=["caps", "record"], default="caps")
+    ap.add_argument("--mode", choices=["caps", "record", "replay"], default="caps")
     a = ap.parse_args()
     load = os.getloadavg()[0]
     results = []
     for name, prog in WORKLOADS.items():
-        base, test = ("off", "enforce") if a.mode == "caps" else ("plain", "record")
+        base, test = {"caps": ("off", "enforce"), "record": ("plain", "record"), "replay": ("plain", "replay")}[a.mode]
         run(a.wj, prog, base, a.mode), run(a.wj, prog, test, a.mode)  # warm
         t = {base: [], test: []}
         outs = set()
