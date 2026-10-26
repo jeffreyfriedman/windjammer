@@ -212,7 +212,7 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="621"];
+  "codegen" -> "analyzer" [label="623"];
   "codegen" -> "auto_clone" [label="7"];
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
@@ -222,10 +222,10 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="373"];
+  "codegen" -> "ir" [label="374"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="665"];
+  "codegen" -> "parser" [label="666"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="1"];
   "codegen" -> "source_map" [label="9"];
@@ -332,7 +332,7 @@ digraph deps {
   "inference" -> "test_utils" [label="1"];
   "interpreter" -> "analyzer" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "ir" [label="17"];
+  "interpreter" -> "ir" [label="18"];
   "interpreter" -> "lexer" [label="5"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
@@ -412,7 +412,7 @@ digraph deps {
   "test_runner" -> "compiler_config" [label="1"];
   "test_runner" -> "config" [label="3"];
   "test_runner" -> "diagnostics" [label="1"];
-  "test_runner" -> "interpreter" [label="1"];
+  "test_runner" -> "interpreter" [label="3"];
   "test_runner" -> "lexer" [label="2"];
   "test_runner" -> "package" [label="1"];
   "test_runner" -> "parser" [label="3"];
