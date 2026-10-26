@@ -745,3 +745,38 @@ id = "code WJ0160"
 [[promise]]
 id = "code WJ0161"
 
+[[promise]]
+id = "wj mcp"
+statement = "MCP tools as typed Windjammer for code mode (ADR-0021)"
+
+[[promise]]
+id = "wj mcp bind"
+statement = "Generate a typed Windjammer module for the tools of an MCP server: a function per tool, structs for arguments and results"
+
+[[promise]]
+id = "wj mcp bind --tools"
+statement = "Read the server's tool list (tools/list JSON) from a file, or standard input with -"
+
+[[promise]]
+id = "wj mcp bind --stdio"
+statement = "Ask a live MCP server for its tool list by starting it as a child process"
+
+[[promise]]
+id = "wj mcp bind --tool"
+statement = "Bind only the named tool (repeatable), so the program's effect set is as small as the script"
+
+[[promise]]
+id = "wj mcp bind --out"
+statement = "Write the generated module to a file instead of standard output"
+
+[[promise]]
+id = "wj run --bind"
+statement = "Let mcp::call reach an MCP server: NAME=ENDPOINT with mock:FILE or stdio:COMMAND (ADR-0021)"
+
+[[promise]]
+id = "wj run --limits"
+statement = "Resource limits of a run: fuel, wall, output, calls, mem; exceeding one stops it with exit status 124"
+
+[[promise]]
+id = "wj run --result-json"
+statement = "Write the exit status, effects used and resources used of a run to a JSON file"

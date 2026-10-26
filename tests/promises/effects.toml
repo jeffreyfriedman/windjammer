@@ -356,3 +356,112 @@ args = ["run", "--interpret", "--journal", "{w}/j", "--crash-after", "1", "{w}/m
 exit = 137
 stdout_has = ["step"]
 output_lacks = ["\n7\n"]
+
+[[case]]
+name = "mcp bind writes typed bindings for the tools of a list"
+polarity = "positive"
+files = { "tools.json" = "{\"tools\": [{\"name\": \"ping\", \"description\": \"p\", \"inputSchema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"echo\", \"description\": \"e\", \"inputSchema\": {\"type\": \"object\", \"required\": [\"text\"], \"properties\": {\"text\": {\"type\": \"string\"}}}}]}" }
+args = ["mcp", "bind", "demo", "--tools", "{w}/tools.json"]
+stdout_has = ["pub fn ping()", "pub fn echo(args: EchoArgs)", "mcp::call(\"demo\", \"ping\""]
+
+[[case]]
+name = "mcp bind needs a tool list"
+polarity = "negative"
+args = ["mcp", "bind", "demo"]
+exit = 1
+output_has = ["--tools"]
+
+[[case]]
+name = "mcp bind --tools reports a file that is not a tool list"
+polarity = "negative"
+files = { "tools.json" = "not json" }
+args = ["mcp", "bind", "demo", "--tools", "{w}/tools.json"]
+exit = 1
+output_has = ["not JSON"]
+
+[[case]]
+name = "mcp bind --tool binds only the named tool"
+polarity = "positive"
+files = { "tools.json" = "{\"tools\": [{\"name\": \"ping\", \"description\": \"p\", \"inputSchema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"echo\", \"description\": \"e\", \"inputSchema\": {\"type\": \"object\", \"required\": [\"text\"], \"properties\": {\"text\": {\"type\": \"string\"}}}}]}" }
+args = ["mcp", "bind", "demo", "--tools", "{w}/tools.json", "--tool", "ping"]
+stdout_has = ["pub fn ping()"]
+output_lacks = ["pub fn echo"]
+
+[[case]]
+name = "mcp bind --tool refuses a tool the server does not have"
+polarity = "negative"
+files = { "tools.json" = "{\"tools\": [{\"name\": \"ping\", \"description\": \"p\", \"inputSchema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"echo\", \"description\": \"e\", \"inputSchema\": {\"type\": \"object\", \"required\": [\"text\"], \"properties\": {\"text\": {\"type\": \"string\"}}}}]}" }
+args = ["mcp", "bind", "demo", "--tools", "{w}/tools.json", "--tool", "nope"]
+exit = 1
+output_has = ["no tool named `nope`"]
+
+[[case]]
+name = "mcp bind --out writes the module to a file"
+polarity = "positive"
+files = { "tools.json" = "{\"tools\": [{\"name\": \"ping\", \"description\": \"p\", \"inputSchema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"echo\", \"description\": \"e\", \"inputSchema\": {\"type\": \"object\", \"required\": [\"text\"], \"properties\": {\"text\": {\"type\": \"string\"}}}}]}" }
+args = ["mcp", "bind", "demo", "--tools", "{w}/tools.json", "--out", "{w}/bindings/demo.wj"]
+
+[[case]]
+name = "mcp bind --out refuses a path it cannot write"
+polarity = "negative"
+files = { "tools.json" = "{\"tools\": [{\"name\": \"ping\", \"description\": \"p\", \"inputSchema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"echo\", \"description\": \"e\", \"inputSchema\": {\"type\": \"object\", \"required\": [\"text\"], \"properties\": {\"text\": {\"type\": \"string\"}}}}]}" }
+args = ["mcp", "bind", "demo", "--tools", "{w}/tools.json", "--out", "{w}/tools.json/demo.wj"]
+exit = 1
+
+[[case]]
+name = "mcp bind --stdio asks a live server for its tools"
+polarity = "positive"
+files = { "srv.sh" = "read l\necho '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"serverInfo\":{\"name\":\"s\",\"version\":\"1\"}}}'\nread n\nread l\necho '{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{\"name\":\"ping\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}]}}'\n" }
+args = ["mcp", "bind", "demo", "--stdio", "sh {w}/srv.sh"]
+stdout_has = ["pub fn ping()"]
+
+[[case]]
+name = "mcp bind --stdio reports a server that cannot be started"
+polarity = "negative"
+args = ["mcp", "bind", "demo", "--stdio", "wj-no-such-server-binary"]
+exit = 1
+output_has = ["cannot start the MCP server"]
+
+[[case]]
+name = "run --bind lets a granted tool be called"
+polarity = "positive"
+files = { "mock.json" = "{\"ping\": \"pong\"}", "m.wj" = "use std::mcp\n\nfn main() {\n    println(\"${mcp::call(\"demo\", \"ping\", \"{}\") ?? \"\"}\")\n}\n" }
+args = ["run", "--interpret", "--sandbox", "--allow", "effects=mcp.demo.ping", "--bind", "demo=mock:{w}/mock.json", "{w}/m.wj"]
+stdout_has = ["pong"]
+
+[[case]]
+name = "run --bind needs NAME=ENDPOINT"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--bind", "nope", "{w}/m.wj"]
+exit = 1
+output_has = ["--bind takes NAME=ENDPOINT"]
+
+[[case]]
+name = "run --limits lets a small program finish"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"fine\")\n}\n" }
+args = ["run", "--interpret", "--limits", "fuel=100000,wall=5", "{w}/m.wj"]
+stdout_has = ["fine"]
+
+[[case]]
+name = "run --limits stops a runaway program with status 124"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    while true { }\n}\n" }
+args = ["run", "--interpret", "--limits", "fuel=50000", "{w}/m.wj"]
+exit = 124
+output_has = ["limit exceeded: fuel"]
+
+[[case]]
+name = "run --result-json reports the run"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"done\")\n}\n" }
+args = ["run", "--interpret", "--result-json", "{w}/r.json", "{w}/m.wj"]
+stdout_has = ["done"]
+
+[[case]]
+name = "run --result-json still reports a run that hit a limit"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    while true { }\n}\n" }
+args = ["run", "--interpret", "--limits", "fuel=20000", "--result-json", "{w}/r.json", "{w}/m.wj"]
+exit = 124
