@@ -100,10 +100,12 @@ impl Interpreter {
         let mut module = module;
         let mut first = first.to_string();
         let mut rest: Vec<&str> = rest.to_vec();
+        let mut is_key = false; // `Self` already names a type key
         match first.as_str() {
             "Self" => {
                 if let Some(t) = self.scope.self_ty.clone() {
                     first = t.to_string();
+                    is_key = true;
                 }
             }
             "crate" => {
@@ -141,6 +143,9 @@ impl Interpreter {
         }
         if let Some(Type::Custom(n)) = self.type_aliases.get(&first) {
             first = n.clone();
+        }
+        if !is_key && !self.dup_types.is_empty() {
+            first = self.type_key(module, &first);
         }
         if rest.is_empty() {
             if let Some(f) = self.modules[module].funcs.get(&first) {
@@ -347,7 +352,7 @@ impl Interpreter {
             };
             if want_ref && Self::is_place_expr(a) {
                 if let Some(p) = self.resolve_place(a)? {
-                    out.push(Value::Ref(p));
+                    out.push(Value::Ref(Box::new(p)));
                     continue;
                 }
             }
@@ -687,7 +692,21 @@ impl Interpreter {
         targs: &[Type],
         expected: Option<Type>,
     ) -> R {
+        let picked;
+        let f = match (f.name == "from", args.first()) {
+            (true, Some(a)) => match self.pick_from(f, a) {
+                Some(p) => {
+                    picked = p;
+                    &picked
+                }
+                None => f,
+            },
+            _ => f,
+        };
         if f.is_extern {
+            if !self.has_host_fn(&f.name) {
+                return self.call_c_library(f, args);
+            }
             return self.call_host(&f.name, args); // ADR-0023 host bridge (unsupported when none is loaded)
         }
         if self.hot.is_some() {
@@ -702,7 +721,15 @@ impl Interpreter {
     }
 
     /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
-    pub(crate) fn call_func_walk(
+    pub(crate) fn call_func_walk(&mut self, f: &Rc<FuncDef>, args: Vec<Value>, self_val: Option<Value>, targs: &[Type], expected: Option<Type>) -> R {
+        if f.decorators.iter().any(|d| d.name == "durable") {
+            return self.call_durable(f, args, self_val, targs, expected); // journaled steps (ADR-0021 E4), tree-walked
+        }
+        self.call_func_body(f, args, self_val, targs, expected)
+    }
+
+    /// The walker's call proper (a durable function's body runs through here, inside its journal).
+    pub(crate) fn call_func_body(
         &mut self,
         f: &Rc<FuncDef>,
         mut args: Vec<Value>,
@@ -865,7 +892,7 @@ impl Interpreter {
             None => self.eval_raw(object)?,
         };
         let place = match (&place, &recv) {
-            (None, Value::Ref(p)) => Some(self.chase(p.clone())?),
+            (None, Value::Ref(p)) => Some(self.chase(*p.clone())?),
             _ => place,
         };
         if method == "clone" && matches!(recv, Value::Rc(_)) {
@@ -877,6 +904,10 @@ impl Interpreter {
         let args = self.eval_args(arguments, user.as_ref(), true)?;
         self.mark(loc);
         self.type_hint = type_args.and_then(|t| t.first().cloned());
+        if method == "into" && self.type_hint.is_none() {
+            // `let e: AppErr = x.into()`: the declared type picks the `From` impl
+            self.type_hint = self.take_expected(whole);
+        }
         if let Some(f) = user {
             self.prepare_arg_moves(&f, arguments, 0);
             return self.call_user_method(&f, recv, place, args);
@@ -907,7 +938,7 @@ impl Interpreter {
         let self_val = if place.is_some() && self.self_mutation(f) {
             // release our clone of the receiver so in-place mutation stays copy-free
             drop(recv);
-            Value::Ref(place.unwrap())
+            Value::Ref(Box::new(place.unwrap()))
         } else {
             recv
         };

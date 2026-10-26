@@ -475,6 +475,33 @@ narrow the claim in the spec (which this note already does for handles). Planted
 claim: keep record/replay, drop the DST positioning. Record overhead above 4x means the log encoding is too heavy: switch events to a binary encoding with the
 JSON form as an export.
 
+### E4 design (2026-10-26): `durable fn` on the interpreter first
+
+**Surface.** `durable fn` is a contextual keyword (an identifier directly before `fn`, at module level or in an `impl`). The parser records it as the marker attribute `@durable` on the function, so no AST shape changes and every layer sees it as a fact of the declaration. This follows the rule in section 3: the keyword changes execution; the attribute is how the declaration is carried.
+
+**What a step is.** The static pass (`ir/effect_facts/durable.rs`, on the resolved program and the effect facts) walks each durable body and marks a call as a *step* when its callee performs an effect, is effect-open, or is a sink (including `println`, `time::now`, `random::range`, file reads). Steps are identified by source position. Calls that perform no effect are ordinary code, so ordinary arithmetic and collection work is simply re-executed on replay. Nothing needs annotating: "no ambient time, randomness or I/O outside a recorded step" holds by construction.
+
+**Checks (all in `wj check`, same pass).** WJ0045 a step result, an argument or the return type cannot be journaled (function types, trait objects, raw pointers, live handles and handle sinks); WJ0046 a step mutates a binding of the body (callee parameter is `&mut`, or its body mutates it); WJ0047 the body receives from a channel, locks, or reads an atomic; WJ0048 the body iterates a `HashMap`/`HashSet` (a binding known to hold one) outside a step. They are syntactic on the resolved AST, not type inference, so each has a stated blind spot: a hash collection reached only through a field or a function result is not seen; the runtime still journals, so the cost of a miss is an unstable order, not a lost step.
+
+**Run time (interpreter).** Calling a durable function opens a *run* identified by function and argument digest (and the call's occurrence count in the process). With `--journal DIR` the run is a JSON Lines file `<fn>-<digest>.wjlog`: a header, one `{"step", "callee", "result", "vt_ns"}` line per step in call order, and `{"done"}` when the function returned. Calling it again with the same arguments replays: a completed run returns its recorded result without running; otherwise journaled steps return their results without executing (not even evaluating arguments) and the first missing step runs live. Steps are numbered when they start, so a step that contains steps replays correctly. A replayed step whose callee name differs from the journal's is WJ0049 (the program changed under the journal). Delivery is at-least-once: a crash after performing a step and before journaling it re-executes that step (`--crash-after N:mid` tests that window); steps that must not repeat take an idempotency key (planned, see below).
+
+**Why a resumed run equals an uninterrupted one.** Skipped steps would otherwise skip their share of the random stream and of virtual time. At each live step the random generator is re-seeded from (run, step number), and the journal records the virtual clock after each step and restores it on replay. In a deterministic world (`--deterministic-time`, `--simulate`) crash and resume therefore give the same output as no crash. With the real clock the numbers differ per run, as they must; they are journaled once.
+
+**Relation to the effect port.** Independent: the journal is call-level, the port is effect-level. A durable run can be recorded or simulated; `println` is a step, so output already printed is not printed again after a resume.
+
+**Not in this slice.** Explicit `step { }` blocks and `step.key()`; `durable::start(id, f, args)` for starting a run by identity from ordinary code; child durable calls with their own journal (DUR-CALL); `durable fn` in traits; a `DurableStore` port with a non-file store (ADR-0019 D1); seeded crash injection under `--simulate`. Each has a spec rule or ADR line already; none is needed by the gates below.
+
+**Compiled backends.** The facts are backend-independent (`step_sites`, the four checks). A compiled backend needs three things: a journal in `windjammer-runtime` (and the Go and JS runtimes) with this file format, checked by shared vectors like `caps_core`; code generation that wraps each step-site call as `durable::step(index, "callee", || call)`; and a serialization of journalable types (derive-based in Rust, JSON in Go and JS). Until then `wj build` and `wj run --compiled` of a program with a `durable fn` **stop with an error** naming the function. A build that dropped the journal would lose progress on a crash while looking correct, which is the failure this feature exists to prevent. This is stage E4b.
+
+**Gates.**
+1. Mutation study: ten sample workflows (ported from public workflow patterns: order checkout, ETL batch, report generation, retrying fetch, invoice numbering, nightly cleanup, signup, inventory sync, export, notification fan-out), each mutated by injecting clock, random, file-read, environment, `HashMap`-order and channel non-determinism into the durable body. Every mutant is either rejected by `wj check` or, when it runs, gives the same final output and files under a crash at every step boundary as an uninterrupted run. Required: 100%.
+2. Crash at every step boundary (before and after journaling) on those workflows and on the replay corpus wrapped in a durable function: final stdout and files equal the crash-free run in 100% of cases.
+3. SPEC-EFF-021 to 026 pass.
+4. Cost: a file-backed journal costs at most 2x per step over the in-memory one.
+5. Escape hatches: at most 20% of the sample workflows need anything beyond ordinary code.
+
+**Kill / rethink.** More than 20% of workflows needing an escape hatch means the rules are too strict: relax DUR-VALUE or DUR-MUT before shipping. A mutant that is neither rejected nor journaled means a step is missing from the pass: fix the pass, and if the hole is structural (calls the resolver cannot see, such as inside string interpolation) narrow the claim in the spec. Cost above 2x means the journal should batch writes.
+
 ### E3 status (2026-10-26): implemented, gates measured (overhead provisional)
 
 Delivered: `wj run --interpret --record LOG | --replay LOG`, `wj run --simulate [--seed N] [--faults R]`, `wj test --interpret --simulate [--seed N | --seeds A..B] [--faults R]`; `src/interpreter/effect_port/` (`mod.rs` port and WJ0049, `log.rs` log v1, `codec.rs` values, `sim.rs` world, `sim_fs.rs` in-memory file system). SPEC-EFF-027, 028, 029, 031 and new 044-047 pass; the spec harness has `replay` mode and a `faults:` header.
@@ -495,6 +522,20 @@ Differences from the design note above, and why:
 | Record overhead at most 2x on the sink-dense program and at most +3% on the non-sink one | **Provisional**: sink-dense +42% (0.90 s to 1.28 s), non-sink +5.7% (0.67 s to 0.71 s; that program makes no recorded call, so this is noise), CPU time, median of 10 interleaved runs, at load 130 to 282. `scripts/bench_effects_overhead.py --mode record` refuses a verdict above load 20: re-run it on a quiet machine |
 
 Kill criteria: none triggered. Replay stayed at 100% after routing the sources the audit found; the study found far more than half.
+
+### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
+
+Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
+
+| Gate | Result |
+|---|---|
+| Mutation study: 10 workflows x 6 injected non-determinisms (clock, random, changing file, environment, `HashMap` order, channel receive) are rejected by `wj check` or journaled | **Met: 60 of 60** (20 rejected: `HashMap` order WJ0048, channel WJ0047; 40 journaled: replaying a finished journal after the file and the environment changed returns the recorded result). The oracle can fail: the same mutants without a journal show the changed world |
+| Crash at every step boundary: final stdout and files equal the uninterrupted run | **Met: 96 crash points on the 10 workflows plus 134 on the replay corpus wrapped in a durable fn (38 programs; 3 more are rejected by the durable rules)**, 0 differences. Crashes in the window before journaling are tested separately: the resumed run completes, and the step runs again (at-least-once), shown by `a_crash_between_performing_and_journaling_runs_the_step_again` |
+| SPEC-EFF-021 to 026 | **Met** |
+| Cost: file-backed journal at most 2x per step over in-memory | **Provisional**: about 1.0x to 1.7x on 3000 steps, at load 100; re-measure on a quiet machine (`bench/effects/durable.wj`, `--journal DIR` against none) |
+| Escape hatches: at most 20% of workflows need one | **Met**: 0 of 10 (the rules accepted ordinary code; the only edits were to the `HashMap` and channel mutants, which are meant to be rejected) |
+
+Findings from building it: (1) resumption needs the random stream and the virtual clock restored per step, not per process: a resumed run that simply skipped steps drew different numbers than an uninterrupted one; the per-step re-seeding and the journaled clock fix that (the first crash-everywhere run failed on exactly this for the clock, and on `Instant` not being journalable). (2) The compiled engine called durable functions without going through the interpreter's call entry, so the hook sits at the walker's entry and durable functions are excluded from compilation. (3) Calls inside string interpolation (`"${time::now()}"`) are not seen by the resolver, so neither the effect facts nor the step pass see them; the run-time gate still does. This is a hole in the static claim, recorded for the resolver owner.
 
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).

@@ -336,7 +336,7 @@ pub(super) fn range_code(s: Code, en: Code, inclusive: bool) -> Code {
         let x = s(it, b)?;
         let y = en(it, b)?;
         match (&x, &y) {
-            (Value::Int(a, at), Value::Int(c, ct)) => Ok(Value::Range(*a, if inclusive { *c + 1 } else { *c }, IntTy::unify(*at, *ct))),
+            (Value::Int(a, at), Value::Int(c, ct)) => Ok(Value::range(*a, if inclusive { *c + 1 } else { *c }, IntTy::unify(*at, *ct))),
             (Value::Char(a), Value::Char(c)) => {
                 let hi = if inclusive { *c as u32 + 1 } else { *c as u32 };
                 Ok(Value::vec((*a as u32..hi).filter_map(char::from_u32).map(Value::Char).collect()))

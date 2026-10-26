@@ -3,10 +3,12 @@
 //! generated projects under random dependency edits and on the repository's example programs.
 //! Run: cargo test --release --test check_cache_differential
 
-#[path = "check_cache/generated.rs"]
+#[path = "common/check_cache/generated.rs"]
 mod generated;
-#[path = "check_cache/support.rs"]
+#[path = "common/check_cache/support.rs"]
 mod support;
+#[path = "common/check_cache/effects.rs"]
+mod effects;
 
 use generated::Project;
 use std::path::Path;

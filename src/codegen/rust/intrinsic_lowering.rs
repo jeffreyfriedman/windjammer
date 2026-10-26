@@ -57,6 +57,12 @@ impl<'ast> CodeGenerator<'ast> {
                 if arguments.is_empty() {
                     return Some(format!("{macro_name}!()"));
                 }
+                if arguments.len() > 1 && matches!(arguments[0].1, Expression::Literal { value: Literal::String(_), .. }) {
+                    // `panic("bad {}: {}", a, b)`: a template and its arguments, exactly as `println` takes them
+                    let mut parts = vec![self.format_macro_template_arg(arguments[0].1)];
+                    parts.extend(arguments[1..].iter().map(|(_, a)| self.generate_expression(a)));
+                    return Some(format!("{macro_name}!({})", parts.join(", ")));
+                }
                 let msg = self.intrinsic_message_parts(arguments[0].1);
                 Some(format!("{macro_name}!({msg})"))
             }

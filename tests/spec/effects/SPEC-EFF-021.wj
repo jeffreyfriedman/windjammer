@@ -1,5 +1,4 @@
 // spec: SPEC-EFF-021
-// xfail: Q-032
 // expect: 6
 durable fn total(xs: Vec<int>) -> int {
     let mut s = 0

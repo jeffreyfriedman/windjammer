@@ -1,5 +1,5 @@
 // tags: vec, slices, windows, chunks
-// rust: gap error[E0277]: a value of type 'Vec<i64>' cannot be built from an iterator over e
+// rust: ok
 // expect: [2, 3, 4]
 // expect: 3 5 7 9
 // expect: [1, 2] [3, 4] [5]

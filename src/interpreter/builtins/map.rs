@@ -3,9 +3,8 @@
 //! Maps are ordered by key (a valid HashMap iteration order; programs must not depend on it).
 
 use super::*;
-use std::collections::BTreeMap;
 
-type M = BTreeMap<Key, Value>;
+type M = KMap;
 
 fn map_of(v: &Value) -> Rc<KMap> {
     match v {
@@ -16,7 +15,7 @@ fn map_of(v: &Value) -> Rc<KMap> {
 
 fn map_mut(v: &mut Value) -> &mut M {
     match v {
-        Value::Map(m) | Value::Set(m) => &mut Rc::make_mut(m).m,
+        Value::Map(m) | Value::Set(m) => Rc::make_mut(m),
         _ => unreachable!("map method on non-map"),
     }
 }
@@ -25,7 +24,7 @@ fn entry_parts(v: &Value) -> R<(Place, Value)> {
     if let Value::Struct(s) = v {
         if &*s.name == "__Entry" {
             if let (Value::Ref(p), k) = (&s.fields[0].1, &s.fields[1].1) {
-                return Ok((p.clone(), k.clone()));
+                return Ok((*p.clone(), k.clone()));
             }
         }
     }
@@ -35,7 +34,7 @@ fn entry_parts(v: &Value) -> R<(Place, Value)> {
 fn entry_value(map: Place, key: Value) -> Value {
     Value::Struct(Rc::new(StructVal {
         name: Rc::from("__Entry"),
-        fields: vec![(Rc::from("map"), Value::Ref(map)), (Rc::from("key"), key)],
+        fields: vec![(Rc::from("map"), Value::Ref(Box::new(map))), (Rc::from("key"), key)],
         copy: false,
         uid: 0,
     }))
@@ -62,7 +61,7 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Map, "last_key_value", |_, v, _| Ok(Value::option(map_of(v).iter().next_back().map(|(k, x)| tup(k, x)))));
     r.pure(Kind::Map, "range", |_, v, a| {
         let (lo, hi) = match arg(&a, 0, "range")? {
-            Value::Range(x, y, t) => (Value::Int(x, t), Value::Int(y, t)),
+            Value::Range(r, t) => (Value::Int(r.0, t), Value::Int(r.1, t)),
             _ => return Err(semantic("`range` expects a range")),
         };
         Ok(new_iter(map_of(v).iter().filter(|(k, _)| k.0.structural_cmp(&lo) != std::cmp::Ordering::Less && k.0.structural_cmp(&hi) == std::cmp::Ordering::Less).map(|(k, x)| tup(k, x)).collect()))
@@ -93,7 +92,7 @@ pub fn register(r: &mut Registry) {
     r.mutating(Kind::Map, "retain", |it, v, a| {
         let f = arg(&a, 0, "retain")?;
         let src: Vec<(Key, Value)> = map_of(v).iter().map(|(k, x)| (k.clone(), x.clone())).collect();
-        let mut out = M::new();
+        let mut out = map_of(v).empty_like();
         for (k, x) in src {
             let keep = it.call_value(&f, vec![k.0.clone(), x.clone()])?;
             if matches!(keep, Value::Bool(true)) {
@@ -116,16 +115,16 @@ pub fn register(r: &mut Registry) {
     r.place(Kind::Map, "get_mut", |_, p, a| {
         let k = arg(&a, 0, "get_mut")?;
         let present = map_of(&p.read()?).contains_key(&Key(k.clone()));
-        Ok(if present { Value::some(Value::Ref(p.proj(Proj::Key(k)))) } else { Value::none() })
+        Ok(if present { Value::some(Value::Ref(Box::new(p.proj(Proj::Key(k))))) } else { Value::none() })
     });
     r.place(Kind::Map, "entry", |_, p, a| Ok(entry_value(p, arg(&a, 0, "entry")?)));
     r.place(Kind::Map, "iter_mut", |it, p, _| {
         let keys: Vec<Value> = map_of(&p.read()?).ordered_keys(it.hash_seed);
-        Ok(new_iter(keys.into_iter().map(|k| Value::tuple(vec![k.clone(), Value::Ref(p.proj(Proj::Key(k)))])).collect()))
+        Ok(new_iter(keys.into_iter().map(|k| Value::tuple(vec![k.clone(), Value::Ref(Box::new(p.proj(Proj::Key(k))))])).collect()))
     });
     r.place(Kind::Map, "values_mut", |it, p, _| {
         let keys: Vec<Value> = map_of(&p.read()?).ordered_keys(it.hash_seed);
-        Ok(new_iter(keys.into_iter().map(|k| Value::Ref(p.proj(Proj::Key(k)))).collect()))
+        Ok(new_iter(keys.into_iter().map(|k| Value::Ref(Box::new(p.proj(Proj::Key(k))))).collect()))
     });
 
     // ---------------- Entry ----------------
@@ -139,7 +138,7 @@ pub fn register(r: &mut Registry) {
                 Ok(())
             })?;
         }
-        Ok(Value::Ref(map.proj(Proj::Key(key))))
+        Ok(Value::Ref(Box::new(map.proj(Proj::Key(key)))))
     });
     r.pure(Kind::Entry, "or_insert_with", |it, v, a| {
         let (map, key) = entry_parts(v)?;
@@ -152,7 +151,7 @@ pub fn register(r: &mut Registry) {
                 Ok(())
             })?;
         }
-        Ok(Value::Ref(map.proj(Proj::Key(key))))
+        Ok(Value::Ref(Box::new(map.proj(Proj::Key(key)))))
     });
     r.pure(Kind::Entry, "or_default", |it, v, _| {
         let (map, key) = entry_parts(v)?;
@@ -167,14 +166,14 @@ pub fn register(r: &mut Registry) {
                 Ok(())
             })?;
         }
-        Ok(Value::Ref(map.proj(Proj::Key(key))))
+        Ok(Value::Ref(Box::new(map.proj(Proj::Key(key)))))
     });
     r.pure(Kind::Entry, "and_modify", |it, v, a| {
         let (map, key) = entry_parts(v)?;
         let present = map_of(&map.read()?).contains_key(&Key(key.clone()));
         if present {
             let f = arg(&a, 0, "and_modify")?;
-            it.call_value(&f, vec![Value::Ref(map.proj(Proj::Key(key.clone())))])?;
+            it.call_value(&f, vec![Value::Ref(Box::new(map.proj(Proj::Key(key.clone()))))])?;
         }
         Ok(v.clone())
     });
@@ -221,7 +220,8 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Set, "is_superset", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_superset")?);
         let m = map_of(v);
-        Ok(Value::Bool(o.keys().all(|k| m.contains_key(k))))
+        let all = o.keys().all(|k| m.contains_key(k));
+        Ok(Value::Bool(all))
     });
     r.pure(Kind::Set, "is_disjoint", |_, v, a| {
         let o = map_of(&arg(&a, 0, "is_disjoint")?);
@@ -247,7 +247,7 @@ pub fn register(r: &mut Registry) {
     r.mutating(Kind::Set, "retain", |it, v, a| {
         let f = arg(&a, 0, "retain")?;
         let src: Vec<Key> = map_of(v).keys().cloned().collect();
-        let mut out = M::new();
+        let mut out = map_of(v).empty_like();
         for k in src {
             if matches!(it.call_value(&f, vec![k.0.clone()])?, Value::Bool(true)) {
                 out.insert(k, Value::Unit);

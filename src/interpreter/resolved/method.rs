@@ -78,7 +78,7 @@ pub(super) fn method_call(
                 let v = slot.borrow().clone();
                 match v {
                     Value::Ref(p) => {
-                        let place = it.chase(p)?;
+                        let place = it.chase(*p)?;
                         let recv = place.read()?;
                         (Some(place), recv)
                     }
@@ -89,7 +89,7 @@ pub(super) fn method_call(
             Recv::Value(c) => {
                 let v = c(it, b)?;
                 match &v {
-                    Value::Ref(p) => (Some(it.chase(p.clone())?), v),
+                    Value::Ref(p) => (Some(it.chase(*p.clone())?), v),
                     _ => (None, v),
                 }
             }
@@ -126,7 +126,7 @@ pub(super) fn method_call(
                 let self_val = match place {
                     Some(p) if it.self_mutation(f) => {
                         drop(recv);
-                        Value::Ref(p)
+                        Value::Ref(Box::new(p))
                     }
                     _ => recv,
                 };
@@ -140,6 +140,9 @@ pub(super) fn method_call(
         }
         it.mark(loc);
         it.type_hint = hint.clone();
+        if method == "into" && hint.is_none() {
+            it.type_hint = it.take_expected(whole);
+        }
         match user {
             Some(f) => it.call_user_method(&f, recv, place, vals),
             None if Interpreter::builtin_by_kind(&recv) && it.hot.is_none() => {

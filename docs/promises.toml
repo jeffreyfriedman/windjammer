@@ -672,6 +672,14 @@ id = "wj test --faults"
 statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
 
 [[promise]]
+id = "wj run --journal"
+statement = "Interpreted runs keep the step journals of durable fn runs in a directory, so a crashed run resumes where it stopped (ADR-0021)"
+
+[[promise]]
+id = "wj run --crash-after"
+statement = "With --journal: exit abruptly after the N-th journaled step, to test crash recovery"
+
+[[promise]]
 id = "wj run --record"
 statement = "Interpreted runs write every effect (file, env, process and network results, stdin, real-clock readings) to a replayable log (ADR-0021)"
 
@@ -698,6 +706,18 @@ statement = "Interpreted runs: do not compile hot integer functions to machine c
 [[promise]]
 id = "wj run --jit"
 statement = "Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020)"
+
+[[promise]]
+id = "wj run --jit-loop-hot"
+statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_LOOP_HOT): closure-engine iterations before a hot loop enters machine code; 0 makes every loop try at its first iteration (stress tests)"
+
+[[promise]]
+id = "wj run --jit-debug"
+statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_DEBUG): report on stderr which loops run as machine code and why others do not"
+
+[[promise]]
+id = "wj run --jit-mutant"
+statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_MUTANT): in debug builds, leave one machine-code check out for the mutation gate; release builds ignore it"
 
 [[promise]]
 id = "wj run --engine"
@@ -730,3 +750,10 @@ pending = "no acceptance cases yet"
 [[promise]]
 id = "wj run --no-lint"
 statement = "Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it"
+
+[[promise]]
+id = "code WJ0160"
+
+[[promise]]
+id = "code WJ0161"
+

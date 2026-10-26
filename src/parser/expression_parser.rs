@@ -16,7 +16,9 @@ impl Parser {
     pub(crate) fn parse_expression(&mut self) -> Result<&'static Expression<'static>, String> {
         // A full expression (parenthesised, argument, index...) is never itself a unary operand.
         let saved = std::mem::replace(&mut self.in_unary_operand, false);
+        self.span_enter();
         let r = self.parse_ternary_expression();
+        self.span_exit();
         self.in_unary_operand = saved;
         r
     }

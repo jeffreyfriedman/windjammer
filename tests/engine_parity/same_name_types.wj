@@ -1,0 +1,78 @@
+// Two modules declare a struct and an enum of the same names: literals, methods, variants and the
+// resolved engine's caches (method sites, struct-literal plans, field reads) keep them apart.
+mod a {
+    pub enum Color {
+        Red,
+        Green,
+    }
+    impl Color {
+        pub fn code(self) -> int {
+            match self {
+                Color::Red => 10,
+                Color::Green => 11,
+            }
+        }
+    }
+    pub struct P {
+        pub x: int,
+    }
+    impl P {
+        pub fn get(self) -> int {
+            self.x + 1000
+        }
+    }
+    pub fn mk(i: int) -> P {
+        P { x: i }
+    }
+    pub fn col() -> Color {
+        Color::Green
+    }
+}
+
+mod b {
+    pub enum Color {
+        Red,
+        Blue,
+    }
+    impl Color {
+        pub fn code(self) -> int {
+            match self {
+                Color::Red => 20,
+                Color::Blue => 21,
+            }
+        }
+    }
+    pub struct P {
+        pub y: int,
+        pub x: int,
+    }
+    impl P {
+        pub fn get(self) -> int {
+            self.x * 2 + self.y
+        }
+    }
+    pub fn mk(i: int) -> P {
+        P { y: 5, x: i }
+    }
+    pub fn col() -> Color {
+        Color::Blue
+    }
+}
+
+// the program root declares a `P` too: a literal inside `b` still means `b::P`
+pub struct P {
+    pub z: int,
+}
+
+fn main() {
+    let root = P { z: 7 }
+    let mut s = root.z
+    let mut i = 0
+    while i < 600 {
+        let p = a::mk(i)
+        let q = b::mk(i)
+        s += p.get() + q.get() + p.x - q.x + a::col().code() + b::col().code()
+        i += 1
+    }
+    println("${s} ${a::col().code()} ${b::col().code()} ${a::mk(3).get()} ${b::mk(3).get()}")
+}

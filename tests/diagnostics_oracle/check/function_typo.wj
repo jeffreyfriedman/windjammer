@@ -1,0 +1,10 @@
+// expect: WJ0002
+fn compute_total(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() {
+    let r = compute_totl(1, 2)
+//~@13+12 ERROR WJ0002 cannot find function `compute_totl`
+    println("${r}")
+}

@@ -1,0 +1,9 @@
+// expect: W0010
+fn greet(name: str) {
+//~@16+3 ERROR W0010 use `string` instead of
+    println("${name}")
+}
+
+fn main() {
+    greet("a")
+}

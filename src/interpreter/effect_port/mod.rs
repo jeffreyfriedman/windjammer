@@ -48,10 +48,7 @@ fn not_an_event(path: &str, uses: &[sinks::SinkUse]) -> bool {
     uses.iter().any(|u| matches!(u.effect, Time | Random | Console))
 }
 
-/// Sinks that hand back a live handle (a child process, a listener, a database connection). Their later use is
-/// not an event the port can see, so a run that makes one cannot be recorded, replayed or simulated: it stops here,
-/// naming the call, instead of replaying something that did not happen.
-pub static HANDLE_SINKS: &[&str] = &["subprocess::spawn", "http::serve", "http::serve_fn", "http::server_serve", "db::connect"];
+pub use crate::ir::effect_facts::sinks::HANDLE_SINKS;
 
 fn is_handle_sink(path: &str) -> bool {
     HANDLE_SINKS.iter().any(|h| path.ends_with(h))

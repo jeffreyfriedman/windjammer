@@ -165,6 +165,7 @@ pub fn generate_single_file_cargo_toml_with_config(
     write_cargo_toml(output_dir, source_dir, &lib_or_bin_section, config)
 }
 
+pub(crate) mod runtime_alignment;
 pub(crate) use toml_generation::find_wj_config;
 pub use toml_generation::{generate_wasm_cargo_toml, generate_wasm_cargo_toml_with_config};
 pub use toml_generation::infer_configured_package_name;

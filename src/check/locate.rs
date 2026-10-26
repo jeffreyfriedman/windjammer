@@ -11,6 +11,82 @@ const LOOKBACK: usize = 600;
 
 pub struct Locator<'a> {
     pub ix: &'a SourceIndex<'a>,
+    /// Byte ranges that are comments or the literal text of strings (not `${..}` bodies): a name
+    /// that only occurs there is not a use of that name.
+    masked: Vec<(usize, usize)>,
+}
+
+/// Comment and string-literal byte ranges of `text` (`//`, nested `/* */`, `"..."` with escapes,
+/// `r#"..."#`); the code inside `${..}` of a string stays visible.
+pub fn masked_ranges(text: &str) -> Vec<(usize, usize)> {
+    let b = text.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    // stack of open interpolation depths: each entry is the brace depth inside a `${`
+    let mut interp: Vec<usize> = Vec::new();
+    // Scan a string body starting after its opening quote; returns the index after the closing quote
+    // or the index of an interpolation start (`${`), pushing the mask for the literal part.
+    fn string_body(b: &[u8], mut i: usize, out: &mut Vec<(usize, usize)>, interp: &mut Vec<usize>) -> usize {
+        let start = i;
+        while i < b.len() {
+            match b[i] {
+                b'\\' => i += 2,
+                b'"' => {
+                    out.push((start, i));
+                    return i + 1;
+                }
+                b'$' if b.get(i + 1) == Some(&b'{') && b.get(i + 2) != Some(&b'"') => {
+                    out.push((start, i));
+                    interp.push(0);
+                    return i + 2;
+                }
+                _ => i += 1,
+            }
+        }
+        out.push((start, b.len()));
+        b.len()
+    }
+    while i < b.len() {
+        match b[i] {
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                let end = text[i..].find('\n').map_or(b.len(), |n| i + n);
+                out.push((i, end));
+                i = end;
+            }
+            b'/' if b.get(i + 1) == Some(&b'*') => {
+                let (mut depth, mut j) = (1, i + 2);
+                while j < b.len() && depth > 0 {
+                    if b[j] == b'/' && b.get(j + 1) == Some(&b'*') {
+                        depth += 1;
+                        j += 2;
+                    } else if b[j] == b'*' && b.get(j + 1) == Some(&b'/') {
+                        depth -= 1;
+                        j += 2;
+                    } else {
+                        j += 1;
+                    }
+                }
+                out.push((i, j));
+                i = j;
+            }
+            b'"' => i = string_body(b, i + 1, &mut out, &mut interp),
+            b'{' if !interp.is_empty() => {
+                *interp.last_mut().unwrap() += 1;
+                i += 1;
+            }
+            b'}' if !interp.is_empty() => {
+                if *interp.last().unwrap() == 0 {
+                    interp.pop();
+                    i = string_body(b, i + 1, &mut out, &mut interp);
+                } else {
+                    *interp.last_mut().unwrap() -= 1;
+                    i += 1;
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    out
 }
 
 fn is_word(c: char) -> bool {
@@ -25,7 +101,15 @@ fn whole_word_at(text: &str, at: usize, word: &str) -> bool {
 
 impl<'a> Locator<'a> {
     pub fn new(ix: &'a SourceIndex<'a>) -> Self {
-        Self { ix }
+        Self { ix, masked: masked_ranges(ix.text()) }
+    }
+
+    fn is_masked(&self, at: usize) -> bool {
+        self.masked.iter().any(|&(s, e)| at >= s && at < e)
+    }
+
+    fn word_here(&self, at: usize, word: &str) -> bool {
+        whole_word_at(self.ix.text(), at, word) && !self.is_masked(at)
     }
 
     fn offset(&self, loc: &SourceLocation) -> Option<usize> {
@@ -39,7 +123,7 @@ impl<'a> Locator<'a> {
         let text = self.ix.text();
         let off = self.offset(loc)?;
         for at in [self.ix.skip_ws(off), off] {
-            if whole_word_at(text, at, word) {
+            if self.word_here(at, word) {
                 return Some(self.ix.span(at, at + word.len()));
             }
         }
@@ -48,7 +132,7 @@ impl<'a> Locator<'a> {
         let hay = &text[lo..off.min(text.len())];
         let mut best = None;
         for (i, _) in hay.match_indices(word) {
-            if whole_word_at(text, lo + i, word) {
+            if self.word_here(lo + i, word) {
                 best = Some(lo + i);
             }
         }
@@ -63,7 +147,7 @@ impl<'a> Locator<'a> {
         ahead
             .match_indices(word)
             .map(|(i, _)| off + i)
-            .find(|&s| whole_word_at(text, s, word))
+            .find(|&s| self.word_here(s, word))
             .map(|s| self.ix.span(s, s + word.len()))
     }
 
@@ -79,7 +163,7 @@ impl<'a> Locator<'a> {
             for prefix in ["pub ", "async "] {
                 rest = rest.strip_prefix(prefix).unwrap_or(rest);
             }
-            if !line.starts_with(char::is_whitespace) {
+            if !line.starts_with(char::is_whitespace) && !self.is_masked(offset) {
                 if let Some(after) = rest.strip_prefix(kw).and_then(|r| r.strip_prefix(' ')) {
                     if after.starts_with(name)
                         && !after[name.len()..].chars().next().is_some_and(is_word)
@@ -104,7 +188,7 @@ impl<'a> Locator<'a> {
         let mut from = 0;
         while let Some(i) = text[from..].find(word) {
             let s = from + i;
-            if whole_word_at(text, s, word) {
+            if self.word_here(s, word) {
                 let line_start = text[..s].rfind('\n').map_or(0, |n| n + 1);
                 let before = &text[line_start..s];
                 let is_decl = before.trim_start().starts_with("fn ") || before.trim_start().starts_with("let ");
@@ -242,5 +326,22 @@ mod tests {
         let l = Locator::new(&ix);
         let s = l.literal(&loc(1, 8), &Literal::Int(42)).unwrap();
         assert_eq!(&src[s.byte_start..s.byte_end], "42");
+    }
+
+
+    #[test]
+    fn masks_comments_and_string_text_but_not_interpolation_code() {
+        let t = "a // note foo\nb \"foo ${foo + 1} foo\" /* foo */ foo";
+        let m = masked_ranges(t);
+        let masked = |needle: &str, nth: usize| {
+            let at = t.match_indices(needle).nth(nth).unwrap().0;
+            m.iter().any(|&(s, e)| at >= s && at < e)
+        };
+        assert!(masked("foo", 0), "line comment");
+        assert!(masked("foo", 1), "string text before the interpolation");
+        assert!(!masked("foo", 2), "code inside ${{..}}");
+        assert!(masked("foo", 3), "string text after the interpolation");
+        assert!(masked("foo", 4), "block comment");
+        assert!(!masked("foo", 5), "plain code");
     }
 }

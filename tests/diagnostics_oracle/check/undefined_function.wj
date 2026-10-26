@@ -1,0 +1,6 @@
+// expect: WJ0002
+fn main() {
+    let result = calculate_total(100, 200)
+//~@18+15 ERROR WJ0002 cannot find function `calculate_total`
+    println("${result}")
+}

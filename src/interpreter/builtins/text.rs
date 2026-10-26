@@ -106,8 +106,11 @@ fn parse_target(it: &mut Interpreter, text: &str) -> Value {
     if let Some(ty) = int_ty {
         let parsed = if t.starts_with('+') { t[1..].parse::<i128>() } else { t.parse::<i128>() };
         return match parsed {
-            Ok(n) if ty.fits(n) && !(t.starts_with('-') && !ty.signed()) => Value::ok(Value::Int(n, ty)),
-            Ok(_) => Value::err(Value::str("number too large or too small to fit in target type")),
+            // rustc's `ParseIntError` kinds: a `-` on an unsigned type is an invalid digit; otherwise the sign of the overflow
+            Ok(_) if t.starts_with('-') && !ty.signed() => Value::err(Value::str("invalid digit found in string")),
+            Ok(n) if ty.fits(n) => Value::ok(Value::Int(n, ty)),
+            Ok(n) if n < 0 => Value::err(Value::str("number too small to fit in target type")),
+            Ok(_) => Value::err(Value::str("number too large to fit in target type")),
             Err(e) => Value::err(Value::str(e.to_string())),
         };
     }
@@ -149,7 +152,7 @@ fn parse_target(it: &mut Interpreter, text: &str) -> Value {
 pub fn register(r: &mut Registry) {
     r.pure(Kind::Str, "slice", |it, v, a| {
         let (x, y) = (arg_int(&a, 0, "slice")?, arg_int(&a, 1, "slice")?);
-        it.index_value(v, &Value::Range(x, y, IntTy::Usize))
+        it.index_value(v, &Value::range(x, y, IntTy::Usize))
     });
     r.pure(Kind::Str, "len", |_, v, _| Ok(Value::usize(sv(v).len())));
     r.pure(Kind::Str, "is_empty", |_, v, _| Ok(Value::Bool(sv(v).is_empty())));
@@ -333,8 +336,8 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Str, "get", |_, v, a| {
         let s = sv(v);
         Ok(match arg(&a, 0, "get")? {
-            Value::Range(x, y, _) => {
-                let (x, y) = (x as usize, y as usize);
+            Value::Range(r, _) => {
+                let (x, y) = (r.0 as usize, r.1 as usize);
                 if x <= y && y <= s.len() && s.is_char_boundary(x) && s.is_char_boundary(y) {
                     Value::some(Value::str(&s[x..y]))
                 } else {
@@ -350,7 +353,7 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Str, "substring", |it, v, a| {
         // byte offsets, like slicing
         let (x, y) = (arg_int(&a, 0, "substring")?, arg_int(&a, 1, "substring")?);
-        it.index_value(v, &Value::Range(x, y, IntTy::Usize))
+        it.index_value(v, &Value::range(x, y, IntTy::Usize))
     });
     r.pure(Kind::Str, "capacity", |_, v, _| Ok(Value::usize(sv(v).capacity())));
 

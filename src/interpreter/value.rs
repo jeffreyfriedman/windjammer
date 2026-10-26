@@ -91,66 +91,7 @@ impl From<Rc<str>> for Name {
     }
 }
 
-/// A map or set body. `hashed` marks `HashMap`/`HashSet`, whose iteration order is unspecified in Rust
-/// (ADR-0021 D6): by default they iterate in key order, and `--hash-seed N` permutes that order
-/// deterministically so order-dependent programs can be found. `BTreeMap`/`BTreeSet` always iterate sorted.
-#[derive(Clone, Debug, Default)]
-pub struct KMap {
-    pub m: BTreeMap<Key, Value>,
-    pub hashed: bool,
-}
-
-impl std::ops::Deref for KMap {
-    type Target = BTreeMap<Key, Value>;
-    fn deref(&self) -> &Self::Target {
-        &self.m
-    }
-}
-impl std::ops::DerefMut for KMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.m
-    }
-}
-impl From<BTreeMap<Key, Value>> for KMap {
-    fn from(m: BTreeMap<Key, Value>) -> KMap {
-        KMap { m, hashed: false }
-    }
-}
-
-fn seeded_hash(seed: u64, k: &Key) -> u64 {
-    // FNV-1a over the key's structural text, then a splitmix-style finalizer mixed with the seed
-    let mut h: u64 = 0xcbf29ce484222325;
-    for b in format!("{:?}", k.0).bytes() {
-        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
-    }
-    let mut z = h ^ seed.wrapping_mul(0x9e3779b97f4a7c15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-    z ^ (z >> 31)
-}
-
-impl KMap {
-    pub fn hash_map(m: BTreeMap<Key, Value>) -> KMap {
-        KMap { m, hashed: true }
-    }
-
-    /// Entries in iteration order (see the type docs); `seed` is `--hash-seed` (0 = key order).
-    pub fn ordered(&self, seed: u64) -> Vec<(&Key, &Value)> {
-        let mut v: Vec<(&Key, &Value)> = self.m.iter().collect();
-        if self.hashed && seed != 0 {
-            v.sort_by_cached_key(|(k, _)| seeded_hash(seed, k));
-        }
-        v
-    }
-
-    pub fn ordered_keys(&self, seed: u64) -> Vec<Value> {
-        self.ordered(seed).into_iter().map(|(k, _)| k.0.clone()).collect()
-    }
-
-    pub fn ordered_values(&self, seed: u64) -> Vec<Value> {
-        self.ordered(seed).into_iter().map(|(_, v)| v.clone()).collect()
-    }
-}
+pub use super::kmap::KMap;
 
 /// Total-ordered map key wrapper.
 #[derive(Clone, Debug)]
@@ -256,6 +197,10 @@ impl CellKind {
     }
 }
 
+/// `Value` stays 32 bytes (the size of an `i128` integer with its width): larger payloads (ranges,
+/// places) are boxed, since every element of a `Vec` is a `Value`.
+const _: () = assert!(std::mem::size_of::<Value>() <= 32);
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Unit,
@@ -271,12 +216,12 @@ pub enum Value {
     Map(Rc<KMap>),
     Set(Rc<KMap>),
     /// Half-open integer range; `a..=b` is stored as `a..b+1`.
-    Range(i128, i128, IntTy),
+    Range(Box<(i128, i128)>, IntTy),
     Iter(Iter),
     Func(Rc<Callable>),
     /// `fmt::Formatter` / `String` sink used by `write!` inside `impl Display`.
     Formatter(Rc<RefCell<String>>),
-    Ref(Place),
+    Ref(Box<Place>),
     /// `Rc<T>` / `Arc<T>`: a shared slot. Clones alias; strong counts are computed by reachability.
     Rc(Slot),
     /// `Weak<T>` of an `Rc` slot: a real `std::rc::Weak`, so a value kept alive only by an `Rc`
@@ -289,6 +234,10 @@ pub enum Value {
 }
 
 impl Value {
+    /// The half-open range `a..b` of width `t`.
+    pub fn range(a: i128, b: i128, t: IntTy) -> Value {
+        Value::Range(Box::new((a, b)), t)
+    }
     pub fn int(v: i128) -> Value {
         Value::Int(v, IntTy::Lit)
     }
@@ -451,7 +400,7 @@ impl Value {
                 }
                 ka.len().cmp(&kb.len())
             }
-            (Range(a, b, _), Range(c, d, _)) => (a, b).cmp(&(c, d)),
+            (Range(x, _), Range(y, _)) => x.cmp(y),
             (Rc(a), Rc(b)) => a.borrow().structural_cmp(&b.borrow()),
             (Cell(_, a, _), Cell(_, b, _)) => a.borrow().structural_cmp(&b.borrow()),
             (Native(a), Native(b)) => match (a.order_key(), b.order_key()) {

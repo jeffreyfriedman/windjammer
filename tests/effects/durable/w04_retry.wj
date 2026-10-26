@@ -1,0 +1,25 @@
+// workflow: retrying fetch: try a flaky source up to 3 times with backoff
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn attempt(n: int) -> bool {
+    fs::append("attempts.log", "try ${n}\n") ?? ()
+    n >= 2
+}
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let mut n = 0
+    let mut ok = false
+    while n < 3 && !ok {
+        ok = attempt(n)
+        if !ok { time::sleep_millis(100) }
+        n += 1
+    }
+    println("finished after ${n}")
+    "fetch ${ok} ${n}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

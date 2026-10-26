@@ -3,8 +3,7 @@
 ## Purpose
 Run Windjammer source directly, with no cargo/rustc, for an instant dev loop
 (`wj run` interprets by default, ADR-0022; `wj test --interpret`, `wj repl`). Rust remains the release path;
-the interpreter must never print something the compiled program would not print.
-Status and measurements: `docs/INTERPRETER.md`.
+the interpreter must never print something the compiled program would not print. Status: `docs/INTERPRETER.md`.
 
 ## Inputs / outputs
 - In: `.wj` source parsed by the compiler's own lexer/parser (`Program<'static>`); a file or a project dir.
@@ -20,13 +19,14 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`; `moves.rs` ownership moves
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
+- `from_impls.rs`, `type_keys.rs`, `c_library.rs`, `task_blocks.rs`  `From` impl choice by argument type; same-name struct/enum keys (`b::P`); scalar `extern fn` in the C library; `thread {}`/`async {}` tasks
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
 - `builtins/`            native stdlib registry (`std_runtime_gaps.rs`: runtime functions called module-qualified) (`Registry`; `native(type, method)` for host objects): core types, `std_*` modules (`std_http{,_server}` port, `std_proc` subprocess/cli, `std_config`, `std_db`, `std_ordered`), `test_assert`, `thread`/`channel`/`sync`/`time`, `arena` (`std::arena`: Arena/Handle/Scratch, debug-build handle checks)
 - `resolved/`            default engine of `wj run` (ADR-0020): closures over `rstack` slots; `typed.rs` unboxed ints, `island.rs` walker islands, `method.rs`/`place.rs`/`literal.rs` via the walker's own routines, `forloop.rs`; `osr.rs` statement registry for machine-code loops; `jit/` (default feature `jit`; `--no-jit`): `mod.rs` int functions, `osr.rs`+`lower*.rs`+`rt.rs` hot `while`/range-`for` loops (exits resume the closures)
 - `sched.rs`, `locks.rs`, `native.rs`, `slicing.rs`  task scheduler (virtual clock), guard tokens + poisoning, host objects, panic texts `arena` (`std::arena`: Arena/Handle/Scratch with debug-build handle checks).
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
-- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists; `caps.rs` = capability gate (ADR-0021): every sink builtin is checked against the run's grant (`ir::effect_facts`) before it runs, denial = exit 126, uncatchable; `effect_port/` = effect port (ADR-0021 E3): `--record`/`--replay` logs (`log.rs`, `codec.rs`), `sim.rs` seeded world; one choke point per effect; `HANDLE_SINKS` refused; a test audits every host read
+- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists; `caps.rs` = capability gate (ADR-0021): every sink builtin is checked against the run's grant (`ir::effect_facts`) before it runs, denial = exit 126, uncatchable; `durable_rt.rs` = `durable fn` step journal (ADR-0021 E4); `effect_port/` = effect port (ADR-0021 E3): `--record`/`--replay` logs (`log.rs`, `codec.rs`), `sim.rs` seeded world; one choke point per effect; `HANDLE_SINKS` refused; a test audits every host read
 
 ## Invariants
 - Values are immutable trees behind `Rc` with copy-on-write; `&mut` is a `Place` (slot + projections).

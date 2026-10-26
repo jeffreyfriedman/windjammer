@@ -448,7 +448,7 @@ fn register_responses(r: &mut Registry) {
     for n in ["with_header", "header"] {
         r.native("ServerResponse", n, |_, v, a| {
             let mut hs = match field(v, "headers") {
-                Some(Value::Map(m)) => m.m.clone(),
+                Some(Value::Map(m)) => m.to_btree(),
                 _ => BTreeMap::new(),
             };
             hs.insert(Key(s(&arg_str(&a, 0, "header")?)), s(&arg_str(&a, 1, "header")?));

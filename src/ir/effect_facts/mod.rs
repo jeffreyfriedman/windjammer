@@ -20,6 +20,7 @@ pub mod model;
 pub use self::model::{grant, kind, scope_match};
 
 pub mod analysis;
+pub mod durable;
 pub mod install;
 pub mod lock;
 pub mod manifest;

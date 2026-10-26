@@ -2,6 +2,7 @@
 //! JSON string = `string`, bool = `bool`, null = `()`; everything else is a one-key (or tagged) object.
 //! A value that is a live handle (iterator, closure, thread, socket...) has no encoding: recording it is an error.
 
+use super::super::builtins::time::{time_from_parts, time_parts};
 use super::super::builtins::std_sys::{dirent_path, dirent_value, metadata_from_parts, metadata_parts};
 use super::super::int::IntTy;
 use super::super::value::{EnumVal, FloatTy, Payload, StructVal, Value};
@@ -40,11 +41,15 @@ pub fn encode(v: &Value) -> Result<Json, String> {
             };
             json!({ "en": &*e.ty, "var": &*e.variant, "idx": e.idx, "p": payload })
         }
-        Value::Range(a, b, t) => json!({ "range": [a.to_string(), b.to_string(), t.name()] }),
+        Value::Range(r, t) => json!({ "range": [r.0.to_string(), r.1.to_string(), t.name()] }),
         Value::Native(_) => match (metadata_parts(v), dirent_path(v)) {
             (Some((len, file, dir, ro)), _) => json!({ "meta": [len, file, dir, ro] }),
             (_, Some(path)) => json!({ "dirent": path }),
-            _ => return Err(format!("a `{}` handle", v.type_name())),
+            _ => match time_parts(v) {
+                // clock values are plain nanosecond counts
+                Some((kind, ns)) => json!({ "time": kind, "ns": ns.to_string() }),
+                None => return Err(format!("a `{}` handle", v.type_name())),
+            },
         },
         other => return Err(format!("a `{}` value", other.type_name())),
     })
@@ -124,7 +129,11 @@ fn decode_object(m: &Map<String, Json>, bad: &dyn Fn(&str) -> String) -> Result<
     if let Some(r) = m.get("range").and_then(|r| r.as_array()) {
         let n = |i: usize| r.get(i).and_then(|x| x.as_str()).and_then(|x| x.parse::<i128>().ok()).ok_or_else(|| bad("range"));
         let ty = int_ty(r.get(2).and_then(|t| t.as_str()).unwrap_or("")).ok_or_else(|| bad("range type"))?;
-        return Ok(Value::Range(n(0)?, n(1)?, ty));
+        return Ok(Value::range(n(0)?, n(1)?, ty));
+    }
+    if let Some(kind) = m.get("time").and_then(|k| k.as_str()) {
+        let ns: i128 = m.get("ns").and_then(|n| n.as_str()).and_then(|n| n.parse().ok()).ok_or_else(|| bad("time value"))?;
+        return time_from_parts(kind, ns).ok_or_else(|| bad("time value"));
     }
     if let Some(p) = m.get("dirent").and_then(|p| p.as_str()) {
         return Ok(dirent_value(p.to_string()));
@@ -162,9 +171,11 @@ mod tests {
         rt(Value::ok(Value::tuple(vec![Value::int(1), Value::Bool(false)])));
         rt(Value::err(Value::str("No such file or directory (os error 2)")));
         rt(Value::none());
-        rt(Value::Range(0, 9, IntTy::Usize));
+        rt(Value::range(0, 9, IntTy::Usize));
         rt(metadata_from_parts(12, true, false, false));
         rt(dirent_value("a/b.txt".into()));
+        rt(time_from_parts("Instant", 1234).unwrap());
+        rt(time_from_parts("Duration", -5).unwrap());
     }
 
     #[test]

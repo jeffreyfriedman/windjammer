@@ -73,7 +73,9 @@ impl Interpreter {
         if let Some((_, c)) = self.compiled.get(&key) {
             return c.clone();
         }
-        let c = if self.drop_types.is_empty() { compile::compile_fn(self, f).map(Rc::new) } else { None };
+        // a durable fn is tree-walked: its steps are journaled at the call expressions the walker evaluates
+        let durable = f.decorators.iter().any(|d| d.name == "durable");
+        let c = if self.drop_types.is_empty() && !durable { compile::compile_fn(self, f).map(Rc::new) } else { None };
         self.compiled.insert(key, (f.clone(), c.clone()));
         c
     }

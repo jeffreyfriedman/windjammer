@@ -294,6 +294,8 @@ same failure comes back every time. Put inputs the test needs in a `fixtures/` d
 
 To keep a live run for later, `wj run --interpret --record run.wjlog PROGRAM` writes every effect it performed; `--replay run.wjlog` re-runs the program
 answering all of them from the log and performing none, so a run that hit the network or the clock can be debugged offline and gives the same output.
+`durable fn name(...) { ... }` makes a function crash-safe: each call in its body that performs an effect (file, clock, random, print) is journaled, and `wj run --interpret --journal DIR` resumes a crashed run from the journal without repeating finished steps. Write ordinary code; `wj check` rejects what replay could not honour (WJ0045 a value that cannot be journaled, WJ0046 a step that mutates a local, WJ0047 a channel receive or lock, WJ0048 iterating a `HashMap`/`HashSet`: use `BTreeMap` or sort first). A crash between performing a step and journaling it runs the step again, so make steps safe to repeat. It runs only in the interpreter for now.
+
 A replay that asks for something the log does not have stops with `WJ0049` and shows both requests. Calls that return a live handle
 (`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded; the error names the call.
 

@@ -1,5 +1,5 @@
 // tags: program, game, grid, enum
-// rust: gap error[E0308]: mismatched types
+// rust: ok
 // expect: X wins
 // expect: draw
 // expect: in progress

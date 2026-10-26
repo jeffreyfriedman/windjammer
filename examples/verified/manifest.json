@@ -67,8 +67,7 @@
       "expect_lines": 1,
       "file": "algo_bubble_sort.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "algorithm",
         "sorting",
@@ -160,8 +159,7 @@
       "expect_lines": 1,
       "file": "algo_knapsack_dp.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: arguments to this function are incorrect",
+      "rust": "ok",
       "tags": [
         "algorithm",
         "dynamic-programming"
@@ -314,8 +312,7 @@
       "expect_lines": 1,
       "file": "algo_tokenizer.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "algorithm",
         "strings",
@@ -487,8 +484,7 @@
       "expect_lines": 3,
       "file": "basics_tuples.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "basics",
         "tuples"
@@ -684,8 +680,7 @@
       "expect_lines": 4,
       "file": "error_custom_enum.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "error-handling",
         "enum",
@@ -697,8 +692,7 @@
       "expect_lines": 4,
       "file": "error_map_err_ok.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "error-handling",
         "map_err",
@@ -948,8 +942,7 @@
       "expect_lines": 3,
       "file": "iter_map_filter.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<i32>' in the current s",
+      "rust": "ok",
       "tags": [
         "iterators",
         "map",
@@ -1035,8 +1028,7 @@
       "expect_lines": 1,
       "file": "loops_labeled_nested.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: arguments to this function are incorrect",
+      "rust": "ok",
       "tags": [
         "loops",
         "break",
@@ -1095,8 +1087,7 @@
       "expect_lines": 3,
       "file": "module_inline.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0255]: the name 'rect_area' is defined multiple times",
+      "rust": "ok",
       "tags": [
         "modules",
         "mod",
@@ -1226,8 +1217,7 @@
       "expect_lines": 5,
       "file": "option_basics.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "option",
         "match",
@@ -1372,8 +1362,7 @@
       "expect_lines": 3,
       "file": "prog_matrix_transpose.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "program",
         "matrix",
@@ -1445,8 +1434,7 @@
       "expect_lines": 3,
       "file": "prog_tictactoe_winner.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "program",
         "game",
@@ -1634,8 +1622,7 @@
       "expect_lines": 5,
       "file": "strings_slicing.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0277]: the size for values of type 'str' cannot be known at compilation t",
+      "rust": "ok",
       "tags": [
         "strings",
         "slicing"
@@ -1879,8 +1866,7 @@
       "expect_lines": 3,
       "file": "trait_dyn_dispatch.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "trait",
         "dynamic-dispatch",
@@ -1891,8 +1877,7 @@
       "expect_lines": 2,
       "file": "trait_generic_bound.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0425]: cannot find type 'int' in this scope",
+      "rust": "ok",
       "tags": [
         "trait",
         "generics",
@@ -1927,8 +1912,7 @@
       "expect_lines": 4,
       "file": "vec_contains_position.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "v.position(|x| *x == 15) emits 15_i64 against an i32 array (literal width: numeric solver, convergence C4)",
+      "rust": "ok",
       "tags": [
         "vec",
         "search",
@@ -1939,8 +1923,7 @@
       "expect_lines": 4,
       "file": "vec_insert_remove.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "vec",
         "collections",
@@ -1964,8 +1947,7 @@
       "expect_lines": 3,
       "file": "vec_slices_windows.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0277]: a value of type 'Vec<i64>' cannot be built from an iterator over e",
+      "rust": "ok",
       "tags": [
         "vec",
         "slices",
