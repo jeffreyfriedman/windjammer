@@ -3,6 +3,9 @@
 #
 #   scripts/interp_compare.sh WJ_BIN [--runs N] [--json OUT.json] [--only NAME]
 #
+# `--json bench/interp/compare.json` records the run the readiness scorecard reads (per kernel:
+# CPU seconds per runtime and `ratios.resolved_over_{node,python3,walker}`).
+#
 # For every bench/interp/<k>.wj: `wj run --interpret` with the tree walker and the resolved engine,
 # the Rust the Windjammer compiler generates for the same file (`wj build --no-cargo`, then
 # `rustc -O`, or `cargo build --release --offline` when it needs the runtime crate), and the
@@ -101,6 +104,10 @@ for k, v in res["kernels"].items():
     r = v["cpu_s"]
     ratio = lambda a, b: f"{r[a] / r[b]:.2f}x" if r.get(a) and r.get(b) else "n/a"
     print(f"| {k} | " + " | ".join(fmt(r.get(c)) for c in cols) + f" | {ratio('walker', 'resolved')} | {ratio('resolved', 'python3')} | {ratio('resolved', 'node')} | {'; '.join(v['notes'])} |")
+# ratios for the readiness scorecard (bench/interp/compare.json): resolved engine over each runtime
+for k, v in res["kernels"].items():
+    r = v["cpu_s"]
+    v["ratios"] = {f"resolved_over_{o}": round(r["resolved"] / r[o], 2) for o in ("node", "python3", "walker") if r.get("resolved") and r.get(o)}
 out = opt("--json")
 if out:
     with open(out, "w") as fh:
