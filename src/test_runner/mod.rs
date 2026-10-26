@@ -46,7 +46,10 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     use test_reporting::{generate_coverage_report, parse_test_output};
 
     let start_time = Instant::now();
-    let project_root = std::env::current_dir()?;
+    // The project is found from the test path (nearest `wj.toml`), never from the cwd alone:
+    // the same command must behave identically whichever directory it is started in.
+    let project_root = layout_detect::find_project_root(opts.path.as_deref().unwrap_or(Path::new(".")))
+        .or_else(|_| std::env::current_dir())?; // a missing path is reported just below
     layout_detect::apply_inferred_test_options(&project_root, &mut opts);
 
     // Determine test directory

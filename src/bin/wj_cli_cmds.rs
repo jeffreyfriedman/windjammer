@@ -264,14 +264,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
-        Commands::Eject {
-            path,
-            output,
-            target,
-            library,
-            module_file,
-        } => {
-            windjammer::cli::eject::execute(&path, &output, &target, library, module_file)?;
+        Commands::Eject(a) => {
+            windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?
         }
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;

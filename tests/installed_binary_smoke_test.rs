@@ -91,7 +91,7 @@ fn tree_normalized(dir: &Path, subs: &[(String, &str)]) -> Vec<(String, u64)> {
             // `.wj-cache` entries are keyed by the absolute project path (the check cache's file name and
             // fingerprint), so they legitimately differ between two work directories; the behavior under test
             // is what the command prints and which source files it leaves behind.
-            if rel.starts_with(".git/") || rel == ".git" || rel.starts_with(".wj-cache") {
+            if rel.starts_with(".git/") || rel == ".git" || rel.split('/').any(|c| c == ".wj-cache") {
                 continue;
             }
             if p.is_dir() {
