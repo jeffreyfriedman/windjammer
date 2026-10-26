@@ -1,0 +1,6 @@
+// expect: WJ0005
+fn main() {
+    let p = UndefinedStruct { x: 10, y: 20 }
+//~@13+15 ERROR WJ0005 cannot find struct `UndefinedStruct`
+    println("${p.x}")
+}

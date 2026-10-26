@@ -1,0 +1,9 @@
+// expect: WJ0003
+fn process_number(n: int) {
+    println("${n}")
+}
+
+fn main() {
+    process_number("not a number")
+//~@20+14 ERROR WJ0003 mismatched types: expected `int`,
+}

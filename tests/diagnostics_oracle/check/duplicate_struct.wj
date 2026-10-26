@@ -1,0 +1,13 @@
+// expect: WJ0021
+struct Item {
+    id: int,
+}
+
+struct Item {
+//~@8+4 ERROR WJ0021 the name `Item` is
+    name: string,
+}
+
+fn main() {
+    println("x")
+}

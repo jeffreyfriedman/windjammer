@@ -189,6 +189,24 @@ impl std::hash::Hash for Token {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TokenWithLocation {
     pub token: Token,
+    /// 1-based line of the first character of the token.
     pub line: usize,
+    /// 1-based column (in chars) of the first character of the token.
     pub column: usize,
+    /// The true source position of the token start. Equals `line`/`column` for lexer output; the
+    /// parser rebases `line`/`column` of string-interpolation bodies onto synthetic identity keys
+    /// (numeric inference), so diagnostics and spans read these two fields instead.
+    pub src_line: usize,
+    pub src_column: usize,
+    /// 0-based byte offset of the token start.
+    pub byte_start: usize,
+    /// 0-based byte offset one past the token end (half-open).
+    pub byte_end: usize,
+    /// 1-based line of the position one past the last character (exclusive end).
+    pub end_line: usize,
+    /// 1-based column of the position one past the last character (exclusive end).
+    pub end_column: usize,
+    /// For `InterpolatedString`: where each `${expr}` body starts, as `(line, column, byte)` in
+    /// the original text (one entry per `StringPart::Expression`, in order). Empty otherwise.
+    pub interpolation_starts: Vec<(usize, usize, usize)>,
 }

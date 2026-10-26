@@ -1,0 +1,7 @@
+// expect: WJ0020
+fn main() {
+    let a = "1"
+    let b = a - 1
+//~@13+1 ERROR WJ0020 operator `-` cannot be
+    println("${b}")
+}

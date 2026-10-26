@@ -1,0 +1,9 @@
+// expect: W0001
+fn total(items: &Vec<int>) -> int {
+//~@17+1 ERROR W0001 explicit ownership annotation
+    0
+}
+
+fn main() {
+    println("${total([1])}")
+}
