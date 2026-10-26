@@ -1,5 +1,5 @@
 // tags: iterators, map, filter, collect
-// rust: gap error[E0599]: no method named 'map' found for struct 'Vec<i32>' in the current s
+// rust: ok
 // expect: [1, 4, 9, 16, 25]
 // expect: [2, 4]
 // expect: [11, 12, 13]

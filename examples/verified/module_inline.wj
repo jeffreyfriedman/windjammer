@@ -1,5 +1,5 @@
 // tags: modules, mod, use, pub
-// rust: gap error[E0255]: the name 'rect_area' is defined multiple times
+// rust: ok
 // expect: 12
 // expect: 7
 // expect: 3

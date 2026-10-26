@@ -27,6 +27,7 @@ mod std_data;
 mod std_extra;
 mod std_fns;
 pub(crate) mod std_proc;
+mod std_legacy;
 mod std_runtime_gaps;
 mod test_assert;
 pub mod std_http;
@@ -169,6 +170,7 @@ impl Registry {
         std_data::register(&mut r);
         std_proc::register(&mut r);
         std_runtime_gaps::register(&mut r);
+        std_legacy::register(&mut r);
         std_extra::register(&mut r);
         std_http::register(&mut r);
         std_http_server::register(&mut r);
@@ -253,6 +255,16 @@ impl Registry {
                 None => return None,
             }
         }
+    }
+    /// Every method name the interpreter implements (builtin kinds and host-object methods), sorted and deduplicated.
+    /// The method-parity gate (`check::semantic::std_methods`) holds each one against the surface table.
+    #[cfg(test)]
+    pub fn method_names(&self) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = self.methods.keys().map(|(_, n)| *n).collect();
+        v.extend(self.natives.values().flat_map(|m| m.keys().copied()));
+        v.sort_unstable();
+        v.dedup();
+        v
     }
     /// Every registered function path, sorted (audits: `caps.rs` requires each authority-module builtin to be classified).
     #[cfg(test)]

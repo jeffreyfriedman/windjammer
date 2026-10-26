@@ -302,10 +302,7 @@ pub fn register(r: &mut Registry) {
     // ---------------- Any ----------------
     r.pure(Kind::Any, "clone", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Any, "to_owned", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Any, "into", |it, v, _| match it.type_hint.take() {
-        Some(t) => it.coerce(v.clone(), &t),
-        None => Ok(v.clone()),
-    });
+    r.pure(Kind::Any, "into", |it, v, _| it.convert_into(v));
     r.pure(Kind::Any, "try_into", |it, v, _| match (it.type_hint.take(), v) {
         (Some(t), Value::Int(n, _)) => match IntTy::from_type(&t) {
             Some(ty) if ty.fits(*n) => Ok(Value::ok(Value::Int(*n, ty))),
@@ -314,7 +311,7 @@ pub fn register(r: &mut Registry) {
         },
         _ => Ok(Value::ok(v.clone())),
     });
-    for name in ["borrow", "borrow_mut", "as_ref", "as_mut", "deref", "to_vec", "unwrap_ref", "iter_ref", "lock_unwrap"] {
+    for name in ["borrow", "borrow_mut", "as_ref", "as_mut", "deref", "to_vec"] {
         r.pure(Kind::Any, name, |_, v, _| Ok(v.clone()));
     }
     r.pure(Kind::Any, "to_string", |it, v, _| Ok(Value::str(it.display_string(v)?)));
