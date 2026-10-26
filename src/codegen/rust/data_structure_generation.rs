@@ -569,6 +569,11 @@ impl<'ast> CodeGenerator<'ast> {
             return base_expr;
         }
 
+        // CLONE-BORROWED-TO-OWNED: a returned field of a parameter is decided by the IR fact alone.
+        if let Some(clone) = self.returned_field_clone(expr_to_generate) {
+            return if clone { format!("{base_expr}.clone()") } else { base_expr };
+        }
+
         // AUTO-CLONE: Check if this field access needs to be cloned
         // Extract the full path (e.g., "config.paths")
         // CRITICAL: Never clone assignment targets (left side of `=`)

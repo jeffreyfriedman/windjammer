@@ -57,6 +57,8 @@ struct Collector {
     branch_groups: usize,
     /// Names bound by a plain `let x` / `let mut x` (owned values in every backend).
     let_bound: BTreeSet<String>,
+    /// `x.clone()` / `x.f.clone()` written in the source, by root binding.
+    user_clones: BTreeMap<String, usize>,
     /// Per loop id, the (first, last) mention seq of its body.
     loop_ranges: BTreeMap<usize, (usize, usize)>,
 }
@@ -323,7 +325,12 @@ impl Collector {
                 // binding initialised by a call does not keep the arguments alive.
                 self.without_sources(|c| arguments.iter().for_each(|(_, a)| c.expr(a)));
             }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::MethodCall { object, method, arguments, .. } => {
+                if method == "clone" && arguments.is_empty() {
+                    if let Some(root) = root_name(object) {
+                        *self.user_clones.entry(root).or_insert(0) += 1;
+                    }
+                }
                 self.expr(object);
                 // A method result may borrow from its receiver, never from its arguments.
                 self.without_sources(|c| arguments.iter().for_each(|(_, a)| c.expr(a)));
@@ -490,6 +497,22 @@ pub fn read_after(entry: &[&str], body: &[&Statement<'_>], always_move: bool) ->
         let _ = sp.start;
     }
     out
+}
+
+/// Clones the user wrote (`x.clone()`, `x.f[i].clone()`), counted by root binding: the
+/// programmer's decision, not the compiler's.
+pub fn user_clones(body: &[&Statement<'_>]) -> BTreeMap<String, usize> {
+    let mut c = Collector::default();
+    c.stmts(body);
+    c.user_clones
+}
+
+fn root_name(e: &Expression<'_>) -> Option<String> {
+    match e {
+        Expression::Identifier { name, .. } => Some(name.clone()),
+        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => root_name(object),
+        _ => None,
+    }
 }
 
 /// Names bound by a closure parameter as written: `x`, `x: int`, `(k, v)`, `mut acc`.
@@ -747,6 +770,24 @@ mod tests {
             .unwrap();
         let Statement::Let { value: Expression::Closure { parameters, body, .. }, .. } = decl.body[1] else { panic!() };
         assert_eq!(captures(parameters, body).into_iter().collect::<Vec<_>>(), vec!["k".to_string()]);
+    }
+
+    #[test]
+    fn user_clones_are_counted_by_root() {
+        let src = "struct R { files: Vec<string> }\nfn main() {\n let r = R { files: [] }\n let a = r.files.clone()\n let b = r.files[0].clone()\n let c = a.clone()\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        let u = user_clones(&decl.body);
+        assert_eq!((u.get("r"), u.get("a")), (Some(&2), Some(&1)));
     }
 
     #[test]

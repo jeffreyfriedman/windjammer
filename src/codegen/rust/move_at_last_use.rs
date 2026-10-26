@@ -32,6 +32,16 @@ impl<'ast> CodeGenerator<'ast> {
         self.local_var_types.get(name).is_some_and(|t| !is_ref(t))
     }
 
+    /// CLONE-BORROWED-TO-OWNED: `Some(clone?)` when `expr` is a returned field of a parameter
+    /// (the IR fact's domain): clone exactly when the solver borrowed its root and the field is
+    /// not Copy. `None` outside the domain.
+    pub(in crate::codegen::rust) fn returned_field_clone(&self, expr: &crate::parser::Expression<'_>) -> Option<bool> {
+        let node = crate::ir::numeric_defaults::node_id(expr);
+        self.returned_fields.0.get(&node)?;
+        let copy = self.infer_expression_type(expr).as_ref().is_some_and(|t| self.is_type_copy(t));
+        Some(self.returned_fields.1.contains_key(&node) && !copy)
+    }
+
     /// The binding's type is known and not Copy (a `&T` binding is Copy).
     pub(in crate::codegen::rust) fn binding_known_non_copy(&self, name: &str) -> bool {
         let ty = self

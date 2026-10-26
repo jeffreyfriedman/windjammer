@@ -1,0 +1,38 @@
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+
+struct Quest {
+    title: String,
+    level: i64,
+}
+
+impl Quest {
+#[inline]
+fn name(&self) -> String {
+        self.title.clone()
+}
+#[inline]
+fn level(&self) -> i64 {
+        self.level
+}
+#[inline]
+fn label(&self, loud: bool) -> String {
+        if loud {
+            return self.title.clone();
+        }
+        String::from("quiet")
+}
+}
+
+#[inline]
+fn title_of(q: Quest) -> String {
+    q.title
+}
+
+fn main() {
+    let q = Quest { title: String::from("find"), level: 2_i64 };
+    println!("{}", q.name());
+    println!("{}", q.level);
+    println!("{}", q.label(true));
+    println!("{}", title_of(q));
+}
+

@@ -69,7 +69,7 @@ pub fn explain_source(source: &str, file: &str, opts: &ExplainOptions) -> Result
                 .into_iter()
                 .filter(|l| !l.name.contains("::") && (em.is_none() || l.mutable_in_emitted.is_some()))
                 .collect(),
-            clones: params::clone_reports(&fc, af, em),
+            clones: params::clone_reports(&fc, af, ir_fn, em),
             calls,
         });
     }

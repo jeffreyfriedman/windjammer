@@ -101,6 +101,7 @@ impl<'ast> CodeGenerator<'ast> {
         let always_move = self.config.liveness_mutation_always_move;
         self.last_use_nodes = crate::ir::liveness::last_moves(&entry, &func.body, always_move);
         self.read_after = (crate::ir::liveness::read_after(&entry, &func.body, always_move), Vec::new());
+        self.returned_fields = self.current_ir_function.as_ref().map(|f| (f.returned_fields.clone(), f.clone_sites.clone())).unwrap_or_default();
 
         self.current_function_params = func.parameters.clone();
         self.current_function_name = Some(func.name.to_string());
