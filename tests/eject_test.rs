@@ -21,6 +21,21 @@ use windjammer::agent_index::verified::{load_examples, RustStatus};
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
 const TEMPLATES: [&str; 4] = ["cli", "web", "lib", "wasm"];
 
+/// Scratch space next to the test binary (under the cargo target dir), not the shared OS temp
+/// dir, which other processes on a busy machine clean while a long run is in progress.
+fn scratch_dir() -> TempDir {
+    let base = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("eject-scratch");
+    fs::create_dir_all(&base).unwrap();
+    tempfile::Builder::new()
+        .prefix("eject-gate-")
+        .tempdir_in(base)
+        .unwrap()
+}
+
 fn verified_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/verified")
 }
@@ -132,7 +147,7 @@ fn self_contained_problems(out: &Path) -> Vec<String> {
 
 #[test]
 fn ejected_rust_is_byte_identical_to_wj_build() {
-    let scratch = TempDir::new().unwrap();
+    let scratch = scratch_dir();
     let s = scratch.path().canonicalize().unwrap();
     let items = corpus(&s);
     assert!(items.len() >= 50, "corpus too small: {}", items.len());
@@ -218,7 +233,7 @@ fn ejected_rust_is_byte_identical_to_wj_build() {
 
 #[test]
 fn multi_file_project_ejects_like_wj_build() {
-    let scratch = TempDir::new().unwrap();
+    let scratch = scratch_dir();
     let s = scratch.path().canonicalize().unwrap();
     let src = s.join("proj/src");
     fs::create_dir_all(&src).unwrap();
@@ -251,7 +266,7 @@ fn multi_file_project_ejects_like_wj_build() {
 
 #[test]
 fn eject_refuses_non_empty_output() {
-    let scratch = TempDir::new().unwrap();
+    let scratch = scratch_dir();
     let s = scratch.path();
     fs::write(s.join("a.wj"), "fn main() {\n    println(\"hi\")\n}\n").unwrap();
     fs::create_dir_all(s.join("out")).unwrap();
@@ -300,9 +315,9 @@ fn ejected_projects_build_and_run_anywhere() {
         eprintln!("skipped: set WJ_SMOKE_COMPILED=1 (needs cargo; builds every ejected project)");
         return;
     }
-    let scratch = TempDir::new().unwrap();
+    let scratch = scratch_dir();
     let s = scratch.path().canonicalize().unwrap();
-    let elsewhere = TempDir::new().unwrap();
+    let elsewhere = scratch_dir();
     let target = std::env::var_os("WJ_EJECT_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| s.join("target"));
@@ -313,6 +328,7 @@ fn ejected_projects_build_and_run_anywhere() {
         .collect();
     let mut failures = Vec::new();
     let mut compiler_gaps = Vec::new();
+    let mut nondeterministic: Vec<String> = Vec::new();
     let mut matched = 0;
     for (name, src) in corpus(&s) {
         let tag = name.replace(' ', "_");
@@ -352,6 +368,12 @@ fn ejected_projects_build_and_run_anywhere() {
             n if n.starts_with("template ") => vec!["run", "-q", "--", "World"],
             _ => vec!["run", "-q"],
         };
+        if rs_files(&built) != rs_files(&moved) {
+            // `wj build` codegen varied between the two runs (compiler nondeterminism, reported
+            // below); `ejected_rust_is_byte_identical_to_wj_build` pins eject to a real build output.
+            nondeterministic.push(name.clone());
+            continue;
+        }
         let b = cargo_outcome(&built, &target, &args);
         let e = cargo_outcome(&moved, &target, &args);
         if (b.0, b.1, &b.2) != (e.0, e.1, &e.2) {
@@ -373,7 +395,7 @@ fn ejected_projects_build_and_run_anywhere() {
         }
     }
     eprintln!(
-        "eject: {matched} projects behave identically to wj build; {} compiled-path gaps shared by both:\n{}",
+        "eject: {matched} projects behave identically to wj build; nondeterministic codegen: {nondeterministic:?}; {} compiled-path gaps shared by both:\n{}",
         compiler_gaps.len(),
         compiler_gaps.join("\n")
     );

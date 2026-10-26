@@ -55,3 +55,18 @@ polarity = "negative"
 args = ["eject", "{w}/nope.wj", "-o", "{w}/ejected"]
 exit = 1
 output_has = ["does not exist"]
+
+[[case]]
+name = "eject --library of a missing input fails"
+polarity = "negative"
+args = ["eject", "{w}/nope.wj", "-o", "{w}/ejected", "--library"]
+exit = 1
+output_has = ["does not exist"]
+
+[[case]]
+name = "eject --module-file refuses a non-empty output directory"
+polarity = "negative"
+files = { "p/main.wj" = "fn main() {\n}\n", "out/keep.txt" = "user data" }
+args = ["eject", "{w}/p", "-o", "{w}/out", "--module-file"]
+exit = 1
+output_has = ["not empty"]
