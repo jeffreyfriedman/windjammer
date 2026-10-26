@@ -145,6 +145,7 @@ digraph deps {
   "check" -> "analyzer" [label="2"];
   "check" -> "diagnostics" [label="19"];
   "check" -> "fuzzy_matcher" [label="2"];
+  "check" -> "interpreter" [label="1",color=red,fontcolor=red];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="12"];
   "check" -> "lexer" [label="5"];
@@ -330,12 +331,12 @@ digraph deps {
   "interpreter" -> "analyzer" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
   "interpreter" -> "ir" [label="20"];
-  "interpreter" -> "lexer" [label="5"];
+  "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
-  "interpreter" -> "parser" [label="103"];
+  "interpreter" -> "parser" [label="109"];
   "interpreter" -> "resolve" [label="13"];
-  "interpreter" -> "source_map" [label="12"];
+  "interpreter" -> "source_map" [label="13"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="1"];
@@ -405,7 +406,7 @@ digraph deps {
   "stdlib_scanner" -> "parser" [label="4"];
   "test_runner" -> "build_utils" [label="1"];
   "test_runner" -> "cargo_cache" [label="3"];
-  "test_runner" -> "cargo_toml" [label="1"];
+  "test_runner" -> "cargo_toml" [label="2"];
   "test_runner" -> "check" [label="3"];
   "test_runner" -> "compiler_config" [label="1"];
   "test_runner" -> "config" [label="3"];
