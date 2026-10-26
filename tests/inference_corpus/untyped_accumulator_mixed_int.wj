@@ -1,0 +1,11 @@
+// Agent-pilot top compiled failure: `let mut v = 0` mixed with `int` must be int (i64) everywhere, including
+// the `while v > 0` comparison and `v / a`. Expected output: 0
+fn main() {
+    let a: int = 3
+    let mut v = 0
+    v = v * a + 1
+    while v > 0 {
+        v = v / a
+    }
+    println("${v}")
+}

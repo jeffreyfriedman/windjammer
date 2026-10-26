@@ -96,6 +96,13 @@ fn parse_target(it: &mut Interpreter, text: &str) -> Value {
     let hint = it.type_hint.take();
     let t = text;
     let int_ty = hint.as_ref().and_then(IntTy::from_type);
+    if int_ty == Some(IntTy::U128) {
+        let body = t.strip_prefix('+').unwrap_or(t);
+        return match body.parse::<u128>() {
+            Ok(n) => Value::ok(Value::Int(n as i128, IntTy::U128)),
+            Err(e) => Value::err(Value::str(e.to_string())),
+        };
+    }
     if let Some(ty) = int_ty {
         let parsed = if t.starts_with('+') { t[1..].parse::<i128>() } else { t.parse::<i128>() };
         return match parsed {

@@ -11,7 +11,7 @@ pub(super) enum Raw {
 }
 
 /// Parse the part of a `{:spec}` after the colon. Anything the portable backends cannot render
-/// faithfully (sign `+`, alternate `#` forms, `E`, `x?`) is an error, never silently ignored.
+/// faithfully (`E`, `x?`, `{:#e}`) is an error, never silently ignored.
 pub(super) fn parse_spec(s: &str) -> Result<FmtSpec, String> {
     let mut spec = FmtSpec::default();
     let chars: Vec<char> = s.chars().collect();
@@ -24,11 +24,18 @@ pub(super) fn parse_spec(s: &str) -> Result<FmtSpec, String> {
         spec.align = Some(chars[0]);
         i = 1;
     }
-    if matches!(chars.get(i), Some('+' | '-')) {
-        return Err(format!("format flag `{}` in `{{:{s}}}`", chars[i]));
+    // Rust accepts `-` and ignores it.
+    match chars.get(i) {
+        Some('+') => {
+            spec.plus = true;
+            i += 1;
+        }
+        Some('-') => i += 1,
+        _ => {}
     }
-    if chars.get(i) == Some(&'#') && chars[i..].iter().collect::<String>() != "#?" {
-        return Err(format!("alternate `#` format in `{{:{s}}}`"));
+    if chars.get(i) == Some(&'#') {
+        spec.alternate = true;
+        i += 1;
     }
     if i < chars.len() && chars[i] == '0' {
         spec.zero_pad = true;
@@ -52,11 +59,11 @@ pub(super) fn parse_spec(s: &str) -> Result<FmtSpec, String> {
     let rest: String = chars[i..].iter().collect();
     match rest.as_str() {
         "" => {}
-        "?" => spec.debug = true,
-        "#?" => {
+        "?" => {
             spec.debug = true;
-            spec.pretty = true;
+            spec.pretty = spec.alternate;
         }
+        "e" if spec.alternate => return Err(format!("alternate `#` with `e` in `{{:{s}}}`")),
         "x" | "X" | "b" | "o" | "e" => spec.radix = rest.chars().next(),
         other => return Err(format!("format type `{other}` in `{{:{s}}}`")),
     }
@@ -159,10 +166,15 @@ mod tests {
 
     #[test]
     fn unsupported_specs_are_errors_not_ignored() {
-        for bad in ["+", "+5", "#x", "#08b", "E", "x?"] {
+        for bad in ["E", "x?", "#e", "+#x?"] {
             assert!(parse_spec(bad).is_err(), "{bad} must be rejected");
         }
         assert!(parse_spec("#?").unwrap().pretty);
+        let s = parse_spec("+#010x").unwrap();
+        assert_eq!((s.plus, s.alternate, s.zero_pad, s.width, s.radix), (true, true, true, Some(10), Some('x')));
+        let s = parse_spec("*<+8.2?").unwrap();
+        assert_eq!((s.fill, s.align, s.plus, s.width, s.precision, s.debug), (Some('*'), Some('<'), true, Some(8), Some(2), true));
+        assert!(parse_spec("-5").unwrap().width == Some(5));
         let s = parse_spec("*^9.2").unwrap();
         assert_eq!((s.fill, s.align, s.width, s.precision), (Some('*'), Some('^'), Some(9), Some(2)));
         assert!(parse_spec("08b").unwrap().zero_pad);

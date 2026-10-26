@@ -56,7 +56,7 @@ impl Report {
 
     pub fn summary(&self) -> String {
         let mut s = String::from("backend  pass  unsupported  skip  fail\n");
-        for b in ALL_BACKENDS {
+        for b in selected_backends() {
             let (p, u, k, f) = self.counts(b);
             s += &format!("{:<8} {p:>4}  {u:>11}  {k:>4}  {f:>4}\n", b.name());
         }
@@ -130,7 +130,9 @@ pub fn run_all(ctx: std::sync::Arc<Ctx>) -> Report {
     let mut report = Report::default();
     // Dev knob: `WJ_CONFORMANCE_ONLY=intr` runs only programs whose name contains the text.
     let only = std::env::var("WJ_CONFORMANCE_ONLY").unwrap_or_default();
-    let jobs: Vec<(usize, Backend)> = (0..ctx.programs.len()).filter(|i| ctx.programs[*i].name.contains(&only)).flat_map(|i| ALL_BACKENDS.map(|b| (i, b))).collect();
+    // Dev knob: `WJ_CONFORMANCE_BACKENDS=go,js,ts` restricts (or extends, for `ts`) the backends.
+    let backends = selected_backends();
+    let jobs: Vec<(usize, Backend)> = (0..ctx.programs.len()).filter(|i| ctx.programs[*i].name.contains(&only)).flat_map(|i| backends.iter().map(move |b| (i, *b))).collect();
     let c = ctx.clone();
     let results = super::parallel::map(jobs, 3, move |(i, b)| {
         let p = &c.programs[i];
@@ -145,4 +147,13 @@ pub fn run_all(ctx: std::sync::Arc<Ctx>) -> Report {
         report.cells.entry(k).or_default().push(v);
     }
     report
+}
+
+fn selected_backends() -> Vec<Backend> {
+    let raw = std::env::var("WJ_CONFORMANCE_BACKENDS").unwrap_or_default();
+    if raw.trim().is_empty() {
+        return ALL_BACKENDS.to_vec();
+    }
+    let all = [Backend::Rust, Backend::Go, Backend::Js, Backend::Ts];
+    raw.split(',').filter_map(|n| all.iter().copied().find(|b| b.name() == n.trim())).collect()
 }

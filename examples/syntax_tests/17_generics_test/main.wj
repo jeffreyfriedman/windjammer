@@ -19,7 +19,7 @@ impl<T> Box<T> {
         Box { value }
     }
     
-    fn get(&self) -> &T {
+    fn get(self) -> &T {
         &self.value
     }
 }

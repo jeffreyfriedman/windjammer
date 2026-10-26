@@ -110,6 +110,18 @@ Residual risk: the code generator must never expect a private struct from file A
 be reachable from file B. Rust itself enforces this (privacy error), so a violation
 would already fail to compile.
 
+## P8 scratch_reuse (OFF; auto-arena, ADR-0025)
+Rewrite: `for .. { let mut b = String::new(); <uses> }` -> `{ let mut b = String::new(); for .. { b.clear(); <uses> } }`
+(also `while`, `loop`, `Vec::new()`). Enabled by `OptimizationConfig::with_auto_arena()`.
+Why sound: (1) `b` is not mentioned in the loop header or before its `let` and has no other binding in the loop, so
+every use names the same binding before and after; (2) every use borrows `b` (whitelisted non-consuming methods,
+`&b`, `&mut b`, `b[i]`, `b += ..`, format-family macro arguments); no move, assignment, closure capture or
+`for x in b`. So nothing from iteration k is observable in iteration k+1 except through `b`, and `b.clear()` leaves
+`b` equal to `new()` in contents (only `capacity()` differs); (3) `Vec` element destructors run at the next
+`clear()` instead of at the end of the iteration: refused when the file has `impl Drop` or the header locks/borrows.
+The wrapping block drops the buffer when the loop exits. Lines are preserved.
+Mutant caught: `ScratchIgnoresMoves` (`kept.push(s)` hoisted: use of moved value), tests/optimizer_scratch_reuse_test.rs.
+
 ## Considered and rejected (stay OFF / not implemented)
 - Last-use clone elimination (`let y = x.clone();` with `x` unused afterwards): needs
   borrow facts (a live `&x` makes the move a compile error) and drop-order facts

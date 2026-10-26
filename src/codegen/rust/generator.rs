@@ -39,11 +39,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_cow_import: bool, // For Phase 9 Cow optimization
     pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
     pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
+    pub(crate) uses_enumerable: bool, // ADR-0018: a surface call needs the inlined `mod wj_enumerable`
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
-    source_map: crate::source_map::SourceMap,
     pub(crate) current_output_file: std::path::PathBuf, // Path to the Rust file being generated
-    current_rust_line: usize, // Current line number in generated Rust code (1-indexed)
     pub(crate) current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
@@ -128,7 +127,6 @@ pub struct CodeGenerator<'ast> {
     /// replace `current_function_body`; pure-forwarding refresh must not run on those.
     pub(crate) full_function_body_snapshot: Vec<&'ast Statement<'ast>>,
     // Workspace root for source maps
-    workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
     // Cell for interior mutability (needed for call-site optimization in immutable context)
     pub(crate) suppress_string_conversion: Cell<bool>,
@@ -298,11 +296,9 @@ pub struct CodeGenerator<'ast> {
     /// WJ `struct` names declared in this compilation unit. Shadows stdlib types
     /// of the same name (`use std::url` + local `struct Url`) so literals stay local.
     pub(crate) user_declared_struct_names: std::collections::HashSet<String>,
-    // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
-    // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
+    // TUPLE STRUCT NAMES (struct Point(i32, i32)): ownership conversion in constructor calls needs owned args
     pub(crate) tuple_struct_names: std::collections::HashSet<String>,
-    // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
-    // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
+    // USER-DEFINED COPY TYPES (@derive(Copy)): lets is_copy_type recognize them, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
     /// Types explicitly annotated with `@derive(Copy)` by the user.
     /// Distinguished from auto-derived Copy types to preserve `&mut` semantics
@@ -312,6 +308,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
     pub(crate) types_with_drop: std::collections::HashSet<String>,
+    pub(crate) idiom: super::program_facts::IdiomScratch, // std-idiom / closure / derive facts
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
@@ -543,6 +540,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if callee_name.contains("::") {
+            let same_crate = self.same_crate_callee_key(callee_name).filter(|k| !callee_name.starts_with("crate::") && k.contains("::"));
+            if let Some(key) = same_crate {
+                return std::borrow::Cow::Owned(key);
+            }
             return std::borrow::Cow::Borrowed(callee_name);
         }
         if let Some(q) = self.import_fn_alias_map.get(callee_name) {
@@ -593,21 +594,6 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::analyzer::SignatureRegistry::stdlib(),
                 )
             })
-    }
-
-    /// Bare `error()` after `use std::log::*` must use `log::error` / `log_mod::error`,
-    /// not a colliding runtime homonym (`http::error`, `dialog::error`).
-    pub(in crate::codegen::rust) fn imported_runtime_std_signature(
-        &self,
-        registry: &crate::analyzer::SignatureRegistry,
-        callee_name: &str,
-    ) -> Option<crate::analyzer::FunctionSignature> {
-        let key = self.imported_runtime_qualified_callee(callee_name)?;
-        registry.get_signature(&key).cloned().or_else(|| {
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(&key).cloned())
-        })
     }
 
     /// True when `name` is a parameter, `let` binding, or match-arm binding in the current fn.
@@ -663,11 +649,10 @@ impl<'ast> CodeGenerator<'ast> {
             needs_cow_import: false,
             needs_hashmap_import: false,
             needs_hashset_import: false,
+            uses_enumerable: false,
             target,
             is_module: false,
-            source_map: crate::source_map::SourceMap::new(),
             current_output_file: std::path::PathBuf::new(),
-            current_rust_line: 1,
             current_wj_file: std::path::PathBuf::new(),
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
@@ -707,7 +692,6 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_return_type: None,
             current_function_body: Vec::new(),
             full_function_body_snapshot: Vec::new(),
-            workspace_root: None,
             suppress_string_conversion: Cell::new(false),
             coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
@@ -782,6 +766,7 @@ impl<'ast> CodeGenerator<'ast> {
             explicit_copy_types_registry: std::collections::HashSet::new(),
             non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
+            idiom: Default::default(),
             in_struct_literal_field: false,
             array_literal_as_list: false,
             in_owned_value_context: false,
@@ -895,18 +880,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.explicit_copy_types_registry = registry;
     }
 
-    pub fn is_explicitly_copy_type(&self, ty: &crate::parser::ast::types::Type) -> bool {
-        if let crate::parser::ast::types::Type::Custom(name) = ty {
-            self.explicit_copy_types_registry.contains(name.as_str())
-                || name
-                    .split("::")
-                    .last()
-                    .is_some_and(|b| self.explicit_copy_types_registry.contains(b))
-        } else {
-            false
-        }
-    }
-
     pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.non_copy_types_registry = registry;
     }
@@ -961,17 +934,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         None
-    }
-
-    /// Map `Self::method` qualifiers to the enclosing impl struct for signature lookup.
-    pub(crate) fn signature_lookup_receiver_type(&self, qualifier: &str) -> String {
-        if qualifier == "Self" {
-            self.current_struct_name
-                .clone()
-                .unwrap_or_else(|| qualifier.to_string())
-        } else {
-            qualifier.to_string()
-        }
     }
 
     /// Method signature for call-site lowering: local registry, then cross-module global.
@@ -1279,13 +1241,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.analyzed_trait_methods = methods;
     }
 
-    /// Set the workspace root for relative paths in source maps
-    pub fn set_workspace_root(&mut self, path: std::path::PathBuf) {
-        self.workspace_root = Some(path.clone());
-        // CRITICAL: Also set workspace root on the source_map for relative path conversion
-        self.source_map.set_workspace_root(path);
-    }
-
     /// Set inferred trait bounds for functions
     pub fn set_inferred_bounds(
         &mut self,
@@ -1340,12 +1295,6 @@ impl<'ast> CodeGenerator<'ast> {
         let unified = crate::ir::numeric_bridge::UnifiedNumericInference::from_int_only(int_inf);
         self.merge_numeric_inference_const_types(&unified);
         self.numeric_inference = Some(std::sync::Arc::new(unified));
-    }
-
-    /// Set the IR function data for the current function being generated.
-    /// When IR cutover flags are enabled, codegen reads from this instead of AnalyzedFunction.
-    pub fn set_current_ir_function(&mut self, ir_fn: Option<crate::ir::IrFunction>) {
-        self.current_ir_function = ir_fn;
     }
 
     /// Set IR cutover configuration explicitly (for testing).
@@ -1434,6 +1383,31 @@ impl<'ast> CodeGenerator<'ast> {
         Some(owned_type_to_ownership_mode(&safety_ty.ownership))
     }
 
+    /// The solver itself moved `name` to Owned (the analyzer seed was not already Owned): an analyzer
+    /// seed echoed back through the IR is not a solver decision.
+    pub(crate) fn ir_param_owned_by_solver(&self, name: &str) -> bool {
+        self.ir_param_ownership_definitive(name) == Some(OwnershipMode::Owned)
+            && self.current_ir_function.as_ref().is_some_and(|f| {
+                f.ownership_trail.get(name).is_some_and(|t| {
+                    t.iter().any(|(stage, o)| {
+                        *stage == "solver" && matches!(o, crate::ir::safety_type::OwnedType::Owned)
+                    })
+                })
+            })
+    }
+
+    /// The analyzer found `name` read-only text AND the IR solver did not decide it is owned (a read-only
+    /// looking parameter can still flow into an owned position through an alias or a branch value).
+    /// Pub free-fn text formals are registry-seeded Owned before codegen (multipass ABI lock); that seed
+    /// is not a solver decision unless the param flows as a value into a `let`.
+    pub(crate) fn str_ref_optimizable_param(&self, analyzed: &AnalyzedFunction<'_>, name: &str) -> bool {
+        analyzed.str_ref_optimizable_params.contains(name)
+            && (!self.ir_param_owned_by_solver(name)
+                || (analyzed.decl.is_pub
+                    && analyzed.decl.parent_type.is_none()
+                    && !crate::analyzer::Analyzer::param_is_branch_value_of_let(name, &analyzed.decl.body)))
+    }
+
     /// Ownership for formal demotion / str_ref.
     ///
     /// Prefer definitive IR borrows (`Ref` / `MutRef`). Analyzer `Borrowed` /
@@ -1445,26 +1419,11 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         analyzed: &AnalyzedFunction<'_>,
     ) -> Option<OwnershipMode> {
-        let analyzer = analyzed.inferred_ownership.get(param_name).copied();
-        let ir = self.ir_param_ownership_definitive(param_name);
-        // Mutated+returned / identity formals: Owned beats stale IR MutRef (solver lattice).
-        if analyzed.returned_parameters.contains(param_name) {
-            return Some(OwnershipMode::Owned);
-        }
-        if matches!(analyzer, Some(OwnershipMode::Owned))
-            && matches!(ir, Some(OwnershipMode::MutBorrowed) | None)
-        {
-            return analyzer;
-        }
-        match (analyzer, ir) {
-            (_, Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)) => ir,
-            (
-                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
-                Some(OwnershipMode::Owned) | None,
-            ) => analyzer,
-            (_, Some(OwnershipMode::Owned)) => ir,
-            _ => analyzer.or_else(|| self.get_param_ownership(param_name, analyzed)),
-        }
+        // ADR-0001: the IR solver is the owner. The analyzer is consulted only when no IR exists
+        // (isolated unit tests / paths without an IR module), never to override the solver.
+        self.ir_param_ownership_definitive(param_name)
+            .or_else(|| analyzed.inferred_ownership.get(param_name).copied())
+            .or_else(|| self.get_param_ownership(param_name, analyzed))
     }
 
     /// Record a hard error for a module-qualified call with no registry signature.
@@ -1492,7 +1451,7 @@ impl<'ast> CodeGenerator<'ast> {
         let last = qualifier.rsplit("::").next().unwrap_or(qualifier);
         last.chars()
             .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_') && !crate::type_classification::is_primitive_type_name(last)
     }
 
     pub fn ir_cutover_call_sites_enabled(&self) -> bool {
@@ -2424,18 +2383,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Item::TypeAlias {
                 name,
+                type_params,
                 target,
                 is_pub,
                 ..
-            } => {
-                let pub_prefix = if *is_pub { "pub " } else { "" };
-                format!(
-                    "{}type {} = {};\n",
-                    pub_prefix,
-                    name,
-                    self.type_to_rust(target)
-                )
-            }
+            } => self.generate_type_alias(name, type_params, target, *is_pub),
             Item::Macro {
                 doc_comment, expr, ..
             } => {
@@ -2472,52 +2424,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_wj_file = path.into();
     }
 
-    /// Get the current line number in the generated Rust code
-    #[allow(dead_code)]
-    fn current_rust_line(&self) -> usize {
-        self.current_rust_line
-    }
-
-    /// Increment the Rust line counter (call after generating each line)
-    #[allow(dead_code)]
-    fn increment_rust_line(&mut self) {
-        self.current_rust_line += 1;
-    }
-
-    /// Increment the Rust line counter by N lines
-    #[allow(dead_code)]
-    fn increment_rust_lines(&mut self, count: usize) {
-        self.current_rust_line += count;
-    }
-
-    /// Record a mapping from current Rust location to Windjammer location
-    pub(super) fn record_mapping(&mut self, wj_location: &crate::source_map::Location) {
-        if !self.current_output_file.as_os_str().is_empty() {
-            self.source_map.add_mapping(
-                self.current_output_file.clone(),
-                self.current_rust_line,
-                0, // column (simplified for now)
-                wj_location.file.clone(),
-                wj_location.line,
-                wj_location.column,
-            );
-        }
-    }
-
-    /// Get the source map (for saving after code generation)
-    pub fn get_source_map(&self) -> &crate::source_map::SourceMap {
-        &self.source_map
-    }
-
-    /// Count newlines in a string and increment the Rust line counter
-    #[allow(dead_code)]
-    pub(super) fn track_generated_lines(&mut self, code: &str) {
-        let newline_count = code.matches('\n').count();
-        if newline_count > 0 {
-            self.increment_rust_lines(newline_count);
-        }
-    }
-
     /// Map Windjammer decorators to Rust attributes
     /// This abstraction layer allows us to use semantic Windjammer names
     /// while generating appropriate Rust attributes based on compilation target
@@ -2542,14 +2448,8 @@ impl<'ast> CodeGenerator<'ast> {
             ("test", _) => "test".to_string(),
             ("async", _) => "async".to_string(),
             ("ignore", _) => "ignore".to_string(),
-            ("timeout", _) => {
-                // TODO: Timeout requires special body wrapping
-                "test".to_string()
-            }
-            ("bench", _) => {
-                // TODO: Benchmark tests use criterion
-                "bench".to_string()
-            }
+            ("timeout", _) => "test".to_string(), // timeout needs body wrapping (not done)
+            ("bench", _) => "bench".to_string(),  // benchmark tests would use criterion
             // HTTP method decorators for Axum
             ("get", _) => "axum::routing::get".to_string(),
             ("post", _) => "axum::routing::post".to_string(),
@@ -2971,14 +2871,6 @@ impl<'ast> CodeGenerator<'ast> {
             && self.current_fn_forward_ref_if_params.contains(param_name)
             && !self.emitted_rust_ref_formals.contains(param_name)
             && crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(receiver)
-    }
-
-    pub(crate) fn should_borrow_owned_param_in_if_condition(
-        &self,
-        param_name: &str,
-        receiver: &Expression<'ast>,
-    ) -> bool {
-        self.should_borrow_forward_ref_param_at_call(param_name, receiver)
     }
 
     pub(crate) fn caller_keeps_owned_outer_formal(&self, param_name: &str) -> bool {
@@ -4713,7 +4605,7 @@ impl<'ast> CodeGenerator<'ast> {
         expr_str: &mut String,
         expr: &crate::parser::Expression,
     ) {
-        if expr_str.starts_with('*') || expr_str.ends_with(".clone()") {
+        if expr_str.starts_with('*') || expr_str.ends_with(".clone()") || Self::receiver_already_owned(expr_str) {
             return;
         }
         let expects_owned = !matches!(

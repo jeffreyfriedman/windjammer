@@ -16,12 +16,9 @@
 
 use super::constraints::Constraint;
 use super::effects::{self, EffectConstraint};
-use super::node::parser_type_to_base_type;
 use super::safety_type::{BaseType, EffectSet, OwnedType, Region, SafetyType};
 use super::taint;
 use super::{constraint_gen, EffectSolver, ExecutionValidator, IrFunction, Solver, TaintSolver};
-use crate::analyzer::OwnershipMode;
-use crate::parser::Type;
 use std::collections::HashMap;
 
 /// Configuration for the IR compilation pipeline.
@@ -150,6 +147,7 @@ impl IrPipeline {
             .map(|af| {
                 let mut ir_fn = IrFunction::from_analyzed(af);
                 ir_fn.body = super::lower::lower_body(&af.decl.body);
+                ir_fn.record_ownership_stage("analyzer-seed");
                 ir_fn
             })
             .collect();
@@ -218,7 +216,7 @@ impl IrPipeline {
             if let Some(ir_fn) = functions.get_mut(i) {
                 for (param_name, &var) in &fc.var_map.params {
                     if let Some(st) = ir_fn.param_types.get_mut(param_name) {
-                        let root_idx = var.0 as usize;
+                        let root_idx = var.0 as usize; // results are indexed by variable
                         if let Some(Some(ref base)) = result.types.get(root_idx) {
                             if *base != BaseType::Inferred {
                                 st.base = base.clone();
@@ -231,6 +229,8 @@ impl IrPipeline {
                         }
                     }
                 }
+
+                ir_fn.record_ownership_stage("solver");
 
                 let ret_idx = fc.var_map.return_var.0 as usize;
                 if let Some(Some(ref base)) = result.types.get(ret_idx) {
@@ -252,11 +252,14 @@ impl IrPipeline {
                     }
                 }
 
+                ir_fn.record_ownership_stage("pipeline::retain_mutated_mutref");
+
                 // Write local variable types from solver.
                 for (local_name, &var) in &fc.var_map.locals {
-                    let root_idx = var.0 as usize;
+                    let root_idx = var.0 as usize; // results are indexed by variable
                     let base = result.types.get(root_idx).and_then(|t| t.as_ref());
-                    let own = result.ownership.get(root_idx).and_then(|o| o.as_ref());
+                    // A local's mode is what it holds (join over its type class), not a requirement.
+                    let own = result.class_ownership.get(root_idx).and_then(|o| o.as_ref());
                     if base.is_some() || own.is_some() {
                         let entry = ir_fn
                             .local_types
@@ -277,14 +280,6 @@ impl IrPipeline {
             }
         }
 
-        apply_analyzer_readonly_string_params_to_ir(&mut functions, analyzed);
-        clear_str_ref_for_owned_or_stored_params(&mut functions, analyzed);
-        restore_owned_string_params_after_str_ref(&mut functions, analyzed);
-        converge_impl_param_ownership(&mut functions, analyzed);
-        finalize_ir_param_ownership_from_analyzer(&mut functions, analyzed);
-        propagate_delegation_ownership(&mut functions, analyzed, registry, &struct_field_types);
-        // Delegation may force Owned on wrappers; mutated non-returned params stay MutRef.
-        restore_mutated_param_mutrefs(&mut functions, analyzed);
 
         diagnostics.push(IrDiagnostic {
             severity: DiagnosticSeverity::Info,
@@ -551,373 +546,6 @@ impl Default for IrPipeline {
 #[inline]
 pub fn ir_pipeline_available() -> bool {
     true
-}
-
-/// Sync IR param ownership with converged analyzer body inference.
-/// Solver/registry can lag for enum-payload stores, static-method passthrough borrows,
-/// and field assignments — analyzer ownership is authoritative for formals.
-fn finalize_ir_param_ownership_from_analyzer(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-) {
-    let mut region_counter = 10_000u32;
-    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
-        for param in &af.decl.parameters {
-            if param.name == "self" {
-                continue;
-            }
-            let Some(mode) = af.inferred_ownership.get(&param.name) else {
-                continue;
-            };
-            let Some(st) = ir_fn.param_types.get_mut(&param.name) else {
-                continue;
-            };
-            match mode {
-                OwnershipMode::Owned => {
-                    st.ownership = OwnedType::Owned;
-                    ir_fn.str_ref_params.remove(&param.name);
-                    let is_plain_string = matches!(param.type_, Type::String)
-                        || matches!(&param.type_, Type::Custom(name) if name == "string");
-                    if is_plain_string {
-                        st.base = BaseType::String;
-                    }
-                }
-                OwnershipMode::Borrowed => {
-                    if !af.mutated_parameters.contains(&param.name) {
-                        let r = Region::fresh(region_counter);
-                        region_counter += 1;
-                        st.ownership = OwnedType::Ref(r);
-                    }
-                }
-                OwnershipMode::MutBorrowed => {
-                    let r = Region::fresh(region_counter);
-                    region_counter += 1;
-                    st.ownership = OwnedType::MutRef(r);
-                }
-            }
-        }
-    }
-}
-
-/// Re-apply analyzer/solver Owned semantics after readonly-string lowering.
-fn restore_owned_string_params_after_str_ref(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-) {
-    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
-        for (idx, param) in af.decl.parameters.iter().enumerate() {
-            if param.name == "self" {
-                continue;
-            }
-            let is_plain_string = matches!(param.type_, Type::String)
-                || matches!(&param.type_, Type::Custom(name) if name == "string");
-            if !is_plain_string {
-                continue;
-            }
-            let force_owned = af.inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned)
-                || af.returned_parameters.contains(&param.name);
-            if !force_owned {
-                continue;
-            }
-            if let Some(st) = ir_fn.param_types.get_mut(&param.name) {
-                st.ownership = OwnedType::Owned;
-                st.base = af
-                    .inferred_param_types
-                    .get(idx)
-                    .map(parser_type_to_base_type)
-                    .unwrap_or(BaseType::String);
-            }
-        }
-    }
-}
-
-/// Drop str_ref markers for params the solver/analyzer kept owned (enum payload, struct store).
-fn clear_str_ref_for_owned_or_stored_params(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-) {
-    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
-        ir_fn.str_ref_params.retain(|name| {
-            if af.inferred_ownership.get(name) == Some(&OwnershipMode::Owned) {
-                return false;
-            }
-            if let Some(st) = ir_fn.param_types.get(name) {
-                if matches!(st.ownership, OwnedType::Owned) {
-                    return false;
-                }
-            }
-            true
-        });
-    }
-}
-
-/// Align IR param types with analyzer str_ref / readonly string inference so shadow
-/// validation stays clean for `fn f(msg: string) { println("{}", msg) }`.
-fn apply_analyzer_readonly_string_params_to_ir(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-) {
-    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
-        for (idx, param) in af.decl.parameters.iter().enumerate() {
-            if param.name == "self" {
-                continue;
-            }
-            let is_plain_string = matches!(param.type_, Type::String)
-                || matches!(&param.type_, Type::Custom(name) if name == "string");
-            if !is_plain_string
-                || matches!(param.type_, Type::Reference(_) | Type::MutableReference(_))
-            {
-                continue;
-            }
-            let borrow = af.str_ref_optimizable_params.contains(&param.name)
-                || matches!(
-                    af.inferred_ownership.get(&param.name),
-                    Some(OwnershipMode::Borrowed)
-                );
-            if !borrow {
-                continue;
-            }
-            if af.inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned) {
-                continue;
-            }
-            if let Some(st) = ir_fn.param_types.get_mut(&param.name) {
-                // Solver-owned params (enum payload, struct field store) beat &str lowering.
-                if matches!(st.ownership, OwnedType::Owned) {
-                    continue;
-                }
-                st.ownership = OwnedType::Ref(Region::fresh(0));
-                // Keep declared `String` base when the function returns a non-unit value so
-                // shadow validation can surface IR String vs analyzer &str during migration
-                // (e.g. `fn greet(name: string) -> i32 { name.len() }`). Unit-returning
-                // pass-through helpers still sync base to `str` for clean shadow parity.
-                let returns_non_unit = af
-                    .decl
-                    .return_type
-                    .as_ref()
-                    .is_some_and(|rt| parser_type_to_base_type(rt) != BaseType::Unit);
-                if !returns_non_unit {
-                    st.base = af
-                        .inferred_param_types
-                        .get(idx)
-                        .map(parser_type_to_base_type)
-                        .unwrap_or(BaseType::Custom("str".into()));
-                }
-            }
-        }
-    }
-}
-
-/// Keep mutated non-returned params as MutRef after delegation/impl convergence.
-fn restore_mutated_param_mutrefs(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-) {
-    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
-        for param_name in af
-            .mutated_parameters
-            .iter()
-            .chain(ir_fn.mutated_params.iter())
-        {
-            if af.returned_parameters.contains(param_name) {
-                continue;
-            }
-            // Analyzer Owned wins (mutated+returned, identity transforms). Do not
-            // re-force MutRef after delegation solely because the body mutates.
-            if af.inferred_ownership.get(param_name) == Some(&OwnershipMode::Owned) {
-                continue;
-            }
-            if let Some(st) = ir_fn.param_types.get_mut(param_name) {
-                if !matches!(st.ownership, OwnedType::MutRef(_)) {
-                    st.ownership = OwnedType::MutRef(Region::fresh(0));
-                }
-            }
-        }
-        for (name, mode) in &af.inferred_ownership {
-            if *mode == OwnershipMode::MutBorrowed && !af.returned_parameters.contains(name) {
-                if let Some(st) = ir_fn.param_types.get_mut(name) {
-                    if !matches!(st.ownership, OwnedType::MutRef(_)) {
-                        st.ownership = OwnedType::MutRef(Region::fresh(0));
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// When any method in an impl uses an owned non-`self` parameter, sibling methods with
-/// the same parameter index inherit owned semantics (TxnManager/MemoryEngine Key API).
-fn converge_impl_param_ownership(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-) {
-    use std::collections::{HashMap, HashSet};
-
-    let mut impl_owned_indices: HashMap<String, HashSet<usize>> = HashMap::new();
-
-    for (i, af) in analyzed.iter().enumerate() {
-        let Some(parent) = af.decl.parent_type.as_ref() else {
-            continue;
-        };
-        let ir_fn = &functions[i];
-        for (idx, param) in af.decl.parameters.iter().enumerate() {
-            if param.name == "self" {
-                continue;
-            }
-            if let Some(st) = ir_fn.param_types.get(&param.name) {
-                if matches!(st.ownership, OwnedType::Owned)
-                    && af.inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned)
-                {
-                    impl_owned_indices
-                        .entry(parent.clone())
-                        .or_default()
-                        .insert(idx);
-                }
-            }
-        }
-    }
-
-    for (i, af) in analyzed.iter().enumerate() {
-        let Some(parent) = af.decl.parent_type.as_ref() else {
-            continue;
-        };
-        let Some(owned_indices) = impl_owned_indices.get(parent) else {
-            continue;
-        };
-        let ir_fn = &mut functions[i];
-        for (idx, param) in af.decl.parameters.iter().enumerate() {
-            if param.name == "self" {
-                continue;
-            }
-            if owned_indices.contains(&idx) {
-                if let Some(st) = ir_fn.param_types.get_mut(&param.name) {
-                    st.ownership = OwnedType::Owned;
-                }
-            }
-        }
-    }
-}
-
-/// After impl convergence, upgrade wrapper methods that forward params to owned callees.
-fn propagate_delegation_ownership(
-    functions: &mut [IrFunction],
-    analyzed: &[crate::analyzer::AnalyzedFunction],
-    registry: &crate::analyzer::SignatureRegistry,
-    struct_field_types: &HashMap<String, HashMap<String, crate::parser::Type>>,
-) {
-    for (caller_idx, af) in analyzed.iter().enumerate() {
-        let Some((method, arg_names, receiver_type)) =
-            extract_single_method_delegation(af.decl.body.as_slice(), &af.decl, struct_field_types)
-        else {
-            continue;
-        };
-        let caller_name = &functions[caller_idx].name;
-        let arg_count = arg_names.len();
-        let mut owned_args: Vec<String> = Vec::new();
-
-        if let Some(callee_idx) = functions
-            .iter()
-            .position(|f| f.name.ends_with(&format!("::{method}")) && &f.name != caller_name)
-        {
-            let callee_ir = &functions[callee_idx];
-            let callee_params: Vec<_> = analyzed[callee_idx]
-                .decl
-                .parameters
-                .iter()
-                .filter(|p| p.name != "self")
-                .map(|p| p.name.as_str())
-                .collect();
-            for (arg_idx, arg_name) in arg_names.iter().enumerate() {
-                let Some(callee_param_name) = callee_params.get(arg_idx) else {
-                    continue;
-                };
-                let Some(callee_st) = callee_ir.param_types.get(*callee_param_name) else {
-                    continue;
-                };
-                if matches!(callee_st.ownership, OwnedType::Owned) {
-                    owned_args.push(arg_name.clone());
-                }
-            }
-        } else if let Some(receiver_type) = receiver_type.as_deref() {
-            if let Some(sig) =
-                registry.find_method_on_receiver_type(receiver_type, &method, arg_count)
-            {
-                collect_owned_delegation_args(sig, &arg_names, &mut owned_args);
-            }
-        } else if let Some(sig) = registry.find_delegation_callee(caller_name, &method, arg_count) {
-            collect_owned_delegation_args(sig, &arg_names, &mut owned_args);
-        }
-
-        for arg_name in owned_args {
-            if let Some(st) = functions[caller_idx].param_types.get_mut(&arg_name) {
-                st.ownership = OwnedType::Owned;
-            }
-        }
-    }
-}
-
-fn collect_owned_delegation_args(
-    sig: &crate::analyzer::FunctionSignature,
-    arg_names: &[String],
-    owned_args: &mut Vec<String>,
-) {
-    use crate::analyzer::OwnershipMode;
-
-    for (arg_idx, arg_name) in arg_names.iter().enumerate() {
-        let param_idx = sig.arg_param_index(arg_idx);
-        let owned = sig
-            .param_ownership
-            .get(param_idx)
-            .is_some_and(|m| *m == OwnershipMode::Owned);
-        if owned {
-            owned_args.push(arg_name.clone());
-        }
-    }
-}
-
-fn extract_single_method_delegation<'ast>(
-    body: &[&crate::parser::ast::core::Statement<'ast>],
-    func: &crate::parser::ast::core::FunctionDecl<'ast>,
-    struct_field_types: &HashMap<String, HashMap<String, crate::parser::Type>>,
-) -> Option<(String, Vec<String>, Option<String>)> {
-    use crate::parser::ast::core::Expression;
-    let expr = single_statement_expression(body)?;
-    let Expression::MethodCall {
-        method,
-        arguments,
-        object,
-        ..
-    } = expr
-    else {
-        return None;
-    };
-    let mut arg_names = Vec::new();
-    for (_label, arg) in arguments {
-        if let Expression::Identifier { name, .. } = arg {
-            if name != "self" {
-                arg_names.push(name.clone());
-            }
-        } else {
-            return None;
-        }
-    }
-    let receiver_type =
-        crate::ir::receiver_type::infer_receiver_type_name(object, func, struct_field_types);
-    Some((method.clone(), arg_names, receiver_type))
-}
-
-fn single_statement_expression<'a>(
-    body: &[&'a crate::parser::ast::core::Statement<'a>],
-) -> Option<&'a crate::parser::ast::core::Expression<'a>> {
-    use crate::parser::ast::core::Statement;
-    match body.len() {
-        0 => None,
-        1 => match body[0] {
-            Statement::Return { value: Some(e), .. } => Some(e),
-            Statement::Expression { expr, .. } => Some(expr),
-            _ => None,
-        },
-        _ => None,
-    }
 }
 
 #[cfg(test)]

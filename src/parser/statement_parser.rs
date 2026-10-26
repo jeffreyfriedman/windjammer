@@ -15,6 +15,21 @@ impl Parser {
         let mut statements = Vec::new();
 
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+            // A `;` terminates the statement before it (`if c { .. };` leaves it for us), but a
+            // `;` with no statement before it is an error (SPEC-GRAM-007).
+            if self.current_token() == &Token::Semicolon {
+                let after_stmt = !statements.is_empty()
+                    && self.position > 0
+                    && self.tokens[self.position - 1].token != Token::Semicolon;
+                if !after_stmt {
+                    return Err(format!(
+                        "Unexpected `;`: a `;` must follow a statement (at {})",
+                        self.pos_desc()
+                    ));
+                }
+                self.advance();
+                continue;
+            }
             let start = self.position;
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),
@@ -257,6 +272,10 @@ impl Parser {
 
     /// Optional `'label` after `break` / `continue`.
     fn parse_optional_jump_label(&mut self) -> Option<String> {
+        // The label must be on the same line: `continue` newline `'outer: loop {..}` is two statements.
+        if self.had_newline_before_current() {
+            return None;
+        }
         if let Token::Lifetime(name) = self.current_token().clone() {
             self.advance();
             Some(name)
@@ -421,24 +440,33 @@ impl Parser {
         }))
     }
 
+    /// After `return`: is this a bare return? A value must start on the same line as `return`
+    /// (docs/design/statement-boundaries.md, STMT-011).
+    pub(in crate::parser) fn return_has_no_value(&self) -> bool {
+        self.had_newline_before_current()
+            || matches!(
+                self.current_token(),
+                Token::RBrace | Token::Semicolon | Token::Comma | Token::Eof
+            )
+    }
+
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
+        // Location of the `return` keyword itself (lints and `wj fix` edit at this position).
+        let return_location = self.current_location();
         self.advance();
 
         // TDD FIX: Check for Comma too! Match arms can have: None => return,
         // The comma indicates end of return statement (no value to return)
-        let stmt = if matches!(
-            self.current_token(),
-            Token::RBrace | Token::Semicolon | Token::Comma
-        ) {
+        let stmt = if self.return_has_no_value() {
             self.alloc_stmt(Statement::Return {
                 value: None,
-                location: self.current_location(),
+                location: return_location,
             })
         } else {
             let value = self.parse_expression()?;
             self.alloc_stmt(Statement::Return {
                 value: Some(value),
-                location: self.current_location(),
+                location: return_location,
             })
         };
 
@@ -570,6 +598,9 @@ impl Parser {
     }
 
     fn parse_match(&mut self) -> Result<&'static Statement<'static>, String> {
+        if self.at_guard_only_match() {
+            return self.parse_guard_only_match(); // ADR-0018: `match { cond => .. }`
+        }
         self.expect(Token::Match)?;
 
         let value = self.parse_match_value()?;

@@ -82,6 +82,17 @@ impl Interpreter {
         self.eval_raw(e)
     }
 
+    /// Like `eval`, but a lock/borrow guard stays a guard (so it can be handed to `Condvar::wait`
+    /// or reassigned without releasing the lock).
+    pub(crate) fn eval_keep_guard(&mut self, e: &'static Expression<'static>) -> R {
+        let v = self.eval_raw(e)?;
+        match &v {
+            Value::Ref(p) if p.guard.is_some() => Ok(v),
+            Value::Ref(_) => super::place::strip_refs(v),
+            _ => Ok(v),
+        }
+    }
+
     pub(crate) fn literal(&self, l: &Literal) -> Value {
         match l {
             Literal::Int(i) => Value::Int(*i as i128, IntTy::Lit),
@@ -139,6 +150,19 @@ impl Interpreter {
             }
 
             Expression::Unary { op, operand, location } => match op {
+                // the parser reads `-2..3` as `-(2..3)`; a range cannot be negated, so this is `(-2)..3`
+                UnaryOp::Neg if matches!(operand, Expression::Range { .. }) => {
+                    let Expression::Range { start, end, inclusive, .. } = operand else { unreachable!() };
+                    let s = self.eval(start)?;
+                    let s = self.negate(s)?;
+                    let en = self.eval(end)?;
+                    match (s, en) {
+                        (Value::Int(a, at), Value::Int(b, bt)) => {
+                            Ok(Value::Range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
+                        }
+                        _ => Err(unsupported("range over non-integer values")),
+                    }
+                }
                 UnaryOp::Neg => {
                     let v = self.eval(operand)?;
                     self.mark(location.as_ref());
@@ -186,7 +210,9 @@ impl Interpreter {
 
             Expression::StructLiteral { name, fields, location } => {
                 self.mark(location.as_ref());
-                self.eval_struct_literal(name, fields)
+                let v = self.eval_struct_literal(name, fields)?;
+                self.note_moves(fields.iter().map(|(_, e)| *e));
+                Ok(v)
             }
 
             Expression::MapLiteral { pairs, .. } => {
@@ -196,7 +222,7 @@ impl Interpreter {
                     let v = self.eval(v)?;
                     m.insert(Key(k), v);
                 }
-                Ok(Value::Map(Rc::new(m)))
+                Ok(Value::hash_map(m))
             }
 
             Expression::Range { start, end, inclusive, .. } => {
@@ -246,6 +272,7 @@ impl Interpreter {
                 for x in elements {
                     items.push(self.eval(x)?);
                 }
+                self.note_moves(elements.iter().copied());
                 Ok(Value::tuple(items))
             }
 
@@ -254,6 +281,7 @@ impl Interpreter {
                 for x in elements {
                     items.push(self.eval(x)?);
                 }
+                self.note_moves(elements.iter().copied());
                 Ok(Value::vec(items))
             }
 
@@ -280,9 +308,13 @@ impl Interpreter {
                 self.await_value(v)
             }
 
-            Expression::AsyncCall { location, .. }
-            | Expression::SpawnCall { location, .. }
-            | Expression::ChannelSend { location, .. }
+            Expression::AsyncCall { expr, location } | Expression::SpawnCall { expr, location } => {
+                self.mark(location.as_ref());
+                let body = self.task_body(expr)?;
+                super::builtins::thread::start_task(self, body)
+            }
+
+            Expression::ChannelSend { location, .. }
             | Expression::ChannelRecv { location, .. } => {
                 self.mark(location.as_ref());
                 Err(unsupported(
@@ -290,6 +322,24 @@ impl Interpreter {
                 ))
             }
         }
+    }
+
+    /// What a `spawn`/`async` task runs: a call evaluates its callee and arguments now (as Rust
+    /// does) and runs later; any other operand (a block) becomes a closure over the current scope.
+    fn task_body(&mut self, e: &'static Expression<'static>) -> R {
+        if let Expression::Call { function, arguments, .. } = e {
+            let func = self.eval(function)?;
+            let args = self.eval_args(arguments, None, false)?;
+            return Ok(Value::Func(Rc::new(Callable::Thunk { func, args })));
+        }
+        Ok(Value::Func(Rc::new(Callable::Closure {
+            params: &[],
+            body: e,
+            env: self.scope.vars.clone(),
+            module: self.scope.module,
+            self_ty: self.scope.self_ty.clone(),
+            tparams: self.scope.tparams.clone(),
+        })))
     }
 
     fn eval_try(&mut self, v: Value) -> R {
@@ -351,6 +401,11 @@ impl Interpreter {
                     .ok_or_else(|| semantic(format!("no field `{}`", field))),
                 _ => Err(semantic(format!("no field `{}` on enum `{}`", field, e.ty))),
             },
+            // `mime.APPLICATION_JSON`: a constant of a standard-library module imported by name
+            Value::Func(f) if matches!(&**f, Callable::Path(p) if self.builtins.constant(&format!("{p}::{field}")).is_some()) => {
+                let Callable::Path(p) = &**f else { unreachable!() };
+                Ok(self.builtins.constant(&format!("{p}::{field}")).expect("checked"))
+            }
             other => Err(semantic(format!("no field `{}` on value of type `{}`", field, other.type_name()))),
         }
     }
@@ -371,18 +426,17 @@ impl Interpreter {
                 Ok(v[*i as usize].clone())
             }
             (Value::Vec(v), Value::Range(a, b, _)) => {
-                let (a, b) = (*a as usize, (*b).min(i128::MAX) as usize);
-                if a > b || b > v.len() {
-                    return Err(panic_ctl(format!("range end index {} out of range for slice of length {}", b, v.len())));
+                let (a, b) = (*a, *b);
+                if let Some(msg) = super::slicing::slice_error(a, b, v.len()) {
+                    return Err(panic_ctl(msg));
                 }
-                Ok(Value::vec(v[a..b].to_vec()))
+                Ok(Value::vec(v[a as usize..b as usize].to_vec()))
             }
             (Value::Str(s), Value::Range(a, b, _)) => {
-                let (a, b) = (*a as usize, *b as usize);
-                if a > b || b > s.len() || !s.is_char_boundary(a) || !s.is_char_boundary(b) {
-                    return Err(panic_ctl(format!("byte index {}..{} out of range or not on a char boundary for string of length {}", a, b, s.len())));
+                if let Some(msg) = super::slicing::str_slice_error(s, *a, *b) {
+                    return Err(panic_ctl(msg));
                 }
-                Ok(Value::str(s[a..b].to_string()))
+                Ok(Value::str(s[*a as usize..*b as usize].to_string()))
             }
             (Value::Map(m), k) => m
                 .get(&Key(k.clone()))
@@ -397,10 +451,20 @@ impl Interpreter {
         name: &'static str,
         fields: &'static [(String, &'static Expression<'static>)],
     ) -> R {
+        self.eval_struct_literal_in(name, fields, &mut super::place::WalkerEnv)
+    }
+
+    /// `eval_struct_literal` with the field expressions evaluated by `env` (also the resolved engine's).
+    pub(crate) fn eval_struct_literal_in(
+        &mut self,
+        name: &'static str,
+        fields: &'static [(String, &'static Expression<'static>)],
+        env: &mut dyn super::place::PlaceEnv,
+    ) -> R {
         if matches!(name, "RangeFrom" | "std::ops::RangeFrom") && !self.structs.contains_key("RangeFrom") {
             // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
             return match fields {
-                [(f, ex)] if f == "start" => match self.eval(ex)? {
+                [(f, ex)] if f == "start" => match env.eval(self, ex)? {
                     Value::Int(a, t) => Ok(Value::Range(a, i128::MAX, t)),
                     other => Err(unsupported(format!("`..` range from {}", other.type_name()))),
                 },
@@ -430,7 +494,7 @@ impl Interpreter {
                         .iter()
                         .find(|(n, _)| n == fname)
                         .ok_or_else(|| semantic(format!("missing field `{}` in `{}`", fname, name)))?;
-                    let v = self.eval(ex)?;
+                    let v = env.eval(self, ex)?;
                     out.push((Rc::from(*fname), self.coerce(v, ty)?));
                 }
                 return Ok(Value::enum_val(&target, var, idx as u32, Payload::Struct(out)));
@@ -440,23 +504,28 @@ impl Interpreter {
         if let Some(Type::Custom(n)) = self.type_aliases.get(&name) {
             name = n.clone();
         }
-        let (decl_fields, copy) = match self.structs.get(&name) {
-            Some(d) => (d.fields.iter().map(|(n, t)| (*n, t.clone())).collect::<Vec<_>>(), d.copy),
+        if !self.structs.contains_key(&name) {
+            if let Some(names) = self.builtins.constructible_fields(&name) {
+                return self.eval_host_struct_literal(&name, names, fields, env);
+            }
+        }
+        let (decl_fields, copy, rc_name, rc_fields) = match self.structs.get(&name) {
+            Some(d) => (d.fields.clone(), d.copy, d.rc_name.clone(), d.rc_fields.clone()),
             None => return Err(semantic(format!("cannot find struct `{}`", name))),
         };
         let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(decl_fields.len());
-        for (fname, ty) in &decl_fields {
+        for ((fname, ty), rc_fname) in decl_fields.iter().zip(rc_fields.iter()) {
             match fields.iter().find(|(n, _)| n == fname) {
                 Some((_, ex)) => {
-                    let v = self.eval(ex)?;
-                    out.push((Rc::from(*fname), self.coerce(v, ty)?));
+                    let v = env.eval(self, ex)?;
+                    out.push((rc_fname.clone(), self.coerce(v, ty)?));
                 }
                 None => {
                     // struct update syntax `..base` is parsed as a field named ".."
                     if let Some((_, base_ex)) = fields.iter().find(|(n, _)| n == "..") {
-                        let base = self.eval(base_ex)?;
+                        let base = env.eval(self, base_ex)?;
                         let v = self.field_of(&base, fname)?;
-                        out.push((Rc::from(*fname), v));
+                        out.push((rc_fname.clone(), v));
                     } else {
                         return Err(semantic(format!("missing field `{}` in initializer of `{}`", fname, name)));
                     }
@@ -468,7 +537,32 @@ impl Interpreter {
                 return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
             }
         }
-        Ok(self.make_struct(name.as_str(), out, copy))
+        Ok(self.make_struct_named(rc_name, out, copy))
+    }
+
+    /// Struct literal of a host type with a fixed field list (`std::http::ServerRequest`): every field is
+    /// required, as in the runtime's definition.
+    fn eval_host_struct_literal(
+        &mut self,
+        name: &str,
+        names: &'static [&'static str],
+        fields: &'static [(String, &'static Expression<'static>)],
+        env: &mut dyn super::place::PlaceEnv,
+    ) -> R {
+        let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(names.len());
+        for fname in names {
+            let (_, ex) = fields
+                .iter()
+                .find(|(n, _)| n == fname)
+                .ok_or_else(|| semantic(format!("missing field `{}` in initializer of `{}`", fname, name)))?;
+            out.push((Rc::from(*fname), env.eval(self, ex)?));
+        }
+        for (n, _) in fields {
+            if !names.contains(&n.as_str()) {
+                return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
+            }
+        }
+        Ok(self.make_struct(name, out, false))
     }
 
     pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {

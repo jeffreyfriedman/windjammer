@@ -19,7 +19,7 @@ fn write_temp_wj(src: &str) -> PathBuf {
 
 fn wj_bin() -> PathBuf {
     // Prefer local release wj; fall back to PATH.
-    let local = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let local = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     if local.exists() {
         return local;
     }

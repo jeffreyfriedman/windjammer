@@ -99,6 +99,12 @@ impl<'ast> Analyzer<'ast> {
         receiver_type: Option<&str>,
         registry: &SignatureRegistry,
     ) -> bool {
+        // Iterator adapters on a std collection receiver borrow it (codegen inserts `.iter()`).
+        if matches!(receiver_type, Some("Vec" | "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "VecDeque"))
+            && super::stdlib_method_traits::ITERATOR_ONLY_ADAPTERS.contains(&method)
+        {
+            return false;
+        }
         let owned_self = |sig: &super::FunctionSignature| {
             sig.has_self_receiver
                 && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
@@ -107,6 +113,12 @@ impl<'ast> Analyzer<'ast> {
             super::stdlib_method_traits::lookup_method_signature(method, receiver_type, registry)
         {
             return owned_self(sig);
+        }
+        // A std collection's own methods (`v.sum()`, `v.map(..)`, `v.len()` on a `Vec` parameter) are
+        // resolved through its receiver type; a bare-name hit on another type's by-value `self`
+        // (`Iterator::sum`) says nothing about the collection.
+        if matches!(receiver_type, Some("Vec" | "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "VecDeque")) {
+            return false;
         }
         // Bare `get_signature("as_float")` misses `Val::as_float` and can hit a
         // different type. Only an unambiguous unqualified key may decide.
@@ -208,7 +220,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_calls_consuming_method(param_name, operand, registry, receiver_type)
             }
             Expression::TryOp { expr, .. } => {
-                self.expr_calls_consuming_method(param_name, expr, registry, receiver_type)
+                // `param?` moves the Option/Result out of the parameter.
+                self.is_direct_receiver(param_name, expr)
+                    || self.expr_calls_consuming_method(param_name, expr, registry, receiver_type)
             }
             _ => false,
         }

@@ -303,6 +303,34 @@ impl ErrorStatistics {
         output
     }
 
+    /// `format()` plus per-code details: every code with its count, message and files, and every
+    /// recorded error (not just the last five).
+    pub fn format_verbose(&self) -> String {
+        use colored::*;
+
+        let mut output = self.format();
+        output.push_str(&format!("\n{}\n", "Per-code details (all codes):".yellow().bold()));
+        let all = self.get_top_errors(usize::MAX);
+        if all.is_empty() {
+            output.push_str("  No errors recorded yet\n");
+        }
+        for (stats, count) in all {
+            output.push_str(&format!("  {} - {} occurrence(s): {}\n", stats.code.green(), count, stats.message));
+            for file in &stats.files {
+                output.push_str(&format!("     in {}\n", file.display()));
+            }
+        }
+        output.push_str(&format!("\n{}\n", "All recorded errors:".yellow().bold()));
+        if self.recent_errors.is_empty() {
+            output.push_str("  No recent errors\n");
+        }
+        for r in &self.recent_errors {
+            let code = r.code.as_deref().map(|c| format!("[{c}] ")).unwrap_or_default();
+            output.push_str(&format!("  {}{} at {}:{}\n", code, r.message, r.file.display(), r.line));
+        }
+        output
+    }
+
     /// Clear all statistics
     pub fn clear(&mut self) {
         *self = Self::new();

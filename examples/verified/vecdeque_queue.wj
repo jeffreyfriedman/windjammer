@@ -1,5 +1,5 @@
 // tags: vecdeque, queue, collections
-// rust: gap error[E0599]: no method named 'cloned' found for struct 'VecDeque<i64>' in the c
+// rust: ok
 // expect: Some(1)
 // expect: Some(0)
 // expect: 3

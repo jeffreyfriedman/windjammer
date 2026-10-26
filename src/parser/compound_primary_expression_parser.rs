@@ -8,6 +8,12 @@ impl Parser {
     pub(in crate::parser) fn parse_primary_match(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
+        if self.at_guard_only_match() {
+            // ADR-0018: `match { cond => .. }` (parser/guard_match.rs)
+            let location = self.current_location();
+            let stmt = self.parse_guard_only_match()?;
+            return Ok(self.alloc_expr(Expression::Block { statements: vec![stmt], is_unsafe: false, location }));
+        }
         // Match expression
         self.advance();
         // Parse the value to match on, but don't allow struct literals here
@@ -30,67 +36,7 @@ impl Parser {
 
             self.expect(Token::FatArrow)?;
 
-            // TDD: Match arms can contain assignments (statements), not just expressions
-            // Check if this is a block or a single statement/expression
-            let (body, is_block) = if self.current_token() == &Token::LBrace {
-                // Block expression: match x { Pattern => { ... } }
-                self.advance();
-                let statements = self.parse_block_statements()?;
-                self.expect(Token::RBrace)?;
-                let block = self.alloc_expr(Expression::Block {
-                    statements,
-                    is_unsafe: false,
-                    location: self.current_location(),
-                });
-                (block, true)
-            } else {
-                // Try to parse as statement first (for assignments), then as expression
-                let _checkpoint = self.position;
-
-                // Peek ahead to see if this looks like an assignment
-                let is_assignment = if let Token::Ident(_) = self.current_token() {
-                    // Check for identifier followed by = (or .field = for field assignment)
-                    let mut ahead = 1;
-                    loop {
-                        match self.peek(ahead) {
-                            Some(Token::Assign) => break true,
-                            Some(Token::Dot) | Some(Token::LBracket) => {
-                                ahead += 1;
-                                if let Some(Token::Ident(_)) = self.peek(ahead) {
-                                    ahead += 1;
-                                } else {
-                                    break false;
-                                }
-                            }
-                            _ => break false,
-                        }
-                    }
-                } else {
-                    false
-                };
-
-                // TDD: break/continue/return in match arm (e.g. None => break) must be parsed
-                // as statements, not expressions. Expression parser doesn't handle them.
-                let is_control_flow = matches!(
-                    self.current_token(),
-                    Token::Break | Token::Continue | Token::Return
-                );
-
-                if is_assignment || is_control_flow {
-                    // Parse as statement (assignment or break/continue/return)
-                    let stmt = self.parse_statement()?;
-                    // Wrap in block expression
-                    let block = self.alloc_expr(Expression::Block {
-                        statements: vec![stmt],
-                        is_unsafe: false,
-                        location: self.current_location(),
-                    });
-                    (block, false)
-                } else {
-                    // Parse as expression
-                    (self.parse_expression()?, false)
-                }
-            };
+            let (body, is_block) = self.parse_match_arm_body()?;
 
             arms.push(MatchArm {
                 pattern,
@@ -133,6 +79,75 @@ impl Parser {
             is_unsafe: false,
             location: self.current_location(),
         }))
+    }
+
+    /// One match arm's value after `=>`: a block, a statement (assignment / break / continue / return), or an
+    /// expression. Returns the value and whether it was a `{ .. }` block (commas are optional after blocks).
+    pub(in crate::parser) fn parse_match_arm_body(
+        &mut self,
+    ) -> Result<(&'static Expression<'static>, bool), String> {
+        // TDD: Match arms can contain assignments (statements), not just expressions
+        // Check if this is a block or a single statement/expression
+        let arm = if self.current_token() == &Token::LBrace {
+            // Block expression: match x { Pattern => { ... } }
+            self.advance();
+            let statements = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            let block = self.alloc_expr(Expression::Block {
+                statements,
+                is_unsafe: false,
+                location: self.current_location(),
+            });
+            (block, true)
+        } else {
+            // Try to parse as statement first (for assignments), then as expression
+            let _checkpoint = self.position;
+
+            // Peek ahead to see if this looks like an assignment
+            let is_assignment = if let Token::Ident(_) = self.current_token() {
+                // Check for identifier followed by = (or .field = for field assignment)
+                let mut ahead = 1;
+                loop {
+                    match self.peek(ahead) {
+                        Some(Token::Assign) => break true,
+                        Some(Token::Dot) | Some(Token::LBracket) => {
+                            ahead += 1;
+                            if let Some(Token::Ident(_)) = self.peek(ahead) {
+                                ahead += 1;
+                            } else {
+                                break false;
+                            }
+                        }
+                        _ => break false,
+                    }
+                }
+            } else {
+                false
+            };
+
+            // TDD: break/continue/return in match arm (e.g. None => break) must be parsed
+            // as statements, not expressions. Expression parser doesn't handle them.
+            let is_control_flow = matches!(
+                self.current_token(),
+                Token::Break | Token::Continue | Token::Return
+            );
+
+            if is_assignment || is_control_flow {
+                // Parse as statement (assignment or break/continue/return)
+                let stmt = self.parse_statement()?;
+                // Wrap in block expression
+                let block = self.alloc_expr(Expression::Block {
+                    statements: vec![stmt],
+                    is_unsafe: false,
+                    location: self.current_location(),
+                });
+                (block, false)
+            } else {
+                // Parse as expression
+                (self.parse_expression()?, false)
+            }
+        };
+        Ok(arm)
     }
 
     pub(in crate::parser) fn parse_primary_closure_pipe(
@@ -437,6 +452,45 @@ impl Parser {
         Ok(self.alloc_expr(Expression::Block {
             statements: body,
             is_unsafe: true,
+            location: self.current_location(),
+        }))
+    }
+
+    /// `self` the value, or `self::f` the module-relative path. They must stay distinct in the
+    /// AST: `self.f()` is a method call on the value (MethodCall), `self::f()` calls the free
+    /// function `f` of the current module (Call on a path identifier). Cursor on `self`.
+    pub(in crate::parser) fn parse_self_value_or_path(&mut self) -> &'static Expression<'static> {
+        self.advance();
+        let mut name = "self".to_string();
+        while self.current_token() == &Token::ColonColon {
+            if let Some(Token::Ident(seg)) = self.peek(1) {
+                name.push_str("::");
+                name.push_str(seg);
+                self.advance();
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.alloc_expr(Expression::Identifier {
+            name,
+            location: self.current_location(),
+        })
+    }
+
+    /// `loop { .. break value .. }` / `'label: loop/while/for { .. }` used as a value: a block whose
+    /// tail statement is the loop (a `loop` evaluates to its `break` value).
+    pub(in crate::parser) fn parse_loop_expression(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
+        let stmt = if self.current_token() == &Token::Loop {
+            self.parse_loop(None)?
+        } else {
+            self.parse_statement()?
+        };
+        Ok(self.alloc_expr(Expression::Block {
+            statements: vec![stmt],
+            is_unsafe: false,
             location: self.current_location(),
         }))
     }

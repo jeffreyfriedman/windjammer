@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-003
+// mode: effects
+// expect: read_config: fs.read
+// expect: settings: fs.read, random
+// expect: main: console, fs.read, random
+use std::fs
+use std::random
+fn read_config() -> string { fs::read_to_string("cfg.toml").unwrap_or("") }
+fn settings() -> string { "${read_config()}${random::range(0, 2)}" }
+fn main() {
+    println(settings())
+}

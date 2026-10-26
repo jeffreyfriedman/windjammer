@@ -1,0 +1,244 @@
+# Acceptance cases for `wj build` (tests/promise_registry_test.rs). `{w}` is the scratch dir.
+# CLI promises a case covers are derived from its args; `xfail` cases document a known bug.
+
+[[case]]
+name = "build transpiles a program to Rust without cargo"
+polarity = "positive"
+covers = ["feature ownership-visible"]
+files = { "m.wj" = "fn main() {\n    println(\"hi ${40 + 2}\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--output", "{w}/out"]
+creates = ["out/m.rs", "out/Cargo.toml"]
+file_has = { "out/m.rs" = "fn main()" }
+
+[[case]]
+name = "build rejects a syntax error with its location"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "-o", "{w}/out"]
+exit = 1
+output_has = ["Parse error", "line 1, column 10"]
+absent = ["out/m.rs"]
+
+[[case]]
+name = "build of a missing file fails instead of reporting success"
+polarity = "negative"
+args = ["build", "{w}/nope.wj", "--no-cargo", "-o", "{w}/out"]
+output_has = ["path not found"]
+output_lacks = ["Success"]
+
+[[case]]
+name = "build --target javascript emits an ES module"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--target", "javascript", "-o", "{w}/out"]
+creates = ["out/main.mjs"]
+
+[[case]]
+name = "build --target go emits a Go module"
+polarity = "positive"
+covers = ["feature multi-backend"]
+files = { "m.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "-t", "go", "-o", "{w}/out"]
+creates = ["out/main.go", "out/go.mod"]
+
+[[case]]
+name = "build rejects an unknown target"
+polarity = "negative"
+covers = ["feature multi-backend"]
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--target", "nope", "-o", "{w}/out"]
+output_has = ["Unknown target: nope"]
+
+[[case]]
+name = "build --json reports success as JSON"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--json", "-o", "{w}/out"]
+json = true
+stdout_has = ["\"success\": true"]
+
+[[case]]
+name = "build --json on a syntax error reports success=false"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--json", "-o", "{w}/out"]
+exit = 1
+json = true
+stdout_has = ["\"success\": false", "expected parameter name"]
+
+[[case]]
+name = "build --json exits non-zero when the build fails"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--json", "-o", "{w}/out"]
+json = true
+
+[[case]]
+name = "build --library emits library metadata"
+polarity = "positive"
+files = { "src/lib.wj" = "pub fn add(a: int, b: int) -> int {\n    a + b\n}\n" }
+args = ["build", "{w}/src", "--no-cargo", "--library", "-o", "{w}/out"]
+creates = ["out/lib.rs", "out/metadata.json"]
+
+[[case]]
+name = "build --library still rejects broken sources"
+polarity = "negative"
+files = { "src/lib.wj" = "pub fn add(a: int, b: int -> int {\n" }
+args = ["build", "{w}/src", "--no-cargo", "--library", "-o", "{w}/out"]
+output_has = ["Parse error"]
+
+[[case]]
+name = "build --module-file writes a module root for a source dir"
+polarity = "positive"
+files = { "src/util.wj" = "pub fn twice(a: int) -> int {\n    a * 2\n}\n" }
+args = ["build", "{w}/src", "--no-cargo", "--module-file", "-o", "{w}/out"]
+creates = ["out/util.rs"]
+
+[[case]]
+name = "build --module-file rejects broken sources"
+polarity = "negative"
+files = { "src/util.wj" = "pub fn twice(a: int -> int {\n" }
+args = ["build", "{w}/src", "--no-cargo", "--module-file", "-o", "{w}/out"]
+output_has = ["Parse error"]
+
+[[case]]
+name = "build --no-generate-cargo-toml leaves the manifest to the project"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--no-generate-cargo-toml", "-o", "{w}/out"]
+creates = ["out/m.rs"]
+absent = ["out/Cargo.toml"]
+
+[[case]]
+name = "build --no-generate-cargo-toml still rejects syntax errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--no-generate-cargo-toml", "-o", "{w}/out"]
+output_has = ["Parse error"]
+
+[[case]]
+name = "build --no-lint silences Rust-leakage lints"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = Some(1).unwrap()\n    println(\"${v}\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--no-lint", "-o", "{w}/out"]
+output_lacks = ["W0002"]
+
+[[case]]
+name = "build --no-lint does not silence errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--no-lint", "-o", "{w}/out"]
+output_has = ["Parse error"]
+
+[[case]]
+name = "build --defer-drop accepts the documented modes"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--defer-drop", "always", "--defer-drop-threshold", "1024", "-o", "{w}/out"]
+creates = ["out/m.rs"]
+
+[[case]]
+name = "build --defer-drop-threshold must be a number"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--defer-drop-threshold", "abc", "-o", "{w}/out"]
+exit = 2
+output_has = ["invalid value 'abc'"]
+
+[[case]]
+name = "build --defer-drop rejects an unknown mode"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--defer-drop", "bogus", "-o", "{w}/out"]
+exit = 2
+output_has = ["invalid value 'bogus'"]
+
+[[case]]
+name = "build --ir-shadow-validate passes a clean program"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = [1, 2, 3]\n    println(\"${v.len()}\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--ir-shadow-validate", "-o", "{w}/out"]
+creates = ["out/m.rs"]
+
+[[case]]
+name = "build --ir-shadow-validate rejects broken sources"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--ir-shadow-validate", "-o", "{w}/out"]
+output_has = ["Parse error"]
+
+[[case]]
+name = "build --source-maps is refused on the JS backend"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "-t", "javascript", "--source-maps", "-o", "{w}/out"]
+output_has = ["--source-maps is not supported"]
+
+[[case]]
+name = "build --source-maps writes a source map for Rust"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--source-maps", "-o", "{w}/out"]
+creates = ["out/m.rs.map"]
+file_has = { "out/m.rs.map" = "\"wj_line\": 1" }
+
+[[case]]
+name = "build --metadata rejects a malformed NAME=PATH"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--metadata", "bad", "-o", "{w}/out"]
+exit = 1
+output_has = ["invalid --metadata 'bad'", "NAME=PATH"]
+
+[[case]]
+name = "build --metadata accepts NAME=PATH for an existing file"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n}\n", "dep/metadata.json" = "{}" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--metadata", "dep={w}/dep/metadata.json", "-o", "{w}/out"]
+creates = ["out/m.rs"]
+
+[[case]]
+name = "build --metadata rejects a path that does not exist"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--metadata", "dep={w}/missing.json", "-o", "{w}/out"]
+exit = 1
+output_has = ["path not found"]
+
+[[case]]
+name = "inferred ownership: a read-only parameter becomes a borrow in the emitted Rust"
+polarity = "positive"
+covers = ["feature ownership-inferred"]
+files = { "m.wj" = "struct Big {\n    items: Vec<int>,\n}\n\nfn count(b: Big) -> int {\n    b.items.len() as int\n}\n\nfn main() {\n    let b = Big { items: [1, 2, 3] }\n    println(\"${count(b)} ${count(b)}\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "-o", "{w}/out"]
+file_has = { "out/m.rs" = "fn count(b: &Big)" }
+
+[[case]]
+name = "inferred ownership: spelling the borrow yourself is flagged (W0001)"
+polarity = "negative"
+covers = ["feature ownership-inferred", "feature ownership-visible"]
+exit = 1
+files = { "m.wj" = "fn count(v: &Vec<int>) -> int {\n    v.len() as int\n}\n\nfn main() {\n    println(\"${count([1])}\")\n}\n" }
+args = ["lint", "{w}/m.wj"]
+output_has = ["[W0001]"]
+
+[[case]]
+name = "build --defer-drop still rejects syntax errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--defer-drop", "never", "-o", "{w}/out"]
+output_has = ["Parse error"]
+
+[[case]]
+name = "build --tree-shake transpiles"
+polarity = "positive"
+files = { "m.wj" = "fn unused() -> int {\n    1\n}\n\nfn main() {\n    println(\"hi\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--tree-shake", "-o", "{w}/out"]
+creates = ["out/m.rs"]
+
+[[case]]
+name = "build --tree-shake still rejects syntax errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--tree-shake", "-o", "{w}/out"]
+output_has = ["Parse error"]

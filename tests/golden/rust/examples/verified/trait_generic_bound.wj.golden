@@ -1,0 +1,28 @@
+pub trait Doubler {
+    fn double(self) -> Self;
+}
+
+impl Doubler for i64 {
+#[inline]
+fn double(self) -> i64 {
+        self * 2
+}
+}
+
+impl Doubler for f64 {
+#[inline]
+fn double(self) -> f64 {
+        self * 2.0_f64
+}
+}
+
+#[inline]
+fn twice<T: Doubler>(mut x: T) -> T {
+    x.double()
+}
+
+fn main() {
+    println!("{}", twice(3));
+    println!("{}", twice(1.75_f64));
+}
+

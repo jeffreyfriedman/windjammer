@@ -4,7 +4,6 @@
 //! Method Call Analyzer — automatic conversions for method arguments (`&`, `.clone()`, `.to_string()`, …).
 
 mod analyze_borrow_signature;
-mod clone_string;
 mod copy_detection;
 mod registry_lookup;
 mod stdlib_ref;

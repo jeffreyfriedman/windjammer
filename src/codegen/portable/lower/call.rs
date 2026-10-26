@@ -92,6 +92,9 @@ impl<'e> Lowerer<'e> {
                 return self.call_value(f, args);
             }
         }
+        if let Some(last) = self.env.aliases.strip_modules(name) {
+            return self.named_call(&last, args, want);
+        }
         if let Some((owner, member)) = name.rsplit_once("::") {
             return self.path_call(owner, member, args, want);
         }
@@ -102,7 +105,31 @@ impl<'e> Lowerer<'e> {
         if let Some(en) = self.env.enum_of_variant(name).map(|s| s.to_string()) {
             return self.variant_ctor(&en, name, args, want);
         }
+        if self.env.structs.get(name).is_some_and(|s| s.tuple) {
+            return self.tuple_struct_ctor(name, args, want);
+        }
         self.err(format!("call of unknown function `{name}`"))
+    }
+
+    /// `P(a, b)` for `struct P(A, B)`: a struct literal with fields `0`, `1`, ...
+    fn tuple_struct_ctor(&mut self, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        let info = self.env.structs[name].clone();
+        if args.len() != info.fields.len() {
+            return self.err(format!("`{name}` takes {} field(s), got {}", info.fields.len(), args.len()));
+        }
+        let mut bound: Vec<Ty> = match want {
+            Some(Ty::Adt(n, a)) if n == name => a.clone(),
+            _ => vec![Ty::Unknown; info.type_params.len()],
+        };
+        let mut fields = Vec::new();
+        for ((fname, fty), (_, a)) in info.fields.iter().zip(args.iter()) {
+            let expect = fty.subst(&info.type_params, &bound);
+            let v = self.expr(a, Some(&expect).filter(|t| !t.is_unknown()))?;
+            unify(fty, &v.ty, &info.type_params, &mut bound);
+            self.constrain(&expect, &v.ty);
+            fields.push((fname.clone(), self.own(v)));
+        }
+        Ok(PExpr::new(Ty::Adt(name.to_string(), bound), PK::Struct { name: name.to_string(), fields }))
     }
 
     fn call_value(&mut self, f: PExpr, args: &Args) -> PResult<PExpr> {
@@ -139,6 +166,17 @@ impl<'e> Lowerer<'e> {
 
     fn path_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        if self.env.aliases.is_module(&owner) {
+            return self.named_call(name, args, want);
+        }
+        let owner = self.env.aliases.strip_modules(&owner).unwrap_or(owner);
+        let owner = self.env.aliases.nominal(&owner).unwrap_or(owner);
+        // `Box<T>` / `Rc<T>` / `Arc<T>` are erased to `T` (values are already heap objects or
+        // copied by value semantics), so `Box::new(x)` is `x`.
+        if matches!(owner.as_str(), "Box" | "Rc" | "Arc") && name == "new" && args.len() == 1 && !self.env.structs.contains_key(&owner) {
+            let v = self.expr(args[0].1, want)?;
+            return Ok(self.own(v));
+        }
         let module = owner.rsplit("::").next().unwrap_or(&owner).to_string();
         if self.env.variant(&owner, name).is_none() && self.env.method(&owner, name).is_none() {
             if let Some(sig) = crate::codegen::portable::stdlib::lookup(&module, name) {
@@ -147,6 +185,9 @@ impl<'e> Lowerer<'e> {
         }
         if self.env.variant(&owner, name).is_some() {
             return self.variant_ctor(&owner, name, args, want);
+        }
+        if self.env.method(&owner, name).is_none() && self.env.trait_impls.contains_key(&(owner.clone(), name.to_string())) {
+            return self.generic_impl_call(&owner, name, args, want);
         }
         if let Some(sig) = self.env.method(&owner, name).cloned() {
             if sig.recv.is_some() {
@@ -165,6 +206,50 @@ impl<'e> Lowerer<'e> {
             Some(ty) => Ok(PExpr::new(ty, PK::StaticCall { owner, name: name.to_string(), args: out })),
             None => self.err(format!("unknown associated function `{owner}::{name}`")),
         }
+    }
+
+    /// `E::from(x)` with several `impl From<X> for E`: the impl is chosen by the argument type.
+    fn generic_impl_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        let single = self.env.trait_impls[&(owner.to_string(), name.to_string())].len() == 1;
+        let first = match args.first() {
+            Some((_, a)) if !single => Some(self.expr(a, None)?),
+            _ => None,
+        };
+        let Some(mangled) = self.pick_impl(owner, name, first.as_ref().map(|e| e.ty.clone())) else {
+            return self.err(format!("no `{owner}::{name}` impl for this argument type"));
+        };
+        let sig = self.env.method(owner, &mangled).cloned().expect("registered impl method");
+        let (mut a, ret) = match first {
+            None => self.lower_args_sig(&sig, args, want, false)?,
+            Some(f) => {
+                let (rest, ret) = self.lower_args_sig(&FnSig { params: sig.params[1..].to_vec(), ..sig.clone() }, &args[1..], want, false)?;
+                let mut all = vec![if sig.params[0].2 == ParamMode::Value { self.own(f) } else { f }];
+                all.extend(rest);
+                (all, ret)
+            }
+        };
+        Ok(PExpr::new(ret, PK::StaticCall { owner: owner.to_string(), name: mangled, args: a }))
+    }
+
+    /// The emitted name of the `owner::name` generic-trait impl whose first trait argument is
+    /// `arg` (any impl when there is exactly one).
+    pub(super) fn pick_impl(&mut self, owner: &str, name: &str, arg: Option<Ty>) -> Option<String> {
+        let cands = self.env.trait_impls.get(&(owner.to_string(), name.to_string()))?.clone();
+        if cands.len() == 1 {
+            return Some(cands[0].1.clone());
+        }
+        let arg = self.resolve(&arg?);
+        if let Some((_, n)) = cands.iter().find(|(targs, _)| targs.first() == Some(&arg)) {
+            return Some(n.clone());
+        }
+        // An unsuffixed literal: the only integer (or float) impl, as rustc's inference picks it.
+        let Ty::Var(v) = arg else { return None };
+        let fits = |t: &Ty| if self.float_vars.contains(&v) { matches!(t, Ty::F32 | Ty::F64) } else if self.int_vars.contains(&v) { matches!(t, Ty::Int(_)) } else { false };
+        let hits: Vec<&(Vec<Ty>, String)> = cands.iter().filter(|(targs, _)| targs.first().is_some_and(fits)).collect();
+        let [(targs, n)] = hits.as_slice() else { return None };
+        let (t, n) = (targs[0].clone(), n.clone());
+        self.constrain(&t, &arg);
+        Some(n)
     }
 
     fn std_call(&mut self, module: &str, name: &str, sig: crate::codegen::portable::stdlib::StdSig, args: &Args) -> PResult<PExpr> {
@@ -244,11 +329,32 @@ impl<'e> Lowerer<'e> {
         let recv = self.expr(object, None)?;
         let rty = self.resolve_for_dispatch(&recv.ty);
         let recv = PExpr { ty: rty, ..recv };
+        // `x.into()` where the expected type has `impl From<X>`: that impl's `from`.
+        if method == "into" && args.is_empty() {
+            if let Some(Ty::Adt(target, _)) = want.map(|w| self.resolve(w)) {
+                if let Some(m) = self.pick_impl(&target, "from", Some(recv.ty.clone())) {
+                    let ty = want.cloned().unwrap_or(Ty::Unknown);
+                    let recv = self.own(recv);
+                    return Ok(PExpr::new(ty, PK::StaticCall { owner: target, name: m, args: vec![recv] }));
+                }
+            }
+        }
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.optional_chain(recv, args);
+        }
         let owner_ty = match &recv.ty {
             Ty::Adt(n, a) => Some((n.clone(), a.clone())),
             _ => None,
         };
-        if let Some((owner, targs)) = owner_ty {
+        let builtin_ordering = crate::codegen::portable::ordering::is_ordering(&recv.ty) && !self.env.enums.contains_key(crate::codegen::portable::ordering::NAME);
+        if let Some((owner, targs)) = owner_ty.filter(|_| !builtin_ordering) {
+            // `Scratch::new_list()` is `Vec::new()` (Go cannot infer a type argument that only the return type mentions).
+            if method == "new_list" && args.is_empty() && super::arena::is_prelude_scratch(&self.env, &owner) {
+                return self.path_call("Vec", "new", args, want);
+            }
+            if method == "get_mut" && args.len() == 1 && super::arena::is_prelude_arena(&self.env, &owner) {
+                return self.arena_slot(recv, &targs, args);
+            }
             if let Some(sig) = self.env.method(&owner, method).cloned() {
                 return self.user_method(recv, &owner, &targs, method, &sig, args, want);
             }
@@ -268,6 +374,13 @@ impl<'e> Lowerer<'e> {
             if method == "clone" {
                 let ty = recv.ty.clone();
                 return Ok(PExpr::new(ty, PK::Copy(recv)));
+            }
+            // `t.into()` for `T: Into<string>`: the std types that convert into a string are
+            // the string types themselves (and `char`, a one-character string on JS), so it is
+            // a checked conversion of the generic value to `string`.
+            let into_string = self.bounds.get(p).is_some_and(|b| b.iter().any(|t| t.replace(' ', "") == "Into<string>" || t.replace(' ', "") == "Into<String>"));
+            if method == "into" && args.is_empty() && into_string {
+                return Ok(PExpr::new(Ty::Str, PK::Cast(self.own(recv), Ty::Str)));
             }
         }
         self.builtin_method(recv, method, turbofish, args, want)
@@ -294,7 +407,15 @@ impl<'e> Lowerer<'e> {
             let ty = recv.ty.clone();
             return Ok(PExpr::new(ty, PK::Copy(recv)));
         }
-        let tf = turbofish.and_then(|t| t.first()).map(|t| from_ast(t, &self.generics));
+        // `v[a..b]` / `s[a..]` (the parser's `.slice(a, b)`): a range index (byte offsets on strings).
+        if method == "slice" && args.len() == 2 && matches!(recv.ty, Ty::Vec(_) | Ty::Str) {
+            let (a, b) = (self.expr(args[0].1, Some(&Ty::usize()))?, self.expr(args[1].1, Some(&Ty::usize()))?);
+            let (a, b) = (self.ensure_usize(a), self.ensure_usize(b));
+            let range = PExpr::new(Ty::Range(Box::new(Ty::usize())), PK::Range { start: a, end: b, inclusive: false });
+            let ty = recv.ty.clone();
+            return Ok(PExpr::new(ty, PK::Index(recv, range)));
+        }
+        let tf = turbofish.and_then(|t| t.first()).map(|t| from_ast(t, &self.generics, &self.env.aliases));
         let want_for_ret: Option<Ty> = match (method, &tf) {
             ("parse", Some(t)) => Some(Ty::Result(Box::new(t.clone()), Box::new(Ty::Str))),
             ("collect", Some(t)) | ("sum", Some(t)) | ("product", Some(t)) => Some(t.clone()),
@@ -320,6 +441,8 @@ impl<'e> Lowerer<'e> {
             }
         }
         let ty = refine_container(ty, &recv, method, &lowered);
+        // SPEC-NUM-014: a length is usable as `int` (`i < v.len()` with `i: int`, `-> int { v.len() }`).
+        let ty = if matches!(method, "len" | "count" | "capacity") && ty == Ty::usize() { self.len_var() } else { ty };
         Ok(PExpr::new(ty, PK::Method { recv, name: method.to_string(), args: lowered, res: Resolution::Builtin }))
     }
 

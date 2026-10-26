@@ -6,7 +6,7 @@ Post-codegen Rust optimizer: behaviour-preserving rewrites of the Rust text that
 ## Purpose
 Remove inefficiencies the code generator cannot cheaply avoid (redundant clones,
 growth reallocations, quadratic string building, no-op casts, inline-hint bloat,
-dead layout/serialization helpers). Each rewrite has a written soundness
+dead layout/serialization helpers; opt-in: per-iteration scratch buffers hoisted out of loops, the auto-arena pass `scratch_reuse`). Each rewrite has a written soundness
 argument in `docs/optimization/PASSES.md`; a pass without one stays off.
 
 ## Inputs / outputs

@@ -1,0 +1,9 @@
+// spec: SPEC-TRT-007
+// expect: 4
+trait Conv { fn conv<T>(self, x: T) -> T }
+struct S {}
+impl Conv for S { fn conv<T>(self, x: T) -> T { x } }
+fn main() {
+    let s = S {}
+    println("${s.conv(4)}")
+}

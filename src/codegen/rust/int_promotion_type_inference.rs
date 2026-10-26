@@ -1053,7 +1053,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn scan_expr_for_call_arg_int_formal(
+    pub(super) fn scan_expr_for_call_arg_int_formal(
         &self,
         expr: &Expression<'ast>,
         name: &str,
@@ -1114,7 +1114,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Unary { operand, .. } => {
                 self.scan_expr_for_call_arg_int_formal(operand, name, peer);
             }
-            _ => {}
+            other => self.scan_extra_exprs_for_call_arg_int_formal(other, name, peer),
         }
     }
 
@@ -1732,117 +1732,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// P3.323: untyped `let mut i = 0` + `while i < 4` — treat counter as i32, not WJ `int`/i64.
-    pub(in crate::codegen::rust) fn promote_ambiguous_int_loop_counter_in_while_condition(
-        &mut self,
-        condition: &Expression<'ast>,
-    ) {
-        use crate::parser::BinaryOp;
-        let Expression::Binary {
-            left, right, op, ..
-        } = condition
-        else {
-            return;
-        };
-        if !matches!(
-            op,
-            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-        ) {
-            return;
-        }
-        let ident_name = |expr: &Expression<'ast>, lit: &Expression<'ast>| -> Option<String> {
-            match (expr, lit) {
-                (
-                    Expression::Identifier { name, .. },
-                    Expression::Literal {
-                        value: Literal::Int(n),
-                        ..
-                    },
-                ) if (0..=4096).contains(n) => Some(name.to_string()),
-                (
-                    Expression::Literal {
-                        value: Literal::Int(n),
-                        ..
-                    },
-                    Expression::Identifier { name, .. },
-                ) if (0..=4096).contains(n) => Some(name.to_string()),
-                _ => None,
-            }
-        };
-        if let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) {
-            if self.let_binding_has_negative_int_literal_init(name.as_str()) {
-                return;
-            }
-            if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
-                && self.literal_init_wj_int_loop_counters.contains(&name)
-            {
-                // P3.329: int-/struct-int returns already chose WJ `int` (i64) at the let.
-                if let Some(ret_ty) = &self.current_function_return_type {
-                    let peeled = Self::peel_option_result_payload(ret_ty);
-                    match peeled {
-                        Type::Int | Type::Int32 | Type::Uint => return,
-                        Type::Custom(n)
-                            if matches!(
-                                n.as_str(),
-                                "int" | "i64" | "i32" | "u32" | "u64" | "usize"
-                            ) =>
-                        {
-                            return;
-                        }
-                        Type::Custom(n)
-                            if self.struct_fields_include_wj_int(n)
-                                && !self.struct_fields_include_vec_or_array(n) =>
-                        {
-                            return;
-                        }
-                        _ => {}
-                    }
-                }
-                self.local_var_types.insert(name.clone(), Type::Int32);
-                self.codegen_i32_binding_names.insert(name.clone());
-                return;
-            }
-        }
-
-        if let Expression::Identifier { name, .. } = left {
-            if self.expression_has_i32_width_in_tree(right) {
-                let is_counter = self.literal_init_wj_int_loop_counters.contains(name)
-                    || self.codegen_i32_binding_names.contains(name)
-                    || matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Int) | Some(Type::Int32)
-                    );
-                // P3.497: `now` from `timestamp_millis` / i64 lets is not an i32 coord counter.
-                // P3.549: untyped `let mut i = 0` (literal-init loop counter) stays WJ `Int` in
-                // `local_var_types` but must still promote when the while peer is i32-width
-                // (`while i < len - 1` after `let len = …len() as i32`) — otherwise emit
-                // keeps `0_i64` and casts the i32 bound (`(len - 1) as i64`).
-                let i64_init = !self.literal_init_wj_int_loop_counters.contains(name)
-                    && (matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
-                        || matches!(
-                            self.local_var_types.get(name.as_str()),
-                            Some(Type::Custom(n)) if n == "int" || n == "i64"
-                        )
-                        || self.int_type_for_mixed_int_codegen(left) == IntType::I64);
-                if is_counter && !i64_init {
-                    self.local_var_types.insert(name.clone(), Type::Int32);
-                    self.codegen_i32_binding_names.insert(name.clone());
-                    self.usize_variables.remove(name);
-                }
-            } else if self.expression_has_u32_width_in_tree(right) {
-                let is_counter = self.literal_init_wj_int_loop_counters.contains(name)
-                    || matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Int) | Some(Type::Uint)
-                    );
-                if is_counter {
-                    self.local_var_types.insert(name.clone(), Type::Uint);
-                    self.usize_variables.remove(name);
-                }
-            }
-        }
-    }
-
     /// P3.348: u32 loop counter vs u32 bound — do not widen either side to i64.
     pub(in crate::codegen::rust) fn comparison_should_prefer_u32_over_i64(
         &self,
@@ -2006,9 +1895,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.expression_produces_usize(expr) {
                     return Some(Type::Custom("usize".into()));
                 }
-                return self
-                    .peer_type_for_int_literal_operand(left)
-                    .or_else(|| self.peer_type_for_int_literal_operand(right));
+                let lit = |e: &Expression<'ast>| crate::codegen::rust::type_casting::expression_is_literal_only_int(e);
+                let (l, r) = (if lit(left) { None } else { self.peer_type_for_int_literal_operand(left) }, if lit(right) { None } else { self.peer_type_for_int_literal_operand(right) });
+                return l.or(r);
             }
         }
         if self.infer_expression_type_is_usize(expr) {
@@ -2046,13 +1935,6 @@ impl<'ast> CodeGenerator<'ast> {
             Self::assignment_target_needs_int_codegen_context(t)
                 && Self::int_type_from_assignment_target(t).is_some()
         })
-    }
-
-    pub(in crate::codegen::rust) fn expr_is_usize_loop_counter(
-        &self,
-        expr: &Expression<'ast>,
-    ) -> bool {
-        matches!(expr, Expression::Identifier { name, .. } if self.usize_variables.contains(name))
     }
 
     /// Map parser [`Type`] to [`crate::type_inference::IntType`] for mixed-integer `as T` codegen.

@@ -1,0 +1,13 @@
+// spec: SPEC-OWN-005
+// expect: 7
+struct Acc { total: int }
+impl Acc {
+    fn add(self, n: int) { self.total += n }
+    fn total(self) -> int { self.total }
+}
+fn main() {
+    let mut a = Acc { total: 0 }
+    a.add(2)
+    a.add(5)
+    println("${a.total()}")
+}

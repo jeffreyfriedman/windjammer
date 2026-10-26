@@ -1,0 +1,9 @@
+use std::time
+fn work() -> int {
+    time::sleep_millis(5)
+    7
+}
+fn main() {
+    let t = spawn work()
+    println("${t.wait()}")
+}

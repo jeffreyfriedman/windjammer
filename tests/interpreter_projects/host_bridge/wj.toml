@@ -1,0 +1,10 @@
+[package]
+name = "host_bridge"
+version = "0.1.0"
+
+# The extern fns below are Rust code behind the host bridge: `ffi` is denied unless granted by name, and a
+# [capabilities] table is the whole grant, so the project-directory file access is spelled out too.
+[capabilities]
+fs.read = ["./**"]
+fs.write = ["./**"]
+ffi = ["host_*"]

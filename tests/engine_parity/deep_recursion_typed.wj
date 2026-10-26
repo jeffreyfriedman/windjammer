@@ -1,0 +1,13 @@
+fn depth(n: int) -> int {
+    if n == 0 { return 0 }
+    1 + depth(n - 1)
+}
+fn ack(m: int, n: int) -> int {
+    if m == 0 { return n + 1 }
+    if n == 0 { return ack(m - 1, 1) }
+    ack(m - 1, ack(m, n - 1))
+}
+fn main() {
+    println("${depth(5000)} ${ack(2, 3)}")
+    println("${depth(20000)}")
+}

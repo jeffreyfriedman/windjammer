@@ -1,0 +1,14 @@
+// spec: SPEC-LEX-012
+// expect: 3
+// expect: 2
+fn main() {
+    let a = 1; let b = 2
+    let c = a +
+        b
+    println("${c}")
+    let d = [
+        1,
+        2,
+    ]
+    println("${d.len()}")
+}

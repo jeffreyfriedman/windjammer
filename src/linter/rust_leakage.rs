@@ -46,6 +46,66 @@ impl<'ast> RustLeakageLinter<'ast> {
         for item in &program.items {
             self.check_item(item);
         }
+        self.check_trailing_returns(program);
+        self.check_missing_values(program);
+        for m in super::mixed_int_width::mixed_widths(program) {
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0013".to_string(),
+                category: LintCategory::Correctness,
+                level: LintLevel::Warning,
+                message: format!("mixed integer widths `{}` and `{}` without an explicit conversion", m.left, m.right),
+                location: to_source_location(m.location, &self.default_file),
+                help: Some(format!("convert one side explicitly, e.g. `{}(x)`", m.right)),
+                note: Some("ADR-0015: explicit widths are never silently widened or narrowed".to_string()),
+                suggestion: None,
+            });
+        }
+    }
+
+    /// W0011 (ADR-0015 #4): declared return type but the body definitely ends without a value.
+    fn check_missing_values(&mut self, program: &Program<'ast>) {
+        for m in super::missing_value::missing_values(program) {
+            let location = to_source_location(m.location, &self.default_file);
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0011".to_string(),
+                category: LintCategory::Correctness,
+                level: LintLevel::Error,
+                message: format!("function `{}` declares a return type but ends without a value: {}", m.function, m.reason),
+                location,
+                help: Some("end the body with the value as its final expression (no `return` needed), or remove the return type".to_string()),
+                note: Some("ADR-0015 #4: the final expression is the function's value".to_string()),
+                suggestion: None,
+            });
+        }
+    }
+
+    /// W0009 (ADR-0015 #4): `return x` as the last statement; the final expression is the value.
+    fn check_trailing_returns(&mut self, program: &Program<'ast>) {
+        for t in super::trailing_return::tail_returns(program) {
+            let location = SourceLocation {
+                file: t.location.file.to_string_lossy().to_string(),
+                line: t.location.line,
+                column: t.location.column,
+            };
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0009".to_string(),
+                category: LintCategory::Style,
+                level: LintLevel::Warning,
+                message: if t.has_value {
+                    "trailing `return` is redundant".to_string()
+                } else {
+                    "trailing bare `return` is redundant".to_string()
+                },
+                location,
+                help: Some(if t.has_value {
+                    "drop `return`: the final expression is the function's value (or run `wj fix`)".to_string()
+                } else {
+                    "remove the trailing `return`".to_string()
+                }),
+                note: Some("ADR-0015 #4: implicit final expression is canonical; `return` is for early exit".to_string()),
+                suggestion: None,
+            });
+        }
     }
 
     fn check_item(&mut self, item: &Item<'ast>) {
@@ -218,7 +278,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                         message: format!("explicit .{}() call", method),
                         location: loc,
                         help: Some(
-                            "use explicit error handling: `if let Some(...)` or `match`"
+                            "give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`"
                                 .to_string(),
                         ),
                         note: Some(".unwrap() is a Rust-specific panic convention".to_string()),
@@ -441,6 +501,19 @@ impl<'ast> RustLeakageLinter<'ast> {
     pub fn lint_source(&mut self, source: &str) {
         for diag in super::surface_syntax::diagnostics(&self.default_file, source) {
             self.collector.add(diag);
+        }
+        for off in super::redundant_as_str::find(source) {
+            let (line, column) = super::redundant_as_str::line_col(source, off);
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0012".to_string(),
+                category: LintCategory::Style,
+                level: LintLevel::Warning,
+                message: "`.as_str()` is redundant: Windjammer has one string type".to_string(),
+                location: SourceLocation { file: self.default_file.clone(), line, column },
+                help: Some("remove `.as_str()` (or run `wj fix`)".to_string()),
+                note: Some("every backend treats `.as_str()` as identity".to_string()),
+                suggestion: Some(String::new()),
+            });
         }
     }
 

@@ -1,0 +1,11 @@
+// spec: SPEC-EFF-011
+// mode: panic
+// manifest: [capabilities]
+// manifest: fs.read = ["./data/**"]
+// expect-exit: 126
+// expect-error: capability denied: fs.read(./secret.txt)
+use std::fs
+fn main() {
+    let r = fs::read_to_string("./data/../secret.txt")
+    println("${r.is_ok()}")
+}

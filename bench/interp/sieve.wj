@@ -1,0 +1,24 @@
+// Sieve of Eratosthenes below 1,000,000: Vec<bool> reads and writes by index.
+fn main() {
+    let n = 1000000
+    let mut flags: Vec<bool> = Vec::new()
+    let mut k = 0
+    while k < n {
+        flags.push(true)
+        k += 1
+    }
+    let mut count = 0
+    let mut i = 2
+    while i < n {
+        if flags[i] {
+            count += 1
+            let mut j = i * i
+            while j < n {
+                flags[j] = false
+                j += i
+            }
+        }
+        i += 1
+    }
+    println("${count}")
+}

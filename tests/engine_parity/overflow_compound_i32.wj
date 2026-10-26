@@ -1,0 +1,9 @@
+fn main() {
+    let mut acc: i32 = 2147483000
+    let mut i = 0
+    while i < 1000 {
+        acc += i
+        i += 1
+    }
+    println("${acc}")
+}

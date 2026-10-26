@@ -578,14 +578,6 @@ impl<'ast> CodeGenerator<'ast> {
             .and_then(Self::int_rust_type_name)
     }
 
-    /// Generate a statement with automatic source tracking
-    #[allow(dead_code)]
-    pub(super) fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {
-        let code = self.generate_statement(stmt);
-        self.track_generated_lines(&code);
-        code
-    }
-
     /// Whether an expression's value should be treated as owned `String` for if/else branch coercion.
     pub(in crate::codegen::rust) fn expr_suggests_owned_string_coercion(
         &self,
@@ -703,9 +695,9 @@ impl<'ast> CodeGenerator<'ast> {
                     && type_
                         .as_ref()
                         .is_none_or(crate::type_classification::type_is_vec_container);
-                let generated = self.generate_let_statement(pattern, *mutable, type_, value, location);
+                let generated = self.generate_let_statement_with_context(pattern, *mutable, type_, value, location);
                 self.array_literal_as_list = prev_list;
-                generated
+                self.append_let_else(generated, stmt)
             }
             Statement::Const {
                 name, type_, value, ..
@@ -759,34 +751,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // explicit `return match` (E0308 otherwise — wj-todo-cli edit branch).
                 self.maybe_return_value_match_in_void_block(generated, arms)
             }
-            Statement::Loop { body, label, .. } => {
-                let out = self.generate_loop_statement(body);
-                super::loop_statement_generation::with_loop_label(out, label.as_deref())
-            }
-            Statement::While {
-                condition,
-                body,
-                label,
-                ..
-            } => {
-                let out = self.generate_while_statement(condition, body);
-                super::loop_statement_generation::with_loop_label(out, label.as_deref())
-            }
-            Statement::For {
-                pattern,
-                iterable,
-                body,
-                label,
-                location,
-                ..
-            } => {
-                let out = self.generate_for_statement(pattern, iterable, body, location);
-                super::loop_statement_generation::with_loop_label(out, label.as_deref())
-            }
-            Statement::Break { label, value, .. } => {
-                self.generate_break_statement(label.as_deref(), *value)
-            }
-            Statement::Continue { label, .. } => self.generate_continue_statement(label.as_deref()),
+            Statement::Loop { .. }
+            | Statement::While { .. }
+            | Statement::For { .. }
+            | Statement::Break { .. }
+            | Statement::Continue { .. } => self.generate_loop_family_statement(stmt),
             Statement::Use {
                 path,
                 alias,
@@ -815,14 +784,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_assignment_statement(target, value, compound_op),
             Statement::Thread { body, .. } => self.generate_thread_statement(body),
             Statement::Async { body, .. } => self.generate_async_statement(body),
-            Statement::Defer { statement: _, .. } => {
-                // Defer is not directly supported in Rust
-                // We'll generate a comment for now
-                let mut output = self.indent();
-                output.push_str("// TODO: defer not yet implemented\n");
-                output.push_str(&self.generate_statement(stmt));
-                output
-            }
+            Statement::Defer { statement, .. } => self.generate_defer_statement(statement, stmt),
         }
     }
 

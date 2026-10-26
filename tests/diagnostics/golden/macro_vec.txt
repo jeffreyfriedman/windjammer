@@ -1,0 +1,9 @@
+warning[W0007]: `vec!` is deprecated: use the list literal `[..]`
+  --> macro_vec.wj:3:13
+  |
+3 |     let v = vec![1, 2, 3]
+  |             ^^^^^^^^^^^^^
+  = help: replace `vec![1, 2, 3]` with `[1, 2, 3]`
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = fix (auto-fixable): replace `vec![1, 2, 3]` with `[1, 2, 3]`
+  = explain: wj explain W0007

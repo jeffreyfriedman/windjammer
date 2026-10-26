@@ -1,0 +1,13 @@
+// spec: SPEC-EFF-004
+// mode: effects
+// expect: apply: pure + f
+// expect: twice: pure + f
+// expect: main: console, random
+use std::random
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn twice(f: fn(int) -> int, x: int) -> int { apply(f, apply(f, x)) }
+fn main() {
+    let a = twice(|x| x + 1, 0)
+    let b = apply(|x| x + random::range(0, 1), 1)
+    println("${a} ${b}")
+}

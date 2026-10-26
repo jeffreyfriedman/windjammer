@@ -465,6 +465,38 @@ impl<'ast> CodeGenerator<'ast> {
                         return true;
                     }
                 }
+                // `x.child.method()` where `x` is the loop variable: resolve the receiver type
+                // through the struct field registry (same walk as the analyzer's `&mut self` rule).
+                if let Expression::FieldAccess { .. } = &**object {
+                    let mut fields: Vec<&str> = Vec::new();
+                    let mut cur: &Expression = object;
+                    while let Expression::FieldAccess { object: inner, field, .. } = cur {
+                        fields.push(field.as_str());
+                        cur = inner;
+                    }
+                    if matches!(cur, Expression::Identifier { name, .. } if name == loop_var) {
+                        fields.reverse();
+                        let mut ty = Some(elem.clone());
+                        for f in fields {
+                            ty = ty.and_then(|t| {
+                                let name = match t {
+                                    Type::Custom(n) | Type::Parameterized(n, _) => n,
+                                    Type::Reference(i) | Type::MutableReference(i) => match *i {
+                                        Type::Custom(n) | Type::Parameterized(n, _) => n,
+                                        _ => return None,
+                                    },
+                                    _ => return None,
+                                };
+                                let base = name.split('<').next().unwrap_or(&name).to_string();
+                                self.lookup_struct_field_types(&base)
+                                    .and_then(|m| m.get(f).cloned())
+                            });
+                        }
+                        if ty.is_some_and(|t| self.method_requires_mut_receiver_for_element_type(&t, method)) {
+                            return true;
+                        }
+                    }
+                }
                 if self.expr_contains_mut_dispatch_on_var(object, loop_var, elem) {
                     return true;
                 }

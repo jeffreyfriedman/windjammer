@@ -524,7 +524,8 @@ fn register_consts(r: &mut Registry) {
         ("usize", IntTy::Usize),
     ];
     for (n, t) in ints {
-        r.add_const(format!("{}::MAX", n), Value::Int(t.max(), t));
+        // u128::MAX is all ones (stored as the bit pattern -1, see u128ops.rs)
+        r.add_const(format!("{}::MAX", n), Value::Int(if t == IntTy::U128 { -1 } else { t.max() }, t));
         r.add_const(format!("{}::MIN", n), Value::Int(t.min(), t));
         r.add_const(format!("{}::BITS", n), Value::Int(t.bits() as i128, IntTy::U32));
     }

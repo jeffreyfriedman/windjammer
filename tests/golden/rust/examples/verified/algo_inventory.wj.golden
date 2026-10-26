@@ -1,0 +1,43 @@
+use std::collections::HashMap;
+#[derive(Debug, Clone, PartialEq)]
+
+struct Inventory {
+    stock: HashMap<String, i64>,
+}
+
+impl Inventory {
+#[inline]
+fn new() -> Inventory {
+        Inventory { stock: HashMap::new() }
+}
+#[inline]
+fn add(&mut self, item: String, n: i64) {
+        let cur = self.stock.get(&item).copied().unwrap_or(0_i64);
+        self.stock.insert(item.clone(), cur + n);
+}
+#[inline]
+fn take(&mut self, item: String, n: i64) {
+        let cur = self.stock.get(&item).copied().unwrap_or(0_i64);
+        self.stock.insert(item.clone(), cur - n);
+}
+#[inline]
+fn report(&self, item: &str) -> String {
+        match self.stock.get(item).copied() {
+            Some(0) => String::from("out of stock"),
+            Some(n) => format!("{}", n),
+            None => String::from("not found"),
+        }
+}
+}
+
+fn main() {
+    let mut inv = Inventory::new();
+    inv.add("widget".to_string(), 10_i64);
+    inv.add("gadget".to_string(), 1_i64);
+    inv.take("widget".to_string(), 2_i64);
+    inv.take("gadget".to_string(), 1_i64);
+    println!("widget: {}", inv.report("widget"));
+    println!("gadget: {}", inv.report("gadget"));
+    println!("unknown: {}", inv.report("unknown"));
+}
+

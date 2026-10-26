@@ -1,0 +1,9 @@
+// spec: SPEC-ATTR-002
+// expect: true 0 []
+@derive(Clone, Debug, PartialEq, Default)
+struct Cfg { n: int, s: string }
+fn main() {
+    let d = Cfg::default()
+    let e = d.clone()
+    println("${d == e} ${d.n} [${d.s}]")
+}

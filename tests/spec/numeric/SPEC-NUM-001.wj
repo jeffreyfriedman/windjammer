@@ -1,0 +1,9 @@
+// spec: SPEC-NUM-001
+// expect: 9223372036854775807
+// expect: -9223372036854775808
+fn main() {
+    let big = 9223372036854775807
+    println("${big}")
+    let small = -9223372036854775807 - 1
+    println("${small}")
+}

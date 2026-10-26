@@ -1,0 +1,25 @@
+use std::collections::HashMap;
+use windjammer_runtime::test::*;
+
+use std::collections;
+#[test]
+
+fn test_hashmap_insert_string_literals() {
+    let mut map = collections::HashMap::new();
+    map.insert(String::from("key1"), String::from("value1"));
+    map.insert(String::from("key2"), String::from("value2"));
+    assert!(map.get("key1").is_some());
+    assert!(map.get("key2").is_some());
+}
+
+#[test]
+
+fn test_hashmap_insert_mixed() {
+    let mut map = collections::HashMap::new();
+    let key: String = String::from("dynamic_key");
+    let value: String = String::from("dynamic_value");
+    map.insert(key.to_string(), value.to_string());
+    map.insert(String::from("literal_key"), String::from("literal_value"));
+    assert!(map.len() == 2);
+}
+

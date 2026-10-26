@@ -516,7 +516,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.generate_expression(left)
                 }
             }
-            _ => self.generate_expression(left),
+            _ => self.generate_left_operand(left),
         };
         let mut right_str = match right {
             Expression::Binary { op: right_op, .. } => {
@@ -539,7 +539,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.generate_expression(right)
                 }
             }
-            _ => self.generate_expression(right),
+            _ => self.generate_value_operand(right),
         };
         self.assignment_int_target_type = prev_bin_int;
 
@@ -1376,7 +1376,7 @@ impl<'ast> CodeGenerator<'ast> {
                 op,
                 BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
             );
-            self.balance_eq_operands_for_rust(
+            self.balance_eq_operands_checked(
                 left,
                 right,
                 &mut left_str,

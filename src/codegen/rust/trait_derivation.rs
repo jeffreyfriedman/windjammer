@@ -114,12 +114,57 @@ impl CodeGenerator<'_> {
 
         // Auto-derive Serialize/Deserialize when serde is available (project uses std::json
         // or is compiled as part of a multi-file project with windjammer-runtime).
-        if !has_non_auto_debug_clone_field && (self.serde_available || self.needs_serde_imports) {
+        if !has_non_auto_debug_clone_field
+            && (self.serde_available || self.needs_serde_imports)
+            && all_types.iter().all(|t| self.type_is_serde_derivable(t, 0))
+        {
             traits.push("Serialize".to_string());
             traits.push("Deserialize".to_string());
         }
 
+        self.drop_hand_implemented_traits(&struct_.name, &mut traits);
         traits
+    }
+
+    /// False when `ty` (transitively through this crate's structs) names a type imported from another crate:
+    /// that type may not implement `Serialize`, so a derive over it would break the build.
+    fn type_is_serde_derivable(&self, ty: &Type, depth: usize) -> bool {
+        if depth > 8 {
+            return true;
+        }
+        match ty {
+            Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Reference(inner)
+            | Type::MutableReference(inner) => self.type_is_serde_derivable(inner, depth),
+            Type::Tuple(items) => items.iter().all(|t| self.type_is_serde_derivable(t, depth)),
+            Type::Array(inner, _) => self.type_is_serde_derivable(inner, depth),
+            Type::Parameterized(base, args) => {
+                self.named_type_is_serde_derivable(base, depth)
+                    && args.iter().all(|a| self.type_is_serde_derivable(a, depth))
+            }
+            Type::Custom(name) => self.named_type_is_serde_derivable(name, depth),
+            _ => true,
+        }
+    }
+
+    fn named_type_is_serde_derivable(&self, name: &str, depth: usize) -> bool {
+        let leaf = crate::type_classification::type_name_leaf(name);
+        if let Some(fields) = self.lookup_struct_field_types(leaf) {
+            return fields.values().all(|t| self.type_is_serde_derivable(t, depth + 1));
+        }
+        !self.idiom.foreign_imported_types.contains(leaf)
+    }
+
+    /// A hand-written `impl Trait for T` replaces the auto-derive of `Trait` (a derive plus an impl is E0119).
+    /// A hand-written `Clone` also rules out the derived `Copy`.
+    pub(super) fn drop_hand_implemented_traits(&self, type_name: &str, traits: &mut Vec<String>) {
+        let has = |t: &str| {
+            self.idiom.user_trait_impls
+                .contains(&(type_name.to_string(), t.to_string()))
+        };
+        let clone_by_hand = has("Clone");
+        traits.retain(|t| !has(t) && !(clone_by_hand && t == "Copy"));
     }
 
     /// Types that prevent auto-deriving `Debug`/`Clone` on a struct (trait objects, `mpsc::Receiver`, …).
@@ -292,6 +337,7 @@ impl CodeGenerator<'_> {
     /// registration mirroring `struct_emits_partial_eq` + `is_partial_eq_type`, and interleave
     /// structs with enums so mutually dependent types converge.
     pub(super) fn collect_partial_eq_types(&mut self, program: &Program) {
+        self.collect_user_trait_impls(program); // hand-written impls must be known before derives are inferred
         for item in &program.items {
             if let Item::Enum { decl: e, .. } = item {
                 self.collect_enum_variant_types(e);
@@ -338,6 +384,12 @@ impl CodeGenerator<'_> {
     /// True if `generate_struct` will emit a `#[derive(...)]` that includes `PartialEq`
     /// (explicit `@derive` / `@auto`, or implicit auto-derive when there is no derive decorator).
     fn struct_emits_partial_eq(&self, s: &StructDecl) -> bool {
+        if self
+            .idiom.user_trait_impls
+            .contains(&(s.name.clone(), "PartialEq".to_string()))
+        {
+            return true;
+        }
         let has_auto_or_derive = s
             .decorators
             .iter()

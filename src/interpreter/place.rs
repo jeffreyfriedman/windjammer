@@ -65,7 +65,7 @@ fn descend<'v>(cur: &'v mut Value, p: &Proj) -> R<&'v mut Value> {
 
 impl Place {
     pub fn of_slot(slot: Slot) -> Place {
-        Place { slot, path: Vec::new() }
+        Place { slot, path: Vec::new(), guard: None }
     }
 
     pub fn temp(v: Value) -> Place {
@@ -75,7 +75,7 @@ impl Place {
     pub fn proj(&self, p: Proj) -> Place {
         let mut path = self.path.clone();
         path.push(p);
-        Place { slot: self.slot.clone(), path }
+        Place { slot: self.slot.clone(), path, guard: self.guard.clone() }
     }
 
     /// Run `f` on the target value with unique access (copy-on-write along the path).
@@ -152,7 +152,15 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
 }
 
 /// Follow `Ref` values to the underlying value.
+#[inline]
 pub fn deref_value(v: Value) -> R<Value> {
+    if !matches!(v, Value::Ref(_) | Value::Rc(_)) {
+        return Ok(v); // the common case: a plain value, no indirection
+    }
+    deref_chain(v)
+}
+
+fn deref_chain(v: Value) -> R<Value> {
     let mut cur = v;
     let mut n = 0;
     loop {
@@ -169,7 +177,11 @@ pub fn deref_value(v: Value) -> R<Value> {
 }
 
 /// Follow `&`/`&mut` references but keep an `Rc` handle (so sharing is not lost).
+#[inline]
 pub fn strip_refs(v: Value) -> R<Value> {
+    if !matches!(v, Value::Ref(_)) {
+        return Ok(v);
+    }
     let mut cur = v;
     for _ in 0..64 {
         match cur {
@@ -195,11 +207,24 @@ impl Interpreter {
 
     /// Resolve an expression to a place, following references. `None` for rvalues.
     pub(crate) fn resolve_place(&mut self, e: &'static Expression<'static>) -> R<Option<Place>> {
+        self.resolve_place_in(e, &mut WalkerEnv)
+    }
+
+    /// `resolve_place` with variables and sub-expressions supplied by `env` (the walker's scope, or
+    /// the resolved engine's slots and compiled code).
+    pub(crate) fn resolve_place_in(&mut self, e: &'static Expression<'static>, env: &mut dyn PlaceEnv) -> R<Option<Place>> {
         match e {
             Expression::Identifier { name, .. } => {
-                let Some(slot) = self.lookup_var(name) else {
+                let Some(slot) = env.var(self, name) else {
                     // `static mut` / module-level state
-                    let module = self.scope.module;
+                    let mut module = self.scope.module;
+                    // a function-body `use` overlay keeps the module's statics where they are
+                    while !self.modules[module].consts.contains_key(name.as_str()) {
+                        match self.modules[module].fallback {
+                            Some(fb) => module = fb,
+                            None => break,
+                        }
+                    }
                     if self.modules[module].consts.contains_key(name.as_str()) {
                         self.global_value(module, name)?;
                         return Ok(self.globals.get(&(module, name.clone())).cloned().map(Place::of_slot));
@@ -213,10 +238,10 @@ impl Interpreter {
                 }
             }
             Expression::FieldAccess { object, field, .. } => {
-                let base = match self.resolve_place(object)? {
+                let base = match self.resolve_place_in(object, env)? {
                     Some(p) => p,
                     None => {
-                        let v = self.eval(object)?;
+                        let v = env.eval(self, object)?;
                         Place::temp(v)
                     }
                 };
@@ -233,14 +258,14 @@ impl Interpreter {
                 Ok(Some(base.proj(proj)))
             }
             Expression::Index { object, index, .. } => {
-                let base = match self.resolve_place(object)? {
+                let base = match self.resolve_place_in(object, env)? {
                     Some(p) => p,
                     None => {
-                        let v = self.eval(object)?;
+                        let v = env.eval(self, object)?;
                         Place::temp(v)
                     }
                 };
-                let idx = self.eval(index)?;
+                let idx = env.eval(self, index)?;
                 let bv = base.read()?;
                 match (&bv, &idx) {
                     (Value::Vec(vs), Value::Int(i, _)) => {
@@ -258,13 +283,13 @@ impl Interpreter {
             }
             Expression::Unary { op: crate::parser::UnaryOp::Deref, operand, .. } => {
                 // `*r`: r's slot holds a Ref -> its target; otherwise same place
-                self.resolve_place(operand)
+                self.resolve_place_in(operand, env)
             }
             Expression::Unary { op: crate::parser::UnaryOp::MutRef | crate::parser::UnaryOp::Ref, operand, .. } => {
-                self.resolve_place(operand)
+                self.resolve_place_in(operand, env)
             }
             Expression::MethodCall { .. } | Expression::Call { .. } => {
-                let v = self.eval_keep_ref(e)?;
+                let v = env.eval_keep_ref(self, e)?;
                 match v {
                     Value::Ref(p) => Ok(Some(self.chase(p)?)),
                     _ => Ok(None),
@@ -289,5 +314,29 @@ impl Interpreter {
             }
         }
         Err(panic_ctl("reference cycle"))
+    }
+}
+
+/// Where `resolve_place_in` finds variables and evaluates the sub-expressions of a place.
+pub(crate) trait PlaceEnv {
+    fn var(&mut self, it: &Interpreter, name: &str) -> Option<Slot>;
+    /// `eval` (references followed).
+    fn eval(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value>;
+    /// `eval_keep_ref` (a call returning a reference).
+    fn eval_keep_ref(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value>;
+}
+
+/// The tree walker's scope.
+pub(crate) struct WalkerEnv;
+
+impl PlaceEnv for WalkerEnv {
+    fn var(&mut self, it: &Interpreter, name: &str) -> Option<Slot> {
+        it.lookup_var(name)
+    }
+    fn eval(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value> {
+        it.eval(e)
+    }
+    fn eval_keep_ref(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value> {
+        it.eval_keep_ref(e)
     }
 }

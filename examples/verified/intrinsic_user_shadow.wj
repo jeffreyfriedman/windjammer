@@ -1,0 +1,9 @@
+// tags: intrinsics, shadowing, println
+// rust: ok
+// expect: custom: hi
+fn println(s: string) {
+    print("custom: ${s}\n")
+}
+fn main() {
+    println("hi")
+}

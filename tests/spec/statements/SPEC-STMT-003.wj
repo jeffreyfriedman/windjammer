@@ -1,0 +1,13 @@
+// spec: SPEC-STMT-003
+// expect: 16 9
+fn main() {
+    let mut i = 0
+    let mut s = 0
+    while i < 10 {
+        i += 1
+        if i % 2 == 0 { continue }
+        if i > 7 { break }
+        s += i
+    }
+    println("${s} ${i}")
+}

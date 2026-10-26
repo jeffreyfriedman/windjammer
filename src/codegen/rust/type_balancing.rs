@@ -906,8 +906,8 @@ impl<'ast> CodeGenerator<'ast> {
             };
 
             // Determine ownership explicitly, being careful about match arm bindings
-            let left_is_owned = is_owned_string(lt.as_ref()) || is_owned_string_var(left);
-            let right_is_owned = is_owned_string(rt.as_ref()) || is_owned_string_var(right);
+            let left_is_owned = !expression_utilities::is_string_literal(left) && (is_owned_string(lt.as_ref()) || is_owned_string_var(left));
+            let right_is_owned = !expression_utilities::is_string_literal(right) && (is_owned_string(rt.as_ref()) || is_owned_string_var(right));
             let left_is_ref = is_ref_string(lt.as_ref());
             let right_is_ref = is_ref_string(rt.as_ref());
             let right_is_borrowed_param = is_borrowed_string_param(right);

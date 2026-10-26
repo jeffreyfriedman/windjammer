@@ -104,7 +104,8 @@ impl Game {
         fs::read_to_string(output_dir.join("main.rs")).expect("Failed to read generated main.rs");
 
     assert!(
-        generated_code.contains("use super::vec2::Vec2")
+        generated_code.contains("use crate::vec2::Vec2")
+            || generated_code.contains("use super::vec2::Vec2")
             || generated_code.contains("use super::Vec2")
             || generated_code.contains("use crate::Vec2"),
         "Should generate import path for Vec2.\nGenerated code:\n{}",
@@ -112,7 +113,8 @@ impl Game {
     );
 
     assert!(
-        generated_code.contains("use super::color::Color")
+        generated_code.contains("use crate::color::Color")
+            || generated_code.contains("use super::color::Color")
             || generated_code.contains("use super::Color")
             || generated_code.contains("use crate::Color"),
         "Should generate import path for Color.\nGenerated code:\n{}",

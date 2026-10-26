@@ -10,9 +10,39 @@
 
 use crate::parser::*;
 
-use super::{ast_utilities, codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
+use super::{ast_utilities, pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Generate an expression in value position (compound-assignment right-hand side): an `if` /
+    /// `match` operand must keep its tail instead of being discarded as `{ if c { x; } else { y; } }`.
+    pub(in crate::codegen::rust) fn generate_value_expr(&mut self, e: &Expression<'ast>) -> String {
+        let prev_ctx = std::mem::replace(&mut self.in_expression_context, true);
+        let s = self.generate_expression(e);
+        self.in_expression_context = prev_ctx;
+        s
+    }
+
+    /// Left operand of a binary operator: a block there is parenthesised (`} + x` ends the statement in Rust).
+    pub(in crate::codegen::rust) fn generate_left_operand(&mut self, e: &Expression<'ast>) -> String {
+        let s = self.generate_value_operand(e);
+        if matches!(e, Expression::Block { .. }) { format!("({s})") } else { s }
+    }
+
+    /// Generate an operand / condition / argument whose value is used. A block expression there (`if` /
+    /// `match` as a value) must yield its tail even when the enclosing statement block is void.
+    pub(in crate::codegen::rust) fn generate_value_operand(&mut self, e: &Expression<'ast>) -> String {
+        if !matches!(e, Expression::Block { .. }) {
+            return self.generate_expression(e);
+        }
+        let prev_ctx = std::mem::replace(&mut self.in_expression_context, true);
+        let prev_void = std::mem::replace(&mut self.in_void_block, false);
+        let s = self.generate_expression(e);
+        self.in_expression_context = prev_ctx;
+        self.in_void_block = prev_void;
+        s
+    }
+
+
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
         self.prepass_mark_loop_counter_usize_variables(stmts);
@@ -356,11 +386,6 @@ impl<'ast> CodeGenerator<'ast> {
         if let Err(e) = self.enter_recursion("generate_statement") {
             eprintln!("{}", e);
             return format!("/* {} */", e);
-        }
-
-        // Record source mapping if location info is available
-        if let Some(location) = codegen_helpers::get_statement_location(stmt) {
-            self.record_mapping(&location);
         }
 
         let result = self.generate_statement_impl(stmt);
@@ -758,7 +783,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Unsafe blocks are always value-producing (e.g., `if unsafe { call() } { ... }`),
         // so reset in_void_block to allow implicit returns.
         let saved_void_block = self.in_void_block;
-        if is_unsafe {
+        if is_unsafe || self.in_expression_context {
             self.in_void_block = false;
         }
 

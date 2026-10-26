@@ -1,0 +1,24 @@
+#[inline]
+fn f(seg: i32) -> u32 {
+    (2_i32 * seg + 1_i32) as u32
+}
+
+#[inline]
+fn g(a: i32, b: u8, c: i64) -> i64 {
+    let x = (2_i32 * a + 1_i32) as i64;
+    let y = (b + 1_u8) as i64;
+    let z = c - 3_i64 + (a * 2_i32) as i64;
+    x + y + z
+}
+
+#[inline]
+fn h(seg: i32) -> i32 {
+    1_i32 + 2_i32 * seg - 1_i32
+}
+
+fn main() {
+    println!("{}", f(3_i32));
+    println!("{}", g(5_i32, 2_u8, 100_i64));
+    println!("{}", h(4_i32));
+}
+

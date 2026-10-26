@@ -22,7 +22,13 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("return");
         if let Some(e) = expr {
             output.push(' ');
+            // The operand is a value: `return if c { "a" } else { "b" }` keeps branch values, even in a unit-typed block.
+            let prev_expression_context = self.in_expression_context;
+            self.in_expression_context = true;
+            let was_void = std::mem::replace(&mut self.in_void_block, false);
             let mut return_str = self.generate_expression(e);
+            self.in_void_block = was_void;
+            self.in_expression_context = prev_expression_context;
 
             // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
             // For `for (_, val) in &vec` where val: &i32, `return val` needs `return *val`

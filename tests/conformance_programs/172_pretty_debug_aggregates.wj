@@ -1,0 +1,103 @@
+// Pretty Debug `{:#?}` of structs, tuple structs, tuples, enums (unit/tuple/struct variants), nested
+// Option/Result, Vec, single-entry HashMap/HashSet (iteration order is unspecified, EXEC-005), empty
+// collections and width propagation (`{:#5?}`). Expected output produced by rustc from a line-by-line
+// Rust transliteration (independent of every Windjammer backend).
+// expect: [
+// expect:     1,
+// expect:     2,
+// expect: ]
+// expect: P {
+// expect:     x: 1,
+// expect:     y: -2,
+// expect: }
+// expect: T(
+// expect:     3,
+// expect:     "a\"b",
+// expect: )
+// expect: (
+// expect:     1,
+// expect:     "x",
+// expect: )
+// expect: A
+// expect: B(
+// expect:     9,
+// expect: )
+// expect: C {
+// expect:     v: [],
+// expect: }
+// expect: C {
+// expect:     v: [
+// expect:         1,
+// expect:     ],
+// expect: }
+// expect: Some(
+// expect:     Some(
+// expect:         3,
+// expect:     ),
+// expect: )
+// expect: None
+// expect: Ok(
+// expect:     1,
+// expect: )
+// expect: {
+// expect:     1: [
+// expect:         2,
+// expect:     ],
+// expect: }
+// expect: {
+// expect:     "k",
+// expect: }
+// expect: []
+// expect: [
+// expect:     P {
+// expect:         x: 1,
+// expect:         y: 2,
+// expect:     },
+// expect: ]
+// expect: 1.0
+// expect: [
+// expect:         1,
+// expect: ]
+use std::collections::HashMap
+use std::collections::HashSet
+
+struct P {
+    x: int,
+    y: int,
+}
+
+struct T(int, string)
+
+enum E {
+    A,
+    B(int),
+    C { v: Vec<int> },
+}
+
+fn main() {
+    println("{:#?}", vec![1, 2])
+    println("{:#?}", P { x: 1, y: -2 })
+    println("{:#?}", T(3, "a\"b".to_string()))
+    println("{:#?}", (1, "x"))
+    println("{:#?}", E::A)
+    println("{:#?}", E::B(9))
+    let empty: Vec<int> = vec![]
+    println("{:#?}", E::C { v: empty })
+    println("{:#?}", E::C { v: vec![1] })
+    println("{:#?}", Some(Some(3)))
+    let none: Option<int> = None
+    println("{:#?}", none)
+    let ok: Result<int, string> = Ok(1)
+    println("{:#?}", ok)
+    let mut m: HashMap<int, Vec<int>> = HashMap::new()
+    m.insert(1, vec![2])
+    println("{:#?}", m)
+    let mut s: HashSet<string> = HashSet::new()
+    s.insert("k".to_string())
+    println("{:#?}", s)
+    let e: Vec<P> = vec![]
+    println("{:#?}", e)
+    println("{:#?}", vec![P { x: 1, y: 2 }])
+    println("{:#?}", 1.0)
+    println("{:#5?}", vec![1])
+}

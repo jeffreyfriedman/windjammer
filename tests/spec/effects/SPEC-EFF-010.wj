@@ -1,0 +1,11 @@
+// spec: SPEC-EFF-010
+// mode: panic
+// manifest: [capabilities]
+// manifest: net.connect = ["api.example.com"]
+// expect-exit: 126
+// expect-error: capability denied: net.connect(other.example)
+use std::http
+fn main() {
+    let r = http::get("http://other.example/data")
+    println("${r.is_ok()}")
+}

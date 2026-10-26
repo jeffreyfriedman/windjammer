@@ -1,0 +1,6 @@
+// spec: SPEC-COLL-010
+// expect: 3 3
+fn main() {
+    let r = (1..4).to_list()
+    println("${r.len()} ${r[2]}")
+}

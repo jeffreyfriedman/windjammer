@@ -1,0 +1,10 @@
+// spec: SPEC-MOD-004
+// mode: parse-error
+// xfail: Q-009
+mod m {
+    fn secret() -> int { 1 }
+    pub fn open() -> int { secret() }
+}
+fn main() {
+    println("${m::secret()}")
+}

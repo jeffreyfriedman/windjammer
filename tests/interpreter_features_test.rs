@@ -16,8 +16,6 @@
 
 use windjammer::interpreter::features::{Feature, Status, FEATURES};
 use windjammer::interpreter::{ErrorKind, Interpreter};
-use windjammer::lexer::Lexer;
-use windjammer::parser::Parser;
 
 #[derive(Debug, PartialEq)]
 enum Outcome {
@@ -27,19 +25,19 @@ enum Outcome {
     Other(String),
 }
 
+/// Run a probe the way `wj run` does: as a program file loaded through the shared module system and
+/// resolver (`load_program_at`, which includes the preflight), then `main`.
 fn run_probe(src: &str) -> Outcome {
     let src = src.to_string();
     std::thread::Builder::new()
         .stack_size(64 << 20)
         .spawn(move || {
-            let tokens = Lexer::new(&src).tokenize_with_locations();
-            let program =
-                match Parser::new_with_source(tokens, "probe.wj".into(), src.clone()).parse() {
-                    Ok(p) => p,
-                    Err(e) => return Outcome::Other(format!("parse error: {e}")),
-                };
+            let dir = tempfile::tempdir().unwrap();
+            let file = dir.path().join("main.wj");
+            std::fs::write(&file, &src).unwrap();
             let mut it = Interpreter::new_capturing();
-            match it.run_checked(&program) {
+            let r = it.load_program_at(&file).and_then(|_| it.call_main());
+            match r {
                 Ok(_) => Outcome::Printed(it.get_output().trim_end_matches('\n').to_string()),
                 Err(e) => match e.kind {
                     ErrorKind::Panic => Outcome::Panicked(e.message),
@@ -53,7 +51,35 @@ fn run_probe(src: &str) -> Outcome {
         .unwrap_or_else(|_| Outcome::Other("interpreter panicked".into()))
 }
 
-/// Does running `f.probe` match what the registry says about it?
+/// The `wj run` fallback contract (ADR-0019): every `Unsupported` feature is detected at load time by the
+/// preflight, before `main` runs, and no `Supported` feature is.
+#[test]
+fn unsupported_features_are_caught_before_main_and_supported_ones_are_not() {
+    let mut bad = Vec::new();
+    for f in FEATURES {
+        let src = f.probe.to_string();
+        let caught = std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(move || {
+                let dir = tempfile::tempdir().unwrap();
+                let file = dir.path().join("main.wj");
+                std::fs::write(&file, &src).unwrap();
+                let mut it = Interpreter::new_capturing();
+                match it.load_program_at(&file) {
+                    Err(e) => windjammer::interpreter::preflight::is_preflight(&e),
+                    Ok(()) => false,
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        if caught != (f.status == Status::Unsupported) {
+            bad.push(format!("{} ({:?}): preflight caught = {}", f.id, f.status, caught));
+        }
+    }
+    assert!(bad.is_empty(), "fallback trigger drifted from the registry:\n{}", bad.join("\n"));
+}
+
 fn conforms(f: &Feature, got: &Outcome) -> bool {
     match (f.status, got) {
         (Status::Supported, Outcome::Printed(out)) => {

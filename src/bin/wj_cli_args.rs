@@ -44,16 +44,12 @@ pub enum Commands {
         target: String,
 
         /// Defer drop optimization mode (auto, always, never)
-        #[arg(long, value_name = "MODE", default_value = "auto")]
+        #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,
 
         /// Defer drop threshold in bytes (default: 102400 = 100KB)
         #[arg(long, value_name = "BYTES")]
         defer_drop_threshold: Option<usize>,
-
-        /// Minify JavaScript output (JS target only)
-        #[arg(long)]
-        minify: bool,
 
         /// Enable tree shaking (dead code elimination)
         #[arg(long)]
@@ -62,14 +58,6 @@ pub enum Commands {
         /// Generate source maps
         #[arg(long)]
         source_maps: bool,
-
-        /// Include polyfills for older browsers (JS target only)
-        #[arg(long)]
-        polyfills: bool,
-
-        /// Apply V8 optimizations (JS target only)
-        #[arg(long)]
-        v8_optimize: bool,
 
         /// Run cargo build after transpilation and show errors
         #[arg(long)]
@@ -133,27 +121,102 @@ pub enum Commands {
         ir_shadow_validate: bool,
     },
 
-    /// Compile and run a Windjammer file
+    /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// Path to .wj file
-        #[arg(value_name = "FILE")]
-        path: PathBuf,
+        /// A .wj file or a directory; omitted: the project containing the current directory (wj.toml)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
 
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
 
-        /// Target platform (rust, javascript, wasm)
+        /// Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)
+        #[arg(long, value_name = "NAME")]
+        bin: Option<String>,
+
+        /// Target platform (rust, javascript, wasm); non-rust targets always compile
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
-        /// Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start.
-        /// Accepts a file or a project directory. Same source compiles with `wj build` for release.
-        #[arg(long)]
+        /// Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature)
+        #[arg(long, conflicts_with_all = ["compiled", "release"])]
         interpret: bool,
 
+        /// Transpile to Rust and run with cargo (the release path), skipping the interpreter
+        #[arg(long)]
+        compiled: bool,
+
+        /// Like --compiled, with optimizations
+        #[arg(long)]
+        release: bool,
+
+        /// Re-run on every source change (restarts long-running programs)
+        #[arg(long)]
+        watch: bool,
+
+        /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
+        #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
+        hot: bool,
+
+        /// Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another
+        /// reproducible interleaving at every synchronisation point)
+        #[arg(long, value_name = "N", default_value = "0")]
+        sched_seed: u64,
+
+        /// Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible
+        /// shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)
+        #[arg(long, value_name = "N", default_value = "0")]
+        hash_seed: u64,
+
+        /// Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset
+        /// run in the tree walker) or `walker` (the tree walker only, the reference semantics)
+        #[arg(long, value_name = "ENGINE", default_value = "resolved")]
+        engine: String,
+
+        /// Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as
+        /// `WJ_JIT=0`); they run in the resolved engine's closures
+        #[arg(long)]
+        no_jit: bool,
+
+        /// Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020)
+        #[arg(long, value_name = "on|off", env = "WJ_JIT", default_value = "on", hide = true)]
+        jit: String,
+
+        /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
+        /// compile errors still refuse it
+        #[arg(long)]
+        no_lint: bool,
+
+        /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
+        #[arg(long)]
+        deterministic_time: bool,
+
+        /// Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`)
+        #[arg(long)]
+        allow_network: bool,
+
+        /// Interpreted runs: answer http client calls from a JSON file of canned responses
+        #[arg(long, value_name = "FILE")]
+        mock_http: Option<PathBuf>,
+
+        /// Interpreted runs: ignore the project's grants and start from an empty one (only time, random
+        /// and console); add authority with --allow (ADR-0021)
+        #[arg(long)]
+        sandbox: bool,
+
+        /// Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`,
+        /// `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable)
+        #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
+        allow: Vec<String>,
+
+        /// Interpreted runs without a [capabilities] table: `enforce` (default) stops calls outside the project
+        /// directory with exit status 126 and prints the exact fix, `warn` runs them with a warning, `off` disables the gate
+        #[arg(long, value_name = "MODE", env = "WJ_CAPS", default_value = "enforce")]
+        caps: String,
+
         /// Defer drop optimization mode (auto, always, never)
-        #[arg(long, value_name = "MODE", default_value = "auto")]
+        #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,
 
         /// Defer drop threshold in bytes (default: 102400 = 100KB)
@@ -233,6 +296,62 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// Re-run the tests on every source change
+        #[arg(long)]
+        watch: bool,
+        /// Run only the doctests (```wj examples in `///` doc comments)
+        #[arg(long)]
+        doc: bool,
+        /// Also build and run each doctest through the Rust backend (default: interpreter only)
+        #[arg(long)]
+        compiled: bool,
+    },
+
+    /// Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
+    Reduce {
+        /// Project directory or .wj file to reduce
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present)
+        #[arg(long, value_name = "SPEC")]
+        oracle: String,
+
+        /// Output directory for the minimal project and repro.md
+        #[arg(short, long, value_name = "DIR")]
+        output: PathBuf,
+
+        /// Candidates evaluated in parallel
+        #[arg(long, default_value_t = 2, value_name = "N")]
+        jobs: usize,
+
+        /// Seed for the deterministic candidate order
+        #[arg(long, default_value_t = 0, value_name = "N")]
+        seed: u64,
+
+        /// Maximum number of oracle runs
+        #[arg(long, default_value_t = 5000, value_name = "N")]
+        max_steps: usize,
+
+        /// Wall-clock budget for the reduction search, in seconds
+        #[arg(long, default_value_t = 3600, value_name = "SECS")]
+        time_budget: u64,
+
+        /// Timeout for a single oracle run, in seconds
+        #[arg(long, default_value_t = 300, value_name = "SECS")]
+        candidate_timeout: u64,
+
+        /// Accept a partially anonymized result when some names cannot be renamed without losing the bug
+        #[arg(long)]
+        keep_names: bool,
+
+        /// Compiler binary used by the oracles (default: this executable)
+        #[arg(long, value_name = "WJ")]
+        wj_bin: Option<PathBuf>,
+
+        /// Print progress counts to stderr (never source text)
+        #[arg(short, long)]
+        verbose: bool,
     },
 
     /// Format Windjammer code
@@ -282,9 +401,17 @@ pub enum Commands {
         #[arg(value_name = "PATH")]
         path: Option<PathBuf>,
 
-        /// Output diagnostics as machine-readable JSON (for agent/IDE consumption)
+        /// Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json)
         #[arg(long)]
         json: bool,
+
+        /// Re-check whenever a .wj file changes
+        #[arg(long)]
+        watch: bool,
+
+        /// Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...)
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Add a dependency to wj.toml
@@ -335,14 +462,19 @@ pub enum Commands {
         verbose: bool,
     },
 
-    /// Interactive error navigator (TUI)
+    /// Browse the diagnostics of a file or project (summary by code, filterable)
     Errors {
-        /// File to check
-        file: PathBuf,
+        /// .wj file or project directory (default: current directory)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
 
-        /// Output directory
-        #[arg(short, long, default_value = "./build")]
-        output: PathBuf,
+        /// Show only this diagnostic code (e.g. WJ0010, W0002)
+        #[arg(long, value_name = "CODE")]
+        code: Option<String>,
+
+        /// Show only this severity (error, warning)
+        #[arg(long, value_name = "SEVERITY")]
+        severity: Option<String>,
     },
 
     /// Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples,
@@ -367,6 +499,51 @@ pub enum Commands {
         /// Format (html, markdown, json)
         #[arg(short, long, default_value = "html")]
         format: String,
+    },
+
+    /// Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)
+    #[command(name = "explain-ownership")]
+    ExplainOwnership {
+        /// Windjammer source file
+        file: PathBuf,
+
+        /// Only this function (`name` or `Type::name`)
+        #[arg(long = "fn", value_name = "NAME")]
+        function: Option<String>,
+
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs
+    #[command(name = "explain-effects")]
+    ExplainEffects {
+        /// Windjammer source file or project directory
+        path: PathBuf,
+
+        /// Only this function (`name` or `Type::name`)
+        #[arg(long = "fn", value_name = "NAME")]
+        function: Option<String>,
+
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// What the project's dependencies are known to do (per-package capabilities and the lock file)
+    Caps {
+        /// `show` the effects each dependency performs and whether .wj-capabilities.lock covers them;
+        /// `approve` records them in the lock file (review with `show` first)
+        #[arg(value_parser = ["show", "approve"])]
+        action: String,
+
+        /// Project directory (default: the current directory)
+        path: Option<PathBuf>,
+
+        /// Machine-readable JSON output (show)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Explain an error code
@@ -438,7 +615,11 @@ pub enum Commands {
 
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
-    SelfInstall,
+    SelfInstall {
+        /// Print what would be installed (binary, plugins, embedded std/ files) without writing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]

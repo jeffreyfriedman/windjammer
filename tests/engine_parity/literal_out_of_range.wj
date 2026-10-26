@@ -1,0 +1,10 @@
+fn small() -> u8 {
+    let x = 255
+    let y = x + 1
+    y
+}
+fn main() {
+    let a: u8 = 200
+    println("${a}")
+    println("${small()}")
+}

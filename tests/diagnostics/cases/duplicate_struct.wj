@@ -1,0 +1,12 @@
+// expect: WJ0021
+struct Item {
+    id: int,
+}
+
+struct Item {
+    name: string,
+}
+
+fn main() {
+    println("x")
+}

@@ -1,0 +1,19 @@
+// spec: SPEC-ARGS-002
+// expect: tick
+// expect: tick
+// expect: 7
+fn tick() -> int {
+    println("tick")
+    1
+}
+
+fn step(n: int = tick()) -> int {
+    n
+}
+
+fn main() {
+    let a = step()
+    let b = step(5)
+    let c = step()
+    println("${a + b + c}")
+}

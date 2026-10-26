@@ -1,0 +1,13 @@
+// spec: SPEC-TYP-010
+// expect: 3
+enum List { Nil, Cons(int, Box<List>) }
+fn sum(l: List) -> int {
+    match l {
+        List::Nil => 0,
+        List::Cons(v, rest) => v + sum(*rest),
+    }
+}
+fn main() {
+    let l = List::Cons(1, Box::new(List::Cons(2, Box::new(List::Nil))))
+    println("${sum(l)}")
+}

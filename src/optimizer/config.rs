@@ -22,6 +22,9 @@ pub struct OptimizationConfig {
     pub inline_policy: bool,
     /// Remove file-private `#[repr(C)]` and unreferenced `to_bytes` helpers.
     pub dead_helpers: bool,
+    /// Auto-arena: hoist a per-iteration `String::new()`/`Vec::new()` scratch buffer out of its loop and
+    /// `clear()` it instead (PASSES.md P8). OFF by default; `WJ_AUTO_ARENA=1` (CompilerConfig::auto_arena) turns it on.
+    pub scratch_reuse: bool,
     /// Byte size of a function body above which `#[inline]` is removed.
     pub inline_max_body_bytes: usize,
     /// Test-only: run a deliberately unsound variant of one pass.
@@ -41,6 +44,7 @@ impl OptimizationConfig {
             string_append: true,
             inline_policy: true,
             dead_helpers: true,
+            scratch_reuse: false,
             inline_max_body_bytes: 600,
             mutant: None,
         }
@@ -57,8 +61,16 @@ impl OptimizationConfig {
             string_append: false,
             inline_policy: false,
             dead_helpers: false,
+            scratch_reuse: false,
             ..Self::production()
         }
+    }
+}
+
+impl OptimizationConfig {
+    /// Production defaults plus the opt-in auto-arena pass.
+    pub fn with_auto_arena() -> Self {
+        Self { scratch_reuse: true, ..Self::production() }
     }
 }
 
