@@ -191,6 +191,19 @@ mod tests {
     }
 
     #[test]
+    fn a_pattern_that_spells_out_the_source_suffix_grants_generated_sources() {
+        let mut gen = Grant::sandbox(&root());
+        gen.allow(EffectKind::FsWrite, "./out/mutants/*.wj");
+        assert!(gen.check(&EffectKind::FsWrite, Some("out/mutants/a__op.wj")).is_ok(), "`*.wj` says sources out loud");
+        assert!(gen.check(&EffectKind::FsWrite, Some("out/mutants/a.txt")).is_err(), "other files stay outside the pattern");
+        assert!(gen.check(&EffectKind::FsWrite, Some("src/main.wj")).is_err(), "other directories stay outside it");
+        assert!(gen.check(&EffectKind::FsWrite, Some("wj.toml")).is_err(), "the manifest still needs its exact name");
+        let mut broad = Grant::sandbox(&root());
+        broad.allow(EffectKind::FsWrite, "./out/**");
+        assert!(broad.check(&EffectKind::FsWrite, Some("out/mutants/a.wj")).is_err(), "`**` alone never reaches sources");
+    }
+
+    #[test]
     fn local_profile_is_the_project_directory() {
         let g = Grant::local_profile(&root());
         assert!(g.check(&EffectKind::FsWrite, Some("out/x.txt")).is_ok());

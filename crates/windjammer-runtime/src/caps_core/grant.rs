@@ -298,8 +298,11 @@ impl Grant {
                     })
                 };
                 if *kind == EffectKind::FsWrite && is_protected(&p) {
-                    // the manifest, the lock file and program sources can be written only when a pattern names them exactly
-                    pats.iter().any(|pat| !pat.contains('*') && inside(pat))
+                    // the manifest, the lock file and program sources can be written only when a pattern names them exactly,
+                    // or (sources only) spells out the `.wj` suffix in its last segment: `./gen/*.wj` is a deliberate grant,
+                    // `./**` is not
+                    let source = p.extension().is_some_and(|e| e == "wj");
+                    pats.iter().any(|pat| (!pat.contains('*') || (source && names_source_suffix(pat))) && inside(pat))
                 } else {
                     pats.iter().any(inside)
                 }
@@ -389,6 +392,12 @@ fn device_effect(kind: &EffectKind, res: &str) -> Option<Option<EffectKind>> {
         "/dev/urandom" | "/dev/random" if reading => Some(Some(EffectKind::Random)),
         _ => None,
     }
+}
+
+/// A glob whose last segment ends in `.wj` (and does not itself cross directories): the grant says "program sources" out loud.
+fn names_source_suffix(pat: &str) -> bool {
+    let last = pat.rsplit('/').next().unwrap_or(pat);
+    last.ends_with(".wj") && !last.contains("**")
 }
 
 /// Files that define what a program may do or is: never reachable through a glob grant.
