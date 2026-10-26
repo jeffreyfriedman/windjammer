@@ -210,12 +210,75 @@ module is created on the first hot call: `wj run hello.wj` about 20 ms CPU with 
 jit and 0.091 s with `--no-jit`; `loop5m` is unchanged (its loop is in `main`, which returns nothing and is not jitted). The
 ratchet baseline (load 13.5) now has `fib30` at 37x over the walker.
 
-### Step 8: parse/resolve cache for startup (measured, not built)
+### Step 8: parse/resolve cache for startup (measured here; built as round 3, rung 4, below)
 A generated 200-module project (4k functions) starts in about 0.9 s CPU. Profiling shows that at least 80% of it is the pre-run
 check gate (`cli::check::require_clean`: IR lowering, `ir::taint::stdlib_taint_sources`, effect lookups), not the
 interpreter's parse/resolve/registration, so a per-module interpreter cache cannot meet its kill criterion (30%). The lever is in
 the check pipeline: memoize the stdlib taint sources (a function of the stdlib only, about a quarter of the profile) and cache
 check results per file content hash. Those modules belong to the convergence and effects streams.
+
+### Round 3, rung 4: startup
+Built step 8's lever, in the check gate rather than the interpreter. Fixture: a generated 200-module project, 20 functions per
+module (4k functions: the shape of `scripts/interpreter_project_bench.py --files 200` plus 17 filler functions per module,
+each an `if` and a call). Metric: CPU seconds (user + sys) of `wj run`, median of 5 after one warm-up, release build, with
+the 1-minute load average next to every number (the machine was shared with ~10 agents; CPU time is less load-sensitive than
+wall time, not immune).
+
+| build | scenario | CPU s (median of 5) | load (1 min) |
+|---|---|---|---|
+| base (`2088c1e6`) | no cache exists | 0.853 / 0.853 (two batches) | 72.7 / 76.4 |
+| 1: stdlib tables once per process (`d5ee5266`, the `OnceLock` cut) | no cache | 0.545 / 0.536 | 71.2 / 79.1 |
+| 1 | no cache (re-run beside 2) | 0.558 | 48.7 |
+| 2: + check caches | cold (`.wj-cache` deleted before every run) | 0.600 | 48.8 |
+| 2 | warm (nothing changed) | **0.065** | 50.1 |
+| 2 | one module edited before every run | **0.145** | 50.1 |
+| base, re-run for the final comparison | no cache | 0.914 | 37.6 |
+| final (`2b9293f7`, session-shared tables + caches) | cold | 0.610 | 37.5 |
+| final | warm | **0.070** (-92% vs 0.914) | 37.5 |
+| final | one module edited before every run | **0.155** (-83%) | 37.6 |
+
+1. **Stdlib tables.** `ir::taint::stdlib_taint_sources`, `stdlib_sinks` and `ir::effects::stdlib_effect_declarations` are
+   functions of the stdlib registry only, and every `IrPipeline` rebuilt them: once per checked file. A first cut memoized
+   them in process-global `OnceLock`s; `tests/architecture.rs` (no new static state) rejected that, so they are now
+   `ir::stdlib_tables::StdlibTables`, computed once per check run and handed to every pipeline with
+   `IrPipeline::with_stdlib_tables`. -37% with no cache at all. Gate: `tests/stdlib_tables_test.rs` (shared tables equal
+   the per-pipeline computation, same order).
+2. **Check caches** (`src/check/{cache,file_cache,ambient}.rs`), under `<project>/.wj-cache/` (the build's cache directory,
+   `metadata::meta_cache_root`). `wj run` now uses them when the program lives in a `wj.toml` project; a lone script is
+   still checked uncached and nothing is written next to it. Warm: -89%; one module edited: -75%; cold pays +7% for
+   hashing and writing. Kill criterion (warm improvement < 30%) not hit: shipped.
+   - What "per file, keyed by everything it depends on" turned out to mean. The whole-program phases (resolution, effects,
+     the semantic index) are not per file: WJ0002's "similar name" help scans every definition in the program and the
+     semantic index is global, so a file's diagnostics from those phases depend on every file, not just its imports. Their
+     honest per-file key is the whole project, which is the whole-run cache (`cache.rs`: SHA-256 over all paths and
+     contents, manifest, lock file, dependency sources, the build identity, and the ambient sidecars below). The phase that
+     really is per file is the expensive one: `project::analysis_phase` (analyzer, numeric inference, IR solvers) builds a
+     fresh stdlib-only `SignatureRegistry` and reads nothing but its file, so `file_cache.rs` keys it on path + SHA-256 of
+     the text under a header of build identity + ambient digest. Resolution, effects and the index always run fresh, and
+     whether a memoized analysis is reported still depends on their fresh results (the "file already has errors" rule).
+   - A hidden input found on the way, and keyed: the numeric inference reads `.wj.meta` sidecars relative to the working
+     directory (`load_imported_metadata.rs`, `source_root` is unset in check), so `wj check` results depend on the cwd.
+     The pre-existing whole-run cache did not key on this. `ambient.rs` digests the cwd plus every `*.wj.meta` within the
+     reach of the program's `use` paths (and under `<cwd>/.wj-cache/`); a walk over 20k entries disables caching for that
+     run.
+   - Gate, `tests/check_cache_differential_test.rs`: (a) editing a dependency module (never the checked file) changes the
+     entry's diagnostics exactly as an uncached run does (arity change -> WJ0013, made private, reverted); (b) 24 generated
+     projects x 6 random dependency edits (arity, visibility, rename, syntax error, f32+f64 for analysis-phase WJ0027,
+     unresolved call, comment, revert), checking the entry file and the directory: 288 comparisons of diagnostics, success
+     and the `wj run` gate decision (`require_clean`, lints on and off) between cached (first and repeat) and uncached runs,
+     288 repeat hits, 163 failing states, 71 with analysis-phase findings; (c) 300 real programs (`examples/verified`,
+     `tests/check_negative/mutants`) x 2 random line edits: 600 comparisons, 600 repeat hits, 324 failing; (d) the memo is
+     live (a planted entry for an unchanged file shows up, and disappears when the file changes); (e) a new `.wj.meta`
+     sidecar is a miss.
+   - Mutation checks (done, observed, reverted). Whole-run key restricted to the checked file's own content (dependency
+     hashes omitted): (a) fails (`left: "[]"`, `right: [WJ0013 dep::f takes 2 arguments but 1 was supplied]`), (b) fails
+     (stale `[]` against WJ0002), (d) fails; 3 of 5 red. Per-file key without the content hash: (b) fails once the
+     generator includes the f32+f64 edit (stale `[]` against WJ0027; before that edit existed, only (d) caught it, so the
+     generator was strengthened), (d) fails.
+   - Found, not fixed (resolver, not this rung): `wj check` on a directory where several files define the same top-level
+     function names reports some diagnostics at a nondeterministic file (six fresh runs over 12 `check_negative` mutants
+     put WJ0013 at six different files). The first draft of (c) grouped 12 programs per project and tripped on it, which is
+     why (c) checks one program per project.
 
 ### What is left
 - Iterator chains (`closures`) and maps (`hashmap`) are bound by the value model, not dispatch: every closure call from a
