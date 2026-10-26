@@ -225,6 +225,110 @@ check results per file content hash. Those modules belong to the convergence and
 - Builtin methods are looked up by name on every call: cache the resolved builtin per call site.
 - `match` on a place and closures with tuple parameters are walker islands / walker calls.
 
+## Round 3 (Oct 2026): toward Node
+
+Goal ladder: (1) machine-code loops: `loop5m`, `sieve`, `nbody` within 2x of Node; (2) value model: `hashmap`, `closures`,
+`structs`, `strings` within 3x of Node; (3) typed slots from semantic facts; (4) startup; (5) tiering with type feedback,
+as a spike only if 1-2 leave kernels more than 3x off Node.
+
+Measured with `scripts/interp_compare.sh --runs 5` (child CPU seconds, median of 5, release `wj`, Node 24, Python 3.13) at a
+1-minute load average of 36 (a shared machine; the run is recorded in `bench/interp/compare.json`, which the readiness
+scorecard reads as `ratios.resolved_over_node`). Quick checks (best of 3-5) at load 20-30 during the work gave lower ratios
+for the memory-bound kernels: `sieve` 0.10 s (1.8x Node), `nbody` 0.10 s (1.9x), `closures` 0.11 s, `hashmap` 0.15 s,
+`structs` 0.25 s.
+
+| kernel | walker | resolved (before round 3) | resolved | Node | Python | resolved / Node | goal |
+|--------|--------|---------------------------|----------|------|--------|-----------------|------|
+| `fib30` | 0.906 | 0.107 | 0.038 | 0.043 | 0.158 | 0.89x | - |
+| `loop5m` | 2.369 | 0.190 | 0.042 | 0.048 | 1.102 | 0.86x | 2x: met |
+| `sieve` | 1.520 | 0.599 | 0.197 | 0.056 | 0.458 | 3.5x (1.8x at load 25) | 2x: met at low load only |
+| `nbody` | 1.352 | 0.888 | 0.133 | 0.050 | 0.152 | 2.6x (1.9x at load 25) | 2x: met at low load only |
+| `closures` | 0.218 | 0.173 | 0.148 | 0.052 | 0.056 | 2.8x | 3x: met |
+| `strings` | 0.226 | 0.114 | 0.112 | 0.034 | 0.070 | 3.3x | 3x: borderline |
+| `hashmap` | 0.311 | 0.218 | 0.206 | 0.048 | 0.063 | 4.3x | 3x: not met |
+| `structs` | 0.710 | 0.393 | 0.372 | 0.042 | 0.188 | 8.8x | 3x: not met |
+
+`sieve` is bound by memory: a `Vec<bool>` of a million 48-byte `Value`s (48 MB) is strided through by the inner loop, against
+Node's packed array; it is the most load-sensitive number here. A packed representation for `Vec`s of scalars is its lever.
+The ratchet (`bench/interp/baseline.json`, walker / resolved) was rewritten from the same run's measurement
+(`scripts/interp_bench.py --write`): `loop5m` 70.7x, `fib30` 36.7x, `sieve` 11.5x, `nbody` 9.8x.
+
+### Rung 1: machine-code loops (met)
+A hot `while` or range `for` loop in any compiled function (`main` included) enters Cranelift code at its head: on-stack
+replacement at an iteration boundary, where every local is in its slot (`resolved/jit/osr.rs`). Locals the loop names are
+classified at entry (`jit/kinds.rs`: a scalar of a given width, a `Vec` with the type its first element had, a struct with its
+fields' types) and the loop is compiled for that classification (cached per loop, at most 4). Lowered (`jit/lower*.rs`):
+`let`, assignment and compound assignment, `if`/`else`, nested `while` and `for i in a..b`/`a..=b`, `break`/`continue`
+(labels included) as jumps, every integer width up to 64 bits with the walker's width tag tracked statically (`u64`/`usize` as
+unsigned patterns, so every result the walker can produce is representable), `f64` (literal and `f64` tags), `bool`, casts,
+`sqrt`/`abs`/`floor`/`ceil`/`trunc`/`round`, `v[i]`, `v[i].f`, `s.f` loads and stores, `v.push(x)`, `v.len()`; `Vec` and
+struct accesses go through helpers (`jit/rt.rs`) that follow the walker's place rules (copy-on-write along the path, `retag`).
+
+How it stays exact: machine code only takes the happy path. Any check that fails (an overflow, a zero divisor, an index out of
+bounds, an element of another type than the one speculated, a literal that no longer fits, a width that would change) branches
+to the exit of the statement being lowered: the exit stores the variables in scope, `osr.rs` writes them back to their slots and
+the closure engine resumes at that statement, which has not done anything yet (a statement's only effect is its last action).
+The rest of the iteration, and of any inner loop the statement sits in, runs from the statement codes the compiled function
+registered (`resolved/osr.rs`: the very closures the loop body is made of), so panics, locations, backtraces and lock poisoning
+are produced by the code that always produced them. `return` and the unit's own `break` are exits too. A simple statement outside the subset (a `let`,
+assignment or expression statement with a call, a method call, `println`, a struct literal) does not refuse the loop: machine
+code writes the variables in scope to their slots, runs that statement's registered closure code, and reloads them checked
+against their types; if the statement raised, or left a variable with another type, machine code leaves after it and the raised
+control is handed to the continuation. Machine code itself has no calls and never reaches a sink: every sink runs in closure
+code, through the capability gate (`interpreter_jit_caps_test`: the loop with the sinks runs as machine code and the late sink
+is denied with exit 126 exactly as with `--no-jit`).
+
+Gates: `tests/interpreter_jit_loops_test.rs` generates programs (hot loops over `i32`/`int`/`usize`/`u8`/`f64`/`bool` locals,
+`Vec<int>`/`Vec<f64>`/`Vec<bool>` elements, fields of a `Vec` of structs, NaN/infinity/`-0.0`, nested `while`/`for`,
+`break`/`continue`, planted late overflows, out-of-bounds reads and writes, zero divisors, `usize` underflow) and runs each
+under the walker, the resolved engine with every loop entering machine code at its first iteration (`WJ_JIT_LOOP_HOT=0`), the
+default threshold and `--no-jit`: 150 generated programs, no difference (calls, `println` and a panic inside a callee included since closure-run statements landed). A coverage test requires at least 70% of the generated main loops to run as machine
+code. In debug builds `WJ_JIT_MUTANT` leaves one check out (overflow, narrow-width range, zero divisor, bounds, NaN `!=`,
+literal retag); the mutation gate requires each to make some generated program differ: all six caught (debug build). The engine parity corpus
+(697 programs) shows no difference with the default threshold and with every loop entering machine code at its first
+iteration; `tests/engine_parity/jit_loop_*.wj` add hand-written cases (widths, floats, exits, bounds, overflow, division,
+speculation, structs, `for`).
+
+Size: `jit/` is 2,797 lines in all (the function tier included), under step 7's 3k cap.
+
+### Rung 2: value model (partly met)
+Landed: enum names without allocation (`value::Name`: static for `Option`/`Result`/`Ordering`, interned in `EnumDef` for a
+program's enums; a first version interned through a `thread_local!`, which the architecture ratchet forbids, so the names became a
+type instead); struct literals resolved once per site (`resolved/literal.rs`); field reads of struct locals in place with a cache
+keyed by the interned field name; one receiver read per method call and arguments evaluated straight into a compiled method's
+frame; a per-call-site cache of the builtin method implementation (`call_builtin_method` split so the cached path runs the same
+dispatch); closure parameters the body only reads are plain slots (no walker slot per call; a reference argument sends that call
+to the walker); bare variant patterns (`Some(v)`) match without building a normalized name; integer map keys compare inline.
+
+Not met for `structs` and `hashmap`: `hashmap` 4.3x and `structs` 8.8x Node at load 36 (`closures` and `strings` within or at 3x). Profiles (macOS `sample`, release): `structs` spends its time in the method-call
+path (argument vector, frame and scope set-up, parameter binding, result coercion) and in boxed field arithmetic; `hashmap` in
+`BTreeMap` search (about 30%) and allocation (about 20%: argument vectors, `Some` payload vectors, the `Rc` of every `Option`).
+Both are structural: a hashed map index that every map builtin keeps in step, and a call path that writes arguments into the
+callee frame (as direct calls already do) with methods inlined into machine code, are the next experiments.
+
+### Rung 3: typed slots from semantic facts (stopped)
+Kill criterion: under 1.5x on the affected kernels, or a parity difference. What the semantic layer would hand over (declared
+widths, literal classes, field types) is what the resolved engine and the loop tier already see locally (typed slots from local
+inference; field and element types from runtime classification at loop entry). The profiles above show the remaining cost is
+not type dispatch but calls, allocation and map search, so a facts handoff cannot move these kernels by 1.5x. Not built; no
+`ir` import was added.
+
+### Rung 4: startup
+Done on `wt/interp-startup` (separate branch): the stdlib taint/effect tables are computed once per check run and shared by
+every pipeline, and check results are cached per project (whole run) and per file (analysis phase), keyed by content hashes of
+everything they read (sources, manifest, lock file, dependencies, build identity, `.wj.meta` sidecars). Warm `wj run` of the
+200-module project: 0.914 s to 0.070 s CPU; one module edited per run: 0.155 s. Gates: cached vs uncached diagnostics over
+generated and real projects after random dependency edits; mutation checks (a key without dependency hashes, a per-file key
+without the content hash) fail them. Details in that branch's section of this ADR.
+
+### Rung 5: tiering with type feedback (spike: design only)
+The loop tier already specializes on type feedback (classification at entry, guards with exits). For the kernels still more than
+3x off Node the next tier is inlining: compile a hot loop together with the small user methods it calls (`acc.add(v)`,
+`acc.dot(v)`), with struct values that do not escape the loop kept in registers (scalar replacement) and materialized at exits.
+Prerequisites: calls in the loop subset (a call is an exit point today), a struct-construction helper, and an escape check over
+the loop body. First experiment: `structs` with `add`/`dot` inlined by hand in Cranelift IR to measure the ceiling. Kill: under
+2x on `structs`, or the inliner over 1.5k lines.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to

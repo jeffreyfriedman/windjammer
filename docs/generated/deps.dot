@@ -165,10 +165,11 @@ digraph deps {
   "cli" -> "check" [label="6"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="3"];
-  "cli" -> "compiler_config" [label="2"];
+  "cli" -> "compiler_config" [label="3"];
   "cli" -> "config" [label="3"];
   "cli" -> "debug_env" [label="1"];
   "cli" -> "diagnostics" [label="12"];
+  "cli" -> "ejector" [label="2"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
   "cli" -> "formatter" [label="1"];
@@ -189,7 +190,6 @@ digraph deps {
   "cli_commands" -> "cli_args" [label="1"];
   "cli_commands" -> "cli_execution" [label="1"];
   "cli_commands" -> "cli_project_build" [label="3"];
-  "cli_commands" -> "ejector" [label="1"];
   "cli_commands" -> "error_handling" [label="1"];
   "cli_commands" -> "lexer" [label="1"];
   "cli_commands" -> "parser" [label="1"];
@@ -278,12 +278,8 @@ digraph deps {
   "doctest" -> "lexer" [label="1"];
   "doctest" -> "linter" [label="1"];
   "doctest" -> "parser" [label="5"];
-  "ejector" -> "analyzer" [label="1"];
-  "ejector" -> "codegen" [label="1"];
-  "ejector" -> "inference" [label="1"];
-  "ejector" -> "ir" [label="1"];
-  "ejector" -> "lexer" [label="1"];
-  "ejector" -> "parser" [label="1"];
+  "ejector" -> "build_utils" [label="1"];
+  "ejector" -> "compiler_config" [label="1"];
   "error_catalog" -> "intrinsics" [label="1",color=red,fontcolor=red];
   "error_handling" -> "error_mapper" [label="1"];
   "error_mapper" -> "auto_fix" [label="2"];
@@ -336,9 +332,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="5"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
-  "interpreter" -> "parser" [label="94"];
+  "interpreter" -> "parser" [label="101"];
   "interpreter" -> "resolve" [label="13"];
-  "interpreter" -> "source_map" [label="10"];
+  "interpreter" -> "source_map" [label="12"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="1"];

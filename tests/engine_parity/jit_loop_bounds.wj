@@ -1,0 +1,24 @@
+// Vec reads and writes in hot loops, then an index one past the end.
+fn main() {
+    let mut v: Vec<int> = Vec::new()
+    let mut k = 0
+    while k < 1000 {
+        v.push(k * 2)
+        k += 1
+    }
+    let mut s = 0
+    let mut i = 0
+    while i < 1000 {
+        v[i] = v[i] + v[(i * 7) % 1000]
+        s += v[i] % 1000
+        i += 1
+    }
+    println("${s} ${v[999]}")
+    let mut t = 0
+    let mut j = 0
+    while j <= 1000 {
+        t += v[j]
+        j += 1
+    }
+    println("${t}")
+}
