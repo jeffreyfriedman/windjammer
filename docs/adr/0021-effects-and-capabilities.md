@@ -475,7 +475,7 @@ narrow the claim in the spec (which this note already does for handles). Planted
 claim: keep record/replay, drop the DST positioning. Record overhead above 4x means the log encoding is too heavy: switch events to a binary encoding with the
 JSON form as an export.
 
-### E3 status (2026-10-26): implemented, gates measured except overhead
+### E3 status (2026-10-26): implemented, gates measured (overhead provisional)
 
 Delivered: `wj run --interpret --record LOG | --replay LOG`, `wj run --simulate [--seed N] [--faults R]`, `wj test --interpret --simulate [--seed N | --seeds A..B] [--faults R]`; `src/interpreter/effect_port/` (`mod.rs` port and WJ0049, `log.rs` log v1, `codec.rs` values, `sim.rs` world, `sim_fs.rs` in-memory file system). SPEC-EFF-027, 028, 029, 031 and new 044-047 pass; the spec harness has `replay` mode and a `faults:` header.
 
@@ -492,7 +492,7 @@ Differences from the design note above, and why:
 | Simulation is a function of (program, seed, faults) on the corpus; the seed matters where randomness or tasks are used | **Met**: 44 programs, two runs of one seed agree, nothing reaches the host; 10 seed-sensitive programs change with the seed |
 | Simulated fs agrees with the real one | **Met** on every call of a 23-step script except two error numbers that differ between macOS and Linux (compared only on Linux) |
 | Planted-bug study: 20 bugs, at least 80% found within 10 minutes of seeds, failing seeds reproduce exactly | **Met: 20 of 20 found in 2.0 s** (seeds 1 to 325; the rarest, a 1-in-150 boundary bug, needed seed 325). Caveats: the bugs were written by the implementer; each test passes at seed 0 (one bug was re-parameterised after failing that control, which is the definition of latent); the 12 concurrency and timing bugs need no faults, six I/O bugs run at fault rate 0.15 |
-| Record overhead at most 2x on the sink-dense program and at most +3% on the non-sink one | **Not yet measured**: the machine load stayed above 100 during this work and `scripts/bench_effects_overhead.py --mode record` refuses a verdict above load 20. Re-run it on a quiet machine |
+| Record overhead at most 2x on the sink-dense program and at most +3% on the non-sink one | **Provisional**: sink-dense +42% (0.90 s to 1.28 s), non-sink +5.7% (0.67 s to 0.71 s; that program makes no recorded call, so this is noise), CPU time, median of 10 interleaved runs, at load 130 to 282. `scripts/bench_effects_overhead.py --mode record` refuses a verdict above load 20: re-run it on a quiet machine |
 
 Kill criteria: none triggered. Replay stayed at 100% after routing the sources the audit found; the study found far more than half.
 
