@@ -78,6 +78,12 @@ pub struct RunOptions {
     pub crash_after: Option<String>,
     /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
     pub no_jit: bool,
+    /// `WJ_JIT_LOOP_HOT`: closure iterations before a loop enters machine code (default 256).
+    pub jit_loop_hot: Option<u32>,
+    /// `WJ_JIT_DEBUG`: report machine-code loop decisions on stderr.
+    pub jit_debug: bool,
+    /// `WJ_JIT_MUTANT` (debug builds): a machine-code check to leave out, for mutation tests.
+    pub jit_mutant: Option<String>,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -134,6 +140,11 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.set_deterministic_time(opts.deterministic_time);
         it.set_engine_resolved(opts.engine_resolved);
         it.set_jit(!opts.no_jit);
+        if let Some(n) = opts.jit_loop_hot {
+            it.jit_loop_hot = n;
+        }
+        it.jit_debug = opts.jit_debug;
+        it.jit_mutant = opts.jit_mutant.clone();
         if let Some(p) = &opts.mock_http {
             match super::builtins::std_http::HttpMode::mock_from_file(p) {
                 Ok(m) => it.set_http_mode(m),

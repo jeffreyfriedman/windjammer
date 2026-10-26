@@ -1,0 +1,52 @@
+// Range `for` loops in machine code: as hot loops of their own and nested in `while` loops, with
+// `break`/`continue`/labels, inclusive ends (up to i64::MAX), `usize` bounds and late panics.
+fn tri(n: int) -> int {
+    let mut t = 0
+    for k in 0..n {
+        t += k
+    }
+    t
+}
+fn main() {
+    let mut v: Vec<int> = Vec::new()
+    for k in 0..2000 {
+        v.push(k % 97)
+    }
+    let mut s = 0
+    for i in 0..v.len() {
+        if v[i] == 13 { continue }
+        s += v[i] * (i as int % 7)
+        if s > 1000000000 { break }
+    }
+    let mut w = 0
+    let mut r = 0
+    while r < 300 {
+        for j in r..=r + 3 {
+            w += j % 5
+            if j == 1001 { break }
+        }
+        r += 1
+    }
+    let mut edge = 0
+    for x in 9223372036854775000..=9223372036854775807 {
+        edge = x % 1000
+    }
+    let mut count = 0
+    'outer: for a in 0..100 {
+        for b in 0..100 {
+            if a * b > 5000 { break 'outer }
+            count += 1
+        }
+    }
+    let mut acc: i32 = 0
+    for mut q in 0..3000 {
+        q = q * 2
+        acc = (acc + q as i32) % 10007
+    }
+    println("${s} ${w} ${edge} ${count} ${acc} ${tri(500)} ${tri(5000)}")
+    let mut boom: i32 = 1
+    for i in 0..5000 {
+        boom = boom + i
+    }
+    println("${boom}")
+}

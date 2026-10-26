@@ -4,7 +4,7 @@
 /// function signatures, struct fields, and trait implementations.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod crate_metadata;
 mod function_metadata;
@@ -359,12 +359,38 @@ fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
     }
 }
 
+thread_local! {
+    /// Sidecars of the sources currently being compiled. A file's own previous `.wj.meta` is an
+    /// output of that file; reading it back as an input makes the result depend on whether an
+    /// earlier build left a cache behind (cold and warm builds must emit identical code).
+    static OWN_META_PATHS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a == b,
+    }
+}
+
+/// Run `f` with the sidecars of `source` excluded from every metadata merge on this thread.
+pub fn with_own_meta_excluded<R>(source: &Path, f: impl FnOnce() -> R) -> R {
+    let paths = vec![crate_metadata::meta_cache_path(source), source.with_extension("wj.meta")];
+    let prev = OWN_META_PATHS.with(|c| std::mem::replace(&mut *c.borrow_mut(), paths));
+    let out = f();
+    OWN_META_PATHS.with(|c| *c.borrow_mut() = prev);
+    out
+}
+
 fn merge_single_wj_meta_file(
     path: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
+    if OWN_META_PATHS.with(|c| c.borrow().iter().any(|own| same_file(own, path))) {
+        return;
+    }
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
     };

@@ -1,0 +1,135 @@
+{
+ "load_avg_1m": 36.1,
+ "runs": 5,
+ "versions": {
+  "python3": "Python 3.13.5",
+  "node": "v24.17.0",
+  "rustc": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)"
+ },
+ "kernels": {
+  "closures": {
+   "cpu_s": {
+    "walker": 0.21810000000000002,
+    "resolved": 0.1481140000000032,
+    "python3": 0.05573999999999302,
+    "node": 0.05212400000002049
+   },
+   "notes": [
+    "rust: error[E0308]: mismatched types"
+   ],
+   "ratios": {
+    "resolved_over_node": 2.84,
+    "resolved_over_python3": 2.66,
+    "resolved_over_walker": 0.68
+   }
+  },
+  "fib30": {
+   "cpu_s": {
+    "walker": 0.9059030000000128,
+    "resolved": 0.0378639999999848,
+    "rust": 0.005056000000013938,
+    "python3": 0.15835099999998192,
+    "node": 0.04248699999999417
+   },
+   "notes": [],
+   "ratios": {
+    "resolved_over_node": 0.89,
+    "resolved_over_python3": 0.24,
+    "resolved_over_walker": 0.04
+   }
+  },
+  "hashmap": {
+   "cpu_s": {
+    "walker": 0.31119900000000555,
+    "resolved": 0.20555900000002936,
+    "python3": 0.06343799999999788,
+    "node": 0.04752999999997343
+   },
+   "notes": [
+    "rust: error[E0308]: mismatched types"
+   ],
+   "ratios": {
+    "resolved_over_node": 4.32,
+    "resolved_over_python3": 3.24,
+    "resolved_over_walker": 0.66
+   }
+  },
+  "loop5m": {
+   "cpu_s": {
+    "walker": 2.3688970000000324,
+    "resolved": 0.04171800000001724,
+    "rust": 0.005721999999948935,
+    "python3": 1.1016420000000267,
+    "node": 0.04839499999997798
+   },
+   "notes": [],
+   "ratios": {
+    "resolved_over_node": 0.86,
+    "resolved_over_python3": 0.04,
+    "resolved_over_walker": 0.02
+   }
+  },
+  "nbody": {
+   "cpu_s": {
+    "walker": 1.3519520000000043,
+    "resolved": 0.1325040000000186,
+    "rust": 0.0028400000000345926,
+    "python3": 0.1521829999999582,
+    "node": 0.05018499999999193
+   },
+   "notes": [],
+   "ratios": {
+    "resolved_over_node": 2.64,
+    "resolved_over_python3": 0.87,
+    "resolved_over_walker": 0.1
+   }
+  },
+  "sieve": {
+   "cpu_s": {
+    "walker": 1.520131000000049,
+    "resolved": 0.19724199999997438,
+    "rust": null,
+    "python3": 0.4578690000000023,
+    "node": 0.056146000000026675
+   },
+   "notes": [
+    "rust failed"
+   ],
+   "ratios": {
+    "resolved_over_node": 3.51,
+    "resolved_over_python3": 0.43,
+    "resolved_over_walker": 0.13
+   }
+  },
+  "strings": {
+   "cpu_s": {
+    "walker": 0.22604600000003217,
+    "resolved": 0.11240900000002085,
+    "rust": 0.009054999999996483,
+    "python3": 0.06986199999998632,
+    "node": 0.03417599999997378
+   },
+   "notes": [],
+   "ratios": {
+    "resolved_over_node": 3.29,
+    "resolved_over_python3": 1.61,
+    "resolved_over_walker": 0.5
+   }
+  },
+  "structs": {
+   "cpu_s": {
+    "walker": 0.7097600000000241,
+    "resolved": 0.37209900000002705,
+    "rust": 0.002353000000027805,
+    "python3": 0.18835900000004102,
+    "node": 0.042299000000014075
+   },
+   "notes": [],
+   "ratios": {
+    "resolved_over_node": 8.8,
+    "resolved_over_python3": 1.98,
+    "resolved_over_walker": 0.52
+   }
+  }
+ }
+}

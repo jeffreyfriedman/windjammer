@@ -462,7 +462,7 @@ impl Interpreter {
 }
 
 /// An assignment keeps the declared width of the old value when the new one is a bare literal.
-fn retag(old: Value, new: Value) -> Value {
+pub(crate) fn retag(old: Value, new: Value) -> Value {
     match (&old, &new) {
         (Value::Int(_, ot), Value::Int(n, IntTy::Lit)) if *ot != IntTy::Lit && ot.fits(*n) => Value::Int(*n, *ot),
         (Value::Float(_, ot), Value::Float(n, FloatTy::Lit)) => Value::Float(*n, *ot),

@@ -1,0 +1,14 @@
+// A hot machine-code loop whose i32 accumulator overflows late: same panic, location and trace.
+fn grow(limit: int) -> i32 {
+    let mut x: i32 = 1
+    let mut i = 0
+    while i < limit {
+        x = x + i as i32 * 1000
+        i += 1
+    }
+    x
+}
+fn main() {
+    println("${grow(500)}")
+    println("${grow(5000)}")
+}

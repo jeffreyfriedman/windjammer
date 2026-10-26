@@ -272,6 +272,26 @@ id = "wj check --json"
 statement = "Output diagnostics as machine-readable JSON (for agent/IDE consumption)"
 
 [[promise]]
+id = "wj eject"
+statement = "Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies)"
+
+[[promise]]
+id = "wj eject --output"
+statement = "Output directory (must be absent or empty)"
+
+[[promise]]
+id = "wj eject --target"
+statement = "Target platform (rust, wasm)"
+
+[[promise]]
+id = "wj eject --library"
+statement = "Library crate (as `wj build --library`)"
+
+[[promise]]
+id = "wj eject --module-file"
+statement = "Generate mod.rs re-exports (as `wj build --module-file`)"
+
+[[promise]]
 id = "wj clean"
 statement = "Clean build artifacts and stale temp files"
 

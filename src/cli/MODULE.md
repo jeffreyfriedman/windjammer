@@ -8,7 +8,7 @@ In: parsed CLI args. Out: process side effects and exit status.
 
 ## Invariants
 - Offline subcommands are cwd-independent: no runtime reads of templates/std/runtime relative to the cwd or the build checkout (templates in `new_templates.rs`, assets via `crate::embedded_assets`). Gate: tests/installed_binary_smoke_test.rs.
-- `wj run --interpret` calls `check::require_clean` first: the interpreter never runs a program `wj check` rejects (gate: tests/interpreter_check_parity_test.rs).
+- `wj run --interpret` calls `check::require_clean` first: the interpreter never runs a program `wj check` rejects (gate: tests/interpreter_check_parity_test.rs). Inside a project (`wj.toml`) that gate uses the check caches in `<project>/.wj-cache/`; a lone script is checked uncached and nothing is written next to it. Gate: tests/check_cache_differential_test.rs.
 - Thin: delegate to `compiler`, `test_runner`, `cargo_cache`.
 - Driver layer: may read env vars and print (ratcheted).
 

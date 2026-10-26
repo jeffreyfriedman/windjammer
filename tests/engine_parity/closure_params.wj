@@ -1,0 +1,35 @@
+// Closure parameters in the resolved engine: read-only ones are plain slots, mutated or borrowed
+// ones keep a walker slot (a reference argument sends a call to the walker).
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+fn main() {
+    let mut v: Vec<int> = Vec::new()
+    for k in 0..300 {
+        v.push(k)
+    }
+    let r = 7
+    let s1: int = v.map(|x| x * r).filter(|x| x % 3 == 0).map(|x| x / 3).sum()
+    let mut acc = 0
+    v.for_each(|x| acc += x)
+    for x in &mut v {
+        *x *= 2
+    }
+    let adder = |a: int, b: int| {
+        let mut c = a
+        c += b
+        c
+    }
+    let shadow = |x: int| {
+        let x = x + 1
+        x * 2
+    }
+    let bump = |x: int| {
+        let mut y = x
+        y += 5
+        y
+    }
+    let lens: int = ["a", "bb", "ccc"].map(|w| w.len() as int).sum()
+    let nested = |n: int| v.filter(|y| *y > n).count()
+    println("${s1} ${acc} ${v[10]} ${adder(2, 3)} ${shadow(4)} ${bump(1)} ${lens} ${nested(500)} ${apply(|z| z * z, 9)}")
+}

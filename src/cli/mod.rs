@@ -17,6 +17,7 @@ pub mod fix;
 pub mod fmt;
 pub mod host_build;
 pub mod lint;
+pub mod eject;
 pub mod new;
 mod new_templates;
 pub mod reduce;

@@ -16,11 +16,14 @@ mod closure;
 mod compile;
 mod expr;
 mod fast;
+mod forloop;
 mod island;
 #[cfg(feature = "jit")]
 pub(crate) mod jit;
+mod literal;
 mod matching;
 mod method;
+pub(crate) mod osr;
 mod place;
 mod typed;
 

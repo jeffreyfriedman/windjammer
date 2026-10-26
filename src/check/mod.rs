@@ -1,11 +1,13 @@
 //! `wj check`: the front end of the compiler as a standalone, rustc-free checker.
 //! See `MODULE.md` and `docs/DIAGNOSTICS.md`.
 
+mod ambient;
 mod cache;
 mod dep_sources;
 pub mod durable_sites;
 pub mod effects;
 pub mod files;
+mod file_cache;
 mod fix;
 mod front;
 pub mod locate;
@@ -57,16 +59,16 @@ pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
         }
     }
     let fp = cache::fingerprint(&keyed);
-    let cached = if opts.use_cache { cache::load(path, fp) } else { None };
+    let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
     let was_cached = cached.is_some();
     let diagnostics = match cached {
         Some(d) => d,
         None => {
-            let d = run(path, &sources);
+            let r = run_with(path, &sources, opts.use_cache);
             if opts.use_cache {
-                cache::store(path, fp, &d);
+                cache::store(path, &fp, r.use_depth, r.ambient.as_deref(), &r.diagnostics);
             }
-            d
+            r.diagnostics
         }
     };
     let mut report = Report::new("check", diagnostics);
@@ -85,6 +87,17 @@ pub fn check_sources(root: &Path, sources: &[(String, String)]) -> Vec<Diagnosti
 }
 
 fn run(root: &Path, sources: &[(String, String)]) -> Vec<Diagnostic> {
+    run_with(root, sources, false).diagnostics
+}
+
+struct RunOutput {
+    diagnostics: Vec<Diagnostic>,
+    use_depth: usize,
+    /// Digest of the non-source inputs, taken before the checks ran; `None` when not caching.
+    ambient: Option<String>,
+}
+
+fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool) -> RunOutput {
     let mut out = Vec::new();
     let mut parsed = Vec::new();
     for (file, text) in sources {
@@ -93,8 +106,15 @@ fn run(root: &Path, sources: &[(String, String)]) -> Vec<Diagnostic> {
             parsed.push(p);
         }
     }
-    project::run(root, &parsed, &mut out);
-    finish(out)
+    let use_depth = ambient::use_depth(parsed.iter().map(|p| &p.program));
+    let ambient = if use_cache { ambient::fingerprint(use_depth) } else { None };
+    let mut memo = ambient.as_deref().map(|a| file_cache::FileMemo::open(root, a));
+    project::run(root, &parsed, &mut out, memo.as_mut());
+    if let Some(mut m) = memo {
+        m.retain(&parsed.iter().map(|p| p.file.as_str()).collect());
+        m.save();
+    }
+    RunOutput { diagnostics: finish(out), use_depth, ambient }
 }
 
 /// Deterministic order, duplicates removed.
