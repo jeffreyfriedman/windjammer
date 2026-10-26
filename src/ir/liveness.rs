@@ -238,8 +238,8 @@ impl Collector {
             }
             Expression::Closure { body, parameters, .. } => {
                 self.closure_depth += 1;
-                for p in parameters {
-                    self.declared_in.insert(p.clone(), self.current_loop());
+                for name in parameters.iter().flat_map(|p| closure_param_names(p)) {
+                    self.declared_in.insert(name, self.current_loop());
                 }
                 self.expr(body);
                 self.closure_depth -= 1;
@@ -412,6 +412,31 @@ pub fn read_after(entry: &[&str], body: &[&Statement<'_>], always_move: bool) ->
         }
     }
     out
+}
+
+/// Names bound by a closure parameter as written: `x`, `x: int`, `(k, v)`, `mut acc`.
+fn closure_param_names(p: &str) -> Vec<String> {
+    let pattern = p.split(':').next().unwrap_or(p);
+    pattern
+        .split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+        .filter(|n| !n.is_empty() && *n != "mut" && *n != "_")
+        .map(String::from)
+        .collect()
+}
+
+/// Bindings a closure body reads but does not bind itself: its captures (`self` excluded).
+/// `params` are the closure's parameters as written (`x` or `x: int`).
+pub fn captures(params: &[String], body: &Expression<'_>) -> BTreeSet<String> {
+    let mut c = Collector::default();
+    for name in params.iter().flat_map(|p| closure_param_names(p)) {
+        c.declared_in.insert(name, 0);
+    }
+    c.expr(body);
+    c.mentions
+        .iter()
+        .filter(|(n, ms)| *n != "self" && !c.declared_in.contains_key(*n) && ms.iter().any(|m| m.node.is_some()))
+        .map(|(n, _)| n.clone())
+        .collect()
 }
 
 /// A binding derived (transitively) from `name` is mentioned after `seq`: it may hold a
@@ -600,6 +625,24 @@ mod tests {
         };
         assert!(at(decl.body[2]).contains("v"), "the closure `f` captured v and runs later");
         assert!(!at(decl.body[4]).contains("t"), "a closure parameter is not live after the statement");
+    }
+
+    #[test]
+    fn captures_are_the_free_reads_of_a_closure_body() {
+        let src = "fn main() {\n let k = 1\n let f = |x: int, (y, w)| { let z = x + y + w\n z + k + format(\"${k}\").len() }\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        let Statement::Let { value: Expression::Closure { parameters, body, .. }, .. } = decl.body[1] else { panic!() };
+        assert_eq!(captures(parameters, body).into_iter().collect::<Vec<_>>(), vec!["k".to_string()]);
     }
 
     #[test]

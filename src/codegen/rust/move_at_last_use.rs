@@ -32,6 +32,13 @@ impl<'ast> CodeGenerator<'ast> {
         self.local_var_types.get(name).is_some_and(|t| !is_ref(t))
     }
 
+    /// The binding's type is known and not Copy (a `&T` binding is Copy).
+    pub(in crate::codegen::rust) fn binding_known_non_copy(&self, name: &str) -> bool {
+        let ty = self.current_function_params.iter().find(|p| p.name == name).map(|p| &p.type_);
+        ty.or_else(|| self.local_var_types.get(name))
+            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && !self.is_type_copy(t))
+    }
+
     /// CLONE-USE-AFTER-MOVE: `name` is read after the statement being emitted (no fact: assume so).
     pub(in crate::codegen::rust) fn read_after_current_statement(&self, name: &str) -> bool {
         match self.read_after.1.last().copied().flatten() {

@@ -1,11 +1,13 @@
 // MOVE-LAST-USE / CLONE-USE-AFTER-MOVE / CLONE-LOOP (C6): the liveness fact decides per site.
-// Before C6 the last uses of `b` (after a `&mut` call) and `k` (after an owned push) were cloned.
+// Before C6 the last uses of `b` (after a `&mut` call) and `k` (after an owned push) were cloned, and
+// the `retain` closure moved `k` although `k` is pushed afterwards (E0382; CLOS-MOVE-CAPTURE).
 struct Bag { items: Vec<string>, name: string }
 
 struct Lru { order: Vec<string> }
 
 impl Lru {
     fn touch(self, k: string) {
+        self.order.retain(|x| *x != k)
         self.order.push(k)
     }
     fn put(self, k: string) {

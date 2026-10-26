@@ -211,6 +211,9 @@ it names. A let-bound closure that never leaves the function borrows its capture
 **Example.** `fn f(v: Vec<int>) -> int { let g = |i: int| v[i]; g(0) }` emits `let g = |i: i64| v[i as usize]`.
 **Status.** Implementation-defined (no ADR); the escape test is `codegen/rust/closure_escape.rs`. Still over-owns the
 captured parameter (D-CLOS-OVEROWN): `v` above is inferred `Vec<i64>` although the non-escaping closure only reads it.
+Captures come from the liveness layer (`ir::liveness::captures`); a closure whose captured non-Copy binding is read
+after the closure's statement (`ir::liveness::read_after`) borrows instead of moving, because `move` would be E0382
+(`self.order.retain(|x| *x != k); self.order.push(k)`).
 
 ### CLOS-MUT-CAPTURE
 **Rule.** A closure that mutates a captured variable needs the variable and the closure binding to be mutable.
