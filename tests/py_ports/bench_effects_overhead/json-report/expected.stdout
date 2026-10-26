@@ -1,0 +1,26 @@
+non-sink (HashMap/Rc builtins, 400k iterations): off #s on #s overhead #% (4 runs per arm)
+sink-dense (fs::exists + random + time, 30k iterations): off #s on #s overhead #% (4 runs per arm)
+load average # -> #: valid measurement
+{
+ "load_avg_1m_before": #,
+ "load_avg_1m_after": #,
+ "max_load": #,
+ "valid": true,
+ "cpu_time": true,
+ "results": [
+  {
+   "workload": "non-sink (HashMap/Rc builtins, 400k iterations)",
+   "off_s": #,
+   "on_s": #,
+   "overhead_pct": #,
+   "runs_per_arm": 4
+  },
+  {
+   "workload": "sink-dense (fs::exists + random + time, 30k iterations)",
+   "off_s": #,
+   "on_s": #,
+   "overhead_pct": #,
+   "runs_per_arm": 4
+  }
+ ]
+}

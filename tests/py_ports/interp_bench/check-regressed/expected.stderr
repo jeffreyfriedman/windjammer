@@ -1,0 +1,3 @@
+speedup regressed:
+alpha.wj: # < # - 15%
+beta.wj: # < # - 15%

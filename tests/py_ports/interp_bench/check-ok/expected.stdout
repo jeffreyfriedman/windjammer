@@ -1,0 +1,16 @@
+{
+ "load_avg_1m": #,
+ "runs": 5,
+ "programs": {
+  "alpha.wj": {
+   "walker_s": #,
+   "resolved_s": #,
+   "speedup": #
+  },
+  "beta.wj": {
+   "walker_s": #,
+   "resolved_s": #,
+   "speedup": #
+  }
+ }
+}
