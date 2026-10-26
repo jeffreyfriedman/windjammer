@@ -124,7 +124,7 @@ fn registry_is_not_trivially_small_and_has_both_statuses() {
             .count()
             >= 20
     );
-    assert!(FEATURES.iter().any(|f| f.status == Status::Unsupported));
+    // R6 of the readiness scorecard wants the registry's unsupported list empty: nothing to assert about it here
 }
 
 /// Mutation self-tests: the harness must reject wrong expectations and flipped statuses.
@@ -152,10 +152,15 @@ fn harness_detects_drift() {
         !conforms(&flipped, &got),
         "a feature that works but is registered Unsupported must be caught"
     );
-    let uns = FEATURES
-        .iter()
-        .find(|f| f.status == Status::Unsupported)
-        .unwrap();
+    // a synthetic unsupported feature (the registry itself lists none): an `extern fn` no library provides
+    let uns = &Feature {
+        id: "test.unknown_extern",
+        area: "FFI",
+        summary: "harness self-test",
+        status: Status::Unsupported,
+        probe: "extern fn wj_no_such_symbol_xyz(x: i32) -> i32\nfn main() {\n    println(\"${wj_no_such_symbol_xyz(1)}\")\n}\n",
+        expect: "wj_no_such_symbol_xyz",
+    };
     let got = run_probe(uns.probe);
     assert!(conforms(uns, &got));
     let flipped = Feature {

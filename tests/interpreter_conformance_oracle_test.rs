@@ -79,7 +79,7 @@ fn compiled_panic_formats_its_arguments() {
     let out = Command::new(WJ).args(["build", "--target", "rust", "--no-cargo", "--no-lint"]).arg(&f).current_dir(dir.path()).output().unwrap();
     assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     let rs = fs::read_to_string(dir.path().join("build/p.rs")).unwrap();
-    assert!(rs.contains("panic!(\"too large: {} {}\", x, x + 1)"), "generated Rust:\n{rs}");
+    assert!(rs.contains("panic!(\"too large: {} {}\", x, x + 1_i32)"), "generated Rust:\n{rs}");
 }
 
 /// Several `impl From<S> for T`: `T::from`, `.into()` with a declared type and `?` choose by the argument's type.

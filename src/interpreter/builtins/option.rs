@@ -302,14 +302,7 @@ pub fn register(r: &mut Registry) {
     // ---------------- Any ----------------
     r.pure(Kind::Any, "clone", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Any, "to_owned", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Any, "into", |it, v, _| match it.type_hint.take() {
-        Some(crate::parser::Type::Custom(target)) if it.from_impl_for(&target, v).is_some_and(|f| v.type_name() != target && f.self_ty.is_some()) => {
-            let f = it.from_impl_for(&target, v).expect("checked");
-            it.call_func(&f, vec![v.clone()], None)
-        }
-        Some(t) => it.coerce(v.clone(), &t),
-        None => Ok(v.clone()),
-    });
+    r.pure(Kind::Any, "into", |it, v, _| it.convert_into(v));
     r.pure(Kind::Any, "try_into", |it, v, _| match (it.type_hint.take(), v) {
         (Some(t), Value::Int(n, _)) => match IntTy::from_type(&t) {
             Some(ty) if ty.fits(*n) => Ok(Value::ok(Value::Int(*n, ty))),
