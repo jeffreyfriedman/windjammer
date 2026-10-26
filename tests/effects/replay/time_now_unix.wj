@@ -1,0 +1,5 @@
+use std::time
+fn main() {
+    println("unix ${time::now_unix()}")
+    println("millis ${time::now_millis()}")
+}

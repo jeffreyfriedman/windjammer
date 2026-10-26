@@ -1,0 +1,13 @@
+use std::fs
+fn main() {
+    scope {
+        for i in 0..3 {
+            spawn {
+                fs::write("w${i}.txt", "writer ${i}").unwrap()
+            }
+        }
+    }
+    for i in 0..3 {
+        println(fs::read_to_string("w${i}.txt").unwrap())
+    }
+}

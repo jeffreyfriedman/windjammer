@@ -1,0 +1,7 @@
+// stdin: first line\nsecond line\n
+use std::io
+fn main() {
+    let a = io::read_line().unwrap()
+    let b = io::read_line().unwrap()
+    println("got [${a}] and [${b}]")
+}

@@ -32,7 +32,7 @@ mod std_http_server;
 mod std_config;
 mod std_ordered;
 mod std_db;
-mod std_sys;
+pub(crate) mod std_sys;
 pub(crate) mod sync;
 pub(crate) mod thread;
 pub(crate) mod time;
@@ -324,9 +324,9 @@ pub(crate) fn new_iter(items: Vec<Value>) -> Value {
 
 pub(crate) fn ordering(o: std::cmp::Ordering) -> Value {
     match o {
-        std::cmp::Ordering::Less => Value::enum_val("Ordering", "Less", 0, Payload::Unit),
-        std::cmp::Ordering::Equal => Value::enum_val("Ordering", "Equal", 1, Payload::Unit),
-        std::cmp::Ordering::Greater => Value::enum_val("Ordering", "Greater", 2, Payload::Unit),
+        std::cmp::Ordering::Less => Value::std_enum("Ordering", "Less", 0, Payload::Unit),
+        std::cmp::Ordering::Equal => Value::std_enum("Ordering", "Equal", 1, Payload::Unit),
+        std::cmp::Ordering::Greater => Value::std_enum("Ordering", "Greater", 2, Payload::Unit),
     }
 }
 

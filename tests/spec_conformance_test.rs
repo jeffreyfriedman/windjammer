@@ -15,6 +15,7 @@
 //!   expect-exit: N          expected exit status for panic mode (default 101)
 //!   manifest: TOML-LINE     one line of the program's wj.toml (repeatable; ADR-0021 `[capabilities]`, `[policy]`)
 //!   seed: N                 simulation seed (simulate mode, default 1)
+//!   faults: P               probability that a file or network call fails (simulate mode, default 0)
 //!   profile: local         run under the default local profile (project directory + time/random/console), enforced
 //!   xfail: Q-NNN            the implementation currently contradicts the spec (docs/spec/OPEN_QUESTIONS.md);
 //!                           the example must FAIL, and the run fails if it starts passing
@@ -41,6 +42,7 @@ struct Spec {
     manifest: Vec<String>,
     profile: Option<String>,
     seed: Option<u64>,
+    faults: Option<f64>,
     src: String,
 }
 
@@ -78,6 +80,7 @@ fn load(path: &Path) -> Spec {
             "xfail" => s.xfail = Some(v.trim().to_string()),
             "manifest" => s.manifest.push(v.trim().to_string()),
             "seed" => s.seed = Some(v.trim().parse().expect("seed")),
+            "faults" => s.faults = Some(v.trim().parse().expect("faults")),
             "profile" => s.profile = Some(v.trim().to_string()),
             _ => {}
         }
@@ -91,8 +94,7 @@ fn check(s: &Spec) -> Result<(), String> {
         "check-ok" | "check-error" => return check_front_end(s),
         "simulate" => return simulate(s),
         "effects" => return effect_report(s),
-        // ADR-0021 stage E3 adds the effect log.
-        "replay" => return Err("record/replay not implemented (ADR-0021 stage E3)".into()),
+        "replay" => return replay(s),
         _ => {}
     }
     let src = s.src.clone();
@@ -245,6 +247,7 @@ fn check_front_end(s: &Spec) -> Result<(), String> {
 /// Run twice in the deterministic world with the same seed; the runs must agree and match `expect:`.
 fn simulate(s: &Spec) -> Result<(), String> {
     let seed = s.seed.unwrap_or(1);
+    let faults = s.faults.unwrap_or(0.0);
     let once = || {
         let src = s.src.clone();
         let name = s.path.display().to_string();
@@ -257,8 +260,10 @@ fn simulate(s: &Spec) -> Result<(), String> {
                 ));
                 let program = parser.parse().map_err(|e| format!("parse error: {e}"))?;
                 let mut it = Interpreter::new_capturing();
-                it.set_deterministic_time(true);
-                it.set_sched_seed(seed);
+                // the same world `wj test --simulate` builds: virtual clock, seeded random numbers and scheduler, in-memory files
+                let cfg = windjammer::interpreter::effect_port::sim::SimConfig { seed, faults };
+                let here = std::env::current_dir().unwrap_or_default();
+                windjammer::interpreter::runner::install_simulation(&mut it, &cfg, &here, &here.join(".wj-sim"));
                 it.run_checked(&program).map_err(|e| e.render())?;
                 Ok::<String, String>(it.get_output())
             }))
@@ -270,6 +275,45 @@ fn simulate(s: &Spec) -> Result<(), String> {
         return Err(format!("two runs with seed {seed} differ:\n  {a:?}\n  {b:?}"));
     }
     let got: Vec<&str> = a.lines().collect();
+    let want: Vec<&str> = s.expect.iter().map(|x| x.as_str()).collect();
+    if !want.is_empty() && got != want {
+        return Err(format!("stdout mismatch\n  want: {want:?}\n  got:  {got:?}"));
+    }
+    Ok(())
+}
+
+/// Record the run into an effect log, replay it from the log: the replay prints the same lines and reports no divergence.
+fn replay(s: &Spec) -> Result<(), String> {
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let (entry, log) = (dir.path().join("main.wj"), dir.path().join("run.wjlog"));
+    std::fs::write(&entry, &s.src).map_err(|e| e.to_string())?;
+    let once = |record: bool| {
+        let (src, name, entry, log) = (s.src.clone(), s.path.display().to_string(), entry.clone(), log.clone());
+        with_big_stack(move || {
+            catch_unwind(AssertUnwindSafe(|| {
+                let mut lexer = windjammer::lexer::Lexer::new(&src);
+                let tokens = lexer.tokenize_with_locations();
+                let parser: &'static mut windjammer::parser::Parser = Box::leak(Box::new(windjammer::parser::Parser::new_with_source(tokens, name, src.clone())));
+                let program = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+                let mut it = Interpreter::new_capturing();
+                let mut opts = windjammer::interpreter::runner::RunOptions::default();
+                if record {
+                    opts.record = Some(log.clone());
+                } else {
+                    opts.replay = Some(log.clone());
+                }
+                windjammer::interpreter::runner::setup_effect_port(&mut it, &opts, &entry)?;
+                it.run_checked(&program).map_err(|e| e.render())?;
+                Ok::<String, String>(it.get_output())
+            }))
+            .unwrap_or_else(|_| Err("lexer/parser/interpreter panicked".to_string()))
+        })
+    };
+    let (recorded, replayed) = (once(true)?, once(false)?);
+    if recorded != replayed {
+        return Err(format!("replay differs from the recording:\n  recorded: {recorded:?}\n  replayed: {replayed:?}"));
+    }
+    let got: Vec<&str> = recorded.lines().collect();
     let want: Vec<&str> = s.expect.iter().map(|x| x.as_str()).collect();
     if !want.is_empty() && got != want {
         return Err(format!("stdout mismatch\n  want: {want:?}\n  got:  {got:?}"));
@@ -377,7 +421,7 @@ fn rule_examples_in_chapters_match_the_test_files() {
 }
 
 fn is_header(l: &str) -> bool {
-    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "profile"]
+    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "faults", "profile"]
         .iter()
         .any(|k| l.strip_prefix("// ").is_some_and(|r| r.starts_with(&format!("{k}:"))))
 }

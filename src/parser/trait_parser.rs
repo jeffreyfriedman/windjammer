@@ -123,8 +123,16 @@ impl Parser {
                 continue;
             }
 
+            // Attributes (`@uses(fs.read)`) may come before or after the doc comments
+            let mut decorators = Vec::new();
+            while matches!(self.current_token(), Token::Decorator(_)) {
+                decorators.push(self.parse_decorator()?);
+            }
             // Capture all consecutive doc comments (/// or //!)
             let doc_comment = self.collect_doc_comments();
+            while matches!(self.current_token(), Token::Decorator(_)) {
+                decorators.push(self.parse_decorator()?);
+            }
 
             // Parse trait method signature
             let is_async = if self.current_token() == &Token::Async {
@@ -200,6 +208,7 @@ impl Parser {
                 is_async,
                 body,
                 doc_comment,
+                decorators,
             });
         }
 
@@ -213,5 +222,45 @@ impl Parser {
             methods,
             doc_comment: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::Item;
+
+    fn trait_methods(src: &str) -> Vec<(String, Vec<String>)> {
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = crate::parser::Parser::new_with_source(tokens, "t.wj".into(), src.into());
+        let program = parser.parse().expect("parses");
+        program
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Trait { decl, .. } => Some(decl.methods.iter().map(|m| (m.name.clone(), m.decorators.iter().map(|d| d.name.clone()).collect())).collect::<Vec<_>>()),
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    }
+
+    #[test]
+    fn attributes_on_trait_methods_are_kept() {
+        let got = trait_methods("trait Source {\n    @uses(fs.read)\n    fn get(self) -> string\n    @pure\n    fn name(self) -> string { \"x\" }\n    fn plain(self) -> int\n}\n");
+        assert_eq!(
+            got,
+            vec![
+                ("get".to_string(), vec!["uses".to_string()]),
+                ("name".to_string(), vec!["pure".to_string()]),
+                ("plain".to_string(), vec![]),
+            ]
+        );
+    }
+
+    #[test]
+    fn attributes_may_follow_doc_comments_and_precede_async() {
+        let got = trait_methods("trait T {\n    /// docs\n    @uses(net.connect)\n    async fn fetch(self) -> string\n}\n");
+        assert_eq!(got, vec![("fetch".to_string(), vec!["uses".to_string()])]);
     }
 }

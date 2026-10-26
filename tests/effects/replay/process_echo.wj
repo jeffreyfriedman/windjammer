@@ -1,0 +1,8 @@
+// allow: process=echo
+use std::process
+fn main() {
+    match process::run("echo replayed") {
+        Ok(out) => println("ok: ${out.trim()}"),
+        Err(e) => println("failed: ${e}"),
+    }
+}

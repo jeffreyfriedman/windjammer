@@ -1,0 +1,26 @@
+// bug: the consumer assumes the first worker's message arrives first, but workers interleave their sends
+use std::sync::mpsc
+use std::thread
+
+@test
+fn messages_arrive_in_worker_order() {
+    let (tx, rx) = mpsc::channel()
+    let t1 = tx.clone()
+    let t2 = tx.clone()
+    drop(tx)
+    let w1 = thread::spawn(move || {
+        t1.send(1)
+        t1.send(2)
+        return 0
+    })
+    let w2 = thread::spawn(move || {
+        t2.send(10)
+        t2.send(20)
+        return 0
+    })
+    let mut got: Vec<i64> = Vec::new()
+    for v in rx { got.push(v) }
+    w1.join()
+    w2.join()
+    assert_eq(got, vec![1, 2, 10, 20])
+}

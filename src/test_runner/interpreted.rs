@@ -42,6 +42,7 @@ pub fn run_interpreted(
     list: bool,
     allow_empty: bool,
     json: bool,
+    sim: Option<crate::interpreter::runner::SimRun>,
 ) -> Result<()> {
     let test_dir = path.unwrap_or_else(|| Path::new("."));
     if !test_dir.exists() {
@@ -70,7 +71,7 @@ pub fn run_interpreted(
             discovery.test_count()
         );
     }
-    let results = run_specs(specs);
+    let results = crate::interpreter::runner::run_specs_simulated(specs, sim);
     if json {
         let failed = results.iter().filter(|r| !r.passed).count();
         let tests: Vec<_> = results
