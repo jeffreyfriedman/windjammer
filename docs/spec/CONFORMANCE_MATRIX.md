@@ -61,7 +61,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-009 | effects.md | `effects/SPEC-EFF-009.wj` |
 | SPEC-EFF-010 | effects.md | `effects/SPEC-EFF-010.wj` |
 | SPEC-EFF-011 | effects.md | `effects/SPEC-EFF-011.wj` |
-| SPEC-EFF-012 | effects.md | `effects/SPEC-EFF-012.wj` (xfail Q-032) |
+| SPEC-EFF-012 | effects.md | `effects/SPEC-EFF-012.wj` |
 | SPEC-EFF-013 | effects.md | `effects/SPEC-EFF-013.wj` |
 | SPEC-EFF-014 | effects.md | `effects/SPEC-EFF-014.wj` |
 | SPEC-EFF-015 | effects.md | `effects/SPEC-EFF-015.wj` |
@@ -82,6 +82,14 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-030 | effects.md | untestable |
 | SPEC-EFF-031 | effects.md | untestable |
 | SPEC-EFF-032 | effects.md | untestable |
+| SPEC-EFF-033 | effects.md | `effects/SPEC-EFF-033.wj` |
+| SPEC-EFF-034 | effects.md | `effects/SPEC-EFF-034.wj` |
+| SPEC-EFF-035 | effects.md | `effects/SPEC-EFF-035.wj` |
+| SPEC-EFF-036 | effects.md | untestable |
+| SPEC-EFF-037 | effects.md | untestable |
+| SPEC-EFF-038 | effects.md | untestable |
+| SPEC-EFF-039 | effects.md | `effects/SPEC-EFF-039.wj` |
+| SPEC-EFF-040 | effects.md | `effects/SPEC-EFF-040.wj` |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
 | SPEC-ERR-002 | errors.md | `errors/SPEC-ERR-002.wj` |
 | SPEC-ERR-003 | errors.md | `errors/SPEC-ERR-003.wj` |

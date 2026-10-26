@@ -62,7 +62,7 @@ pub struct RunOptions {
     pub sandbox: bool,
     /// `--allow EFFECT[=RESOURCE]` (repeatable).
     pub allow: Vec<String>,
-    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given.
+    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given (default: enforce).
     pub caps_mode: String,
     /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
     pub no_jit: bool,
@@ -220,6 +220,14 @@ pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
             it.guard_stack();
             // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
             it.set_engine_resolved(true);
+            // tests are sandboxed like `wj run` (ADR-0021): the project's [capabilities], else the local profile
+            match super::caps::gate_for_run(&spec.file, false, &[], false, "") {
+                Ok(gate) => it.set_caps(gate.map(|g| g.for_tests())),
+                Err(m) => {
+                    results.push(TestResult { file: spec.file, name: spec.display_name, passed: false, message: m });
+                    continue;
+                }
+            }
             let outcome = match it.load_test_program(&spec.file) {
                 Ok(mut path) => {
                     path.extend(spec.mods.iter().cloned());

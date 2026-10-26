@@ -3,8 +3,7 @@
 //! interpreter performs (observed at the capability gate) is in the static effect set of `main`.
 //! Reported, not gated: precision (how often the static set names an effect the run never exercised).
 //!
-//! `console` is static-only in E1 (the interpreter's `println` intrinsic is not a gated builtin), so it is
-//! excluded from the dynamic side.
+//! `console` is observed at the print intrinsics (ADR-0021 E2), so it is part of the dynamic side.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -77,7 +76,7 @@ fn dynamic_effects_are_a_subset_of_the_static_effects_of_main() {
         if !missing.is_empty() {
             unsound.push(format!("{}: performed {:?} but the static set is {:?}", f.display(), missing, stat.iter().map(|k| k.name()).collect::<Vec<_>>()));
         }
-        let extra: Vec<&EffectKind> = stat.iter().filter(|k| **k != EffectKind::Console && !dynamic.contains(k)).collect();
+        let extra: Vec<&EffectKind> = stat.iter().filter(|k| !dynamic.contains(k)).collect();
         if !extra.is_empty() {
             imprecise += 1;
         }

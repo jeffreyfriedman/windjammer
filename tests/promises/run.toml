@@ -132,10 +132,10 @@ exit = 1
 [[case]]
 name = "run --interpret refuses network access by default"
 polarity = "negative"
-exit = 0
+exit = 126
 files = { "m.wj" = "use std::http\n\nfn main() {\n    match http::get(\"http://127.0.0.1:9/hello\") {\n        Ok(r) => println(\"${r.status_code()}\"),\n        Err(e) => println(\"ERR ${e}\"),\n    }\n}\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
-stdout_has = ["ERR network access is disabled", "--allow-network"]
+output_has = ["capability denied: net.connect(127.0.0.1)", "--allow net.connect=127.0.0.1", "[capabilities]"]
 
 [[case]]
 name = "run --allow-network performs real requests"

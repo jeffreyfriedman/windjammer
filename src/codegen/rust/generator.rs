@@ -1383,6 +1383,31 @@ impl<'ast> CodeGenerator<'ast> {
         Some(owned_type_to_ownership_mode(&safety_ty.ownership))
     }
 
+    /// The solver itself moved `name` to Owned (the analyzer seed was not already Owned): an analyzer
+    /// seed echoed back through the IR is not a solver decision.
+    pub(crate) fn ir_param_owned_by_solver(&self, name: &str) -> bool {
+        self.ir_param_ownership_definitive(name) == Some(OwnershipMode::Owned)
+            && self.current_ir_function.as_ref().is_some_and(|f| {
+                f.ownership_trail.get(name).is_some_and(|t| {
+                    t.iter().any(|(stage, o)| {
+                        *stage == "solver" && matches!(o, crate::ir::safety_type::OwnedType::Owned)
+                    })
+                })
+            })
+    }
+
+    /// The analyzer found `name` read-only text AND the IR solver did not decide it is owned (a read-only
+    /// looking parameter can still flow into an owned position through an alias or a branch value).
+    /// Pub free-fn text formals are registry-seeded Owned before codegen (multipass ABI lock); that seed
+    /// is not a solver decision unless the param flows as a value into a `let`.
+    pub(crate) fn str_ref_optimizable_param(&self, analyzed: &AnalyzedFunction<'_>, name: &str) -> bool {
+        analyzed.str_ref_optimizable_params.contains(name)
+            && (!self.ir_param_owned_by_solver(name)
+                || (analyzed.decl.is_pub
+                    && analyzed.decl.parent_type.is_none()
+                    && !crate::analyzer::Analyzer::param_is_branch_value_of_let(name, &analyzed.decl.body)))
+    }
+
     /// Ownership for formal demotion / str_ref.
     ///
     /// Prefer definitive IR borrows (`Ref` / `MutRef`). Analyzer `Borrowed` /

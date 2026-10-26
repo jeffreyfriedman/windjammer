@@ -27,7 +27,7 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 ## Entry points
 Each `cli/<cmd>.rs::execute` (src/cli/mod.rs routes). `run_dev::execute`: `wj run` policy (interpret by default,
 compiled fallback on a preflight hit, `--compiled`/`--release`, ADR-0019); `watch::watch`: `--watch` restart loop;
-`host_build::ensure`: cached host bridge library for `extern fn` (ADR-0020).
+`host_build::ensure`: cached host bridge library for `extern fn` (ADR-0020); `build_caps::prepare_for`: `wj build` stops on capability findings and returns the grant-install statement a program needs (ADR-0021); `caps::execute`: `wj caps show|approve`; `explain_effects::execute`.
 
 ## Tests
 tests/installed_binary_smoke_test.rs (installed-binary matrix), tests/cli_lint_test.rs and assert_cmd tests of the `wj` binary.

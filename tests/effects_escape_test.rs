@@ -179,6 +179,31 @@ fn cases() -> Vec<Case> {
         esc("indirect/inside-spawned-task", FS, "use std::fs", "let t = spawn fs::read_to_string(\"$ROOT/secret.txt\")\n    let r = t.wait()\n    println(\"DONE\")", "fs.read"),
         esc("indirect/inside-callback-argument", FS, "use std::fs", "let items = [1]\n    let r = items.iter().map(|x| fs::read_to_string(\"$ROOT/secret.txt\")).collect::<Vec<_>>()\n    println(\"DONE ${r.len()}\")", "fs.read"),
         esc("indirect/denial-is-not-catchable", FS, "use std::fs", "match fs::read_to_string(\"$ROOT/secret.txt\") {\n        Ok(_) => println(\"DONE\"),\n        Err(_) => println(\"DONE survived\"),\n    }", "fs.read"),
+        // ---- capability values (std::cap): minting needs the grant, narrowing only shrinks, operations stay inside the value
+        esc("cap/mint-without-grant", NONE, "use std::cap", "let net = cap::net()\n    println(\"DONE\")", "net.connect"),
+        esc("cap/mint-fs-without-grant", NONE, "use std::cap", "let f = cap::fs()\n    println(\"DONE\")", "fs.read"),
+        esc("cap/mint-revoked-clock", "[capabilities]\ndeny = [\"time\"]\n", "use std::cap", "let c = cap::clock()\n    println(\"DONE\")", "time"),
+        esc("cap/net-other-host", NET, "use std::cap", "let n = cap::net().only([\"api.example.com\"])\n    let r = n.get(\"http://other.example/\")\n    println(\"DONE\")", "net.connect(other.example)"),
+        esc("cap/net-cannot-widen", NET, "use std::cap", "let n = cap::net().only([\"api.example.com\"])\n    let w = n.only([\"localhost:8080\"])\n    println(\"DONE\")", "net.connect"),
+        esc("cap/net-cannot-widen-to-star", NET, "use std::cap", "let n = cap::net().only([\"*\"])\n    println(\"DONE\")", "net.connect"),
+        esc("cap/net-narrowing-beyond-the-ambient-grant", NET, "use std::cap", "let n = cap::net().only([\"evil.example\"])\n    println(\"DONE\")", "net.connect(evil.example)"),
+        esc("cap/fs-read-only-blocks-write", FS_ALL_WRITE, "use std::cap", "let f = cap::fs().read_only()\n    let r = f.write(\"$ROOT/out/x.txt\", \"x\")\n    println(\"DONE\")", "fs.write").check(Missing("out/x.txt")),
+        esc("cap/fs-under-dotdot", FS_ALL_WRITE, "use std::cap", "let f = cap::fs().under(\"$ROOT/data\")\n    let r = f.read_to_string(\"$ROOT/data/../secret.txt\")\n    println(\"DONE\")", "fs.read"),
+        esc("cap/fs-under-symlink", FS_ALL_WRITE, "use std::cap", "let f = cap::fs().under(\"$ROOT/data\")\n    let r = f.read_to_string(\"$ROOT/data/link/secret.txt\")\n    println(\"DONE\")", "fs.read"),
+        esc("cap/fs-under-outside-the-grant", FS, "use std::cap", "let f = cap::fs().under(\"$ROOT\")\n    println(\"DONE\")", "fs.read"),
+        esc("cap/fs-sibling-of-under", FS_ALL_WRITE, "use std::cap", "let f = cap::fs().under(\"$ROOT/data\")\n    let r = f.read_to_string(\"$ROOT/data2/x.txt\")\n    println(\"DONE\")", "fs.read"),
+        esc("cap/env-other-name", ENV, "use std::cap", "let e = cap::env().only([\"HOME\"])\n    let r = e.var(\"SECRET_TOKEN\")\n    println(\"DONE\")", "env.read(SECRET_TOKEN)"),
+        esc("cap/process-other-program", PROC, "use std::cap", "let p = cap::process().only([\"echo\"])\n    let r = p.run(\"echo hi; touch $ROOT/pwned6\")\n    println(\"DONE\")", "process(sh)").check(Missing("pwned6")),
+        legit("cap/ok-net-within-value", NET, "use std::cap", "let n = cap::net().only([\"api.example.com\"])\n    let r = n.get(\"http://api.example.com/ok\")\n    println(\"DONE ${r.is_ok()}\")"),
+        legit("cap/ok-fs-under-read", FS, "use std::cap", "let f = cap::fs().under(\"$ROOT/data\").read_only()\n    let r = f.read_to_string(\"$ROOT/data/ok.txt\")\n    println(\"DONE ${r.unwrap()}\")"),
+        legit("cap/ok-fs-write-inside-value", FS, "use std::cap", "let f = cap::fs().under(\"$ROOT/out\")\n    let r = f.write(\"$ROOT/out/v.txt\", \"hello\")\n    println(\"DONE ${r.is_ok()}\")"),
+        legit("cap/ok-env-var", ENV, "use std::cap", "let e = cap::env().only([\"HOME\"])\n    let r = e.var(\"HOME\")\n    println(\"DONE ${r.is_ok()}\")"),
+        legit("cap/ok-clock-and-rng", NONE, "use std::cap", "let c = cap::clock()\n    let g = cap::rng()\n    println(\"DONE ${g.range(0, 5) < 5}\")"),
+        // ---- console is an effect too: revocable, free by default
+        esc("console/denied-println", "[capabilities]\ndeny = [\"console\"]\n", "use std::fs", "println(\"DONE\")", "console"),
+        esc("console/denied-eprintln", "[capabilities]\ndeny = [\"console\"]\n", "use std::fs", "eprintln(\"DONE\")", "console"),
+        esc("console/denied-print", "[capabilities]\ndeny = [\"console\"]\n", "use std::fs", "print(\"DONE\")", "console"),
+        legit("console/default-granted", NONE, "use std::fs", "println(\"DONE\")"),
     ];
     // every effect from an empty grant: nothing but time/random/console works
     for (name, uses, call, effect) in [

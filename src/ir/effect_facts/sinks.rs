@@ -18,6 +18,12 @@ pub enum Res {
     CmdArg(usize),
     /// A fixed resource (`HOME`, `RUST_LOG`).
     Fixed(&'static str),
+    /// Minting a capability value (`cap::net()`): the effect must be granted for *some* resource; the value then
+    /// carries that scope. The runtime check is the mint itself (`Interpreter::cap_mint`).
+    Scope,
+    /// Like [`Res::Scope`], but a package that was not granted the effect is not at fault: the value simply carries
+    /// no such ability (`cap::fs()` of a read-only grant has no write scope).
+    ScopeOptional,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +110,13 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("random::shuffle", &[u(Random, Res::None)]),
     ("uuid::v4", &[u(Random, Res::None)]),
     ("uuid::v7", &[u(Random, Res::None), u(Time, Res::None)]),
+    // capability values (std::cap): minting needs the effect, the value is then checked on every use
+    ("cap::net", &[u(NetConnect, Res::Scope)]),
+    ("cap::fs", &[u(FsRead, Res::Scope), u(FsWrite, Res::ScopeOptional)]),
+    ("cap::env", &[u(EnvRead, Res::Scope)]),
+    ("cap::process", &[u(Process, Res::Scope)]),
+    ("cap::clock", &[u(Time, Res::None)]),
+    ("cap::rng", &[u(Random, Res::None)]),
     // console input and output
     ("io::stdin", &[u(Console, Res::None)]),
     ("io::read_line", &[u(Console, Res::None)]),
@@ -144,16 +157,23 @@ pub static NOT_SINKS: &[&str] = &[
 pub static AUTHORITY_MODULES: &[&str] =
     &["fs", "env", "process", "subprocess", "http", "net", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime"];
 
-/// Cheap pre-filter for hot paths: can `path` possibly be a sink? (a segment names a sink module, or the path is a
-/// console intrinsic). No hashing, no allocation; `lookup` decides.
+/// Cheap pre-filter for hot paths: can `path` possibly be a sink? Every row is `module::function` (or a bare console
+/// intrinsic), and lookup only drops LEADING segments, so the module is always the second-to-last segment: two steps
+/// from the end, no allocation, no hashing. `lookup` decides.
 pub fn may_be_sink(path: &str) -> bool {
-    path.split("::").any(|seg| {
-        matches!(
-            seg,
-            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log"
-                | "print" | "println" | "eprint" | "eprintln"
-        )
-    })
+    let mut from_end = path.rsplit("::");
+    let last = from_end.next().unwrap_or(path);
+    // console intrinsics are single-segment rows: `lookup` finds them after dropping any leading segments
+    if matches!(last, "print" | "println" | "eprint" | "eprintln") {
+        return true;
+    }
+    match from_end.next() {
+        Some(module) => matches!(
+            module,
+            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap"
+        ),
+        None => false,
+    }
 }
 
 /// Find the sink row for a call path, dropping leading segments (`std::fs::read` finds `fs::read`).
@@ -170,6 +190,7 @@ pub fn lookup(path: &str) -> Option<&'static [SinkUse]> {
     }
 }
 
+#[cfg(test)]
 pub fn is_not_sink(path: &str) -> bool {
     let mut p = path;
     loop {
@@ -183,6 +204,7 @@ pub fn is_not_sink(path: &str) -> bool {
     }
 }
 
+#[cfg(test)]
 pub fn all_paths() -> impl Iterator<Item = &'static str> {
     SINKS.iter().map(|(n, _)| *n)
 }

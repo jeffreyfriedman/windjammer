@@ -262,6 +262,27 @@ for a in env::args() {
 `io::stdin().read_line(..)` loops forever in compiled programs and `io::read_line()` is not implemented by the interpreter, so
 prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead of slicing it.
 
+## Permissions: exit 126 and the fix line
+
+`wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,
+console) and nothing else. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
+message that already contains the fix:
+
+```text
+error: capability denied: net.connect(api.example.com)
+  = to allow just this once: run with `--allow net.connect=api.example.com`
+  = to allow it for good, put this in wj.toml:
+        [capabilities]
+        fs.read = ["./**"]
+        fs.write = ["./**"]
+        net.connect = ["api.example.com"]
+```
+
+Copy that block into `wj.toml` (a `[capabilities]` table is the whole grant, so keep the two `fs` lines), or pass `--allow`. Do not catch it
+or work around it; 126 is a policy fault, not an error value. `wj explain-effects FILE` lists what a program will need, `wj check`
+reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_CAPS=warn|off` is the explicit opt-out. Hand untrusted
+helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
+
 ## The 25 things agents get wrong first
 
 1. `println!("{}", x)`: macros do not exist. Write `println("${x}")` (W0007/W0008, ADR-0014).
