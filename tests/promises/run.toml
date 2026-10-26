@@ -29,7 +29,7 @@ covers = ["feature interpret-instant"]
 files = { "m.wj" = "fn main( {\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
 exit = 1
-output_has = ["Expected parameter name"]
+output_has = ["expected parameter name"]
 
 [[case]]
 name = "run --interpret of a missing file fails"
