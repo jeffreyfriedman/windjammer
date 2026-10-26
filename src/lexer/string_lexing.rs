@@ -43,6 +43,34 @@ impl Lexer {
         false
     }
 
+    /// At `escaped` (the character after a backslash): `x` + two hex digits, or `u{` + 1 to 6 hex digits + `}`.
+    /// Consumes the escape and returns the character when well formed; otherwise consumes nothing.
+    fn read_numeric_escape(&mut self, escaped: char) -> Option<char> {
+        let (digits, braces) = match escaped {
+            'x' => (2, false),
+            'u' if self.peek(1) == Some('{') => (6, true),
+            _ => return None,
+        };
+        let mut offset = if braces { 2 } else { 1 };
+        let mut value: u32 = 0;
+        let mut seen = 0;
+        while seen < digits {
+            match self.peek(offset).and_then(|c| c.to_digit(16)) {
+                Some(d) => value = value * 16 + d,
+                None => break,
+            }
+            offset += 1;
+            seen += 1;
+        }
+        let well_formed = if braces { seen >= 1 && self.peek(offset) == Some('}') } else { seen == 2 && value < 0x80 };
+        let c = char::from_u32(value).filter(|_| well_formed)?;
+        let consumed = if braces { offset + 1 } else { offset };
+        for _ in 0..consumed {
+            self.advance();
+        }
+        Some(c)
+    }
+
     pub(in crate::lexer) fn read_string(&mut self) -> Token {
         self.advance(); // Skip opening quote
         let mut parts = Vec::new();
@@ -58,10 +86,17 @@ impl Lexer {
             } else if ch == '\\' {
                 self.advance();
                 if let Some(escaped) = self.current_char {
+                    // `\xHH` and `\u{H..}` name a character by code point; anything malformed keeps the old
+                    // meaning (the escaped character itself)
+                    if let Some(c) = self.read_numeric_escape(escaped) {
+                        current_literal.push(c);
+                        continue;
+                    }
                     let unescaped = match escaped {
                         'n' => '\n',
                         't' => '\t',
                         'r' => '\r',
+                        '0' => '\0',
                         '\\' => '\\',
                         '"' => '"',
                         '`' => '`',
@@ -228,17 +263,22 @@ impl Lexer {
                 // Handle escape sequences
                 self.advance();
                 if let Some(escaped) = self.current_char {
-                    let unescaped = match escaped {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '\\' => '\\',
-                        '\'' => '\'',
-                        '0' => '\0',
-                        _ => escaped,
-                    };
-                    self.advance();
-                    unescaped
+                    if let Some(c) = self.read_numeric_escape(escaped) {
+                        c
+                    } else {
+                        let unescaped = match escaped {
+                            'n' => '\n',
+                            't' => '\t',
+                            'r' => '\r',
+                            '\\' => '\\',
+                            '\'' => '\'',
+                            '"' => '"',
+                            '0' => '\0',
+                            _ => escaped,
+                        };
+                        self.advance();
+                        unescaped
+                    }
                 } else {
                     '\0'
                 }
