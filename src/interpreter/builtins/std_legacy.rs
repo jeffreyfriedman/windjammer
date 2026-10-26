@@ -111,9 +111,9 @@ pub fn register(r: &mut Registry) {
     });
 
     // ----- std::env::vars (an `env.read` of every variable) -----
-    r.func("env::vars", |_, _| {
-        let mut vars: Vec<(String, String)> = std::env::vars().collect();
-        vars.sort();
+    r.func("env::vars", |it, _| {
+        // the snapshot the runner passed in; the `env.read(*)` sink row gates the call
+        let vars = it.env_snapshot.clone();
         Ok(Value::vec(vars.into_iter().map(|(k, v)| Value::tuple(vec![Value::str(k), Value::str(v)])).collect()))
     });
 
