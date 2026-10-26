@@ -60,7 +60,7 @@ Functions, not macros: `print println eprint eprintln panic assert(c, msg?) asse
 `Vec`: push pop len insert remove contains first last get reverse sort sort_by iter; `v[i]` (out of range panics). `HashMap`: insert get contains_key remove len keys values entry; **iteration order unspecified: sort before printing** (EXEC-005). Iterators: `iter map filter enumerate zip rev take skip chain fold sum count any all min max collect::<Vec<T>>()`. Closures `|x| x + 1`, capture by reference, may mutate captured `mut` locals. Turbofish `f::<T>()`, `.collect::<Vec<int>>()`.
 
 ## Concurrency (CONC): mostly **[gap]**
-Decided (ADR-0004): `spawn f()`, `async f()`, blocks, `Task<T>.wait()`, `scope { }`, channel `send`/`recv`. Today only `async fn`/`.await`/`thread { }` parse (Rust backend); not in the interpreter. Do not use `go`, `chan`, `<-`.
+Decided (ADR-0004): `spawn f()`, `async f()`, blocks, `Task<T>.wait()`, `scope { }`, channel `send`/`recv`. Today only `async fn`/`.await`/`thread { }` parse (Rust backend and interpreter). Do not use `go`, `chan`, `<-`.
 
 ## Effects (EFF): **[gap]**, designed (ADR-0021)
 Effects are inferred, never required: `fs.read fs.write net.connect net.listen env.read env.write process time random console ffi` + `@effect("x")`. Grants in `wj.toml [capabilities]` (`net.connect = ["api.example.com"]`, `fs.read = ["./data/**"]`); a denied sink stops the run (exit 126). Optional `@uses(...)`/`@pure`; `durable fn` journals every effectful call. Today only the interpreter's http client is gated (`--allow-network`, `--mock-http`); `--deterministic-time`/`--sched-seed` give reproducible runs.

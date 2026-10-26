@@ -140,6 +140,9 @@ pub(super) fn method_call(
         }
         it.mark(loc);
         it.type_hint = hint.clone();
+        if method == "into" && hint.is_none() {
+            it.type_hint = it.take_expected(whole);
+        }
         match user {
             Some(f) => it.call_user_method(&f, recv, place, vals),
             None if Interpreter::builtin_by_kind(&recv) && it.hot.is_none() => {

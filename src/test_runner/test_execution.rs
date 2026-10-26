@@ -1136,6 +1136,10 @@ path = "lib.rs"
 
     fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
 
+    // Path dependencies built earlier may name another `windjammer-runtime` directory: one runtime per graph.
+    let crate_runtime = if no_runtime_copy { runtime_path.clone() } else { output_dir.join("crates").join("windjammer-runtime") };
+    crate::cargo_toml::runtime_alignment::align_path_dependencies_to_runtime(&output_dir.join("Cargo.toml"), &crate_runtime);
+
     // Declare exactly the modules compiled above (a module without a .rs file is E0583).
     fs::write(output_dir.join("lib.rs"), render_harness_lib_rs(&module_names))?;
 

@@ -1,5 +1,5 @@
 // tags: strings, slicing
-// rust: gap error[E0277]: the size for values of type 'str' cannot be known at compilation t
+// rust: ok
 // expect: ell
 // expect: hel
 // expect: llo
