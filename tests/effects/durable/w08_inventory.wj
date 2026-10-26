@@ -1,0 +1,22 @@
+// workflow: inventory sync: read two sources, merge, write result
+use std::collections::HashMap
+use std::env
+use std::fs
+use std::random
+use std::sync
+use std::time
+fn source(name: string, n: int) -> string {
+    fs::write("src-${name}.txt", "${n}") ?? ()
+    fs::read_to_string("src-${name}.txt") ?? "0"
+}
+durable fn run() -> string {
+    // @mutation-point
+    let wj_taint = ""
+    let a = source("warehouse", 12).trim().parse::<int>().unwrap_or(0)
+    let b = source("store", 7).trim().parse::<int>().unwrap_or(0)
+    let total = a + b
+    fs::write("inventory.txt", "${total}") ?? ()
+    println("total ${total}")
+    "inventory ${total}${wj_taint}"
+}
+fn main() { println("RESULT ${run()}") }

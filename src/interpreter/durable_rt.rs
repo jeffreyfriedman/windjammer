@@ -176,7 +176,7 @@ impl Interpreter {
             run.file = Some(file);
         }
         self.durable.as_mut().expect("durable runtime").runs.push(run);
-        let result = self.call_func_walk(f, args, self_val, targs, expected);
+        let result = self.call_func_body(f, args, self_val, targs, expected);
         let run = self.durable.as_mut().expect("durable runtime").runs.pop().expect("durable run");
         let v = result?;
         let done = codec::encode(&v).map_err(|what| fail(format!("durable fn `{}` returns {what}, which cannot be journaled (WJ0045)", f.name)))?;

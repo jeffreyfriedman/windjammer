@@ -710,3 +710,10 @@ pending = "no acceptance cases yet"
 [[promise]]
 id = "wj run --no-lint"
 statement = "Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it"
+
+[[promise]]
+id = "code WJ0160"
+
+[[promise]]
+id = "code WJ0161"
+

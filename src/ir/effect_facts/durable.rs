@@ -433,8 +433,9 @@ pub fn analyze(r: &ResolvedProgram<'_>, facts: &EffectFacts) -> DurableFacts {
     ids.sort();
     for id in ids {
         let d = r.collected.decls[&id];
-        let function = r.defs().get(id).path.clone();
-        out.functions.push(function.clone());
+        let path = r.defs().get(id).path.clone();
+        out.functions.push(path.clone());
+        let function = last_seg(&path).to_string();
         let mut pass = Pass { r, facts, calls: &calls, out: &mut out, function: function.clone(), locals: HashSet::new(), hashes: HashMap::new() };
         for p in &d.parameters {
             pass.locals.insert(p.name.clone());
