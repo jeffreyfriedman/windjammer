@@ -143,7 +143,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if is_string_type {
                     // Phase 2: if the param was optimized to &str, string literals are already
                     // &str — no .to_string() needed. Only add for Owned or &String params.
-                    !analyzed.str_ref_optimizable_params.contains(&param.name)
+                    !self.str_ref_optimizable_param(analyzed, &param.name)
                 } else {
                     false
                 }

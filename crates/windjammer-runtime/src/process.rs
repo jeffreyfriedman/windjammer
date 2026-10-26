@@ -6,6 +6,7 @@ use std::process::Command;
 
 /// Run a command and return output
 pub fn run(program: &str, args: &[String]) -> Result<String, String> {
+    crate::caps::process(program);
     let output = Command::new(program)
         .args(args)
         .output()
@@ -20,6 +21,7 @@ pub fn run(program: &str, args: &[String]) -> Result<String, String> {
 
 /// Run a command and return full output
 pub fn run_with_output(program: &str, args: &[String]) -> Result<ProcessOutput, String> {
+    crate::caps::process(program);
     let output = Command::new(program)
         .args(args)
         .output()

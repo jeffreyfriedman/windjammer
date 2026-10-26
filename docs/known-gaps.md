@@ -17,8 +17,8 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | 4 | Dependencies: path/git build in dependency order, lock file; registry deferred | Partial | `DependencySpec` has path/git; `src/package/` has manifest parsing only; no `wj.lock` | [ADR-0010](adr/0010-package-source-of-truth.md), [WJ-PKG-01](proposals/rfcs/WJ-PKG-01-package-management.md) |
 | 5 | Concurrency: one coherent surface across backends; `async expr`/`spawn expr` do not parse; `go`/`chan::new()` were advertised but never existed | Decision needed | `AsyncCall`/`SpawnCall` never constructed; `thread {}`, `async fn`, `<-` do parse | [ADR-0004](adr/0004-concurrency-surface.md), [WJ-CONC-01](proposals/rfcs/WJ-CONC-01-async-concurrency.md) |
 | 6a | Taint errors do not fail the build | Partial | Only `src/diagnostics/` consumes `taint_errors` | [ADR-0009](adr/0009-security-enforcement.md) |
-| 6b | `.wj-capabilities.lock` not wired | Open | `src/ir/capability_lock.rs` unused by the CLI | ADR-0009, ADR-0010 |
-| 6c | Unknown external calls have no effect classification; effects checked only with `[app_capabilities]` | Partial | `src/output_generation.rs` | ADR-0009, ADR-0012 |
+| 6b | `.wj-capabilities.lock` | Closed | Wired by `wj caps show|approve`, `wj check`, `wj build` and the interpreter (`src/ir/effect_facts/lock.rs`, `src/cli/caps.rs`); the unused legacy module is deleted | ADR-0021 |
+| 6c | Unknown external calls have no effect classification | Closed for std and `extern fn` (an undeclared extern performs `ffi`, WJ0044); effects are checked against `[capabilities]` by `wj check`, `wj build` and `wj run` | `src/ir/effect_facts/`, `src/check/effects.rs` | ADR-0021 |
 | 7a | Go and JavaScript backends do not consume the IR | Open | `let _ir = ...prepare_ir_context(...)` in both generators | Plan WP 11; [ADR-0007](adr/0007-target-tiers-conformance.md) |
 | 7b | Conformance suite runs only the Rust path | Partial | `tests/conformance/run_conformance_tests.sh` | ADR-0007 |
 | 7c | Stdlib is Rust-host-only; no portability tags | Open | `std/*.wj` over `windjammer-runtime` | [ADR-0008](adr/0008-stdlib-portability.md) |

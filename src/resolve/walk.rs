@@ -147,7 +147,23 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             | Statement::Thread { body, .. }
             | Statement::Async { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
-            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+            Statement::Use { path, alias, .. } => self.bind_body_use(path, alias.as_deref()),
+            Statement::Break { .. } | Statement::Continue { .. } => {}
+        }
+    }
+
+    /// `use a::b::f` / `use a::b::{f, g}` / `use a::f as h` inside a body: the names are in scope for the rest of the block.
+    fn bind_body_use(&mut self, path: &[String], alias: Option<&str>) {
+        let joined = path.join("::");
+        if let Some((_, names)) = joined.split_once("::{") {
+            for n in names.trim_end_matches('}').split(',').map(str::trim).filter(|n| !n.is_empty()) {
+                let local = n.rsplit_once(" as ").map_or(n, |(_, a)| a);
+                self.bind(local);
+            }
+        } else if let Some(last) = alias.or_else(|| joined.rsplit("::").next()) {
+            if last != "*" {
+                self.bind(last);
+            }
         }
     }
 

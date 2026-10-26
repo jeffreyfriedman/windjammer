@@ -16,7 +16,7 @@ Read `docs/agent/WINDJAMMER_FOR_AGENTS.md` (or `wj docs idioms`) once per sessio
    primary_span:{file,line_start,col_start,byte_start,byte_end}, help, fixes}]}`.
    Exit 1 when `success` is false. Fix every error; `wj check --fix` applies `machine_applicable` fixes;
    `wj explain CODE` explains any code.
-3. `wj run --interpret FILE`: instant execution (no cargo, no rustc). stdout is program output only.
+3. `wj run --interpret FILE`: instant execution (no cargo, no rustc). stdout is program output only. Exit 126 = capability denied; the error prints the `[capabilities]` block to put in `wj.toml` (or an `--allow` flag).
    Exit 101 is a panic, 2 means the construct is unsupported in the interpreter.
 4. `wj test --interpret DIR_OR_FILE`: runs `@test`, `test_*` and `@test_cases` functions in `*_test.wj`.
 5. `wj build FILE_OR_DIR`: the production path (Rust + cargo). Run it last; if it fails on code the interpreter

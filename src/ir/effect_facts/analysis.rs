@@ -28,6 +28,8 @@ pub enum Resource {
     Lit(String),
     /// Computed at run time: only a runtime check can decide.
     Computed,
+    /// A capability value minted for an effect the package may not even have (see `sinks::Res::ScopeOptional`).
+    MintedOptional,
 }
 
 impl Resource {
@@ -351,6 +353,8 @@ fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind,
             let res = match u.res {
                 SinkRes::None => Resource::None,
                 SinkRes::Fixed(s) => Resource::Lit(s.to_string()),
+                SinkRes::Scope => Resource::Computed,
+                SinkRes::ScopeOptional => Resource::MintedOptional,
                 SinkRes::Arg(n) => match c.str_args.get(n) {
                     Some(Some(s)) => Resource::Lit(s.clone()),
                     _ => Resource::Computed,

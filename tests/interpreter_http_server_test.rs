@@ -170,7 +170,7 @@ fn real_socket_only_with_allow_network() {
     let f = dir.path().join("prog.wj");
     fs::write(&f, SIMPLE.replace("PORT", &port.to_string())).unwrap();
     let mut child = Command::new(WJ)
-        .args(["run", "--interpret", "--allow-network"])
+        .args(["run", "--interpret", "--allow", "net.listen=127.0.0.1"])
         .arg(&f)
         .current_dir(dir.path())
         .stdout(Stdio::null())

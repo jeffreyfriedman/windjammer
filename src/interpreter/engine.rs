@@ -207,7 +207,7 @@ pub struct Interpreter {
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
     /// `(module, address of the `use` statement)` -> the module that adds that function-body import.
-    /// Names of the dependency crates mounted as top-level modules (reachable by name from any module).
+    /// Names of the dependency crates mounted as top-level modules (reachable by name from any module; package attribution for grants).
     pub(crate) dep_crates: HashSet<String>,
     pub(crate) body_use_modules: HashMap<(usize, usize), usize>,
     /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items

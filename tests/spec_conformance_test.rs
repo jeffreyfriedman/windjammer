@@ -15,6 +15,7 @@
 //!   expect-exit: N          expected exit status for panic mode (default 101)
 //!   manifest: TOML-LINE     one line of the program's wj.toml (repeatable; ADR-0021 `[capabilities]`, `[policy]`)
 //!   seed: N                 simulation seed (simulate mode, default 1)
+//!   profile: local         run under the default local profile (project directory + time/random/console), enforced
 //!   xfail: Q-NNN            the implementation currently contradicts the spec (docs/spec/OPEN_QUESTIONS.md);
 //!                           the example must FAIL, and the run fails if it starts passing
 //!
@@ -38,6 +39,7 @@ struct Spec {
     expect_exit: Option<i32>,
     xfail: Option<String>,
     manifest: Vec<String>,
+    profile: Option<String>,
     seed: Option<u64>,
     src: String,
 }
@@ -76,6 +78,7 @@ fn load(path: &Path) -> Spec {
             "xfail" => s.xfail = Some(v.trim().to_string()),
             "manifest" => s.manifest.push(v.trim().to_string()),
             "seed" => s.seed = Some(v.trim().parse().expect("seed")),
+            "profile" => s.profile = Some(v.trim().to_string()),
             _ => {}
         }
     }
@@ -94,6 +97,7 @@ fn check(s: &Spec) -> Result<(), String> {
     }
     let src = s.src.clone();
     let manifest = s.manifest.clone();
+    let local_profile = s.profile.as_deref() == Some("local");
     let name = s.path.display().to_string();
     let (parsed, out, exit, err) = with_big_stack(move || {
         catch_unwind(AssertUnwindSafe(|| {
@@ -107,7 +111,9 @@ fn check(s: &Spec) -> Result<(), String> {
                 Err(e) => return (Err(e.to_string()), String::new(), 1, String::new()),
             };
             let mut it = Interpreter::new_capturing();
-            if !manifest.is_empty() {
+            if local_profile {
+                it.set_caps(Some(windjammer::interpreter::caps::CapGate::local(&std::env::current_dir().unwrap())));
+            } else if !manifest.is_empty() {
                 match gate_from_manifest(&manifest) {
                     Ok(g) => it.set_caps(Some(g)),
                     Err(e) => return (Err(e), String::new(), 1, String::new()),
@@ -371,7 +377,7 @@ fn rule_examples_in_chapters_match_the_test_files() {
 }
 
 fn is_header(l: &str) -> bool {
-    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed"]
+    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed", "profile"]
         .iter()
         .any(|k| l.strip_prefix("// ").is_some_and(|r| r.starts_with(&format!("{k}:"))))
 }
