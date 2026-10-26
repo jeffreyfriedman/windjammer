@@ -1,14 +1,10 @@
-//! The check caches never change effect diagnostics (WJ0040-WJ0049, ADR-0021): every `check-error` spec example
-//! of `tests/spec/effects` with a WJ004x expectation (not an expected failure), as a project, gives the same diagnostics cached and uncached
-//! (and the expected code); and edits that change those diagnostics without touching the checked file (the
-//! manifest's grant, an effect moving into or out of a dependency module) are seen by the cached run.
-//! Run: cargo test --release --test check_cache_effects
+//! Effect diagnostics (WJ0040-WJ0049, ADR-0021) through the check caches: every non-xfail WJ004x check-error spec
+//! example of `tests/spec/effects`, as a project, agrees cached and uncached and reports its code; grant and
+//! dependency edits that change those diagnostics for an unchanged file are seen by the cached run. (A module of
+//! `check_cache_differential_test`, so it shares its working-directory lock.)
 
-#[path = "check_cache/support.rs"]
-mod support;
-
+use super::support::{compare, diags, in_dir, write};
 use std::path::Path;
-use support::{compare, diags, in_dir, write};
 
 fn effect_codes(r: &windjammer::diagnostics::Report) -> Vec<String> {
     let mut v: Vec<String> = r.diagnostics.iter().map(|d| d.code.to_string()).filter(|c| c.starts_with("WJ004")).collect();

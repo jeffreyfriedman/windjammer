@@ -317,7 +317,7 @@ impl Interpreter {
                     out.push('}');
                 }
             }
-            Value::Range(a, b, _) => out.push_str(&format!("{}..{}", a, b)),
+            Value::Range(r, _) => out.push_str(&format!("{}..{}", r.0, r.1)),
             Value::Struct(s) => {
                 if let Some(u) = self.user_debug(v)? {
                     out.push_str(&u);

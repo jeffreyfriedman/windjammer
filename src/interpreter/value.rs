@@ -256,6 +256,10 @@ impl CellKind {
     }
 }
 
+/// `Value` stays 32 bytes (the size of an `i128` integer with its width): larger payloads (ranges,
+/// places) are boxed, since every element of a `Vec` is a `Value`.
+const _: () = assert!(std::mem::size_of::<Value>() <= 32);
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Unit,
@@ -271,12 +275,12 @@ pub enum Value {
     Map(Rc<KMap>),
     Set(Rc<KMap>),
     /// Half-open integer range; `a..=b` is stored as `a..b+1`.
-    Range(i128, i128, IntTy),
+    Range(Box<(i128, i128)>, IntTy),
     Iter(Iter),
     Func(Rc<Callable>),
     /// `fmt::Formatter` / `String` sink used by `write!` inside `impl Display`.
     Formatter(Rc<RefCell<String>>),
-    Ref(Place),
+    Ref(Box<Place>),
     /// `Rc<T>` / `Arc<T>`: a shared slot. Clones alias; strong counts are computed by reachability.
     Rc(Slot),
     /// `Weak<T>` of an `Rc` slot: a real `std::rc::Weak`, so a value kept alive only by an `Rc`
@@ -289,6 +293,10 @@ pub enum Value {
 }
 
 impl Value {
+    /// The half-open range `a..b` of width `t`.
+    pub fn range(a: i128, b: i128, t: IntTy) -> Value {
+        Value::Range(Box::new((a, b)), t)
+    }
     pub fn int(v: i128) -> Value {
         Value::Int(v, IntTy::Lit)
     }
@@ -451,7 +459,7 @@ impl Value {
                 }
                 ka.len().cmp(&kb.len())
             }
-            (Range(a, b, _), Range(c, d, _)) => (a, b).cmp(&(c, d)),
+            (Range(x, _), Range(y, _)) => x.cmp(y),
             (Rc(a), Rc(b)) => a.borrow().structural_cmp(&b.borrow()),
             (Cell(_, a, _), Cell(_, b, _)) => a.borrow().structural_cmp(&b.borrow()),
             (Native(a), Native(b)) => match (a.order_key(), b.order_key()) {
