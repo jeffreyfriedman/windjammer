@@ -192,6 +192,11 @@ path = "tests/stdlib_tables_test.rs"
 name = "check_cache_differential"
 path = "tests/check_cache_differential_test.rs"
 
+# Check caches never change effect diagnostics (WJ0040-WJ0049): cargo test --release --test check_cache_effects
+[[test]]
+name = "check_cache_effects"
+path = "tests/check_cache_effects_test.rs"
+
 # Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
 [[test]]
 name = "meta_sidecar_consistency"
