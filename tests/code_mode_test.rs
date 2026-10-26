@@ -501,3 +501,26 @@ fn execute_reports_typed_errors_denials_and_tools() {
     assert_eq!(ok.effects_used.iter().filter(|e| e.starts_with("mcp.")).collect::<Vec<_>>(), ["mcp.demo.ping"]);
     assert_eq!(ok.effect_calls, 1);
 }
+
+/// SPEC-EFF-052: authority comes from the operator's policy; a request can only pick from it and lower the limits.
+#[test]
+fn the_operator_decides_what_a_request_may_use() {
+    use std::time::Duration;
+    use windjammer::cli::code_mode::Policy;
+    let mut p = Policy::default();
+    p.allow = vec!["effects=mcp.demo.ping".into()];
+    p.servers = vec![("demo".into(), "mock:m.json".into())];
+    let r = p.plan("fn main() {}", &["effects=mcp.demo.ping".into()], &["demo".into()], Some("fuel=10,wall=99,calls=5000")).unwrap();
+    assert_eq!(r.limits.fuel, Some(10), "a request may lower a limit");
+    assert_eq!(r.limits.wall, Some(Duration::from_secs(10)), "and may not raise it above the operator's");
+    assert_eq!(r.limits.calls, Some(100));
+    assert_eq!(r.bindings, ["demo=mock:m.json"]);
+    assert!(p.plan("", &["fs.read=/etc/**".into()], &[], None).unwrap_err().contains("not in this server's policy"));
+    assert!(p.plan("", &["effects=mcp.demo.send".into()], &[], None).is_err());
+    assert!(p.plan("", &[], &["github".into()], None).unwrap_err().contains("no MCP server"));
+    assert!(p.plan("", &[], &[], Some("speed=1")).is_err());
+    let none = p.plan("", &[], &[], None).unwrap();
+    assert!(none.allow.is_empty() && none.bindings.is_empty(), "asking for nothing grants nothing");
+    // the default policy grants nothing at all
+    assert!(Policy::default().plan("", &["effects=mcp.demo.ping".into()], &[], None).is_err());
+}
