@@ -26,6 +26,7 @@ pub mod host_bridge;
 mod hot;
 mod intrinsics;
 pub mod int;
+mod kmap;
 mod iter;
 mod locks;
 mod moves;
