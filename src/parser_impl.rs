@@ -362,6 +362,8 @@ impl Parser {
     pub(crate) fn new_sharing_arenas(tokens: Vec<crate::lexer::TokenWithLocation>, parent: &Parser) -> Self {
         let mut p = Parser::new(tokens);
         p.arenas = parent.arenas.clone();
+        // nodes of a `${..}` part belong to the same file: diagnostics and position-keyed facts name it
+        p.filename = parent.filename.clone();
         p
     }
 

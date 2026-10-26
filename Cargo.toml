@@ -261,6 +261,12 @@ path = "tests/effect_simulation_test.rs"
 name = "effect_durable"
 path = "tests/effect_durable_test.rs"
 
+# The resolver visits every call position the parser can produce (ADR-0021 soundness of the static facts)
+#   cargo test --release --test resolve_positions
+[[test]]
+name = "resolve_positions"
+path = "tests/resolve_positions_test.rs"
+
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages
 [[test]]
