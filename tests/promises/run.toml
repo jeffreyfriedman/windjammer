@@ -286,3 +286,42 @@ polarity = "positive"
 files = { "m.wj" = "fn main() {\n    let v: Option<int> = Some(1)\n    println(\"${v.unwrap()}\")\n}\n" }
 args = ["run", "--interpret", "--no-lint", "{w}/m.wj"]
 stdout_has = ["1"]
+
+[[case]]
+name = "run --jit-loop-hot 0 --jit-debug: the loop runs as machine code from its first iteration, same result"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 300 {\n        t += i * 3\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit-loop-hot", "0", "--jit-debug", "{w}/m.wj"]
+stdout_has = ["134550"]
+stderr_has = ["[jit] loop", "compiled"]
+
+[[case]]
+name = "run --jit-loop-hot rejects a non-number"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 300 {\n        t += i * 3\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit-loop-hot", "soon", "{w}/m.wj"]
+exit = 2
+output_has = ["invalid value"]
+
+[[case]]
+name = "run --jit-debug with a machine-code loop that overflows still panics like the walker"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut t: i32 = 1\n    let mut i = 0\n    while i < 300 {\n        t = t * 3\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit-loop-hot", "0", "--jit-debug", "{w}/m.wj"]
+exit = 101
+output_has = ["attempt to multiply with overflow"]
+
+[[case]]
+name = "run --jit-mutant names a check; a correct program prints the same"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 300 {\n        t += i * 3\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit-mutant", "nan", "{w}/m.wj"]
+stdout_has = ["134550"]
+
+[[case]]
+name = "run --jit-mutant needs a name"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 300 {\n        t += i * 3\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit-mutant"]
+exit = 2
+output_has = ["a value is required"]

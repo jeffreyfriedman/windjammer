@@ -15,7 +15,7 @@ fn wrap(text: &str, width: i64) -> Vec<String> {
         }
     }
     if !cur.is_empty() {
-        let _ = lines.push(cur.clone());
+        let _ = lines.push(cur);
     }
     lines
 }

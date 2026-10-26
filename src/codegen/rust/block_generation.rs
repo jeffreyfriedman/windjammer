@@ -46,7 +46,6 @@ impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
         self.prepass_mark_loop_counter_usize_variables(stmts);
-        if stmts.len() == 1 {}
         let mut output = String::new();
         let len = stmts.len();
         let saved_body = self.current_function_body.clone();
@@ -55,9 +54,7 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_skips = std::mem::take(&mut self.skip_block_indices);
         self.current_function_body = stmts.to_vec();
         for (i, stmt) in stmts.iter().enumerate() {
-            self.current_statement_idx = self.auto_clone_counter;
-            self.current_block_local_idx = i;
-            self.auto_clone_counter += 1;
+            self.begin_block_statement(i);
 
             // Skip statements folded into a preceding .take() or .replace()
             if self.skip_block_indices.contains(&i) {
@@ -79,6 +76,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             let is_last = i == len - 1;
+            // The tail expression is emitted without `generate_statement`: publish its liveness here.
+            let outer_dying = self.enter_statement_liveness(stmt);
             // TDD: Track if this is the last statement (used by If handler)
             self.current_is_last_statement = is_last;
             // TDD FIX: Only optimize return statements in function body (not nested blocks)
@@ -373,12 +372,20 @@ impl<'ast> CodeGenerator<'ast> {
                 // Preserve in_expression_context so inner branches retain correct semicolon behavior
                 output.push_str(&self.generate_statement(stmt));
             }
+            self.exit_statement_liveness(outer_dying);
         }
         self.current_function_body = saved_body;
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
         self.skip_block_indices = saved_skips;
         output
+    }
+
+    /// Statement bookkeeping shared by the block emitters: auto-clone index and block position.
+    fn begin_block_statement(&mut self, i: usize) {
+        self.current_statement_idx = self.auto_clone_counter;
+        self.current_block_local_idx = i;
+        self.auto_clone_counter += 1;
     }
 
     pub(crate) fn generate_statement(&mut self, stmt: &Statement<'ast>) -> String {
@@ -388,7 +395,9 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("/* {} */", e);
         }
 
+        let outer_dying = self.enter_statement_liveness(stmt);
         let result = self.generate_statement_impl(stmt);
+        self.exit_statement_liveness(outer_dying);
         self.exit_recursion();
         result
     }
@@ -801,11 +810,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         let len = stmts.len();
         for (i, stmt) in stmts.iter().enumerate() {
-            self.current_statement_idx = self.auto_clone_counter;
-            self.current_block_local_idx = i;
-            self.auto_clone_counter += 1;
+            self.begin_block_statement(i);
 
             let is_last = i == len - 1;
+            let outer_dying = self.enter_statement_liveness(stmt);
             if is_last
                 && !self.in_void_block
                 && matches!(
@@ -898,6 +906,7 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 output.push_str(&self.generate_statement(stmt));
             }
+            self.exit_statement_liveness(outer_dying);
         }
 
         self.auto_clone_counter = saved_auto_clone;

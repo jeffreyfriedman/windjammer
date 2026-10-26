@@ -91,66 +91,7 @@ impl From<Rc<str>> for Name {
     }
 }
 
-/// A map or set body. `hashed` marks `HashMap`/`HashSet`, whose iteration order is unspecified in Rust
-/// (ADR-0021 D6): by default they iterate in key order, and `--hash-seed N` permutes that order
-/// deterministically so order-dependent programs can be found. `BTreeMap`/`BTreeSet` always iterate sorted.
-#[derive(Clone, Debug, Default)]
-pub struct KMap {
-    pub m: BTreeMap<Key, Value>,
-    pub hashed: bool,
-}
-
-impl std::ops::Deref for KMap {
-    type Target = BTreeMap<Key, Value>;
-    fn deref(&self) -> &Self::Target {
-        &self.m
-    }
-}
-impl std::ops::DerefMut for KMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.m
-    }
-}
-impl From<BTreeMap<Key, Value>> for KMap {
-    fn from(m: BTreeMap<Key, Value>) -> KMap {
-        KMap { m, hashed: false }
-    }
-}
-
-fn seeded_hash(seed: u64, k: &Key) -> u64 {
-    // FNV-1a over the key's structural text, then a splitmix-style finalizer mixed with the seed
-    let mut h: u64 = 0xcbf29ce484222325;
-    for b in format!("{:?}", k.0).bytes() {
-        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
-    }
-    let mut z = h ^ seed.wrapping_mul(0x9e3779b97f4a7c15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-    z ^ (z >> 31)
-}
-
-impl KMap {
-    pub fn hash_map(m: BTreeMap<Key, Value>) -> KMap {
-        KMap { m, hashed: true }
-    }
-
-    /// Entries in iteration order (see the type docs); `seed` is `--hash-seed` (0 = key order).
-    pub fn ordered(&self, seed: u64) -> Vec<(&Key, &Value)> {
-        let mut v: Vec<(&Key, &Value)> = self.m.iter().collect();
-        if self.hashed && seed != 0 {
-            v.sort_by_cached_key(|(k, _)| seeded_hash(seed, k));
-        }
-        v
-    }
-
-    pub fn ordered_keys(&self, seed: u64) -> Vec<Value> {
-        self.ordered(seed).into_iter().map(|(k, _)| k.0.clone()).collect()
-    }
-
-    pub fn ordered_values(&self, seed: u64) -> Vec<Value> {
-        self.ordered(seed).into_iter().map(|(_, v)| v.clone()).collect()
-    }
-}
+pub use super::kmap::KMap;
 
 /// Total-ordered map key wrapper.
 #[derive(Clone, Debug)]

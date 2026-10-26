@@ -155,6 +155,20 @@ of file order.
    D-CLONE-REDUNDANT by construction; corpus `string_literal_move_then_use.wj` must pass.
 Explain counts: `D-CLONE-OUTSIDE-SOLVER`, `D-CLONE-LASTUSE` -> 0.
 
+**Progress (2026-10-26, wt/convergence-c6).** Step 1 (facts) is live and consumed: `ir::liveness` provides
+`last_moves`/`dying_in` (MOVE-LAST-USE), `read_after` (CLONE-USE-AFTER-MOVE, CLONE-LOOP; exclusive `if`/`match` arms,
+`return` and rebinding aware) and `captures` (CLOS-MOVE-CAPTURE; `FnOnce` slots such as `thread::spawn` keep `move`),
+keyed by AST node identity (the Rust backend walks the analyzed AST).
+`codegen/rust/move_at_last_use.rs` hands them to every reuse-clone query; the backend's own later-use statement scans and
+its closure free-identifier scanner are deleted. D-CLONE-LASTUSE 2 -> 1; emitted `.clone()` in goldens 42 -> 38; one
+E0382 removed (closure `move` of a binding pushed afterwards). Mutation check: `CompilerConfig::liveness_mutation_always_move`
+makes the differential oracle and gate 1 fail. Not yet: step 2 (`NeedsClone` per site in the solver) and step 3 (codegen
+prints only the solver's sites). D-CLONE-OUTSIDE-SOLVER (25) is unchanged: its findings are place clones and signature
+gaps, not liveness decisions -- `self.f.clone()` in `&self` getters (8, SELF-GETTER / CLONE-BORROWED-TO-OWNED), element
+clones of unknown or Copy element type (`w[0].clone()`, `svo[0].clone()`, `f[0].clone()`: type inference), `&a.1.clone()`
+and `s.union(other.clone())` (an explicit `&x` turned into a clone because the callee's formal resolved as owned:
+signature resolution, C3/C5). Each needs its owner first; the solver should then emit CLONE-BORROWED-TO-OWNED per site.
+
 ## C5/C6 acceptance inputs from other streams (2026-10-11)
 * Consuming trait methods on generic parameters: `fn label<T: Into<string>>(t: T) -> string { t.into() }` must make
   `t` owned (category "consuming method" / OWN-CALL-FORMAL with `self`-by-value receivers). Ratchet test from parser-gaps2.

@@ -14,7 +14,7 @@ fn new(cap: i64) -> Lru {
 }
 #[inline]
 fn touch(&mut self, k: String) {
-        self.order.retain(move |x| *x != k);
+        self.order.retain(|x| *x != k);
         self.order.push(k);
 }
 #[inline]
@@ -24,7 +24,7 @@ fn put(&mut self, k: String, v: i64) {
             let _ = self.data.remove(&oldest);
         }
         self.data.insert(k.clone(), v);
-        self.touch(k.clone());
+        self.touch(k);
 }
 #[inline]
 fn get(&mut self, k: String) -> Option<i64> {

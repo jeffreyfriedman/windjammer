@@ -75,6 +75,7 @@ pub mod macro_and_string_generation;
 pub mod macro_conversion;
 mod match_binding_type_inference;
 pub mod match_statement_generation;
+mod move_at_last_use;
 pub mod method_signature;
 pub mod operator_generation;
 pub mod operators;

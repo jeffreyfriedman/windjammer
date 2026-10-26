@@ -213,6 +213,8 @@ pub struct Interpreter {
     /// bounded by stack bytes used instead of a frame count.
     pub(crate) stack_guard: Option<(usize, usize)>,
     pub(crate) args: Vec<String>,
+    /// The process environment as the runner saw it at start (sorted); `env::vars` serves this, nothing reads the host itself.
+    pub(crate) env_snapshot: Vec<(String, String)>,
     pub(crate) closure_counter: usize,
     pub(crate) mutating_analysis: HashSet<usize>,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
@@ -303,6 +305,7 @@ impl Interpreter {
             max_depth: 10_000,
             stack_guard: None,
             args: Vec::new(),
+            env_snapshot: Vec::new(),
             closure_counter: 0,
             mutating_analysis: HashSet::new(),
             type_hint: None,
@@ -357,6 +360,12 @@ impl Interpreter {
     /// Allow machine code for hot integer functions (on by default; a no-op without the `jit` feature).
     pub fn set_jit(&mut self, on: bool) {
         self.jit_enabled = on;
+    }
+
+    /// The environment `env::vars()` reports (the runner passes it in, like `args`).
+    pub fn set_env_snapshot(&mut self, mut vars: Vec<(String, String)>) {
+        vars.sort();
+        self.env_snapshot = vars;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {

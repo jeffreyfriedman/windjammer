@@ -708,6 +708,18 @@ id = "wj run --jit"
 statement = "Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020)"
 
 [[promise]]
+id = "wj run --jit-loop-hot"
+statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_LOOP_HOT): closure-engine iterations before a hot loop enters machine code; 0 makes every loop try at its first iteration (stress tests)"
+
+[[promise]]
+id = "wj run --jit-debug"
+statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_DEBUG): report on stderr which loops run as machine code and why others do not"
+
+[[promise]]
+id = "wj run --jit-mutant"
+statement = "Interpreted runs (internal, hidden from help; env WJ_JIT_MUTANT): in debug builds, leave one machine-code check out for the mutation gate; release builds ignore it"
+
+[[promise]]
 id = "wj run --engine"
 statement = "Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics)"
 
