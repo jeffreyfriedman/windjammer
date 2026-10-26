@@ -446,3 +446,29 @@ fn main() {
     assert_eq!(&lines[3..4], ["hello compress world"]);
     assert_eq!(&lines[5..], ["alice acme", "rejected", "true", "true", "false"]);
 }
+
+/// `process::run_inherit` shares stdout with the program (blank lines and ordering intact) and returns the exit status.
+/// The expected text is what the shell itself prints.
+#[test]
+fn process_run_inherit_streams_output_in_order_and_returns_status() {
+    let script = "echo a; echo; echo b 1>&2; echo c; exit 3";
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("prog.wj");
+    fs::write(
+        &f,
+        format!(
+            "use std::process\n\nfn main() {{\n    println(\"before\")\n    match process::run_inherit(\"sh\", [\"-c\", \"{script}\"]) {{\n        Ok(code) => println(\"status ${{code}}\"),\n        Err(e) => println(\"error ${{e}}\"),\n    }}\n    match process::run_inherit(\"definitely-not-a-program-xyz\", []) {{\n        Ok(_) => println(\"started?\"),\n        Err(_) => println(\"missing program is an Err\"),\n    }}\n    println(\"after\")\n}}\n"
+        ),
+    )
+    .unwrap();
+    let o = Command::new(WJ)
+        .args(["run", "--interpret", "--allow", "process=sh", "--allow", "process=definitely-not-a-program-xyz"])
+        .arg(&f)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let sh = Command::new("sh").args(["-c", script]).output().unwrap();
+    let want_out = format!("before\n{}status 3\nmissing program is an Err\nafter\n", String::from_utf8_lossy(&sh.stdout));
+    assert_eq!(String::from_utf8_lossy(&o.stdout), want_out);
+    assert_eq!(String::from_utf8_lossy(&o.stderr), String::from_utf8_lossy(&sh.stderr));
+}

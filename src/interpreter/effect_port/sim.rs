@@ -228,7 +228,7 @@ pub fn answer(it: &mut Interpreter, path: &str, args: Vec<Value>) -> Result<Valu
             Value::Unit
         }
         "env::home_dir" => Value::option(w.env.get("HOME").map(|v| Value::str(v.clone()))),
-        "process::run" | "process::run_with_args" | "process::run_with_output" => err_str(ENOENT),
+        "process::run" | "process::run_with_args" | "process::run_with_output" | "process::run_inherit" => err_str(ENOENT),
         "io::read_line" | "io::read_to_string" => Value::ok(Value::str("")),
         "log::init" | "log::init_with_level" => Value::Unit,
         "crypto::hash_password" | "crypto::hash_password_with_cost" => {
