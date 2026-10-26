@@ -694,6 +694,47 @@ Recorded, then replayed from the effect log: both runs print the same lines and 
 
 **SPEC-EFF-031** During replay, a sink call that differs from the logged request at the same sequence number stops the run with a replay divergence (`WJ0049`) that shows both requests and the source location. (untestable: needs a log recorded from a different program; acceptance test `tests/effect_replay_test.rs`, stage E3)
 
+**SPEC-EFF-044** In the simulated world files live in memory: a write is visible to later reads of the same run and reaches nothing on the host, and every call returns the error text the operating system would (`No such file or directory (os error 2)`, `File exists (os error 17)`, ...). The capability gate runs first, so a simulated program is confined to the same paths as a live one.
+
+<!-- example: tests/spec/effects/SPEC-EFF-044.wj -->
+```windjammer
+use std::fs
+fn main() {
+    fs::write("sim-note.txt", "kept in memory") ?? ()
+    println(fs::read_to_string("sim-note.txt") ?? "?")
+    fs::remove_file("sim-note.txt") ?? ()
+    println("${fs::exists("sim-note.txt")}")
+}
+```
+Simulated with seed 3 (`wj run --simulate --seed 3`), the output is:
+```text
+kept in memory
+false
+```
+
+**SPEC-EFF-045** With a fault rate (`--faults RATE`, a probability from 0 to 1) each file and network call fails with that probability, drawn from the seed, so a failing run reproduces from `--seed` and `--faults`. A failed write is a short write: the first half of the data is on disk. Network faults are a reset connection or a timeout after 30 virtual seconds.
+
+<!-- example: tests/spec/effects/SPEC-EFF-045.wj -->
+```windjammer
+use std::fs
+fn main() {
+    match fs::write("short.txt", "abcdefgh") {
+        Ok(_) => println("written"),
+        Err(e) => println("write failed: ${e}"),
+    }
+    println("read back: ${fs::read_to_string("short.txt") ?? "?"}")
+}
+```
+Simulated with seed 9 and fault rate 0.5 (the seed decides which calls fail), the output is:
+```text
+write failed: No space left on device (os error 28)
+read back: abcd
+```
+
+**SPEC-EFF-046** An effect log is JSON Lines: a header line (`wj_effect_log`, `program`, `compiler`, `sched_seed`, `hash_seed`, `rng_seed`, `det_time`, `args`) and one event per effect in program order (`seq`, `task`, `effect`, `op`, `args`, `result`, `vt_ns`), with sorted keys. Random numbers and task interleavings are not events: the header's seeds determine them. (untestable: a file format; acceptance test `tests/effect_replay_test.rs`)
+
+**SPEC-EFF-047** An effect that returns a live handle (`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded, replayed or simulated; the run stops at the call with an error that names it. (untestable: needs a process or a socket; acceptance test `tests/effect_replay_test.rs`)
+
 ## Code mode
 
 **SPEC-EFF-032** [PLANNED ADR-0021] `wj mcp bind` generates one Windjammer function per tool of an MCP server, with typed parameters and results and the user-defined effect `mcp.<server>.<tool>`; a sandboxed run may call exactly the tools its grant lists. (untestable: generated from a live tool schema; acceptance test `tests/mcp_bind_test.rs`, stage E5)

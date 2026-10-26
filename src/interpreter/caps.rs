@@ -98,6 +98,13 @@ impl CapGate {
     }
 }
 
+/// The project directory of a run: the nearest `wj.toml` at or above the entry file, else the entry's directory (canonical).
+pub fn project_root(entry: &Path) -> PathBuf {
+    let root = manifest_dir(entry).or_else(|| entry.parent().map(Path::to_path_buf)).unwrap_or_default();
+    let root = if root.as_os_str().is_empty() { std::env::current_dir().unwrap_or_default() } else { root };
+    std::fs::canonicalize(&root).unwrap_or(root)
+}
+
 /// The directory of the nearest `wj.toml` at or above `start`.
 fn manifest_dir(start: &Path) -> Option<PathBuf> {
     let mut cur = if start.is_dir() { Some(start) } else { start.parent() };

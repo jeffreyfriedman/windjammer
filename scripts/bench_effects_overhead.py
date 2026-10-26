@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Overhead of the capability gate (ADR-0021 gates: interpreter overhead <= 5% on general programs).
 
-  scripts/bench_effects_overhead.py [--wj PATH] [--runs N] [--max-load L] [--json OUT]
+  scripts/bench_effects_overhead.py [--wj PATH] [--runs N] [--max-load L] [--json OUT] [--mode caps|record]
+
+`--mode caps` (default) compares WJ_CAPS=off with enforce. `--mode record` compares a plain run with `--record LOG` (ADR-0021 E3 gate:
+record overhead <= 2x on the sink-dense program, <= +3% on the non-sink one; the log is written to a temporary file).
 
 Arms are interleaved (off, on, on, off, ...) and measured in child CPU time (user + sys), median of N runs; both
 arms must print identical output. The run REFUSES to produce a verdict when the 1-minute load average exceeds
 --max-load (default 20): a number measured on a loaded machine is not a result (see the benchmark rules in
 docs/testing/). `load_avg_1m` is recorded next to every number.
 """
-import argparse, json, os, resource, statistics, subprocess, sys
+import argparse, json, os, resource, statistics, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKLOADS = {
@@ -17,10 +20,18 @@ WORKLOADS = {
 }
 
 
-def run(wj, prog, caps):
-    env = dict(os.environ, WJ_CAPS=caps)
+def run(wj, prog, caps, mode="caps"):
+    if mode == "record":
+        env = dict(os.environ, WJ_CAPS="enforce")
+        log = tempfile.mktemp(suffix=".wjlog")
+        cmd = [wj, "run", "--interpret", prog] + (["--record", log] if caps == "record" else [])
+    else:
+        env = dict(os.environ, WJ_CAPS=caps)
+        cmd = [wj, "run", "--interpret", "--deterministic-time", prog]
     before = resource.getrusage(resource.RUSAGE_CHILDREN)
-    out = subprocess.run([wj, "run", "--interpret", "--deterministic-time", prog], env=env, capture_output=True, text=True, cwd=ROOT)
+    out = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=ROOT)
+    if mode == "record" and os.path.exists(log):
+        os.remove(log)
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     if out.returncode != 0:
         sys.exit(f"{prog} failed under WJ_CAPS={caps}: {out.stderr}")
@@ -33,22 +44,24 @@ def main():
     ap.add_argument("--runs", type=int, default=9)
     ap.add_argument("--max-load", type=float, default=20.0)
     ap.add_argument("--json")
+    ap.add_argument("--mode", choices=["caps", "record"], default="caps")
     a = ap.parse_args()
     load = os.getloadavg()[0]
     results = []
     for name, prog in WORKLOADS.items():
-        run(a.wj, prog, "off"), run(a.wj, prog, "enforce")  # warm
-        t = {"off": [], "enforce": []}
+        base, test = ("off", "enforce") if a.mode == "caps" else ("plain", "record")
+        run(a.wj, prog, base, a.mode), run(a.wj, prog, test, a.mode)  # warm
+        t = {base: [], test: []}
         outs = set()
         for _ in range(a.runs):
-            for arm in ("off", "enforce", "enforce", "off"):
-                c, o = run(a.wj, prog, arm)
+            for arm in (base, test, test, base):
+                c, o = run(a.wj, prog, arm, a.mode)
                 t[arm].append(c)
                 outs.add(o)
         if len(outs) != 1:
             sys.exit(f"{name}: the arms printed different output: {outs}")
         m = {k: statistics.median(v) for k, v in t.items()}
-        results.append({"workload": name, "off_s": m["off"], "on_s": m["enforce"], "overhead_pct": 100 * (m["enforce"] / m["off"] - 1), "runs_per_arm": 2 * a.runs})
+        results.append({"workload": name, "off_s": m[base], "on_s": m[test], "overhead_pct": 100 * (m[test] / m[base] - 1), "runs_per_arm": 2 * a.runs})
     load_after = os.getloadavg()[0]
     valid = max(load, load_after) <= a.max_load
     report = {"load_avg_1m_before": load, "load_avg_1m_after": load_after, "max_load": a.max_load, "valid": valid, "cpu_time": True, "results": results}

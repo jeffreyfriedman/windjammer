@@ -205,3 +205,116 @@ files = { "m.wj" = "fn main() {\n    println(\"replayed\")\n}\n", "r.wjlog" = "{
 args = ["run", "--interpret", "--replay", "{w}/r.wjlog", "{w}/m.wj"]
 stdout_has = ["replayed"]
 
+[[case]]
+name = "run --simulate runs the program in the seeded world"
+polarity = "positive"
+files = { "m.wj" = "use std::time\n\nfn main() {\n    println(\"${time::now().timestamp()}\")\n}\n" }
+args = ["run", "--interpret", "--simulate", "--seed", "4", "{w}/m.wj"]
+stdout_has = ["1700000000"]
+
+[[case]]
+name = "run --seed needs --simulate"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--seed", "4", "{w}/m.wj"]
+exit = 2
+output_has = ["--simulate"]
+
+[[case]]
+name = "run --faults makes file calls fail"
+polarity = "positive"
+files = { "m.wj" = "use std::fs\n\nfn main() {\n    match fs::write(\"x.txt\", \"abcd\") {\n        Ok(_) => println(\"written\"),\n        Err(e) => println(\"failed\"),\n    }\n}\n" }
+args = ["run", "--interpret", "--simulate", "--faults", "1", "{w}/m.wj"]
+stdout_has = ["failed"]
+
+[[case]]
+name = "run --faults needs --simulate"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--faults", "0.5", "{w}/m.wj"]
+exit = 2
+output_has = ["--simulate"]
+
+[[case]]
+name = "test --simulate runs tests in the seeded world"
+polarity = "positive"
+files = { "t/x_test.wj" = "@test\nfn test_ok() {\n    assert_eq(1 + 1, 2)\n}\n" }
+args = ["test", "--interpret", "--simulate", "{w}/t"]
+stdout_has = ["1 passed; 0 failed"]
+
+[[case]]
+name = "test --simulate needs --interpret"
+polarity = "negative"
+files = { "t/x_test.wj" = "@test\nfn test_ok() {\n    assert(true)\n}\n" }
+args = ["test", "--simulate", "{w}/t"]
+exit = 2
+output_has = ["--interpret"]
+
+[[case]]
+name = "test --seed picks the world"
+polarity = "positive"
+files = { "t/x_test.wj" = "use std::random\n\n@test\nfn test_r() {\n    assert(random::range(0, 10) < 10)\n}\n" }
+args = ["test", "--interpret", "--simulate", "--seed", "9", "{w}/t"]
+stdout_has = ["1 passed; 0 failed"]
+
+[[case]]
+name = "test --seeds names the first failing seed"
+polarity = "negative"
+files = { "t/x_test.wj" = "use std::random\n\n@test\nfn test_r() {\n    assert(random::range(0, 2) == 0)\n}\n" }
+args = ["test", "--interpret", "--simulate", "--seeds", "1..50", "{w}/t"]
+exit = 1
+output_has = ["failed; reproduce: wj test --interpret --simulate --seed"]
+
+[[case]]
+name = "test --seeds rejects a malformed range"
+polarity = "negative"
+files = { "t/x_test.wj" = "@test\nfn test_ok() {\n    assert(true)\n}\n" }
+args = ["test", "--interpret", "--simulate", "--seeds", "9..2", "{w}/t"]
+exit = 1
+output_has = ["--seeds takes A..B"]
+
+[[case]]
+name = "test --faults makes file calls fail"
+polarity = "negative"
+files = { "t/x_test.wj" = "use std::fs\n\n@test\nfn test_w() {\n    assert(fs::write(\"o.txt\", \"abcd\").is_ok())\n}\n" }
+args = ["test", "--interpret", "--simulate", "--faults", "1", "{w}/t"]
+exit = 1
+output_has = ["test_w ... FAILED"]
+
+[[case]]
+name = "run --simulate cannot be combined with --record"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--simulate", "--record", "{w}/a.wjlog", "{w}/m.wj"]
+exit = 2
+output_has = ["cannot be used with"]
+
+[[case]]
+name = "run --seed picks the world"
+polarity = "positive"
+files = { "m.wj" = "use std::random\n\nfn main() {\n    println(\"${random::range(0, 1000000)}\")\n}\n" }
+args = ["run", "--interpret", "--simulate", "--seed", "5", "{w}/m.wj"]
+stdout_has = ["342126"]
+
+[[case]]
+name = "test --seed needs --simulate"
+polarity = "negative"
+files = { "t/x_test.wj" = "@test\nfn test_ok() {\n    assert(true)\n}\n" }
+args = ["test", "--interpret", "--seed", "5", "{w}/t"]
+exit = 2
+output_has = ["--simulate"]
+
+[[case]]
+name = "test --seeds passes when every seed passes"
+polarity = "positive"
+files = { "t/x_test.wj" = "@test\nfn test_ok() {\n    assert_eq(2 * 2, 4)\n}\n" }
+args = ["test", "--interpret", "--simulate", "--seeds", "1..5", "{w}/t"]
+stdout_has = ["1 passed; 0 failed"]
+
+[[case]]
+name = "test --faults 0 never fails a call"
+polarity = "positive"
+files = { "t/x_test.wj" = "use std::fs\n\n@test\nfn test_w() {\n    assert(fs::write(\"o.txt\", \"abcd\").is_ok())\n}\n" }
+args = ["test", "--interpret", "--simulate", "--faults", "0", "{w}/t"]
+stdout_has = ["1 passed; 0 failed"]
+

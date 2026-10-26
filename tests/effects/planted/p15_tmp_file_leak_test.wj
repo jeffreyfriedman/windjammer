@@ -1,0 +1,23 @@
+// bug: the temporary file is only removed on the success path
+// faults: 0.15
+use std::fs
+
+fn process(input: string) -> bool {
+    match fs::write("work.tmp", input) {
+        Ok(_) => {}
+        Err(_) => return false
+    }
+    let text = match fs::read_to_string("work.tmp") {
+        Ok(t) => t,
+        Err(_) => return false
+    }
+    let _ = fs::remove_file("work.tmp")
+    text.len() > 0
+}
+
+@test
+fn no_temporary_file_is_left_behind() {
+    process("data")
+    process("more data")
+    assert(!fs::exists("work.tmp"))
+}

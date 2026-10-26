@@ -202,6 +202,19 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         replay: Option<PathBuf>,
 
+        /// Interpreted runs: run in the deterministic simulated world (virtual clock, seeded random numbers and
+        /// scheduler, in-memory files, no network); the run is a function of the program and `--seed` (ADR-0021)
+        #[arg(long, conflicts_with_all = ["record", "replay"])]
+        simulate: bool,
+
+        /// With --simulate: the seed of the world
+        #[arg(long, value_name = "N", default_value = "1", requires = "simulate")]
+        seed: u64,
+
+        /// With --simulate: probability (0 to 1) that a file or network call fails
+        #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
+        faults: f64,
+
         /// Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`)
         #[arg(long)]
         allow_network: bool,
@@ -306,6 +319,18 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// With --interpret: run each test in the deterministic simulated world (ADR-0021)
+        #[arg(long, requires = "interpret")]
+        simulate: bool,
+        /// With --simulate: the seed of the world
+        #[arg(long, value_name = "N", requires = "simulate", conflicts_with = "seeds")]
+        seed: Option<u64>,
+        /// With --simulate: try every seed in A..B (inclusive); a test fails with the first seed that fails it
+        #[arg(long, value_name = "A..B", requires = "simulate")]
+        seeds: Option<String>,
+        /// With --simulate: probability (0 to 1) that a file or network call fails
+        #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
+        faults: f64,
         /// Re-run the tests on every source change
         #[arg(long)]
         watch: bool,

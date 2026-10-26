@@ -624,6 +624,34 @@ id = "wj run --mock-http"
 id = "wj run --sched-seed"
 
 [[promise]]
+id = "wj run --simulate"
+statement = "Interpreted runs in the deterministic simulated world: virtual clock, seeded random numbers and scheduler, in-memory files, no network (ADR-0021)"
+
+[[promise]]
+id = "wj run --seed"
+statement = "With --simulate: the seed of the world; the run is a function of the program and the seed"
+
+[[promise]]
+id = "wj run --faults"
+statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
+
+[[promise]]
+id = "wj test --simulate"
+statement = "Run each interpreted test in the deterministic simulated world (ADR-0021)"
+
+[[promise]]
+id = "wj test --seed"
+statement = "With --simulate: the seed of the world"
+
+[[promise]]
+id = "wj test --seeds"
+statement = "With --simulate: try every seed in A..B; a test fails with the first failing seed and the command that reproduces it"
+
+[[promise]]
+id = "wj test --faults"
+statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
+
+[[promise]]
 id = "wj run --record"
 statement = "Interpreted runs write every effect (file, env, process and network results, stdin, real-clock readings) to a replayable log (ADR-0021)"
 
