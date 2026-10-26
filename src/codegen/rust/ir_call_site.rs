@@ -8895,6 +8895,12 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()") {
             return SafetyType::owned(BaseType::String);
         }
+        // A module `const NAME: string` is emitted `&'static str`: borrowed text whatever its WJ type
+        // says. This is the one place that decides it; every owned position (call argument, field,
+        // vec! element, let, return) then gets `.to_string()` from the coercion engine.
+        if self.expression_is_static_str_value(arg_expr) {
+            return SafetyType::borrowed(BaseType::String, Region::fresh(13));
+        }
         if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
             arg_expr,
         ) {
