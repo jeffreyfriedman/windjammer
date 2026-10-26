@@ -107,6 +107,9 @@ pub(super) fn method_call(
         }
         it.mark(loc);
         it.type_hint = hint.clone();
+        if method == "into" && hint.is_none() {
+            it.type_hint = it.take_expected(whole);
+        }
         match user {
             Some(f) => match cache.compiled(it, &f) {
                 // `call_user_method` -> `call_func_run` for a compiled method with a `self` receiver

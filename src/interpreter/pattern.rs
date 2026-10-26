@@ -21,6 +21,10 @@ impl Interpreter {
         }
         match en {
             Some("Self") | None => true,
+            Some(_) if !self.dup_types.is_empty() => {
+                let written = name.rsplit_once("::").map(|(head, _)| head).unwrap_or("");
+                self.written_type_is(written, &e.ty)
+            }
             Some(t) => {
                 *e.ty == *t
                     || self
@@ -163,7 +167,8 @@ impl Interpreter {
         if let Value::Struct(s) = v {
             let sn = name.rsplit("::").next().unwrap_or(name);
             let sn = if sn == "Self" { self.scope.self_ty.as_deref().unwrap_or(sn) } else { sn };
-            if &*s.name != sn {
+            let same = if self.dup_types.is_empty() || sn == "Self" { &*s.name == sn } else { self.written_type_is(name, &s.name) };
+            if !same {
                 return false;
             }
             return match binding {

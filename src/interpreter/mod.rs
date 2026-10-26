@@ -5,6 +5,7 @@
 mod analysis;
 pub mod builtins;
 pub mod caps;
+mod c_library;
 mod call;
 mod coerce;
 mod defaults;
@@ -16,6 +17,7 @@ mod eval_stmt;
 pub mod features;
 mod fasthash;
 mod format;
+mod from_impls;
 mod generics;
 mod heap;
 pub mod host_bridge;
@@ -39,6 +41,8 @@ pub mod runner;
 mod sched;
 mod scope;
 mod slicing;
+mod task_blocks;
+mod type_keys;
 mod u128ops;
 pub mod value;
 

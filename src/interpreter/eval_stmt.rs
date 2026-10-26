@@ -188,7 +188,7 @@ impl Interpreter {
                 self.bind_body_use(s, path, alias.as_deref())?;
                 Ok(Value::Unit)
             }
-            Statement::Thread { .. } | Statement::Async { .. } => Err(unsupported("`thread {}` / `async {}` blocks (ADR-0004: surface not settled; use `async fn` + `.await`)")),
+            Statement::Thread { body, .. } | Statement::Async { body, .. } => self.spawn_block(s, body),
         }
     }
 
