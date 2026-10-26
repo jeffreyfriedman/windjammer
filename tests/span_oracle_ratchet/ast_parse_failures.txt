@@ -25,12 +25,6 @@ tests/spec/closures/SPEC-CLOS-005.wj
 tests/spec/closures/SPEC-CLOS-006.wj
 tests/spec/closures/SPEC-CLOS-007.wj
 tests/spec/closures/SPEC-CLOS-008.wj
-tests/spec/effects/SPEC-EFF-021.wj
-tests/spec/effects/SPEC-EFF-022.wj
-tests/spec/effects/SPEC-EFF-023.wj
-tests/spec/effects/SPEC-EFF-024.wj
-tests/spec/effects/SPEC-EFF-025.wj
-tests/spec/effects/SPEC-EFF-026.wj
 tests/spec/expressions/SPEC-EXPR-017.wj
 tests/spec/grammar/SPEC-GRAM-007.wj
 tests/spec/guard-match/SPEC-MATCH-003.wj
