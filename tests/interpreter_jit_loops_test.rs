@@ -175,6 +175,14 @@ fn program(seed: u64) -> String {
         body += &stmt(&mut r, 0, iters, false);
         body.push('\n');
     }
+    // NaN appears in machine code (its `!=` is unordered): one program in three
+    if seed % 3 == 1 {
+        body += "if i % 50 == 0 { y = y * 0.0 / 0.0 }\nf = f || y != y\n";
+    }
+    // a literal too large for `i32` stored into the `i32` local stays a literal (`retag`): one in three
+    if seed % 3 == 2 {
+        body += "if i > 800 {\na = i * 3000000\na = a + 1\n}\n";
+    }
     // every third program has one edge of each kind in turn, so each kind is exercised
     if seed % 3 == 0 {
         body += &planted((seed / 3) % 7, iters - 1 - r.below(iters / 4));
