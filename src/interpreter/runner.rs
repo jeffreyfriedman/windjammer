@@ -70,6 +70,8 @@ pub struct RunOptions {
     pub replay: Option<PathBuf>,
     /// `--simulate` (with `--seed`, `--faults`): run in the seeded world instead of the live one.
     pub simulate: Option<super::effect_port::sim::SimConfig>,
+    /// Source positions of the journaled steps of `durable fn`s (`check::durable_sites::discover`).
+    pub durable_sites: Vec<(PathBuf, usize, usize)>,
     /// `--journal DIR`: where `durable fn` runs keep their step journals (default: in memory).
     pub journal: Option<PathBuf>,
     /// `--crash-after N[:mid]`: exit abruptly after the N-th journaled step (tests of crash recovery).
@@ -198,16 +200,16 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
 
 /// `durable fn`: find the journaled steps of the program and install the journal (ADR-0021 E4).
 fn setup_durable(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Result<(), String> {
-    use super::durable_rt::{discover_sites, DurableCfg};
+    use super::durable_rt::DurableCfg;
     let mut cfg = DurableCfg { dir: opts.journal.clone(), ..DurableCfg::default() };
     if let Some(c) = &opts.crash_after {
         let (n, mid) = DurableCfg::parse_crash(c)?;
         cfg.crash_after = Some(n);
         cfg.crash_mid = mid;
     }
-    let sites = discover_sites(entry)?;
-    if !sites.is_empty() || cfg.dir.is_some() {
-        it.enable_durable(sites, cfg);
+    let _ = entry;
+    if !opts.durable_sites.is_empty() || cfg.dir.is_some() {
+        it.enable_durable(opts.durable_sites.clone(), cfg);
     }
     Ok(())
 }
@@ -277,6 +279,8 @@ pub struct TestSpec {
     pub mods: Vec<String>,
     /// `Some(type)` for a receiver-less associated function `Type::name()`.
     pub assoc: Option<String>,
+    /// Journaled step positions of the file's `durable fn`s (empty without any).
+    pub durable_sites: Vec<(PathBuf, usize, usize)>,
 }
 
 /// Run the given tests (each against a fresh interpreter, files loaded once per test).
@@ -342,10 +346,8 @@ fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig
         })),
         Err(m) => return TestResult { file: spec.file, name: spec.display_name, passed: false, message: m },
     }
-    if let Ok(sites) = super::durable_rt::discover_sites(&spec.file) {
-        if !sites.is_empty() {
-            it.enable_durable(sites, Default::default());
-        }
+    if !spec.durable_sites.is_empty() {
+        it.enable_durable(spec.durable_sites.clone(), Default::default());
     }
     if let Some(cfg) = sim {
         let tmp = scratch.as_ref().map(|s| s.path().to_path_buf()).unwrap_or_else(std::env::temp_dir);

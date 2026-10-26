@@ -653,7 +653,7 @@ pub fn gate(program: &Program) -> Result<(), String> {
     }
     if !cfg!(feature = "unstable_arenas") {
         return Err("error[WJ0161]: `std::arena` is unstable (ADR-0025)\n  = help: build the compiler with \
-                    `--features unstable_arenas` to opt in"
+                    `--features unstable_arenas` to opt in; arena values that escape their arena (WJ0160) are rejected once it is on"
             .to_string());
     }
     let errors = check_program(program);

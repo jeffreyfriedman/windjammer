@@ -723,6 +723,8 @@ read back: abcd
 
 **SPEC-EFF-047** An effect that returns a live handle (`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded, replayed or simulated; the run stops at the call with an error that names it. (untestable: needs a process or a socket; acceptance test `tests/effect_replay_test.rs`)
 
+**SPEC-EFF-048** With `--journal DIR` a durable function keeps one journal file per run (function and argument digest). Calling it again resumes: a finished run returns its recorded result without running, and otherwise journaled steps return their recorded results without executing and the first missing step runs. A program that changed so that the next step is a different call is `WJ0049`. Delivery is at-least-once: a crash after performing a step and before journaling it runs the step again. (untestable: needs a crash and a second process; acceptance test `tests/effect_durable_test.rs`)
+
 ## Code mode
 
 **SPEC-EFF-032** [PLANNED ADR-0021] `wj mcp bind` generates one Windjammer function per tool of an MCP server, with typed parameters and results and the user-defined effect `mcp.<server>.<tool>`; a sandboxed run may call exactly the tools its grant lists. (untestable: generated from a live tool schema; acceptance test `tests/mcp_bind_test.rs`, stage E5)

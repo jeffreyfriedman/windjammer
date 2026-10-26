@@ -652,6 +652,14 @@ id = "wj test --faults"
 statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
 
 [[promise]]
+id = "wj run --journal"
+statement = "Interpreted runs keep the step journals of durable fn runs in a directory, so a crashed run resumes where it stopped (ADR-0021)"
+
+[[promise]]
+id = "wj run --crash-after"
+statement = "With --journal: exit abruptly after the N-th journaled step, to test crash recovery"
+
+[[promise]]
 id = "wj run --record"
 statement = "Interpreted runs write every effect (file, env, process and network results, stdin, real-clock readings) to a replayable log (ADR-0021)"
 

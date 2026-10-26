@@ -523,6 +523,20 @@ Differences from the design note above, and why:
 
 Kill criteria: none triggered. Replay stayed at 100% after routing the sources the audit found; the study found far more than half.
 
+### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
+
+Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
+
+| Gate | Result |
+|---|---|
+| Mutation study: 10 workflows x 6 injected non-determinisms (clock, random, changing file, environment, `HashMap` order, channel receive) are rejected by `wj check` or journaled | **Met: 60 of 60** (20 rejected: `HashMap` order WJ0048, channel WJ0047; 40 journaled: replaying a finished journal after the file and the environment changed returns the recorded result). The oracle can fail: the same mutants without a journal show the changed world |
+| Crash at every step boundary: final stdout and files equal the uninterrupted run | **Met: 96 crash points on the 10 workflows plus 134 on the replay corpus wrapped in a durable fn (38 programs; 3 more are rejected by the durable rules)**, 0 differences. Crashes in the window before journaling are tested separately: the resumed run completes, and the step runs again (at-least-once), shown by `a_crash_between_performing_and_journaling_runs_the_step_again` |
+| SPEC-EFF-021 to 026 | **Met** |
+| Cost: file-backed journal at most 2x per step over in-memory | **Provisional**: about 1.0x to 1.7x on 3000 steps, at load 100; re-measure on a quiet machine (`bench/effects/durable.wj`, `--journal DIR` against none) |
+| Escape hatches: at most 20% of workflows need one | **Met**: 0 of 10 (the rules accepted ordinary code; the only edits were to the `HashMap` and channel mutants, which are meant to be rejected) |
+
+Findings from building it: (1) resumption needs the random stream and the virtual clock restored per step, not per process: a resumed run that simply skipped steps drew different numbers than an uninterrupted one; the per-step re-seeding and the journaled clock fix that (the first crash-everywhere run failed on exactly this for the clock, and on `Instant` not being journalable). (2) The compiled engine called durable functions without going through the interpreter's call entry, so the hook sits at the walker's entry and durable functions are excluded from compilation. (3) Calls inside string interpolation (`"${time::now()}"`) are not seen by the resolver, so neither the effect facts nor the step pass see them; the run-time gate still does. This is a hole in the static claim, recorded for the resolver owner.
+
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).
 - Escape suite: at least 150 cases by E5, 0 escapes (CI gate).

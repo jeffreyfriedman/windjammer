@@ -3,6 +3,7 @@
 
 mod cache;
 mod dep_sources;
+pub mod durable_sites;
 pub mod effects;
 pub mod files;
 mod fix;

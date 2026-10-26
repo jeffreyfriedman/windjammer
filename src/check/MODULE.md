@@ -13,7 +13,7 @@ In: a `.wj` file or project directory. Out: `Checked { report, sources }` in the
 - `--fix` applies only machine-applicable fixes and refuses results that no longer parse.
 
 ## Owns
-Check orchestration, effect findings (`effects.rs`: WJ0040-WJ0044 from `ir::effect_facts`, `wj.toml [capabilities]`/`[policy]`, per-dependency grants via `dep_sources.rs`), file discovery, source locating (`locate.rs`), semantic checks (`semantic/`), result cache, watch loop, fix application.
+Check orchestration, effect findings (`effects.rs`: WJ0040-WJ0048 from `ir::effect_facts`, `durable_sites.rs`: journaled step positions for the interpreter, `wj.toml [capabilities]`/`[policy]`, per-dependency grants via `dep_sources.rs`), file discovery, source locating (`locate.rs`), semantic checks (`semantic/`), result cache, watch loop, fix application.
 
 ## Never decides
 Diagnostic wording for rustc errors (see `diagnostics/rustc_text.rs`); codegen.
