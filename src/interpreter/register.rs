@@ -144,7 +144,7 @@ impl Interpreter {
                         .collect::<Vec<VariantDef>>();
                     let rc_variants = variants.iter().map(|v| Rc::from(v.name)).collect();
                     let key = self.declared_type_key(module, &decl.name);
-                    self.enums.insert(key, EnumDef { variants, rc_name: Rc::from(decl.name.as_str()), rc_variants });
+                    self.enums.insert(key.clone(), EnumDef { variants, rc_name: Rc::from(key.as_str()), rc_variants });
                 }
                 Item::Trait { decl, .. } => {
                     self.traits.insert(

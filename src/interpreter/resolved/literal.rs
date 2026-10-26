@@ -33,7 +33,9 @@ struct Plan {
 }
 
 fn plan(it: &Interpreter, name: &str, fields: &[(String, E)]) -> Option<Plan> {
-    if name.contains("::") || matches!(name, "Self" | "RangeFrom") || it.type_aliases.contains_key(name) {
+    // a program that declares one type name in several modules resolves written names by module
+    // (`type_keys.rs`): the walker's routine does that
+    if name.contains("::") || matches!(name, "Self" | "RangeFrom") || it.type_aliases.contains_key(name) || !it.dup_types.is_empty() {
         return None;
     }
     let d = it.structs.get(name)?;
