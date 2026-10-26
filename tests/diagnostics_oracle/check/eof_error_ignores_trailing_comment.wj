@@ -1,0 +1,4 @@
+fn main() {
+    println("hi")
+//~@17+1 ERROR WJ0011 expected `}`, found end
+// a trailing comment after the last token must not move the diagnostic
