@@ -426,7 +426,7 @@ impl Interpreter {
                         i
                     )));
                 }
-                Ok(v[*i as usize].clone())
+                Ok(v.get_value(*i as usize).expect("in bounds"))
             }
             (Value::Vec(v), Value::Range(r, _)) => {
                 let (a, b) = **r;

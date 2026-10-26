@@ -29,8 +29,8 @@ impl Walker {
     pub(crate) fn walk(&mut self, v: &Value, f: &mut dyn FnMut(&Value)) {
         f(v);
         match v {
-            Value::Vec(items) | Value::Tuple(items) => {
-                for x in items.iter() {
+            Value::Vec(_) | Value::Tuple(_) => {
+                for x in v.items().iter() {
                     self.walk(x, f);
                 }
             }
@@ -215,8 +215,8 @@ impl Interpreter {
                     Self::glue_order_in(x, out, seen, shared);
                 }
             }
-            Value::Vec(xs) | Value::Tuple(xs) => {
-                for x in xs.iter() {
+            Value::Vec(_) | Value::Tuple(_) => {
+                for x in v.items().iter() {
                     Self::glue_order_in(x, out, seen, shared);
                 }
             }
