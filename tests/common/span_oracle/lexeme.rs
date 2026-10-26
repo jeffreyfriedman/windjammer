@@ -42,12 +42,10 @@ pub fn check_lexeme(tok: &Token, lexeme: &str, at_eof: bool) -> Result<(), Strin
                     .then_some(())
                     .ok_or_else(|| format!("lexeme value {v} != token value {n}")),
                 Some(s) => Err(format!("suffix {s:?} != token suffix {suffix:?}")),
-                // Unsuffixed hex above i64::MAX is typed u64 by the lexer.
-                None if lexeme.starts_with("0x") || lexeme.starts_with("0X") => {
-                    (suffix == "u64" && v as u64 as i64 == *n)
-                        .then_some(())
-                        .ok_or_else(|| "hex literal without suffix must be u64 bits".to_string())
-                }
+                // An unsuffixed literal above i64::MAX (any radix) is typed u64 by the lexer.
+                None if v > i64::MAX as i128 => (suffix == "u64" && v as u64 as i64 == *n)
+                    .then_some(())
+                    .ok_or_else(|| "literal above i64::MAX must be u64 bits".to_string()),
                 None => Err("suffixed token but lexeme has no suffix".into()),
             }
         }

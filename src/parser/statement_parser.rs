@@ -458,6 +458,15 @@ impl Parser {
     }
 
     pub(crate) fn parse_if(&mut self) -> Result<&'static Statement<'static>, String> {
+        // An entry of its own: `else if` recurses here directly, and the nested `if` must start at
+        // its own `if` token, not at the outer one.
+        self.span_enter();
+        let r = self.parse_if_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_if_inner(&mut self) -> Result<&'static Statement<'static>, String> {
         self.expect(Token::If)?;
 
         // Check for `if let` pattern matching

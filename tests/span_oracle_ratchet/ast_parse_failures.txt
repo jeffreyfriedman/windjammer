@@ -1,19 +1,4 @@
 # Known violations. May only shrink: fix the code, then delete the line.
-examples/applications/components/counter.wj
-examples/async_patterns.wj
-examples/game_editor/main.wj
-examples/http_server/main.wj
-examples/macros.wj
-examples/taskflow/windjammer/src/db/projects.wj
-examples/taskflow/windjammer/src/db/tasks.wj
-examples/taskflow/windjammer/src/db/users.wj
-examples/taskflow/windjammer/src/handlers/auth.wj
-examples/taskflow/windjammer/src/main.wj
-examples/taskflow/windjammer/src/middleware/auth.wj
-examples/taskflow/windjammer/src/middleware/rate_limit.wj
-examples/taskflow/windjammer/src/utils/filtering.wj
-examples/testing_examples.wj
-examples/wschat/src/room.wj
 std/compute/mod.wj
 std/dialog/mod.wj
 std/fs/mod.wj

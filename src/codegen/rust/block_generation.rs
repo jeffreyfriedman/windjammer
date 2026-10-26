@@ -10,7 +10,7 @@
 
 use crate::parser::*;
 
-use super::{ast_utilities, codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
+use super::{ast_utilities, pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
