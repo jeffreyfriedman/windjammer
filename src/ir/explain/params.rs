@@ -340,8 +340,10 @@ pub fn local_reports(
 pub fn clone_reports(
     fc: &FunctionConstraints,
     af: &AnalyzedFunction<'_>,
+    ir_fn: &crate::ir::IrFunction,
     emitted: Option<&EmittedFn>,
 ) -> Vec<CloneReport> {
+    let user_clones = crate::ir::liveness::user_clones(&af.decl.body);
     let mut names: Vec<String> = fc.var_map.params.keys().cloned().collect();
     names.extend(fc.var_map.locals.keys().cloned());
     names.sort();
@@ -371,7 +373,24 @@ pub fn clone_reports(
                 }
             }
         }
-        let emitted_clones = emitted.and_then(|e| e.clones.get(&name)).copied().unwrap_or(0);
+        // Per-site solver facts (C6): a returned field of a borrowed parameter is cloned.
+        for root in ir_fn.clone_sites.values().filter(|r| **r == name) {
+            reasons.push(Reason {
+                rule: "CLONE-BORROWED-TO-OWNED".into(),
+                detail: format!("a returned field of borrowed `{}` is cloned (RET-OWNED)", root),
+                line: None,
+                col: None,
+                binding: true,
+                dropped: false,
+            });
+        }
+        // A clone the user wrote is the user's decision, not the compiler's.
+        let written = user_clones.get(&name).copied().unwrap_or(0);
+        let emitted_clones = emitted
+            .and_then(|e| e.clones.get(&name))
+            .copied()
+            .unwrap_or(0)
+            .saturating_sub(written);
         if reasons.is_empty() && emitted_clones == 0 {
             continue;
         }

@@ -18,6 +18,7 @@
 
 pub mod annotations;
 pub mod capability_profiles;
+pub mod clone_facts;
 pub mod coercion;
 pub mod constraint_gen;
 pub mod constraints;

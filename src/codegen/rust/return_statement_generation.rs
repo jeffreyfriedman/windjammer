@@ -131,6 +131,7 @@ impl<'ast> CodeGenerator<'ast> {
             // `return self.field` on borrowed `self` when the return type is owned (not `&T`).
             // After index/`&` fixes above so we emit `( &expr ).clone()` not `&expr.clone()`.
             if super::self_analysis::is_self_field_chain(e)
+                && self.returned_field_clone(e).is_none()
                 && (self.inferred_mut_borrowed_params.contains("self")
                     || self.inferred_borrowed_params.contains("self"))
             {
