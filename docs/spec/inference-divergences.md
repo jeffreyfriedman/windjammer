@@ -61,7 +61,7 @@ is dead, and arguments inside `println` interpolation are cloned (`field_str(cfg
 `D-CLONE-LASTUSE` per call argument (rule `CALL-CLONE`, `used_later=false`). Not S1; costs allocations and hides
 that ownership flowed. Cause: `auto_clone.rs` decides per statement index and treats a use after a `&mut` call or inside
 a macro conservatively.
-**C6 (2026-10-26): fixed for bare owned bindings.** The liveness fact (`ir::liveness::last_use_keys`, `dying_in`) now
+**C6 (2026-10-26): fixed for bare owned bindings.** The liveness fact (`ir::liveness::last_moves`, `dying_in`) now
 vetoes every reuse-clone query in the Rust backend at a last use (`codegen/rust/move_at_last_use.rs`): `wrap(b, ..)`,
 `self.touch(k)` and the corpus `prog_text_wrap`/`prog_lru_cache` goldens move. Corpus
 `tests/inference_corpus/move_at_last_use.wj` (rustc + interpreter oracles); mutation check: an always-move liveness is

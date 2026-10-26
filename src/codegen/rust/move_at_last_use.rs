@@ -2,7 +2,7 @@
 //! moves it; no clone is emitted there.
 //!
 //! The decision is the semantic layer's liveness fact (`ir::liveness::last_uses`, loaded per
-//! function into `CodeGenerator::last_use_keys`; `ir::liveness::dying_in` per statement). This
+//! function into `CodeGenerator::last_use_nodes`; `ir::liveness::dying_in` per statement). This
 //! module only hands the fact to the clone decision: while a statement is emitted, the bindings
 //! whose last use it holds are put in `AutoCloneAnalysis::dying_here`, which every reuse-clone
 //! query (`needs_clone`, `needs_clone_anywhere`) consults first. The one backend-local input is
@@ -34,35 +34,43 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// The binding's type is known and not Copy (a `&T` binding is Copy).
     pub(in crate::codegen::rust) fn binding_known_non_copy(&self, name: &str) -> bool {
-        let ty = self.current_function_params.iter().find(|p| p.name == name).map(|p| &p.type_);
+        let ty = self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| &p.type_);
         ty.or_else(|| self.local_var_types.get(name))
-            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && !self.is_type_copy(t))
+            .is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && !self.is_type_copy(t)
+            })
     }
 
     /// CLONE-USE-AFTER-MOVE: `name` is read after the statement being emitted (no fact: assume so).
     pub(in crate::codegen::rust) fn read_after_current_statement(&self, name: &str) -> bool {
-        match self.read_after.1.last().copied().flatten() {
-            Some(k) => self.read_after.0.get(&k).is_none_or(|names| names.contains(name)),
+        match self.read_after.1.last() {
+            Some(stmt) => self.read_after.0.get(stmt).is_none_or(|names| names.contains(name)),
             None => true,
         }
     }
 
     /// Publish the bindings that die in `stmt`; returns the enclosing statement's set.
-    pub(in crate::codegen::rust) fn enter_statement_liveness(&mut self, stmt: &Statement<'_>) -> HashSet<String> {
-        self.read_after.1.push(stmt.location().as_ref().map(|l| (l.line, l.column)));
-        if crate::debug_env::enabled("WJ_DEBUG_LIVENESS") {
-            eprintln!("liveness {:?}: {} last-use keys, analysis {}", self.current_function_name, self.last_use_keys.len(), self.auto_clone_analysis.is_some());
-        }
-        let dying: HashSet<String> = if self.auto_clone_analysis.is_some() && !self.last_use_keys.is_empty() {
-            let all = crate::ir::liveness::dying_in(stmt, &self.last_use_keys);
-            if crate::debug_env::enabled("WJ_DEBUG_LIVENESS") {
-                let owned: Vec<_> = all.iter().filter(|n| self.binding_emits_owned_value(n)).collect();
-                eprintln!("liveness {:?}: dying {:?}, owned {:?}", self.current_function_name, all, owned);
-            }
-            all.into_iter().filter(|n| self.binding_emits_owned_value(n)).collect()
+    pub(in crate::codegen::rust) fn enter_statement_liveness(
+        &mut self,
+        stmt: &Statement<'_>,
+    ) -> HashSet<String> {
+        self.read_after.1.push(stmt as *const Statement<'_> as *const () as usize);
+        let dying: HashSet<String> = if self.auto_clone_analysis.is_some() {
+            crate::ir::liveness::dying_in(stmt, &self.last_use_nodes)
+                .into_iter()
+                .filter(|n| self.binding_emits_owned_value(n))
+                .collect()
         } else {
             HashSet::new()
         };
+        if crate::debug_env::enabled("WJ_DEBUG_LIVENESS") {
+            eprintln!("liveness {:?}: dying {:?}", self.current_function_name, dying);
+        }
         match self.auto_clone_analysis.as_mut() {
             Some(a) => std::mem::replace(&mut a.dying_here, dying),
             None => HashSet::new(),
