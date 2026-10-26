@@ -412,7 +412,7 @@ exit = 1
 name = "mcp bind --stdio asks a live server for its tools"
 polarity = "positive"
 files = { "srv.sh" = "read l\necho '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"serverInfo\":{\"name\":\"s\",\"version\":\"1\"}}}'\nread n\nread l\necho '{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{\"name\":\"ping\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}}]}}'\n" }
-args = ["mcp", "bind", "demo", "--stdio", "sh {w}/srv.sh"]
+args = ["mcp", "bind", "demo", "--stdio", "/bin/sh {w}/srv.sh"]
 stdout_has = ["pub fn ping()"]
 
 [[case]]
