@@ -39,6 +39,9 @@ pub struct CompilerConfig {
     /// Rust statement installing the program's capability grant at the start of `main` (ADR-0021: only when some
     /// sink call cannot be proven inside the grant at compile time; see `ir::effect_facts::install`).
     pub capability_install: Option<String>,
+    /// Gate self-test only (`WJ_LIVENESS_MUTATION=always-move`): a deliberately wrong liveness
+    /// fact that marks every read a last use, so the convergence gates can prove they catch it.
+    pub liveness_mutation_always_move: bool,
 }
 
 impl Default for CompilerConfig {
@@ -57,6 +60,7 @@ impl Default for CompilerConfig {
             game_path: None,
             auto_arena: false,
             capability_install: None,
+            liveness_mutation_always_move: false,
         }
     }
 }
@@ -93,6 +97,7 @@ impl CompilerConfig {
             game_path: path("game-host_PATH"),
             auto_arena: on("WJ_AUTO_ARENA"),
             capability_install: None,
+            liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
         }
     }
 

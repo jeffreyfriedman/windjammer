@@ -47,8 +47,6 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
     pub(crate) bound_aliases: std::collections::HashMap<String, Vec<String>>, // bound Name = Trait + Trait
-    // PHASE 2 OPTIMIZATION: Track variables that can avoid cloning
-    pub(crate) clone_optimizations: std::collections::HashSet<String>, // Variables that don't need .clone()
     // PHASE 3 OPTIMIZATION: Track struct mapping optimizations
     pub(crate) struct_mapping_hints:
         std::collections::HashMap<String, crate::analyzer::MappingStrategy>, // Struct name -> strategy
@@ -396,6 +394,10 @@ pub struct CodeGenerator<'ast> {
     /// Per-function IR data, populated when the IR pipeline runs alongside legacy codegen.
     /// When set and a cutover flag is enabled, the corresponding codegen reads from here.
     pub(crate) current_ir_function: Option<crate::ir::IrFunction>,
+    /// MOVE-LAST-USE fact (`ir::liveness::last_moves`) for the function being emitted.
+    pub(crate) last_use_nodes: std::collections::BTreeSet<usize>,
+    /// CLONE-USE-AFTER-MOVE fact (`ir::liveness::read_after`) and the statement being emitted.
+    pub(crate) read_after: (std::collections::BTreeMap<usize, std::collections::BTreeSet<String>>, Vec<usize>),
     /// Full IR module (all functions), set when cutover is active. Functions are looked up
     /// by name when codegen begins processing each AnalyzedFunction.
     pub(crate) ir_module_functions: Vec<crate::ir::IrFunction>,
@@ -657,7 +659,6 @@ impl<'ast> CodeGenerator<'ast> {
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
             bound_aliases: std::collections::HashMap::new(),
-            clone_optimizations: std::collections::HashSet::new(),
             struct_mapping_hints: std::collections::HashMap::new(),
             string_capacity_hints: std::collections::HashMap::new(),
             assignment_optimizations: std::collections::HashMap::new(),
@@ -797,6 +798,8 @@ impl<'ast> CodeGenerator<'ast> {
             ir_cutover: IrCutoverConfig::production(),
             config: crate::compiler_config::CompilerConfig::default(),
             current_ir_function: None,
+            last_use_nodes: std::collections::BTreeSet::new(),
+            read_after: Default::default(),
             ir_module_functions: Vec::new(),
             ir_module: None,
             boundary_signature_errors: std::cell::RefCell::new(Vec::new()),
@@ -3005,45 +3008,6 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// True when `stmt` passes `param_name` to a callee formal that emits owned (not `&T`).
-    pub(in crate::codegen::rust) fn statement_passes_param_to_owned_formal_callee(
-        &self,
-        stmt: &crate::parser::Statement,
-        param_name: &str,
-    ) -> bool {
-        use crate::parser::{Expression, Statement};
-        let check_expr = |expr: &Expression| -> bool {
-            let Expression::Call {
-                function,
-                arguments,
-                ..
-            } = expr
-            else {
-                return false;
-            };
-            let Some(callee_name) = (match &**function {
-                Expression::Identifier { name, .. } => Some(name.as_str()),
-                _ => None,
-            }) else {
-                return false;
-            };
-            for (i, (_, arg)) in arguments.iter().enumerate() {
-                if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                    && self.callee_arg_emits_owned_contract(callee_name, i)
-                {
-                    return true;
-                }
-            }
-            false
-        };
-        match stmt {
-            Statement::Let { value, .. } => check_expr(value),
-            Statement::Expression { expr, .. } => check_expr(expr),
-            Statement::Assignment { value, .. } => check_expr(value),
-            _ => false,
-        }
-    }
-
     /// Signature-driven: callee arg emits owned in Rust (global registry refresh wins).
     pub(in crate::codegen::rust) fn callee_arg_emits_owned_contract(
         &self,
@@ -3219,32 +3183,13 @@ impl<'ast> CodeGenerator<'ast> {
             && self.param_has_later_owned_formal_pass(param_name, self.current_statement_idx)
     }
 
-    /// True when a local binding is used again after the current statement (auto-clone or scan).
+    /// True when a local binding is read again after the current statement (liveness fact).
     pub(in crate::codegen::rust) fn local_binding_reused_after_current_statement(
         &self,
         name: &str,
     ) -> bool {
         // `map = f(map)` / tuple writeback moves then rebinds — not multi-use.
-        if self.current_stmt_restores_binding_after_move(name) {
-            return false;
-        }
-        if self
-            .auto_clone_analysis
-            .as_ref()
-            .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some())
-        {
-            return true;
-        }
-        // `current_block_local_idx` is the index within `current_function_body`;
-        // `current_statement_idx` / auto_clone_counter can drift across nested blocks.
-        let start = self.current_block_local_idx.saturating_add(1);
-        let later: Vec<&crate::parser::Statement> = self
-            .current_function_body
-            .iter()
-            .skip(start)
-            .copied()
-            .collect();
-        !later.is_empty() && Self::variable_used_in_statements(&later, name)
+        !self.current_stmt_restores_binding_after_move(name) && self.read_after_current_statement(name)
     }
 
     /// Auto-clone / signature-driven reuse must survive post-IR borrow reapply and peel passes.
@@ -3296,24 +3241,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
-        let body: Vec<&crate::parser::Statement> =
-            self.current_function_body.iter().copied().collect();
-        if crate::auto_clone::AutoCloneAnalysis::stmt_restores_binding_after_move(
-            &body,
-            param_name,
-            from_stmt_idx,
-        ) {
-            return false;
-        }
-        for (idx, stmt) in self.current_function_body.iter().enumerate() {
-            if idx <= from_stmt_idx {
-                continue;
-            }
-            if self.statement_passes_param_to_owned_formal_callee(stmt, param_name) {
-                return true;
-            }
-        }
-        false
+        self.read_after_current_statement(param_name)
     }
 
     /// Rust function calls do not auto-coerce owned non-Copy bindings to `&T` — emit `&binding`
