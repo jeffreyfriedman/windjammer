@@ -6,11 +6,11 @@ use std::random
 use std::sync
 use std::time
 fn load() -> string {
-    fs::write("input.csv", "a,1\nb,2\nc,3\n") ?? ()
-    fs::read_to_string("input.csv") ?? ""
+    fs::write("input.csv", "a,1\nb,2\nc,3\n").unwrap_or(())
+    fs::read_to_string("input.csv").unwrap_or("")
 }
 fn save(text: string) -> int {
-    fs::write("output.csv", text) ?? ()
+    fs::write("output.csv", text).unwrap_or(())
     text.len()
 }
 durable fn run() -> string {

@@ -66,7 +66,7 @@ pub fn execute(req: &Request) -> Response {
             Err(e) => return Response { exit: 1, diagnostics: e.to_string(), ..Response::default() },
         };
         // lints (W####) are advice; every other error stops the program before anything runs
-        let blocking: Vec<_> = checked.report.diagnostics.iter().filter(|d| d.severity == crate::diagnostics::Severity::Error && !d.code.starts_with('W')).collect();
+        let blocking: Vec<_> = checked.report.diagnostics.iter().filter(|d| d.severity == crate::diagnostics::Severity::Error && !(d.code.len() == 5 && d.code.starts_with('W'))).collect();
         if !blocking.is_empty() {
             let source_of = |f: &str| checked.sources.get(f).cloned();
             let text = blocking.iter().map(|d| crate::diagnostics::render::render(d, &source_of)).collect::<Vec<_>>().join("\n");

@@ -4,7 +4,7 @@
 // expect-error: WJ0040: effect `process` is not granted
 use std::process
 fn listing() -> string {
-    "ls says ${process::run("ls") ?? ""}"
+    "ls says ${process::run("ls").unwrap_or("")}"
 }
 fn main() {
     println(listing())
