@@ -14,7 +14,7 @@ fn new(cap: i64) -> Lru {
 }
 #[inline]
 fn touch(&mut self, k: String) {
-        self.order.retain(move |x| *x != k);
+        self.order.retain(|x| *x != k);
         self.order.push(k);
 }
 #[inline]

@@ -562,6 +562,8 @@ fn corpus_last_use_moves_and_earlier_uses_clone() {
     assert!(rust.contains("wrap(b,") && rust.contains("self.touch(k)"), "{rust}");
     // CLONE-LOOP: a binding declared outside the loop is cloned at a move inside it.
     assert!(rust.contains("take(looped.clone())"), "{rust}");
+    // CLOS-MOVE-CAPTURE: `k` is read after the `retain` closure, so the closure borrows it.
+    assert!(rust.contains("retain(|x|"), "{rust}");
 }
 
 /// Mutation check: a deliberately wrong liveness (every read is a last use, so everything

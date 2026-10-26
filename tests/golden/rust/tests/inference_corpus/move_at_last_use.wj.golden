@@ -14,6 +14,7 @@ struct Lru {
 impl Lru {
 #[inline]
 fn touch(&mut self, k: String) {
+        self.order.retain(|x| *x != k);
         self.order.push(k);
 }
 #[inline]
