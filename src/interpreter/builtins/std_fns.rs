@@ -180,7 +180,8 @@ pub fn register(r: &mut Registry) {
     r.func("env::args", |it, _| {
         let mut v = vec![Value::str("wj-interpreted")];
         v.extend(it.args.iter().cloned().map(Value::str));
-        Ok(new_iter(v))
+        // a Vec like the compiled runtime (`windjammer_runtime::env::args() -> Vec<String>`): indexable, `.len()`
+        Ok(Value::vec(v))
     });
     r.func("env::var", |_, a| {
         let n = arg_str(&a, 0, "env::var")?;

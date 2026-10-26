@@ -232,3 +232,22 @@ fn startup_is_fast_enough_for_a_dev_loop() {
     assert!(o.status.success());
     assert!(start.elapsed() < std::time::Duration::from_secs(5), "took {:?}", start.elapsed());
 }
+
+/// A script defines its own flags: everything after the script path reaches the program, including a first
+/// argument that starts with `--` (the program's own `--name value` flags), and `env::args()` is indexable.
+#[test]
+fn run_passes_program_flags_after_the_path_and_args_is_a_vec() {
+    let d = TempDir::new().unwrap();
+    write(
+        d.path(),
+        "argv.wj",
+        "use std::env\n\nfn main() {\n    let args = env.args()\n    println(\"${args.len()} ${args[1]} ${args[2]} ${args[3]}\")\n}\n",
+    );
+    let o = wj(&["run", "--interpret", "argv.wj", "--name", "value", "positional"], d.path());
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "4 --name value positional\n");
+    // wj's own flags before the path still belong to wj
+    let o = wj(&["run", "argv.wj", "--interpret", "a", "b", "c"], d.path());
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "4 a b c\n");
+}

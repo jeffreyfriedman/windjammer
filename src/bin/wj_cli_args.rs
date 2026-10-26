@@ -127,8 +127,8 @@ pub enum Commands {
         #[arg(value_name = "PATH")]
         path: Option<PathBuf>,
 
-        /// Arguments to pass to the program
-        #[arg(trailing_var_arg = true)]
+        /// Arguments to pass to the program (flags the program defines, such as `--wj`, pass through after the path)
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
 
         /// Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)
