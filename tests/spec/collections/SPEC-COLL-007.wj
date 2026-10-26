@@ -1,0 +1,9 @@
+// spec: SPEC-COLL-007
+// expect: 5 0 3
+// expect: 2 11 22
+fn main() {
+    let v = [1, 2, 3].intersperse(0)
+    println("${v.len()} ${v[1]} ${v[4]}")
+    let z = [1, 2, 3].zip_with([10, 20], |a, b| a + b)
+    println("${z.len()} ${z[0]} ${z[1]}")
+}

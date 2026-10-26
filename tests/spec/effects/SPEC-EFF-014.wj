@@ -1,0 +1,10 @@
+// spec: SPEC-EFF-014
+// mode: check-error
+// manifest: [capabilities]
+// manifest: fs.read = ["./config/**"]
+// expect-error: main -> load -> fs::read_to_string
+use std::fs
+fn load() -> string { fs::read_to_string("/etc/passwd").unwrap_or("") }
+fn main() {
+    println(load())
+}

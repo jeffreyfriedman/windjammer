@@ -37,7 +37,10 @@ pub struct FuncDef {
 }
 
 pub struct StructDef {
-    pub fields: Vec<(&'static str, Type)>,
+    pub fields: Rc<[(&'static str, Type)]>,
+    /// The type and field names, interned: every instance built from a literal shares them.
+    pub rc_name: Rc<str>,
+    pub rc_fields: Rc<[Rc<str>]>,
     pub tuple: bool,
     pub copy: bool,
 }
@@ -69,6 +72,9 @@ pub enum Import {
     Item(usize, String),
     /// A builtin (native) std path such as `std::fs`.
     Std(String),
+    /// A name that is both a module and a value (`pub use version::version` next to `mod version`):
+    /// the module for paths (`version::f`), the item `name` of `module` for a bare use.
+    Both(usize, usize, String),
 }
 
 pub struct Module {
@@ -80,6 +86,10 @@ pub struct Module {
     pub children: HashMap<String, usize>,
     pub consts: HashMap<String, &'static crate::parser::Expression<'static>>,
     pub const_types: HashMap<String, &'static Type>,
+    /// Names a function-body `use` added on top of this module (lookups fall through to `fallback`).
+    pub fallback: Option<usize>,
+    /// Standard-library modules glob-imported here (`use std::log::*`), as `std::log`.
+    pub std_globs: Vec<String>,
 }
 
 pub struct Scope {
@@ -108,6 +118,8 @@ impl Scope {
 }
 
 pub struct Interpreter {
+    // SAFETY note for `retained`: it is declared last, so it is dropped after every field that holds `&'static` AST
+    // references (fields drop in declaration order); see `retain_program`.
     pub(crate) modules: Vec<Module>,
     pub(crate) structs: HashMap<String, StructDef>,
     pub(crate) enums: HashMap<String, EnumDef>,
@@ -119,12 +131,48 @@ pub struct Interpreter {
     pub(crate) type_aliases: HashMap<String, Type>,
     pub(crate) globals: HashMap<(usize, String), Slot>,
     pub(crate) scope: Scope,
+    /// Call-site cache: call expression address -> the module function it resolved to.
+    pub(crate) call_cache: HashMap<usize, Rc<FuncDef>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Recycled variable vectors of finished frames.
+    pub(crate) vec_pool: Vec<Vec<(&'static str, Slot)>>,
+    /// `--engine=resolved`: run compiled functions where possible (see `resolved/`).
+    pub(crate) engine_resolved: bool,
+    /// Compiled forms by `FuncDef` address (`None` = not compilable).
+    /// The `FuncDef` is kept alive with its entry so its address is never reused (hot reload replaces bodies).
+    pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Compiled closure bodies by body address (`None` = run in the walker).
+    pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Locals of active compiled calls (one window per call).
+    pub(crate) rstack: Vec<Value>,
+    /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
+    pub(crate) jit_enabled: bool,
+    /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
+    #[cfg(feature = "jit")]
+    pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
+    /// `std::subprocess` children by handle id.
+    pub(crate) subprocesses: HashMap<u64, super::builtins::std_proc::Session>,
+    pub(crate) next_subprocess: u64,
+    /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
+    pub(crate) sched: super::sched::Sched,
+    pub(crate) epoch: std::time::Instant,
+    /// Global random generator (`std::random`), seeded from entropy unless time is deterministic.
+    pub(crate) rng: Option<rand::rngs::StdRng>,
+    /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
+    pub(crate) log_level: Option<i32>,
+    /// How `std::http` client calls are answered (default: refuse).
+    pub(crate) http: super::builtins::std_http::HttpMode,
+    /// Capability gate for sink calls (`caps.rs`); `None` = unrestricted (library and test use).
+    pub(crate) caps: Option<super::caps::CapGate>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
     pub(crate) drop_types: HashSet<String>,
     pub(crate) next_uid: u32,
     pub(crate) dropped: HashSet<u32>,
+    /// Ownership moves out of variables (`moves.rs`).
+    pub(crate) moves: super::moves::Moves,
+    /// `--hash-seed`: permutation of HashMap/HashSet iteration order (0 = key order).
+    pub hash_seed: u64,
     /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
     pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
     pub(crate) cur: Option<&'static Location>,
@@ -146,6 +194,21 @@ pub struct Interpreter {
     pub(crate) expected: Option<(usize, Type)>,
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
+    /// `(module, address of the `use` statement)` -> the module that adds that function-body import.
+    /// Names of the dependency crates mounted as top-level modules (reachable by name from any module; package attribution for grants).
+    pub(crate) dep_crates: HashSet<String>,
+    pub(crate) body_use_modules: HashMap<(usize, usize), usize>,
+    /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items
+    /// are then bound after every module is registered, instead of one at a time.
+    pub(crate) project_loading: bool,
+    /// Bridge library for `extern fn` (ADR-0020), when the project provides Rust code.
+    pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
+    /// `wj run --hot`: pending file edits applied at function entry (`hot.rs`).
+    pub(crate) hot: Option<Box<super::hot::HotState>>,
+    /// Programs loaded into this interpreter (files, REPL inputs, hot-reload revisions). Every `&'static` AST node the
+    /// definitions above point at lives in one of these (or in the arenas its `Program` owns), so they are kept for the
+    /// interpreter's lifetime and freed when it is dropped, instead of being leaked for the life of the process.
+    pub(crate) retained: Vec<Box<Program<'static>>>,
 }
 
 impl Default for Interpreter {
@@ -168,10 +231,29 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             globals: HashMap::new(),
             scope: Scope::new(0),
+            call_cache: HashMap::default(),
+            vec_pool: Vec::new(),
+            engine_resolved: false,
+            compiled: HashMap::default(),
+            compiled_closures: HashMap::default(),
+            rstack: Vec::new(),
+            jit_enabled: true,
+            #[cfg(feature = "jit")]
+            jit: None,
+            subprocesses: HashMap::new(),
+            next_subprocess: 0,
+            sched: super::sched::Sched::new(),
+            epoch: std::time::Instant::now(),
+            rng: None,
+            log_level: None,
+            http: Default::default(),
+            caps: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
             dropped: HashSet::new(),
+            moves: Default::default(),
+            hash_seed: 0,
             backtrace: Vec::new(),
             cur: None,
             output: Vec::new(),
@@ -185,10 +267,19 @@ impl Interpreter {
             closure_counter: 0,
             mutating_analysis: HashSet::new(),
             type_hint: None,
+            retained: Vec::new(),
             expected: None,
             missing_modules: HashSet::new(),
+            dep_crates: HashSet::new(),
+            body_use_modules: HashMap::new(),
+            project_loading: false,
+            host: None,
+            hot: None,
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
+        if std::thread::current().name() == Some(super::runner::BIG_STACK_THREAD) {
+            s.guard_stack();
+        }
         s
     }
 
@@ -203,6 +294,30 @@ impl Interpreter {
     pub fn guard_stack(&mut self) {
         let here = 0u8;
         self.stack_guard = Some((&here as *const u8 as usize, super::runner::STACK_BYTES - super::runner::STACK_HEADROOM));
+    }
+
+    /// Schedule seed: 0 = FIFO run-to-block, N = seeded exploration of other interleavings.
+    pub fn set_sched_seed(&mut self, seed: u64) {
+        self.sched.set_seed(seed);
+    }
+
+    /// Deterministic time: no real clock is read; time advances only through `sleep`.
+    pub fn set_deterministic_time(&mut self, on: bool) {
+        self.sched.deterministic = on;
+    }
+
+    pub fn set_http_mode(&mut self, mode: super::builtins::std_http::HttpMode) {
+        self.http = mode;
+    }
+
+    /// Select the resolved (compiled closure) engine for compilable functions.
+    pub fn set_engine_resolved(&mut self, on: bool) {
+        self.engine_resolved = on;
+    }
+
+    /// Allow machine code for hot integer functions (on by default; a no-op without the `jit` feature).
+    pub fn set_jit(&mut self, on: bool) {
+        self.jit_enabled = on;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {
@@ -246,7 +361,7 @@ impl Interpreter {
 
     /// Run a program, keeping the structured error (kind, span, backtrace).
     pub fn run_checked(&mut self, program: &Program<'static>) -> Result<Value, RuntimeError> {
-        let prog: &'static Program<'static> = Box::leak(Box::new(program.clone()));
+        let prog = self.retain_program(program.clone());
         self.load_program(0, prog)?;
         self.call_main()
     }
@@ -314,9 +429,26 @@ impl Module {
             children: HashMap::new(),
             consts: HashMap::new(),
             const_types: HashMap::new(),
+            fallback: None,
+            std_globs: Vec::new(),
         }
     }
 }
 
 #[allow(dead_code)]
 pub(crate) type SharedCell<T> = Rc<RefCell<T>>;
+
+impl Interpreter {
+    /// Keep `program` alive as long as this interpreter and hand out the `&'static` view the evaluator uses.
+    ///
+    /// SAFETY: the box is never moved or dropped before the interpreter (`retained` is the last field, programs are
+    /// only pushed), so the reference is valid for every use inside the interpreter. The `'static` is a promise
+    /// scoped to the interpreter: a `Value` holding a function must not be called after the interpreter is dropped
+    /// (it cannot be: calling needs `&mut Interpreter`).
+    pub(crate) fn retain_program(&mut self, program: Program<'static>) -> &'static Program<'static> {
+        let boxed = Box::new(program);
+        let ptr: *const Program<'static> = &*boxed;
+        self.retained.push(boxed);
+        unsafe { &*ptr }
+    }
+}

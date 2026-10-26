@@ -1,0 +1,8 @@
+// spec: SPEC-NUM-011
+// expect: 6
+// xfail: Q-003
+fn main() {
+    let a: i32 = 5
+    let b = int(a)
+    println("${b + 1}")
+}

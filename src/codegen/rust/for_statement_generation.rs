@@ -359,12 +359,11 @@ impl<'ast> CodeGenerator<'ast> {
         // tuple element) is always `usize` (owned, Copy) — NOT a reference.
         // Only the value variable inherits the borrowed status from the iterator.
         let mut borrowed_bindings_added: Vec<String> = Vec::new();
-        // `needs_borrow` can stay true after `copy_element_by_value` clears
-        // `is_borrowed_iterator`; any `&iterable` loop must track borrowed bindings.
-        // Also detect when `generate_expression` already emitted a leading `&`.
-        // P3.646: `values()`/`keys()` always track `&V` bindings — even when the
-        // registry Item looks like owned Copy (`usize`), Rust still yields `&V`.
+        // Any `&iterable` loop tracks borrowed bindings (also after `copy_element_by_value`);
+        // P3.646: `values()`/`keys()` always yield `&V`. `&str` slice items never deref.
+        let (yields_str_slices, str_slice_shadowed) = self.shadow_str_slice_loop_vars(iterable, pattern);
         let tracks_borrowed_loop_var = !use_copied_for_copy_elems
+            && !yields_str_slices
             && (is_map_shared_ref_iter || !by_value_owned_iter)
             && (needs_borrow
                 || is_borrowed_iterator
@@ -551,6 +550,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
 
+        self.inferred_borrowed_params.extend(str_slice_shadowed);
         if is_borrowed_iterator {
             for var in &borrowed_bindings_added {
                 self.borrowed_iterator_vars.remove(var);

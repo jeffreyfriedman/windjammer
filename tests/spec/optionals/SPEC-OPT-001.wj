@@ -1,0 +1,15 @@
+// spec: SPEC-OPT-001
+// expect: true true
+fn half(x: int) -> int? {
+    if x % 2 == 0 {
+        Some(x / 2)
+    } else {
+        None
+    }
+}
+
+fn main() {
+    let a: Option<int> = half(8)
+    let b: int? = a
+    println("${b.is_some()} ${half(3).is_none()}")
+}

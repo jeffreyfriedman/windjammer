@@ -22,6 +22,21 @@ check = "links"
 glob = "CHANGELOG.md"
 reason = "release notes name files, commands and docs as they were at their release; many were deleted or renamed since"
 
+[[exclude]]
+check = "links"
+glob = "docs/adr/0021-effects-and-capabilities.md"
+reason = "accepted for design with a staged implementation (E1-E7): the commands, flags and test files it names are the plan, not current behaviour"
+
+[[exclude]]
+check = "links"
+glob = "docs/spec/effects.md"
+reason = "rules marked [PLANNED] name commands, flags and acceptance tests that arrive with stages E1-E7"
+
+[[exclude]]
+check = "fences"
+glob = "docs/adr/0021-effects-and-capabilities.md"
+reason = "design sketches of planned syntax (effect declarations, durable processes) that the parser does not accept yet"
+
 [freshness]
 tracked = ["docs/adr/0*.md", "docs/design/*.md"]
 changed_lines = 200

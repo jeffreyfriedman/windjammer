@@ -8,7 +8,7 @@ your training data: do not write Rust or Python syntax. Context pack: `docs/agen
 
 1. Edit `.wj` files in small steps.
 2. `wj check --json <path>`: fix every diagnostic (JSON with spans and repair hints; exit 1 on errors).
-3. `wj run --interpret <file>`: run it and read the output.
+3. `wj run --interpret <file>`: run it and read the output. Exit status 126 means a capability was denied: the message contains the exact `[capabilities]` line to add to `wj.toml` (or `--allow ...`); apply it, do not work around it.
 4. `wj test --interpret .`: tests are `@test` / `test_*` functions in `*_test.wj` files.
 5. `wj build`: production build. Report compiler bugs with a minimal repro instead of working around them.
 

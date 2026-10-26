@@ -79,8 +79,8 @@ impl Parser {
                 Some(NodeSpan {
                     byte_start: first.byte_start,
                     byte_end: last.byte_end,
-                    line: first.line,
-                    column: first.column,
+                    line: first.src_line,
+                    column: first.src_column,
                     end_line: last.end_line,
                     end_column: last.end_column,
                 })
@@ -143,10 +143,10 @@ impl Parser {
             NodeSpan {
                 byte_start: first.byte_start,
                 byte_end: last.byte_end.max(first.byte_start),
-                line: first.line,
-                column: first.column,
-                end_line: if last.byte_end >= first.byte_start { last.end_line } else { first.line },
-                end_column: if last.byte_end >= first.byte_start { last.end_column } else { first.column },
+                line: first.src_line,
+                column: first.src_column,
+                end_line: if last.byte_end >= first.byte_start { last.end_line } else { first.src_line },
+                end_column: if last.byte_end >= first.byte_start { last.end_column } else { first.src_column },
             },
         );
     }

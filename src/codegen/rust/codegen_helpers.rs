@@ -322,13 +322,6 @@ fn function_may_need_dense_clone_bound(func: &FunctionDecl<'_>) -> bool {
         .any(|s| stmt_may_need_generic_clone_bound(s))
 }
 
-/// When a generic `impl Foo<T>` clones `self.dense` (or `self.dense[i]`), Rust needs `T: Clone`
-/// for `Vec<T>::clone` and element clones. Infers `where T: Clone` for single-type-parameter impls.
-pub fn infer_clone_where_bounds_for_impl(impl_block: &ImplBlock<'_>) -> Vec<(String, Vec<String>)> {
-    let params = impl_block_type_param_names(impl_block);
-    infer_clone_where_bounds_for_generic_params(impl_block.functions.iter(), &params)
-}
-
 /// Per-method `T: Clone` when only that method clones generic storage/elements.
 pub fn infer_clone_where_bounds_for_function(
     func: &FunctionDecl<'_>,

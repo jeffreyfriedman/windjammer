@@ -65,21 +65,12 @@ impl AssetType {
         .output()
         .expect("Failed to run wj");
 
-    // Build should FAIL - .as_str() is forbidden
+    // `.as_str()` is identity (W0012 lint): the build succeeds and never reaches rustc E0658.
     assert!(
-        !output.status.success(),
-        "wj build should fail when source contains .as_str()"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // Should have helpful error (not rustc E0658)
-    assert!(
-        stderr.contains("`.as_str()` is forbidden") || stdout.contains("`.as_str()` is forbidden"),
-        "Should emit helpful 'forbidden' error. Stderr:\n{}\nStdout:\n{}",
-        stderr,
-        stdout
+        output.status.success(),
+        "wj build must accept .as_str(): {}{}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
     );
 }
 

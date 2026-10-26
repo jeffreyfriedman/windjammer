@@ -133,6 +133,8 @@ pub enum PPat {
     Or(Vec<PPat>),
     /// `Enum::Variant(p0, p1)` / struct-like; fields are (field name, pattern).
     Variant { enum_name: String, variant: String, fields: Vec<(String, PPat)> },
+    /// `P { x, y: 2, .. }` on a struct: (field name, field type, pattern).
+    Struct { name: String, fields: Vec<(String, Ty, PPat)> },
     Some(Box<PPat>),
     None,
     Ok(Box<PPat>),
@@ -192,14 +194,21 @@ pub struct PExpr {
     pub kind: Box<PK>,
     /// 1-based source line (0 when unknown) for diagnostics.
     pub line: u32,
+    /// The expression reads a local for the last time (semantic fact `last_use`).
+    pub last_use: bool,
 }
 
-/// Parsed `{...}` format spec (subset of Rust's: `?`, `.N`, width, fill/align, `0`, `x X b o e`).
+/// Parsed `{...}` format spec: Rust's `[[fill]align][sign]['#']['0'][width]['.' precision][type]`
+/// with types `?`, `x X b o e`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FmtSpec {
     pub debug: bool,
-    /// `{:#?}`: pretty Debug. Identical to `{:?}` for scalars; emitters reject it for aggregates.
+    /// `{:#?}`: pretty (multi-line) Debug. Implies `alternate`.
     pub pretty: bool,
+    /// `+`: always print the sign of numbers.
+    pub plus: bool,
+    /// `#`: alternate form (`0x`/`0b`/`0o` prefixes; pretty Debug).
+    pub alternate: bool,
     pub precision: Option<usize>,
     pub width: Option<usize>,
     pub fill: Option<char>,
@@ -255,18 +264,24 @@ pub enum PK {
     VecRepeat(PExpr, PExpr),
     MapLit(Vec<(PExpr, PExpr)>),
     Tuple(Vec<PExpr>),
-    /// `captures`: outer mutable locals snapshotted at creation (Rust `move` semantics).
-    Closure { params: Vec<(String, Ty)>, ret: Ty, body: PBlock, captures: Vec<(String, Ty)> },
+    /// Captures are by reference (SPEC-EXPR-011): JS/Go closures over the enclosing variables.
+    Closure { params: Vec<(String, Ty)>, ret: Ty, body: PBlock },
     If { cond: PExpr, then: PBlock, els: PBlock },
     Match { scrutinee: PExpr, arms: Vec<PArm> },
     Block(PBlock),
-    /// `e?`; `fn_ret` is the return type of the enclosing function or closure.
-    Try { expr: PExpr, fn_ret: Ty },
+    /// `e?`; `fn_ret` is the return type of the enclosing function or closure. `conv` names the
+    /// `From` impl (`owner`, emitted method) applied to the error when the error types differ.
+    Try { expr: PExpr, fn_ret: Ty, conv: Option<(String, String)> },
     Format(Vec<FmtPiece>),
     Print { newline: bool, to_stderr: bool, pieces: Vec<FmtPiece> },
     Range { start: PExpr, end: PExpr, inclusive: bool },
     /// Value-semantics copy of a place used as an owned value.
     Copy(PExpr),
+    /// `&mut place` bound to a local (`let r = &mut z`): the local aliases the place, so writes
+    /// through it (`*r = ..`, `r.f = ..`, `r.push(..)`) reach the place. Only appears as the
+    /// `init` of a `PStmt::Let`; the expression's type is the pointee type. Emitters realise it
+    /// as a pointer (Go) or as the shared object / an accessor cell (JS/TS).
+    BorrowMut(PExpr),
     Panic(PExpr),
     /// Reference to a top-level function used as a value.
     FnRef(String),
@@ -276,7 +291,7 @@ pub enum PK {
 
 impl PExpr {
     pub fn new(ty: Ty, kind: PK) -> PExpr {
-        PExpr { ty, kind: Box::new(kind), line: 0 }
+        PExpr { ty, kind: Box::new(kind), line: 0, last_use: false }
     }
 
     pub fn at(mut self, line: u32) -> PExpr {

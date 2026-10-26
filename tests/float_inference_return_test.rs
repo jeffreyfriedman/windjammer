@@ -147,7 +147,7 @@ pub fn foo() -> f64 {
     );
 }
 
-/// No return type: unconstrained float literal (currently f32 in compiler)
+/// No return type: an unconstrained float literal is `float` (f64, SPEC-NUM-007)
 #[test]
 fn test_no_return_type_defaults_f64() {
     let source = r#"
@@ -157,8 +157,8 @@ pub fn foo() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f32") || output.contains("1.0f32"),
-        "Literal in function with no return type: expect current float default (f32), got:\n{}",
+        output.contains("1.0_f64") || output.contains("1.0f64"),
+        "Literal in function with no return type: expect the spec float default (f64), got:\n{}",
         output
     );
 }

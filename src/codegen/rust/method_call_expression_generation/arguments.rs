@@ -184,6 +184,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                let runtime_module_borrows = self.adopt_runtime_module_signature(object, method, i, &mut call_site_sig, method_signature.as_ref());
                 let sig_for_effective = call_site_sig.as_ref().or(method_signature.as_ref());
                 let effective_ownership = if external_module_mut_reborrow {
                     Some(OwnershipMode::MutBorrowed)
@@ -195,9 +196,8 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                 };
 
-                // TDD FIX: Suppress auto-clone for FieldAccess when method expects Borrowed
-                // Bug: ingredient.item_id generates .clone(), then & is added -> &cloned_value
-                // Fix: Suppress clone when param expects Borrowed -> just add & to field
+                // Suppress auto-clone for FieldAccess when the method expects Borrowed
+                // (`ingredient.item_id` would become `&cloned_value`): just add & to the field.
                 let param_expects_borrowed = effective_ownership
                     .is_some_and(|o| matches!(o, OwnershipMode::Borrowed))
                     || sig_for_effective.is_some_and(|sig| {
@@ -217,7 +217,7 @@ impl<'ast> CodeGenerator<'ast> {
                     );
 
                 let prev_suppress = self.suppress_borrowed_clone;
-                if (param_expects_borrowed || is_auto_borrow_target)
+                if (param_expects_borrowed || is_auto_borrow_target || runtime_module_borrows)
                     && matches!(arg, Expression::FieldAccess { .. } | Expression::Identifier { .. })
                 {
                     self.suppress_borrowed_clone = true;
@@ -258,7 +258,7 @@ impl<'ast> CodeGenerator<'ast> {
                         );
 
                     if strip_ref_for_collection_key {
-                        if let Expression::Identifier { .. } = &**operand {
+                        if matches!(&**operand, Expression::Identifier { .. }) && !self.is_owned_text_local(operand) {
                             operand
                         } else {
                             arg
@@ -302,10 +302,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // TDD FIX for E0277: Methods like retain/filter/any/all pass &T to
                 // their closure, so closure params are references. Mark them as
                 // borrowed so binary comparisons (id != val) generate *id != val.
+                let predicate_receives_ref = Self::predicate_closure_receives_ref(method, receiver_type_name);
                 let closure_borrowed_params: Vec<String> =
-                    if crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(
-                        method,
-                    ) {
+                    if predicate_receives_ref {
                         if let Expression::Closure { parameters, .. } = arg_to_generate {
                             let mut added = Vec::new();
                             for p in parameters.iter() {
@@ -324,9 +323,7 @@ impl<'ast> CodeGenerator<'ast> {
                     };
 
                 let prev_closure_predicate = self.closure_predicate_typed_params;
-                if crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(
-                    method,
-                ) {
+                if predicate_receives_ref {
                     self.closure_predicate_typed_params = true;
                 }
 
@@ -410,7 +407,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let scope = self.arg_gen_scope();
-                let mut arg_str = self.generate_expression(arg_to_generate);
+                let mut arg_str = self.generate_value_operand(arg_to_generate);
                 self.closure_predicate_typed_params = prev_closure_predicate;
                 self.restore_arg_gen_scope(scope);
                 self.suppress_borrowed_clone = prev_suppress;
@@ -1065,5 +1062,15 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         (args_vec, prev_float_target)
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Does the predicate closure of `method` receive a reference (`retain`, `filter`, `any`...)?
+    /// `str::find(pattern)` takes `FnMut(char) -> bool`: its parameter is a plain `char`, unlike
+    /// `Iterator::find`, which passes `&Item`.
+    fn predicate_closure_receives_ref(method: &str, receiver_type_name: Option<&str>) -> bool {
+        !matches!(receiver_type_name, Some("string" | "String" | "str"))
+            && crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(method)
     }
 }

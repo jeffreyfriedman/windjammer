@@ -1,0 +1,10 @@
+// spec: SPEC-PIPE-004
+// expect: 20
+// expect: T
+fn f(x: int) -> int { x * 10 }
+fn main() {
+    let a = 1
+    println("${a + 1 |> f}")
+    println("${false || true |> f2}")
+}
+fn f2(b: bool) -> string { if b { "T" } else { "F" } }

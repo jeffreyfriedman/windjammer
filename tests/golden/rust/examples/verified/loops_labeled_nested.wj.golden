@@ -1,0 +1,16 @@
+#[inline]
+fn find_pair(a: &Vec<i64>, b: &Vec<i64>) -> String {
+    for x in a.iter().copied() {
+        for y in b.iter().copied() {
+            if x + y == 10_i64 {
+                return format!("{} + {}", x, y);
+            }
+        }
+    }
+    String::from("none")
+}
+
+fn main() {
+    println!("first pair summing to 10: {}", find_pair(&vec![1_i64, 3_i64, 5_i64], &vec![2_i64, 7_i64, 9_i64]));
+}
+

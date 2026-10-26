@@ -14,13 +14,37 @@ fn use_path_first_segment_is_lang_root(seg: &str) -> bool {
     matches!(seg, "std" | "crate" | "super" | "self")
 }
 
+/// True when an emitted `use` line already binds `name` (`use crate::util::math;`, `use x as math;`):
+/// a user module must shadow the runtime std module of the same name, never collide with it (E0252).
+fn binds_name_locally(imports: &str, name: &str) -> bool {
+    imports.lines().map(str::trim).any(|l| {
+        let Some(path) = l.strip_prefix("pub use ").or_else(|| l.strip_prefix("use ")) else {
+            return false;
+        };
+        let path = path.trim_end_matches(';').trim();
+        let bound = match path.rsplit_once(" as ") {
+            Some((_, alias)) => alias.trim(),
+            None => path.rsplit("::").next().unwrap_or(path),
+        };
+        bound == name && !path.starts_with("windjammer_runtime::")
+    })
+}
+
+/// Does `imports` already bring `module` in scope (runtime path, `module::`, `use module`, or a local binding)?
+fn import_mentions_module(imports: &str, module: &str) -> bool {
+    imports.contains(&format!("windjammer_runtime::{module}"))
+        || imports.contains(&format!("{module}::"))
+        || imports.contains(&format!("use {module}"))
+        || binds_name_locally(imports, module)
+}
+
 fn is_fn_import_name(name: &str) -> bool {
     name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
 }
 
 /// Parser stores `use http::{json_cors_error, ServerResponse}` as one segment
 /// (`"http::{json_cors_error, ServerResponse}"`).
-fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
+pub(super) fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
     let (module, rest) = seg.split_once("::{")?;
     let inner = rest.strip_suffix('}')?;
     if module.is_empty() {
@@ -882,7 +906,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.in_impl_block = true;
 
                     body.push_str(&self.generate_impl(impl_block, analyzed));
-                    body.push_str("\n\n");
+                    body.push_str(&super::display_from_to_string::after_impl(impl_block, &program.items));
 
                     self.in_impl_block = false;
                     self.current_struct_name = None;
@@ -944,18 +968,15 @@ impl<'ast> CodeGenerator<'ast> {
         for item in &program.items {
             if let Item::TypeAlias {
                 name,
+                type_params,
                 target,
                 is_pub,
                 ..
             } = item
             {
-                let pub_prefix = if *is_pub { "pub " } else { "" };
-                body.push_str(&format!(
-                    "{}type {} = {};\n\n",
-                    pub_prefix,
-                    name,
-                    self.type_to_rust(target)
-                ));
+                let alias = self.generate_type_alias(name, type_params, target, *is_pub);
+                body.push_str(&alias);
+                body.push('\n');
             }
         }
 
@@ -991,7 +1012,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut top_level_funcs: Vec<_> = analyzed
             .iter()
             .filter(|af| {
-                !is_impl_method(af)
+                !is_impl_method(af) && !self.idiom.inline_mod_fn_names.contains(&af.decl.name)
                     && !af.decl.is_extern
                     && !(self.is_module && af.decl.name == "main")
             })
@@ -1163,8 +1184,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
         }
-        // Cross-crate return types / ascriptions may emit `HashMap<...>` without a local
-        // `use std::collections::HashMap` in the .wj source — detect from generated body.
+        // Cross-crate types may emit `HashMap<..>` with no `use` in the .wj source: detect from the body.
         if !self.needs_hashmap_import
             && (body.contains("HashMap<") || body.contains("HashMap::"))
             && !imports.contains("std::collections::HashMap")
@@ -1187,10 +1207,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         for module in self.runtime_std_module_imports.iter() {
-            if imports.contains(&format!("windjammer_runtime::{module}"))
-                || imports.contains(&format!("{module}::"))
-                || imports.contains(&format!("use {module}"))
-            {
+            if import_mentions_module(&imports, module) {
                 continue;
             }
             // `std::map` / rustc std / WJ-only stubs must not invent `windjammer_runtime::{module}`.
@@ -1286,6 +1303,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 "#);
         }
 
+        let body = self.with_enumerable_runtime(body, &mut implicit_imports);
         // Combine: implicit imports + explicit imports + tauri helper + body
         let mut combined_imports = String::new();
         if !implicit_imports.is_empty() {

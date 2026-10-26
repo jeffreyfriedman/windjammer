@@ -55,6 +55,11 @@ impl<'m> Go<'m> {
                     self.pat(sp, &format!("{scrut}.({vt}).{}", field(f)), &fty, conds, binds)?;
                 }
             }
+            PPat::Struct { fields, .. } => {
+                for (f, fty, sp) in fields {
+                    self.pat(sp, &format!("{scrut}.{}", field(f)), fty, conds, binds)?;
+                }
+            }
             PPat::Some(sp) => {
                 conds.push(format!("{scrut}.Ok"));
                 let inner = if let Ty::Option(t) = ty { (**t).clone() } else { Ty::Unknown };

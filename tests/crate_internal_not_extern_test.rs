@@ -26,10 +26,7 @@ fn compile_wj_to_rust(source: &str) -> String {
     let input_file = test_dir.join("test_input.wj");
     std::fs::write(&input_file, source).unwrap();
 
-    let wj_binary = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = Path::new(env!("CARGO_BIN_EXE_wj"));
 
     let _output = Command::new(&wj_binary)
         .arg("build")

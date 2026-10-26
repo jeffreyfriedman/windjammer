@@ -41,7 +41,6 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
     ) -> String {
         self.mark_usize_variables_in_condition(condition);
-        self.promote_ambiguous_int_loop_counter_in_while_condition(condition);
 
         let mut output = self.indent();
         output.push_str("while ");
@@ -76,7 +75,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let mut condition_str = self.generate_expression(condition);
+        let mut condition_str = self.generate_value_operand(condition);
         self.assignment_int_target_type = prev_while_int;
         if let Expression::Binary {
             left, op, right, ..
@@ -145,6 +144,43 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&self.indent());
         output.push_str("}\n");
         output
+    }
+
+    /// `loop` / `while` / `for` (with their optional `'label:`), `break [label] [value]`, `continue [label]`.
+    pub(in crate::codegen::rust) fn generate_loop_family_statement(
+        &mut self,
+        stmt: &Statement<'ast>,
+    ) -> String {
+        match stmt {
+            Statement::Loop { body, label, .. } => {
+                let out = self.generate_loop_statement(body);
+                with_loop_label(out, label.as_deref())
+            }
+            Statement::While {
+                condition,
+                body,
+                label,
+                ..
+            } => {
+                let out = self.generate_while_statement(condition, body);
+                with_loop_label(out, label.as_deref())
+            }
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                label,
+                location,
+            } => {
+                let out = self.generate_for_statement(pattern, iterable, body, location);
+                with_loop_label(out, label.as_deref())
+            }
+            Statement::Break { label, value, .. } => {
+                self.generate_break_statement(label.as_deref(), *value)
+            }
+            Statement::Continue { label, .. } => self.generate_continue_statement(label.as_deref()),
+            _ => unreachable!("not a loop-family statement"),
+        }
     }
 
     pub(in crate::codegen::rust) fn generate_break_statement(

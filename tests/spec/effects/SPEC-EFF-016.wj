@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-016
+// mode: check-error
+// expect-error: WJ0042: `parse` performs `fs.read`
+use std::fs
+@pure
+fn parse(s: string) -> int {
+    let extra = fs::read_to_string("x").unwrap_or("")
+    s.len() + extra.len()
+}
+fn main() {
+    println("${parse("abc")}")
+}

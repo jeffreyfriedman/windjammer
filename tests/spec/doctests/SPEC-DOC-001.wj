@@ -1,0 +1,15 @@
+// spec: SPEC-DOC-001
+// mode: parse-ok
+/// Doubles a number.
+///
+/// ```wj
+/// println("${double(21)}")
+/// // expect: 42
+/// ```
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn main() {
+    println("${double(1)}")
+}

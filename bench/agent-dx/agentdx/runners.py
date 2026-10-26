@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 
 from . import diagnostics as dg
@@ -160,6 +161,9 @@ class WjInterpRunner(Runner):
         return [wj_bin(), "run", "--interpret", build.prog]
 
 
+_BUILD_LOCK = threading.Lock()   # cargo builds share one target dir and one binary name: build+copy must not interleave
+
+
 class WjCompiledRunner(Runner):
     lang, src = "wj", "main.wj"
     build_timeout = 900
@@ -186,6 +190,10 @@ class WjCompiledRunner(Runner):
         target = os.environ.get("AGENTDX_CARGO_TARGET") or os.path.expanduser(
             "~/Library/Caches/windjammer/wt-agent-bench")
         env = {"CARGO_TARGET_DIR": target, "CARGO_BUILD_JOBS": os.environ.get("CARGO_BUILD_JOBS", "2")}
+        with _BUILD_LOCK:
+            return self._cargo_and_copy(wd, gen, target, env, t0)
+
+    def _cargo_and_copy(self, wd, gen, target, env, t0):
         code, out, err, to, _ = _exec(["cargo", "build", "-q", "--message-format=json"], gen,
                                       timeout=self.build_timeout, env=env)
         if code != 0:

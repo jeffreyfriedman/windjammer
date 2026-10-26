@@ -1,0 +1,13 @@
+// spec: SPEC-PAT-003
+// expect: big small zero negative
+fn f(n: int) -> string {
+    match n {
+        x if x > 100 => "big",
+        x if x > 0 => "small",
+        0 => "zero",
+        _ => "negative",
+    }
+}
+fn main() {
+    println("${f(500)} ${f(5)} ${f(0)} ${f(-3)}")
+}

@@ -1,0 +1,233 @@
+(* Windjammer grammar: normative syntax of the language as accepted by src/lexer and src/parser.   *)
+(*                                                                                                  *)
+(* This file is machine-checked by tools/docs_truth/spec_grammar.rs: sentences are generated from it and *)
+(* fed to the real parser. Notation: "x" terminal; { x } repetition; [ x ] option; ( x ) group;     *)
+(* /a-z_/ character class (lexical rules only). UPPERCASE names are lexical, lowercase syntactic.   *)
+(* Directives (a comment whose text starts with "@") apply to the NEXT production:                               *)
+(*   @ctx T      generate sentences for this production, substitute into template T at "$$"        *)
+(*   @nl         a newline follows each expansion (statement/item separator)                       *)
+(*   @status S   parsed (default) | unparsed (documented but rejected today) | informative          *)
+(*   @lex K      lexical rule: must lex to exactly one token whose kind starts with K ("A|B")      *)
+(*   @reject-keywords  generated identifiers must not be reserved words                            *)
+(*   @depth      expanding this production consumes one level of the generator's recursion budget  *)
+
+(* ======================== Lexical structure ======================== *)
+
+(*@lex Ident *)
+(*@reject-keywords *)
+IDENT        = /a-z/ { /a-z0-9_/ } ;
+(*@lex Ident *)
+(*@reject-keywords *)
+TYPE_IDENT   = /A-Z/ { /a-zA-Z0-9/ } ;
+
+(*@lex IntLiteral *)
+INT_LIT      = DEC_DIGITS | "0x" HEX_DIGITS | "0b" BIN_DIGITS | "0o" OCT_DIGITS | DEC_DIGITS INT_SUFFIX ;
+DEC_DIGITS   = /0-9/ { [ "_" ] /0-9/ } ;
+HEX_DIGITS   = /0-9a-fA-F/ { [ "_" ] /0-9a-fA-F/ } ;
+BIN_DIGITS   = /01/ { [ "_" ] /01/ } ;
+OCT_DIGITS   = /0-7/ { [ "_" ] /0-7/ } ;
+INT_SUFFIX   = "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" | "isize" ;
+
+(*@lex FloatLiteral *)
+FLOAT_LIT    = DEC_DIGITS "." DEC_DIGITS [ EXPONENT ] | DEC_DIGITS EXPONENT ;
+EXPONENT     = ( "e" | "E" ) [ "+" | "-" ] /0-9/ { /0-9/ } ;
+
+(*@lex StringLiteral *)
+PLAIN_STRING = "\"" { STR_CHAR } "\"" ;
+(*@lex StringLiteral|InterpolatedString *)
+STRING_LIT   = "\"" { STR_CHAR | STR_ESCAPE | INTERPOLATION } "\"" ;
+STR_CHAR     = /a-zA-Z0-9 .,:;!?_-/ ;
+STR_ESCAPE   = "\\n" | "\\t" | "\\r" | "\\\\" | "\\\"" | "$$" ;
+INTERPOLATION = "${" interp_expr [ ":" FORMAT_SPEC ] "}" ;
+(* interpolations hold ordinary expressions; the generator keeps them to arithmetic, calls and fields *)
+interp_expr  = interp_atom { ( "+" | "-" | "*" | "==" | "<" | "&&" ) interp_atom } ;
+interp_atom  = IDENT { "." IDENT [ "(" [ interp_expr ] ")" ] } | INT_LIT | IDENT "(" [ interp_expr ] ")" | "(" interp_expr ")" ;
+FORMAT_SPEC  = /0-9a-z.<>?/ { /0-9a-z.<>?/ } ;
+
+(*@lex CharLiteral *)
+CHAR_LIT     = "'" ( /a-zA-Z0-9 / | "\\n" | "\\t" | "\\\\" | "\\'" | "\\0" ) "'" ;
+
+(* ======================== Items ======================== *)
+
+(*@ctx $$ *)
+program      = { item } ;
+
+(*@depth *)
+(*@ctx $$ *)
+(*@nl *)
+item         = [ attributes ] ( use_decl | struct_decl | enum_decl | trait_decl | impl_block
+                 | function_decl | const_decl | static_decl | type_alias | mod_decl | extern_fn ) ;
+extern_fn    = "extern" "fn" IDENT "(" [ params ] ")" [ "->" type ] ;
+
+attributes   = attribute { attribute } ;
+(*@lex Decorator *)
+ATTR_NAME    = "@" IDENT ;
+attribute    = ATTR_NAME [ "(" attr_args ")" ] ;
+attr_args    = attr_arg { "," attr_arg } ;
+attr_arg     = IDENT [ ":" cond_expr ] | STRING_LIT ;
+
+use_decl     = "use" use_path [ "as" IDENT | "::" "{" IDENT { "," IDENT } "}" ] ;
+use_path     = IDENT { "::" IDENT } ;
+
+struct_decl  = [ visibility ] "struct" TYPE_IDENT [ generic_params ] "{" { field_decl [ "," ] } "}" ;
+field_decl   = [ visibility ] IDENT ":" type ;
+
+enum_decl    = [ visibility ] "enum" TYPE_IDENT [ generic_params ] "{" { variant [ "," ] } "}" ;
+variant      = TYPE_IDENT [ "(" type { "," type } ")" | "{" variant_field { "," variant_field } "}" ] ;
+variant_field = IDENT ":" type ;
+
+trait_decl   = [ visibility ] "trait" TYPE_IDENT [ plain_generics ] [ ":" bound { "+" bound } ] "{" { trait_member } "}" ;
+plain_generics = "<" TYPE_IDENT { "," TYPE_IDENT } ">" ;
+trait_member = trait_sig | trait_fn ;
+trait_sig    = "fn" IDENT "(" [ params ] ")" [ "->" type ] ;
+trait_fn     = trait_sig block ;
+
+impl_block   = "impl" [ generic_params ] path_type [ "for" path_type ] "{" { function_decl } "}" ;
+
+function_decl = function_sig block ;
+function_sig = [ visibility ] [ "async" ] "fn" IDENT [ generic_params ] "(" [ params ] ")"
+               [ "->" type ] [ where_clause ] ;
+params       = param { "," param } { "," default_param } [ "," ] ;
+param        = [ "mut" ] IDENT ":" type | "self" ;
+(* ADR-0018 ARGS: parameters with defaults come last; a default may not mention another parameter *)
+default_param = IDENT ":" type "=" ( INT_LIT | STRING_LIT | "true" | "false" ) ;
+
+generic_params = "<" generic_param { "," generic_param } ">" ;
+generic_param  = TYPE_IDENT [ ":" bound { "+" bound } ] ;
+(* Q-024: bounds cannot take type arguments (`T: Into<string>` is rejected today) *)
+bound          = TYPE_IDENT ;
+where_clause   = "where" where_pred { "," where_pred } ;
+where_pred     = TYPE_IDENT ":" bound { "+" bound } ;
+
+const_decl   = [ visibility ] "const" IDENT ":" type "=" expression ;
+static_decl  = [ visibility ] "static" [ "mut" ] IDENT ":" type "=" expression ;
+type_alias   = [ visibility ] "type" TYPE_IDENT "=" type ;
+mod_decl     = [ visibility ] "mod" IDENT "{" { item } "}" ;
+visibility   = "pub" ;
+
+(* ======================== Types ======================== *)
+
+(*@depth *)
+(*@ctx fn main() { let _v: $$ = 0 } *)
+type         = path_type | list_type | tuple_type | fn_type | ref_type | PRIMITIVE | "dyn" TYPE_IDENT | optional_type ;
+(* ADR-0018 OPT: `T?` is `Option<T>` *)
+optional_type = ( path_type | PRIMITIVE ) "?" ;
+PRIMITIVE    = "int" | "float" | "bool" | "string" | "i32" | "i64" | "u8" | "u32" | "u64" | "f32" | "f64" | "usize" ;
+path_type    = TYPE_IDENT [ "<" type { "," type } ">" ] ;
+list_type    = "[" type [ ";" INT_LIT ] "]" ;
+tuple_type   = "(" type "," [ type { "," type } ] ")" ;
+fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] ;
+ref_type     = "&" [ "mut" ] type ;
+
+(* ======================== Statements ======================== *)
+
+(*@depth *)
+(* A block's final expression may not begin with a block-like keyword (`if`, `match`, `loop`, `unsafe`):
+   at the start of a line those are statements, so `loop { } as int` is a statement followed by an error. *)
+block        = "{" { statement } [ tail_expr ] "}" ;
+tail_expr    = ( IDENT | INT_LIT | STRING_LIT | "true" | "false" | call_expr | method_call | "(" expression ")" )
+               [ ( "+" | "-" | "*" | "==" | "<" ) cond_atom ] ;
+
+(*@depth *)
+(*@ctx fn main() { $$ } *)
+(*@nl *)
+statement    = let_stmt | assign_stmt | return_stmt | if_stmt | while_stmt | loop_stmt | for_stmt
+               | break_stmt | continue_stmt | defer_stmt | match_stmt | expr_stmt | thread_stmt ;
+(* deprecated by ADR-0004 (accepted); still parsed *)
+thread_stmt  = "thread" block ;
+
+let_stmt     = "let" [ "mut" ] binding [ ":" type ] "=" expression
+             | "let" pattern "=" expression "else" block ;
+assign_stmt  = place assign_op expression ;
+place        = IDENT { "." IDENT | "[" or_expr "]" } ;
+assign_op    = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+(* a bare `return` must be followed by `;` or `}`: a newline does not end it (Q-026) *)
+return_stmt  = "return" expression | "return" ";" ;
+if_stmt      = "if" cond block { "else" "if" cond block } [ "else" block ] ;
+cond         = cond_expr | "let" pattern "=" cond_expr ;
+while_stmt   = [ label ] "while" cond block ;
+label        = LIFETIME ":" ;
+(*@lex Lifetime *)
+LIFETIME     = "'" /a-z/ { /a-z0-9_/ } ;
+loop_stmt    = [ label ] "loop" block ;
+for_stmt     = [ label ] "for" binding "in" ( cond_expr | range_expr ) block ;
+binding      = IDENT | "_" | "(" binding "," binding { "," binding } ")" | TYPE_IDENT "{" IDENT { "," IDENT } "}" ;
+range_expr   = cond_atom ( ".." | "..=" ) cond_atom ;
+(* like `return`, `break`/`continue` read a label on the next line as theirs (Q-026): the grammar ends them with `;` *)
+break_stmt   = "break" [ LIFETIME ] [ expression ] ";" ;
+continue_stmt = "continue" [ LIFETIME ] ";" ;
+defer_stmt   = "defer" call_expr ;
+match_stmt   = match_expr ;
+expr_stmt    = call_expr | method_call ;
+
+(* ======================== Patterns ======================== *)
+
+(*@ctx fn main() { if let $$ = v { } } *)
+pattern      = simple_pattern ;
+(* or-patterns exist only at the top of a match arm; they do not nest inside other patterns *)
+(*@ctx fn main() { match v { $$ => 0 } } *)
+or_pattern   = simple_pattern { "|" simple_pattern } ;
+(*@depth *)
+simple_pattern = "_" | IDENT | INT_LIT | PLAIN_STRING | range_pattern | "true" | "false" | "None"
+               | "(" pattern "," pattern { "," pattern } ")"
+               | "Some" "(" pattern ")" | "Ok" "(" pattern ")" | "Err" "(" pattern ")"
+               | path "::" TYPE_IDENT [ "(" pattern { "," pattern } ")" ]
+               | path "::" TYPE_IDENT "{" IDENT { "," IDENT } "}"
+               | TYPE_IDENT "{" IDENT [ ":" simple_pattern ] { "," IDENT [ ":" simple_pattern ] } [ "," ".." ] "}" ;
+path         = TYPE_IDENT { "::" TYPE_IDENT } ;
+
+(*@ctx fn main() { match v { $$ => 0 } } *)
+range_pattern = INT_LIT ( ".." | "..=" ) INT_LIT | CHAR_LIT "..=" CHAR_LIT ;
+
+(* ======================== Expressions ======================== *)
+
+(*@depth *)
+(*@ctx fn main() { let _v = $$ } *)
+expression   = pipe_expr ;
+pipe_expr    = or_expr { "|>" stage } ;
+(*@ctx fn main() { let _v = x |> $$ } *)
+stage        = IDENT | IDENT "(" [ args ] ")" | "." IDENT "(" [ args ] ")" ;
+or_expr      = and_expr { "||" and_expr } ;
+and_expr     = bitor_expr { "&&" bitor_expr } ;
+bitor_expr   = bitxor_expr { "|" bitxor_expr } ;
+bitxor_expr  = bitand_expr { "^" bitand_expr } ;
+bitand_expr  = equality_expr { "&" equality_expr } ;
+equality_expr = relational_expr { ( "==" | "!=" ) relational_expr } ;
+relational_expr = coalesce_expr { ( "<" | "<=" | ">" | ">=" ) coalesce_expr } ;
+(* ADR-0018 OPT: `x ?? d`, right-associative, between comparison and additive *)
+coalesce_expr = additive_expr [ "??" coalesce_expr ] ;
+additive_expr = shift_expr { ( "+" | "-" ) shift_expr } ;
+shift_expr   = mul_expr { ( "<<" | ">>" ) mul_expr } ;
+mul_expr     = unary_expr { ( "*" | "/" | "%" ) unary_expr } ;
+unary_expr   = ( "-" | "!" ) unary_expr | postfix_expr ;
+postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ call_args ] ")" | "." "await" | "[" or_expr "]" | "?" } [ "as" PRIMITIVE ] ;
+args         = expression { "," expression } ;
+(* Call arguments: optionally named (ADR-0018 ARGS) and possibly `_` shorthand closures (ADR-0018 CLOS) *)
+call_args    = call_arg { "," call_arg } ;
+(* Named arguments (`name: expr`, ADR-0018 ARGS) need a callee declared in the same file, which a context-free derivation cannot guarantee: they are covered by the spec examples, not generated here. *)
+call_arg     = ( expression | shorthand ) ;
+shorthand    = "_" ( "." IDENT { "." IDENT } | ( "+" | "-" | "*" | "==" | "<" ) ( "_" | INT_LIT ) ) ;
+(* ADR-0018 BLOCK: a block after a call's `)` on the same line is a trailing closure argument *)
+trailing_block = "{" [ IDENT { "," IDENT } "->" ] tail_expr "}" ;
+call_expr    = IDENT "(" [ args ] ")" ;
+method_call  = IDENT "." IDENT "(" [ args ] ")" ;
+primary      = INT_LIT | FLOAT_LIT | STRING_LIT | CHAR_LIT | "true" | "false" | IDENT
+             | "(" expression ")" | "(" expression "," [ args ] ")" | "[" [ args ] "]" | "[" expression ";" INT_LIT "]"
+             | TYPE_IDENT "::" IDENT | TYPE_IDENT "::" IDENT "(" [ args ] ")"
+             | IDENT "(" [ call_args ] ")" [ trailing_block ] | struct_lit | if_expr | match_expr | guard_match | closure | loop_expr | "unsafe" block ;
+loop_expr    = [ label ] "loop" block ;
+
+(* An expression in an `if`/`while`/`for`/`match` head: a struct literal there would swallow the body's `{`,
+   so the head grammar excludes struct literals and block-like expressions (wrap them in parentheses). *)
+cond_expr    = [ "!" ] cond_atom { ( "==" | "!=" | "<" | ">=" | "&&" | "||" | "+" | "-" ) cond_atom } ;
+cond_atom    = ( IDENT | INT_LIT | FLOAT_LIT | STRING_LIT | "true" | "false" | call_expr | "(" expression ")" | TYPE_IDENT "::" IDENT )
+               { "." IDENT | "." IDENT "(" [ args ] ")" | "[" or_expr "]" | "?" } ;
+
+struct_lit   = TYPE_IDENT "{" [ field_init { "," field_init } [ "," ] ] "}" ;
+field_init   = IDENT [ ":" expression ] ;
+if_expr      = "if" cond block "else" block ;
+match_expr   = "match" cond_expr "{" match_arm { match_arm } "}" ;
+match_arm    = or_pattern [ "if" cond_expr ] "=>" ( expression "," | block ) ;
+closure      = "|" [ IDENT { "," IDENT } ] "|" ( expression | block ) ;
+(* ADR-0018 MATCH: `match` without a scrutinee; the last arm must be `_` *)
+guard_match  = "match" "{" { or_expr "=>" expression "," } "_" "=>" expression [ "," ] "}" ;

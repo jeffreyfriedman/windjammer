@@ -54,3 +54,14 @@ tmp_*
 .agent-wip/
 **/*.wip.rs
 /.worktrees/
+
+# Claude plugin runtime state
+.claude/autoharness/
+.claude/autoharness*/
+.claude/skills/*/.ledger.jsonl
+.claude/skills/
+
+# Interpreter-readiness scorecard: resumable result cache and the R7 history (nightly CI restores the latter)
+.wj-readiness-cache/
+.wj-readiness-history.json
+scripts/**/__pycache__/

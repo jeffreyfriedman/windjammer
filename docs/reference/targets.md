@@ -6,26 +6,22 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 127 | 103 | 24 |
-| `go` | 127 | 124 | 3 |
-| `js` | 127 | 124 | 3 |
-| `ts` | 127 | 125 | 2 |
+| `rust` | 156 | 129 | 27 |
+| `go` | 156 | 156 | 0 |
+| `js` | 156 | 156 | 0 |
 
 ## Known-unsupported pairs by cause
 
 | Backend | Cause | Programs |
 |---|---|---|
-| `go` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
-| `go` | mut-ref-to-int-locals | 1 |
-| `go` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
-| `js` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
-| `js` | mut-ref-to-int-parameters | 1 |
-| `js` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
-| `rust` | mut-ref-to-int-parameters | 1 |
-| `rust` | rust-closure-returned-as-fn-pointer | 1 |
-| `rust` | rust-int-literal-width-inference | 14 |
+| `rust` | mut-ref-to-int-parameters | 2 |
+| `rust` | rust-closure-field-move | 1 |
+| `rust` | rust-closure-if-tail | 1 |
+| `rust` | rust-int-literal-width-inference | 11 |
+| `rust` | rust-into-bound-param-borrowed | 1 |
+| `rust` | rust-module-impl-self-type | 1 |
+| `rust` | rust-optional-chain | 1 |
 | `rust` | rust-std-runtime-crate-needed-by-rustc | 4 |
 | `rust` | rust-str-vs-string-in-collect-and-concat | 2 |
 | `rust` | rust-tail-none-cast | 2 |
-| `ts` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
-| `ts` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
+| `rust` | rust-unsized-slice-binding | 1 |

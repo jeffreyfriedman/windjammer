@@ -1,0 +1,4 @@
+// expect: W0007
+fn main() {
+    println!("hello")
+}

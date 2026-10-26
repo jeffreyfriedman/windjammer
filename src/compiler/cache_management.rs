@@ -35,12 +35,6 @@ pub fn is_output_fresh(source: &Path, output: &Path) -> bool {
     output_mtime >= source_mtime
 }
 
-/// Check if the meta cache file is also fresh relative to the source.
-pub fn is_meta_fresh(source: &Path) -> bool {
-    let meta_path = crate::metadata::meta_cache_path(source);
-    is_output_fresh(source, &meta_path)
-}
-
 /// Authoritative check for whether generated Rust can be skipped.
 ///
 /// Requires ALL of:
@@ -284,19 +278,6 @@ pub fn compute_codegen_files(
     dirty.dedup();
     let skipped = wj_files.len().saturating_sub(dirty.len());
     (dirty, skipped)
-}
-
-/// Like [`compute_dirty_files`] but also includes transitive importers (analysis rebuild set).
-pub fn compute_rebuild_set(
-    wj_files: &[(PathBuf, String)],
-    src_base: &Path,
-    output: &Path,
-    dep_roots: &[PathBuf],
-    dependency_graph: &crate::compiler::incremental::DependencyGraph,
-) -> std::collections::HashSet<usize> {
-    let (dirty_indices, _) = compute_dirty_files(wj_files, src_base, output, dep_roots);
-    let dirty: std::collections::HashSet<usize> = dirty_indices.into_iter().collect();
-    dependency_graph.transitive_dependents(&dirty)
 }
 
 pub fn is_compiler_stamp_fresh(output: &Path) -> bool {

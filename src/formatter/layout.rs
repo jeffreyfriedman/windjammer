@@ -13,9 +13,9 @@ pub struct Line {
     pub indent: usize,
 }
 
-const CONTINUATION_STARTS: &[&str] = &[".", "|>", "|>?", "&&", "||", "?"];
+const CONTINUATION_STARTS: &[&str] = &[".", "|>", "|>?", "??", "&&", "||", "?"];
 const CONTINUATION_ENDS: &[&str] = &[
-    "=", "+", "-", "/", "%", "&&", "||", "|>", "|>?", "==", "!=", "<=", ">=", "+=", "-=", "*=",
+    "=", "+", "-", "/", "%", "&&", "||", "|>", "|>?", "??", "==", "!=", "<=", ">=", "+=", "-=", "*=",
     "/=", "->", "=>",
 ];
 
@@ -29,10 +29,11 @@ pub fn layout(toks: &[Tok]) -> Vec<Line> {
         while e < toks.len() && toks[e].nl == 0 {
             e += 1;
         }
-        let pipe_next = toks[s].is_comment() && comment_precedes_pipe(&toks[e..]);
+        let comment_only = toks[s..e].iter().all(|t| t.is_comment());
+        let pipe_next = comment_only && comment_precedes_pipe(&toks[e..]);
         let indent = line_indent(&toks[s..e], &mut stack, prev_last, lines.len(), pipe_next);
         lines.push(Line { start: s, end: e, indent });
-        if !toks[s].is_comment() {
+        if !comment_only {
             prev_last = toks[s..e].iter().rev().find(|t| !t.is_comment());
         }
         s = e;
@@ -48,7 +49,8 @@ fn line_indent(
     line_no: usize,
     pipe_next: bool,
 ) -> usize {
-    if line[0].is_comment() {
+    // (A line that starts with a block comment but has code after it is laid out as code.)
+    if line.iter().all(|t| t.is_comment()) {
         return stack.last().map_or(0, |e| e.0 + 1) + usize::from(pipe_next);
     }
     let leading = line.iter().take_while(|t| t.is_closer()).count();

@@ -11,7 +11,18 @@ use std::collections::HashMap;
 
 /// Lower a whole program. `reg` supplies analyzer-inferred parameter ownership.
 pub fn lower_program(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
-    let env = ItemEnv::build(program, reg);
+    lower_with_env(program, ItemEnv::build(program, reg))
+}
+
+/// [`lower_program`] ignoring the semantic layer's facts (defensive copy at every owned use).
+/// Used to measure what the facts save; never used to emit code.
+pub fn lower_program_without_facts(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
+    let mut env = ItemEnv::build(program, reg);
+    env.without_facts = true;
+    lower_with_env(program, env)
+}
+
+fn lower_with_env(program: &Program, env: ItemEnv) -> PResult<PModule> {
     let mut m = PModule { structs: vec![], enums: vec![], traits: vec![], fns: vec![], consts: vec![] };
     let mut items: Vec<&Item> = Vec::new();
     flatten(&program.items, &mut items);
@@ -71,7 +82,7 @@ fn lower_item(env: &ItemEnv, item: &Item, defaults: &Defaults, m: &mut PModule) 
             m.traits.push(PTrait { name: decl.name.clone(), methods });
         }
         Item::Const { name, type_, value, .. } | Item::Static { name, type_, value, .. } => {
-            let ty = from_ast(type_, &[]);
+            let ty = from_ast(type_, &[], &env.aliases);
             let mut lw = Lowerer::new(env);
             let mut e = lw.expr(value, Some(&ty))?;
             visit::types_in_expr(&mut e, &mut |t| *t = lw.resolve_final(t));
@@ -92,8 +103,10 @@ fn attach_impl(env: &ItemEnv, block: &ImplBlock, defaults: &Defaults, m: &mut PM
     let owner = crate::codegen::portable::env::base_name(&block.type_name).to_string();
     let mut methods = Vec::new();
     for f in &block.functions {
-        let sig = &env.methods[&(owner.clone(), f.name.clone())];
+        let name = crate::codegen::portable::env::impl_method_name(block, &f.name, &env.aliases);
+        let sig = &env.methods[&(owner.clone(), name.clone())];
         let mut fx = lower_fn(env, f, sig, Some(&owner), &outer)?;
+        fx.name = name;
         fx.owner = Some(owner.clone());
         methods.push(fx);
     }
@@ -122,7 +135,7 @@ fn lower_trait_method(env: &ItemEnv, tm: &TraitMethod, trait_name: &str, for_typ
         name: tm.name.clone(),
         is_pub: true,
         is_extern: false,
-        type_params: vec![],
+        type_params: tm.type_params.clone(),
         where_clause: vec![],
         decorators: vec![],
         is_async: tm.is_async,
@@ -171,13 +184,17 @@ pub(super) fn lower_fn(env: &ItemEnv, decl: &FunctionDecl, sig: &crate::codegen:
             lw.declare("self", st, sig.recv != Some(ParamMode::Value));
             continue;
         }
-        let (_, pty, mode) = sig.params.iter().find(|(n, _, _)| *n == p.name).cloned().unwrap_or((p.name.clone(), fix_self(from_ast(&p.type_, &lw.generics), self_ty.as_ref()), ParamMode::Value));
+        let (_, pty, mode) = sig.params.iter().find(|(n, _, _)| *n == p.name).cloned().unwrap_or((p.name.clone(), fix_self(from_ast(&p.type_, &lw.generics, &env.aliases), self_ty.as_ref()), ParamMode::Value));
         let _ = i;
         let out = lw.declare(&p.name, pty.clone(), mode != ParamMode::Value);
-        if p.is_mutable {
-            lw.set_mutable(&p.name);
+        if mode == ParamMode::Value {
+            lw.set_fresh(&p.name);
         }
         params.push(PParam { name: out, ty: pty, mode, own_mutable: p.is_mutable });
+    }
+    let names: Vec<&str> = decl.parameters.iter().map(|p| p.name.as_str()).collect();
+    if !env.without_facts {
+        lw.last_uses = crate::ir::liveness::last_uses(&names, &decl.body);
     }
     lw.rets.push(sig.ret.clone());
     let need_value = sig.ret != Ty::Unit;
@@ -191,7 +208,7 @@ pub(super) fn lower_fn(env: &ItemEnv, decl: &FunctionDecl, sig: &crate::codegen:
     let mut bounds: Vec<(String, Vec<String>)> = lw.bounds.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     bounds.sort();
     let mut f = PFn { name: decl.name.clone(), type_params: decl.type_params.iter().map(|t| t.name.clone()).collect(), bounds, recv: sig.recv, params, ret: sig.ret.clone(), body: Some(body), owner: owner.map(|s| s.to_string()), is_async: decl.is_async };
-    let resolver = Lowerer { vars: lw.vars.clone(), int_vars: lw.int_vars.clone(), float_vars: lw.float_vars.clone(), ..Lowerer::new(env) };
+    let resolver = Lowerer { vars: lw.vars.clone(), int_vars: lw.int_vars.clone(), float_vars: lw.float_vars.clone(), usize_vars: lw.usize_vars.clone(), ..Lowerer::new(env) };
     visit::types_in_fn(&mut f, &mut |t| *t = resolver.resolve_final(t));
     Ok(f)
 }

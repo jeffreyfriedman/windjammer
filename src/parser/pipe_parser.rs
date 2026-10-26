@@ -39,7 +39,7 @@ impl Parser {
                 &format!("`{op}` needs a left-hand value (a pipe cannot start an expression)"),
             ));
         }
-        let left = self.parse_binary_expression(0)?;
+        let left = self.parse_range_expression()?;
         self.parse_pipe_stages(left)
     }
 
@@ -243,7 +243,7 @@ impl Parser {
         }
     }
 
-    fn token_location(&self, token_index: usize) -> SourceLocation {
+    pub(in crate::parser) fn token_location(&self, token_index: usize) -> SourceLocation {
         self.tokens.get(token_index).map(|t| crate::source_map::Location {
             file: std::path::PathBuf::from(&self.filename),
             line: t.line,

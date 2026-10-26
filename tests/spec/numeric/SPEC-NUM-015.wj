@@ -1,0 +1,8 @@
+// spec: SPEC-NUM-015
+// mode: panic
+// expect-error: out of bounds
+fn main() {
+    let v = [1, 2, 3]
+    let i = 3
+    println("${v[i]}")
+}

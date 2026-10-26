@@ -135,4 +135,6 @@ fn trivia_check_rejects_hidden_tokens() {
     assert!(check_trivia(" x ").is_err());
     assert!(check_trivia("/// doc").is_err());
     assert!(check_trivia("\n").is_err());
+    assert!(check_trivia(" /* c */ \t/* a\nb */").is_ok());
+    assert!(check_trivia("/* never closed").is_err());
 }

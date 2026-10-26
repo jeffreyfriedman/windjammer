@@ -4,31 +4,37 @@
 
 /// Get an environment variable
 pub fn var(key: &str) -> Result<String, String> {
+    crate::caps::env_read(key);
     std::env::var(key).map_err(|e| e.to_string())
 }
 
 /// Get an environment variable or return a default
 pub fn get_or(key: &str, default: &str) -> String {
+    crate::caps::env_read(key);
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
 /// Get an environment variable (optional)
 pub fn get(key: &str) -> Option<String> {
+    crate::caps::env_read(key);
     std::env::var(key).ok()
 }
 
 /// Set an environment variable
 pub fn set_var(key: &str, value: &str) {
+    crate::caps::env_write(key);
     std::env::set_var(key, value);
 }
 
 /// Remove an environment variable
 pub fn remove_var(key: &str) {
+    crate::caps::env_write(key);
     std::env::remove_var(key);
 }
 
 /// Get all environment variables
 pub fn vars() -> Vec<(String, String)> {
+    crate::caps::env_read_all();
     std::env::vars().collect()
 }
 

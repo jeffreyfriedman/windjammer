@@ -26,7 +26,7 @@ pub fn compile_with_map(wj_src: &str) -> Result<(String, Vec<Map>), String> {
     std::fs::create_dir_all(&src_dir).unwrap();
     std::fs::write(src_dir.join("main.wj"), wj_src).unwrap();
     let r = std::panic::catch_unwind(|| {
-        build_project_with_config(&src_dir, &out, CompilationTarget::Rust, false, false, &[], &windjammer::compiler_config::CompilerConfig::default())
+        build_project_with_config(&src_dir, &out, CompilationTarget::Rust, false, false, &[], &windjammer::compiler_config::CompilerConfig::default().with_emit_source_maps(true))
     });
     match r {
         Ok(Ok(())) => {}
@@ -65,13 +65,16 @@ pub fn verify(wj_src: &str, rust_src: &str, maps: &[Map]) -> Vec<String> {
             v.push(format!("{at}: rust line outside generated file ({} lines)", rust_lines.len()));
             continue;
         }
-        if !starts.contains(&(m.wj_line, m.wj_column)) {
-            v.push(format!("{at}: not the start of any .wj token"));
+        // The aligned map is line-level (column 0); a column, when present, must be a token start.
+        let line_has_token = tokens.iter().any(|t| t.line == m.wj_line && t.token != windjammer::lexer::Token::Newline);
+        let ok = if m.wj_column == 0 { line_has_token } else { starts.contains(&(m.wj_line, m.wj_column)) };
+        if !ok {
+            v.push(format!("{at}: not a .wj line with code / not the start of any .wj token"));
             continue;
         }
         // First word of the statement must occur on the mapped Rust line.
         let wj_line = wj_lines.get(m.wj_line - 1).copied().unwrap_or("");
-        let rest: String = wj_line.chars().skip(m.wj_column - 1).collect();
+        let rest: String = wj_line.chars().skip(m.wj_column.saturating_sub(1)).collect();
         let mut words = rest.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|w| !w.is_empty());
         let first = words.next().unwrap_or("");
         let key = match first {
@@ -182,6 +185,14 @@ fn verifier_rejects_wj_line_off_by_one() {
     m[0].wj_column = 5;
     assert!(!verify(MUT_WJ, MUT_RS, &m).is_empty());
 }
+#[test]
+fn verifier_accepts_line_level_map_and_rejects_blank_line() {
+    let line_level = vec![Map { rust_line: 2, rust_column: 0, wj_line: 2, wj_column: 0 }];
+    assert_eq!(verify(MUT_WJ, MUT_RS, &line_level), Vec::<String>::new());
+    let blank = vec![Map { rust_line: 2, rust_column: 0, wj_line: 5, wj_column: 0 }];
+    assert!(!verify(MUT_WJ, MUT_RS, &blank).is_empty());
+}
+
 #[test]
 fn verifier_rejects_position_that_is_not_a_token_start() {
     let mut m = good_maps();

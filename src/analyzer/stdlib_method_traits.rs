@@ -34,6 +34,11 @@ pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<Stri
     if matches!(leaf, "Map") {
         push("HashMap");
     }
+    // Fixed-size arrays and slices use the `Vec` methods (`[1, 2].contains(&1)`); without this the lookup
+    // fell through to an arbitrary homonym (`HashSet::contains`), which made codegen differ between runs.
+    if matches!(leaf, "Array" | "Slice" | "slice") {
+        push("Vec");
+    }
     out
 }
 
@@ -642,22 +647,6 @@ fn sig_is_storage_like(sig: &FunctionSignature) -> bool {
     false
 }
 
-/// When `::{method}` is registered on many types, true only if every *instance*
-/// method match is storage-like (`Vec::push`-style). Ambiguous names return false.
-pub fn consensus_storage_method(method: &str, registry: &SignatureRegistry) -> bool {
-    let mut any = false;
-    for (_key, sig) in registry.signatures_for_method_name(method) {
-        if !sig.has_self_receiver {
-            continue;
-        }
-        any = true;
-        if !sig_is_storage_like(sig) {
-            return false;
-        }
-    }
-    any
-}
-
 fn sig_is_closure_taking(sig: &FunctionSignature) -> bool {
     first_arg_type(sig).is_some_and(is_closure_type)
 }
@@ -680,7 +669,13 @@ pub fn method_predicate_closure_receives_ref(method: &str) -> bool {
             | "skip_while"
             | "partition"
             | "inspect"
-    )
+    ) || enumerable_key_closure(method)
+}
+
+/// ADR-0018 enumerable surface: key/predicate closures (`group_by(|x| ..)`) receive `&T`.
+fn enumerable_key_closure(method: &str) -> bool {
+    use crate::stdlib_surface::enumerable::{Arg, METHODS};
+    METHODS.iter().any(|m| (m.name == method || m.rust == method) && m.args.contains(&Arg::KeyFn))
 }
 
 /// Unanimous closure-first-arg across all stdlib instance methods named `::{method}`.
@@ -802,25 +797,6 @@ pub fn method_is_string_runtime_qualified(
                 return true;
             }
         }
-    }
-    false
-}
-
-pub fn method_is_membership_test_qualified(
-    method: &str,
-    receiver_type: Option<&str>,
-    registry: &SignatureRegistry,
-) -> bool {
-    if method_is_string_search_qualified(method, receiver_type, registry) {
-        return true;
-    }
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_unqualified(method, registry));
-    if let Some(s) = sig {
-        return sig_is_membership_test(s);
-    }
-    if receiver_type.is_none() {
-        return consensus_membership_test_method(method, registry);
     }
     false
 }
@@ -1102,3 +1078,13 @@ mod tests {
         assert!(!is_known_readonly_qualified("as_float", Some("Val"), &reg));
     }
 }
+
+/// Adapters that exist on `Iterator` but not on the collection types. Called on a collection they
+/// borrow it (codegen inserts `.iter()`), so the receiver is read, never consumed. One table for the
+/// analyzer's ownership rule and for the codegen lowering (`idiom_lowering`).
+pub const ITERATOR_ONLY_ADAPTERS: &[&str] = &[
+    "map", "filter", "filter_map", "flat_map", "flatten", "fold", "any", "all", "find", "find_map",
+    "position", "take", "skip", "take_while", "skip_while", "step_by", "zip", "chain", "rev",
+    "sum", "product", "max_by_key", "min_by_key", "max_by", "min_by", "partition", "cloned",
+    "copied", "peekable", "inspect", "for_each", "count", "last", "unzip", "scan", "cycle",
+];

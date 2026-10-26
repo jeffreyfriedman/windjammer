@@ -1,0 +1,14 @@
+use shapes::{area, perimeter}
+use shapes::area as rect_area
+use text::*
+use geo::points::Point
+use geo::origin_distance
+
+fn main() {
+    println("${area(2, 3)} ${perimeter(2, 3)} ${rect_area(4, 5)}")
+    println("${shout("hi")}")
+    println("${whisper("HI")}")
+    let p = Point { x: 3, y: 4 }
+    println("${origin_distance(p)}")
+    println("${geo::points::manhattan(Point { x: 1, y: 2 })}")
+}

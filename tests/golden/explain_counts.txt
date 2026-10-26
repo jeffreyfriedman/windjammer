@@ -1,0 +1,7 @@
+# `wj explain-ownership` finding counts over the convergence corpus (gate 3). May only fall.
+# <finding id> | <count>
+D-CLONE-LASTUSE | 2
+D-CLONE-OUTSIDE-SOLVER | 25
+D-OWN-STAGES | 21
+D-WIDTH-OWNERS | 191
+EXPLAIN-ERROR | 5

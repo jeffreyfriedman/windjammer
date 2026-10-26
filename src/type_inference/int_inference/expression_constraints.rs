@@ -187,7 +187,7 @@ impl IntInference {
                 arguments,
                 ..
             } => {
-                self.collect_expression_constraints(function, return_type);
+                self.collect_callee_constraints(function, arguments, return_type);
 
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.clone()),
@@ -468,9 +468,8 @@ impl IntInference {
                 // Don't pass return_type to object - Vec has its own type
                 self.collect_expression_constraints(object, None);
 
-                // Rust indexing uses usize at codegen (`maybe_cast_index_to_usize`). Do not
-                // force the variable's unified width to usize — loop counters stay WJ `int`/i64
-                // when compared to `len() as int` (P3.267 / a downstream application nested loops).
+                // Indexing casts to usize at codegen (`maybe_cast_index_to_usize`); do not force the variable's
+                // width to usize — loop counters stay WJ `int`/i64 when compared to `len() as int` (P3.267).
                 self.collect_expression_constraints(index, None);
             }
             Expression::Array { elements, .. } => {
@@ -546,6 +545,7 @@ impl IntInference {
                     }
                 }
             }
+            Expression::Unary { .. } | Expression::Closure { .. } => self.collect_unary_or_closure_constraints(expr, return_type),
             Expression::Range { start, end, .. } => {
                 // TDD FIX: Ranges like 0..vec.len() should have unified types
                 // If end is .len() (returns usize), constrain start to usize

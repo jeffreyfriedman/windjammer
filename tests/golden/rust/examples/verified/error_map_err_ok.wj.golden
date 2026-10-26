@@ -1,0 +1,17 @@
+#[inline]
+fn parse(s: &str) -> Result<i64, String> {
+    { s.parse::<i64>().map_err(|_| format!("bad: {}", s)) }
+}
+
+#[inline]
+fn pick(xs: &Vec<i64>, i: i64) -> Result<i64, String> {
+    xs.get(i as usize).copied().ok_or(String::from("missing"))
+}
+
+fn main() {
+    println!("{:?}", parse("abc"));
+    println!("{:?}", parse("5"));
+    println!("{:?}", pick(&vec![9_i64], 3_i64));
+    println!("{:?}", pick(&vec![9_i64], 0_i64));
+}
+

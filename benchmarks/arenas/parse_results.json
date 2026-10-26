@@ -1,0 +1,6 @@
+{
+  "note": "benches/parser_throughput.rs, interleaved A/B x3 on loadavg 85-105 (8 cores): base = next/v0.50.0 at 86e2a044 (leaked arenas), owned = this branch (Arc-owned arenas). Best of 3 rounds; lower is better.",
+  "small_359B_us_per_parse": {"base": 14.3, "owned": 13.1},
+  "big_73760B_us_per_parse": {"base": 2919.2, "owned": 2558.4},
+  "memory_gate_live_heap_growth_bytes_per_1000_parses": {"owned": 0, "leaked_mutation": 11602000}
+}

@@ -32,6 +32,7 @@ pub fn mask_value() -> u64 {
     assert!(
         generated.contains("0x8000000000000000u64")
             || generated.contains("9223372036854775808u64")
+            || generated.contains("9223372036854775808_u64")
             || generated.contains("-9223372036854775808_u64")
             || generated.contains("i64::MIN as u64"),
         "Expected large u64 hex constant in output.\nGenerated:\n{generated}"

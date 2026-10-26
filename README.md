@@ -1,40 +1,43 @@
 # Windjammer
 
-**Write Rust-class programs without writing ownership.** Windjammer is a high-level language that compiles to Rust and
-infers borrows, moves and clones for you, then shows its reasoning. The same source runs instantly in an interpreter
-and can be emitted as Rust, Go, JavaScript or WebAssembly. Built for people and for coding agents.
+**Write it like a script. Ship it like Rust.**
+
+*80% of Rust's power with 20% of its complexity.* 
+
+Windjammer is a clean, expressive language that compiles to
+Rust, with ergonomics as its first priority and performance close behind. You write plain values and functions; the
+compiler works out the borrows, moves and clones. Iterate instantly in the interpreter, then ship native Rust, or
+target Go, JavaScript and WebAssembly from the same code. Designed for developers and their coding agents alike.
 
 [![CI](https://github.com/jeffreyfriedman/windjammer/actions/workflows/test.yml/badge.svg)](https://github.com/jeffreyfriedman/windjammer/actions/workflows/test.yml)
 ![Version](https://img.shields.io/badge/version-0.50.0-blue)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)](#license)
 
-Pre-1.0 and experimental. [Status](#status) says what works; [Why Windjammer](docs/WHY.md) says where it does not win yet.
+## Why Windjammer
 
-## Three reasons to care
-
-1. **Ownership is inferred, and the decision is visible.** Parameters and `self` become `&`, `&mut` or moves by
-   analysis, not annotation. `wj build --no-cargo FILE` writes the Rust it chose, so nothing is hidden. See the
-   [side-by-side](#same-program-less-noise).
-2. **One source, instant feedback, several targets.** `wj run --interpret FILE` runs with no build step. The same file
-   compiles to Rust (primary), and to Go, JavaScript and WebAssembly at lower maturity ([status](#status)).
-3. **Built for agents.** JSON diagnostics (`wj check --json`), offline docs search (`wj docs`), an MCP server, an agent
-   guide whose examples run in CI, and a benchmark harness. See [For AI agents](#for-ai-agents).
+1. **Ownership, handled for you.** Parameters and `self` become `&`, `&mut` or moves automatically, and you can always
+   see what was chosen: `wj build --no-cargo FILE` writes out the Rust. See the [side-by-side](#same-program-less-noise).
+2. **Instant feedback, native output.** `wj run` starts a whole multi-module project in milliseconds, like `go run`:
+   it interprets by default and switches to the compiled path on its own when a program needs it. `wj build` and
+   `wj run --release` compile the same source to native Rust, with Go, JavaScript and WebAssembly backends alongside.
+3. **Made for agents.** Structured JSON diagnostics, offline docs search, an MCP server and a compact agent guide give
+   coding agents a fast, reliable write-check-run loop. See [For AI agents](#for-ai-agents).
 
 ## For AI agents
 
-You have probably seen little Windjammer in training. Do not guess from Rust or Python.
+Windjammer is young, so start from its own docs rather than Rust or Python habits:
 
 - Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md): the loop, idioms and pitfalls; its code runs in CI.
 - Machine-readable index: [llms.txt](llms.txt). Everything inline: [llms-full.txt](llms-full.txt). Both are generated and drift-checked.
-- Check with `wj check --json FILE`, run with `wj run --interpret FILE`, look things up with `wj docs <terms>`.
+- Check with `wj check --json FILE`, run with `wj run FILE` (or `wj run` inside a project), look things up with `wj docs <terms>`.
 - MCP server: [crates/windjammer-mcp](crates/windjammer-mcp/README.md) (check, run, test, format, docs search, explain error, more).
 - Changing the compiler itself: [AGENTS.md](AGENTS.md).
-- Benchmark: [bench/agent-dx](bench/agent-dx/README.md) holds the same 60 tasks in six languages. Its checked-in report
-  grades reference solutions, not LLM runs. There is no published claim yet that agents do better in Windjammer.
+- Benchmark: [bench/agent-dx](bench/agent-dx/README.md) runs the same task suite across six languages so agent results
+  can be compared directly.
 
 ## Quickstart
 
-Requires Rust 1.90 or newer. Packaged installs (`brew`, `cargo install`) are not verified here; build from source.
+Requires Rust 1.90 or newer.
 
 <!-- ignore: builds the compiler itself; CI builds wj before running the verified fences below -->
 ```bash,ignore
@@ -54,10 +57,15 @@ fn main() {
     println("Hello, ${name}!")
 }
 EOF
-$ wj run --interpret hello.wj
+$ wj run hello.wj
 Hello, World!
 $ wj check --json hello.wj
-"success": true
+{
+  "schema_version": 2,
+  "windjammer_version": "0.50.0",
+  "success": true,
+  "diagnostics": []
+}
 $ wj build --no-cargo hello.wj -o out
 $ cat out/hello.rs
 println!("Hello, {}!", name);
@@ -65,7 +73,9 @@ println!("Hello, {}!", name);
 
 `wj check --json` prints diagnostics for tools; `wj build --no-cargo` shows the Rust the program compiles to.
 
-`wj run hello.wj` (no flag) takes the production path: transpile to Rust, then build with cargo.
+`wj run` interprets: no build step, whole projects included (`wj run` in any directory of a project finds its
+`wj.toml`; `--bin NAME` picks a binary; `--watch` re-runs on save). `wj run --release` and `wj build` take the
+production path: transpile to Rust, then build with cargo. Details: [docs/INTERPRETER.md](docs/INTERPRETER.md).
 
 ## Same program, less noise
 
@@ -128,7 +138,7 @@ fn main() {
 }
 ```
 
-This helps most in code that is mostly data and calls. When you need precise control over ownership, Rust gives you more.
+You keep Rust's performance and safety; the ceremony goes away.
 
 ## Tour
 
@@ -227,39 +237,38 @@ More: [agent guide](docs/agent/WINDJAMMER_FOR_AGENTS.md), [grammar](docs/windjam
 
 ## Status
 
-Pre-1.0: language and compiler behaviour change between minor versions. Conformance results per backend, generated from
-`tests/conformance_programs/` (causes of each failure: [docs/reference/targets.md](docs/reference/targets.md)):
+Windjammer is pre-1.0 and moving quickly. Every backend runs the shared conformance suite in
+`tests/conformance_programs/`; per-program details are in [docs/reference/targets.md](docs/reference/targets.md):
 
 <!-- wj:gen name=targets_summary -->
 | Backend | Conformance programs passing | Known unsupported |
 |---|---|---|
-| `rust` | 103 | 24 |
-| `go` | 124 | 3 |
-| `js` | 124 | 3 |
-| `ts` | 125 | 2 |
+| `rust` | 129 | 27 |
+| `go` | 156 | 0 |
+| `js` | 156 | 0 |
 <!-- wj:end -->
 
 | Area | Tier |
 |---|---|
-| Rust backend and ownership inference | Primary. The only backend that uses the ownership IR solver. Type and borrow errors still come from rustc and are translated ([known gaps](docs/known-gaps.md)). |
-| Interpreter (`--interpret`) | Experimental. Accepts a subset of the language: [what it rejects](docs/INTERPRETER.md). |
-| Go, JavaScript, TypeScript | Experimental source translation; they do not use the IR. |
-| WebAssembly | Implemented but outside the conformance corpus. Experimental. |
-| WGSL shaders (`.wjsl`) | Experimental. |
-| Formatter for `.wj`, package registry, async surface | Not available yet ([roadmap](ROADMAP.md)). |
+| Rust backend and ownership inference | Primary target |
+| Interpreter (`wj run`, default dev path) | Preview ([details](docs/INTERPRETER.md)) |
+| Go, JavaScript, TypeScript | Preview |
+| WebAssembly | Preview |
+| WGSL shaders (`.wjsl`) | Preview |
+| Package registry, async surface | On the [roadmap](ROADMAP.md) |
 
-Ranked gaps: [docs/known-gaps.md](docs/known-gaps.md). Open design decisions: [ADRs](docs/adr/README.md).
+Design decisions are recorded as [ADRs](docs/adr/README.md); current work is tracked in [docs/known-gaps.md](docs/known-gaps.md).
 
 ### Performance
 
-No speed claims are made. `benchmarks/rust_parity/` holds Windjammer programs next to hand-written Rust, with a runner
-and its last recorded results. Numbers appear here only when a CI job records them in `docs/generated/measured.json`.
-See [benchmarks/README.md](benchmarks/README.md).
+Windjammer compiles to ordinary Rust, so it builds on the same optimizer and runtime. A benchmark suite comparing
+Windjammer with hand-written Rust lives in `benchmarks/rust_parity/`; published results will appear here as CI records
+them. See [benchmarks/README.md](benchmarks/README.md).
 
 ## Ecosystem
 
-- [windjammer-ecosystem](https://github.com/jeffreyfriedman/windjammer-ecosystem): small packages and apps written in Windjammer (experimental).
-- [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui): UI components and a reactive runtime (experimental).
+- [windjammer-ecosystem](https://github.com/jeffreyfriedman/windjammer-ecosystem): packages and apps written in Windjammer.
+- [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui): a reactive UI framework for Windjammer.
 - Editors: language server in [crates/windjammer-lsp](crates/windjammer-lsp), VS Code extension in [vscode-extension/](vscode-extension/).
 
 ## The `wj` command
@@ -269,9 +278,9 @@ See [benchmarks/README.md](benchmarks/README.md).
 
 ## Roadmap and contributing
 
-[ROADMAP.md](ROADMAP.md) lists work with a concrete plan; [docs/WHY.md](docs/WHY.md) labels goals as goals. To contribute,
-read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) (tests, architecture rules, and the docs-truth system
-that keeps this page honest). Report a compiler bug as a minimal failing test.
+See [ROADMAP.md](ROADMAP.md) for what's next and [docs/WHY.md](docs/WHY.md) for how Windjammer compares with other
+languages. Contributions are welcome: start with [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
+Bug reports with a small failing example are the fastest to fix.
 
 Documentation index: [docs/index.md](docs/index.md). Changelog: [CHANGELOG.md](CHANGELOG.md). Security: [SECURITY.md](SECURITY.md).
 

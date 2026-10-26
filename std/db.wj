@@ -7,6 +7,8 @@ struct Connection {}
 struct Row {}
 
 /// Open postgres://, postgresql://, or sqlite path (:memory:, file.db).
+/// Postgres connections share one process-wide pool per URL; each handle pins one pooled session
+/// for its lifetime, so session settings and transactions apply across its statements.
 fn connect(url: string) -> Result<Connection, string> {
     Err("import std::db — maps to windjammer_runtime::db")
 }
@@ -24,6 +26,34 @@ impl Connection {
     }
 
     fn close(self) {}
+
+    /// Start a transaction on this handle's session.
+    fn begin(&self) -> Result<(), string> {
+        Err("not implemented")
+    }
+
+    fn commit(&self) -> Result<(), string> {
+        Err("not implemented")
+    }
+
+    fn rollback(&self) -> Result<(), string> {
+        Err("not implemented")
+    }
+
+    /// Run `body` in a transaction: commit on Ok, roll back on Err.
+    fn transaction(&self, body: fn(&Connection) -> Result<(), string>) -> Result<(), string> {
+        Err("not implemented")
+    }
+
+    /// Transaction-scoped setting (`SET LOCAL`), e.g. a row-level-security context. Postgres only.
+    fn set_local(&self, key: string, value: string) -> Result<(), string> {
+        Err("not implemented")
+    }
+
+    /// Session-scoped setting, visible to every later statement on this handle. Postgres only.
+    fn set_session(&self, key: string, value: string) -> Result<(), string> {
+        Err("not implemented")
+    }
 }
 
 impl Row {

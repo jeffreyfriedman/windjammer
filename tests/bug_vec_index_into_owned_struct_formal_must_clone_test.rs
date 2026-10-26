@@ -80,12 +80,14 @@ pub fn sort_items(items: Vec<Item>) -> Vec<Item> {
     let call_ok = rs.contains("out[")
         && (rs.contains(".clone()")
             || rs.contains("item_less(") && rs.contains("clone"));
-    // Bare `item_less(out[…], out[…])` without clone is the RED shape.
+    // Bare `item_less(out[…], out[…])` without clone is the RED shape. A borrowed formal (`&Item`) takes
+    // `item_less(&out[…], &out[…])`: nothing is moved, so no clone is needed (the better inference).
     let bare_move = rs.lines().any(|l| {
         let t = l.trim();
         t.contains("item_less(")
             && t.contains("out[")
             && !t.contains(".clone()")
+            && !t.contains("item_less(&")
     });
     assert!(
         call_ok && !bare_move,

@@ -20,6 +20,17 @@ pub struct Config {
     pub verify: Verify,
     #[serde(default)]
     pub ebnf: Ebnf,
+    #[serde(default)]
+    pub spec_grammar: SpecGrammar,
+}
+
+/// Cross-check of `docs/spec/grammar.ebnf` (see `spec_grammar.rs`). There is no divergence table:
+/// constructs the parser rejects are documented in the grammar itself with `@status unparsed`.
+#[derive(Debug, Default, Deserialize)]
+pub struct SpecGrammar {
+    /// Lexer keywords deliberately absent from the spec grammar -> reason.
+    #[serde(default)]
+    pub unlisted_keywords: BTreeMap<String, String>,
 }
 
 /// Cross-check of `docs/windjammer.ebnf` against the parser (see `ebnf.rs`). Both tables may only shrink.

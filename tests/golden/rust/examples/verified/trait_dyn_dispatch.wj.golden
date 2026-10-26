@@ -1,0 +1,65 @@
+pub trait Shape {
+    fn area(&self) -> i64;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct Sq {
+    s: i64,
+}
+impl Sq {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.s.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct Rc {
+    w: i64,
+    h: i64,
+}
+impl Rc {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(16);
+        __bytes.extend_from_slice(&self.w.to_ne_bytes());
+        __bytes.extend_from_slice(&self.h.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Shape for Sq {
+#[inline]
+fn area(&self) -> i64 {
+        self.s * self.s
+}
+}
+
+impl Shape for Rc {
+#[inline]
+fn area(&self) -> i64 {
+        self.w * self.h
+}
+}
+
+#[inline]
+fn total(shapes: Vec<Box<dyn Shape>>) -> i64 {
+    let mut t = 0_i64;
+    for s in shapes {
+        t += s.area();
+    }
+    t
+}
+
+fn main() {
+    let a: Box<dyn Shape> = Box::new(Sq { s: 3_i64 });
+    let b: Box<dyn Shape> = Box::new(Rc { w: 2_i64, h: 3_i64 });
+    println!("{}", a.area() + 3_i64);
+    println!("{}", b.area());
+    println!("{}", total(vec![a, b]) - 3_i64);
+}
+

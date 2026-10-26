@@ -150,4 +150,19 @@ mod tests {
             assert!(TEMPLATE_NAMES.contains(t), "unknown template {t} ({p})");
         }
     }
+
+    /// ADR-0021 (owner decision D-ffi): `ffi` is denied by default, so a template whose sources declare an `extern fn`
+    /// (a host bridge) must ship the exact `[capabilities] ffi` line that lets it run.
+    #[test]
+    fn templates_with_a_host_bridge_grant_ffi() {
+        for (template, path, body) in EMBEDDED {
+            if path.ends_with(".wj") && body.lines().any(|l| l.trim_start().starts_with("extern fn") || l.trim_start().starts_with("pub extern fn")) {
+                let manifest = EMBEDDED.iter().find(|(t, p, _)| t == template && *p == "wj.toml").map(|(_, _, b)| *b).unwrap_or("");
+                assert!(
+                    manifest.contains("[capabilities]") && manifest.contains("ffi"),
+                    "template {template}: {path} declares an extern fn, so wj.toml needs `[capabilities]` with an `ffi = [..]` line"
+                );
+            }
+        }
+    }
 }

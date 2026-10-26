@@ -4,12 +4,8 @@
 //! and helpful suggestions - inspired by Rust's excellent error messages.
 
 #[cfg(feature = "cli")]
-pub mod context_builder;
-#[cfg(feature = "cli")]
 pub mod suggestions;
 
-#[cfg(feature = "cli")]
-pub use context_builder::ErrorContext;
 #[cfg(feature = "cli")]
 pub use suggestions::suggest_fix;
 
@@ -59,12 +55,6 @@ impl Suggestion {
         }
     }
 
-    pub fn with_replacement(message: impl Into<String>, replacement: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-            replacement: Some(replacement.into()),
-        }
-    }
 }
 
 /// A compiler error with rich context

@@ -16,6 +16,10 @@
 //! - Compiled `wj test` (needs cargo + a long runtime build) is opt-in:
 //!   `WJ_SMOKE_COMPILED=1 cargo test --test all installed_binary_smoke`.
 
+#[path = "common/installed_sandbox.rs"]
+mod installed_sandbox;
+
+use installed_sandbox::{real_wj, write, Sandbox};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -24,98 +28,24 @@ use tempfile::TempDir;
 
 const TEMPLATES: [&str; 4] = ["cli", "web", "lib", "wasm"];
 
-struct Sandbox {
-    _root: TempDir,
-    bin: PathBuf,
-    home: PathBuf,
-    empty_path: PathBuf,
-    /// Working directories, `(label, path)`; the first is the baseline.
-    cwds: Vec<(&'static str, PathBuf)>,
-}
-
-fn real_wj() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn write(p: &Path, s: &str) {
-    fs::create_dir_all(p.parent().unwrap()).unwrap();
-    fs::write(p, s).unwrap();
-}
-
-impl Sandbox {
-    fn new(bin_src: &Path) -> Sandbox {
-        let root = TempDir::new().unwrap();
-        let r = root.path().canonicalize().unwrap();
-        let prefix = r.join("prefix/bin");
-        fs::create_dir_all(&prefix).unwrap();
-        let bin = prefix.join("wj");
-        fs::copy(bin_src, &bin).unwrap();
-        let home = r.join("home");
-        fs::create_dir_all(&home).unwrap();
-        let empty_path = r.join("emptypath");
-        fs::create_dir_all(&empty_path).unwrap();
-
-        let plain = r.join("cwd-plain");
-        let homelike = r.join("home/work/Documents");
-        let proj = r.join("cwd-project");
-        let stray = r.join("cwd-stray");
-        for d in [&plain, &homelike, &proj, &stray] {
-            fs::create_dir_all(d).unwrap();
-        }
-        // A real project with wj.toml.
-        write(
-            &proj.join("wj.toml"),
-            "[package]\nname = \"other\"\nversion = \"0.1.0\"\n",
-        );
-        write(
-            &proj.join("src/main.wj"),
-            "fn main() {\n    println(\"other\")\n}\n",
-        );
-        // Looks like a compiler checkout, but every asset is a decoy.
-        write(&stray.join("Cargo.toml"), "[package]\nname = \"x\"\nversion = \"0.1.0\"\n[lib]\nname = \"windjammer\"\npath = \"src/lib.rs\"\n");
-        write(&stray.join("src/lib.rs"), "pub fn decoy() {}\n");
-        write(&stray.join("std/decoy.wj"), "pub fn decoy() {}\n");
-        write(&stray.join("stdlib_meta/string.wj.meta"), "garbage");
-        write(&stray.join("templates/cli/main.wj"), "DECOY");
-        write(&stray.join("templates/cli/wj.toml"), "DECOY");
-        write(
-            &stray.join("crates/windjammer-runtime/Cargo.toml"),
-            "[package]\nname = \"decoy\"\n",
-        );
-        write(&stray.join("agent_index/docs_index.json"), "[]");
-
-        let checkout = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        Sandbox {
-            bin,
-            home,
-            empty_path,
-            cwds: vec![
-                ("plain-tmp", plain),
-                ("home-like", homelike),
-                ("compiler-checkout", checkout),
-                ("wj-project", proj),
-                ("stray-src-lib", stray),
-            ],
-            _root: root,
-        }
-    }
-
-    fn command(&self, cwd: &Path) -> Command {
-        let mut c = Command::new(&self.bin);
-        c.current_dir(cwd)
-            .env_clear()
-            .env("PATH", &self.empty_path)
-            .env("HOME", &self.home)
-            .env("NO_COLOR", "1");
-        c
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
 struct Outcome {
     code: Option<i32>,
     output: String,
     files: Vec<(String, u64)>,
+}
+
+/// `wj check: 0 error(s), 0 warning(s) in 1 file(s) (57 ms)` -> drop the wall-clock suffix.
+fn strip_elapsed(line: &str) -> String {
+    if let Some(i) = line.rfind(" (") {
+        let tail = &line[i + 2..];
+        if let Some(n) = tail.strip_suffix(" ms)") {
+            if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == '.') {
+                return line[..i].to_string();
+            }
+        }
+    }
+    line.to_string()
 }
 
 fn normalize(s: &str, subs: &[(String, &str)]) -> String {
@@ -142,6 +72,7 @@ fn normalize(s: &str, subs: &[(String, &str)]) -> String {
         .filter(|l| {
             !l.contains("finished in") && !l.contains("Finished") && !l.contains("Compiling")
         })
+        .map(strip_elapsed)
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -157,7 +88,10 @@ fn tree_normalized(dir: &Path, subs: &[(String, &str)]) -> Vec<(String, u64)> {
         for e in rd.flatten() {
             let p = e.path();
             let rel = p.strip_prefix(base).unwrap().to_string_lossy().to_string();
-            if rel.starts_with(".git/") || rel == ".git" {
+            // `.wj-cache` entries are keyed by the absolute project path (the check cache's file name and
+            // fingerprint), so they legitimately differ between two work directories; the behavior under test
+            // is what the command prints and which source files it leaves behind.
+            if rel.starts_with(".git/") || rel == ".git" || rel.starts_with(".wj-cache") {
                 continue;
             }
             if p.is_dir() {
@@ -325,7 +259,7 @@ fn cases() -> Vec<Case> {
             args: vec!["check".into(), src.clone()],
             stdin: None,
             expect_code: 0,
-            expect_in_output: Some("No errors found"),
+            expect_in_output: Some("0 error(s)"),
         });
         v.push(Case {
             name: Box::leak(format!("build --no-cargo {name}").into_boxed_str()),
@@ -690,10 +624,16 @@ fn source_tree_has_no_runtime_checkout_reads() {
         "Path::new(\"crates/windjammer-runtime",
     ];
     // Reviewed exceptions (file suffix, reason). Keep this list tiny.
-    let allow: [(&str, &str); 1] = [(
-        "agent_index/mod.rs",
-        "maintainer-only: `wj agent-index` regenerates repo artifacts from a checkout",
-    )];
+    let allow: [(&str, &str); 2] = [
+        (
+            "agent_index/mod.rs",
+            "maintainer-only: `wj agent-index` regenerates repo artifacts from a checkout",
+        ),
+        (
+            "bin/wj-docs.rs",
+            "maintainer-only: `wj-docs` checks and regenerates the checkout's documentation; never installed",
+        ),
+    ];
     let mut hits = Vec::new();
     fn walk(d: &Path, out: &mut Vec<PathBuf>) {
         for e in fs::read_dir(d).unwrap().flatten() {

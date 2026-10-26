@@ -30,7 +30,7 @@ impl<'m> Go<'m> {
             PK::Local(n) if self.ptr_locals.contains_key(n) => Ok(ident(n)),
             PK::Local(n) => Ok(format!("&{}", ident(n))),
             PK::Field(..) | PK::TupleIdx(..) | PK::Index(..) => Ok(format!("&{}", self.expr(e)?)),
-            PK::Copy(inner) => self.addr(inner),
+            PK::Copy(inner) | PK::BorrowMut(inner) => self.addr(inner),
             _ => Ok(format!("wjPtr({})", self.expr(e)?)),
         }
     }
@@ -115,11 +115,13 @@ impl<'m> Go<'m> {
                 let parts: PResult<Vec<String>> = es.iter().enumerate().map(|(i, x)| Ok(format!("F{i}: {}", self.expr(x)?))).collect();
                 Ok(format!("{}{{{}}}", self.ty(&e.ty)?, parts?.join(", ")))
             }
-            PK::Closure { params, ret, body, captures } => self.closure_snapshot(params, ret, body, captures, &e.ty),
+            PK::Closure { params, ret, body } => self.closure(params, ret, body),
             PK::Copy(a) => {
                 let v = self.expr(a)?;
                 self.clone_go(&a.ty, &v)
             }
+            // Only reference types (maps, sets) reach here: the alias is the value itself.
+            PK::BorrowMut(a) => self.expr(a),
             PK::Format(pieces) => self.format(pieces),
             PK::Print { newline, to_stderr, pieces } => {
                 let s = self.format(pieces)?;
@@ -183,6 +185,20 @@ impl<'m> Go<'m> {
             (_, BinKind::Lt | BinKind::Le | BinKind::Gt | BinKind::Ge) if aggregate => self.unsupported("ordering comparison of aggregate values"),
             (Ty::Int(_), _) => Ok(num::int_binary(op, &x, &y)),
             (Ty::F64 | Ty::F32, BinKind::Rem) => Ok(format!("wjFmod({x}, {y})")),
+            // Two literal operands would be folded by Go's exact constant arithmetic, which has no `-0`
+            // and rounds differently from IEEE; route them through a call so they run as float64 ops.
+            (Ty::F64 | Ty::F32, BinKind::Add | BinKind::Sub | BinKind::Mul)
+                if matches!(*a.kind, PK::Float(_)) && matches!(*b.kind, PK::Float(_)) =>
+            {
+                let f = match op {
+                    BinKind::Add => "wjFadd",
+                    BinKind::Sub => "wjFsub",
+                    _ => "wjFmul",
+                };
+                Ok(format!("{f}({x}, {y})"))
+            }
+            // Go rejects constant float division by zero at compile time; IEEE semantics (inf/NaN) need a call.
+            (Ty::F64 | Ty::F32, BinKind::Div) => Ok(format!("wjFdiv({x}, {y})")),
             (Ty::Str, BinKind::Add) => Ok(format!("({x} + {y})")),
             (_, BinKind::Add | BinKind::Sub | BinKind::Mul | BinKind::Div | BinKind::Lt | BinKind::Le | BinKind::Gt | BinKind::Ge | BinKind::Eq | BinKind::Ne) => Ok(format!("({x} {} {y})", sym(op))),
             _ => self.unsupported("operator on this type"),
@@ -209,22 +225,6 @@ impl<'m> Go<'m> {
         let targs = self.targs(ty)?;
         let vals: PResult<Vec<String>> = fields.iter().map(|(n, v)| Ok(format!("{}: {}", field(n), self.expr(v)?))).collect();
         Ok(format!("{}{targs}{{{}}}", ident(name), vals?.join(", ")))
-    }
-
-    fn closure_snapshot(&mut self, params: &[(String, Ty)], ret: &Ty, body: &PBlock, captures: &[(String, Ty)], fn_ty: &Ty) -> PResult<String> {
-        let lit = self.closure(params, ret, body)?;
-        if captures.is_empty() {
-            return Ok(lit);
-        }
-        let decl: PResult<Vec<String>> = captures.iter().map(|(n, t)| Ok(format!("{} {}", ident(n), self.ty(t)?))).collect();
-        let vals: PResult<Vec<String>> = captures
-            .iter()
-            .map(|(n, t)| {
-                let v = if self.ptr_locals.contains_key(n) { format!("(*{})", ident(n)) } else { ident(n) };
-                self.clone_go(t, &v)
-            })
-            .collect();
-        Ok(format!("(func({}) {} {{ return {lit} }})({})", decl?.join(", "), self.ty(fn_ty)?, vals?.join(", ")))
     }
 
     fn closure(&mut self, params: &[(String, Ty)], ret: &Ty, body: &PBlock) -> PResult<String> {

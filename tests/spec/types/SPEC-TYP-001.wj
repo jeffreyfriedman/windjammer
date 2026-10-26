@@ -1,0 +1,10 @@
+// spec: SPEC-TYP-001
+// expect: 5 2.5 true s c
+fn main() {
+    let i: int = 5
+    let f: float = 2.5
+    let b: bool = true
+    let s: string = "s"
+    let c: char = 'c'
+    println("${i} ${f} ${b} ${s} ${c}")
+}

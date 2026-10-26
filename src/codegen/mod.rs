@@ -81,11 +81,6 @@ pub fn generate_rust(program: &Program) -> Result<String> {
     Ok(output.source)
 }
 
-/// Generate Go code
-pub fn generate_go(program: &Program) -> Result<CodegenOutput> {
-    generate(program, Target::Go, None)
-}
-
 /// Generate JavaScript code
 pub fn generate_javascript(program: &Program) -> Result<CodegenOutput> {
     generate(program, Target::JavaScript, None)
@@ -101,7 +96,7 @@ mod tests {
     use super::*;
 
     fn create_test_program() -> Program<'static> {
-        Program { items: vec![] }
+        Program::new(vec![])
     }
 
     #[test]
@@ -118,7 +113,7 @@ mod tests {
         assert!(result.is_ok());
 
         if let Ok(output) = result {
-            assert_eq!(output.extension, "js");
+            assert_eq!(output.extension, "mjs");
             assert!(output.source.contains("JavaScript"));
         }
     }

@@ -135,6 +135,10 @@ impl Interpreter {
         if matches!(e, Call { .. } | MethodCall { .. }) {
             let t = subst(t, &self.scope.tparams);
             self.expected = Some((e as *const _ as usize, t));
+        } else if let Some(call) = typed_parse_source(e) {
+            // `let x: T = json.parse_string(s)?` / `let x: T = match json.parse_string(s) { Ok(v) => v, .. }`:
+            // the declared type is the success type of the parse call.
+            self.expect_type_of(call, t);
         }
     }
 
@@ -169,6 +173,93 @@ impl Interpreter {
     pub(crate) fn expect_tail_type(&mut self, f: &Rc<super::engine::FuncDef>) {
         if let (Some(ret), Some(crate::parser::Statement::Expression { expr, .. })) = (f.ret, f.body.last()) {
             self.expect_type_of(expr, ret);
+        }
+    }
+}
+
+/// The `parse_string` call under a `?` or an `Ok(v) => v` match, whose target type comes from the
+/// enclosing `let` annotation (compiled code infers it; the interpreter needs it handed over).
+pub(crate) fn typed_parse_source(e: &'static crate::parser::Expression<'static>) -> Option<&'static crate::parser::Expression<'static>> {
+    use crate::parser::{Expression as E, Pattern};
+    fn is_parse(e: &crate::parser::Expression<'_>) -> bool {
+        match e {
+            E::MethodCall { method, .. } => method == "parse_string",
+            E::Call { function, .. } => match function {
+                E::Identifier { name, .. } => name.ends_with("parse_string"),
+                E::FieldAccess { field, .. } => field == "parse_string",
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+    match e {
+        E::TryOp { expr, .. } if is_parse(expr) => Some(*expr),
+        E::Block { statements, .. } => {
+            let [crate::parser::Statement::Match { value, arms, .. }] = statements.as_slice() else { return None };
+            if !is_parse(value) {
+                return None;
+            }
+            let passes_ok = arms.iter().any(|a| match (&a.pattern, a.body) {
+                (Pattern::EnumVariant(name, crate::parser::EnumPatternBinding::Single(bound)), E::Identifier { name: body, .. }) => {
+                    name == "Ok" && bound == body
+                }
+                _ => false,
+            });
+            if passes_ok { Some(*value) } else { None }
+        }
+        _ => None,
+    }
+}
+
+/// First call `f(.., name, ..)` in `e` where `name` is passed as a plain argument: `(f, argument index)`.
+fn first_call_taking(e: &'static crate::parser::Expression<'static>, name: &str) -> Option<(String, usize)> {
+    use crate::parser::Expression as E;
+    match e {
+        E::Call { function, arguments, .. } => {
+            if let E::Identifier { name: f, .. } = function {
+                if let Some(i) = arguments.iter().position(|(_, a)| matches!(a, E::Identifier { name: n, .. } if n == name)) {
+                    return Some((f.clone(), i));
+                }
+            }
+            arguments.iter().find_map(|(_, a)| first_call_taking(a, name))
+        }
+        E::MethodCall { object, arguments, .. } => {
+            first_call_taking(object, name).or_else(|| arguments.iter().find_map(|(_, a)| first_call_taking(a, name)))
+        }
+        E::Binary { left, right, .. } => first_call_taking(left, name).or_else(|| first_call_taking(right, name)),
+        E::Unary { operand, .. } => first_call_taking(operand, name),
+        E::TryOp { expr, .. } => first_call_taking(expr, name),
+        E::Block { statements, .. } => statements.iter().find_map(|s| stmt_call_taking(s, name)),
+        _ => None,
+    }
+}
+
+fn stmt_call_taking(s: &'static crate::parser::Statement<'static>, name: &str) -> Option<(String, usize)> {
+    use crate::parser::Statement as S;
+    match s {
+        S::Expression { expr, .. } => first_call_taking(expr, name),
+        S::Let { value, .. } => first_call_taking(value, name),
+        S::Return { value: Some(v), .. } => first_call_taking(v, name),
+        S::Assignment { value, .. } => first_call_taking(value, name),
+        S::If { condition, then_block, else_block, .. } => first_call_taking(condition, name)
+            .or_else(|| then_block.iter().find_map(|s| stmt_call_taking(s, name)))
+            .or_else(|| else_block.iter().flatten().find_map(|s| stmt_call_taking(s, name))),
+        _ => None,
+    }
+}
+
+impl Interpreter {
+    /// Target type of an un-annotated `let name = <json parse>`: the declared type of the formal that
+    /// `name` is first passed to in the statements that follow (`to_draft(payload)` -> `Payload`).
+    pub(crate) fn type_from_later_use(&mut self, name: &str, rest: &[&'static crate::parser::Statement<'static>]) -> Option<Type> {
+        let (f, idx) = rest.iter().find_map(|s| stmt_call_taking(s, name))?;
+        let module = self.scope.module;
+        match self.resolve_in(module, &[f.as_str()]).ok()?? {
+            super::call::Resolved::Func(fd) => {
+                let user: Vec<&crate::parser::Parameter<'static>> = fd.params.iter().filter(|p| p.name != "self").collect();
+                user.get(idx).map(|p| p.type_.clone())
+            }
+            _ => None,
         }
     }
 }

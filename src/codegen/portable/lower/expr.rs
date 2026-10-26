@@ -50,7 +50,11 @@ impl<'e> Lowerer<'e> {
     fn expr_inner(&mut self, e: &Expression, want: Option<&Ty>) -> PResult<PExpr> {
         match e {
             Expression::Literal { value, .. } => self.literal(value, want),
-            Expression::Identifier { name, .. } => self.identifier(name, want),
+            Expression::Identifier { name, .. } => {
+                let mut r = self.identifier(name, want)?;
+                r.last_use = self.last_uses.contains(&crate::ir::numeric_defaults::node_id(e));
+                Ok(r)
+            }
             Expression::Binary { left, op, right, .. } => self.binary(left, op, right, want),
             Expression::Unary { op, operand, .. } => self.unary(op, operand, want),
             Expression::Call { function, arguments, .. } => self.call(function, arguments, want),
@@ -62,7 +66,12 @@ impl<'e> Lowerer<'e> {
             Expression::Closure { parameters, body, .. } => self.closure(parameters, body, want),
             Expression::Cast { expr, type_, .. } => {
                 let inner = self.expr(expr, None)?;
-                let ty = from_ast(type_, &self.generics);
+                let ty = from_ast(type_, &self.generics, &self.env.aliases);
+                // Constant integer casts are folded with Rust `as` semantics (wrap to the target
+                // width): Go rejects `uint8(-1)` as a constant overflow.
+                if let (Some(v), Some(k)) = (const_int(&inner), ty.int_kind()) {
+                    return Ok(PExpr::new(ty, PK::Int(wrap_int(v, k.bits(), k.signed()))));
+                }
                 Ok(PExpr::new(ty.clone(), PK::Cast(inner, ty)))
             }
             Expression::Index { object, index, .. } => self.index(object, index),
@@ -147,6 +156,9 @@ impl<'e> Lowerer<'e> {
         if let Some(t) = self.env.consts.get(name) {
             return Ok(PExpr::new(t.clone(), PK::Local(name.to_string())));
         }
+        if let Some(last) = self.env.aliases.strip_modules(name) {
+            return self.identifier(&last, want);
+        }
         if let Some((owner, member)) = name.rsplit_once("::") {
             return self.path_value(owner, member, want);
         }
@@ -164,6 +176,8 @@ impl<'e> Lowerer<'e> {
     /// `Owner::member` used as a value: unit variant, associated const, or function reference.
     fn path_value(&mut self, owner: &str, member: &str, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        let owner = self.env.aliases.strip_modules(&owner).unwrap_or(owner);
+        let owner = self.env.aliases.nominal(&owner).unwrap_or(owner);
         if let Some(v) = self.env.variant(&owner, member) {
             if v.fields.is_empty() {
                 let args = self.enum_args_from_want(&owner, want);
@@ -267,12 +281,16 @@ impl<'e> Lowerer<'e> {
         Unsupported { what, line: self.line }
     }
 
+    /// An index or count operand: `int` is accepted (SPEC-NUM-014), so an index whose type is still
+    /// open is not forced to `usize`; it is converted (a no-op once it resolves to `usize`).
     pub(super) fn ensure_usize(&mut self, e: PExpr) -> PExpr {
-        self.constrain(&Ty::usize(), &e.ty);
         match self.resolve(&e.ty) {
             Ty::Int(IntKind::Usize) => e,
-            Ty::Int(_) => PExpr::new(Ty::usize(), PK::Cast(e, Ty::usize())),
-            _ => e,
+            Ty::Int(_) | Ty::Var(_) => PExpr::new(Ty::usize(), PK::Cast(e, Ty::usize())),
+            _ => {
+                self.constrain(&Ty::usize(), &e.ty);
+                e
+            }
         }
     }
 
@@ -363,6 +381,8 @@ impl<'e> Lowerer<'e> {
 
     fn struct_literal(&mut self, name: &str, fields: &[(String, &Expression)], want: Option<&Ty>) -> PResult<PExpr> {
         let name = if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() };
+        let name = self.env.aliases.strip_modules(&name).unwrap_or(name);
+        let name = self.env.aliases.nominal(&name).unwrap_or(name);
         if let Some((en, var)) = name.split_once("::") {
             return self.variant_struct_literal(en, var, fields, want);
         }
@@ -415,7 +435,7 @@ impl<'e> Lowerer<'e> {
                 continue;
             }
             let (name, declared) = match raw.split_once(':') {
-                Some((n, t)) => (n.trim().to_string(), Some(from_ast(&type_from_str(t), &self.generics))),
+                Some((n, t)) => (n.trim().to_string(), Some(from_ast(&type_from_str(t), &self.generics, &self.env.aliases))),
                 None => (raw.trim().to_string(), None),
             };
             let t = declared.or(hint).unwrap_or_else(|| self.new_var());
@@ -434,8 +454,7 @@ impl<'e> Lowerer<'e> {
         blk.stmts = prologue;
         let ret = blk.tail.as_ref().map(|t| t.ty.clone()).unwrap_or(Ty::Unit);
         let ty = Ty::Fn(ps.iter().map(|p| p.1.clone()).collect(), Box::new(ret.clone()));
-        let captures = self.closure_captures(&mut blk);
-        Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk, captures }))
+        Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk }))
     }
 
     /// `|(a, b)|`: a hidden tuple parameter plus a destructuring `let` at the top of the body.
@@ -457,24 +476,6 @@ impl<'e> Lowerer<'e> {
         Ok(((hidden, tup_ty), PStmt::LetPat { pat: PPat::Tuple(binds), init, els: None }))
     }
 
-    /// Outer `mut` locals referenced by the closure body: Rust `move` closures own a snapshot.
-    fn closure_captures(&self, body: &mut PBlock) -> Vec<(String, Ty)> {
-        let mut seen = std::collections::BTreeSet::new();
-        crate::codegen::portable::visit::exprs_in_block(body, &mut |e| {
-            if let PK::Local(n) = &*e.kind {
-                seen.insert(n.clone());
-            }
-        });
-        let mut out = Vec::new();
-        for name in seen {
-            let hit = self.scopes.iter().flat_map(|s| s.values()).find(|l| l.out == name && l.mutable && !l.alias);
-            if let Some(l) = hit {
-                out.push((name, l.ty.clone()));
-            }
-        }
-        out
-    }
-
     fn try_op(&mut self, inner: &Expression) -> PResult<PExpr> {
         let e = self.expr(inner, None)?;
         let fn_ret = self.rets.last().cloned().unwrap_or(Ty::Unknown);
@@ -483,7 +484,25 @@ impl<'e> Lowerer<'e> {
             Ty::Result(t, _) => (**t).clone(),
             other => return self.err(format!("`?` applied to `{}`", other.describe())),
         };
-        Ok(PExpr::new(ty, PK::Try { expr: e, fn_ret }))
+        let conv = self.try_conversion(&e.ty, &fn_ret)?;
+        Ok(PExpr::new(ty, PK::Try { expr: e, fn_ret, conv }))
+    }
+
+    /// `?` converts the error with `From` when the function's error type differs (Rust semantics).
+    fn try_conversion(&mut self, inner: &Ty, fn_ret: &Ty) -> PResult<Option<(String, String)>> {
+        let (Ty::Result(_, from), Ty::Result(_, to)) = (self.resolve(inner), self.resolve(fn_ret)) else { return Ok(None) };
+        let Ty::Adt(owner, _) = &*to else {
+            self.constrain(&to, &from);
+            return Ok(None);
+        };
+        if matches!(&*from, Ty::Adt(n, _) if n == owner) || from.is_unknown() || matches!(*from, Ty::Var(_)) {
+            self.constrain(&to, &from);
+            return Ok(None);
+        }
+        match self.pick_impl(owner, "from", Some((*from).clone())) {
+            Some(m) => Ok(Some((owner.clone(), m))),
+            None => self.err(format!("`?` needs `impl From<{}> for {owner}`", from.describe())),
+        }
     }
 
     /// Lower a statement list as a value-producing block (`let x = { ... }`, arm bodies, closures).
@@ -535,4 +554,26 @@ fn split_top(s: &str) -> Vec<&str> {
         out.push(last);
     }
     out
+}
+
+/// Value of an integer literal, possibly negated (`7`, `-1`).
+fn const_int(e: &PExpr) -> Option<i128> {
+    match &*e.kind {
+        PK::Int(v) => Some(*v),
+        PK::Unary(UnKind::Neg, inner) => const_int(inner).map(|v| -v),
+        _ => None,
+    }
+}
+
+/// Two's-complement wrap of `v` to `bits`, read back signed or unsigned (Rust `as`).
+fn wrap_int(v: i128, bits: u32, signed: bool) -> i128 {
+    if bits >= 128 {
+        return v;
+    }
+    let m = v & ((1i128 << bits) - 1);
+    if signed && m >= 1i128 << (bits - 1) {
+        m - (1i128 << bits)
+    } else {
+        m
+    }
 }

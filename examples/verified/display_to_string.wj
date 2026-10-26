@@ -1,0 +1,21 @@
+// tags: traits, display, to_string, interpolation
+// rust: ok
+// expect: (1, 2)
+// expect: at (1, 2)!
+// expect: [p=(3, 4)]
+struct Point { x: int, y: int }
+
+impl Point {
+    fn to_string(self) -> string {
+        "(${self.x}, ${self.y})"
+    }
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    println("${p}")
+    let s = "at ${p}!"
+    println(s)
+    let q = Point { x: 3, y: 4 }
+    println("[p=${q}]")
+}

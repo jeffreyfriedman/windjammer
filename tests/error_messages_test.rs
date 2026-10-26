@@ -99,8 +99,8 @@ fn test_type_mismatch_shows_both_types() {
         diag.message
     );
     assert!(
-        diag.message.contains("Type mismatch"),
-        "Should say 'Type mismatch'. Got: {}",
+        diag.message.contains("mismatched types"),
+        "Should say 'mismatched types' (WJ0003 wording). Got: {}",
         diag.message
     );
 }

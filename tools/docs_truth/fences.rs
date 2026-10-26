@@ -13,35 +13,7 @@
 use super::config::Config;
 use super::{fence_run, md, util, Ctx, Finding};
 
-#[derive(Debug, Default, Clone)]
-pub struct Ann {
-    pub wj: bool,
-    pub sh_verify: bool,
-    pub ignore: bool,
-    pub check: bool,
-    pub run: bool,
-    pub should_fail: Option<Option<String>>,
-}
-
-pub fn parse_info(info: &str) -> Ann {
-    let mut a = Ann::default();
-    let mut parts = info.split([',', ' ']).filter(|p| !p.is_empty());
-    let lang = parts.next().unwrap_or("");
-    a.wj = matches!(lang, "windjammer" | "wj");
-    let sh = matches!(lang, "sh" | "bash" | "shell" | "console");
-    for p in parts {
-        match p {
-            "ignore" => a.ignore = true,
-            "check" => a.check = true,
-            "run" => a.run = true,
-            "verify" if sh => a.sh_verify = true,
-            "should_fail" => a.should_fail = Some(None),
-            p if p.starts_with("should_fail=") => a.should_fail = Some(Some(p["should_fail=".len()..].to_string())),
-            _ => {}
-        }
-    }
-    a
-}
+pub use windjammer::doctest::fence::{parse_info, rustdoc_as_markdown, Ann};
 
 /// A `sh,verify` fence that could not run: a warning locally, a failure in CI (`WJ_DOCS_REQUIRE_EXEC=1`), so a
 /// missing `wj` can never turn the quickstart check into a silent pass.
@@ -79,18 +51,6 @@ pub fn sources(ctx: &Ctx) -> Vec<(String, String)> {
         }
     }
     out
-}
-
-/// Doc-comment lines become Markdown lines; everything else blank, so line numbers are preserved.
-pub fn rustdoc_as_markdown(src: &str) -> String {
-    src.lines()
-        .map(|l| {
-            let t = l.trim_start();
-            let rest = t.strip_prefix("///").or_else(|| t.strip_prefix("//!"));
-            rest.map(|r| r.strip_prefix(' ').unwrap_or(r)).unwrap_or("").to_string()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 pub struct Report {

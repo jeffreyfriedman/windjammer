@@ -22,6 +22,16 @@ pub struct Lexer {
 }
 
 impl Lexer {
+    /// 1-based (line, column) the lexer has reached (used to locate lexing failures).
+    pub fn position(&self) -> (usize, usize) {
+        (self.line, self.column)
+    }
+
+    /// 0-based byte offset the lexer has reached.
+    pub fn byte_offset(&self) -> usize {
+        self.byte_pos
+    }
+
     pub fn new(input: &str) -> Self {
         let chars: Vec<char> = input.chars().collect();
         let current_char = chars.first().copied();
@@ -48,6 +58,18 @@ impl Lexer {
         lx
     }
 
+    /// Source text from char index `start` up to the current position.
+    pub(in crate::lexer) fn text_since(&self, start: usize) -> String {
+        self.input[start..self.position].iter().collect()
+    }
+
+    /// True at a `//` comment that is not a doc comment (`///` not followed by a third `/`).
+    fn at_plain_comment(&self) -> bool {
+        self.current_char == Some('/')
+            && self.peek(1) == Some('/')
+            && !(self.peek(2) == Some('/') && self.peek(3) != Some('/'))
+    }
+
     pub(in crate::lexer) fn advance(&mut self) {
         // Track newlines for line/column tracking
         if self.current_char == Some('\n') {
@@ -60,18 +82,6 @@ impl Lexer {
         self.byte_pos += self.current_char.map_or(0, char::len_utf8);
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
-    }
-
-    /// Source text from char index `start` up to the current position.
-    pub(in crate::lexer) fn text_since(&self, start: usize) -> String {
-        self.input[start..self.position].iter().collect()
-    }
-
-    /// True at a `//` comment that is not a doc comment (`///` not followed by a third `/`).
-    fn at_plain_comment(&self) -> bool {
-        self.current_char == Some('/')
-            && self.peek(1) == Some('/')
-            && !(self.peek(2) == Some('/') && self.peek(3) != Some('/'))
     }
 
     pub(in crate::lexer) fn peek(&self, offset: usize) -> Option<char> {
@@ -112,6 +122,39 @@ impl Lexer {
                 break;
             }
         }
+    }
+
+    /// Block comment `/* .. */`, nesting like Rust, is whitespace. A comment spanning lines still
+    /// separates statements (boundaries are decided by token line numbers).
+    fn after_block_comment(&mut self) -> Token {
+        if !self.skip_block_comment() {
+            return Token::Invalid("unterminated block comment (missing `*/`)".to_string());
+        }
+        self.next_token()
+    }
+
+    /// Skip a (nested) block comment; cursor on `/*`. False when it is not terminated.
+    fn skip_block_comment(&mut self) -> bool {
+        self.advance();
+        self.advance();
+        let mut depth = 1;
+        while let Some(ch) = self.current_char {
+            if ch == '/' && self.peek(1) == Some('*') {
+                depth += 1;
+                self.advance();
+                self.advance();
+            } else if ch == '*' && self.peek(1) == Some('/') {
+                depth -= 1;
+                self.advance();
+                self.advance();
+                if depth == 0 {
+                    return true;
+                }
+            } else {
+                self.advance();
+            }
+        }
+        false
     }
 
     fn skip_comment(&mut self) {
@@ -171,9 +214,9 @@ impl Lexer {
                 self.skip_comment();
                 return self.next_token();
             }
+            Some('/') if self.peek(1) == Some('*') => return self.after_block_comment(),
             Some('r') if self.peek(1) == Some('#') && self.is_raw_string_start() => {
-                // Raw string literal: r#"..."# or r##"..."## etc.
-                // (r#ident is a raw identifier — handled by read_identifier)
+                // Raw string literal r#"..."# (r#ident is a raw identifier: read_identifier)
                 self.read_raw_string()
             }
             Some('"') => self.read_string(),
@@ -416,10 +459,7 @@ impl Lexer {
                 self.advance();
                 Token::Semicolon
             }
-            Some('?') => {
-                self.advance();
-                Token::Question
-            }
+            Some('?') => self.question(),
             Some(ch) => {
                 self.advance();
                 Token::Invalid(Self::unexpected_char_message(ch))
@@ -440,6 +480,16 @@ impl Lexer {
         }
     }
 
+    /// `?` or `??` (ADR-0018 option default); the cursor is on the first `?`.
+    fn question(&mut self) -> Token {
+        self.advance();
+        if self.peek(0) != Some('?') {
+            return Token::Question;
+        }
+        self.advance();
+        Token::QuestionQuestion
+    }
+
     /// `|>` or `|>?` (the cursor is on the `|`).
     fn pipe_operator(&mut self) -> Token {
         let try_form = self.peek(2) == Some('?');
@@ -457,13 +507,19 @@ impl Lexer {
     ///
     /// Span convention (see docs/testing/INVARIANTS.md): lines and columns are 1-based, columns
     /// count Unicode scalar values (not bytes, not UTF-16 units), lines end at `\n` only, and byte
-    /// offsets are 0-based and half-open. Whitespace and plain `//` comments are trivia and belong
-    /// to no token: the span starts at the token itself.
+    /// offsets are 0-based and half-open. Whitespace and `//` / `/* */` comments are trivia and
+    /// belong to no token: the span starts at the token itself.
     pub fn next_token_with_location(&mut self) -> TokenWithLocation {
         loop {
             self.skip_whitespace();
             if self.at_plain_comment() {
                 self.skip_comment();
+            } else if self.current_char == Some('/') && self.peek(1) == Some('*') {
+                let (line, column, byte_start) = (self.line, self.column, self.byte_pos);
+                if !self.skip_block_comment() {
+                    let token = Token::Invalid("unterminated block comment (missing `*/`)".to_string());
+                    return self.finish_located(token, line, column, byte_start);
+                }
             } else {
                 break;
             }
@@ -471,10 +527,16 @@ impl Lexer {
         let (line, column, byte_start) = (self.line, self.column, self.byte_pos);
         self.interp_starts.clear();
         let token = self.next_token();
+        self.finish_located(token, line, column, byte_start)
+    }
+
+    fn finish_located(&mut self, token: Token, line: usize, column: usize, byte_start: usize) -> TokenWithLocation {
         TokenWithLocation {
             token,
             line,
             column,
+            src_line: line,
+            src_column: column,
             byte_start,
             byte_end: self.byte_pos,
             end_line: self.line,

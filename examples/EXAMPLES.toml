@@ -65,21 +65,6 @@ mode = "check"
 reason = "WebAssembly target demo (needs a wasm toolchain)"
 
 [[example]]
-glob = "examples/taskflow/**/*.wj"
-mode = "check"
-reason = "multi-file REST API (needs HTTP, a database and the module resolver); parse and analyzer pass per file"
-
-[[example]]
-glob = "examples/wjfind/**/*.wj"
-mode = "check"
-reason = "multi-file CLI that needs the real command line and filesystem"
-
-[[example]]
-glob = "examples/wschat/**/*.wj"
-mode = "check"
-reason = "multi-file WebSocket server (needs network)"
-
-[[example]]
 glob = "templates/*/*.wj"
 mode = "check"
 reason = "project templates copied out by `wj new`: a web server, a wasm module and a library cannot run standalone; the CLI template reads its command line"

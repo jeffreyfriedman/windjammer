@@ -106,6 +106,14 @@ fn ebnf_grammar_matches_the_real_lexer_and_parser() {
     assert!(fs.is_empty(), "docs/windjammer.ebnf diverges from the parser:\n{}", show(&fs));
 }
 
+#[test]
+fn spec_grammar_matches_the_real_lexer_and_parser() {
+    let ctx = real();
+    let cfg = config::load(&ctx);
+    let fs = docs_truth::spec_grammar::check_all(&ctx, &cfg);
+    assert!(fs.is_empty(), "docs/spec/grammar.ebnf diverges from the lexer/parser:\n{}", show(&fs));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Mutation self-tests on a scratch repository
 // ---------------------------------------------------------------------------------------------
@@ -117,7 +125,10 @@ struct Scratch {
 impl Scratch {
     fn new() -> Scratch {
         let s = Scratch { dir: tempfile::tempdir().unwrap() };
-        s.write("docs/docs-truth.toml", "[freshness]\ntracked = [\"docs/design/*.md\"]\n");
+        s.write(
+            "docs/docs-truth.toml",
+            "[freshness]\ntracked = [\"docs/design/*.md\"]\n\n[[exclude]]\ncheck = \"links\"\nglob = \"docs/reference/**\"\nreason = \"generated from the real CLI definition, whose help text cites the repository's ADRs; the scratch repo has none of them\"\n",
+        );
         s.write("docs/adr/0001-first.md", "# ADR-0001: First\n\n- **Status:** Accepted (2026-01-01)\n");
         s.write("tests/conformance_programs/SUPPORT.toml", "[[unsupported]]\nprogram = \"01_a\"\nbackend = \"go\"\nreason = \"x: y\"\n");
         s.write("tests/conformance_programs/01_a.wj", "fn main() {}\n");
@@ -127,6 +138,14 @@ impl Scratch {
         // paths cited by the generated headers must exist, as in the real repo
         for f in ["src/bin/wj_cli_args.rs", "src/error_codes.rs", "src/error_catalog.rs", "src/linter/codes.rs", "src/intrinsics/mod.rs", "src/lexer/keywords.rs", "docs/adr/0014-surface.md"] {
             s.write(f, "");
+        }
+        // the llms.txt generators' declared inputs: link targets must exist, inlined documents must have a body
+        let generated = |f: &str| genfiles::FILES.iter().any(|(p, _)| *p == f);
+        for f in docs_truth::gen_llms::link_targets().filter(|f| !generated(f)) {
+            s.write(f, "");
+        }
+        for f in docs_truth::gen_llms::inlined_sources().filter(|f| !generated(f)) {
+            s.write(f, if f.ends_with(".json") { "{\"tools\": []}\n" } else { "# Stub\n" });
         }
         let ctx = s.ctx();
         genfiles::write_all(&ctx).unwrap();
@@ -548,4 +567,46 @@ fn ignored_shell_fences_need_a_reason_too() {
 fn freshness_ignores_docs_that_reference_no_code_paths() {
     // `git diff <sha> HEAD --` with an empty path list used to count the whole repository.
     assert_eq!(freshness::changed_lines(&real(), "HEAD~1", &[]), Some(0));
+}
+
+// ---------------------------------------------------------------------------------------------
+// docs/spec/grammar.ebnf (tools/docs_truth/spec_grammar.rs): self-tests on a scratch repository
+// ---------------------------------------------------------------------------------------------
+
+const SPEC_MINI: &str = "(*@ctx $$ *)\n(*@nl *)\nitem = \"fn\" IDENT \"(\" \")\" block ;\nblock = \"{\" { statement } \"}\" ;\n(*@ctx fn main() { $$ } *)\n(*@nl *)\nstatement = \"let\" IDENT \"=\" INT_LIT ;\n(*@lex Ident *)\n(*@reject-keywords *)\nIDENT = /a-z/ { /a-z0-9_/ } ;\n(*@lex IntLiteral *)\nINT_LIT = /1-9/ { /0-9/ } ;\n";
+
+fn spec_ctx(grammar: &str) -> (Scratch, config::Config) {
+    let s = Scratch::new();
+    s.write("docs/spec/grammar.ebnf", grammar);
+    let mut cfg = config::Config::default();
+    for k in windjammer::lexer::keywords::KEYWORDS {
+        cfg.spec_grammar.unlisted_keywords.insert(k.word.to_string(), "scratch".into());
+    }
+    for t in ["fn", "let"] {
+        cfg.spec_grammar.unlisted_keywords.remove(t);
+    }
+    (s, cfg)
+}
+
+#[test]
+fn spec_grammar_check_accepts_a_grammar_the_parser_accepts() {
+    let (s, cfg) = spec_ctx(SPEC_MINI);
+    let fs = docs_truth::spec_grammar::check_all(&s.ctx(), &cfg);
+    assert!(fs.is_empty(), "{}", show(&fs));
+}
+
+#[test]
+fn spec_grammar_check_detects_parser_lexer_and_status_drift() {
+    // a derivation the parser rejects
+    let (s, cfg) = spec_ctx(&SPEC_MINI.replace("\"let\" IDENT \"=\" INT_LIT", "\"let\" IDENT INT_LIT"));
+    assert!(has(&docs_truth::spec_grammar::check_all(&s.ctx(), &cfg), "spec-grammar", "rejected by the parser"));
+    // `@status unparsed` on a production the parser accepts
+    let (s, cfg) = spec_ctx(&SPEC_MINI.replace("(*@ctx fn main() { $$ } *)", "(*@status unparsed *)\n(*@ctx fn main() { $$ } *)"));
+    assert!(has(&docs_truth::spec_grammar::check_all(&s.ctx(), &cfg), "spec-grammar", "update the spec"));
+    // a lexical production that does not lex as the stated token kind
+    let (s, cfg) = spec_ctx(&SPEC_MINI.replace("(*@lex IntLiteral *)", "(*@lex FloatLiteral *)"));
+    assert!(has(&docs_truth::spec_grammar::check_all(&s.ctx(), &cfg), "spec-grammar", "want one token of kind FloatLiteral"));
+    // a production no checked production reaches
+    let (s, cfg) = spec_ctx(&format!("{SPEC_MINI}orphan = \"fn\" ;\n"));
+    assert!(has(&docs_truth::spec_grammar::check_all(&s.ctx(), &cfg), "spec-grammar", "`orphan` is never exercised"));
 }

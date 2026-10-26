@@ -1,0 +1,17 @@
+pub mod geo {
+    pub mod area {
+        #[inline]
+pub fn square(x: i64) -> i64 {
+            x * x
+}    }
+}
+
+#[inline]
+pub fn square(x: i64) -> i64 {
+    x * x
+}
+
+fn main() {
+    println!("{}", geo::area::square(3));
+}
+

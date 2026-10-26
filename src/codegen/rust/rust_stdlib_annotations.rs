@@ -19,7 +19,3 @@ const DESUGARED: &[&str] = &["substring", "slice", "reversed", "enumerate"];
 pub fn is_strip_redundant(method: &str) -> bool {
     STRIP_REDUNDANT.contains(&method)
 }
-
-pub fn is_desugared_method(method: &str) -> bool {
-    DESUGARED.contains(&method)
-}

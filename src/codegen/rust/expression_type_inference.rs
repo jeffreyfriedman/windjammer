@@ -382,6 +382,9 @@ impl<'ast> CodeGenerator<'ast> {
                 type_args,
                 ..
             } => {
+                if let Some(t) = self.enumerable_call_type(expr) {
+                    return Some(t); // ADR-0018 enumerable surface (stdlib_surface)
+                }
                 // Explicit turbofish return target: `collect::<Vec<char>>()`, …
                 // Without this, `let codepoints = ….collect::<Vec<_>>()` never
                 // enters `local_var_types`, so `codepoints.remove` had no receiver
@@ -516,6 +519,12 @@ impl<'ast> CodeGenerator<'ast> {
                         return Some(obj_type.clone());
                     }
                 }
+                if let Some(t) = Self::rust_primitive_float_method_return_type(
+                    obj_ty_early.as_ref(),
+                    method.as_str(),
+                ) {
+                    return Some(t);
+                }
                 // Prefer signature-registry return types (stdlib_meta) over hardcoded
                 // method-name tables — `String::trim` → `&str`, `HashMap::get` → `Option<&V>`.
                 // Must cover Parameterized/Vec/Option receivers via `type_to_name`.
@@ -531,12 +540,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         return Some(ret);
                     }
-                }
-                if let Some(t) = Self::rust_primitive_float_method_return_type(
-                    obj_ty_early.as_ref(),
-                    method.as_str(),
-                ) {
-                    return Some(t);
                 }
                 // Look up from the method return type registry (populated during impl generation)
                 if let Some(t) = self.method_return_types.get(method.as_str()) {
@@ -591,14 +594,10 @@ impl<'ast> CodeGenerator<'ast> {
                 let l = self.infer_expression_type(left);
                 let r = self.infer_expression_type(right);
                 let untyped_int_lit = |e: &Expression<'_>| {
-                    matches!(
-                        e,
-                        Expression::Literal {
-                            value: Literal::Int(_),
-                            ..
-                        }
-                    )
+                    crate::codegen::rust::type_casting::expression_is_literal_only_int(e)
                 };
+                if untyped_int_lit(left) && r.is_some() { return r; } // a literal-only operand takes its typed peer's type
+                if untyped_int_lit(right) && l.is_some() { return l; }
                 match (l, r) {
                     (Some(a), Some(b)) if a != b => {
                         let is_u32 = |t: &Type| {
@@ -729,14 +728,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 None
             }
-            // TDD FIX: Index expressions: vec[i] → element type of the collection
-            // Example: let mask: Vec<u8> = ...; let color_id = mask[i]; → color_id: u8
-            // Peel `&Vec<T>` / `&mut Vec<T>` so `vals: &Vec<f32>` still yields `f32`.
-            Expression::Index { object, .. } => self
-                .infer_expression_type(object)
-                .as_ref()
-                .and_then(|ot| Self::peeled_collection_element_type(ot))
-                .cloned(),
+            // `vec[i]` → element type (peeling `&Vec<T>`: `vals: &Vec<f32>` yields `f32`; `mask[i]` of
+            // `Vec<u8>` is `u8`); `map[&k]` → value type.
+            Expression::Index { object, .. } => {
+                Self::indexed_type(&self.infer_expression_type(object)?)
+            }
             // `[ (1.0, 0.0, 0.0), … ]` must type as `[ (f32,f32,f32); N ]`
             // so index destructure is Copy and does not `.clone()`.
             Expression::Tuple { elements, .. } => {

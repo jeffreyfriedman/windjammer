@@ -341,6 +341,24 @@ fn load_project_root_metadata(
     }
 }
 
+/// A `.wj.meta` sidecar is analysis output, never an input to be trusted blindly: one written by a
+/// different compiler build, or for different source text than the sibling `.wj` now holds, is stale and
+/// ignored (otherwise `wj build` and `wj explain-ownership` can answer differently for the same file).
+/// Sidecars without a fingerprint (stdlib/hand-authored metadata) are always accepted.
+fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
+    let Some(fp) = &meta.analysis_fingerprint else {
+        return true;
+    };
+    if fp.compiler_version != crate::compiler::incremental::compiler_build_identity() {
+        return false;
+    }
+    let source_path = path.with_extension("");
+    match std::fs::read_to_string(&source_path) {
+        Ok(source) => fp.content_hash == crate::compiler::incremental::hash_source(&source),
+        Err(_) => true,
+    }
+}
+
 fn merge_single_wj_meta_file(
     path: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
@@ -353,6 +371,9 @@ fn merge_single_wj_meta_file(
     let Ok(mod_meta) = serde_json::from_str::<ModuleMetadata>(&text) else {
         return;
     };
+    if !wj_meta_is_current(path, &mod_meta) {
+        return;
+    }
     function_metadata::merge_module_metadata_signatures(&mod_meta, registry);
     let meta_copy_set: HashSet<&str> = mod_meta.copy_structs.iter().map(|s| s.as_str()).collect();
     copy_structs.extend(mod_meta.copy_structs.iter().cloned());
@@ -598,17 +619,6 @@ pub fn write_module_meta_cache(source_file: &Path, meta: &ModuleMetadata) -> std
             .map_err(|e| std::io::Error::other(e.to_string()))?;
     }
     Ok(())
-}
-
-/// Emit per-file `.wj.meta` for a compiled module.
-/// Shared by both `compilation_pipeline` and `library_multipass`.
-pub fn emit_module_meta_for_file(
-    source_file: &Path,
-    program: &crate::parser::Program,
-    registry: &crate::analyzer::SignatureRegistry,
-    copy_structs: Vec<String>,
-) {
-    emit_module_meta_for_file_with_fingerprint(source_file, program, registry, copy_structs, None);
 }
 
 pub fn emit_module_meta_for_file_with_fingerprint(

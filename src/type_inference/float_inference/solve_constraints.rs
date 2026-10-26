@@ -209,7 +209,9 @@ impl FloatInference {
                 expr: inner, type_, ..
             } => {
                 // Cast expression provides explicit type hint
-                if let Some(float_ty) = self.extract_float_type(type_) {
+                if let Some(float_ty) = self.extract_float_type(type_).filter(|_| {
+                    matches!(inner, Expression::Literal { value: crate::parser::Literal::Float(_), .. })
+                }) {
                     let inner_id = self.get_expr_id(inner);
                     let constraint = match float_ty {
                         FloatType::F32 => {

@@ -22,12 +22,12 @@ impl Point {
     }
     
     // Method with &self
-    fn distance_from_origin(&self) -> int {
+    fn distance_from_origin(self) -> int {
         self.x * self.x + self.y * self.y
     }
     
     // Method with &mut self
-    fn translate(&mut self, dx: int, dy: int) {
+    fn translate(self, dx: int, dy: int) {
         self.x = self.x + dx
         self.y = self.y + dy
     }
@@ -50,11 +50,11 @@ impl Rectangle {
         Rectangle { width, height }
     }
     
-    fn area(&self) -> int {
+    fn area(self) -> int {
         self.width * self.height
     }
     
-    fn is_square(&self) -> bool {
+    fn is_square(self) -> bool {
         self.width == self.height
     }
 }

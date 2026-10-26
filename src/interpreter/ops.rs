@@ -40,6 +40,9 @@ pub fn compound_to_binary(op: CompoundOp) -> BinaryOp {
 pub fn int_binary(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> R {
     // shifts keep the left type; others unify literal widths
     let ty = if matches!(op, BinaryOp::Shl | BinaryOp::Shr) { at } else { IntTy::unify(at, bt) };
+    if ty == IntTy::U128 {
+        return super::u128ops::binary(op, a, b);
+    }
     let overflow = || panic_ctl(format!("attempt to {} with overflow", op_name(op)));
     let check = |r: Option<i128>| -> R {
         let r = r.ok_or_else(overflow)?;
@@ -138,6 +141,11 @@ impl Interpreter {
     pub(crate) fn binary(&mut self, op: BinaryOp, l: Value, r: Value) -> R {
         let l = super::place::deref_value(l)?;
         let r = super::place::deref_value(r)?;
+        if let (Value::Native(_), _) | (_, Value::Native(_)) = (&l, &r) {
+            if let Some(res) = super::builtins::time::native_binary(op, &l, &r) {
+                return res;
+            }
+        }
         match (&l, &r) {
             (Value::Int(a, at), Value::Int(b, bt)) => int_binary(op, *a, *at, *b, *bt),
             (Value::Float(a, at), Value::Float(b, bt)) => float_binary(op, *a, *at, *b, *bt),

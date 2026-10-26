@@ -330,12 +330,6 @@ pub fn is_stdlib_default_empty_type(name: &str) -> bool {
     is_map_type(short) || is_set_type_name(name) || matches!(short, "Vec" | "VecDeque" | "String")
 }
 
-/// Heap-owning types that are never Copy.
-pub fn is_heap_container(name: &str) -> bool {
-    let leaf = type_name_leaf(name);
-    leaf == "String" || leaf == "Vec" || is_map_type_name(leaf)
-}
-
 /// Stdlib wrapper return/param bases (Vec, maps, sets, Option, Result) — not custom owned payloads.
 ///
 /// Used when deciding whether a formal argument is *stored into* a user composite return
@@ -508,7 +502,16 @@ pub fn is_enum_variant_constructor_path(qualified_name: &str) -> bool {
 
 /// Free-fn / `Type::Variant` call target that stores arguments as owned payload.
 pub fn is_language_level_payload_call_name(name: &str) -> bool {
-    is_option_result_payload_constructor(name) || is_enum_variant_constructor_path(name)
+    is_option_result_payload_constructor(name)
+        || is_enum_variant_constructor_path(name)
+        || is_ownership_wrapper_constructor_path(name)
+}
+
+/// `Mutex::new` / `Arc::new` / `Box::new` ...: std wrappers own their payload (the argument is moved in).
+pub fn is_ownership_wrapper_constructor_path(path: &str) -> bool {
+    path.strip_suffix("::new").is_some_and(|ty| {
+        matches!(ty.rsplit("::").next().unwrap_or(ty), "Mutex" | "RwLock" | "Arc" | "Rc" | "RefCell" | "Cell" | "Box" | "OnceCell")
+    })
 }
 
 /// MethodCall name that stores arguments (`Some`/`Ok`/`Err` or PascalCase variant).
@@ -589,26 +592,6 @@ pub fn is_ref_receiver_trait(name: &str) -> bool {
 // =============================================================================
 
 // Ownership-producing methods are signature-registry driven (`method_is_type_preserving_qualified`).
-
-/// DEPRECATED: use [`crate::analyzer::stdlib_method_traits::method_preserves_float_receiver`]
-/// with the receiver type — bare method names collide with struct builders (`Slider::max`).
-#[deprecated(note = "use method_preserves_float_receiver(method, receiver_type, registry)")]
-pub fn is_float_receiver_method(name: &str) -> bool {
-    use crate::analyzer::{stdlib_method_traits, SignatureRegistry};
-    use crate::parser::Type;
-    // Legacy callers without receiver context: only true for unambiguous f32/f64 methods.
-    for float in ["f32", "f64"] {
-        let ty = Type::Custom(float.to_string());
-        if stdlib_method_traits::method_preserves_float_receiver(
-            name,
-            Some(&ty),
-            SignatureRegistry::stdlib(),
-        ) {
-            return true;
-        }
-    }
-    false
-}
 
 // =============================================================================
 // Rust-to-Windjammer Type Mapping
@@ -818,4 +801,13 @@ mod tests {
         assert!(is_stdlib_default_empty_type("HashMap"));
         assert!(!is_stdlib_default_empty_type("Mutex"));
     }
+}
+
+/// Rust primitive scalar type names (`i64`, `f32`, `char`, ...): `i64::from_str_radix` is a type path, not a module path.
+pub fn is_primitive_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128"
+            | "usize" | "f32" | "f64" | "char" | "bool" | "str"
+    )
 }

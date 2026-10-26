@@ -1,0 +1,6 @@
+// spec: SPEC-OPT-004
+// mode: parse-error
+// expect-error: is not a type
+fn main() {
+    let x: int?? = None
+}

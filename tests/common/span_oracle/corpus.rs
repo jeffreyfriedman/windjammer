@@ -69,6 +69,7 @@ pub const FRAGMENTS: &[&str] = &[
     "=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", "->", "<-", "=>",
     "(", ")", "{", "}", "[", "]", ",", ".", "..", "..=", ":", "::", ";", "?", "&", "|", "|>", "|>?",
     "// plain comment", "// é日本😀 comment", "//// four slashes", "/// doc comment", "///doc", "/// 😀 doc",
+    "/* block */", "/* multi\nline */", "/* nested /* inner */ outer */", "/*",
     "//", "#", "$", "\\", "1e", "0x", "0b", "99999999999999999999", "\u{feff}", "`", "~",
 ];
 
@@ -119,4 +120,6 @@ pub const HAND_WRITTEN: &[&str] = &[
     "\u{feff}fn main() {}",
     "let a = 1e\nlet b = 0x\nlet c = 99999999999999999999\nlet d = # $ ` ~\nlet e = 2",
     "x // é\n// 日本 comment\ny",
+    "a /* é日本 */ b /* two\r\nlines */ c\nd",
+    "x /* unterminated é",
 ];

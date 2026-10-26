@@ -14,7 +14,23 @@ impl<'m> Go<'m> {
         if name == "to_string" {
             return self.display(recv, &FmtSpec::default());
         }
+        // A length typed `int` (SPEC-NUM-014) converts the `uint` length.
+        if matches!(name, "len" | "count" | "capacity") {
+            if let Ty::Int(k) = ty {
+                if *k != IntKind::Usize {
+                    let n = self.method(recv, name, args, res, &Ty::usize())?;
+                    return Ok(format!("{}({n})", super::types::int_name(*k)));
+                }
+            }
+        }
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
+        if let Some(go) = self.enumerable_method(recv, name, &a)? {
+            return Ok(go);
+        }
+        let r = self.expr(recv)?;
+        if let Some(s) = self.ordering_method(recv, name, &r, &a) {
+            return Ok(s);
+        }
         match &recv.ty {
             Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),
             Ty::Str => self.str_method(recv, name, &a, args, ty),
@@ -32,7 +48,7 @@ impl<'m> Go<'m> {
     fn user_method(&mut self, recv: &PExpr, owner: &str, name: &str, args: &[PExpr]) -> PResult<String> {
         let f = self.find_fn(Some(owner), name);
         let a = self.args_for(f, args)?;
-        if self.is_enum(owner) {
+        if self.is_enum(owner) || f.is_some_and(|f| !f.type_params.is_empty()) {
             let mode = f.and_then(|f| f.recv).unwrap_or(ParamMode::Ref);
             let r = if mode == ParamMode::MutRef { self.addr(recv)? } else { self.expr(recv)? };
             let sep = if a.is_empty() { "" } else { ", " };
@@ -66,7 +82,8 @@ impl<'m> Go<'m> {
             "remove" => format!("wjRemove({p}, {})", a[0]),
             "swap_remove" => format!("wjSwapRemove({p}, {})", a[0]),
             "clear" => format!("wjClear({p})"),
-            "sort" | "sort_unstable" => format!("wjSort({r})"),
+            "sort" | "sort_unstable" if self.is_prim(&elem) && elem != Ty::Bool => format!("wjSort({r})"),
+            "sort" | "sort_unstable" => format!("wjSortAny({r})"),
             "reverse" => format!("wjReverseInPlace({r})"),
             "dedup" => format!("wjDedup({p})"),
             "extend" | "append" | "extend_from_slice" => format!("wjExtend({p}, {})", a[0]),
@@ -342,12 +359,16 @@ impl<'m> Go<'m> {
     }
 
     pub fn builtin_static(&mut self, owner: &str, name: &str, a: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
+        if let Some(c) = self.ordering_const(owner, name) {
+            return Ok(c);
+        }
         if let Some(k) = IntKind::from_name(owner) {
             let (lo, hi) = num::range_of(k);
             return match name {
                 "MAX" => Ok(num::lit_int(hi, k)),
                 "MIN" => Ok(num::lit_int(lo, k)),
                 "from" => Ok(num::cast(&args[0].ty, &Ty::Int(k), a)),
+                "from_str_radix" => Ok(format!("wjParseIntRadix[{}]({a})", super::types::int_name(k))),
                 _ => self.unsupported(format!("`{owner}::{name}`")),
             };
         }
@@ -356,6 +377,9 @@ impl<'m> Go<'m> {
             ("Vec", "from") => Ok(format!("wjClone({a})")),
             ("String" | "string", "new" | "with_capacity") => Ok("\"\"".into()),
             ("String" | "string", "from") => Ok(a.to_string()),
+            ("f32" | "f64", m) if crate::codegen::portable::builtins::float_const(owner, m).is_some() => {
+                Ok(num::float_lit(crate::codegen::portable::builtins::float_const(owner, m).unwrap_or(0.0), owner == "f32"))
+            }
             ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
             ("char", "from_u32") => Ok(format!("wjCharFromU32({a})")),
             _ => {

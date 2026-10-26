@@ -17,22 +17,22 @@
 //! See `docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md` for the full migration plan.
 
 pub mod annotations;
-pub mod capability_lock;
 pub mod capability_profiles;
 pub mod coercion;
 pub mod constraint_gen;
 pub mod constraints;
 pub mod context;
-pub mod cost_model;
+pub mod effect_facts;
 pub mod effects;
 pub mod emission_contract;
 pub mod execution;
+pub mod explain;
 pub mod formal_predicates;
+pub mod liveness;
 pub mod lower;
 pub mod node;
 pub mod numeric_bridge;
-pub mod numeric_solver;
-pub mod numeric_types;
+pub mod numeric_defaults;
 pub mod pipeline;
 pub mod receiver_type;
 pub mod safety_type;
@@ -54,13 +54,10 @@ pub use constraint_gen::{
 };
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use context::{analyze_and_lower, IrContext};
-pub use cost_model::{CompilationCostTracker, CompilationPhase};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
 pub use execution::{ExecutionConstraint, ExecutionValidator};
 pub use lower::lower_body;
 pub use node::{parser_type_to_base_type, IrFunction, IrNode, IrNodeKind};
-pub use numeric_solver::NumericSolver;
-pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
 pub use pipeline::{FileIrModule, IrModule, IrModuleSet, IrPipeline, IrPipelineConfig};
 pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,
