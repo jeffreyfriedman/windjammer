@@ -17,11 +17,12 @@
     {"name": "query_effects", "description": "Query the resolved effect set and propagation chain for a function", "category": "analyze", "stability": "beta"},
     {"name": "check_code", "description": "Check Windjammer source (parse, lint, transpile) and return JSON diagnostics with spans and repair hints", "category": "agent-loop", "stability": "stable"},
     {"name": "run_code", "description": "Run Windjammer source in the interpreter (wj run --interpret); returns exit code, stdout, stderr", "category": "agent-loop", "stability": "stable"},
+    {"name": "execute", "description": "Code mode: run a Windjammer program that calls MCP tools through typed bindings, inside the operator's capability grant and resource limits", "category": "agent-loop", "stability": "beta"},
     {"name": "test_code", "description": "Run @test / test_* functions in the interpreter (wj test --interpret)", "category": "agent-loop", "stability": "stable"},
     {"name": "format_code", "description": "Format Windjammer source with the canonical formatter", "category": "agent-loop", "stability": "stable"},
     {"name": "docs_search", "description": "Search offline docs: stdlib signatures, built-in methods, idioms, verified examples, error codes", "category": "knowledge", "stability": "stable"},
     {"name": "insert_statement", "description": "Insert a Windjammer statement at a given location with optional validation", "category": "patch", "stability": "beta"},
     {"name": "change_type", "description": "Change a type annotation at a given location in a source file", "category": "patch", "stability": "beta"}
   ],
-  "count": 22
+  "count": 23
 }

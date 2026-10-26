@@ -111,6 +111,9 @@ impl Interpreter {
     }
 
     pub(crate) fn eval_raw(&mut self, e: &'static Expression<'static>) -> R {
+        if self.limits.is_some() {
+            self.limit_tick()?;
+        }
         if self.durable_enabled() && self.is_durable_step(e) {
             return self.durable_step(e);
         }

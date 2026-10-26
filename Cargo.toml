@@ -114,6 +114,7 @@ sha2 = "0.10"
 sha1 = "0.10"
 base64 = "0.22"
 rand = "0.8"
+libc = "0.2"
 mime_guess = "2"
 serde_yaml = "0.9"
 flate2 = "1"
@@ -266,6 +267,12 @@ path = "tests/effect_durable_test.rs"
 [[test]]
 name = "resolve_positions"
 path = "tests/resolve_positions_test.rs"
+
+# Code mode: MCP bindings, tools as effects, limits, the red-team suite (ADR-0021 E5)
+#   cargo test --release --test code_mode
+[[test]]
+name = "code_mode"
+path = "tests/code_mode_test.rs"
 
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages

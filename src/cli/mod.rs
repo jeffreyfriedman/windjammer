@@ -8,6 +8,8 @@ pub mod build_caps;
 pub mod build_json;
 pub mod cache;
 pub mod caps;
+pub mod code_mode;
+pub mod mcp_bind;
 pub mod check;
 pub mod clean;
 pub mod errors;
