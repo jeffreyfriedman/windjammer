@@ -119,7 +119,7 @@ fn decode_object(m: &Map<String, Json>, bad: &dyn Fn(&str) -> String) -> Result<
             Payload::Struct(named(p.get("s").ok_or_else(|| bad("payload"))?)?)
         };
         let (ty, var) = (ty.as_str().ok_or_else(|| bad("enum"))?, m["var"].as_str().ok_or_else(|| bad("variant"))?);
-        return Ok(Value::Enum(Rc::new(EnumVal { ty: Rc::from(ty), variant: Rc::from(var), idx: m["idx"].as_u64().unwrap_or(0) as u32, payload })));
+        return Ok(Value::Enum(Rc::new(EnumVal { ty: ty.into(), variant: var.into(), idx: m["idx"].as_u64().unwrap_or(0) as u32, payload })));
     }
     if let Some(r) = m.get("range").and_then(|r| r.as_array()) {
         let n = |i: usize| r.get(i).and_then(|x| x.as_str()).and_then(|x| x.parse::<i128>().ok()).ok_or_else(|| bad("range"));
