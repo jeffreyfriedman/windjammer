@@ -1,0 +1,12 @@
+// bug: an entry with a 100 ms time-to-live is treated as valid only strictly before 100 ms, so a read at exactly 100 ms misses
+use std::random
+use std::time
+
+@test
+fn entry_is_served_for_its_whole_ttl() {
+    let stored_at = time::now_millis()
+    time::sleep_millis(random::range(0, 150))
+    let age = time::now_millis() - stored_at
+    let hit = age < 100
+    assert_eq(hit, age <= 100)
+}

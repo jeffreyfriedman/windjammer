@@ -164,6 +164,12 @@ path = "tests/diagnostics_suite.rs"
 name = "all"
 path = "tests/all.rs"
 
+# Machine-code loops vs the tree walker (ADR-0020 round 3) also run standalone:
+#   cargo test --release --test jit_loops
+[[test]]
+name = "jit_loops"
+path = "tests/interpreter_jit_loops_test.rs"
+
 # Backend conformance (Rust/Go/JS) also runs standalone for fast iteration and CI sharding:
 #   cargo test --release --test backend_conformance
 [[test]]
@@ -175,6 +181,16 @@ path = "tests/backend_conformance_test.rs"
 [[test]]
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
+
+# Session-shared stdlib taint/effect tables equal the per-pipeline computation: cargo test --release --test stdlib_tables
+[[test]]
+name = "stdlib_tables"
+path = "tests/stdlib_tables_test.rs"
+
+# Check caches never change diagnostics (ADR-0020 round 3 rung 4): cargo test --release --test check_cache_differential
+[[test]]
+name = "check_cache_differential"
+path = "tests/check_cache_differential_test.rs"
 
 # Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
 [[test]]
@@ -220,6 +236,24 @@ path = "tests/effects_runtime_audit_test.rs"
 [[test]]
 name = "effects_vectors"
 path = "tests/effects_vectors_test.rs"
+
+# Tests and the REPL get a private scratch directory (ADR-0021)
+#   cargo test --release --test effects_scratch
+[[test]]
+name = "effects_scratch"
+path = "tests/effects_scratch_test.rs"
+
+# Record/replay of the effect port (ADR-0021 E3), through the wj binary
+#   cargo test --release --test effect_replay
+[[test]]
+name = "effect_replay"
+path = "tests/effect_replay_test.rs"
+
+# Deterministic simulation (ADR-0021 E3): the seeded world and the planted-bug study
+#   cargo test --release --test effect_simulation
+[[test]]
+name = "effect_simulation"
+path = "tests/effect_simulation_test.rs"
 
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages

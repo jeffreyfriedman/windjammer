@@ -1,0 +1,14 @@
+use std::fs
+fn main() {
+    fs::create_dir_all("d").unwrap()
+    fs::write("d/b.txt", "b").unwrap()
+    fs::write("d/a.txt", "a").unwrap()
+    fs::write("d/c.txt", "c").unwrap()
+    let mut names = Vec::new()
+    for entry in fs::read_dir("d").unwrap() {
+        names.push(entry.name())
+    }
+    names.sort()
+    println("${names.len()} entries")
+    for n in names { println(n) }
+}

@@ -1,0 +1,18 @@
+use std::fs
+fn load(path: string) -> Result<string, string> { fs::read_to_string(path) }
+fn main() {
+    fs::write("app.conf", "port=8080\nname=demo\n").unwrap()
+    match load("app.conf") {
+        Ok(text) => {
+            for line in text.lines() {
+                let parts = line.split("=").collect::<Vec<_>>()
+                println("${parts[0]} -> ${parts[1]}")
+            }
+        }
+        Err(e) => println("cannot load: ${e}"),
+    }
+    match load("missing.conf") {
+        Ok(_) => println("unexpected"),
+        Err(e) => println("cannot load: ${e}"),
+    }
+}

@@ -1,0 +1,28 @@
+// `break`, `continue`, labeled loops and `return` leaving machine-code loops.
+fn find(limit: int, target: int) -> int {
+    let mut i = 0
+    while i < limit {
+        if i * i > target {
+            return i
+        }
+        i += 1
+    }
+    -1
+}
+fn main() {
+    let mut total = 0
+    let mut i = 0
+    'outer: while i < 3000 {
+        i += 1
+        if i % 3 == 0 { continue }
+        let mut j = 0
+        while j < 10 {
+            j += 1
+            if j == 7 { break }
+            if i == 2999 && j == 5 { break 'outer }
+            total += j
+        }
+        if total > 1000000 { break }
+    }
+    println("${total} ${i} ${find(5000, 1000000)} ${find(10, 1000)}")
+}

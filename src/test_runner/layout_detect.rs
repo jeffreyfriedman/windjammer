@@ -9,6 +9,21 @@ use crate::config::{DependencySpec, WjConfig};
 
 use super::options::TestRunOptions;
 
+/// Project root for a test path: the nearest ancestor holding `wj.toml` / `windjammer.toml`,
+/// else the path itself (its parent for a file). Absolute and independent of the cwd.
+pub fn find_project_root(test_path: &Path) -> std::io::Result<PathBuf> {
+    let abs = test_path.canonicalize()?;
+    let start = if abs.is_dir() {
+        abs.clone()
+    } else {
+        abs.parent().map(Path::to_path_buf).unwrap_or_else(|| abs.clone())
+    };
+    let found = start.ancestors().find(|d| {
+        d.join("wj.toml").is_file() || d.join("windjammer.toml").is_file()
+    });
+    Ok(found.map(Path::to_path_buf).unwrap_or(start))
+}
+
 /// Apply dogfood-friendly defaults when the user did not set explicit flags.
 pub fn apply_inferred_test_options(project_root: &Path, opts: &mut TestRunOptions) {
     infer_runtime_path_dep(project_root, opts);
@@ -231,6 +246,17 @@ path = "build/lib.rs"
         apply_inferred_test_options(root, &mut opts);
         assert_eq!(opts.use_build_dir.as_deref(), Some(Path::new("build")));
         assert!(opts.use_project_cargo);
+    }
+
+    #[test]
+    fn project_root_comes_from_the_test_path_not_the_cwd() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("proj/src")).unwrap();
+        fs::write(root.join("proj/wj.toml"), "[package]\nname = \"p\"\n").unwrap();
+        assert_eq!(find_project_root(&root.join("proj/src")).unwrap(), root.join("proj"));
+        fs::create_dir_all(root.join("loose/tests")).unwrap();
+        assert_eq!(find_project_root(&root.join("loose/tests")).unwrap(), root.join("loose/tests"));
     }
 
     #[test]

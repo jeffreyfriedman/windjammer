@@ -17,6 +17,7 @@
 use super::constraints::Constraint;
 use super::effects::{self, EffectConstraint};
 use super::safety_type::{BaseType, EffectSet, OwnedType, Region, SafetyType};
+use super::stdlib_tables::StdlibTables;
 use super::taint;
 use super::{constraint_gen, EffectSolver, ExecutionValidator, IrFunction, Solver, TaintSolver};
 use std::collections::HashMap;
@@ -57,6 +58,8 @@ pub enum CompilationTarget {
 /// AST → Constraint Collection → Unified Solving → IR → Codegen
 pub struct IrPipeline {
     config: IrPipelineConfig,
+    /// Session-shared stdlib tables; `None` computes them for this pipeline.
+    stdlib: Option<std::sync::Arc<StdlibTables>>,
 }
 
 /// Result of lowering a module to IR.
@@ -119,7 +122,28 @@ impl IrPipeline {
     }
 
     pub fn with_config(config: IrPipelineConfig) -> Self {
-        Self { config }
+        Self { config, stdlib: None }
+    }
+
+    /// Use tables computed once for the whole session instead of rebuilding them per pipeline.
+    pub fn with_stdlib_tables(mut self, tables: std::sync::Arc<StdlibTables>) -> Self {
+        self.stdlib = Some(tables);
+        self
+    }
+
+    fn stdlib_effect_declarations(&self) -> Vec<EffectConstraint> {
+        match &self.stdlib {
+            Some(t) => t.effect_declarations.clone(),
+            None => effects::stdlib_effect_declarations(),
+        }
+    }
+
+    /// (sources, sinks)
+    fn stdlib_taint_tables(&self) -> (Vec<taint::TaintConstraint>, Vec<taint::TaintConstraint>) {
+        match &self.stdlib {
+            Some(t) => (t.taint_sources.clone(), t.taint_sinks.clone()),
+            None => (taint::stdlib_taint_sources(), taint::stdlib_sinks()),
+        }
     }
 
     /// Lower analyzed functions to IR form using the unified constraint solver
@@ -295,7 +319,7 @@ impl IrPipeline {
         // Stage 3: EffectSolver — load stdlib + forwarded constraints
         let effect_result = if self.config.enable_effect_inference {
             let mut effect_solver = EffectSolver::new();
-            for c in effects::stdlib_effect_declarations() {
+            for c in self.stdlib_effect_declarations() {
                 effect_solver.add_constraint(c);
             }
             for c in effect_constraints_forwarded {
@@ -319,10 +343,11 @@ impl IrPipeline {
         // Stage 4: TaintSolver — load stdlib sources + sinks + forwarded constraints
         let taint_result = if self.config.enable_taint_tracking {
             let mut taint_solver = TaintSolver::new();
-            for c in taint::stdlib_taint_sources() {
+            let (sources, sinks) = self.stdlib_taint_tables();
+            for c in sources {
                 taint_solver.add_constraint(c);
             }
-            for c in taint::stdlib_sinks() {
+            for c in sinks {
                 taint_solver.add_constraint(c);
             }
             for c in taint_constraints_forwarded {

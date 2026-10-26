@@ -1,0 +1,14 @@
+use std::fs
+fn bump(path: string) -> int {
+    let current = match fs::read_to_string(path) {
+        Ok(s) => s.trim().parse::<int>().unwrap_or(0),
+        Err(_) => 0,
+    }
+    fs::write(path, "${current + 1}").unwrap()
+    current + 1
+}
+fn main() {
+    println("${bump("counter")}")
+    println("${bump("counter")}")
+    println("${bump("counter")}")
+}

@@ -15,11 +15,12 @@ use super::island::Island;
 use super::Code;
 use super::CompiledFn;
 use crate::interpreter::engine::{FuncDef, Interpreter};
-use std::cell::RefCell;
+use crate::interpreter::builtins::{Kind, MethodImpl};
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use crate::interpreter::error::R;
 use crate::interpreter::place::deref_value;
-use crate::interpreter::value::{Place, Value};
+use crate::interpreter::value::{Name, Place, Value};
 use crate::parser::{Expression, Type, UnaryOp};
 use crate::source_map::Location;
 
@@ -75,12 +76,15 @@ pub(super) fn method_call(
                 };
                 let slot = boxed.slot.clone();
                 let v = slot.borrow().clone();
-                let place = match v {
-                    Value::Ref(p) => it.chase(p)?,
-                    _ => Place::of_slot(slot),
-                };
-                let recv = place.read()?;
-                (Some(place), recv)
+                match v {
+                    Value::Ref(p) => {
+                        let place = it.chase(p)?;
+                        let recv = place.read()?;
+                        (Some(place), recv)
+                    }
+                    // the walker slot itself is the place: reading it again would give `v`
+                    v => (Some(Place::of_slot(slot)), v),
+                }
             }
             Recv::Value(c) => {
                 let v = c(it, b)?;
@@ -101,6 +105,35 @@ pub(super) fn method_call(
                 return island.run(it, b, |it| it.eval_raw(whole));
             }
         }
+        // `call_user_method` -> `call_func_run` for a compiled method with a `self` receiver: the
+        // arguments go straight into the callee's parameter slots (after `self`)
+        if let Some(f) = &user {
+            if let Some(c) = cache.compiled(it, f) {
+                let base = it.rstack.len();
+                it.rstack.resize(base + c.nslots, Value::Unit);
+                for (k, a) in args.iter().enumerate() {
+                    match a.eval(it, b) {
+                        Ok(v) if k + 1 < c.params.len() => it.rstack[base + c.params[k + 1]] = v,
+                        Ok(_) => {}
+                        Err(e) => {
+                            it.rstack.truncate(base);
+                            return Err(e);
+                        }
+                    }
+                }
+                it.mark(loc);
+                it.type_hint = hint.clone();
+                let self_val = match place {
+                    Some(p) if it.self_mutation(f) => {
+                        drop(recv);
+                        Value::Ref(p)
+                    }
+                    _ => recv,
+                };
+                it.rstack[base + c.params[0]] = self_val;
+                return it.run_compiled_at(f, &c, base, false);
+            }
+        }
         let mut vals = Vec::with_capacity(args.len());
         for a in &args {
             vals.push(a.eval(it, b)?);
@@ -108,20 +141,12 @@ pub(super) fn method_call(
         it.mark(loc);
         it.type_hint = hint.clone();
         match user {
-            Some(f) => match cache.compiled(it, &f) {
-                // `call_user_method` -> `call_func_run` for a compiled method with a `self` receiver
-                Some(c) => {
-                    let self_val = match place {
-                        Some(p) if it.self_mutation(&f) => {
-                            drop(recv);
-                            Value::Ref(p)
-                        }
-                        _ => recv,
-                    };
-                    it.run_compiled(&f, &c, vals, Some(self_val))
-                }
-                None => it.call_user_method(&f, recv, place, vals),
-            },
+            Some(f) => it.call_user_method(&f, recv, place, vals),
+            None if Interpreter::builtin_by_kind(&recv) && it.hot.is_none() => {
+                let kind = Kind::of(&recv);
+                let imp = cache.builtin(it, kind, method);
+                it.run_builtin_method(imp, kind, recv, place, method, vals)
+            }
             None => it.call_builtin_method(recv, place, method, vals),
         }
     })))
@@ -131,13 +156,31 @@ pub(super) fn method_call(
 /// compiled form. Methods are fixed once a program is loaded, except under `--hot` (no caching).
 #[derive(Default)]
 struct SiteCache {
-    ty: RefCell<Option<(Rc<str>, Option<Rc<FuncDef>>)>>,
+    ty: RefCell<Option<(Name, Option<Rc<FuncDef>>)>>,
+    /// The builtin implementation for the last receiver kind (the registry is fixed once loaded).
+    builtin: Cell<Option<(Kind, Option<MethodImpl>)>>,
     compiled: RefCell<Option<(Rc<FuncDef>, Option<Rc<CompiledFn>>)>>,
 }
 
 impl SiteCache {
+    fn builtin(&self, it: &Interpreter, kind: Kind, method: &str) -> Option<MethodImpl> {
+        match self.builtin.get() {
+            Some((k, imp)) if k == kind => imp,
+            _ => {
+                let imp = it.builtins.method(kind, method);
+                self.builtin.set(Some((kind, imp)));
+                imp
+            }
+        }
+    }
+
     fn user(&self, it: &mut Interpreter, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {
-        let ty = match recv {
+        let name = |recv: &Value| match recv {
+            Value::Struct(s) => Some(Name::Shared(s.name.clone())),
+            Value::Enum(e) => Some(e.ty.clone()),
+            _ => None,
+        };
+        let ty: &str = match recv {
             Value::Struct(s) => &s.name,
             Value::Enum(e) => &e.ty,
             _ => return it.find_user_method(recv, method),
@@ -146,12 +189,13 @@ impl SiteCache {
             return it.find_user_method(recv, method);
         }
         if let Some((t, f)) = &*self.ty.borrow() {
-            if Rc::ptr_eq(t, ty) || **t == **ty {
+            // interned names: the same text at the same address is the common case
+            if std::ptr::eq(t.as_ptr(), ty.as_ptr()) && t.len() == ty.len() || **t == *ty {
                 return f.clone();
             }
         }
         let f = it.find_user_method(recv, method);
-        *self.ty.borrow_mut() = Some((ty.clone(), f.clone()));
+        *self.ty.borrow_mut() = name(recv).map(|n| (n, f.clone()));
         f
     }
 

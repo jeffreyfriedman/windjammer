@@ -6,7 +6,7 @@ use super::value::*;
 use crate::parser::Expression;
 use std::rc::Rc;
 
-fn descend<'v>(cur: &'v mut Value, p: &Proj) -> R<&'v mut Value> {
+pub(crate) fn descend<'v>(cur: &'v mut Value, p: &Proj) -> R<&'v mut Value> {
     match (cur, p) {
         (Value::Struct(s), Proj::Field(name)) => {
             let sv = Rc::make_mut(s);

@@ -272,6 +272,26 @@ id = "wj check --json"
 statement = "Output diagnostics as machine-readable JSON (for agent/IDE consumption)"
 
 [[promise]]
+id = "wj eject"
+statement = "Eject to a standalone Cargo project (the `wj build` output plus vendored path dependencies)"
+
+[[promise]]
+id = "wj eject --output"
+statement = "Output directory (must be absent or empty)"
+
+[[promise]]
+id = "wj eject --target"
+statement = "Target platform (rust, wasm)"
+
+[[promise]]
+id = "wj eject --library"
+statement = "Library crate (as `wj build --library`)"
+
+[[promise]]
+id = "wj eject --module-file"
+statement = "Generate mod.rs re-exports (as `wj build --module-file`)"
+
+[[promise]]
 id = "wj clean"
 statement = "Clean build artifacts and stale temp files"
 
@@ -622,6 +642,42 @@ id = "wj run --mock-http"
 
 [[promise]]
 id = "wj run --sched-seed"
+
+[[promise]]
+id = "wj run --simulate"
+statement = "Interpreted runs in the deterministic simulated world: virtual clock, seeded random numbers and scheduler, in-memory files, no network (ADR-0021)"
+
+[[promise]]
+id = "wj run --seed"
+statement = "With --simulate: the seed of the world; the run is a function of the program and the seed"
+
+[[promise]]
+id = "wj run --faults"
+statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
+
+[[promise]]
+id = "wj test --simulate"
+statement = "Run each interpreted test in the deterministic simulated world (ADR-0021)"
+
+[[promise]]
+id = "wj test --seed"
+statement = "With --simulate: the seed of the world"
+
+[[promise]]
+id = "wj test --seeds"
+statement = "With --simulate: try every seed in A..B; a test fails with the first failing seed and the command that reproduces it"
+
+[[promise]]
+id = "wj test --faults"
+statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
+
+[[promise]]
+id = "wj run --record"
+statement = "Interpreted runs write every effect (file, env, process and network results, stdin, real-clock readings) to a replayable log (ADR-0021)"
+
+[[promise]]
+id = "wj run --replay"
+statement = "Interpreted runs re-run from an effect log: every effect is answered from the log and none is performed (ADR-0021)"
 
 [[promise]]
 id = "wj self-install --dry-run"

@@ -1,0 +1,10 @@
+// A divisor that reaches zero late in a machine-code loop.
+fn main() {
+    let mut s = 0
+    let mut i = 0
+    while i < 3000 {
+        s += 1000000 / (2500 - i)
+        i += 1
+    }
+    println("${s}")
+}
