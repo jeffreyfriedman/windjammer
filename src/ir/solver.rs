@@ -27,6 +27,9 @@ pub struct SolverResult {
     pub clones: CloneRequirements,
     /// Diagnostics produced during solving.
     pub diagnostics: Vec<SolverDiagnostic>,
+    /// Variables whose type is the numeric default (ADR-0015 `int`/`float`), not a width some use
+    /// fixed. Indexed by variable.
+    pub defaulted: Vec<bool>,
 }
 
 /// A diagnostic emitted by the solver.
@@ -179,6 +182,7 @@ pub struct Solver {
     diagnostics: Vec<SolverDiagnostic>,
     /// Deferred numeric class constraints — resolved after all other constraints.
     numeric_classes: Vec<(ConstraintVar, NumericClass)>,
+    defaulted_roots: std::collections::HashSet<u32>,
     /// Region union-find for aliasing analysis.
     region_uf: RegionUnionFind,
     /// `UsedAs(value, site)` edges: `value` must satisfy `site`'s ownership requirement.
@@ -196,6 +200,7 @@ impl Solver {
             clones: CloneRequirements::new(n),
             diagnostics: Vec::new(),
             numeric_classes: Vec::new(),
+            defaulted_roots: std::collections::HashSet::new(),
             region_uf: RegionUnionFind::new(),
             flows: Vec::new(),
         }
@@ -243,7 +248,9 @@ impl Solver {
             })
             .collect();
 
+        let defaulted: Vec<bool> = (0..n).map(|v| self.defaulted_roots.contains(&self.uf.find(v))).collect();
         SolverResult {
+            defaulted,
             types,
             ownership: self.ownership,
             class_ownership,
@@ -462,6 +469,7 @@ impl Solver {
                     NumericClass::Numeric => BaseType::I64,
                 };
                 self.types[root as usize] = Some(default);
+                self.defaulted_roots.insert(root);
             }
         }
     }

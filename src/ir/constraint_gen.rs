@@ -81,6 +81,9 @@ pub struct FunctionConstraints {
     pub taint_constraints: Vec<crate::ir::taint::TaintConstraint>,
     /// Execution mode constraints from `async`/`spawn` call prefixes (WJ-CONC-01).
     pub execution_constraints: Vec<ExecutionConstraint>,
+    /// Integer literals (by their own source position) and their constraint vars, so the solved
+    /// width can be published as the NUM-LITERAL-WIDTH fact.
+    pub literal_vars: Vec<((usize, usize), ConstraintVar)>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -101,6 +104,9 @@ struct AstConstraintWalker<'a, 'ast> {
     registry: Option<&'a SignatureRegistry>,
     /// Struct field types for resolving `deps.writer` → `Writer` (not outer `AppDeps`).
     struct_field_types: Option<&'a HashMap<String, HashMap<String, Type>>>,
+    literal_vars: Vec<((usize, usize), ConstraintVar)>,
+    /// Names bound by `for v in a..b`.
+    range_loop_vars: std::collections::HashSet<String>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -285,6 +291,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             execution_constraints: Vec::new(),
             registry,
             struct_field_types,
+            literal_vars: Vec::new(),
+            range_loop_vars: std::collections::HashSet::new(),
         }
     }
 
@@ -733,8 +741,22 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 body,
                 ..
             } => {
-                self.walk_expression(iterable);
-                self.bind_pattern(pattern);
+                if let Expression::Range { start, end, .. } = iterable {
+                    // `for i in a..b`: the loop variable has the bounds' integer type (NUM-MIXED), so a
+                    // literal compared with `i` inside the body takes that width.
+                    let s = self.walk_expression(start);
+                    let e = self.walk_expression(end);
+                    self.cs.add_because(Constraint::TypeEquals(s, e), tagged("TY-UNIFY"));
+                    self.cs.add_because(Constraint::IsNumeric(s), tagged("NUM-MIXED"));
+                    if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
+                        self.range_loop_vars.insert(n.clone());
+                    }
+                    let loop_var = self.bind_pattern(pattern);
+                    self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
+                } else {
+                    self.walk_expression(iterable);
+                    self.bind_pattern(pattern);
+                }
                 self.walk_statements(body);
             }
 
@@ -832,6 +854,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let l = self.walk_expression(left);
                 let r = self.walk_expression(right);
+                self.note_literal_paired_with_range_var(left, l, right);
+                self.note_literal_paired_with_range_var(right, r, left);
                 let result = self.cs.fresh_var();
 
                 if is_comparison_op(op) {
@@ -1261,6 +1285,21 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// NUM-LITERAL-WIDTH: publish the solved width of an integer literal that is an operand next to
+    /// a `for a..b` loop variable. The loop variable's width is fixed by its bounds, so the literal
+    /// has no other claim. Wider publication waits for the solver to model `len()`/indexing.
+    fn note_literal_paired_with_range_var(&mut self, lit: &Expression<'ast>, lit_var: ConstraintVar, other: &Expression<'ast>) {
+        let (Expression::Literal { value: Literal::Int(_), location }, Expression::Identifier { name, .. }) = (lit, other) else {
+            return;
+        };
+        if !self.range_loop_vars.contains(name) {
+            return;
+        }
+        if let Some(l) = location {
+            self.literal_vars.push(((l.line, l.column), lit_var));
+        }
+    }
+
     /// OWN-CONSUMING-METHOD (convergence plan C5, category 5): `t.into()` where `t: T` and `T` is one of
     /// the function's type parameters. The trait method takes `self` by value, so `t` is owned.
     fn emit_consuming_method_on_generic_param(&mut self, object: &Expression, method: &str, obj_var: ConstraintVar) {
@@ -1452,6 +1491,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             },
             call_targets: self.call_targets,
             taint_constraints: self.taint_constraints,
+            literal_vars: self.literal_vars,
             execution_constraints: self.execution_constraints,
         }
     }

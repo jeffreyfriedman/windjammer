@@ -968,6 +968,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }) {
                     return format!("{}_i64", i);
                 }
+                // NUM-LITERAL-WIDTH: the solver fixed this literal's width from its uses.
+                if let Some(base) = self.current_ir_function.as_ref().and_then(|f| {
+                    crate::ir::numeric_defaults::literal_key(expr).and_then(|k| f.literal_widths.get(&k))
+                }) {
+                    let suffix = if matches!(base, crate::ir::safety_type::BaseType::I32) { "i32" } else { "i64" };
+                    return format!("{}_{}", i, suffix);
+                }
                 use crate::type_inference::IntType;
                 // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer
                 // must beat struct-field width. Otherwise `total_triangles: (total / 3) as u64`

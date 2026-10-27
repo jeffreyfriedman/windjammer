@@ -2789,12 +2789,12 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(sig) = registry
             .get_signature(callee_name)
             .or_else(|| registry.lookup_method(callee_name))
-            .or_else(|| registry.find_unique_signature_ending_with(simple))
+            .or_else(|| registry.find_signature_ending_with(simple))
             .or_else(|| {
                 self.signature_registry
                     .get_signature(callee_name)
                     .or_else(|| self.signature_registry.lookup_method(callee_name))
-                    .or_else(|| self.signature_registry.find_unique_signature_ending_with(simple))
+                    .or_else(|| self.signature_registry.find_signature_ending_with(simple))
             })
         else {
             return false;

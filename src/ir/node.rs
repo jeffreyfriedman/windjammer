@@ -114,6 +114,12 @@ pub struct IrFunction {
     /// `numeric_defaults::literal_key`) whose class no context constrains; they are `int` (i64).
     pub default_int_literals: std::collections::BTreeSet<(usize, usize)>,
 
+    /// Semantic fact NUM-LITERAL-WIDTH (C4): integer literals (by their own source position) whose
+    /// width the solver fixed from their uses (`i == 0` with `i: i64`, a push into `Vec<i32>`).
+    /// Only signed 32/64-bit widths are published; unsigned and index widths stay with the
+    /// legacy collector until the solver models `len()`/indexing.
+    pub literal_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
+
     /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
     /// the binding is never read again on any path.
     pub last_uses: std::collections::BTreeSet<usize>,
@@ -356,6 +362,7 @@ impl IrFunction {
             ownership_trail: std::collections::BTreeMap::new(),
             module_path: analyzed.module_path.clone(),
             default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
+            literal_widths: std::collections::BTreeMap::new(),
             last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),
             returned_fields: crate::ir::clone_facts::returned_param_fields(
                 &params,
