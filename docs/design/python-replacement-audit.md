@@ -119,6 +119,11 @@ recorded as a Python fallback.
   overflow" where a compile-time type error would be kinder.
 * Diagnostics for an error inside a `${...}` method call print a synthetic span (`--> :4:11240018`) instead of the source line.
   Repro: `println("${s.find("l")}")` where `find` returns an `Option`.
+* Interpreter and compiled runtime disagree in small ways that only a compiled build of the same package reveals:
+  `strings.char_count` and `strings.repeat` are declared in `std/strings.wj` and run interpreted, but the compiled runtime has
+  neither; `strings.split_lines` keeps a final empty element when compiled and drops it interpreted; `s.substring(0, n as usize)`
+  compiled to `s[0..n]` with the cast dropped; in `c + 1` with `c: usize` the literal is typed `i32`. The new packages avoid the
+  affected calls and are tested both ways (`wj test --interpret` and `wj test`); each item is a parity-gate candidate.
 * No `isatty`: `check-versions` printed colour only on a terminal; the port prints plain text.
 * `fs.write` drops file modes, so fixtures that must stay executable are copied with `cp -R`.
 * Per-dependency capability grants cannot name an arbitrary program path (`process = ["/abs/wj"]` has to be spelled out), so
