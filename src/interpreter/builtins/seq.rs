@@ -3,17 +3,19 @@
 //! The iterator protocol itself (lazy adaptors) lives in `builtins/iter.rs` and `interpreter/iter.rs`.
 
 use super::*;
+use crate::interpreter::vecbody::VecBody;
 use crate::parser::Type;
 use std::cmp::Ordering;
 
-fn vec_of(v: &Value) -> Rc<Vec<Value>> {
+fn vec_of(v: &Value) -> Rc<VecBody> {
     match v {
         Value::Vec(x) => x.clone(),
-        _ => Rc::new(Vec::new()),
+        _ => Rc::new(VecBody::default()),
     }
 }
 
-fn vec_mut(v: &mut Value) -> &mut Vec<Value> {
+/// The receiver's body for an in-place change (a packed body stays packed for `push`).
+fn body_mut(v: &mut Value) -> &mut VecBody {
     if !matches!(v, Value::Vec(_)) {
         *v = Value::vec(Vec::new());
     }
@@ -21,6 +23,10 @@ fn vec_mut(v: &mut Value) -> &mut Vec<Value> {
         Value::Vec(x) => Rc::make_mut(x),
         _ => unreachable!(),
     }
+}
+
+fn vec_mut(v: &mut Value) -> &mut Vec<Value> {
+    body_mut(v)
 }
 
 pub(super) fn truthy(v: &Value) -> bool {
@@ -304,7 +310,7 @@ fn register_vec(r: &mut Registry) {
     });
 
     r.mutating(Kind::Vec, "push", |_, v, a| {
-        vec_mut(v).push(arg(&a, 0, "push")?);
+        body_mut(v).push_value(arg(&a, 0, "push")?);
         Ok(Value::Unit)
     });
     r.mutating(Kind::Vec, "push_back", |_, v, a| {
