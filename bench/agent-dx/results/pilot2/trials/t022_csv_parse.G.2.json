@@ -1,0 +1,64 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "G",
+ "arm_name": "go",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "package main\n\nimport (\n\t\"bufio\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tsc.Buffer(make([]byte, 1<<20), 1<<28)\n\tw := bufio.NewWriter(os.Stdout)\n\tdefer w.Flush()\n\tfor sc.Scan() {\n\t\tline := strings.TrimSuffix(sc.Text(), \"\\r\")\n\t\tvar fields []string\n\t\tvar cur strings.Builder\n\t\tinQ := false\n\t\tfor i := 0; i < len(line); i++ {\n\t\t\tc := line[i]\n\t\t\tif inQ {\n\t\t\t\tif c == '\"' {\n\t\t\t\t\tif i+1 < len(line) && line[i+1] == '\"' {\n\t\t\t\t\t\tcur.WriteByte('\"')\n\t\t\t\t\t\ti++\n\t\t\t\t\t} else {\n\t\t\t\t\t\tinQ = false\n\t\t\t\t\t}\n\t\t\t\t} else {\n\t\t\t\t\tcur.WriteByte(c)\n\t\t\t\t}\n\t\t\t} else if c == '\"' {\n\t\t\t\tinQ = true\n\t\t\t} else if c == ',' {\n\t\t\t\tfields = append(fields, cur.String())\n\t\t\t\tcur.Reset()\n\t\t\t} else {\n\t\t\t\tcur.WriteByte(c)\n\t\t\t}\n\t\t}\n\t\tfields = append(fields, cur.String())\n\t\tw.WriteString(strconv.Itoa(len(fields)) + \": \")\n\t\tfor i, f := range fields {\n\t\t\tif i > 0 {\n\t\t\t\tw.WriteByte('|')\n\t\t\t}\n\t\t\tw.WriteString(\"[\" + f + \"]\")\n\t\t}\n\t\tw.WriteByte('\\n')\n\t}\n}\n",
+ "first_source": "package main\n\nimport (\n\t\"bufio\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tsc.Buffer(make([]byte, 1<<20), 1<<28)\n\tw := bufio.NewWriter(os.Stdout)\n\tdefer w.Flush()\n\tfor sc.Scan() {\n\t\tline := strings.TrimSuffix(sc.Text(), \"\\r\")\n\t\tvar fields []string\n\t\tvar cur strings.Builder\n\t\tinQ := false\n\t\tfor i := 0; i < len(line); i++ {\n\t\t\tc := line[i]\n\t\t\tif inQ {\n\t\t\t\tif c == '\"' {\n\t\t\t\t\tif i+1 < len(line) && line[i+1] == '\"' {\n\t\t\t\t\t\tcur.WriteByte('\"')\n\t\t\t\t\t\ti++\n\t\t\t\t\t} else {\n\t\t\t\t\t\tinQ = false\n\t\t\t\t\t}\n\t\t\t\t} else {\n\t\t\t\t\tcur.WriteByte(c)\n\t\t\t\t}\n\t\t\t} else if c == '\"' {\n\t\t\t\tinQ = true\n\t\t\t} else if c == ',' {\n\t\t\t\tfields = append(fields, cur.String())\n\t\t\t\tcur.Reset()\n\t\t\t} else {\n\t\t\t\tcur.WriteByte(c)\n\t\t\t}\n\t\t}\n\t\tfields = append(fields, cur.String())\n\t\tw.WriteString(strconv.Itoa(len(fields)) + \": \")\n\t\tfor i, f := range fields {\n\t\t\tif i > 0 {\n\t\t\t\tw.WriteByte('|')\n\t\t\t}\n\t\t\tw.WriteString(\"[\" + f + \"]\")\n\t\t}\n\t\tw.WriteByte('\\n')\n\t}\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 1.989,
+   "verb": "native"
+  }
+ ],
+ "lang": "go",
+ "mode_violations": 0,
+ "other_seconds": 6.19,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T14:33:34",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 14.479,
+ "tool_wait_seconds": 1.99,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 14.479,
+  "cost_usd": 0.0210729,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the parser in `main.go`. I ran it on Example 2's input plus the `\"x,y\",z` line from Example 1. The output matched what the task expects for those lines. I didn't run Example 1 on its own.\n\nIt reads one record per line and splits on commas outside quotes. Inside quotes, `\"\"` becomes a literal `\"`. Each field is printed in square brackets after the field count.\n\nOne addition beyond the spec:",
+  "subtype": "success",
+  "tokens_in": 23862,
+  "tokens_out": 960,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 22.66
+}

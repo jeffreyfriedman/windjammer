@@ -67,7 +67,7 @@ fn items_mut(v: &mut Value) -> &mut Vec<Value> {
         slot.1 = Value::vec(Vec::new());
     }
     match &mut slot.1 {
-        Value::Vec(x) => Rc::make_mut(x),
+        Value::Vec(x) => &mut **Rc::make_mut(x),
         _ => unreachable!(),
     }
 }

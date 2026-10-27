@@ -1,0 +1,57 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "G",
+ "arm_name": "go",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tsc.Buffer(make([]byte, 1<<20), 1<<28)\n\tw := bufio.NewWriter(os.Stdout)\n\tdefer w.Flush()\n\tfor sc.Scan() {\n\t\tline := strings.TrimSuffix(sc.Text(), \"\\r\")\n\t\tvar fields []string\n\t\tvar cur []byte\n\t\tinQ := false\n\t\tfor i := 0; i < len(line); i++ {\n\t\t\tc := line[i]\n\t\t\tif inQ {\n\t\t\t\tif c == '\"' {\n\t\t\t\t\tif i+1 < len(line) && line[i+1] == '\"' {\n\t\t\t\t\t\tcur = append(cur, '\"')\n\t\t\t\t\t\ti++\n\t\t\t\t\t} else {\n\t\t\t\t\t\tinQ = false\n\t\t\t\t\t}\n\t\t\t\t} else {\n\t\t\t\t\tcur = append(cur, c)\n\t\t\t\t}\n\t\t\t} else if c == '\"' {\n\t\t\t\tinQ = true\n\t\t\t} else if c == ',' {\n\t\t\t\tfields = append(fields, string(cur))\n\t\t\t\tcur = cur[:0]\n\t\t\t} else {\n\t\t\t\tcur = append(cur, c)\n\t\t\t}\n\t\t}\n\t\tfields = append(fields, string(cur))\n\t\tfor i := range fields {\n\t\t\tfields[i] = \"[\" + fields[i] + \"]\"\n\t\t}\n\t\tfmt.Fprintf(w, \"%d: %s\\n\", len(fields), strings.Join(fields, \"|\"))\n\t}\n}\n",
+ "first_source": "",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [],
+ "lang": "go",
+ "mode_violations": 0,
+ "other_seconds": 26.06,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T12:57:58",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 8.603,
+ "tool_wait_seconds": 0,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 8.603,
+  "cost_usd": 0.021502599999999997,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.go`. I ran it on one input only: the records from Example 2 plus `\"x,y\",z` from Example 1. The output matched the expected lines for those four records. I did not run Example 1 as a whole.\n\nThe parser reads each line and walks it character by character. A quote switches quoted mode on and off, and `\"\"` inside quotes becomes a literal `\"`. A comma outside quotes ends t",
+  "subtype": "success",
+  "tokens_in": 23896,
+  "tokens_out": 996,
+  "turns": 3
+ },
+ "verify_calls": 0,
+ "verify_calls_to_green": null,
+ "wall_seconds": 34.66
+}
