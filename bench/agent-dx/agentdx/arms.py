@@ -49,10 +49,18 @@ ARMS = {
     "B": {"name": "compiled-first", "loop": "compiled-first", "pack": True, "lang": "wj"},
     "C": {"name": "no-pack", "loop": "interpreted-first", "pack": False, "lang": "wj"},
     "D": {"name": "interpreted+final-build", "loop": "interpreted-plus-build", "pack": True, "lang": "wj"},
+    # pack / tool experiment: same compiled-first loop as B, tiny pack (packs/), differing only in tool access
+    "E": {"name": "tiny-pack+mcp", "loop": "compiled-first", "pack_file": "tiny_E.md", "mcp": True, "lang": "wj", "bash": "core"},
+    "F": {"name": "tiny-pack+wj-docs", "loop": "compiled-first", "pack_file": "tiny_F.md", "bash": "core+docs", "lang": "wj"},
+    "T": {"name": "tiny-pack-only", "loop": "compiled-first", "pack_file": "tiny_T.md", "bash": "core", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
     "R": {"name": "rust", "loop": "native-rust", "pack": False, "lang": "rust"},
 }
+PACKS_DIR = os.path.join(ROOT, "packs")
+MCP_SERVER = "windjammer"
+MCP_TOOLS = ["docs_search", "check_code", "explain_error"]     # the only MCP tools exposed (others are disallowed by name)
+WJ_CORE = ["build", "run", "test", "check", "fmt", "lint", "fix"]
 LANG_NAME = {"wj": "Windjammer", "python": "Python 3 (standard library only)", "go": "Go (standard library only, package main)",
              "rust": "Rust (std only, edition 2021)"}
 SRC = {"wj": "main.wj", "python": "main.py", "go": "main.go", "rust": "main.rs"}
@@ -78,20 +86,56 @@ def prompt(task_id, arm):
     return head(lang) + LOOP_TEXT[ARMS[arm]["loop"]] + "\n\n" + T.render_prompt(task_id, lang)
 
 
+def _bash(arm):
+    a = ARMS[arm]
+    if a.get("bash") in ("core", "core+docs"):
+        subs = WJ_CORE + (["docs", "explain"] if a["bash"] == "core+docs" else [])
+        return [f"Bash(wj {c}:*)" for c in subs]
+    return EXTRA_BASH[a["lang"]]
+
+
+def _mcp_allowed(arm):
+    return [f"mcp__{MCP_SERVER}__{t}" for t in MCP_TOOLS] if ARMS[arm].get("mcp") else []
+
+
+def mcp_config(server_bin):
+    import json
+    return json.dumps({"mcpServers": {MCP_SERVER: {"command": server_bin, "args": ["stdio"]}}})
+
+
+def pack_path(arm):
+    a = ARMS[arm]
+    if a.get("pack_file"):
+        return os.path.join(PACKS_DIR, a["pack_file"])
+    return PACK_PATH if a.get("pack") else None
+
+
+def all_mcp_tools():
+    import json
+    m = os.path.normpath(os.path.join(ROOT, "..", "..", "crates", "windjammer-mcp", "tools", "manifest.json"))
+    m = json.load(open(m))
+    return [t["name"] for t in (m["tools"] if isinstance(m, dict) else m)]
+
+
 def tool_policy(arm="A"):
     """Tools available to the trial agent. dontAsk denies everything not allowed; file tools stay in the cwd."""
     return {"tools": "Read,Edit,Write,Glob,Grep,Bash",
-            "allowed": ["Read", "Edit", "Write", "Glob", "Grep"] + EXTRA_BASH[ARMS[arm]["lang"]] +
+            "allowed": ["Read", "Edit", "Write", "Glob", "Grep"] + _bash(arm) + _mcp_allowed(arm) +
                        ["Bash(printf:*)", "Bash(echo:*)", "Bash(head:*)", "Bash(tail:*)"],   # printf/echo/head/tail pipe input into the program
             "permission_mode": "dontAsk"}
 
 
-def claude_argv(arm, task_id, model, max_turns, max_trial_usd, claude_bin="claude"):
+def claude_argv(arm, task_id, model, max_turns, max_trial_usd, claude_bin="claude", mcp_config_path=None, stream=False):
     pol = tool_policy(arm)
-    argv = [claude_bin, "-p", prompt(task_id, arm), "--output-format", "json", "--max-turns", str(max_turns),
+    argv = [claude_bin, "-p", prompt(task_id, arm), "--output-format", "stream-json" if stream else "json"] + (["--verbose"] if stream else []) + [
+            "--max-turns", str(max_turns),
             "--model", model, "--permission-mode", pol["permission_mode"], "--tools", pol["tools"],
             "--allowedTools", ",".join(pol["allowed"]), "--setting-sources", "project", "--strict-mcp-config",
             "--disable-slash-commands", "--no-session-persistence", "--max-budget-usd", str(max_trial_usd)]
-    if ARMS[arm]["pack"]:
-        argv += ["--append-system-prompt-file", PACK_PATH]
+    pk = pack_path(arm)
+    if pk:
+        argv += ["--append-system-prompt-file", pk]
+    if ARMS[arm].get("mcp"):
+        hidden = [f"mcp__{MCP_SERVER}__{t}" for t in all_mcp_tools() if t not in MCP_TOOLS]
+        argv += ["--mcp-config", mcp_config_path, "--disallowedTools", ",".join(hidden)]
     return argv
