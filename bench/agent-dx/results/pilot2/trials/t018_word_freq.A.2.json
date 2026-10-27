@@ -1,0 +1,75 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "A",
+ "arm_name": "interpreted-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "mismatched types",
+  "mismatched types"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 36
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k: int = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n        } else {\n            let mut cur = \"\"\n            for c in line.chars() {\n                if c.is_ascii_alphanumeric() {\n                    cur = cur + c.to_ascii_lowercase().to_string()\n                } else {\n                    if cur.len() > 0 {\n                        counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n                        cur = \"\"\n                    }\n                }\n            }\n            if cur.len() > 0 {\n                counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n            }\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for (w, n) in counts {\n        items.push((w, n))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i: int = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k: int = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n        } else {\n            let mut cur = \"\"\n            for c in line.chars() {\n                if c.is_ascii_alphanumeric() {\n                    cur = cur + c.to_ascii_lowercase().to_string()\n                } else {\n                    if cur.len() > 0 {\n                        counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n                        cur = \"\"\n                    }\n                }\n            }\n            if cur.len() > 0 {\n                counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n            }\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for (w, n) in counts {\n        items.push((w, n))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i: int = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.337,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.087,
+   "verb": "check"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 26.11,
+ "pass_final": false,
+ "recorded_at": "2026-10-26T14:40:02",
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 7.813,
+ "tool_wait_seconds": 0.42,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 7.813,
+  "cost_usd": 0.021654,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.wj`. It passes `wj check`, and `wj run --interpret` on Example 1 printed `the 3` and `and 1`, which matches. I didn't run Example 2 or any other inputs. I also didn't run `wj build`, so the compiled path is untested.\n\nIt reads all of stdin, takes K from the first line, then splits the rest into runs of ASCII letters and digits. Each run is lower-cased and counted in a",
+  "subtype": "success",
+  "tokens_in": 29032,
+  "tokens_out": 943,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 34.35
+}
