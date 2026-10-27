@@ -26,7 +26,7 @@ pub struct IterState {
 }
 
 pub enum IterSrc {
-    Buf { items: Rc<Vec<Value>>, pos: Cell<usize>, end: Cell<usize> },
+    Buf { items: Rc<crate::interpreter::vecbody::VecBody>, pos: Cell<usize>, end: Cell<usize> },
     /// Half-open; `end == i128::MAX` is an unbounded range (`1..`).
     Range { cur: Cell<i128>, end: Cell<i128>, ty: IntTy },
     Map(Iter, Value),
@@ -62,9 +62,9 @@ impl IterState {
     }
     pub fn from_items(items: Vec<Value>) -> Iter {
         let n = items.len();
-        Self::new(IterSrc::Buf { items: Rc::new(items), pos: Cell::new(0), end: Cell::new(n) })
+        Self::new(IterSrc::Buf { items: Rc::new(items.into()), pos: Cell::new(0), end: Cell::new(n) })
     }
-    pub fn from_rc(items: Rc<Vec<Value>>) -> Iter {
+    pub fn from_rc(items: Rc<crate::interpreter::vecbody::VecBody>) -> Iter {
         let n = items.len();
         Self::new(IterSrc::Buf { items, pos: Cell::new(0), end: Cell::new(n) })
     }
@@ -112,7 +112,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             let p = pos.get();
             if p < end.get() {
                 pos.set(p + 1);
-                Ok(Some(items[p].clone()))
+                Ok(items.get_value(p))
             } else {
                 Ok(None)
             }
@@ -332,7 +332,7 @@ pub fn next_back(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
         IterSrc::Buf { items, pos, end } => {
             if pos.get() < end.get() {
                 end.set(end.get() - 1);
-                Ok(Some(items[end.get()].clone()))
+                Ok(items.get_value(end.get()))
             } else {
                 Ok(None)
             }

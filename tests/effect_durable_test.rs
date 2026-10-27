@@ -330,3 +330,13 @@ fn a_crash_between_performing_and_journaling_runs_the_step_again() {
     assert_eq!(run_durable(mid.path(), None, true, &[], &[]).stdout, "1\n");
     assert_eq!(fs::read_to_string(mid.path().join("marks.txt")).unwrap(), "xx", "crashed before journaling: performed again");
 }
+
+/// An effect that appears only inside a `${..}` interpolation is a step like any other.
+#[test]
+fn effects_inside_interpolation_are_journaled_steps() {
+    let src = "use std::fs\nuse std::time\ndurable fn run() -> string {\n    let a = \"first ${fs::write(\\\"i.txt\\\", \\\"x\\\").is_ok()}\"\n    let b = \"second ${time::now_millis()}\"\n    \"${a} ${b}\"\n}\nfn main() { println(\"RESULT ${run()}\") }\n";
+    let mut failures = Vec::new();
+    let points = crash_everywhere("interpolation", src, &[], false, &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(points >= 2, "the two interpolated effects must be steps (crash points: {points})");
+}

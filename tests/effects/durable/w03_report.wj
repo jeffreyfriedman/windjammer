@@ -6,8 +6,8 @@ use std::random
 use std::sync
 use std::time
 fn section(name: string) -> string {
-    fs::write("sec-${name}.txt", "body of ${name}") ?? ()
-    fs::read_to_string("sec-${name}.txt") ?? ""
+    fs::write("sec-${name}.txt", "body of ${name}").unwrap_or(())
+    fs::read_to_string("sec-${name}.txt").unwrap_or("")
 }
 fn stamp() -> int { time::now_unix() }
 durable fn run() -> string {
@@ -16,7 +16,7 @@ durable fn run() -> string {
     let a = section("intro")
     let b = section("data")
     let at = stamp()
-    fs::write("report.txt", "${a}|${b}|${at}") ?? ()
+    fs::write("report.txt", "${a}|${b}|${at}").unwrap_or(())
     println("report done")
     "report ${a.len() + b.len()}${wj_taint}"
 }
