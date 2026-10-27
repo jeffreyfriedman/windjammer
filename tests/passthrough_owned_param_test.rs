@@ -24,7 +24,7 @@ fn compile_with_external_sigs(source: &str, external_sigs: &SignatureRegistry) -
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
     let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
+    let program = Box::leak(Box::new(parser.parse().unwrap()));
     let mut analyzer = Analyzer::new();
     let (analyzed_fns, registry, _) = analyzer
         .analyze_program_with_global_signatures(&program, external_sigs)

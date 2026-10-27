@@ -36,7 +36,7 @@ fn compile_with_copy_structs(source: &str, copy_structs: &[&str]) -> String {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
     let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().unwrap();
+    let program = Box::leak(Box::new(parser.parse().unwrap()));
 
     let mut analyzer = Analyzer::new();
     for name in copy_structs {

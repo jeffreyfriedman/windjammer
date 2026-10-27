@@ -71,7 +71,7 @@
 
 ## Interpreter vs compiled divergence
 
-13 of 60 trials had an interpreted hidden-oracle result different from the compiled one (13 silent: interpreter green, compiled red).
+13 out of 60 trials had an interpreted hidden-oracle result different from the compiled one (13 silent: interpreter green, compiled red).
 - t006_base_convert arm A trial 0: interp=True compiled=False
 - t006_base_convert arm A trial 1: interp=True compiled=False
 - t006_base_convert arm A trial 2: interp=True compiled=False

@@ -1,6 +1,9 @@
 ---
 status: proposal
+last_verified: 85a9c47b9571
 ---
+> **Proposal: not implemented.** This page defines a measurement program; the harness in `bench/agent-dx` exists, the targets below are goals.
+
 # Making Windjammer the language agents prefer
 
 Goal: given the same task, a coding agent finishes sooner, with fewer tokens and fewer retries, in Windjammer than in

@@ -1070,7 +1070,7 @@ pub fn count_data_lines(lines: Vec<string>) -> i32 {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
@@ -1114,7 +1114,7 @@ pub fn json_string_field(body: string, key: string) -> string {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
