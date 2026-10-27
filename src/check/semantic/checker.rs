@@ -173,6 +173,9 @@ impl Cx<'_, '_> {
         ck.scalars = scalars;
         ck.immutable = immutable;
         walk_block(&mut ck, body);
+        if let (Some(Statement::Expression { expr, .. }), Some(ty)) = (body.last().map(|s| &**s), ret) {
+            ck.wrapper_mismatch(ty, expr, " in return value");
+        }
         // A literal tail expression is the return value too.
         if let (Some(Statement::Expression { expr: Expression::Literal { value, location }, .. }), Some(ty)) =
             (body.last().map(|s| &**s), ret)
@@ -388,6 +391,18 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         let mut unknown = false;
         for (fname, value) in fields {
             if declared.contains(&fname.as_str()) {
+                // `Some(lit)` for an `Option<T>` field: the literal is checked against `T`
+                if let (Expression::Call { function, arguments, .. }, Some((_, Type::Option(inner)))) = (value, decl_fields.iter().find(|(n, _)| n == fname)) {
+                    if let (Expression::Identifier { name: ctor, .. }, [(None, Expression::Literal { value: lit, location })]) = (&**function, arguments.as_slice()) {
+                        if ctor == "Some" {
+                            let span = self.cx.loc.literal(location, lit);
+                            let ctx = format!(" in field `{fname}` of `{name}`");
+                            if let Some(d) = check_literal(lit, inner, self.cx.idx, span, &ctx) {
+                                self.cx.out.push(d);
+                            }
+                        }
+                    }
+                }
                 if let (Expression::Literal { value: lit, location }, Some((_, ty))) =
                     (value, decl_fields.iter().find(|(n, _)| n == fname))
                 {
@@ -610,11 +625,40 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         self.cx.out.push(d);
     }
 
+    /// `Some("Result")` / `Some("Option")` when `call` is a plain call of a function that returns one (never a scalar).
+    fn wrapped_result(&self, call: &Expression<'_>) -> Option<&'static str> {
+        let Expression::Call { function, .. } = call else { return None };
+        let Expression::Identifier { name, .. } = &**function else { return None };
+        if name.contains("::") || (self.locals.contains(name) && !self.cx.idx.fns.contains_key(name)) {
+            return None;
+        }
+        let Some([info]) = self.cx.idx.fns.get(name).map(Vec::as_slice) else { return None };
+        match &info.ret {
+            _ if info.generic => None,
+            Some(Type::Result(..)) => Some("Result"),
+            Some(Type::Option(_)) => Some("Option"),
+            _ => None,
+        }
+    }
+
+    /// `let x: string = f(..)` or a scalar-returning tail `f(..)` where `f` returns a `Result` / `Option`.
+    fn wrapper_mismatch(&mut self, want: &Type, value: &Expression<'_>, what: &str) {
+        let (Some(k), Some(found)) = (rules::type_kind(want), self.wrapped_result(value)) else { return };
+        let e = rules::display_kind(k);
+        let Expression::Call { function, .. } = value else { return };
+        let mut d = Diagnostic::error("WJ0003", format!("mismatched types: expected `{e}`, found `{found}`{what}"));
+        if let Some(sp) = self.operand_span(function) {
+            d = d.at(sp.with_label(format!("expected `{e}`, found `{found}`")));
+        }
+        self.cx.out.push(d.with_help(format!("handle the {found}: `match`, `?`, or `?? default`")));
+    }
+
     /// `let x: int = f(..)` where `f` returns another scalar kind.
     fn let_from_call(&mut self, ty: &Type, value: &Expression<'_>) {
         if matches!(value, Expression::Literal { .. }) {
             return;
         }
+        self.wrapper_mismatch(ty, value, " in initializer");
         let (Some(want), Some((got, true))) = (rules::type_kind(ty), self.kind_of(value)) else { return };
         if want == got {
             return;
@@ -776,6 +820,17 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             return;
         }
         for ((_, arg), ty) in arguments.iter().zip(&info.params) {
+            // a struct literal of one struct where another is declared
+            if let (Expression::StructLiteral { name: given, location, .. }, Type::Custom(want)) = (arg, ty) {
+                let unique = |n: &str| matches!(idx.structs.get(n).map(Vec::as_slice), Some([s]) if !s.generic);
+                if given != want && unique(given) && unique(want) {
+                    let mut d = Diagnostic::error("WJ0003", format!("mismatched types: expected `{want}`, found `{given}` in argument of `{name}`"));
+                    if let Some(sp) = self.cx.loc.word(location, given) {
+                        d = d.at(sp.with_label(format!("expected `{want}`, found `{given}`")));
+                    }
+                    self.cx.out.push(d.with_help(format!("`{name}` takes a `{want}`")));
+                }
+            }
             if let Expression::Literal { value, location } = arg {
                 let span = self.cx.loc.literal(location, value);
                 let ctx = format!(" in argument of `{name}`");

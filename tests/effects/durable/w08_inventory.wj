@@ -6,8 +6,8 @@ use std::random
 use std::sync
 use std::time
 fn source(name: string, n: int) -> string {
-    fs::write("src-${name}.txt", "${n}") ?? ()
-    fs::read_to_string("src-${name}.txt") ?? "0"
+    fs::write("src-${name}.txt", "${n}").unwrap_or(())
+    fs::read_to_string("src-${name}.txt").unwrap_or("0")
 }
 durable fn run() -> string {
     // @mutation-point
@@ -15,7 +15,7 @@ durable fn run() -> string {
     let a = source("warehouse", 12).trim().parse::<int>().unwrap_or(0)
     let b = source("store", 7).trim().parse::<int>().unwrap_or(0)
     let total = a + b
-    fs::write("inventory.txt", "${total}") ?? ()
+    fs::write("inventory.txt", "${total}").unwrap_or(())
     println("total ${total}")
     "inventory ${total}${wj_taint}"
 }

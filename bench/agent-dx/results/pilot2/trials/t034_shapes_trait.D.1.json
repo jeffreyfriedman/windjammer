@@ -1,0 +1,70 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "D",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 35,
+  "status": "pass",
+  "total": 35
+ },
+ "final_source": "use std::fs\n\ntrait Shape {\n    fn name(self) -> string\n    fn corners(self) -> int\n    fn double_area(self) -> int\n}\n\nstruct Square { s: int }\nstruct Rect { w: int, h: int }\nstruct RTri { a: int, b: int }\nstruct Trap { a: int, b: int, h: int }\n\nimpl Shape for Square {\n    fn name(self) -> string { \"square\" }\n    fn corners(self) -> int { 4 }\n    fn double_area(self) -> int { 2 * self.s * self.s }\n}\n\nimpl Shape for Rect {\n    fn name(self) -> string { \"rect\" }\n    fn corners(self) -> int { 4 }\n    fn double_area(self) -> int { 2 * self.w * self.h }\n}\n\nimpl Shape for RTri {\n    fn name(self) -> string { \"rtri\" }\n    fn corners(self) -> int { 3 }\n    fn double_area(self) -> int { self.a * self.b }\n}\n\nimpl Shape for Trap {\n    fn name(self) -> string { \"trap\" }\n    fn corners(self) -> int { 4 }\n    fn double_area(self) -> int { (self.a + self.b) * self.h }\n}\n\nfn num(p: Vec<string>, i: int) -> int {\n    p[i].parse::<int>().unwrap_or(0)\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut shapes: Vec<Box<dyn Shape>> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().collect()\n        if p.len() == 0 {\n            continue\n        }\n        if p[0] == \"square\" {\n            shapes.push(Box::new(Square { s: num(p, 1) }))\n        } else if p[0] == \"rect\" {\n            shapes.push(Box::new(Rect { w: num(p, 1), h: num(p, 2) }))\n        } else if p[0] == \"rtri\" {\n            shapes.push(Box::new(RTri { a: num(p, 1), b: num(p, 2) }))\n        } else if p[0] == \"trap\" {\n            shapes.push(Box::new(Trap { a: num(p, 1), b: num(p, 2), h: num(p, 3) }))\n        }\n    }\n    let mut total: int = 0\n    let mut best: int = -1\n    let mut best_name = \"\"\n    for s in shapes {\n        let d = s.double_area()\n        println(\"${s.name()} corners=${s.corners()} area2=${d}\")\n        total += d\n        if d > best {\n            best = d\n            best_name = s.name()\n        }\n    }\n    println(\"total area2=${total}\")\n    if best < 0 {\n        println(\"largest=none\")\n    } else {\n        println(\"largest=${best_name} area2=${best}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\ntrait Shape {\n    fn name(self) -> string\n    fn corners(self) -> int\n    fn double_area(self) -> int\n}\n\nstruct Square { s: int }\nstruct Rect { w: int, h: int }\nstruct RTri { a: int, b: int }\nstruct Trap { a: int, b: int, h: int }\n\nimpl Shape for Square {\n    fn name(self) -> string { \"square\" }\n    fn corners(self) -> int { 4 }\n    fn double_area(self) -> int { 2 * self.s * self.s }\n}\n\nimpl Shape for Rect {\n    fn name(self) -> string { \"rect\" }\n    fn corners(self) -> int { 4 }\n    fn double_area(self) -> int { 2 * self.w * self.h }\n}\n\nimpl Shape for RTri {\n    fn name(self) -> string { \"rtri\" }\n    fn corners(self) -> int { 3 }\n    fn double_area(self) -> int { self.a * self.b }\n}\n\nimpl Shape for Trap {\n    fn name(self) -> string { \"trap\" }\n    fn corners(self) -> int { 4 }\n    fn double_area(self) -> int { (self.a + self.b) * self.h }\n}\n\nfn num(p: Vec<string>, i: int) -> int {\n    p[i].parse::<int>().unwrap_or(0)\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut shapes: Vec<Box<dyn Shape>> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().collect()\n        if p.len() == 0 {\n            continue\n        }\n        if p[0] == \"square\" {\n            shapes.push(Box::new(Square { s: num(p, 1) }))\n        } else if p[0] == \"rect\" {\n            shapes.push(Box::new(Rect { w: num(p, 1), h: num(p, 2) }))\n        } else if p[0] == \"rtri\" {\n            shapes.push(Box::new(RTri { a: num(p, 1), b: num(p, 2) }))\n        } else if p[0] == \"trap\" {\n            shapes.push(Box::new(Trap { a: num(p, 1), b: num(p, 2), h: num(p, 3) }))\n        }\n    }\n    let mut total: int = 0\n    let mut best: int = -1\n    let mut best_name = \"\"\n    for s in shapes {\n        let d = s.double_area()\n        println(\"${s.name()} corners=${s.corners()} area2=${d}\")\n        total += d\n        if d > best {\n            best = d\n            best_name = s.name()\n        }\n    }\n    println(\"total area2=${total}\")\n    if best < 0 {\n        println(\"largest=none\")\n    } else {\n        println(\"largest=${best_name} area2=${best}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 35,
+  "status": "pass",
+  "total": 35
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.55,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 195.264,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 2.05,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T14:14:19",
+ "schema": 2,
+ "task": "t034_shapes_trait",
+ "thinking_seconds": 15.108,
+ "tool_wait_seconds": 195.81,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 15.108,
+  "cost_usd": 0.045525,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "The background `wj build main.wj` finished with exit code 0, so the program compiles with the production toolchain. The output file was empty, so there were no warnings or errors to report.\n\nI haven't changed `main.wj` since the interpreted run on Example 1, and I'm not re-running the build. I didn't run Example 2 or the empty-input case.",
+  "subtype": "success",
+  "tokens_in": 16988,
+  "tokens_out": 111,
+  "turns": 1
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 212.97
+}

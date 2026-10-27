@@ -9,5 +9,5 @@ fn save(path: string, text: string) {
 @test
 fn saved_text_can_be_read_back() {
     save("saved.txt", "important")
-    assert_eq(fs::read_to_string("saved.txt") ?? "", "important")
+    assert_eq(fs::read_to_string("saved.txt").unwrap_or(""), "important")
 }

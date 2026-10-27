@@ -5,6 +5,7 @@ prompt; the oracle, other trials and the shim log live outside it."""
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import time
@@ -56,13 +57,13 @@ def _usage(j):
             "result_excerpt": str(j.get("result", ""))[:400]}
 
 
-def analyse_invocations(log):
+def analyse_invocations(log, lang="wj"):
     """Summaries of the shim log: per-verify-call table, invocations-to-green, mode violations, categories."""
     inv, cats = [], {}
     for e in log:
         row = {"verb": e["verb"], "mode": e["mode"], "exit": e["exit"], "secs": e["secs"]}
         if e["exit"] != 0 and e["verb"] in S.VERIFY_VERBS:
-            ds = dg.parse_text("wj", e["out"])
+            ds = dg.parse_text(lang, e["out"])
             row["categories"] = sorted({d["category"] for d in ds})
             for c in row["categories"]:
                 cats[c] = cats.get(c, 0) + 1
@@ -74,18 +75,28 @@ def analyse_invocations(log):
             green = i + 1
         else:
             break
-    return {"invocations": inv, "verify_calls": len(ver), "verify_calls_to_green": green,
+    caps = sum(1 for e in log if re.search(r"WJ004\d|capabilit", e.get("out", "")) and e["exit"] != 0)
+    return {"capability_denials": caps, "final_build_calls": sum(1 for r in inv if r["verb"] == "build"),
+            "invocations": inv, "verify_calls": len(ver), "verify_calls_to_green": green,
             "tool_wait_seconds": round(sum(r["secs"] for r in inv), 2), "categories": cats,
             "first_source": next((e["source"] for e in log if e.get("source")), "")}
 
 
 def violations(arm, inv):
+    """Calls using the other arm's loop commands. D may build; native baselines have no modes."""
     loop = A.ARMS[arm]["loop"]
+    if loop.startswith("native"):
+        return 0
+    if loop == "interpreted-plus-build":
+        return sum(1 for r in inv if r["verb"] in S.VERIFY_VERBS and r["mode"] == "compiled" and r["verb"] != "build")
     bad = "compiled" if loop == "interpreted-first" else "interpret"
     return sum(1 for r in inv if r["verb"] in S.VERIFY_VERBS and r["mode"] == bad)
 
 
-def default_grader(task, ws):
+def default_grader(task, ws, lang="wj"):
+    if lang != "wj":   # native baselines: one toolchain, so no interpreted/compiled divergence
+        g = G.grade(lang, task, ws, hidden=True)
+        return {"compiled": g, "interp": g}
     return {"compiled": G.grade("wj", task, ws, hidden=True), "interp": G.grade("wj-interp", task, ws, hidden=True)}
 
 
@@ -108,17 +119,21 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     os.makedirs(tdir, exist_ok=True)
     ws = os.path.join(tdir, "ws")
     os.makedirs(ws, exist_ok=True)
-    with open(os.path.join(ws, "main.wj"), "w") as f:
-        f.write(W.starter("wj"))
+    lang = A.ARMS[arm]["lang"]
+    src = A.SRC[lang]
+    with open(os.path.join(ws, src), "w") as f:
+        f.write(W.starter(lang))
     log = os.path.join(tdir, "shim.jsonl")
     shim_dir = os.path.join(tdir, "shimbin")
-    S.install(shim_dir, real_wj or wj_bin(), log, os.path.join(ws, "main.wj"))
+    tool = A.SHIMMED[lang]
+    real = (real_wj or wj_bin()) if lang == "wj" else shutil.which(tool)
+    S.install(shim_dir, real, log, os.path.join(ws, src), tool)
     t0 = time.time()
     res = agent.run(ws, shim_dir, arm, task)
     wall = time.time() - t0
-    final = open(os.path.join(ws, "main.wj")).read()
-    g = grader(task, ws)
-    an = analyse_invocations(S.read_log(log))
+    final = open(os.path.join(ws, src)).read()
+    g = default_grader(task, ws, lang) if grader is default_grader else grader(task, ws)
+    an = analyse_invocations(S.read_log(log, tool), lang)
     u = _usage(res["json"])
     cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
     api = u["api_seconds"] if u["api_seconds"] is not None else None
@@ -132,14 +147,15 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           "wall_seconds": round(wall, 2), "thinking_seconds": api,
           "tool_wait_seconds": an["tool_wait_seconds"],
           "other_seconds": None if api is None else round(max(0.0, wall - api - an["tool_wait_seconds"]), 2),
+          "lang": lang, "capability_denials": an["capability_denials"], "final_build_calls": an["final_build_calls"],
           "invocations": an["invocations"], "verify_calls": an["verify_calls"],
           "verify_calls_to_green": an["verify_calls_to_green"], "diagnostic_categories": an["categories"],
           "mode_violations": violations(arm, an["invocations"]),
           "first_source": an["first_source"], "final_source": final,
           "final_build_diag": [d["message"] for d in g["compiled"].get("build", {}).get("diagnostics", [])][:3],
-          "diag_samples": [error_excerpt(e["out"]) for e in S.read_log(log) if e["exit"] != 0 and e["verb"] in S.VERIFY_VERBS][:12]}
+          "diag_samples": [error_excerpt(e["out"]) for e in S.read_log(log, tool) if e["exit"] != 0 and e["verb"] in S.VERIFY_VERBS][:12]}
     for name in os.listdir(ws):     # build outputs can be large; the record keeps first and final sources
-        if name not in ("main.wj",):
+        if name != src:
             q = os.path.join(ws, name)
             shutil.rmtree(q, ignore_errors=True) if os.path.isdir(q) else os.remove(q)
     return tr
@@ -226,9 +242,10 @@ def regrade_failures(out_dir, grader=default_grader, say=print):
             continue
         ws = os.path.join(out_dir, "regrade", f"{tr['task']}.{tr['arm']}.{tr['trial']}")
         os.makedirs(ws, exist_ok=True)
-        with open(os.path.join(ws, "main.wj"), "w") as f:
+        lang = tr.get("lang", "wj")
+        with open(os.path.join(ws, A.SRC[lang]), "w") as f:
             f.write(tr["final_source"])
-        g = grader(tr["task"], ws)
+        g = default_grader(tr["task"], ws, lang) if grader is default_grader else grader(tr["task"], ws)
         shutil.rmtree(ws, ignore_errors=True)
         tr["original_final_grade"], tr["original_interp_grade"] = tr["final_grade"], tr["interp_grade"]
         cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"

@@ -118,3 +118,36 @@ the interpreter accepts but rustc lacks (t018 fails in both arms). The path to H
 finishing) that this pilot did not run. Agents iterate very little (3-5 turns): pass@1 and the first-draft failure classes dominate.
 Harness notes: concurrent compiled grading briefly shared one binary name and produced 4 false failures; fixed by serialising
 build+copy and re-grading every failed trial from its recorded source (`agentdx pilot-regrade`).
+
+## Second pilot (Oct 2026): seven arms, 210 trials, compiler build 8ff93b405
+
+Raw records and reports: `bench/agent-dx/results/pilot2/` (`report.md`, `trials/`; `rerun/` is a second sample of arms A, B, D).
+Arms: A interpreted-first, B compiled-first, C no pack, D interpreted-first plus one `wj build`, and Python, Go and Rust baselines
+(same tasks, no pack, native toolchain). Total spend about $11. Machine load averaged 30-80 from other work, so wall seconds are
+inflated and noisy; turns, tokens and pass rates are not load-sensitive.
+
+| arm | pass@1 | silent divergence | turns | tokens in | cost | verify calls |
+|---|---|---|---|---|---|---|
+| A interpreted-first | 0.40 [0.17, 0.63] | 0.57 | 3.3 | 34k | $0.028 | 1.8 |
+| B compiled-first | 0.87 [0.70, 1.00] | 0.10 | 5.0 | 52k | $0.038 | 2.1 |
+| C no pack | 0.20 [0.07, 0.37] | 0.67 | 21.9 | 229k | $0.118 | 6.9 |
+| D interpreted + final build | 0.83 [0.63, 1.00] | 0.13 | 3.6 | 54k | $0.055 | 3.7 |
+| Python / Go / Rust | 1.00 / 1.00 / 1.00 | n/a | 3.6 / 2.6 / 3.0 | 24k / 18k / 17k | $0.019 / 0.021 / 0.022 | |
+
+Pooling the rerun sample (about 50 trials per arm for A, B, D): A 0.44 pass, 0.52 silent divergence; B 0.90 and 0.06; D 0.86 and 0.12.
+
+- **Loop mode.** Interpreted-first is the cheapest loop (A: 3.3 turns, $0.028) and the least correct (silent divergence 0.52-0.57, unchanged within
+  noise from 0.43 in pilot 1). Compiled-first is the most correct Windjammer loop. D buys back nearly all of B's correctness (0.83-0.86 vs 0.87-0.90)
+  at about the turns of A, but pays for it in `wj build` time and cost: the one final build is the dominant cost of D.
+- **Pack value (A vs C).** Without the pack agents need 6.6x the turns and 6.7x the tokens and pass half as often (paired pass difference A-C
+  +0.20 [-0.07, 0.47], turns -18.6 [-21.6, -15.0]). The pack is worth keeping and growing.
+- **Versus other languages.** Every baseline passes 30/30. No Windjammer arm reaches P >= 0.9 of baseline pass@1, so the agent preference score is
+  reported as P-limited for every arm (B: P 0.87 [0.77, 0.97], I 0.53-0.74, T 0.35-0.47 against Go/Python/Rust). Parity needs two things: first-draft
+  pass rate above 0.9 for interpreted arms (check-vs-build parity) and a pack that cuts the 1.5-3x token overhead.
+- **What changed since pilot 1.** The int-accumulator literal bug is fixed (its repro now builds). The remaining silent divergence is now mostly
+  `usize` versus `int` (`let idx: int = v.len()` passes the interpreter and fails rustc: `docs/known-issues/agent-dx-compiled-len-to-int-binding.md`,
+  9 of 12 re-built failures), plus string/char return typing and the `Vec<String>` collect error. No capability denials (WJ004x) occurred: the default
+  local profile covers every task.
+- **Timing.** Per call: `wj run --interpret` median 0.1 s, `wj run --compiled` 20 s (p90 48 s), `wj build` 167 s (p90 423 s) under load. The final
+  `wj build` of arm D averages 375 s of the 454 s wall. `wj build` does not share the cache that `wj run --compiled` uses; this is the top performance
+  fix for compiled-last loops.
