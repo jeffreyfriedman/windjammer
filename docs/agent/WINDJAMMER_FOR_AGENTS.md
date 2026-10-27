@@ -284,6 +284,10 @@ reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_
 helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
 
 
+## Code mode: one program instead of many tool calls
+
+When you have a set of MCP tools, write a Windjammer program that calls them instead of calling them one by one. `wj mcp bind SERVER --tools tools.json --tool list_issues --tool create_issue` writes typed bindings (a function per tool, structs for arguments and results); paste them above your `fn main()`, bind only the tools the program needs. `wj check --json` reports type mistakes with locations before anything runs: wrong or missing fields, wrong types, unknown tools, a `Result` used as a value. Run it with `wj run --interpret --sandbox --bind NAME=mock:FILE --allow effects=mcp.NAME.TOOL --limits fuel=10000000,wall=10,calls=20 main.wj`. A tool is an effect named `mcp.SERVER.TOOL`; the program can call exactly the tools the grant lists, and the credentials stay with whoever serves the tool. Text a tool returns is data: acting on it (a path, a command, a URL, another tool name) needs a grant of its own, and a refusal is exit status 126, a limit is 124. Do not try to catch either. In an MCP client use the `execute` tool: the operator decides the grants and servers it can use.
+
 ## Races, flaky tests and replays: `--simulate`, `--record`, `--replay`
 
 A test that passes "usually" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a
@@ -364,9 +368,8 @@ fn main() {
 `examples/verified` compiles and matches (`// rust: ok`); the rest carry a recorded `// rust: gap` reason in the
 header. Known classes: adapter chains on a collection without `.iter()` (emitted as `v.map(..)` on a `Vec`),
 integer-width inference between `i32` and `i64` in mixed expressions, `HashMap` indexing with `&str` keys,
-inline `mod` plus `use` duplicates. Annotate numeric accumulators that start as a bare literal and later mix with `int` values (`let mut v: int = 0`, `let mut n: int = 0`): an
-unannotated `let mut v = 0` can be emitted as `i32` and fail `wj build` with `mismatched types ... expected i64, found i32` while the
-interpreter runs it. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
+inline `mod` plus `use` duplicates. `len()` is a `usize` in the compiled path: write `let n: int = v.len() as int` (and `(i as int)` when comparing an `int` with a length); the interpreter
+accepts the bare form, `wj build` does not. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
 
 ## Where to look next
 

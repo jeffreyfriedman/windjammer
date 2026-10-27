@@ -56,6 +56,9 @@ fn is_handle_sink(path: &str) -> bool {
 
 /// Does `path` go through the port?
 pub fn routed(path: &str) -> bool {
+    if path.ends_with("mcp::call") {
+        return true;
+    }
     if is_handle_sink(path) {
         return true;
     }
@@ -221,6 +224,7 @@ fn rt_error_json(e: &RuntimeError) -> Json {
         ErrorKind::Unsupported => ("unsupported", 0),
         ErrorKind::Semantic => ("semantic", 0),
         ErrorKind::CapabilityDenied => ("denied", 0),
+        ErrorKind::Limit => ("limit", 0),
         ErrorKind::Exit(n) => ("exit", *n),
     };
     json!({ "rt_error": { "kind": k, "code": n, "message": e.message } })
@@ -232,6 +236,7 @@ fn rt_error_from(j: &Json) -> Option<RuntimeError> {
         "panic" => ErrorKind::Panic,
         "unsupported" => ErrorKind::Unsupported,
         "denied" => ErrorKind::CapabilityDenied,
+        "limit" => ErrorKind::Limit,
         "exit" => ErrorKind::Exit(e["code"].as_i64().unwrap_or(1) as i32),
         _ => ErrorKind::Semantic,
     };

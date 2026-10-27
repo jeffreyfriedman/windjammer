@@ -5,8 +5,8 @@
 // expect: false
 use std::fs
 fn main() {
-    fs::write("sim-note.txt", "kept in memory") ?? ()
-    println(fs::read_to_string("sim-note.txt") ?? "?")
-    fs::remove_file("sim-note.txt") ?? ()
+    fs::write("sim-note.txt", "kept in memory").unwrap_or(())
+    println(fs::read_to_string("sim-note.txt").unwrap_or("?"))
+    fs::remove_file("sim-note.txt").unwrap_or(())
     println("${fs::exists("sim-note.txt")}")
 }

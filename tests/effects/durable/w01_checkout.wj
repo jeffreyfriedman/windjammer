@@ -7,7 +7,7 @@ use std::sync
 use std::time
 fn quote(items: int) -> int { items * 25 + random::range(0, 5) }
 fn reserve(order: string) -> string {
-    fs::write("reserved-${order}.txt", "reserved") ?? ()
+    fs::write("reserved-${order}.txt", "reserved").unwrap_or(())
     "res-${order}"
 }
 fn charge(total: int) -> string { "charge-${total}-${time::now_unix()}" }
@@ -18,7 +18,7 @@ durable fn run() -> string {
     println("quoted ${total}")
     let res = reserve("A1")
     let ch = charge(total)
-    fs::write("receipt.txt", "${res} ${ch}") ?? ()
+    fs::write("receipt.txt", "${res} ${ch}").unwrap_or(())
     println("receipt written")
     "${res} ${ch}${wj_taint}"
 }

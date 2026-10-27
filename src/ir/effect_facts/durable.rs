@@ -436,6 +436,7 @@ pub fn analyze(r: &ResolvedProgram<'_>, facts: &EffectFacts) -> DurableFacts {
         let path = r.defs().get(id).path.clone();
         out.functions.push(path.clone());
         let function = last_seg(&path).to_string();
+        let fn_site = r.defs().get(id).location.clone();
         let mut pass = Pass { r, facts, calls: &calls, out: &mut out, function: function.clone(), locals: HashSet::new(), hashes: HashMap::new() };
         for p in &d.parameters {
             pass.locals.insert(p.name.clone());
@@ -446,14 +447,14 @@ pub fn analyze(r: &ResolvedProgram<'_>, facts: &EffectFacts) -> DurableFacts {
                 pass.finding(
                     "WJ0045",
                     format!("argument `{}` of type `{t}` cannot be journaled", p.name),
-                    None,
+                    fn_site.clone(),
                     &p.name,
                     "pass data (numbers, strings, collections, structs of those)",
                 );
             }
         }
         if let Some(t) = d.return_type.as_ref().and_then(unjournalable) {
-            pass.finding("WJ0045", format!("return type `{t}` cannot be journaled"), None, &d.name, "return data");
+            pass.finding("WJ0045", format!("return type `{t}` cannot be journaled"), fn_site.clone(), &d.name, "return data");
         }
         pass.block(&d.body);
     }

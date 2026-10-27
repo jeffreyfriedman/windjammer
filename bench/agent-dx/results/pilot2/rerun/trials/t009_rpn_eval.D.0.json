@@ -1,0 +1,70 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "D",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn eval(line: string) -> string {\n    let mut st: Vec<int> = []\n    for tok in line.split(\" \") {\n        if tok == \"+\" || tok == \"-\" || tok == \"*\" || tok == \"/\" {\n            if st.len() < 2 {\n                return \"error: underflow\"\n            }\n            let b: int = st.pop().unwrap_or(0)\n            let a: int = st.pop().unwrap_or(0)\n            if tok == \"+\" {\n                st.push(a + b)\n            } else if tok == \"-\" {\n                st.push(a - b)\n            } else if tok == \"*\" {\n                st.push(a * b)\n            } else {\n                if b == 0 {\n                    return \"error: divzero\"\n                }\n                st.push(a / b)\n            }\n        } else if tok.starts_with(\"+\") {\n            return \"error: token\"\n        } else {\n            match tok.parse::<int>() {\n                Ok(n) => st.push(n),\n                Err(_) => return \"error: token\",\n            }\n        }\n    }\n    if st.len() != 1 {\n        return \"error: leftover\"\n    }\n    \"${st[0]}\"\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let l = line.trim()\n        if l.len() == 0 {\n            continue\n        }\n        println(eval(l))\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn eval(line: string) -> string {\n    let mut st: Vec<int> = []\n    for tok in line.split(\" \") {\n        if tok == \"+\" || tok == \"-\" || tok == \"*\" || tok == \"/\" {\n            if st.len() < 2 {\n                return \"error: underflow\"\n            }\n            let b: int = st.pop().unwrap_or(0)\n            let a: int = st.pop().unwrap_or(0)\n            if tok == \"+\" {\n                st.push(a + b)\n            } else if tok == \"-\" {\n                st.push(a - b)\n            } else if tok == \"*\" {\n                st.push(a * b)\n            } else {\n                if b == 0 {\n                    return \"error: divzero\"\n                }\n                st.push(a / b)\n            }\n        } else if tok.starts_with(\"+\") {\n            return \"error: token\"\n        } else {\n            match tok.parse::<int>() {\n                Ok(n) => st.push(n),\n                Err(_) => return \"error: token\",\n            }\n        }\n    }\n    if st.len() != 1 {\n        return \"error: leftover\"\n    }\n    \"${st[0]}\"\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let l = line.trim()\n        if l.len() == 0 {\n            continue\n        }\n        println(eval(l))\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.055,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 184.121,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 4.83,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T19:25:55",
+ "schema": 2,
+ "task": "t009_rpn_eval",
+ "thinking_seconds": 78.845,
+ "tool_wait_seconds": 184.18,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 78.845,
+  "cost_usd": 0.058836800000000015,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "The RPN calculator in `main.wj` is finished, and `wj build main.wj` now succeeds (exit code 0). The only output was an unused-imports warning from the build tooling, not from my code.\n\nIn the interpreter it gave the expected output on both examples. It also handled a blank line (skipped) and `-7 2 /` (gave `-3`, so division truncates toward zero). I didn't run the compiled binary itself on any inp",
+  "subtype": "success",
+  "tokens_in": 35291,
+  "tokens_out": 278,
+  "turns": 2
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 267.85
+}

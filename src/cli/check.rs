@@ -108,8 +108,10 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
     std::panic::set_hook(previous);
     let checked = checked?;
     // `--no-lint`: Rust-leakage lints (W####) do not stop the run; every other error does.
+    // a lint code is `W` and four digits; `WJ0003` is a compile error and must stop the run whatever `--no-lint` says
+    let is_lint = |code: &str| code.len() == 5 && code.starts_with('W') && code[1..].bytes().all(|b| b.is_ascii_digit());
     let blocks = |d: &crate::diagnostics::Diagnostic| {
-        d.severity == crate::diagnostics::Severity::Error && (lints_block || !d.code.starts_with('W'))
+        d.severity == crate::diagnostics::Severity::Error && (lints_block || !is_lint(&d.code))
     };
     let errors = checked.report.diagnostics.iter().filter(|d| blocks(d)).count();
     if errors == 0 {

@@ -1,0 +1,74 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "A",
+ "arm_name": "interpreted-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "mismatched types"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn find(keys: Vec<int>, k: int) -> int {\n    let mut idx: int = -1\n    let mut i: int = 0\n    while i < keys.len() {\n        if keys[i] == k {\n            idx = i\n        }\n        i += 1\n    }\n    idx\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap: int = 0\n    let mut first = true\n    let mut keys: Vec<int> = []\n    let mut vals: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i >= 0 {\n                keys.remove(i)\n                vals.remove(i)\n            }\n            keys.push(k)\n            vals.push(v)\n            if keys.len() > cap {\n                let ek = keys[0]\n                keys.remove(0)\n                vals.remove(0)\n                println(\"evict ${ek}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i < 0 {\n                println(\"-1\")\n            } else {\n                let v = vals[i]\n                keys.remove(i)\n                vals.remove(i)\n                keys.push(k)\n                vals.push(v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out: Vec<string> = []\n                let mut j: int = keys.len() - 1\n                while j >= 0 {\n                    out.push(\"${keys[j]}\")\n                    j -= 1\n                }\n                println(out.join(\" \"))\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn find(keys: Vec<int>, k: int) -> int {\n    let mut idx: int = -1\n    let mut i: int = 0\n    while i < keys.len() {\n        if keys[i] == k {\n            idx = i\n        }\n        i += 1\n    }\n    idx\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap: int = 0\n    let mut first = true\n    let mut keys: Vec<int> = []\n    let mut vals: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i >= 0 {\n                keys.remove(i)\n                vals.remove(i)\n            }\n            keys.push(k)\n            vals.push(v)\n            if keys.len() > cap {\n                let ek = keys[0]\n                keys.remove(0)\n                vals.remove(0)\n                println(\"evict ${ek}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i < 0 {\n                println(\"-1\")\n            } else {\n                let v = vals[i]\n                keys.remove(i)\n                vals.remove(i)\n                keys.push(k)\n                vals.push(v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out: Vec<string> = []\n                let mut j: int = keys.len() - 1\n                while j >= 0 {\n                    out.push(\"${keys[j]}\")\n                    j -= 1\n                }\n                println(out.join(\" \"))\n            }\n        }\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 1.144,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.193,
+   "verb": "check"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 19.03,
+ "pass_final": false,
+ "recorded_at": "2026-10-26T13:48:52",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 18.381,
+ "tool_wait_seconds": 1.34,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 18.381,
+  "cost_usd": 0.0224613,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache in `main.wj`. On Example 1 it printed exactly the expected output, and `wj check` reports no errors or warnings. I didn't run Example 2, any other inputs, or `wj build`.\n\nIt keeps two parallel lists, one for keys and one for values, ordered from least to most recently used. Every `put` and successful `get` moves the key to the end. When there are more than C entries, the firs",
+  "subtype": "success",
+  "tokens_in": 29633,
+  "tokens_out": 1272,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 38.75
+}

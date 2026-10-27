@@ -1,0 +1,57 @@
+// std::mcp — tools of Model Context Protocol servers (ADR-0021 section 12, code mode)
+// Interpreter only: `wj build` stops with an error for programs that use it.
+//
+// `call` is the one effectful function. Its effect is the user effect `mcp.<server>.<tool>`, taken from the two string
+// literals; a grant lists the tools a program may use (`effects = ["mcp.github.list_issues"]`). The other functions are
+// pure helpers over JSON text that the bindings written by `wj mcp bind` use.
+
+/// Call `tool` of the server bound as `server` (`--bind NAME=ENDPOINT`) with `args_json` (a JSON object).
+/// `Ok` holds the text of the tool's result, `Err` the text of a tool error or of a host problem.
+fn call(server: string, tool: string, args_json: string) -> Result<string, string> {
+    Err("" + "")
+}
+
+/// `s` as a JSON string literal, quotes included.
+fn quote(s: string) -> string {
+    "" + ""
+}
+
+/// The string at `key` of the JSON object `json`, if there is one.
+fn get_string(json: string, key: string) -> Option<string> {
+    None
+}
+
+/// The integer at `key` of the JSON object `json`, if there is one.
+fn get_int(json: string, key: string) -> Option<int> {
+    None
+}
+
+/// The number at `key` of the JSON object `json`, if there is one.
+fn get_float(json: string, key: string) -> Option<float> {
+    None
+}
+
+/// The boolean at `key` of the JSON object `json`, if there is one.
+fn get_bool(json: string, key: string) -> Option<bool> {
+    None
+}
+
+/// The JSON text of the value at `key` of the JSON object `json`, if there is one.
+fn get_raw(json: string, key: string) -> Option<string> {
+    None
+}
+
+/// The JSON text of each element of the array at `key`.
+fn get_items(json: string, key: string) -> Vec<string> {
+    Vec::new()
+}
+
+/// The strings of the array at `key` (other elements are skipped).
+fn get_strings(json: string, key: string) -> Vec<string> {
+    Vec::new()
+}
+
+/// The integers of the array at `key` (other elements are skipped).
+fn get_ints(json: string, key: string) -> Vec<int> {
+    Vec::new()
+}

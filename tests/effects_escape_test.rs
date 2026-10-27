@@ -203,6 +203,11 @@ fn cases() -> Vec<Case> {
         esc("console/denied-println", "[capabilities]\ndeny = [\"console\"]\n", "use std::fs", "println(\"DONE\")", "console"),
         esc("console/denied-eprintln", "[capabilities]\ndeny = [\"console\"]\n", "use std::fs", "eprintln(\"DONE\")", "console"),
         esc("console/denied-print", "[capabilities]\ndeny = [\"console\"]\n", "use std::fs", "print(\"DONE\")", "console"),
+        // ---- effects that appear only inside a `${..}` interpolation are still effects
+        esc("interp/read-outside", FS, "use std::fs", "let s = \"v=${fs::read_to_string(\\\"/etc/hosts\\\") ?? \\\"\\\"}\"\n    println(\"DONE ${s.len()}\")", "fs.read"),
+        esc("interp/write-outside", FS, "use std::fs", "let s = \"w=${fs::write(\\\"$ROOT/secret.txt\\\", \\\"x\\\").is_ok()}\"\n    println(\"DONE ${s}\")", "fs.write").check(Unchanged("secret.txt", "TOP-SECRET")),
+        esc("interp/nested-in-println", FS, "use std::fs", "println(\"DONE ${fs::exists(\\\"/etc/passwd\\\")}\")", "fs.read"),
+        legit("interp/read-inside", FS, "use std::fs", "println(\"DONE ${fs::read_to_string(\\\"$ROOT/data/ok.txt\\\") ?? \\\"\\\"}\")"),
         legit("console/default-granted", NONE, "use std::fs", "println(\"DONE\")"),
     ];
     // every effect from an empty grant: nothing but time/random/console works

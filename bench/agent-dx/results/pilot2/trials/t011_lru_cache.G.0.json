@@ -1,0 +1,57 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "G",
+ "arm_name": "go",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tw := bufio.NewWriter(os.Stdout)\n\tdefer w.Flush()\n\tif !sc.Scan() {\n\t\treturn\n\t}\n\tvar c int\n\tfmt.Sscan(strings.TrimSpace(sc.Text()), &c)\n\tkeys := []int{} // most recent first\n\tvals := map[int]int{}\n\ttouch := func(k int) {\n\t\tfor i, x := range keys {\n\t\t\tif x == k {\n\t\t\t\tkeys = append(keys[:i], keys[i+1:]...)\n\t\t\t\tbreak\n\t\t\t}\n\t\t}\n\t\tkeys = append([]int{k}, keys...)\n\t}\n\tfor sc.Scan() {\n\t\tf := strings.Fields(sc.Text())\n\t\tif len(f) == 0 {\n\t\t\tcontinue\n\t\t}\n\t\tswitch f[0] {\n\t\tcase \"put\":\n\t\t\tvar k, v int\n\t\t\tfmt.Sscan(f[1], &k)\n\t\t\tfmt.Sscan(f[2], &v)\n\t\t\tvals[k] = v\n\t\t\ttouch(k)\n\t\t\tif len(keys) > c {\n\t\t\t\te := keys[len(keys)-1]\n\t\t\t\tkeys = keys[:len(keys)-1]\n\t\t\t\tdelete(vals, e)\n\t\t\t\tfmt.Fprintf(w, \"evict %d\\n\", e)\n\t\t\t}\n\t\tcase \"get\":\n\t\t\tvar k int\n\t\t\tfmt.Sscan(f[1], &k)\n\t\t\tif v, ok := vals[k]; ok {\n\t\t\t\ttouch(k)\n\t\t\t\tfmt.Fprintln(w, v)\n\t\t\t} else {\n\t\t\t\tfmt.Fprintln(w, -1)\n\t\t\t}\n\t\tcase \"keys\":\n\t\t\tif len(keys) == 0 {\n\t\t\t\tfmt.Fprintln(w, \"<empty>\")\n\t\t\t} else {\n\t\t\t\ts := make([]string, len(keys))\n\t\t\t\tfor i, k := range keys {\n\t\t\t\t\ts[i] = fmt.Sprint(k)\n\t\t\t\t}\n\t\t\t\tfmt.Fprintln(w, strings.Join(s, \" \"))\n\t\t\t}\n\t\t}\n\t}\n}\n",
+ "first_source": "",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [],
+ "lang": "go",
+ "mode_violations": 0,
+ "other_seconds": 5.58,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T12:43:27",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 10.865,
+ "tool_wait_seconds": 0,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 10.865,
+  "cost_usd": 0.019889800000000003,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache solution to `main.go`, but I haven't built or run it, so it's untested, including against the two examples.\n\nIt keeps the keys in a slice ordered from most to least recently used, plus a map from key to value. With capacity at most 50, the linear scan to move a key to the front is fast enough. A `put` that pushes the cache past capacity drops the last key and prints `evict <k",
+  "subtype": "success",
+  "tokens_in": 15653,
+  "tokens_out": 946,
+  "turns": 2
+ },
+ "verify_calls": 0,
+ "verify_calls_to_green": null,
+ "wall_seconds": 16.44
+}

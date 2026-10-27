@@ -228,6 +228,20 @@ pub enum Commands {
         #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
         faults: f64,
 
+        /// Interpreted runs: let `mcp::call` reach an MCP server, as NAME=ENDPOINT: `mock:FILE` (canned results) or
+        /// `stdio:COMMAND ARGS` (a child process speaking MCP; it keeps the credentials). Repeatable (ADR-0021)
+        #[arg(long = "bind", value_name = "NAME=ENDPOINT")]
+        bind: Vec<String>,
+
+        /// Interpreted runs: resource limits `fuel=N,wall=SECS,output=BYTES,calls=N,mem=MB`; exceeding one stops the run
+        /// with exit status 124
+        #[arg(long, value_name = "LIMITS")]
+        limits: Option<String>,
+
+        /// Interpreted runs: write the exit status, the effects used and the resources used to FILE as JSON
+        #[arg(long, value_name = "FILE")]
+        result_json: Option<PathBuf>,
+
         /// Interpreted runs: keep the step journals of `durable fn` runs in DIR, so a crashed run resumes where it stopped
         /// (default: in memory)
         #[arg(long, value_name = "DIR")]
@@ -272,6 +286,12 @@ pub enum Commands {
 
     /// Start the Windjammerscript REPL (interactive interpreter)
     Repl {},
+
+    /// MCP tools as typed Windjammer: bindings for code mode (ADR-0021)
+    Mcp {
+        #[command(subcommand)]
+        command: McpCommand,
+    },
 
     /// Run tests
     Test {
@@ -662,6 +682,32 @@ pub enum Commands {
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
+}
+
+#[derive(Subcommand)]
+pub enum McpCommand {
+    /// Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results
+    Bind {
+        /// Name the tools are bound under (`mcp.NAME.TOOL` is the effect of a call)
+        #[arg(value_name = "SERVER")]
+        server: String,
+
+        /// The server's `tools/list` result (JSON); `-` reads standard input
+        #[arg(long, value_name = "FILE", conflicts_with = "stdio")]
+        tools: Option<PathBuf>,
+
+        /// Ask a live server instead: the command that starts it (arguments separated by spaces)
+        #[arg(long, value_name = "COMMAND")]
+        stdio: Option<String>,
+
+        /// Bind only this tool (repeatable): the program's permission request is the tools it can call
+        #[arg(long = "tool", value_name = "NAME")]
+        only: Vec<String>,
+
+        /// Write the module here (default: standard output)
+        #[arg(long, short, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

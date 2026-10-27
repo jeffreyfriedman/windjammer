@@ -48,6 +48,9 @@ fn repo_corpus_location_classes_are_ratcheted() {
         match check_source(&rel(&p), &src) {
             ParseOutcome::Ok(f) => {
                 for (k, (n, ex)) in f.by_class {
+                    if std::env::var_os("SPAN_ORACLE_VERBOSE").is_some() {
+                        eprintln!("CLASS {k} x{n} {}", rel(&p));
+                    }
                     *counts.entry(k.clone()).or_default() += n;
                     examples.entry(k).or_insert_with(|| format!("{}: {ex}", rel(&p)));
                 }
