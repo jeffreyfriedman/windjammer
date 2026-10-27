@@ -1,6 +1,6 @@
 //! Dispatch handlers for the `wj` binary (`cargo`-friendly shim crate splits parsing vs logic).
 
-use crate::wj_cli_args::{CacheCommand, Cli, Commands};
+use crate::wj_cli_args::{CacheCommand, Cli, Commands, McpCommand};
 use anyhow::Result;
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -87,6 +87,9 @@ pub fn run(cli: Cli) -> Result<()> {
             replay,
             journal,
             crash_after,
+            bind,
+            limits,
+            result_json,
             simulate,
             seed,
             faults,
@@ -108,12 +111,36 @@ pub fn run(cli: Cli) -> Result<()> {
             let lint = windjammer::cli_execution::report_build_lints;
             let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, binds: bind, limits, result_json, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
                 std::process::exit(code);
             }
         }
+        Commands::Mcp { command } => match command {
+            McpCommand::Bind { server, tools, stdio, only, out } => {
+                let text = match (tools, stdio) {
+                    (Some(p), _) if p.as_os_str() == "-" => {
+                        let mut t = String::new();
+                        std::io::Read::read_to_string(&mut std::io::stdin(), &mut t)?;
+                        t
+                    }
+                    (Some(p), _) => std::fs::read_to_string(&p).map_err(|e| anyhow::anyhow!("cannot read {}: {e}", p.display()))?,
+                    (None, Some(cmd)) => windjammer::interpreter::mcp_host::list_tools(&cmd).map_err(anyhow::Error::msg)?,
+                    (None, None) => anyhow::bail!("give the tool list with --tools FILE (or - for stdin), or ask a live server with --stdio COMMAND"),
+                };
+                let module = windjammer::cli::mcp_bind::generate_only(&server, &text, &only).map_err(anyhow::Error::msg)?;
+                match out {
+                    Some(p) => {
+                        if let Some(dir) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
+                            std::fs::create_dir_all(dir)?;
+                        }
+                        std::fs::write(&p, module)?;
+                    }
+                    None => print!("{module}"),
+                }
+            }
+        },
         Commands::Repl {} => {
             run_repl()?;
         }

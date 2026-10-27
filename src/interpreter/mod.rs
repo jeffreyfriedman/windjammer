@@ -6,6 +6,8 @@ mod analysis;
 pub mod builtins;
 pub mod caps;
 pub mod durable_rt;
+pub mod limits;
+pub mod mcp_host;
 pub mod effect_port;
 mod c_library;
 mod call;
@@ -48,6 +50,7 @@ mod task_blocks;
 mod type_keys;
 mod u128ops;
 pub mod value;
+pub mod vecbody;
 
 pub use engine::Interpreter;
 pub use error::{ErrorKind, RuntimeError};

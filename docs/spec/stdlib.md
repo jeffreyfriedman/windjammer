@@ -4,7 +4,7 @@ The language core is small; most behaviour is library. This chapter pins the por
 
 Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/stdlib/`.
 
-**Modules under `std/` (index checked against the directory):** `async`, `basic_test`, `cap`, `cli`, `collections`, `compress`, `compute`, `config`, `crypto`, `csv`, `db`, `dialog`, `encoding`, `enumerable`, `env`, `fs`, `http`, `json`, `jwt`, `log`, `map`, `math`, `mime`, `net`, `path`, `process`, `random`, `regex`, `runtime`, `storage`, `strings`, `subprocess`, `sync`, `test`, `test_simple`, `testing`, `time`, `url`, `uuid`, `yaml`.
+**Modules under `std/` (index checked against the directory):** `async`, `basic_test`, `cap`, `cli`, `collections`, `compress`, `compute`, `config`, `crypto`, `csv`, `db`, `dialog`, `encoding`, `enumerable`, `env`, `fs`, `http`, `json`, `jwt`, `log`, `map`, `math`, `mcp`, `mime`, `net`, `path`, `process`, `random`, `regex`, `runtime`, `storage`, `strings`, `subprocess`, `sync`, `test`, `test_simple`, `testing`, `time`, `url`, `uuid`, `yaml`.
 
 Portable core (conformance-covered): `Vec`, `HashMap`, `HashSet`, `Option`, `Result`, `string` methods, iterator adaptors, `std::math`, `std::process::exit`, `std::time` (monotonic), `std::fs` round trip. Everything else (`http`, `db`, `crypto`, `jwt`, `ui`-adjacent modules, ...) is Rust-backend only.
 

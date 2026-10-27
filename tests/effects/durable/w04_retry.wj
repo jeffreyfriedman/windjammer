@@ -6,7 +6,7 @@ use std::random
 use std::sync
 use std::time
 fn attempt(n: int) -> bool {
-    fs::append("attempts.log", "try ${n}\n") ?? ()
+    fs::append("attempts.log", "try ${n}\n").unwrap_or(())
     n >= 2
 }
 durable fn run() -> string {

@@ -88,7 +88,7 @@ impl Interpreter {
                     for x in items.iter() {
                         out.push(self.coerce(x.clone(), inner)?);
                     }
-                    return Ok(Value::Vec(Rc::new(out)));
+                    return Ok(Value::vec(out));
                 }
                 Ok(v)
             }
@@ -108,7 +108,7 @@ impl Interpreter {
                     for x in items.iter() {
                         out.push(self.coerce(x.clone(), &args[0])?);
                     }
-                    return Ok(Value::Vec(Rc::new(out)));
+                    return Ok(Value::vec(out));
                 }
                 Ok(v)
             }

@@ -209,7 +209,7 @@ pub enum Value {
     Float(f64, FloatTy),
     Char(char),
     Str(Rc<String>),
-    Vec(Rc<Vec<Value>>),
+    Vec(Rc<super::vecbody::VecBody>),
     Tuple(Rc<Vec<Value>>),
     Struct(Rc<StructVal>),
     Enum(Rc<EnumVal>),
@@ -250,8 +250,16 @@ impl Value {
     pub fn str(s: impl Into<String>) -> Value {
         Value::Str(Rc::new(s.into()))
     }
+    /// The elements of a `Vec` or a tuple (a packed `Vec` unpacks into its read cache).
+    pub fn items(&self) -> &[Value] {
+        match self {
+            Value::Vec(b) => b,
+            Value::Tuple(t) => t,
+            _ => &[],
+        }
+    }
     pub fn vec(v: Vec<Value>) -> Value {
-        Value::Vec(Rc::new(v))
+        Value::Vec(Rc::new(v.into()))
     }
     pub fn tuple(v: Vec<Value>) -> Value {
         if v.is_empty() {
@@ -366,7 +374,8 @@ impl Value {
             (Float(a, _), Int(b, _)) => a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal),
             (Char(a), Char(b)) => a.cmp(b),
             (Str(a), Str(b)) => a.as_str().cmp(b.as_str()),
-            (Vec(a), Vec(b)) | (Tuple(a), Tuple(b)) => cmp_seq(a, b),
+            (Vec(a), Vec(b)) => cmp_seq(a, b),
+            (Tuple(a), Tuple(b)) => cmp_seq(a, b),
             (Struct(a), Struct(b)) => {
                 for ((_, x), (_, y)) in a.fields.iter().zip(b.fields.iter()) {
                     let o = x.structural_cmp(y);

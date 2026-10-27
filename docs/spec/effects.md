@@ -625,6 +625,24 @@ fn main() {
 ```
 `wj check` reports an error containing: `WJ0048: iteration over `HashMap` has no stable order`
 
+**SPEC-EFF-049** A call inside a string interpolation (`"${...}"`) is a call of the function that contains the string: its effects count for inference, grants, `@pure` and the durable step rules exactly as if it stood on its own line.
+
+<!-- example: tests/spec/effects/SPEC-EFF-049.wj -->
+```windjammer
+use std::process
+fn listing() -> string {
+    "ls says ${process::run("ls").unwrap_or("")}"
+}
+fn main() {
+    println(listing())
+}
+```
+Manifest (`wj.toml`):
+```toml
+[capabilities]
+```
+`wj check` reports an error containing: `WJ0040: effect `process` is not granted`
+
 ## Simulation and replay
 
 **SPEC-EFF-027** In the simulated world the wall clock starts at Unix time 1700000000 and advances only through sleeps and timeouts (the interpreter's `--deterministic-time` clock).
@@ -688,9 +706,9 @@ Recorded, then replayed from the effect log: both runs print the same lines and 
 ```windjammer
 use std::fs
 fn main() {
-    fs::write("sim-note.txt", "kept in memory") ?? ()
-    println(fs::read_to_string("sim-note.txt") ?? "?")
-    fs::remove_file("sim-note.txt") ?? ()
+    fs::write("sim-note.txt", "kept in memory").unwrap_or(())
+    println(fs::read_to_string("sim-note.txt").unwrap_or("?"))
+    fs::remove_file("sim-note.txt").unwrap_or(())
     println("${fs::exists("sim-note.txt")}")
 }
 ```
@@ -710,7 +728,7 @@ fn main() {
         Ok(_) => println("written"),
         Err(e) => println("write failed: ${e}"),
     }
-    println("read back: ${fs::read_to_string("short.txt") ?? "?"}")
+    println("read back: ${fs::read_to_string("short.txt").unwrap_or("?")}")
 }
 ```
 Simulated with seed 9 and fault rate 0.5 (the seed decides which calls fail), the output is:
@@ -727,7 +745,13 @@ read back: abcd
 
 ## Code mode
 
-**SPEC-EFF-032** [PLANNED ADR-0021] `wj mcp bind` generates one Windjammer function per tool of an MCP server, with typed parameters and results and the user-defined effect `mcp.<server>.<tool>`; a sandboxed run may call exactly the tools its grant lists. (untestable: generated from a live tool schema; acceptance test `tests/mcp_bind_test.rs`, stage E5)
+**SPEC-EFF-032** `wj mcp bind SERVER --tools FILE` (or `--stdio COMMAND` to ask a live server) generates one Windjammer module with a function per tool, typed arguments and results, and the effect `mcp.<server>.<tool>` for each call; `--tool NAME` binds only the tools a program needs. A sandboxed run may call exactly the tools its grant lists. (untestable: generated from a tool list; acceptance test `tests/code_mode_test.rs`)
+
+**SPEC-EFF-050** `mcp::call(server, tool, json)` performs the user effect `mcp.<server>.<tool>`, named by its two string literals; if either is computed the effect is `mcp.*`, which no grant that lists tools contains. A tool is granted like any effect: `effects = ["mcp.github.list_issues"]` in `[capabilities]`, or `--allow effects=mcp.github.list_issues`. The credentials belong to the host that serves the tool (`--bind NAME=ENDPOINT`); the program never sees them. (untestable: needs a bound server; acceptance test `tests/code_mode_test.rs`)
+
+**SPEC-EFF-051** `--limits fuel=N,wall=SECS,output=BYTES,calls=N,mem=MB` bounds a run. Exceeding a limit stops it with exit status 124 and a message naming the limit; like a capability denial it cannot be caught by the program, in any thread. (untestable: needs a runaway program; acceptance test `tests/code_mode_test.rs`)
+
+**SPEC-EFF-052** The `execute` tool of `windjammer-mcp` takes its authority from the operator (`WJ_MCP_EXECUTE_ALLOW`, `WJ_MCP_EXECUTE_SERVERS`, `WJ_MCP_EXECUTE_LIMITS`), not from the request: a request can pick from the operator's grants and servers and lower the limits, and anything else is refused. (untestable: needs the server; acceptance test `tests/code_mode_test.rs`)
 
 **SPEC-EFF-041** A call through a trait method that carries `@uses(...)` performs exactly that bound, whatever the impls in the program do. Callers see a stable effect even when an impl is added later.
 
