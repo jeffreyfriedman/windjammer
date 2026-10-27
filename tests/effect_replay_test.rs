@@ -195,12 +195,12 @@ fn a_different_request_is_a_divergence() {
 /// Asking for fewer or more effects than the log has is a divergence too.
 #[test]
 fn leftover_and_missing_events_are_divergences() {
-    let (d, _) = record_prog("use std::fs\nfn main() {\n    fs::write(\"a.txt\", \"hi\").unwrap()\n    println(\"{}\", fs::exists(\"a.txt\"))\n}\n");
+    let (d, _) = record_prog("use std::fs\nfn main() {\n    fs::write(\"a.txt\", \"hi\").unwrap()\n    println(\"${fs::exists(\"a.txt\")}\")\n}\n");
     fs::write(d.path().join("main.wj"), "use std::fs\nfn main() {\n    fs::write(\"a.txt\", \"hi\").unwrap()\n}\n").unwrap();
     let fewer = run(d.path(), &["--replay".into(), "r.wjlog".into()], &Setup::default(), false, false, 0);
     assert_eq!(fewer.code, 1, "{fewer:?}");
     assert!(fewer.stderr.contains("WJ0049"), "{}", fewer.stderr);
-    fs::write(d.path().join("main.wj"), "use std::fs\nfn main() {\n    fs::write(\"a.txt\", \"hi\").unwrap()\n    println(\"{}\", fs::exists(\"a.txt\"))\n    println(\"{}\", fs::exists(\"b.txt\"))\n}\n").unwrap();
+    fs::write(d.path().join("main.wj"), "use std::fs\nfn main() {\n    fs::write(\"a.txt\", \"hi\").unwrap()\n    println(\"${fs::exists(\"a.txt\")}\")\n    println(\"${fs::exists(\"b.txt\")}\")\n}\n").unwrap();
     let more = run(d.path(), &["--replay".into(), "r.wjlog".into()], &Setup::default(), false, false, 0);
     assert_eq!(more.code, 1, "{more:?}");
     assert!(more.stderr.contains("WJ0049") && more.stderr.contains("no more events"), "{}", more.stderr);
@@ -220,9 +220,8 @@ fn recording_a_handle_returning_effect_is_refused_by_name() {
 /// The capability gate still runs in every mode: a replay under a narrower grant is denied like a live run.
 #[test]
 fn replay_keeps_the_capability_gate() {
-    let (d, _) = record_prog("use std::fs\nfn main() {\n    println(\"{}\", fs::exists(\"a.txt\"))\n}\n");
-    fs::write(d.path().join("wj.toml"), "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[capabilities]\n").unwrap();
-    let o = run(d.path(), &["--replay".into(), "r.wjlog".into()], &Setup::default(), false, false, 0);
+    let (d, _) = record_prog("use std::fs\nfn main() {\n    println(\"${fs::exists(\"a.txt\")}\")\n}\n");
+    let o = run(d.path(), &["--replay".into(), "r.wjlog".into(), "--sandbox".into()], &Setup::default(), false, false, 0);
     assert_eq!(o.code, 126, "{o:?}");
 }
 

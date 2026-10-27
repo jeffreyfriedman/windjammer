@@ -133,12 +133,14 @@ fn process_exit_code_is_propagated() {
 #[test]
 fn unsupported_feature_is_a_clear_diagnostic_not_wrong_output() {
     let d = TempDir::new().unwrap();
-    write(d.path(), "a.wj", "fn main() {\n    println(\"start\")\n    thread {\n        println(\"in thread\")\n    }\n}\n");
+    // `len()` of an iterator whose length is not known up front (`thread {}`, the earlier probe, runs now)
+    write(d.path(), "a.wj", "fn main() {\n    println(\"start\")\n    let v = [1, 2, 3]\n    let n = v.filter(|x| *x > 1).len()\n    println(\"${n}\")\n}\n");
     let o = wj(&["run", "--interpret", "a.wj"], d.path());
     assert_eq!(o.status.code(), Some(2), "{}", err(&o));
     let e = err(&o);
     assert!(e.contains("unsupported in the interpreter"), "{}", e);
     assert!(e.contains("wj run"), "diagnostic should point at the compiled path: {}", e);
+    assert_eq!(out(&o), "start\n", "nothing after the unsupported construct runs");
 }
 
 #[test]

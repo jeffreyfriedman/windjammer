@@ -1,0 +1,13 @@
+use std::fs
+use std::time
+// the only effects of these functions sit inside `${..}`
+fn banner() -> string {
+    "built at ${time::now_millis()}"
+}
+fn file_len() -> string {
+    "len=${fs::read_to_string("note.txt").unwrap_or("")}"
+}
+fn main() {
+    println(banner())
+    println(file_len())
+}

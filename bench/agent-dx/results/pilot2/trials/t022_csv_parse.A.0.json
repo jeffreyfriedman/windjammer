@@ -1,0 +1,70 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "A",
+ "arm_name": "interpreted-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn parse_line(line: string) -> Vec<string> {\n    let chars: Vec<char> = line.chars().collect()\n    let n = chars.len()\n    let mut fields: Vec<string> = []\n    let mut cur: string = \"\"\n    let mut in_q = false\n    let mut i: int = 0\n    while i < n {\n        let c = chars[i]\n        if in_q {\n            if c == '\"' {\n                if i + 1 < n && chars[i + 1] == '\"' {\n                    cur.push('\"')\n                    i += 1\n                } else {\n                    in_q = false\n                }\n            } else {\n                cur.push(c)\n            }\n        } else if c == '\"' {\n            in_q = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur.push(c)\n        }\n        i += 1\n    }\n    fields.push(cur)\n    fields\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for raw in text.lines() {\n        let line = raw.trim_end_matches('\\r')\n        let fields = parse_line(line)\n        let mut parts: Vec<string> = []\n        for f in fields {\n            parts.push(\"[${f}]\")\n        }\n        println(\"${parts.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn parse_line(line: string) -> Vec<string> {\n    let chars: Vec<char> = line.chars().collect()\n    let n = chars.len()\n    let mut fields: Vec<string> = []\n    let mut cur: string = \"\"\n    let mut in_q = false\n    let mut i: int = 0\n    while i < n {\n        let c = chars[i]\n        if in_q {\n            if c == '\"' {\n                if i + 1 < n && chars[i + 1] == '\"' {\n                    cur.push('\"')\n                    i += 1\n                } else {\n                    in_q = false\n                }\n            } else {\n                cur.push(c)\n            }\n        } else if c == '\"' {\n            in_q = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur.push(c)\n        }\n        i += 1\n    }\n    fields.push(cur)\n    fields\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for raw in text.lines() {\n        let line = raw.trim_end_matches('\\r')\n        let fields = parse_line(line)\n        let mut parts: Vec<string> = []\n        for f in fields {\n            parts.push(\"[${f}]\")\n        }\n        println(\"${parts.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.445,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.176,
+   "verb": "check"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 11.14,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T12:30:26",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 8.646,
+ "tool_wait_seconds": 0.62,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 8.646,
+  "cost_usd": 0.024167800000000003,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the CSV parser to `main.wj`. It gives the expected output on the second example's input (plus the `\"x,y\",z` line from the first example), and `wj check` reports no errors or warnings.\n\nI didn't run `wj build`, as instructed, so the compiled path is untested. The parser strips a trailing `\\r` from each line, in case the input has Windows line endings.",
+  "subtype": "success",
+  "tokens_in": 29444,
+  "tokens_out": 1060,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 20.41
+}

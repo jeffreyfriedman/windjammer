@@ -1,0 +1,44 @@
+// Vectors of one scalar type are stored packed: every operation answers as on unpacked elements,
+// including element types changing (a literal into an i64 vector, a float into a bool one is a type
+// error elsewhere), sharing (copy-on-write) and every builtin that reads the whole vector.
+fn main() {
+    let mut flags: Vec<bool> = Vec::new()
+    let mut ns: Vec<int> = Vec::new()
+    let mut ws: Vec<i32> = Vec::new()
+    let mut fs: Vec<f64> = Vec::new()
+    let mut i = 0
+    while i < 1000 {
+        flags.push(i % 3 == 0)
+        ns.push(i * 7 % 101)
+        ws.push((i % 50) as i32)
+        fs.push(i as f64 * 0.5)
+        i += 1
+    }
+    let snapshot = ns
+    let mut j = 0
+    while j < 1000 {
+        if flags[j] { ns[j] = ns[j] + 1000 }
+        flags[(j * 7) % 1000] = !flags[j]
+        ws[j] += 1
+        fs[j] = fs[j] * 2.0 - 1.0
+        j += 1
+    }
+    let big: int = 5000000000
+    ns.push(big)
+    ns[3] = 4
+    let mut count = 0
+    for f in flags {
+        if f { count += 1 }
+    }
+    let total: int = ns.sum()
+    let wsum: i32 = ws.sum()
+    ns.sort()
+    println("${count} ${total} ${wsum} ${snapshot[5]} ${ns[0]} ${ns.len()} ${fs[10]} ${ns.contains(&1004)}")
+    println("${flags[0..5].len()} ${ws[1..4]:?}")
+    let mut e: Vec<int> = Vec::new()
+    e.push(1)
+    e.push(2)
+    let copy = e
+    e[0] = 9
+    println("${e:?} ${copy:?} ${e.len()}")
+}

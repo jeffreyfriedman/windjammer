@@ -153,8 +153,8 @@ pub(crate) unsafe extern "C" fn index_get(c: *mut Ctx, slot: i64, i: i64, it: i6
         with_slot(c, slot, |v| {
             let (k, want) = (index(i, it)?, from_code(want)?);
             peek(v, |v| match v {
-                Value::Vec(xs) if off_by_one => bits(xs.get(k).or(xs.last())?, want),
-                Value::Vec(xs) => bits(xs.get(k)?, want),
+                Value::Vec(xs) if off_by_one => bits(&xs.get_value(k).or_else(|| xs.get_value(xs.len().checked_sub(1)?))?, want),
+                Value::Vec(xs) => bits(&xs.get_value(k)?, want),
                 _ => None,
             })
         })
@@ -190,7 +190,12 @@ pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i6
         with_slot(c, slot, |v| {
             let k = index(i, it)?;
             poke(v, |v| match v {
-                Value::Vec(xs) if k < xs.len() => store(&mut Rc::make_mut(xs)[k], x, xt),
+                Value::Vec(xs) if k < xs.len() => {
+                    // the walker's `retag` against the old element, then a plain replacement
+                    let new = retag(xs.get_value(k)?, value(x, from_code(xt)?));
+                    Rc::make_mut(xs).set_value(k, new);
+                    Some(0)
+                }
                 _ => None,
             })
         })
@@ -231,7 +236,7 @@ pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) ->
             let x = value(x, from_code(xt)?);
             poke(v, |v| match v {
                 Value::Vec(xs) => {
-                    Rc::make_mut(xs).push(x);
+                    Rc::make_mut(xs).push_value(x);
                     Some(0)
                 }
                 _ => None,

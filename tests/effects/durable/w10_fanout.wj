@@ -6,7 +6,7 @@ use std::random
 use std::sync
 use std::time
 fn notify(who: string, id: int) -> string {
-    fs::write("msg-${who}.txt", "hello ${who} #${id}") ?? ()
+    fs::write("msg-${who}.txt", "hello ${who} #${id}").unwrap_or(())
     "sent-${who}"
 }
 durable fn run() -> string {

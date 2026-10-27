@@ -1,10 +1,10 @@
 {
- "closures.wj": 1.74,
- "fib30.wj": 36.68,
- "hashmap.wj": 1.67,
- "loop5m.wj": 70.68,
- "nbody.wj": 9.78,
- "sieve.wj": 11.54,
- "strings.wj": 1.9,
- "structs.wj": 2.01
+ "closures.wj": 1.71,
+ "fib30.wj": 40.93,
+ "hashmap.wj": 1.68,
+ "loop5m.wj": 69.82,
+ "nbody.wj": 10.86,
+ "sieve.wj": 18.38,
+ "strings.wj": 2.19,
+ "structs.wj": 2.05
 }

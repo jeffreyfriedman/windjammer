@@ -315,7 +315,7 @@ fn serve(it: &mut Interpreter, addr: &str, h: Handler) -> R {
 
 fn with_route(router: &Value, method: &str, a: &[Value]) -> R {
     let mut rs = match field(router, "routes") {
-        Some(Value::Vec(v)) => (*v).clone(),
+        Some(Value::Vec(v)) => v.to_vec(),
         _ => Vec::new(),
     };
     rs.push(Value::tuple(vec![s(method), s(&arg_str(a, 0, "route")?), arg(a, 1, "route")?]));

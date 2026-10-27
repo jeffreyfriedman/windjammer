@@ -7,7 +7,7 @@ use std::sync
 use std::time
 fn make_id() -> int { random::range(1000, 9999) }
 fn make_token() -> string { random::alphanumeric(8) }
-fn store(id: int, token: string) { fs::write("account-${id}.txt", token) ?? () }
+fn store(id: int, token: string) { fs::write("account-${id}.txt", token).unwrap_or(()) }
 durable fn run() -> string {
     // @mutation-point
     let wj_taint = ""

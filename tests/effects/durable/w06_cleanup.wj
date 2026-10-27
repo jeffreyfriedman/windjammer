@@ -6,15 +6,15 @@ use std::random
 use std::sync
 use std::time
 fn make(n: int) {
-    fs::create_dir_all("tmpdir") ?? ()
-    fs::write("tmpdir/t${n}.tmp", "x") ?? ()
+    fs::create_dir_all("tmpdir").unwrap_or(())
+    fs::write("tmpdir/t${n}.tmp", "x").unwrap_or(())
 }
 fn names() -> int {
     let mut names = Vec::new()
-    for e in fs::read_dir("tmpdir") ?? [] { names.push(e.name()) }
+    for e in fs::read_dir("tmpdir").unwrap_or([]) { names.push(e.name()) }
     names.len()
 }
-fn wipe() { fs::remove_dir_all("tmpdir") ?? () }
+fn wipe() { fs::remove_dir_all("tmpdir").unwrap_or(()) }
 durable fn run() -> string {
     // @mutation-point
     let wj_taint = ""
