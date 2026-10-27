@@ -1,0 +1,107 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "D",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error[E0308]: mismatched types\n  --> main.rs:10:22\n   |\n10 |         let n: i64 = chars.len();\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuilding Windjammer",
+  "error[E0308]: mismatched types\n  --> main.rs:10:22\n   |\n10 |         let n: i64 = chars.len();\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuilding Windjammer",
+  "error[E0308]: mismatched types\n  --> main.rs:10:22\n   |\n10 |         let n: i64 = chars.len();\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuilding Windjammer"
+ ],
+ "diagnostic_categories": {
+  "other": 3,
+  "type-mismatch": 3
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 4,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let mut fields: Vec<string> = []\n        let mut cur: string = \"\"\n        let mut inq = false\n        let chars: Vec<char> = line.chars().collect()\n        let n: int = chars.len() as int\n        let mut i: int = 0\n        while i < n {\n            let c = chars[i]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && chars[i + 1] == '\"' {\n                        cur.push('\"')\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur.push(c)\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur.push(c)\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let mut parts: Vec<string> = []\n        for f in fields {\n            parts.push(\"[${f}]\")\n        }\n        println(\"${parts.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let mut fields: Vec<string> = []\n        let mut cur: string = \"\"\n        let mut inq = false\n        let chars: Vec<char> = line.chars().collect()\n        let n: int = chars.len()\n        let mut i: int = 0\n        while i < n {\n            let c = chars[i]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && chars[i + 1] == '\"' {\n                        cur.push('\"')\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur.push(c)\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur.push(c)\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let mut parts: Vec<string> = []\n        for f in fields {\n            parts.push(\"[${f}]\")\n        }\n        println(\"${parts.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.288,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 307.887,
+   "verb": "build"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 184.272,
+   "verb": "build"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 16.443,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 14.906,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 0.0,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T14:07:46",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 44.14,
+ "tool_wait_seconds": 523.8,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 44.14,
+  "cost_usd": 0.044240600000000005,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` parses each CSV line as specified, and `wj build main.wj` now compiles.\n\nI ran Example 2's records through the interpreter, along with the lines from Example 1, and the output matched. I did not run the compiled binary. The first build failed because `chars.len()` is a `usize` and I had typed it as `int`; I fixed it with `as int`. I didn't rerun the interpreter after that edit.\n\nThe prog",
+  "subtype": "success",
+  "tokens_in": 127950,
+  "tokens_out": 1711,
+  "turns": 8
+ },
+ "verify_calls": 5,
+ "verify_calls_to_green": 5,
+ "wall_seconds": 403.86
+}

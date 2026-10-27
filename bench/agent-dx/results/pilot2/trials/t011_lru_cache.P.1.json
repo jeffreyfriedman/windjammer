@@ -1,0 +1,57 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "P",
+ "arm_name": "python",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "import sys\nfrom collections import OrderedDict\n\n\ndef main():\n    lines = sys.stdin.read().split(\"\\n\")\n    c = int(lines[0].strip())\n    d = OrderedDict()\n    out = []\n    for line in lines[1:]:\n        p = line.split()\n        if not p:\n            continue\n        if p[0] == \"put\":\n            k, v = int(p[1]), int(p[2])\n            d[k] = v\n            d.move_to_end(k)\n            if len(d) > c:\n                ek, _ = d.popitem(last=False)\n                out.append(\"evict %d\" % ek)\n        elif p[0] == \"get\":\n            k = int(p[1])\n            if k in d:\n                d.move_to_end(k)\n                out.append(str(d[k]))\n            else:\n                out.append(\"-1\")\n        elif p[0] == \"keys\":\n            out.append(\" \".join(str(k) for k in reversed(d)) if d else \"<empty>\")\n    print(\"\\n\".join(out))\n\n\nmain()\n",
+ "first_source": "",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [],
+ "lang": "python",
+ "mode_violations": 0,
+ "other_seconds": 16.86,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T13:50:57",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 5.812,
+ "tool_wait_seconds": 0,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 5.812,
+  "cost_usd": 0.015626,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache in `main.py`. It uses an `OrderedDict`, and Example 1 produced the expected output when I ran it. I didn't run Example 2 or any other inputs.\n\nIf the input has no commands that print anything, it prints a single blank line.",
+  "subtype": "success",
+  "tokens_in": 15412,
+  "tokens_out": 609,
+  "turns": 3
+ },
+ "verify_calls": 0,
+ "verify_calls_to_green": null,
+ "wall_seconds": 22.67
+}

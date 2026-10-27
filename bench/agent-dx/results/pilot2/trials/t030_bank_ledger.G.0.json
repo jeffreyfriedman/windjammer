@@ -1,0 +1,57 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "G",
+ "arm_name": "go",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"sort\"\n\t\"strconv\"\n\t\"strings\"\n)\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tsc.Buffer(make([]byte, 1<<20), 1<<26)\n\tw := bufio.NewWriter(os.Stdout)\n\tdefer w.Flush()\n\tacc := map[string]int64{}\n\tfor sc.Scan() {\n\t\tf := strings.Fields(sc.Text())\n\t\tif len(f) == 0 {\n\t\t\tcontinue\n\t\t}\n\t\tparse := func(s string) int64 {\n\t\t\tv, _ := strconv.ParseInt(s, 10, 64)\n\t\t\treturn v\n\t\t}\n\t\tswitch f[0] {\n\t\tcase \"open\":\n\t\t\tif len(f) < 3 {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\ta := parse(f[2])\n\t\t\tif a < 0 {\n\t\t\t\tfmt.Fprintln(w, \"error: invalid amount\")\n\t\t\t} else if _, ok := acc[f[1]]; ok {\n\t\t\t\tfmt.Fprintln(w, \"error: duplicate account\")\n\t\t\t} else {\n\t\t\t\tacc[f[1]] = a\n\t\t\t\tfmt.Fprintln(w, \"ok\")\n\t\t\t}\n\t\tcase \"deposit\", \"withdraw\":\n\t\t\tif len(f) < 3 {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\ta := parse(f[2])\n\t\t\tif a <= 0 {\n\t\t\t\tfmt.Fprintln(w, \"error: invalid amount\")\n\t\t\t} else if b, ok := acc[f[1]]; !ok {\n\t\t\t\tfmt.Fprintln(w, \"error: unknown account \"+f[1])\n\t\t\t} else if f[0] == \"deposit\" {\n\t\t\t\tacc[f[1]] = b + a\n\t\t\t\tfmt.Fprintln(w, \"ok\")\n\t\t\t} else if b < a {\n\t\t\t\tfmt.Fprintln(w, \"error: insufficient funds\")\n\t\t\t} else {\n\t\t\t\tacc[f[1]] = b - a\n\t\t\t\tfmt.Fprintln(w, \"ok\")\n\t\t\t}\n\t\tcase \"transfer\":\n\t\t\tif len(f) < 4 {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\ta := parse(f[3])\n\t\t\tif a <= 0 {\n\t\t\t\tfmt.Fprintln(w, \"error: invalid amount\")\n\t\t\t} else if _, ok := acc[f[1]]; !ok {\n\t\t\t\tfmt.Fprintln(w, \"error: unknown account \"+f[1])\n\t\t\t} else if _, ok := acc[f[2]]; !ok {\n\t\t\t\tfmt.Fprintln(w, \"error: unknown account \"+f[2])\n\t\t\t} else if f[1] == f[2] {\n\t\t\t\tfmt.Fprintln(w, \"error: same account\")\n\t\t\t} else if acc[f[1]] < a {\n\t\t\t\tfmt.Fprintln(w, \"error: insufficient funds\")\n\t\t\t} else {\n\t\t\t\tacc[f[1]] -= a\n\t\t\t\tacc[f[2]] += a\n\t\t\t\tfmt.Fprintln(w, \"ok\")\n\t\t\t}\n\t\tcase \"balance\":\n\t\t\tif len(f) < 2 {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif b, ok := acc[f[1]]; !ok {\n\t\t\t\tfmt.Fprintln(w, \"error: unknown account \"+f[1])\n\t\t\t} else {\n\t\t\t\tfmt.Fprintln(w, b)\n\t\t\t}\n\t\t}\n\t}\n\tnames := make([]string, 0, len(acc))\n\tfor n := range acc {\n\t\tnames = append(names, n)\n\t}\n\tsort.Strings(names)\n\tfor _, n := range names {\n\t\tfmt.Fprintln(w, n, acc[n])\n\t}\n}\n",
+ "first_source": "",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [],
+ "lang": "go",
+ "mode_violations": 0,
+ "other_seconds": 4.22,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T12:43:58",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 10.068,
+ "tool_wait_seconds": 0,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 10.068,
+  "cost_usd": 0.0272134,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.go`, but I haven't built it or run it against the two examples.\n\nIt reads commands from stdin and prints `ok`, a balance, or one error line per command. After all commands it prints every account sorted by name. Errors are checked in the order you gave: invalid amount, duplicate account, unknown account (FROM before TO), same account, then insufficient funds. A failed",
+  "subtype": "success",
+  "tokens_in": 16463,
+  "tokens_out": 1423,
+  "turns": 2
+ },
+ "verify_calls": 0,
+ "verify_calls_to_green": null,
+ "wall_seconds": 14.29
+}

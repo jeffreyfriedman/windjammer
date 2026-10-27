@@ -1,0 +1,244 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "C",
+ "arm_name": "no-pack",
+ "capability_denials": 0,
+ "diag_samples": [
+  "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"evict {}\", keys[last])` with `println(\"evict ${keys[last]}\")` (or run `wj fix`)\n  = suggestion: println(\"evict ${keys[last]}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", found)` with `println(\"${found}\")` (or run `wj fix`)\n  = suggestion: println(\"${found}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", out)` ",
+  "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"evict {}\", keys[last])` with `println(\"evict ${keys[last]}\")` (or run `wj fix`)\n  = suggestion: println(\"evict ${keys[last]}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", found)` with `println(\"${found}\")` (or run `wj fix`)\n  = suggestion: println(\"${found}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", out)` ",
+  "error: `Result` doesn't implement `std::fmt::Display`\n  --> <ws>/t.wj:5:22\nstack backtrace:\n  0: main",
+  "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"evict {}\", keys[last])` with `println(\"evict ${keys[last]}\")` (or run `wj fix`)\n  = suggestion: println(\"evict ${keys[last]}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", found)` with `println(\"${found}\")` (or run `wj fix`)\n  = suggestion: println(\"${found}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", out)` ",
+  "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"evict {}\", keys[last])` with `println(\"evict ${keys[last]}\")` (or run `wj fix`)\n  = suggestion: println(\"evict ${keys[last]}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", found)` with `println(\"${found}\")` (or run `wj fix`)\n  = suggestion: println(\"${found}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", out)` "
+ ],
+ "diagnostic_categories": {
+  "lint-style": 1,
+  "other": 2,
+  "runtime-panic": 2,
+  "unsupported": 1
+ },
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "this function takes 1 argument but 0 arguments were supplied",
+  "a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`",
+  "mismatched types"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 34
+ },
+ "final_source": "use std::io\n\nfn main() {\n    let text = io::read_to_string() ?? \"\"\n    let lines = text.split(\"\\n\")\n    let mut cap = 1\n    let mut keys: Vec<int> = Vec::new()\n    let mut vals: Vec<int> = Vec::new()\n    let mut first = true\n    for line in lines {\n        let parts = line.split_whitespace().collect::<Vec<string>>()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>() ?? 0\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>() ?? 0\n            let v = parts[2].parse::<int>() ?? 0\n            let mut i = 0\n            while i < keys.len() {\n                if keys[i] == k {\n                    keys.remove(i)\n                    vals.remove(i)\n                    break\n                }\n                i += 1\n            }\n            keys.insert(0, k)\n            vals.insert(0, v)\n            if keys.len() > cap {\n                let last = keys.len() - 1\n                println(\"evict ${keys[last]}\")\n                keys.remove(last)\n                vals.remove(last)\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>() ?? 0\n            let mut found = -1\n            let mut i = 0\n            while i < keys.len() {\n                if keys[i] == k {\n                    found = vals[i]\n                    keys.remove(i)\n                    vals.remove(i)\n                    keys.insert(0, k)\n                    vals.insert(0, found)\n                    break\n                }\n                i += 1\n            }\n            println(\"${found}\")\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut i = 0\n                while i < keys.len() {\n                    if i > 0 {\n                        out = out + \" \"\n                    }\n                    out = out + keys[i].to_string()\n                    i += 1\n                }\n                println(\"${out}\")\n            }\n        }\n    }\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.01,
+   "verb": ""
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.065,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.022,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.012,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.008,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.013,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.011,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.014,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.051,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.008,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.015,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.019,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.03,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "lint-style",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.453,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "unsupported"
+   ],
+   "exit": 2,
+   "mode": "interpret",
+   "secs": 0.244,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.352,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.031,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.071,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.01,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.621,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "runtime-panic"
+   ],
+   "exit": 101,
+   "mode": "interpret",
+   "secs": 0.049,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "runtime-panic"
+   ],
+   "exit": 101,
+   "mode": "interpret",
+   "secs": 0.064,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.069,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.05,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.058,
+   "verb": "check"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 23.27,
+ "pass_final": false,
+ "recorded_at": "2026-10-26T13:33:28",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 60.661,
+ "tool_wait_seconds": 2.35,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 60.661,
+  "cost_usd": 0.11402780000000003,
+  "denied_commands": [
+   "sed -i '' 's/\\.unwrap()/ ?? 0/' main.wj 2>&1; echo",
+   "printf '2\\nput 1 1\\nput 2 2\\nget 1\\nput 3 3\\nget 2\\nkeys\\n' | wj run --interpret main.wj 2>&1 | grep -v -E \"^\\s|^warning|^$\"; printf '1\\nkeys\\nput 1 10\\nput 2 20\\nget 1\\nkeys\\n' | wj run --interpret m"
+  ],
+  "is_error": false,
+  "permission_denials": 2,
+  "result_excerpt": "`main.wj` implements the LRU cache and gives the expected output on both examples when run with `wj run --interpret`. `wj check --json` reports no errors or warnings. I didn't run `wj build`, as instructed, so I haven't tested the compiled path.\n\nThe cache is two parallel `Vec<int>`s, one for keys and one for values, with the most recently used entry at index 0. Every operation is a linear scan, w",
+  "subtype": "success",
+  "tokens_in": 228323,
+  "tokens_out": 4710,
+  "turns": 26
+ },
+ "verify_calls": 8,
+ "verify_calls_to_green": 6,
+ "wall_seconds": 86.28
+}
