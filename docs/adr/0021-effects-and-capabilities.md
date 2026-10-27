@@ -358,8 +358,8 @@ host-bridge externs); `wj explain-effects`; `wj run --sandbox/--allow/--caps`. A
 
 Decisions taken while implementing (all enforced by tests): one URL parser (`scope_match::split_url`) serves both the check and
 the interpreter's http client, so what is checked is what is connected to; `process::run` programs are resolved by
-`parse_command` (shell syntax means `sh`, and a bare name never matches a local `./name`); a glob grant never covers
-`wj.toml`, `*.wj-capabilities.lock` or `*.wj` (only an exact pattern does); `fs::set_current_dir` is `env.write(cwd)`.
+`parse_command` (shell syntax means `sh`, and a bare name never matches a local `./name`); a broad grant (`*`, `**`, `dir/*`) never covers
+`wj.toml`, `*.wj-capabilities.lock` or `*.wj`; only an exact pattern or one whose last segment spells the file's own suffix (no `**` in that segment) does, and names compare case-insensitively (review of the py-audit change, 2026-10-27: boundary pinned by `bound/*` escape cases and a manifest unit test); `fs::set_current_dir` is `env.write(cwd)`.
 Known limits: TOCTOU between check and open; DNS rebinding (hosts are checked by name); redirects (the interpreter
 client does not follow any); per-package grants and `std::cap` values are E2; `console` is not gated at run time.
 
