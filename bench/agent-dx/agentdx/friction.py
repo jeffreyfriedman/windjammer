@@ -10,6 +10,8 @@ from collections import defaultdict
 
 # id, regex, title, fix kind, fix location
 RULES = [
+    ("capability-denial", r"WJ004\d|capability", "effect/capability enforcement stopped a program the task needs", "diagnostic text / default profile",
+     "denial message must name the exact `--allow` flag or `[capabilities]` line; default local profile for single-file runs"),
     ("int-width", r"expected `i64`, found `i32`|expected `i32`, found `i64`|expected `usize`, found `i64`|_i32 as i32",
      "untyped integer literal emitted as i32 and mixed with int (i64)", "codegen (literal defaulting) + pack tip",
      "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'"),
