@@ -1,0 +1,36 @@
+coverage (cli): 4070/7160 lines = 56.84%
+  uncovered   600 /   700  src/interpreter/call.rs
+  uncovered   500 /  2000  src/interpreter/eval.rs
+  uncovered   300 /   400  src/bin/wj.rs
+  uncovered    90 /   130  src/cli/cmd03.rs
+  uncovered    90 /   130  src/cli/cmd15.rs
+  uncovered    80 /   120  src/cli/cmd06.rs
+  uncovered    80 /   130  src/cli/cmd07.rs
+  uncovered    75 /    80  src/test_runner/t.rs
+  uncovered    70 /   110  src/cli/cmd09.rs
+  uncovered    70 /   120  src/cli/cmd10.rs
+wrote fresh/dir/base.json
+{
+  "total": {
+    "lines": 7160,
+    "covered": 4070,
+    "pct": 56.84
+  },
+  "modules": {
+    "bin": {
+      "lines": 400,
+      "covered": 100,
+      "branches": 8,
+      "branches_covered": 2,
+      "pct": 25.0
+    },
+    "check": {
+      "lines": 30,
+      "covered": 30,
+      "branches": 0,
+      "branches_covered": 0,
+      "pct": 100.0
+    },
+    "cli": {
+      "lines": 2050,
+      "covere

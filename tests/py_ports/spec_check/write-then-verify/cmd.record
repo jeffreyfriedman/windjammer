@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/spec_check.sh > scripts/spec_check.sh && export LC_ALL=C && bash scripts/spec_check.sh --write; cat docs/spec/CONFORMANCE_MATRIX.md; bash scripts/spec_check.sh; rc=$?; rm -rf scripts; exit $rc

@@ -298,8 +298,10 @@ impl Grant {
                     })
                 };
                 if *kind == EffectKind::FsWrite && is_protected(&p) {
-                    // the manifest, the lock file and program sources can be written only when a pattern names them exactly
-                    pats.iter().any(|pat| !pat.contains('*') && inside(pat))
+                    // the manifest, the lock file and program sources can be written only when a pattern names them exactly,
+                    // or spells out the protected suffix in its last segment (`./gen/*.wj`, `./tmp/**/wj.toml`) - a deliberate
+                    // grant; `./**` is not
+                    pats.iter().any(|pat| (!pat.contains('*') || names_protected_suffix(pat, &p)) && inside(pat))
                 } else {
                     pats.iter().any(inside)
                 }
@@ -389,6 +391,22 @@ fn device_effect(kind: &EffectKind, res: &str) -> Option<Option<EffectKind>> {
         "/dev/urandom" | "/dev/random" if reading => Some(Some(EffectKind::Random)),
         _ => None,
     }
+}
+
+/// A glob whose last segment (which does not itself cross directories) ends in the protected file's own suffix:
+/// `*.wj` for a program source, `wj.toml` for a manifest, `.wj-capabilities.lock` for a lock file. The grant says
+/// what it reaches out loud.
+fn names_protected_suffix(pat: &str, p: &Path) -> bool {
+    let last = pat.rsplit('/').next().unwrap_or(pat);
+    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let suffix = if name.ends_with(".wj") {
+        ".wj"
+    } else if name == "wj.toml" {
+        "wj.toml"
+    } else {
+        ".wj-capabilities.lock"
+    };
+    last.ends_with(suffix) && !last.contains("**")
 }
 
 /// Files that define what a program may do or is: never reachable through a glob grant.

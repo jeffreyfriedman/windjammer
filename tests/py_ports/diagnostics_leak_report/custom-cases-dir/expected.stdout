@@ -1,0 +1,5 @@
+case         stage      rustc/front codes        unmapped  baseline-unmapped
+front_end    front-end  WJ0001,WJ0003           0         0
+leak_mapped  rustc      E0308                   0         0
+
+{"cases": 2, "caught_front": 1, "leaked": 1, "rustc_errors": 1, "unmapped": 0, "baseline_unmapped": 0, "wrong_code": 0}

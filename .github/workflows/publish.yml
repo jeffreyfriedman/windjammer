@@ -17,6 +17,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out the ecosystem packages (the version check is a Windjammer script)
+        uses: actions/checkout@v6
+        with:
+          repository: jeffreyfriedman/windjammer-ecosystem
+          path: windjammer-ecosystem
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build wj
+        run: cargo build --release --bin wj
+
       - name: Get version from tag
         id: get_version
         run: |
@@ -39,7 +51,7 @@ jobs:
           fi
           
           # Also check internal dependency version references
-          ./scripts/check-versions.sh "v$VERSION"
+          ./target/release/wj run scripts/wj/check_versions.wj "v$VERSION"
           echo "✓ Tag matches Cargo.toml version and all crate versions are consistent"
 
       - name: Check if version is published

@@ -23,7 +23,7 @@ Add `tests/<name>_test.rs`; `build.rs` picks it up automatically (see `tests/REA
 
 ```bash
 cargo test --release --test all <filter>    # targeted
-scripts/check-orphan-tests.sh                # every test file must be reached by a runner
+wj run scripts/wj/check_orphan_tests.wj      # every test file must be reached by a runner
 scripts/update-architecture-baselines.sh    # after adding modules/files (also declare new top-level modules in src/lib.rs and src/main.rs)
 ```
 
@@ -74,3 +74,10 @@ Run before merging any branch; targeted tests are not enough (that is how eject 
 scripts/merge_gate.sh           # build, fmt, architecture, docs-truth, promises, reachability, differential gates, smoke
 scripts/merge_gate.sh --full    # + cargo-backed cases, all backends, 6x determinism, whole-suite ratchet
 ```
+
+## Scripts
+
+Repository tooling is written in Windjammer (`scripts/wj/`, run with `wj run scripts/wj/<name>.wj`; it uses the packages in
+`windjammer-ecosystem/`, checked out or symlinked at the repository root). A Python or shell step is an exception recorded in
+[docs/design/python-replacement-audit.md](docs/design/python-replacement-audit.md). Every port is pinned to its original by the
+recorded cases in `tests/py_ports/` (`wj run scripts/wj/port_gates.wj --wj target/release/wj`).

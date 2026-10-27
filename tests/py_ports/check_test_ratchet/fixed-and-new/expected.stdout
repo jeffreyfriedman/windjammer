@@ -1,0 +1,29 @@
+🔧 Running tests with ratcheting (known failures: 3)
+
+fake cargo args: test
+running 5 tests
+test a::one ... ok
+test b::broken ... FAILED
+test c::flaky ... FAILED
+test d::fine ... ok
+
+failures:
+    b::broken
+
+test result: FAILED. 2 failed
+stderr line
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Ratchet Report
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Known failures: 3
+   Actual failures: 2
+
+🎉 2 test(s) now PASSING — remove from known-test-failures.txt:
+   ✓ y::also_fixed
+   ✓ z::was_broken
+
+❌ 1 NEW failure(s) — these must be fixed:
+   ✗ c::flaky
+
+To add to known failures (if intentional): append to .config/known-test-failures.txt

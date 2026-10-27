@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/diagnostics-leak-report.sh > scripts/diagnostics-leak-report.sh && export CARGO_TARGET_DIR=/tmp/wj-gate-leak-target; PATH="$W/bin:$PATH" bash scripts/diagnostics-leak-report.sh $W/bin/wj; rc=$?; rm -rf scripts; exit $rc

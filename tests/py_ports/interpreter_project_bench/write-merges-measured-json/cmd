@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/interpreter_project_bench.wj $W/bin/fakewj --files 5 --runs 2 --write; cat docs/generated/measured.json

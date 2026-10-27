@@ -1,0 +1,11 @@
+// rust: ok
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    a * b
+}
+fn main() {
+    let a: i64 = 7
+    println("${id(a)} ${pair(2, 3)}")
+}
