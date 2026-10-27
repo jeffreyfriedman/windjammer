@@ -50,6 +50,7 @@ mod task_blocks;
 mod type_keys;
 mod u128ops;
 pub mod value;
+pub mod vecbody;
 
 pub use engine::Interpreter;
 pub use error::{ErrorKind, RuntimeError};

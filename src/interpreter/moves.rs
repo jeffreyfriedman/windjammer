@@ -85,7 +85,7 @@ impl Moves {
 fn owns_destructor(v: &Value) -> bool {
     match v {
         Value::Struct(s) => s.uid != 0 || s.fields.iter().any(|(_, x)| owns_destructor(x)),
-        Value::Vec(xs) | Value::Tuple(xs) => xs.iter().any(owns_destructor),
+        Value::Vec(_) | Value::Tuple(_) => v.items().iter().any(owns_destructor),
         Value::Enum(e) => match &e.payload {
             super::value::Payload::Unit => false,
             super::value::Payload::Tuple(xs) => xs.iter().any(owns_destructor),
