@@ -3,7 +3,9 @@ failure categories, silent-divergence cost, and the ranked friction list."""
 from collections import Counter, defaultdict
 
 from . import aps as APS, friction, stats
-from .arms import ARMS
+import os
+
+from .arms import ARMS, pack_path
 
 METRICS = [  # key, label, extractor(trial) -> number|None
     ("pass", "pass@1 (compiled hidden oracle)", lambda t: 1.0 if t["pass_final"] else 0.0),
@@ -45,7 +47,7 @@ def build_report(trials, n_boot=2000, prev=None):
     n = Counter(t["arm"] for t in trials)
     md += ["## Arms", "", "| arm | name | trials | context pack |", "|---|---|---|---|"]
     for a in arms:
-        md.append(f"| {a} | {ARMS[a]['name']} | {n[a]} | {'yes' if ARMS[a]['pack'] else 'no'} |")
+        md.append(f"| {a} | {ARMS[a]['name']} | {n[a]} | {os.path.basename(pack_path(a)) if pack_path(a) else 'no'} |")
     md += ["", "## Arm means", "", "| metric | " + " | ".join(arms) + " |", "|---|" + "---|" * len(arms)]
     for key, label, fn in METRICS:
         row, cells = {}, []
