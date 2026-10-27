@@ -397,21 +397,22 @@ fn device_effect(kind: &EffectKind, res: &str) -> Option<Option<EffectKind>> {
 /// `*.wj` for a program source, `wj.toml` for a manifest, `.wj-capabilities.lock` for a lock file. The grant says
 /// what it reaches out loud.
 fn names_protected_suffix(pat: &str, p: &Path) -> bool {
-    let last = pat.rsplit('/').next().unwrap_or(pat);
-    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    let suffix = if name.ends_with(".wj") {
-        ".wj"
+    // names compare case-insensitively: case-insensitive file systems resolve `WJ.TOML` to the manifest
+    let last = pat.rsplit('/').next().unwrap_or(pat).to_ascii_lowercase();
+    let name = p.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    let suffix = if name.ends_with(".wj-capabilities.lock") {
+        ".wj-capabilities.lock"
     } else if name == "wj.toml" {
         "wj.toml"
     } else {
-        ".wj-capabilities.lock"
+        ".wj"
     };
     last.ends_with(suffix) && !last.contains("**")
 }
 
 /// Files that define what a program may do or is: never reachable through a glob grant.
 fn is_protected(p: &Path) -> bool {
-    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let name = p.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     name == "wj.toml" || name.ends_with(".wj-capabilities.lock") || name.ends_with(".wj")
 }
 
