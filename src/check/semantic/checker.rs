@@ -248,33 +248,10 @@ impl Visitor for Collect<'_> {
                 .for_each(|w| self.bind(w));
         }
     }
-    /// The user struct inside the `Result`/`Option` a plain call of a project function returns (`fn get(..) -> Result<User, string>`).
-    fn wrapped_struct(&self, e: &Expression<'_>) -> Option<String> {
-        let Expression::Call { function, .. } = e else { return None };
-        let Expression::Identifier { name, .. } = &**function else { return None };
-        if name.contains("::") {
-            return None;
-        }
-        let Some([info]) = self.idx.fns.get(name).map(Vec::as_slice) else { return None };
-        if info.generic {
-            return None;
-        }
-        let inner = match info.ret.as_ref()? {
-            Type::Result(t, _) => &**t,
-            Type::Option(t) => &**t,
-            _ => return None,
-        };
-        let Type::Custom(s) = inner else { return None };
-        match self.idx.structs.get(s).map(Vec::as_slice) {
-            Some([si]) if !si.generic => Some(s.clone()),
-            _ => None,
-        }
-    }
-
     fn stmt(&mut self, s: &Statement<'_>) {
         // `match get(..) { Ok(u) => .., }`: `u` is the struct inside the Result / Option
         if let Statement::Match { value, arms, .. } = s {
-            if let Some(st) = self.wrapped_struct(value) {
+            if let Some(st) = wrapped_struct(self.idx, value) {
                 for arm in arms {
                     if let Pattern::EnumVariant(v, crate::parser::EnumPatternBinding::Single(n)) = &arm.pattern {
                         if matches!(v.as_str(), "Ok" | "Some") {
@@ -297,8 +274,8 @@ impl Visitor for Collect<'_> {
             let ty = type_.as_ref().and_then(type_name).map(str::to_string).or_else(|| match value {
                 Expression::StructLiteral { name, .. } if !name.contains("::") => Some(name.clone()),
                 // `let u = get(..)?` / `.unwrap()` / `.expect(..)` / `.unwrap_or(..)`
-                Expression::TryOp { expr, .. } => self.wrapped_struct(expr),
-                Expression::MethodCall { object, method, .. } if matches!(method.as_str(), "unwrap" | "expect" | "unwrap_or" | "unwrap_or_else" | "unwrap_or_default") => self.wrapped_struct(object),
+                Expression::TryOp { expr, .. } => wrapped_struct(self.idx, expr),
+                Expression::MethodCall { object, method, .. } if matches!(method.as_str(), "unwrap" | "expect" | "unwrap_or" | "unwrap_or_else" | "unwrap_or_default") => wrapped_struct(self.idx, object),
                 _ => None,
             });
             if let Some(t) = ty {
@@ -317,6 +294,30 @@ impl Visitor for Collect<'_> {
         }
     }
 }
+
+/// The user struct inside the `Result`/`Option` a plain call of a project function returns (`fn get(..) -> Result<User, string>`).
+fn wrapped_struct(idx: &Index, e: &Expression<'_>) -> Option<String> {
+    let Expression::Call { function, .. } = e else { return None };
+    let Expression::Identifier { name, .. } = &**function else { return None };
+    if name.contains("::") {
+        return None;
+    }
+    let Some([info]) = idx.fns.get(name).map(Vec::as_slice) else { return None };
+    if info.generic {
+        return None;
+    }
+    let inner = match info.ret.as_ref()? {
+        Type::Result(t, _) => &**t,
+        Type::Option(t) => &**t,
+        _ => return None,
+    };
+    let Type::Custom(s) = inner else { return None };
+    match idx.structs.get(s).map(Vec::as_slice) {
+        Some([si]) if !si.generic => Some(s.clone()),
+        _ => None,
+    }
+}
+
 
 struct Checker<'c, 'a, 'o> {
     cx: &'c mut Cx<'a, 'o>,

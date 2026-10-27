@@ -11,7 +11,7 @@
 //! A resumed compiled program gets the journaled values back; unlike the interpreter in a deterministic world it does not
 //! re-derive random numbers or restore a virtual clock, because it has neither.
 
-use crate::durable_core::{self as core, Opened, RunJournal, Step};
+use crate::durable_core::{self as jc, Opened, RunJournal, Step};
 use serde_json::{json, Value as Json};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -233,7 +233,7 @@ pub fn run<T: Journalable>(name: &str, args: Vec<Json>, body: impl FnOnce() -> T
             s.configured = true;
             s.dir = std::env::var_os("WJ_JOURNAL_DIR").map(PathBuf::from);
             if let Ok(c) = std::env::var("WJ_CRASH_AFTER") {
-                match core::parse_crash(&c) {
+                match jc::parse_crash(&c) {
                     Ok((n, mid)) => {
                         s.crash_after = Some(n);
                         s.crash_mid = mid;
@@ -242,13 +242,13 @@ pub fn run<T: Journalable>(name: &str, args: Vec<Json>, body: impl FnOnce() -> T
                 }
             }
         }
-        let key = format!("{name}|{}", core::canon(&Json::Array(args.clone())));
+        let key = format!("{name}|{}", jc::canon(&Json::Array(args.clone())));
         let occurrence = {
             let n = s.occurrences.entry(key).or_insert(0);
             *n += 1;
             *n - 1
         };
-        let id = core::run_id(name, &args, occurrence);
+        let id = jc::run_id(name, &args, occurrence);
         RunJournal::open(s.dir.as_deref(), &id, name, &args).unwrap_or_else(|m| die(&m))
     });
     let journal = match opened {

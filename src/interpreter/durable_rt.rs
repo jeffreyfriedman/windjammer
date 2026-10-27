@@ -11,7 +11,7 @@
 //! random stream is re-derived from (run seed, step number) and the virtual clock is restored from the journal, so a
 //! resumed run draws the same numbers and reads the same times as an uninterrupted one in a deterministic world.
 
-use super::durable_core::{self as core, Opened, RunJournal, Step};
+use super::durable_core::{self as jc, Opened, RunJournal, Step};
 use super::effect_port::codec;
 use super::engine::{FuncDef, Interpreter};
 use super::error::{Ctl, ErrorKind, RuntimeError};
@@ -39,7 +39,7 @@ pub struct DurableCfg {
 impl DurableCfg {
     /// `--crash-after N` or `N:mid`.
     pub fn parse_crash(text: &str) -> Result<(usize, bool), String> {
-        core::parse_crash(text).map_err(|m| format!("--crash-after: {m}"))
+        jc::parse_crash(text).map_err(|m| format!("--crash-after: {m}"))
     }
 }
 
@@ -115,14 +115,14 @@ impl Interpreter {
             .map(codec::encode)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|what| fail(format!("durable fn `{}`: an argument is {what}, which cannot be journaled (WJ0045)", f.name)))?;
-        let key = format!("{}|{}", f.qual, core::canon(&Json::Array(arg_json.clone())));
+        let key = format!("{}|{}", f.qual, jc::canon(&Json::Array(arg_json.clone())));
         let occurrence = {
             let n = rt.occurrences.entry(key).or_insert(0);
             *n += 1;
             *n - 1
         };
-        let id = core::run_id(&f.qual, &arg_json, occurrence);
-        let seed = mix(rt.base_seed, core::hash64(id.as_bytes()));
+        let id = jc::run_id(&f.qual, &arg_json, occurrence);
+        let seed = mix(rt.base_seed, jc::hash64(id.as_bytes()));
         let journal = match RunJournal::open(rt.cfg.dir.as_deref(), &id, &f.qual, &arg_json).map_err(fail)? {
             Opened::Done(result) => return codec::decode(&result).map_err(fail),
             Opened::Run(j) => *j,
