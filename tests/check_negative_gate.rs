@@ -1,8 +1,8 @@
 //! Negative-corpus gate for `wj check` (differential against rustc, recorded oracle).
 //!
 //! Corpus: type-error mutants of the `// rust: ok` verified examples
-//! (`scripts/gen-check-mutants.py` -> tests/check_negative/mutants), the diagnostics cases and the
-//! error-system corpora. `scripts/check-negative-oracle.sh` records, per program, whether
+//! (`scripts/wj/gen_check_mutants.wj` -> tests/check_negative/mutants), the diagnostics cases and the
+//! error-system corpora. `scripts/wj/check_negative_oracle.wj` records, per program, whether
 //! `wj build --no-cargo` + `cargo check` accepts it (tests/check_negative/oracle.tsv). This test never
 //! runs cargo: whenever the build+rustc rejects a program, `wj check` must report an error, unless the
 //! program is listed in tests/check_negative/known_false_negatives.txt (a ratchet: entries that start
@@ -73,7 +73,7 @@ fn corpus_files() -> Vec<String> {
     v
 }
 
-/// FNV-1a 64 of the file bytes (same as scripts/check-negative-oracle.sh).
+/// FNV-1a 64 of the file bytes (same as scripts/wj/check_negative_oracle.wj).
 fn sha16(path: &Path) -> String {
     let mut h: u64 = 0xcbf29ce484222325;
     for b in fs::read(path).unwrap() {
@@ -131,7 +131,7 @@ fn oracle_covers_exactly_the_current_corpus() {
             stale.push(format!("{k}: in oracle but no longer in the corpus"));
         }
     }
-    assert!(stale.is_empty(), "re-run scripts/check-negative-oracle.sh:\n{}", stale.join("\n"));
+    assert!(stale.is_empty(), "re-run scripts/wj/check_negative_oracle.wj:\n{}", stale.join("\n"));
 }
 
 #[test]

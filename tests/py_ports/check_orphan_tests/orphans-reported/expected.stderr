@@ -1,0 +1,18 @@
+ERROR: 13 test file(s) are not reached by any runner:
+  crates/foo/tests/inner/z.rs
+  lib/thing_test.wj
+  pkg/sub/test_deep.wj
+  test_root.wj
+  tests/backup.bak  (disabled test file)
+  tests/consumed/deeper/b.wj
+  tests/deep/basename_only.wj
+  tests/deep/path_ref.wj
+  tests/gone.disabled  (disabled test file)
+  tests/old.skip  (disabled test file)
+  tests/orphan.wj
+  tests/single/sub/nested.sh
+  tests/sub/helper.rs
+
+Fix: wire the file (top-level tests/*.rs, a '// consumes: <glob>' line in a tests/*.rs
+runner, or a reference from a runner), delete it, or add '<glob> | <reason>' to tests/ORPHAN_ALLOWLIST.txt
+(allow-list is for fixtures/helpers only).

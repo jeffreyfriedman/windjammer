@@ -1,0 +1,10 @@
+Runs per binary: 3. Times are seconds; `cpu` = user+sys of the child.
+
+| kernel | variant | wall median | wall min..max | wall stdev | cpu median | size KB | allocs | alloc MB | clone | to_string | as | format! |
+|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| zeta | baseline | 0.001 | 0.000..1234.568 | 0.000 | 2.500 | 2 | 12 | 2.5 | 0 | 0 | 7 | 1 |
+| zeta | optimized | 0.001 | 0.000..1234.568 | 0.000 | 2.500 | 2 | 12 | 2.5 | 1 | 0 | 7 | 1 |
+| zeta | idiomatic | 0.001 | 0.000..1234.568 | 0.000 | 2.500 | 2 | 12 | 2.5 | 2 | 0 | 7 | 1 |
+| alpha | baseline | 1.000 | 0.500..2.000 | 0.250 | 0.125 | 2 | 0 | 0.0 | 0 | 0 | 0 | 0 |
+| alpha | optimized | 1.000 | 0.500..2.000 | 0.250 | 0.125 | 2 | 0 | 0.0 | 0 | 0 | 0 | 0 |
+| alpha | idiomatic | 1.000 | 0.500..2.000 | 0.250 | 0.125 | 2 | 0 | 0.0 | 0 | 0 | 0 | 0 |

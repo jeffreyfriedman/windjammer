@@ -1,0 +1,12 @@
+⚠️  No known-failures file at .config/known-test-failures.txt — running tests normally
+fake cargo args: test
+running 5 tests
+test a::one ... ok
+test b::broken ... FAILED
+test c::flaky ... FAILED
+test d::fine ... ok
+
+failures:
+    b::broken
+
+test result: FAILED. 2 failed

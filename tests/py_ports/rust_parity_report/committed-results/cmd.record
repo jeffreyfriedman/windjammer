@@ -1,0 +1,1 @@
+git -C $REPO show $ORIG:benchmarks/rust_parity/report.py > /tmp/orig-parity-$$.py && python3 /tmp/orig-parity-$$.py results.json; rc=$?; rm -f /tmp/orig-parity-$$.py; exit $rc

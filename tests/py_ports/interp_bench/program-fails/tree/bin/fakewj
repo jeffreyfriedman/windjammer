@@ -1,0 +1,23 @@
+#!/bin/sh
+# stand-in for wj: burns a little CPU (the resolved engine less than the walker) and prints a fixed result
+engine=walker
+prog=
+mode=
+rec=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    run) mode=run ;;
+    --engine) engine="$2"; shift ;;
+    --record) rec="$2"; shift ;;
+    --interpret|--deterministic-time) ;;
+    *) prog="$1" ;;
+  esac
+  shift
+done
+case "$(basename "$prog")" in fail*) echo "boom" 1>&2; exit 1 ;; esac
+n=1000000
+[ "$engine" = walker ] && n=3000000
+[ -n "$rec" ] && echo "log" > "$rec"
+[ -n "$WJ_CAPS" ] && n=$((n + 200000))
+awk -v n=$n 'BEGIN { for (i = 0; i < n; i++) x += i }'
+echo "result=42"

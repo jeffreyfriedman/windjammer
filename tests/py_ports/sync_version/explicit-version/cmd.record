@@ -1,0 +1,1 @@
+git init -q && git add -A && git -c user.email=a@b.c -c user.name=n commit -q -m init && mkdir -p scripts && git -C $REPO show $ORIG:scripts/sync-version.sh > scripts/sync-version.sh && bash scripts/sync-version.sh 1.2.3; rc=$?; rm -rf .git scripts; exit $rc

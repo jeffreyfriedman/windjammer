@@ -21,7 +21,7 @@
 //!                           the example must FAIL, and the run fails if it starts passing
 //!
 //! Rule-ID/test consistency (every rule has a test, every test names a known rule) is enforced by
-//! `scripts/spec_check.sh`, which `rule_ids_and_tests_are_consistent` runs.
+//! `scripts/wj/spec_check.wj`, which `rule_ids_and_tests_are_consistent` runs.
 
 #![allow(clippy::duplicate_mod)]
 
@@ -350,14 +350,19 @@ fn spec_examples_behave_as_the_spec_says() {
 #[test]
 fn rule_ids_and_tests_are_consistent() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let out = std::process::Command::new("bash")
-        .arg(root.join("scripts/spec_check.sh"))
+    if !root.join("windjammer-ecosystem/packages").is_dir() {
+        eprintln!("SKIPPED: windjammer-ecosystem/ is not checked out at the repository root");
+        return;
+    }
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["run", "--allow", &format!("fs.read={}/**", root.display())])
+        .arg(root.join("scripts/wj/spec_check.wj"))
         .current_dir(root)
         .output()
-        .expect("run scripts/spec_check.sh");
+        .expect("run scripts/wj/spec_check.wj");
     assert!(
         out.status.success(),
-        "spec_check.sh failed:\n{}{}",
+        "spec_check.wj failed:\n{}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );

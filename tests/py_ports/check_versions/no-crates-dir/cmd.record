@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/check-versions.sh > scripts/check-versions.sh && bash scripts/check-versions.sh ; rc=$?; rm -rf scripts; exit $rc

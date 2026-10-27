@@ -1,0 +1,536 @@
+// Generate type-error mutants of the `// rust: ok` verified examples for the check negative gate.
+//
+// Each operator makes one deterministic textual change that turns a program rustc accepts into one
+// rustc must reject. Output: tests/check_negative/mutants/<example>__<op>.wj (header names the change).
+// Run from the repository root:  wj run scripts/wj/gen_check_mutants.wj [--per-op N]   (default 14 programs per operator)
+//
+// Offsets are byte offsets throughout (regex matches and `s[a..b]` agree on them).
+use std::env
+use std::process
+use std::fs
+use std::regex
+use std::strings
+use wj_cli_args::long_flag_value_or
+
+const OUT_DIR: string = "tests/check_negative/mutants"
+const VERIFIED_DIR: string = "examples/verified"
+
+fn cut(s: string, a: usize, b: usize) -> string {
+    s[a..b].to_string()
+}
+
+fn re(pattern: string) -> Regex {
+    match regex.compile(pattern) {
+        Ok(r) => r,
+        Err(e) => {
+            println("bad pattern ${pattern}: ${e}")
+            process.exit(1)
+            regex.compile("x") ?? panic("unreachable")
+        },
+    }
+}
+
+fn body(src: string) -> string {
+    let mut keep = Vec::new()
+    for l in src.split("\n") {
+        if !l.starts_with("// ") {
+            keep.push(l)
+        }
+    }
+    keep.join("\n")
+}
+
+fn is_word_byte(c: u8) -> bool {
+    (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95 || c >= 128
+}
+
+fn byte_at(s: string, i: usize) -> u8 {
+    s.as_bytes()[i]
+}
+
+// the byte before `pos` is one of the word characters or of `extra`
+fn prev_in(src: string, pos: usize, extra: string) -> bool {
+    if pos == 0 {
+        return false
+    }
+    let c = byte_at(src, pos - 1)
+    if is_word_byte(c) {
+        return true
+    }
+    for e in extra.as_bytes() {
+        if e == c {
+            return true
+        }
+    }
+    false
+}
+
+fn count_char(s: string, ch: char) -> usize {
+    let mut n = 0
+    for c in s.chars() {
+        if c == ch {
+            n = n + 1
+        }
+    }
+    n
+}
+
+// ---- function signatures: name -> parameter types, for top-level non-generic fns (not main)
+struct Sig {
+    name: string,
+    params: Vec<string>,
+}
+
+fn fn_sigs(src: string) -> Vec<Sig> {
+    let mut out: Vec<Sig> = Vec::new()
+    let finder = re("(?m)^fn (\\w+)\\(([^)]*)\\)")
+    for m in finder.find_all(src) {
+        let caps = finder.captures(m.text())
+        match caps {
+            Some(c) => {
+                let name = c.get(1) ?? ""
+                let params = strings.trim(c.get(2) ?? "")
+                if name == "main" || m.text().contains("<") {
+                    continue
+                }
+                let mut ps = Vec::new()
+                if params.len() > 0 {
+                    for p in params.split(",") {
+                        if p.contains(":") {
+                            let idx = p.find(":") ?? 0
+                            ps.push(strings.trim(cut(p, idx + 1, p.len())))
+                        }
+                    }
+                }
+                let mut replaced = false
+                let mut i = 0
+                while i < out.len() {
+                    if out[i].name == name {
+                        out[i].params = ps
+                        replaced = true
+                        break
+                    }
+                    i = i + 1
+                }
+                if !replaced {
+                    out.push(Sig { name: name, params: ps })
+                }
+            },
+            None => {},
+        }
+    }
+    out
+}
+
+fn sig_of(sigs: Vec<Sig>, name: string) -> Option<Vec<string>> {
+    for s in sigs {
+        if s.name == name {
+            return Some(s.params)
+        }
+    }
+    None
+}
+
+// ---- operators; each returns the mutant or "" when it does not apply
+fn op_let_int_gets_string(src: string) -> string {
+    let r = re("(?m)^(\\s*let (?:mut )?\\w+: (?:int|i32|i64|usize|f64|float) = )([^\\n]+)$")
+    match r.find(src) {
+        Some(m) => match r.captures(m.text()) {
+            Some(c) => {
+                let start2 = m.start() + (c.get(1) ?? "").len()
+                cut(src, 0, start2) + "\"oops\"" + cut(src, m.end(), src.len())
+            },
+            None => "",
+        },
+        None => "",
+    }
+}
+
+fn op_let_string_gets_int(src: string) -> string {
+    let r = re("(?m)^(\\s*let (?:mut )?\\w+: string = )([^\\n]+)$")
+    match r.find(src) {
+        Some(m) => match r.captures(m.text()) {
+            Some(c) => {
+                let start2 = m.start() + (c.get(1) ?? "").len()
+                cut(src, 0, start2) + "42" + cut(src, m.end(), src.len())
+            },
+            None => "",
+        },
+        None => "",
+    }
+}
+
+fn op_let_bool_gets_int(src: string) -> string {
+    let r = re("(?m)^(\\s*let (?:mut )?\\w+: bool = )([^\\n]+)$")
+    match r.find(src) {
+        Some(m) => match r.captures(m.text()) {
+            Some(c) => {
+                let start2 = m.start() + (c.get(1) ?? "").len()
+                cut(src, 0, start2) + "1" + cut(src, m.end(), src.len())
+            },
+            None => "",
+        },
+        None => "",
+    }
+}
+
+// every byte offset at which `needle` occurs in `hay` (overlapping occurrences included)
+fn occurrences(hay: string, needle: string) -> Vec<usize> {
+    let mut out = Vec::new()
+    if needle.len() == 0 {
+        return out
+    }
+    let mut from: usize = 0
+    while from + needle.len() <= hay.len() {
+        let tail = cut(hay, from, hay.len())
+        match tail.find(needle) {
+            Some(i) => {
+                out.push(from + i)
+                from = from + i + 1
+            },
+            None => break,
+        }
+    }
+    out
+}
+
+// the text of the line containing byte `pos`, up to `pos`
+fn line_before(src: string, pos: usize) -> string {
+    let head = cut(src, 0, pos)
+    match head.rfind("\n") {
+        Some(i) => cut(head, i + 1, head.len()),
+        None => head,
+    }
+}
+
+fn op_undefined_variable(src: string) -> string {
+    let lets = re("(?m)^\\s*let (?:mut )?(\\w+)\\b[^\\n]*$")
+    let stmt_start = re("^\\s*(let|fn|for)\\b")
+    let word = re("\\w+")
+    for m in lets.find_all(src) {
+        let name = match lets.captures(m.text()) {
+            Some(c) => c.get(1) ?? "",
+            None => "",
+        }
+        if name.len() < 2 || name == "_" {
+            continue
+        }
+        let tail_start = m.end()
+        let rest = cut(src, tail_start, src.len())
+        for u in occurrences(rest, name) {
+            let us = tail_start + u
+            let ue = us + name.len()
+            // (?<![\w.]) name (?!\w)
+            if prev_in(src, us, ".") {
+                continue
+            }
+            if ue < src.len() && is_word_byte(byte_at(src, ue)) {
+                continue
+            }
+            let line = line_before(src, us)
+            if stmt_start.is_match(line) || (line.contains("\"") && !line.contains("${")) {
+                continue
+            }
+            return cut(src, 0, us) + name + "_undefined" + cut(src, ue, src.len())
+        }
+    }
+    ""
+}
+
+// ---- call sites: (name, start of arguments, index of the closing parenthesis)
+struct Site {
+    name: string,
+    a: usize,
+    b: usize,
+}
+
+fn in_plain_string(src: string, pos: usize) -> bool {
+    let line = line_before(src, pos)
+    if count_char(line, '"') % 2 == 0 {
+        return false
+    }
+    let q = line.rfind("\"") ?? 0
+    let tail = cut(line, q, line.len())
+    let interp: i64 = match tail.rfind("${") {
+        Some(i) => i as i64,
+        None => -1,
+    }
+    let close: i64 = match tail.rfind("}") {
+        Some(i) => i as i64,
+        None => -1,
+    }
+    interp <= close
+}
+
+fn call_sites(src: string, sigs: Vec<Sig>) -> Vec<Site> {
+    let mut out = Vec::new()
+    let finder = re("(\\w+)\\(")
+    let bytes = src.as_bytes()
+    for m in finder.find_all(src) {
+        if prev_in(src, m.start(), ".:") {
+            continue
+        }
+        let name = cut(src, m.start(), m.end() - 1)
+        if sig_of(sigs, name).is_none() || in_plain_string(src, m.start()) {
+            continue
+        }
+        let line = line_before(src, m.start())
+        if strings.trim_start(line).starts_with("fn ") {
+            continue
+        }
+        let mut depth = 1
+        let mut i = m.end()
+        while i < src.len() && depth > 0 {
+            if bytes[i] == 40 {
+                depth = depth + 1
+            } else if bytes[i] == 41 {
+                depth = depth - 1
+            }
+            i = i + 1
+        }
+        out.push(Site { name: name, a: m.end(), b: i - 1 })
+    }
+    out
+}
+
+fn op_drop_argument(src: string) -> string {
+    let sigs = fn_sigs(src)
+    for s in call_sites(src, sigs) {
+        let args = cut(src, s.a, s.b)
+        let params = sig_of(sigs, s.name) ?? Vec::new()
+        if params.len() >= 1 && strings.trim(args).len() > 0 && !args.contains("(") {
+            let parts: Vec<string> = args.split(",").collect()
+            let mut keep = Vec::new()
+            let mut i = 0
+            while i + 1 < parts.len() {
+                keep.push(parts[i])
+                i = i + 1
+            }
+            let new = if parts.len() > 1 { keep.join(",") } else { "" }
+            return cut(src, 0, s.a) + new + cut(src, s.b, src.len())
+        }
+    }
+    ""
+}
+
+fn op_extra_argument(src: string) -> string {
+    let sigs = fn_sigs(src)
+    for s in call_sites(src, sigs) {
+        let args = cut(src, s.a, s.b)
+        if args.contains("(") {
+            continue
+        }
+        let new = if strings.trim(args).len() > 0 { args + ", 0" } else { "0" }
+        return cut(src, 0, s.a) + new + cut(src, s.b, src.len())
+    }
+    ""
+}
+
+fn op_argument_wrong_type(src: string) -> string {
+    let sigs = fn_sigs(src)
+    for s in call_sites(src, sigs) {
+        let params = sig_of(sigs, s.name) ?? Vec::new()
+        if params.len() > 0 {
+            let first = params[0]
+            if first == "int" || first == "i32" || first == "i64" || first == "float" || first == "f64" || first == "bool" {
+                let args = cut(src, s.a, s.b)
+                if args.contains("(") || strings.trim(args).len() == 0 {
+                    continue
+                }
+                let mut parts: Vec<string> = args.split(",").collect()
+                parts[0] = "\"oops\""
+                return cut(src, 0, s.a) + parts.join(",") + cut(src, s.b, src.len())
+            }
+        }
+    }
+    ""
+}
+
+fn op_return_wrong_type(src: string) -> string {
+    let r = re("(?m)^(fn \\w+\\([^)]*\\) -> (?:int|i64|i32|bool|float|f64) \\{\n)")
+    match r.find(src) {
+        Some(m) => cut(src, 0, m.end()) + "    return \"oops\"\n" + cut(src, m.end(), src.len()),
+        None => "",
+    }
+}
+
+struct StructDef {
+    name: string,
+    fields: Vec<string>,
+}
+
+fn op_unknown_field(src: string) -> string {
+    let mut structs: Vec<StructDef> = Vec::new()
+    let r = re("(?m)^struct (\\w+) \\{([^}]*)\\}")
+    for m in r.find_all(src) {
+        match r.captures(m.text()) {
+            Some(c) => {
+                let name = c.get(1) ?? ""
+                let mut fields = Vec::new()
+                for f in (c.get(2) ?? "").split(",") {
+                    if f.contains(":") {
+                        let colon = f.find(":") ?? 0
+                        fields.push(strings.trim(cut(f, 0, colon)))
+                    }
+                }
+                let mut replaced = false
+                let mut i = 0
+                while i < structs.len() {
+                    if structs[i].name == name {
+                        structs[i].fields = fields
+                        replaced = true
+                        break
+                    }
+                    i = i + 1
+                }
+                if !replaced {
+                    structs.push(StructDef { name: name, fields: fields })
+                }
+            },
+            None => {},
+        }
+    }
+    for s in structs {
+        for f in s.fields {
+            let needle = "self." + f
+            for at in occurrences(src, needle) {
+                let end = at + needle.len()
+                if end < src.len() && is_word_byte(byte_at(src, end)) {
+                    continue
+                }
+                return cut(src, 0, at) + "self." + f + "x" + cut(src, end, src.len())
+            }
+        }
+    }
+    ""
+}
+
+fn op_undefined_function(src: string) -> string {
+    let sigs = fn_sigs(src)
+    for s in call_sites(src, sigs) {
+        let start = s.a - s.name.len() - 1
+        return cut(src, 0, start) + s.name + "_missing(" + cut(src, s.a, src.len())
+    }
+    ""
+}
+
+fn op_int_annotated_string(src: string) -> string {
+    let r = re("(?m)^(\\s*let (?:mut )?\\w+)( = )(-?\\d+)\\s*$")
+    match r.find(src) {
+        Some(m) => match r.captures(m.text()) {
+            Some(c) => {
+                let end1 = m.start() + (c.get(1) ?? "").len()
+                cut(src, 0, end1) + ": string" + cut(src, end1, src.len())
+            },
+            None => "",
+        },
+        None => "",
+    }
+}
+
+fn op_string_annotated_int(src: string) -> string {
+    let r = re("(?m)^(\\s*let (?:mut )?\\w+)( = )\"[^\"\\n]*\"\\s*$")
+    match r.find(src) {
+        Some(m) => match r.captures(m.text()) {
+            Some(c) => {
+                let end1 = m.start() + (c.get(1) ?? "").len()
+                cut(src, 0, end1) + ": int" + cut(src, end1, src.len())
+            },
+            None => "",
+        },
+        None => "",
+    }
+}
+
+fn op_unknown_method(src: string) -> string {
+    match src.find(".len()") {
+        Some(i) => cut(src, 0, i) + ".length_of()" + cut(src, i + 6, src.len()),
+        None => "",
+    }
+}
+
+fn apply_op(name: string, src: string) -> string {
+    if name == "op_int_annotated_string" { return op_int_annotated_string(src) }
+    if name == "op_string_annotated_int" { return op_string_annotated_int(src) }
+    if name == "op_unknown_method" { return op_unknown_method(src) }
+    if name == "op_let_int_gets_string" { return op_let_int_gets_string(src) }
+    if name == "op_let_string_gets_int" { return op_let_string_gets_int(src) }
+    if name == "op_let_bool_gets_int" { return op_let_bool_gets_int(src) }
+    if name == "op_undefined_variable" { return op_undefined_variable(src) }
+    if name == "op_drop_argument" { return op_drop_argument(src) }
+    if name == "op_extra_argument" { return op_extra_argument(src) }
+    if name == "op_argument_wrong_type" { return op_argument_wrong_type(src) }
+    if name == "op_return_wrong_type" { return op_return_wrong_type(src) }
+    if name == "op_unknown_field" { return op_unknown_field(src) }
+    if name == "op_undefined_function" { return op_undefined_function(src) }
+    ""
+}
+
+fn main() {
+    let args = env.args()
+    let per_op_text = long_flag_value_or(args, "per-op", "14")
+    let per_op: i64 = per_op_text.parse::<i64>() ?? 14
+    let ops = ["op_int_annotated_string", "op_string_annotated_int", "op_unknown_method",
+        "op_let_int_gets_string", "op_let_string_gets_int", "op_let_bool_gets_int", "op_undefined_variable",
+        "op_drop_argument", "op_extra_argument", "op_argument_wrong_type", "op_return_wrong_type",
+        "op_unknown_field", "op_undefined_function"]
+    let _ = fs.create_dir_all(OUT_DIR)
+    match fs.read_dir(OUT_DIR) {
+        Ok(entries) => {
+            for e in entries {
+                let p = e.path()
+                if p.ends_with(".wj") {
+                    let _ = fs.remove_file(p)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    let mut paths: Vec<string> = Vec::new()
+    match fs.read_dir(VERIFIED_DIR) {
+        Ok(entries) => {
+            for e in entries {
+                let p = e.path()
+                let base = fs.file_name(p) ?? ""
+                if p.ends_with(".wj") && !base.starts_with(".") {
+                    paths.push(p)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    paths.sort()
+    let mut examples: Vec<string> = Vec::new()
+    let mut texts: Vec<string> = Vec::new()
+    for p in paths {
+        let text = fs.read_to_string(p) ?? ""
+        if text.contains("// rust: ok") {
+            examples.push(p)
+            texts.push(body(text))
+        }
+    }
+    let mut total = 0
+    for op in ops {
+        let mut n = 0
+        let mut i = 0
+        while i < examples.len() {
+            if n >= per_op {
+                break
+            }
+            let src = texts[i]
+            let mutant = apply_op(op, src)
+            if mutant.len() > 0 && mutant != src {
+                let base = fs.file_name(examples[i]) ?? ""
+                let stem = cut(base, 0, base.len() - 3)
+                let name = stem + "__" + cut(op, 3, op.len())
+                let header = "// mutant: " + cut(op, 3, op.len()) + " of examples/verified/" + base + "\n"
+                let _ = fs.write(OUT_DIR + "/" + name + ".wj", header + mutant)
+                n = n + 1
+            }
+            i = i + 1
+        }
+        total = total + n
+        println("${wj_table::pad_right(op, 28)} ${n}")
+    }
+    println("total ${total}")
+}
