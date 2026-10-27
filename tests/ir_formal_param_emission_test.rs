@@ -61,6 +61,7 @@ fn wrap(name: string) -> Holder {
         body: Vec::new(),
         ownership_trail: Default::default(),
         default_int_literals: Default::default(),
+        literal_widths: Default::default(),
         last_uses: Default::default(),
         module_path: Vec::new(),
         returned_fields: Default::default(),

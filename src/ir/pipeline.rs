@@ -254,6 +254,15 @@ impl IrPipeline {
                     }
                 }
 
+                for (key, var) in &fc.literal_vars {
+                    if let Some(Some(base)) = result.types.get(var.0 as usize) {
+                        let defaulted = result.defaulted.get(var.0 as usize).copied().unwrap_or(true);
+                        if !defaulted && matches!(base, BaseType::I32 | BaseType::I64) {
+                            ir_fn.literal_widths.insert(*key, base.clone());
+                        }
+                    }
+                }
+
                 ir_fn.record_ownership_stage("solver");
 
                 let ret_idx = fc.var_map.return_var.0 as usize;
