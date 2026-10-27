@@ -119,6 +119,39 @@ def build_report(trials, n_boot=2000, prev=None):
                     nd = 3 if key in ("pass", "silent", "cost") else 1
                     md.append(f"| {a} | {label} | {p0[0]:.{nd}f} | {p1[0]:.{nd}f} | {p1[0] - p0[0]:+.{nd}f} |")
                     js.setdefault("deltas", {}).setdefault(a, {})[key] = p1[0] - p0[0]
+    with_log = [t for t in trials if t.get("first_turn_input")]
+    if with_log:
+        def m(a, f):
+            xs = [f(t) for t in with_log if t["arm"] == a and f(t) is not None]
+            return sum(xs) / len(xs) if xs else None
+        fmt = lambda x: "n/a" if x is None else f"{x:.0f}"
+        md += ["", "## Context attribution (stream-json arms)", "",
+               "First-turn input = system prompt + tool definitions + pack + task prompt. Pack tokens are estimated as bytes/3.5. "
+               "Schema tokens are the first-turn difference to the matching no-MCP arm (T), minus the pack difference.", "",
+               "| arm | first-turn input | pack tokens (est) | other fixed (system, tools, task) | tool-result tokens (est, all turns) | docs shell calls | MCP calls | total tokens in | turns |",
+               "|---|---|---|---|---|---|---|---|---|"]
+        js["attribution"] = {}
+        for a in sorted({t["arm"] for t in with_log}):
+            ft, pk = m(a, lambda t: t["first_turn_input"]), m(a, lambda t: t["pack_bytes"] / 3.5)
+            row = {"first_turn_input": ft, "pack_tokens": pk, "tool_result_tokens": m(a, lambda t: t["tool_result_tokens_est"]),
+                   "docs_calls": m(a, lambda t: t["docs_calls"]), "mcp_calls": m(a, lambda t: sum(t["mcp_calls"].values())),
+                   "tokens_in": m(a, lambda t: t["usage"]["tokens_in"]), "turns": m(a, lambda t: t["usage"]["turns"])}
+            js["attribution"][a] = row
+            md.append(f"| {a} {ARMS[a]['name']} | {fmt(ft)} | {fmt(pk)} | {fmt(ft - pk) if ft is not None else 'n/a'} | {fmt(row['tool_result_tokens'])} | "
+                      f"{row['docs_calls']:.1f} | {row['mcp_calls']:.1f} | {fmt(row['tokens_in'])} | {row['turns']:.1f} |")
+        if "E" in js["attribution"] and "T" in js["attribution"]:
+            e, t_ = js["attribution"]["E"], js["attribution"]["T"]
+            schema = (e["first_turn_input"] - t_["first_turn_input"]) - (e["pack_tokens"] - t_["pack_tokens"])
+            js["mcp_schema_tokens"] = schema
+            md += ["", f"MCP tool-schema tokens (3 exposed tools): about {schema:.0f} per turn-1 context."]
+    ctrl = "B"
+    if ctrl in arms and len(arms) > 1:
+        md += ["", f"## Paired differences versus control {ctrl} (task-clustered 95% CI)", "",
+               "| metric | " + " | ".join(f"{a} - {ctrl}" for a in arms if a != ctrl) + " |", "|---|" + "---|" * (len(arms) - 1)]
+        for key, label, fn in METRICS:
+            d = by_arm_task(trials, fn)
+            cells = [_fmt(stats.paired_diff_ci(d[a], d[ctrl], n_boot), 3 if key in ("pass", "silent", "cost") else 1) for a in arms if a != ctrl]
+            md.append(f"| {label} | " + " | ".join(cells) + " |")
     viol = sum(t["mode_violations"] for t in trials)
     md += ["", f"Mode violations (agent used the other arm's loop commands): {viol}.", "", "## Friction list (ranked by estimated tokens wasted)", "",
            "| # | pri | friction | fix kind | fix location | trials | tasks | wasted calls | est. tokens |", "|---|---|---|---|---|---|---|---|---|"]

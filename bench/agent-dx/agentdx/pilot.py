@@ -22,12 +22,20 @@ PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_
 class ClaudeAgent:
     """Runs `claude -p` inside the sandbox with the wj shim first on PATH."""
 
-    def __init__(self, model="sonnet", max_turns=25, max_trial_usd=2.0, claude_bin="claude", timeout=1500):
+    def __init__(self, model="sonnet", max_turns=25, max_trial_usd=2.0, claude_bin="claude", timeout=1500, stream=False):
+        self.stream = stream
         self.model, self.max_turns, self.max_trial_usd = model, max_turns, max_trial_usd
         self.claude_bin, self.timeout = claude_bin, timeout
 
     def run(self, ws, shim_dir, arm, task):
-        argv = A.claude_argv(arm, task, self.model, self.max_turns, self.max_trial_usd, self.claude_bin)
+        from . import stream as ST
+        cfg = None
+        if A.ARMS[arm].get("mcp"):
+            cfg = os.path.join(os.path.dirname(shim_dir), "mcp.json")
+            with open(cfg, "w") as f:
+                f.write(A.mcp_config(os.environ["WJ_MCP_BIN"]))
+        use_stream = bool(self.stream)
+        argv = A.claude_argv(arm, task, self.model, self.max_turns, self.max_trial_usd, self.claude_bin, cfg, use_stream)
         env = dict(os.environ, PATH=shim_dir + os.pathsep + os.environ.get("PATH", ""),
                    CLAUDE_CODE_DISABLE_AUTO_MEMORY="1")
         env.pop("WJ_BIN", None)
@@ -36,6 +44,11 @@ class ClaudeAgent:
             out, code = p.stdout, p.returncode
         except subprocess.TimeoutExpired:
             return {"json": None, "exit": -9, "log": "agent timeout"}
+        if use_stream:
+            j, log, tools = ST.parse(out)
+            extra = ST.summarise(log, tools)
+            extra["turn_log"] = log
+            return {"json": j, "exit": code, "log": (out if j is None else "")[-1500:], "extra": extra}
         try:
             j = json.loads(out)
         except ValueError:
@@ -148,6 +161,9 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           "tool_wait_seconds": an["tool_wait_seconds"],
           "other_seconds": None if api is None else round(max(0.0, wall - api - an["tool_wait_seconds"]), 2),
           "lang": lang, "capability_denials": an["capability_denials"], "final_build_calls": an["final_build_calls"],
+          "docs_calls": sum(1 for r in an["invocations"] if r["verb"] in ("docs", "explain")),
+          "pack_file": os.path.basename(A.pack_path(arm) or ""), "pack_bytes": len(open(A.pack_path(arm)).read()) if A.pack_path(arm) else 0,
+          **(res.get("extra") or {}),
           "invocations": an["invocations"], "verify_calls": an["verify_calls"],
           "verify_calls_to_green": an["verify_calls_to_green"], "diagnostic_categories": an["categories"],
           "mode_violations": violations(arm, an["invocations"]),
