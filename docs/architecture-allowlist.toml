@@ -38,6 +38,7 @@
 
 [env_var_reads]
 "src/cargo_cache/mod.rs" = 9
+"src/cli/code_mode.rs" = 3
 "src/cli/self_install.rs" = 3
 "src/compiler_config.rs" = 1
 "src/debug_env.rs" = 2
@@ -132,7 +133,7 @@
 "src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 514
 "src/analyzer/string_optimization.rs::expr_uses_param_in_string_ref_context" = 373
 "src/auto_clone.rs::collect_usages_from_expression" = 394
-"src/bin/wj_cli_cmds.rs::run" = 304
+"src/bin/wj_cli_cmds.rs::run" = 331
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 504
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
