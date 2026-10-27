@@ -14,9 +14,9 @@ repository, ranks them, records the ports, and lists what each port taught us.
 
 | | |
 |---|---|
-| Scripts inventoried | 31 helpers in `scripts/` (7 Python, 24 shell, plus the readiness package), 24 + 9 modules in the `bench/agent-dx` harness, 2 benchmark runners, 8 benchmark twins, 62 reference models and fixtures |
+| Scripts inventoried | 260 `.py` and `.sh` files: 27 helpers in `scripts/` (7 Python, 20 shell), the 17-file readiness package, the `bench/agent-dx` harness (24 modules, 9 test files), 3 benchmark runners, 8 benchmark twins, and 225 reference models, task oracles and reference solutions |
 | Ported to Windjammer | **16** (9 Python, 7 shell), each pinned to its original by recorded differential cases |
-| Gate cases | **PORT_CASES** cases in `tests/py_ports/`, run by `scripts/wj/port_gates.wj` and by `tests/python_port_gates_test.rs` |
+| Gate cases | **63** cases in `tests/py_ports/`, run by `scripts/wj/port_gates.wj` and by `tests/python_port_gates_test.rs` |
 | New ecosystem packages | `wj-json-doc`, `wj-table`, `wj-stats`, `wj-proc` (tested, with README and MODULE.md) |
 | Compiler and runtime changes | 5 fixes and one new std function, each with a regression test (see "Gaps") |
 | Python kept on purpose | independent reference models (oracles), benchmark twins, and the steps listed under "Python fallbacks" |
@@ -76,7 +76,7 @@ ports), each scored 1 to 5.
 | `scripts/readiness/*`, `interp_readiness.py` | about 1,900 | owned by the readiness stream (ported last, only if clearly safe); 5 x 1 |
 | `bench/agent-dx/agentdx/*` and `tests/` | about 3,300 | a Python package with its own unittest suite; porting it module by module breaks the package, so it is ported whole or not at all (5 x 1); the Python reference solutions beside it are the comparison arm |
 | `interpreter_coverage.py` | 191 | needs a per-child timeout (see "Python fallbacks"); 4 x 2 |
-| `*.ref.py`, `oracle/ref.py`, `tests/fixtures/optimizer/reference.py` | about 60 files | independent reference models: the point is that they are not Windjammer |
+| `*.ref.py`, `oracle/ref.py`, `solutions/python`, `tests/fixtures/optimizer/reference.py` | about 225 files | independent reference models: the point is that they are not Windjammer |
 | `bench/interp/twins/*.py` | 8 | the Python side of the interpreter-vs-Python comparison |
 | `ci_check.sh`, `merge_gate.sh`, `mutants.sh`, `coverage.sh`, `docs_gen.sh`, `update-architecture-baselines.sh`, `install-hooks.sh`, `atomic_install_wj.sh` | about 350 | thin command sequences around cargo and git; usefulness 2, next wave |
 | `spec_backends.sh`, `verified_backends.sh`, `test_all_examples.sh`, `interp_compare.sh`, `wj-fix-surface.sh`, `conformance/run_conformance_tests.sh`, `install.sh` | about 750 | per-example loops over backends with toolchain probing; next wave (3 x 3) |
@@ -140,16 +140,35 @@ Python fallback: package-sized, `bench/agent-dx/agentdx/*` is one Python package
 ## Measurements
 
 CPU seconds (user plus system, children included) of one run of each case, median of 3, original against port, measured with
-`wj run scripts/wj/port_gates.wj --wj PATH --time 3`. The machine was shared by about ten other agents (load average LOAD_NOTE), so read the
+`wj run scripts/wj/port_gates.wj --wj PATH --time 3`. The machine was shared by many other jobs (load average between 60 and 140 while it ran), so read the
 ratios as the order of magnitude and the absolute numbers as upper bounds.
 
-TIME_TABLE
+| port | original | what it is | Windjammer port | cases | ratio |
+|---|---:|---|---:|---:|---:|
+| `arena_bench` | 0.46 s | Python | 0.42 s | 1 | 0.91x |
+| `bench_effects_overhead` | 13.85 s | Python | 13.87 s | 4 | 1.00x |
+| `check_negative_oracle` | 0.74 s | shell | 0.23 s | 2 | 0.31x |
+| `check_orphan_tests` | 0.78 s | shell | 0.49 s | 5 | 0.63x |
+| `check_test_ratchet` | 0.50 s | shell | 0.20 s | 9 | 0.40x |
+| `check_versions` | 0.46 s | shell | 0.05 s | 8 | 0.11x |
+| `gen_check_mutants` | 0.38 s | Python | 0.77 s | 4 | 2.03x |
+| `interp_bench` | 11.86 s | Python | 11.78 s | 5 | 0.99x |
+| `interpreter_project_bench` | 0.36 s | Python | 0.21 s | 2 | 0.58x |
+| `regen_conformance_vectors` | 0.56 s | Python | 0.47 s | 2 | 0.84x |
+| `rust_parity_run` | 0.72 s | Python | 0.62 s | 2 | 0.86x |
+| `spec_check` | 9.39 s | shell | 0.25 s | 5 | 0.03x |
+| `sync_version` | 0.53 s | shell | 0.38 s | 5 | 0.72x |
 
-Startup, an empty program: STARTUP_NOTE
+The per-case rows are reproduced by the command above; the ones worth singling out: `spec_check` on the committed 276-rule specification took 8.46 s as shell and 0.17 s as the port, `gen_check_mutants` on the 132-program corpus took 0.15 s as Python and 0.58 s as the port, and the two benchmarks that time child processes (`interp_bench`, `bench_effects_overhead`) spend their time in the children, so original and port agree to the 10 ms resolution of `time -p`.
+
+Startup, an empty program: `python3 -c pass` and `wj run hello.wj` each cost 0.01 to 0.05 CPU seconds here (`bash -c :` rounds to 0.00); the interpreter starts as fast as the Python it replaces, and a script that does real work is bounded by its children, not by the language.
 
 ### What the table says
 
-TIME_ANALYSIS
+* Scripts that mostly drive children (benchmarks, `cargo`, `rustc`, `git`) cost the same in either language: the child dominates.
+* Scripts that do text work in the shell (`spec_check`, `check_versions`, `check_test_ratchet`, `check_negative_oracle`, `sync_version`) are faster as Windjammer, because the shell versions fork `grep`, `sed`, `awk` and `cut` per line.
+* The one slower port is the string-surgery script `gen_check_mutants` (about 4x Python on 132 programs, 0.6 s): per-operator regex and `s[a..b]` slicing in the tree-walking interpreter against CPython's tuned string code. It is a candidate for the interpreter-speed work, not for a fallback; 0.6 s is well inside the budget of a script that runs when the corpus changes.
+* The measurement machine was shared (load average 55 to 140), so the CPU-time columns are the honest comparison; wall time was not recorded.
 
 ## Developer experience
 

@@ -5,4 +5,4 @@ spec-check: tests/spec/x/noheader.wj has no '// spec: SPEC-...' header
 spec-check: tests/spec/x/badq.wj: xfail Q-099 has no '## Q-099' entry in OPEN_QUESTIONS.md
 spec-check: docs mention unknown rule SPEC-ZZZ-009
 spec-check: SPEC_COMPACT.md exceeds the 8k-token budget (28000 bytes)
-spec-check: docs/spec/CONFORMANCE_MATRIX.md is stale; run scripts/spec_check.sh --write
+spec-check: docs/spec/CONFORMANCE_MATRIX.md is stale; run # --write

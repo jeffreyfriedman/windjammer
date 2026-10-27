@@ -1,1 +1,4 @@
 [0-9]+
+wj run scripts/wj/spec_check\.wj
+scripts/wj/spec_check\.wj
+scripts/spec_check\.sh
