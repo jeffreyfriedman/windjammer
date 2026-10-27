@@ -100,6 +100,26 @@ impl Place {
     }
 
     pub fn write(&self, v: Value) -> R<()> {
+        // a store into a packed `Vec`'s element keeps it packed (no `&mut Value` to hand out)
+        if let Some((Proj::Index(i), init)) = self.path.split_last() {
+            let mut guard = self.slot.borrow_mut();
+            let mut cur: &mut Value = &mut guard;
+            for p in init {
+                cur = descend(cur, p)?;
+            }
+            if let Value::Vec(body) = cur {
+                if body.packed().is_some() {
+                    let len = body.len();
+                    if *i >= len {
+                        return Err(panic_ctl(format!("index out of bounds: the len is {} but the index is {}", len, i)));
+                    }
+                    Rc::make_mut(body).set_value(*i, v);
+                    return Ok(());
+                }
+            }
+            *descend(cur, &Proj::Index(*i))? = v;
+            return Ok(());
+        }
         self.with_mut(|t| {
             *t = v;
             Ok(())
@@ -125,7 +145,7 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
             let i: usize = n.parse().map_err(|_| panic_ctl("bad tuple field"))?;
             t.get(i).cloned().ok_or_else(|| panic_ctl("tuple index out of range"))
         }
-        (Value::Vec(vs), Proj::Index(i)) => vs.get(*i).cloned().ok_or_else(|| {
+        (Value::Vec(vs), Proj::Index(i)) => vs.get_value(*i).ok_or_else(|| {
             panic_ctl(format!("index out of bounds: the len is {} but the index is {}", vs.len(), i))
         }),
         (Value::Map(m), Proj::Key(k)) => m.get(&Key(k.clone())).cloned().ok_or_else(|| panic_ctl("key not found in map")),

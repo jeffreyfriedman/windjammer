@@ -1,0 +1,64 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::collections::BTreeMap;\nuse std::io::*;\n\nfn main() {\n    let mut s = String::new();\n    stdin().read_to_string(&mut s).unwrap();\n    let mut m: BTreeMap<String, i64> = BTreeMap::new();\n    let mut out = String::new();\n    for line in s.lines() {\n        let t: Vec<&str> = line.split_whitespace().collect();\n        if t.is_empty() {\n            continue;\n        }\n        let amt = |i: usize| -> i64 { t.get(i).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0) };\n        let r: String = match t[0] {\n            \"open\" => {\n                let a = amt(2);\n                if a < 0 {\n                    \"error: invalid amount\".into()\n                } else if m.contains_key(t[1]) {\n                    \"error: duplicate account\".into()\n                } else {\n                    m.insert(t[1].to_string(), a);\n                    \"ok\".into()\n                }\n            }\n            \"deposit\" | \"withdraw\" => {\n                let a = amt(2);\n                if a <= 0 {\n                    \"error: invalid amount\".into()\n                } else if !m.contains_key(t[1]) {\n                    format!(\"error: unknown account {}\", t[1])\n                } else {\n                    let b = m.get_mut(t[1]).unwrap();\n                    if t[0] == \"deposit\" {\n                        *b += a;\n                        \"ok\".into()\n                    } else if *b < a {\n                        \"error: insufficient funds\".into()\n                    } else {\n                        *b -= a;\n                        \"ok\".into()\n                    }\n                }\n            }\n            \"transfer\" => {\n                let a = amt(3);\n                if a <= 0 {\n                    \"error: invalid amount\".into()\n                } else if !m.contains_key(t[1]) {\n                    format!(\"error: unknown account {}\", t[1])\n                } else if !m.contains_key(t[2]) {\n                    format!(\"error: unknown account {}\", t[2])\n                } else if t[1] == t[2] {\n                    \"error: same account\".into()\n                } else if m[t[1]] < a {\n                    \"error: insufficient funds\".into()\n                } else {\n                    *m.get_mut(t[1]).unwrap() -= a;\n                    *m.get_mut(t[2]).unwrap() += a;\n                    \"ok\".into()\n                }\n            }\n            \"balance\" => match m.get(t[1]) {\n                Some(b) => b.to_string(),\n                None => format!(\"error: unknown account {}\", t[1]),\n            },\n            _ => continue,\n        };\n        out.push_str(&r);\n        out.push('\\n');\n    }\n    for (k, v) in &m {\n        out.push_str(&format!(\"{} {}\\n\", k, v));\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_source": "use std::collections::BTreeMap;\nuse std::io::*;\n\nfn main() {\n    let mut s = String::new();\n    stdin().read_to_string(&mut s).unwrap();\n    let mut m: BTreeMap<String, i64> = BTreeMap::new();\n    let mut out = String::new();\n    for line in s.lines() {\n        let t: Vec<&str> = line.split_whitespace().collect();\n        if t.is_empty() {\n            continue;\n        }\n        let amt = |i: usize| -> i64 { t.get(i).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0) };\n        let r: String = match t[0] {\n            \"open\" => {\n                let a = amt(2);\n                if a < 0 {\n                    \"error: invalid amount\".into()\n                } else if m.contains_key(t[1]) {\n                    \"error: duplicate account\".into()\n                } else {\n                    m.insert(t[1].to_string(), a);\n                    \"ok\".into()\n                }\n            }\n            \"deposit\" | \"withdraw\" => {\n                let a = amt(2);\n                if a <= 0 {\n                    \"error: invalid amount\".into()\n                } else if !m.contains_key(t[1]) {\n                    format!(\"error: unknown account {}\", t[1])\n                } else {\n                    let b = m.get_mut(t[1]).unwrap();\n                    if t[0] == \"deposit\" {\n                        *b += a;\n                        \"ok\".into()\n                    } else if *b < a {\n                        \"error: insufficient funds\".into()\n                    } else {\n                        *b -= a;\n                        \"ok\".into()\n                    }\n                }\n            }\n            \"transfer\" => {\n                let a = amt(3);\n                if a <= 0 {\n                    \"error: invalid amount\".into()\n                } else if !m.contains_key(t[1]) {\n                    format!(\"error: unknown account {}\", t[1])\n                } else if !m.contains_key(t[2]) {\n                    format!(\"error: unknown account {}\", t[2])\n                } else if t[1] == t[2] {\n                    \"error: same account\".into()\n                } else if m[t[1]] < a {\n                    \"error: insufficient funds\".into()\n                } else {\n                    *m.get_mut(t[1]).unwrap() -= a;\n                    *m.get_mut(t[2]).unwrap() += a;\n                    \"ok\".into()\n                }\n            }\n            \"balance\" => match m.get(t[1]) {\n                Some(b) => b.to_string(),\n                None => format!(\"error: unknown account {}\", t[1]),\n            },\n            _ => continue,\n        };\n        out.push_str(&r);\n        out.push('\\n');\n    }\n    for (k, v) in &m {\n        out.push_str(&format!(\"{} {}\\n\", k, v));\n    }\n    print!(\"{}\", out);\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 11.496,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "mode_violations": 0,
+ "other_seconds": 15.64,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T14:50:43",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 9.143,
+ "tool_wait_seconds": 11.5,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 9.143,
+  "cost_usd": 0.022558699999999998,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.rs`. It compiles, and I ran it on the first five lines of Example 1. The output matched what Example 1 expects for those lines, including the final balances `a 70` and `b 30`. I did not run the full Example 1 or Example 2, or try any other edge cases.\n\nThe checks run in the order the task specifies. An unparseable amount counts as 0, so it gives `error: invalid amount",
+  "subtype": "success",
+  "tokens_in": 25160,
+  "tokens_out": 1353,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 36.28
+}

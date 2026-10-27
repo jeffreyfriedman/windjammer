@@ -1,0 +1,325 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "C",
+ "arm_name": "no-pack",
+ "capability_denials": 0,
+ "diag_samples": [
+  "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", text.len())` with `println(\"${text.len()}\")` (or run `wj fix`)\n  = suggestion: println(\"${text.len()}\")\n\nerror: no method named `read_all` found for value of type `fn`\n  --> <ws>/main.wj:4:19\nstack backtrace:\n  0: main",
+  "error: `Result` doesn't implement `std::fmt::Display`\n  --> <ws>/main.wj:5:19\nstack backtrace:\n  0: main",
+  "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:14:22\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n  (error in `wj build`)\nerror[W0002]: explicit .unwrap() call\n  --> <ws>/main.wj:14:22\n  (error in `wj build`)\nerror[W0002]: explicit .unwrap() call\n  --> <tmp>",
+  "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:14:22\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n  (error in `wj build`)\nerror[W0002]: explicit .unwrap() call\n  --> <ws>/main.wj:14:22\n  (error in `wj build`)\nerror[W0002]: explicit .unwrap() call\n  --> <tmp>",
+  "error: no method named `len` found for value of type `Result`\n  --> :5:13800018\nstack backtrace:\n  0: main"
+ ],
+ "diagnostic_categories": {
+  "api-misuse": 2,
+  "lint-style": 2,
+  "other": 3
+ },
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "this function takes 1 argument but 0 arguments were supplied",
+  "mismatched types",
+  "type `i64` cannot be dereferenced"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 36
+ },
+ "final_source": "use std::io\nuse std::collections::HashMap\n\nfn main() {\n    let text = io.read_to_string() ?? \"\"\n    let mut first = true\n    let mut k = 0\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let mut cur = \"\"\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else if cur.len() > 0 {\n                let n = counts.get(cur).unwrap_or(0)\n                counts.insert(cur, n + 1)\n                cur = \"\"\n            }\n        }\n        if cur.len() > 0 {\n            let n = counts.get(cur).unwrap_or(0)\n            counts.insert(cur, n + 1)\n            cur = \"\"\n        }\n    }\n    let mut items: Vec<(string, int)> = Vec::new()\n    for (w, c) in counts {\n        items.push((w, c))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i = 0\n    while i < items.len() && i < k {\n        println(\"${items[i].0} ${items[i].1}\")\n        i += 1\n    }\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.257,
+   "verb": ""
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.057,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.005,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.017,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.005,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.038,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.037,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.026,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.04,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.014,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.005,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.005,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "api-misuse"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.526,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.027,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "explain"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.043,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.03,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.124,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "lint-style",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.467,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "lint-style",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.024,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.037,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.027,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.045,
+   "verb": "check"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 1.635,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.113,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.078,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.039,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.051,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.13,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.059,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "api-misuse"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.056,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.072,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.103,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 718.95,
+ "pass_final": false,
+ "recorded_at": "2026-10-26T13:34:53",
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 60.521,
+ "tool_wait_seconds": 4.24,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 60.521,
+  "cost_usd": 0.1536082,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written, and it passes both examples from the task plus a custom input that has a blank line and no trailing newline. I only ran it with `wj run --interpret`. I did not run `wj build`, as instructed, so the compiled path is untested.\n\nIt reads all of stdin with `io.read_to_string()`. The line-by-line `io.read_line()` can't tell a blank line from end of input, so a loop over it never t",
+  "subtype": "success",
+  "tokens_in": 42166,
+  "tokens_out": 370,
+  "turns": 2
+ },
+ "verify_calls": 11,
+ "verify_calls_to_green": 10,
+ "wall_seconds": 783.71
+}

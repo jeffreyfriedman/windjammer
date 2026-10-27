@@ -1,0 +1,64 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::collections::BTreeMap;\nuse std::io::{self, Read};\n\nfn main() {\n    let mut s = String::new();\n    io::stdin().read_to_string(&mut s).unwrap();\n    let mut m: BTreeMap<String, i128> = BTreeMap::new();\n    let mut out = String::new();\n    for line in s.lines() {\n        let t: Vec<&str> = line.split_whitespace().collect();\n        if t.is_empty() {\n            continue;\n        }\n        let amt = |i: usize| -> Option<i128> { t.get(i).and_then(|x| x.parse::<i128>().ok()) };\n        let unk = |n: &str| format!(\"error: unknown account {}\\n\", n);\n        match t[0] {\n            \"open\" if t.len() >= 3 => {\n                match amt(2) {\n                    Some(a) if a >= 0 => {\n                        if m.contains_key(t[1]) {\n                            out += \"error: duplicate account\\n\";\n                        } else {\n                            m.insert(t[1].to_string(), a);\n                            out += \"ok\\n\";\n                        }\n                    }\n                    _ => out += \"error: invalid amount\\n\",\n                }\n            }\n            \"deposit\" | \"withdraw\" if t.len() >= 3 => {\n                match amt(2) {\n                    Some(a) if a > 0 => {\n                        if let Some(b) = m.get_mut(t[1]) {\n                            if t[0] == \"deposit\" {\n                                *b += a;\n                                out += \"ok\\n\";\n                            } else if *b < a {\n                                out += \"error: insufficient funds\\n\";\n                            } else {\n                                *b -= a;\n                                out += \"ok\\n\";\n                            }\n                        } else {\n                            out += &unk(t[1]);\n                        }\n                    }\n                    _ => out += \"error: invalid amount\\n\",\n                }\n            }\n            \"transfer\" if t.len() >= 4 => {\n                match amt(3) {\n                    Some(a) if a > 0 => {\n                        if !m.contains_key(t[1]) {\n                            out += &unk(t[1]);\n                        } else if !m.contains_key(t[2]) {\n                            out += &unk(t[2]);\n                        } else if t[1] == t[2] {\n                            out += \"error: same account\\n\";\n                        } else if m[t[1]] < a {\n                            out += \"error: insufficient funds\\n\";\n                        } else {\n                            *m.get_mut(t[1]).unwrap() -= a;\n                            *m.get_mut(t[2]).unwrap() += a;\n                            out += \"ok\\n\";\n                        }\n                    }\n                    _ => out += \"error: invalid amount\\n\",\n                }\n            }\n            \"balance\" if t.len() >= 2 => match m.get(t[1]) {\n                Some(b) => out += &format!(\"{}\\n\", b),\n                None => out += &unk(t[1]),\n            },\n            _ => {}\n        }\n    }\n    for (k, v) in &m {\n        out += &format!(\"{} {}\\n\", k, v);\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_source": "use std::collections::BTreeMap;\nuse std::io::{self, Read};\n\nfn main() {\n    let mut s = String::new();\n    io::stdin().read_to_string(&mut s).unwrap();\n    let mut m: BTreeMap<String, i128> = BTreeMap::new();\n    let mut out = String::new();\n    for line in s.lines() {\n        let t: Vec<&str> = line.split_whitespace().collect();\n        if t.is_empty() {\n            continue;\n        }\n        let amt = |i: usize| -> Option<i128> { t.get(i).and_then(|x| x.parse::<i128>().ok()) };\n        let unk = |n: &str| format!(\"error: unknown account {}\\n\", n);\n        match t[0] {\n            \"open\" if t.len() >= 3 => {\n                match amt(2) {\n                    Some(a) if a >= 0 => {\n                        if m.contains_key(t[1]) {\n                            out += \"error: duplicate account\\n\";\n                        } else {\n                            m.insert(t[1].to_string(), a);\n                            out += \"ok\\n\";\n                        }\n                    }\n                    _ => out += \"error: invalid amount\\n\",\n                }\n            }\n            \"deposit\" | \"withdraw\" if t.len() >= 3 => {\n                match amt(2) {\n                    Some(a) if a > 0 => {\n                        if let Some(b) = m.get_mut(t[1]) {\n                            if t[0] == \"deposit\" {\n                                *b += a;\n                                out += \"ok\\n\";\n                            } else if *b < a {\n                                out += \"error: insufficient funds\\n\";\n                            } else {\n                                *b -= a;\n                                out += \"ok\\n\";\n                            }\n                        } else {\n                            out += &unk(t[1]);\n                        }\n                    }\n                    _ => out += \"error: invalid amount\\n\",\n                }\n            }\n            \"transfer\" if t.len() >= 4 => {\n                match amt(3) {\n                    Some(a) if a > 0 => {\n                        if !m.contains_key(t[1]) {\n                            out += &unk(t[1]);\n                        } else if !m.contains_key(t[2]) {\n                            out += &unk(t[2]);\n                        } else if t[1] == t[2] {\n                            out += \"error: same account\\n\";\n                        } else if m[t[1]] < a {\n                            out += \"error: insufficient funds\\n\";\n                        } else {\n                            *m.get_mut(t[1]).unwrap() -= a;\n                            *m.get_mut(t[2]).unwrap() += a;\n                            out += \"ok\\n\";\n                        }\n                    }\n                    _ => out += \"error: invalid amount\\n\",\n                }\n            }\n            \"balance\" if t.len() >= 2 => match m.get(t[1]) {\n                Some(b) => out += &format!(\"{}\\n\", b),\n                None => out += &unk(t[1]),\n            },\n            _ => {}\n        }\n    }\n    for (k, v) in &m {\n        out += &format!(\"{} {}\\n\", k, v);\n    }\n    print!(\"{}\", out);\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 2.775,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "mode_violations": 0,
+ "other_seconds": 17.43,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T13:51:36",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 10.508,
+ "tool_wait_seconds": 2.77,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 10.508,
+  "cost_usd": 0.0300181,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.rs`. It compiles, and I ran Example 1 from the task, which printed the expected output. I did not run Example 2 or any other inputs.\n\nI made two choices where the task doesn't say what to do:\n- An amount that isn't a valid integer is treated as `error: invalid amount`.\n- A line with an unrecognised command, or too few arguments, is skipped without printing anything.\n\n",
+  "subtype": "success",
+  "tokens_in": 16746,
+  "tokens_out": 1593,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 30.71
+}

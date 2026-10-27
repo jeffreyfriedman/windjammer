@@ -65,6 +65,14 @@ fn expectation(ty: &Type, idx: &Index) -> Option<Expect> {
     }
 }
 
+/// A name for the scalar or user-struct type `t` (what an element type is called in a message), if it has one.
+fn type_label(t: &Type, idx: &Index) -> Option<String> {
+    match expectation(t, idx)? {
+        Expect::Scalar(k) => Some(kind_name(k).to_string()),
+        Expect::Struct(n) => Some(n),
+    }
+}
+
 /// `Some(diagnostic)` when `lit` can never be a value of `declared`. `span` covers the literal.
 pub fn check_literal(
     lit: &Literal,
@@ -74,6 +82,21 @@ pub fn check_literal(
     context: &str,
 ) -> Option<Diagnostic> {
     let found = literal_kind(lit);
+    // A bare literal is never an `Option<T>` (there is no implicit `Some`) and never a `Vec<T>`.
+    let container = match declared {
+        Type::Option(inner) => type_label(inner, idx).map(|n| format!("Option<{n}>")),
+        Type::Vec(inner) | Type::Array(inner, _) => type_label(inner, idx).map(|n| format!("Vec<{n}>")),
+        _ => None,
+    };
+    if let Some(expected_name) = container {
+        let mut d = Diagnostic::error("WJ0003", format!("mismatched types: expected `{expected_name}`, found `{}`{context}", kind_name(found)));
+        if let Some(mut sp) = span {
+            sp.label = Some(format!("expected `{expected_name}`, found `{}`", kind_name(found)));
+            d = d.at(sp);
+        }
+        let help = if expected_name.starts_with("Option") { "wrap the value in `Some(..)`, or write `None`" } else { "write a list: `[..]`" };
+        return Some(d.with_help(help));
+    }
     let (expected_name, fix_kind) = match expectation(declared, idx)? {
         Expect::Scalar(k) => {
             // An integer literal is acceptable where a float is declared.
@@ -131,6 +154,15 @@ mod tests {
 
     fn idx() -> Index {
         Index::default()
+    }
+
+    #[test]
+    fn bare_literal_is_not_an_option_or_a_vec() {
+        let o = check_literal(&Literal::String("open".into()), &Type::Option(Box::new(Type::String)), &idx(), None, "").unwrap();
+        assert!(o.message.contains("expected `Option<string>`, found `string`"), "{}", o.message);
+        let v = check_literal(&Literal::String("bug".into()), &Type::Vec(Box::new(Type::String)), &idx(), None, "").unwrap();
+        assert!(v.message.contains("expected `Vec<string>`"), "{}", v.message);
+        assert!(check_literal(&Literal::Int(1), &Type::Option(Box::new(Type::Custom("Mystery".into()))), &idx(), None, "").is_none(), "unknown element types stay unchecked");
     }
 
     #[test]

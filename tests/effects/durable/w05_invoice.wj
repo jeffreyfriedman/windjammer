@@ -10,14 +10,14 @@ fn next_number() -> int {
         Ok(s) => s.trim().parse::<int>().unwrap_or(0),
         Err(_) => 0,
     }
-    fs::write("counter.txt", "${current + 1}") ?? ()
+    fs::write("counter.txt", "${current + 1}").unwrap_or(())
     current + 1
 }
 durable fn run() -> string {
     // @mutation-point
     let wj_taint = ""
     let n = next_number()
-    fs::write("invoice-${n}.txt", "invoice ${n}") ?? ()
+    fs::write("invoice-${n}.txt", "invoice ${n}").unwrap_or(())
     println("invoice ${n}")
     "invoice ${n}${wj_taint}"
 }

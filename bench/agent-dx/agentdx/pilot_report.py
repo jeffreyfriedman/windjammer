@@ -2,7 +2,7 @@
 failure categories, silent-divergence cost, and the ranked friction list."""
 from collections import Counter, defaultdict
 
-from . import friction, stats
+from . import aps as APS, friction, stats
 from .arms import ARMS
 
 METRICS = [  # key, label, extractor(trial) -> number|None
@@ -17,6 +17,7 @@ METRICS = [  # key, label, extractor(trial) -> number|None
     ("think", "agent-thinking seconds (API time)", lambda t: t.get("thinking_seconds")),
     ("tool", "tool-wait seconds (wj commands)", lambda t: t["tool_wait_seconds"]),
     ("denied", "harness permission denials (should be 0)", lambda t: t["usage"].get("permission_denials")),
+    ("capden", "capability denials seen (WJ004x)", lambda t: t.get("capability_denials")),
     ("silent", "silent divergence (interp pass, compiled fail)", lambda t: 1.0 if t["divergence"]["silent"] else 0.0),
 ]
 
@@ -35,9 +36,9 @@ def _fmt(ci, nd=2):
     return f"{m:.{nd}f} [{lo:.{nd}f}, {hi:.{nd}f}]"
 
 
-def build_report(trials, n_boot=2000):
+def build_report(trials, n_boot=2000, prev=None):
     arms = sorted({t["arm"] for t in trials})
-    js = {"n_trials": len(trials), "arms": {}, "diffs": {}, "friction": friction.build(trials)}
+    js = {"n_trials": len(trials), "arms": {}, "diffs": {}, "friction": friction.build([t for t in trials if t.get("lang", "wj") == "wj"])}
     md = ["# Agent preference pilot", "",
           f"{len(trials)} trials over {len({t['task'] for t in trials})} tasks. Intervals are 95% bootstrap CIs "
           "that resample tasks, then trials within a task. With this N they show direction, not significance, unless an interval excludes zero.", ""]
@@ -87,6 +88,37 @@ def build_report(trials, n_boot=2000):
            f"({sum(t['divergence']['silent'] for t in trials)} silent: interpreter green, compiled red)."]
     for t in div[:10]:
         md.append(f"- {t['task']} arm {t['arm']} trial {t['trial']}: interp={t['divergence']['interp_pass']} compiled={t['divergence']['compiled_pass']}")
+    base_arms = [a for a in arms if ARMS[a]["lang"] != "wj"]
+    wj_arms = [a for a in arms if ARMS[a]["lang"] == "wj"]
+    js["aps"] = {}
+    if base_arms and wj_arms:
+        md += ["", "## Agent preference score (Windjammer arm vs baseline language)", "",
+               "APS = 100 * P^0.4 * I^0.2 * T^0.2 * W^0.2 (ratios baseline/Windjammer, clipped to [0.25, 4]; I = agent turns). 100 = parity; "
+               "`P-limited` when pass@1 is below 0.9 of the baseline's. Components are the diagnosis; CIs are task-clustered bootstrap.", "",
+               "| arm | vs | APS | P | I (turns) | T (tokens) | W (wall) |", "|---|---|---|---|---|---|---|"]
+        for a in wj_arms:
+            for b in base_arms:
+                r = APS.aps([t for t in trials if t["arm"] == a], [t for t in trials if t["arm"] == b], max(200, n_boot // 2))
+                js["aps"][f"{a}-vs-{b}"] = r
+                if not r:
+                    md.append(f"| {a} {ARMS[a]['name']} | {b} {ARMS[b]['name']} | n/a | | | | |")
+                    continue
+                f = lambda k: ("%.2f" % r["point"][k] + (" [%.2f, %.2f]" % r["ci"][k] if r["ci"].get(k) else ""))
+                score = ("%.0f" % r["point"]["APS"] + (" [%.0f, %.0f]" % r["ci"]["APS"] if r["ci"].get("APS") else "")) if r["point"]["APS"] is not None else "P-limited"
+                md.append(f"| {a} {ARMS[a]['name']} | {b} {ARMS[b]['name']} | {score} | {f('P')} | {f('I')} | {f('T')} | {f('W')} |")
+    if prev:
+        md += ["", "## Deltas versus the previous pilot (same tasks and arms; this run minus previous)", "",
+               "| arm | metric | previous | this run | delta |", "|---|---|---|---|---|"]
+        for a in sorted({t["arm"] for t in prev} & set(arms)):
+            for key, label, fn in METRICS:
+                if key == "denied":
+                    continue
+                p0 = stats.bootstrap_ci(list(by_arm_task([t for t in prev if t["arm"] == a], fn)[a].values()), 500)
+                p1 = stats.bootstrap_ci(list(by_arm_task([t for t in trials if t["arm"] == a], fn)[a].values()), 500)
+                if p0 and p1:
+                    nd = 3 if key in ("pass", "silent", "cost") else 1
+                    md.append(f"| {a} | {label} | {p0[0]:.{nd}f} | {p1[0]:.{nd}f} | {p1[0] - p0[0]:+.{nd}f} |")
+                    js.setdefault("deltas", {}).setdefault(a, {})[key] = p1[0] - p0[0]
     viol = sum(t["mode_violations"] for t in trials)
     md += ["", f"Mode violations (agent used the other arm's loop commands): {viol}.", "", "## Friction list (ranked by estimated tokens wasted)", "",
            "| # | pri | friction | fix kind | fix location | trials | tasks | wasted calls | est. tokens |", "|---|---|---|---|---|---|---|---|---|"]

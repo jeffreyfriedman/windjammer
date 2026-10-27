@@ -1,0 +1,318 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "C",
+ "arm_name": "no-pack",
+ "capability_denials": 0,
+ "diag_samples": [
+  "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{}\", input.len())` with `println(\"${input.len()}\")` (or run `wj fix`)\n  = suggestion: println(\"${input.len()}\")\n\nerror: unsupported in the interpreter: not interpreted yet: `std::io::read_all` is not implemented by the interpreter [std.module_fn]\n  --> <ws>/main.wj:5:5\n  = help: run it compiled with `wj run --compiled`",
+  "error[WJ0002]: cannot find function `stdin_read_all` in this scope\n  --> <ws>/main.wj:2:13\n  |\n2 |     let x = stdin_read_all()\nError: not running <ws>/main.wj: `wj check` reports 1 error(s); the interpreter runs only programs the compiler accepts",
+  "error: `Result` doesn't implement `std::fmt::Display`\n  --> <ws>/main.wj:5:19\nstack backtrace:\n  0: main"
+ ],
+ "diagnostic_categories": {
+  "name-resolution": 1,
+  "other": 2,
+  "unsupported": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::io\nuse std::collections::HashMap\n\nfn main() {\n    let mut accts: HashMap<string, int> = HashMap::new()\n    let mut out: Vec<string> = Vec::new()\n    loop {\n        let r = io::read_line()\n        let line = match r {\n            Ok(s) => s,\n            Err(_) => break,\n        }\n        if line.len() == 0 {\n            break\n        }\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        let cmd = parts[0].clone()\n        if cmd == \"open\" && parts.len() >= 3 {\n            let name = parts[1].clone()\n            let amt: int = parts[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                out.push(\"error: invalid amount\")\n            } else if accts.contains_key(name.as_str()) {\n                out.push(\"error: duplicate account\")\n            } else {\n                accts.insert(name, amt)\n                out.push(\"ok\")\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && parts.len() >= 3 {\n            let name = parts[1].clone()\n            let amt: int = parts[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                out.push(\"error: invalid amount\")\n            } else if !accts.contains_key(name.as_str()) {\n                out.push(\"error: unknown account ${name}\")\n            } else {\n                let bal: int = accts.get(name.as_str()).copied().unwrap_or(0)\n                if cmd == \"deposit\" {\n                    accts.insert(name, bal + amt)\n                    out.push(\"ok\")\n                } else if amt > bal {\n                    out.push(\"error: insufficient funds\")\n                } else {\n                    accts.insert(name, bal - amt)\n                    out.push(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && parts.len() >= 4 {\n            let from = parts[1].clone()\n            let to = parts[2].clone()\n            let amt: int = parts[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                out.push(\"error: invalid amount\")\n            } else if !accts.contains_key(from.as_str()) {\n                out.push(\"error: unknown account ${from}\")\n            } else if !accts.contains_key(to.as_str()) {\n                out.push(\"error: unknown account ${to}\")\n            } else if from == to {\n                out.push(\"error: same account\")\n            } else {\n                let fb: int = accts.get(from.as_str()).copied().unwrap_or(0)\n                let tb: int = accts.get(to.as_str()).copied().unwrap_or(0)\n                if amt > fb {\n                    out.push(\"error: insufficient funds\")\n                } else {\n                    accts.insert(from, fb - amt)\n                    accts.insert(to, tb + amt)\n                    out.push(\"ok\")\n                }\n            }\n        } else if cmd == \"balance\" && parts.len() >= 2 {\n            let name = parts[1].clone()\n            if !accts.contains_key(name.as_str()) {\n                out.push(\"error: unknown account ${name}\")\n            } else {\n                let bal: int = accts.get(name.as_str()).copied().unwrap_or(0)\n                out.push(\"${bal}\")\n            }\n        }\n    }\n    let mut names: Vec<string> = Vec::new()\n    for k in accts.keys() {\n        names.push(k.clone())\n    }\n    names.sort()\n    for n in names {\n        let b: int = accts.get(n.as_str()).copied().unwrap_or(0)\n        out.push(\"${n} ${b}\")\n    }\n    for l in out {\n        println(\"${l}\")\n    }\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.012,
+   "verb": ""
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.025,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.012,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.021,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.058,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.025,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.012,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.008,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.008,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.012,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.005,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.006,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "unsupported"
+   ],
+   "exit": 2,
+   "mode": "interpret",
+   "secs": 0.049,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.016,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.012,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.017,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "name-resolution",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.043,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.014,
+   "verb": "explain-effects"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.02,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.017,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.017,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.008,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.01,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.082,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.086,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 21.88,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T14:44:35",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 38.4,
+ "tool_wait_seconds": 0.69,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 38.4,
+  "cost_usd": 0.121698,
+  "denied_commands": [
+   "for e in 'io::read_line()' 'io::stdin().read_line()' 'std::io::stdin().read_to_string()' 'stdin_read_line()' 'read_line()' 'io::read_to_string()' 'io::read_stdin()' 'std::io::read_line()'; do echo \"=="
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "`main.wj` is written and runs correctly under `wj run --interpret`. It prints the expected output for Example 1, and a test of my own with `deposit z 5`, a duplicate `open`, `transfer a a 1` and `transfer a q 1` gave the right errors.\n\nI did not run `wj build`, so the compiled path is untested, and the interpreter printed warnings that I left alone. They are about redundant `.clone()` and `.as_str",
+  "subtype": "success",
+  "tokens_in": 237059,
+  "tokens_out": 4066,
+  "turns": 22
+ },
+ "verify_calls": 4,
+ "verify_calls_to_green": 4,
+ "wall_seconds": 60.97
+}

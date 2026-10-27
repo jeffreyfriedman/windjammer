@@ -133,6 +133,14 @@ pub fn answer(it: &mut Interpreter, path: &str, args: Vec<Value>) -> Result<Valu
     if op.starts_with("http::") {
         return net(it, path, args);
     }
+    if op == "mcp::call" {
+        // the simulated world talks to canned tool results only
+        let server = a0.clone();
+        if !it.mcp_is_mock(&server) {
+            return Ok(err_str(&format!("the simulated world has no mock MCP server `{server}` (bind one with --bind {server}=mock:FILE)")));
+        }
+        return it.call_builtin_live(path, args);
+    }
     let port = it.port.as_ref().expect("simulation without a port");
     let mut p = port.borrow_mut();
     let w = p.world().expect("simulation without a world");
