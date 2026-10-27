@@ -3474,7 +3474,7 @@ pub fn exercise(parts: Vec<string>) -> string {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
@@ -3515,7 +3515,7 @@ fn strip_question(text: string) -> string {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
@@ -3683,7 +3683,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
@@ -3785,7 +3785,7 @@ pub fn resolve() -> string {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let join_sig = registry.get_signature("join").cloned();

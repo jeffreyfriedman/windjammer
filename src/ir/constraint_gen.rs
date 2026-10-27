@@ -1802,7 +1802,7 @@ pub fn bump(mut c: Counter) {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let bump = analyzed.iter().find(|f| f.decl.name == "bump").unwrap();
@@ -1918,7 +1918,7 @@ pub fn post_journal_entry(deps: AppDeps, tenant_slug: string, draft: string) -> 
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let post = analyzed
@@ -1969,7 +1969,7 @@ pub fn stamp(deps: AppDeps, line: string) {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let stamp = analyzed.iter().find(|f| f.decl.name == "stamp").unwrap();

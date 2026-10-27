@@ -32,7 +32,9 @@ fn parse_stmt(input: &str) -> &'static Statement<'static> {
     let tokens = lexer.tokenize_with_locations();
     // Leak parser to keep arena alive for 'static lifetime (acceptable in tests)
     let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().expect("Failed to parse program");
+    // The Program owns its arena (AstOwner): leak it so the returned references stay valid.
+    let program: &'static Program<'static> =
+        Box::leak(Box::new(parser.parse().expect("Failed to parse program")));
 
     // Extract the statement from the function body
     if let Some(Item::Function { decl, .. }) = program.items.first() {

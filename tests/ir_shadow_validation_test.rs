@@ -8,7 +8,7 @@ fn analyze_and_validate(source: &str) -> windjammer::ir::shadow::ShadowValidatio
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
     let parser = Box::leak(Box::new(windjammer::parser::Parser::new(tokens)));
-    let program = parser.parse().expect("parse");
+    let program = Box::leak(Box::new(parser.parse().expect("parse")));
     let mut analyzer = Analyzer::new();
     let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
     validate_shadow(&analyzed, &registry)

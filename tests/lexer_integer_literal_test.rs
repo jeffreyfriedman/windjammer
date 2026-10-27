@@ -150,7 +150,7 @@ fn u64_constants_reach_the_ast_with_their_type() {
     let src = "fn main() {\n    let h = 14695981039346656037\n}\n";
     let toks = Lexer::new(src).tokenize_with_locations();
     let parser = Box::leak(Box::new(Parser::new(toks)));
-    let program = parser.parse().expect("parses");
+    let program = Box::leak(Box::new(parser.parse().expect("parses")));
     let Item::Function { decl, .. } = &program.items[0] else { panic!() };
     let Statement::Let { value, .. } = decl.body[0] else { panic!("{:?}", decl.body) };
     let Expression::Literal { value: Literal::IntSuffixed(bits, suf), .. } = value else {
