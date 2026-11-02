@@ -318,11 +318,18 @@ fn main() {
             let mut kept = ""
             for line in strings.split_lines(fs.read_to_string(BASELINE).unwrap_or("")) {
                 let id = strings.split(line, "\t")[0]
-                if id != "" && !strings.contains(id, o.only) {
+                if id != "" && !strings.contains(id, o.only) && (!strings.starts_with(id, "#") || strings.starts_with(id, "# compiled")) {
                     kept = kept + line + "\n"
                 }
             }
             recorded = kept + recorded
+        }
+        if o.only == "" {
+            let ver = match sh("${quote(o.wj)} --version") {
+                Ok(r) => strings.trim(r.stdout),
+                Err(_) => "unknown",
+            }
+            recorded = "# compiled results recorded with: ${ver}\n" + recorded
         }
         let _ = fs.write(BASELINE, recorded)
         println("  recorded ${BASELINE}")

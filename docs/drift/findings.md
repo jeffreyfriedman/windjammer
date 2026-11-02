@@ -12,7 +12,7 @@ Rust is rejected by rustc (a compile-time failure users would see as a Windjamme
 
 ## A. Integer literal typing (compiled backend infers `i32`, the declared type is `int` = `i64`)
 
-One family, seven sites. The interpreter has one integer type; the compiled backend picks `i32` for an
+One family, nine sites. The interpreter has one integer type; the compiled backend picks `i32` for an
 unannotated literal in positions where the surrounding type is not yet known, and rustc rejects the mix.
 
 | Repro | Site |
@@ -24,7 +24,7 @@ unannotated literal in positions where the surrounding type is not yet known, an
 | `literal_in_option_field_arm` | `let nx = match self.next { Some(v) => if v > 2 { Some(v - 1) } else { None }, ... }` in a method |
 | `literal_option_through_closure` | `let maybe = Some(7)`, `let get = \|\| maybe`, `show(get())` with `show(x: Option<int>)` |
 | `closure_returns_literal_option` | closure `\|flag\| if flag { Some(1) } else { None }` passed to an `Option<int>` parameter |
-| `enum_variant_literal_payload` | `let t = Tag::B(4)` where `B(int)` |
+| `enum_variant_literal_payload` | `let t = Tag::B(4)` where `B(int)`. **Fixed** by the usize-class merge (tuple-variant payloads have their declared types): the case now agrees in all three modes and stays as a regression case |
 | `let_literal_captured_by_closure` | `let five = 5` used in `\|x: int\| x + five` |
 
 Suggested fix direction: literals take the type of the expected/unified type, defaulting to the language's `int`
@@ -39,6 +39,21 @@ Suggested fix direction: literals take the type of the expected/unified type, de
 | `map_get_loop_str` | `m.get(k)` with `k` the loop variable over a list of string literals: `get(&k)` is `&&str` against `HashMap<String, _>` (E0277) |
 | `closure_string_param_literal` | `\|who: string\| ...` called with a string literal: parameter `String`, argument `&str` (E0308) |
 | `self_by_value_reuse` | a `self`-by-value method that moves fields, then the value is used again: rustc E0382. The interpreter copies and prints; the compiled backend moves. A use-after-move check in the front end (or an auto-clone) would close it |
+
+## C. Regression at the integrated head: the usize class (ADR-0028)
+
+Found by the first gate run after merging `next/v0.50.0` at `fec181b1a`. Before that merge the compiled side of
+`packages/wj-compress`, `wj-table`, `wj-timefmt`, `wj-toml`, `wj-uuid` and `apps/wj-auth-api`, `wj-chat`,
+`wj-notes-api`, `wj-proxy` was green; afterwards each fails to compile (263 test cases). The interpreter is right and
+unchanged.
+
+| Repro | Site |
+|---|---|
+| `len_minus_literal_returned_as_int` | `parts.len() - 1` returned from `-> int`: generated `parts.len() - 1_i64` (E0308, `usize - i64`); `wj-uuid` `hyphen_count` |
+| `int_compared_with_len_and_indexed` | `int` loop variable in `c >= 0 && c < out.len()` then `out[c]`: generated `c >= 0_usize` (E0308); `wj-table` `right_align` |
+| (not reduced) | `-1` as the tail of an `int` function that returns a loop index: generated `-1_usize` (E0600); `wj-toml`, `wj-compress`, `wj-timefmt` |
+
+Fixing the compiler turns those 263 ledger lines stale at once; delete them with the fix.
 
 ## Tooling notes
 
