@@ -1,0 +1,170 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "Sb",
+ "arm_name": "sheet-minus-ownership",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:23:30\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n\nerror: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:24:30\nerror: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:24:30\n  = note:",
+  "error[E0308]: mismatched types\n  --> main.rs:57:17\n   |\n53 | /             if is_int(&t) {\n57 | |                 String::from(\"error: token\")\n   | |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `()`, found `String`\n58 | |             }\n   | |_____________- expected this to be `()`\n57 |                 String::from(\"error: token\");\n   |                                             +\nhelp: you might have meant to return this value\n   |\n57 |                 return String::from(\"error: token\");\n   |                 ++++++                             +\n\nFor more information about this erro"
+ ],
+ "diagnostic_categories": {
+  "lint-style": 1,
+  "other": 2,
+  "type-mismatch": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn is_int(t: string) -> bool {\n    let cs: Vec<char> = t.chars().collect()\n    let n: int = cs.len() as int\n    let mut start = 0\n    if n > 0 && cs[0] == '-' { start = 1 }\n    if start >= n { return false }\n    let mut i = start\n    while i < n {\n        if cs[i] < '0' || cs[i] > '9' { return false }\n        i += 1\n    }\n    true\n}\n\nfn eval(line: string) -> string {\n    let mut st: Vec<int> = []\n    for t in line.split(\" \") {\n        if t == \"\" { continue }\n        if t == \"+\" || t == \"-\" || t == \"*\" || t == \"/\" {\n            if st.len() < 2 { return \"error: underflow\" }\n            let b = st.pop() ?? 0\n            let a = st.pop() ?? 0\n            if t == \"+\" { st.push(a + b) }\n            else if t == \"-\" { st.push(a - b) }\n            else if t == \"*\" { st.push(a * b) }\n            else {\n                if b == 0 { return \"error: divzero\" }\n                st.push(a / b)\n            }\n            continue\n        }\n        if !is_int(t) { return \"error: token\" }\n        let v: int = t.parse::<int>() ?? 0\n        st.push(v)\n    }\n    if st.len() != 1 { return \"error: leftover\" }\n    \"${st[0]}\"\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        if line.trim() == \"\" { continue }\n        println(eval(line.trim()))\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn is_int(t: string) -> bool {\n    let cs: Vec<char> = t.chars().collect()\n    let n: int = cs.len() as int\n    let mut start = 0\n    if n > 0 && cs[0] == '-' { start = 1 }\n    if start >= n { return false }\n    let mut i = start\n    while i < n {\n        if cs[i] < '0' || cs[i] > '9' { return false }\n        i += 1\n    }\n    true\n}\n\nfn eval(line: string) -> string {\n    let mut st: Vec<int> = []\n    for t in line.split(\" \") {\n        if t == \"\" { continue }\n        if t == \"+\" || t == \"-\" || t == \"*\" || t == \"/\" {\n            if st.len() < 2 { return \"error: underflow\" }\n            let b = st.pop().unwrap()\n            let a = st.pop().unwrap()\n            if t == \"+\" { st.push(a + b) }\n            else if t == \"-\" { st.push(a - b) }\n            else if t == \"*\" { st.push(a * b) }\n            else {\n                if b == 0 { return \"error: divzero\" }\n                st.push(a / b)\n            }\n        } else if is_int(t) {\n            let v: int = t.parse::<int>().unwrap()\n            st.push(v)\n        } else {\n            return \"error: token\"\n        }\n    }\n    if st.len() != 1 { return \"error: leftover\" }\n    \"${st[0]}\"\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        if line.trim() == \"\" { continue }\n        println(eval(line.trim()))\n    }\n}\n",
+ "first_turn_input": 8145,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "categories": [
+    "lint-style",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 0.24,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 12.306,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 10.375,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 8,
+ "other_seconds": 18.78,
+ "pack_bytes": 1326,
+ "pack_file": "sheet_minus_ownership.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-02T03:16:23",
+ "schema": 2,
+ "task": "t009_rpn_eval",
+ "thinking_seconds": 20.763,
+ "tool_result_tokens_est": 1236,
+ "tool_wait_seconds": 22.92,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7793,
+   "cache_write": 350,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8145,
+   "output": 3,
+   "result_chars": 1671,
+   "turn": 1
+  },
+  {
+   "cache_read": 8143,
+   "cache_write": 1780,
+   "calls": [
+    "Bash",
+    "Edit",
+    "Edit"
+   ],
+   "fresh": 2,
+   "input_total": 9925,
+   "output": 31,
+   "result_chars": 358,
+   "turn": 2
+  },
+  {
+   "cache_read": 9923,
+   "cache_write": 671,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10596,
+   "output": 16,
+   "result_chars": 1625,
+   "turn": 3
+  },
+  {
+   "cache_read": 10594,
+   "cache_write": 879,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11475,
+   "output": 8,
+   "result_chars": 671,
+   "turn": 4
+  },
+  {
+   "cache_read": 11473,
+   "cache_write": 818,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 12293,
+   "output": 233,
+   "result_chars": 0,
+   "turn": 5
+  }
+ ],
+ "usage": {
+  "api_seconds": 20.763,
+  "cost_usd": 0.0435846,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the RPN calculator in `main.wj`. It builds with `wj build` and gives the expected output on both examples.\n\nI also ran two extra lines: `-7 2 /` gives `-3` (truncation toward zero), and a lone `-` gives `error: underflow`.\n\nTwo details to know about:\n- **Blank lines:** a line that is only whitespace is skipped, as well as an empty one.\n- **Compiler workarounds:** the compiler rejects `.unw",
+  "subtype": "success",
+  "tokens_in": 52434,
+  "tokens_out": 2078,
+  "turns": 9
+ },
+ "verify_calls": 3,
+ "verify_calls_to_green": 3,
+ "wall_seconds": 62.46
+}

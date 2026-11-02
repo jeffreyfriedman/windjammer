@@ -208,7 +208,7 @@ fn every_documented_code_is_explained_by_wj_explain() {
 // Docs may only mention `wj` commands and flags that exist.
 // ------------------------------------------------------------------------------------------
 
-const DOCS: [&str; 7] = ["README.md", "docs/WHY.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "llms.txt", "AGENTS.md", "docs/README.md", "docs/index.md"];
+const DOCS: [&str; 8] = ["README.md", "docs/WHY.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "docs/agent/WINDJAMMER_REFERENCE.md", "llms.txt", "AGENTS.md", "docs/README.md", "docs/index.md"];
 
 /// `wj ...` invocations in inline code spans and fenced shell lines.
 fn wj_mentions(text: &str) -> Vec<String> {

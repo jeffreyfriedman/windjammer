@@ -1,0 +1,104 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "S",
+ "arm_name": "sheet",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap = 0\n    let mut first = true\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let mut i = 0\n            while i < ks.len() {\n                if ks[i] == k {\n                    ks.remove(i)\n                    vs.remove(i)\n                    break\n                }\n                i += 1\n            }\n            ks.push(k)\n            vs.push(v)\n            if ks.len() as int > cap {\n                let e = ks[0]\n                ks.remove(0)\n                vs.remove(0)\n                println(\"evict ${e}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let mut res = -1\n            let mut i = 0\n            while i < ks.len() {\n                if ks[i] == k {\n                    res = vs[i]\n                    ks.remove(i)\n                    vs.remove(i)\n                    ks.push(k)\n                    vs.push(res)\n                    break\n                }\n                i += 1\n            }\n            println(\"${res}\")\n        } else if cmd == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut j = ks.len() as int - 1\n                while j >= 0 {\n                    if out != \"\" { out = out + \" \" }\n                    out = out + \"${ks[j as usize]}\"\n                    j -= 1\n                }\n                println(out)\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap = 0\n    let mut first = true\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let mut i = 0\n            while i < ks.len() {\n                if ks[i] == k {\n                    ks.remove(i)\n                    vs.remove(i)\n                    break\n                }\n                i += 1\n            }\n            ks.push(k)\n            vs.push(v)\n            if ks.len() as int > cap {\n                let e = ks[0]\n                ks.remove(0)\n                vs.remove(0)\n                println(\"evict ${e}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let mut res = -1\n            let mut i = 0\n            while i < ks.len() {\n                if ks[i] == k {\n                    res = vs[i]\n                    ks.remove(i)\n                    vs.remove(i)\n                    ks.push(k)\n                    vs.push(res)\n                    break\n                }\n                i += 1\n            }\n            println(\"${res}\")\n        } else if cmd == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut j = ks.len() as int - 1\n                while j >= 0 {\n                    if out != \"\" { out = out + \" \" }\n                    out = out + \"${ks[j as usize]}\"\n                    j -= 1\n                }\n                println(out)\n            }\n        }\n    }\n}\n",
+ "first_turn_input": 8178,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 9.646,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 14.63,
+ "pack_bytes": 1497,
+ "pack_file": "sheet_full.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-02T02:20:28",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 9.388,
+ "tool_result_tokens_est": 259,
+ "tool_wait_seconds": 9.65,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6726,
+   "cache_write": 1450,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8178,
+   "output": 10,
+   "result_chars": 908,
+   "turn": 1
+  },
+  {
+   "cache_read": 8176,
+   "cache_write": 1546,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9724,
+   "output": 232,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 9.388,
+  "cost_usd": 0.0257722,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache in `main.wj`. I ran only Example 1, and it printed exactly the expected output (`1`, `evict 2`, `-1`, `3 1`). I didn't run Example 2 or any other inputs, such as `keys` on an empty cache.\n\nThe cache keeps keys and values in two parallel lists, ordered from least to most recently used. Each `put` or `get` removes the key and re-adds it at the end, and an eviction removes the f",
+  "subtype": "success",
+  "tokens_in": 17902,
+  "tokens_out": 1229,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 33.67
+}
