@@ -1,0 +1,16 @@
+use std::fs
+fn stage(name: string, input: string) -> string {
+    let out = "${name}(${input})"
+    fs::write("stage-${name}.txt", out).unwrap_or(())
+    out
+}
+durable fn run(seed: string) -> string {
+    let a = stage("parse", seed)
+    println("parsed")
+    let b = stage("check", a)
+    println("checked")
+    let c = stage("emit", b)
+    println("emitted")
+    c
+}
+fn main() { println("RESULT ${run("src")}") }

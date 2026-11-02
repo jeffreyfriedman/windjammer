@@ -1,0 +1,25 @@
+use std::fs
+fn section(title: string, lines: int) -> string {
+    let mut body = ""
+    let mut i = 0
+    while i < lines {
+        body = "${body}${title}-${i};"
+        i += 1
+    }
+    fs::write("section-${title}.txt", body).unwrap_or(())
+    body
+}
+durable fn run() -> Vec<string> {
+    let mut out = Vec::new()
+    out.push(section("intro", 2))
+    println("intro done")
+    out.push(section("body", 3))
+    println("body done")
+    out.push(section("outro", 1))
+    println("outro done")
+    out
+}
+fn main() {
+    let parts = run()
+    println("RESULT ${parts.len()} ${parts[1]}")
+}
