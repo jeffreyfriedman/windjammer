@@ -6,5 +6,6 @@
 pub mod graph;
 pub mod path_deps;
 pub mod manifest;
+pub mod rust_surface;
 
 pub use manifest::{Dependency, PackageManifest};

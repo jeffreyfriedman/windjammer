@@ -5,6 +5,7 @@
 //! * [`sinks`]       THE table of standard-library functions that perform effects (no other code classifies them)
 //! * [`manifest`]   `wj.toml [capabilities]` -> grant
 //! * [`analysis`]    the pass: per-function effect sets with provenance, over `crate::resolve` call resolutions
+//! * [`crates`]     calls into Rust crate dependencies: declared by their surface, else `ffi(<crate>)` (ADR-0026)
 //! * [`report`]      the `wj explain-effects` text/JSON
 //! * [`packages`]   per-package grants (the application and each dependency)
 //! * [`install`]    what a compiled program needs: proven vs runtime-guarded, and the `caps::install` statement
@@ -20,6 +21,7 @@ pub mod model;
 pub use self::model::{grant, kind, scope_match};
 
 pub mod analysis;
+pub mod crates;
 pub mod durable;
 pub mod install;
 pub mod lock;
@@ -30,7 +32,8 @@ pub mod report;
 pub mod sinks;
 pub mod violations;
 
-pub use analysis::{analyze, EffectFacts, FnEffects};
+pub use analysis::{analyze, analyze_with, EffectFacts, FnEffects};
+pub use crates::CrateEffects;
 pub use grant::{Denial, Grant, Scope};
 pub use manifest::grant_from_manifest_text;
 pub use kind::EffectKind;

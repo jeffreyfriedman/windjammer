@@ -48,6 +48,11 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     super::effects::run(root, parsed, &by_file, out);
     let programs: Vec<_> = parsed.iter().map(|p| &p.program).collect();
     let idx = Index::build(&programs);
+    // ADR-0026: calls into Rust crates checked against `rust/<crate>.wji`
+    let crates = super::effects::manifest_path(root)
+        .and_then(|m| m.parent().map(crate::package::rust_surface::load))
+        .unwrap_or_default();
+    super::rust_calls::run(&crates, &idx, parsed, out);
     for p in parsed {
         semantic::check_file(
             &idx,

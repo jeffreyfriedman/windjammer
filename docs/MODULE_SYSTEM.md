@@ -318,6 +318,40 @@ fn process_data() {
 }
 ```
 
+## Using a Rust crate
+
+Any crate on crates.io is one `wj.toml` line away. List it under `[dependencies]` exactly as you would in
+`Cargo.toml`, describe the functions you call in `rust/<crate>.wji`, and call them:
+
+```toml
+# wj.toml
+[dependencies]
+strsim = "0.11"
+```
+
+```windjammer
+// rust/strsim.wji: the part of the crate this project uses
+@pure
+pub fn levenshtein(a: string, b: string) -> usize
+@pure
+pub fn jaro(a: string, b: string) -> f64
+```
+
+```windjammer
+// src/main.wj
+use strsim
+
+fn main() {
+    println("${strsim::levenshtein("kitten", "sitting")}")   // 3
+}
+```
+
+The dependency line goes into the generated `Cargo.toml` unchanged; `wj check` checks every `strsim::` call
+against the surface (unknown function `WJ0050`, argument count `WJ0013`, literal types `WJ0003`); `string`
+parameters are passed as `&str`. `@pure` and `@uses(..)` state what a function does for the capability model;
+a crate function without them needs `ffi = ["strsim"]` under `[capabilities]`. Crate calls run compiled: `wj run`
+switches to the compiled path for them automatically. Design and roadmap: [ADR-0026](adr/0026-rust-crate-dependencies.md).
+
 ## Open design questions
 
 Package sources, lock files and a registry are tracked in [ADR-0010](adr/0010-package-source-of-truth.md); which std modules are

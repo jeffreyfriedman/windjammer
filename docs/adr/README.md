@@ -35,6 +35,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0023](0023-interpreter-rust-crate-bridge.md) | Interpreter host bridge for Rust code and Rust-crate dependencies | Proposed |
 | [0024](0024-hot-reload.md) | `wj run --watch` and hot reload of function bodies | Proposed |
 | [0025](0025-arenas.md) | Arenas as a user capability | Proposed |
+| [0026](0026-rust-crate-dependencies.md) | First-class Rust crate dependencies (wj.toml, signature surfaces, effects) | Proposed |
 <!-- wj:end -->
 
 ## Template

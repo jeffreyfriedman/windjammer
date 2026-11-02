@@ -52,9 +52,15 @@ pub fn check(
                 }
                 let head = path.split("::").next().unwrap_or("");
                 if rust_crates.iter().any(|c| c == head) {
+                    // name the call (`strsim::levenshtein`), not only the import (`strsim`): ADR-0026
+                    let called = match call.callee.split_once("::") {
+                        Some((_, rest)) if !path.ends_with(&format!("::{rest}")) => format!("{}::{}", path, rest),
+                        _ if !call.callee.contains("::") && !path.ends_with(&format!("::{}", call.callee)) => format!("{}::{}", path, call.callee),
+                        _ => path.clone(),
+                    };
                     return Err(at(
                         "deps.rust_crate",
-                        format!("call into Rust crate dependency `{}` (`{}`)", head, path),
+                        format!("call into Rust crate dependency `{}` (`{}`)", head, called),
                     ));
                 }
                 // `std::module::function(..)` (module segment lowercase; type paths like `HashMap::new` are not

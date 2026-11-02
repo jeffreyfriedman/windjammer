@@ -10,6 +10,7 @@ In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` met
 - Owns the multi-pass loop; later passes re-run analysis with global signatures.
 - `compilation_pipeline.rs` and `library_multipass.rs` are large; function-length ratchets apply.
 - `std_stubs.rs`: the `std/<module>.wj` stubs of a build (always re-analysed, never overriding declared runtime formals).
+- `rust_surface_metadata.rs`: Rust crate signature surfaces (`rust/<crate>.wji`, ADR-0026) become `metadata.json` under `.wj-cache/rust-surfaces/<crate>/` and join the external-metadata paths, so every build mode borrows what the crate borrows.
 - `multipass_bare_pass_demotion.rs` contains ownership post-fixes that belong to the solver (WP 9). A standard-library function's formals are the runtime's: bare-pass demotion never touches them (`server_serve(address: String, ..)`).
 
 ## Owns

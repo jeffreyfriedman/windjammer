@@ -31,6 +31,10 @@ fn merge_external_metadata_paths(
     for (k, v) in discover_wj_import_dependency_metadata(build_path) {
         external_paths.entry(k).or_insert(v);
     }
+    // ADR-0026: Rust crate signature surfaces (`rust/<crate>.wji`) as crate metadata
+    for (k, v) in super::rust_surface_metadata::surface_metadata_paths(build_path) {
+        external_paths.entry(k).or_insert(v);
+    }
     for (name, p) in external_metadata {
         external_paths.insert(name.replace('-', "_"), (*p).to_path_buf());
     }

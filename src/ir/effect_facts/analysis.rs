@@ -153,6 +153,11 @@ struct Edge {
 
 /// Analyze a resolved program.
 pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
+    analyze_with(r, &super::crates::CrateEffects::default())
+}
+
+/// Analyze a resolved program whose calls into Rust crate dependencies perform `crates` (ADR-0026).
+pub fn analyze_with(r: &ResolvedProgram<'_>, crates: &super::crates::CrateEffects) -> EffectFacts {
     let defs = r.defs();
     let decls = &r.collected.decls;
     let mut facts = EffectFacts::default();
@@ -245,7 +250,11 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
         let mut direct: Vec<(EffectKind, Resource)> = Vec::new();
         match &c.res {
             Res::Unresolved(Reason::External(path)) | Res::Prim(path) => {
-                direct.extend(sink_uses(&full_path(path, &c.callee), c));
+                let full = full_path(path, &c.callee);
+                match crates.uses(&full) {
+                    Some(u) => direct.extend(u),
+                    None => direct.extend(sink_uses(&full, c)),
+                }
             }
             Res::Unresolved(Reason::NotFound(_)) if c.kind == CallKind::Free => {
                 direct.extend(sink_uses(&c.callee, c));
