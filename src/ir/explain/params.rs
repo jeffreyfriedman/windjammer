@@ -32,6 +32,19 @@ pub fn mode_label(m: OwnershipMode) -> &'static str {
     }
 }
 
+/// Spelling-insensitive form of a type label: the solver prints `Vec(I64)` (Debug) and the emitted
+/// Rust is `Vec<i64>`; they are the same type, so comparing them as raw strings reports a width
+/// disagreement that does not exist (D-WIDTH-OWNERS measured spelling, not width).
+fn same_type_label(solver: &str, emitted: &str) -> bool {
+    fn norm(s: &str) -> String {
+        s.chars()
+            .filter(|c| !c.is_whitespace())
+            .map(|c| if matches!(c, '(' | ')' | '<' | '>' | ',') { '_' } else { c.to_ascii_lowercase() })
+            .collect()
+    }
+    norm(solver) == norm(emitted)
+}
+
 pub fn width_label(b: &BaseType) -> Option<String> {
     Some(match b {
         BaseType::Inferred => return None,
@@ -315,7 +328,7 @@ pub fn local_reports(
         }
         let mut findings = Vec::new();
         if let (Some(s), Some(e)) = (&solver_width, &emitted_width) {
-            if s != e {
+            if s != e && !same_type_label(s, e) {
                 findings.push(Finding {
                     id: "D-WIDTH-OWNERS".into(),
                     message: format!(
