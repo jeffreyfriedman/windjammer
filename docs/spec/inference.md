@@ -299,6 +299,18 @@ conversion. Explicit `usize` is only for FFI and layout.
 **Status.** Diverges (D-NUM-OWNERS): the compiler currently emits `as usize` casts and `usize` locals, and a closure
 body does not convert `len()` at all (D-NUM-CLOSURE-LEN).
 
+### NUM-USIZE
+**Rule (ADR-0028).** `len()`, `count()` and `capacity()` on a receiver with no user signature are index sources, and
+the operand of `v[i]` (or a slice bound) is an index use. An integer class with no exact width that contains an index
+source or use is `usize` (a solved width, published as a fact); with an exact width it keeps that width.
+**Example.** `let mut i = 0; while i < v.len() { i = i + 1 }` emits `let mut i = 0_usize`.
+**Status.** Solver models it; the Rust backend reads it where a fact exists (convergence C4).
+
+### NUM-USIZE-TO-INT
+**Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index
+source whose class resolved to `W` is emitted `(v.len() as W)`; a `usize` class pushed into a `Vec<W>` is converted at
+the argument. The solver places these conversions (`IrFunction::usize_conversions`); the backend prints them.
+
 ### NUM-MIXED
 **Rule (ADR-0015 section 2).** Mixed-width arithmetic requires an explicit conversion (`int(x)`, `float(x)`). The compiler
 reports an error rather than inserting a cast.

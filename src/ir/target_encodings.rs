@@ -457,6 +457,8 @@ fn base_type_rust_cast(base: &BaseType) -> &'static str {
         BaseType::U32 => "u32",
         BaseType::U64 => "u64",
         BaseType::U128 => "u128",
+        BaseType::Usize => "usize",
+        BaseType::Isize => "isize",
         _ => "/* unknown cast */",
     }
 }
