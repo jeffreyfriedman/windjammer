@@ -173,7 +173,7 @@ F -14.9k [-30.7k, -1.3k], T -15.3k [-29.3k, -4.2k]; cost differences are all wit
 - **The full pack costs about 6.4k tokens per turn-1 context and, with the compiler at this head, buys little.** A 1.3-1.5 KB sheet reaches the same pass
   rate within the interval width (N is 30 per arm, so differences under about 0.15 are not detectable). Token savings (about 15k per trial, 34%) are
   significant for F and T; cost savings are small ($0.005 per trial) because cached input is cheap.
-- **Agents rarely use the tools.** MCP: 13 calls in 7 of 30 E trials (8 `docs_search`, `check_code`; no `explain_error`), at about 500 tokens of tool schema per context for three
+- **Agents rarely use the tools.** MCP: 13 calls in 7 of 30 E trials (10 `docs_search`, 3 `check_code`, 0 `explain_error`), at about 500 tokens of tool schema per context for three
   tools. Shell docs: 4 calls in 2 of 30 F trials. Tool results were about 1k tokens per trial, so the tools are cheap, but E needed 1.6 more turns than B on average
   [-0.5, 3.9] and no more passes: MCP does not pay for its schema here. `wj docs` in the shell is free of schema cost and is the better default for the tiny pack.
 - **Attribution.** First-turn input is 14.5k (B) against 8.1-8.7k for the tiny arms; the difference is the pack (6.4k) plus the MCP schema (about 0.5k). The
@@ -182,7 +182,7 @@ F -14.9k [-30.7k, -1.3k], T -15.3k [-29.3k, -4.2k]; cost differences are all wit
   needed; a tip-ablation arm is the next step. Diagnostic signals by trials (of 30): `String`/`&str` mismatches B 5, E 4, F 2, T 7; iterator `collect` element type B 2,
   E 2, F 2, T 5; Rust-leakage lint codes B 1, E 4, F 0, T 1; `usize`/`i32` width B 0, E 1, F 0, T 2; missing methods B 1, F 1. Candidates, in order: (1) string/`&str` and `collect` type
   errors should carry the Windjammer-level fix in the message (T, the arm without docs, hit them most); (2) lint messages (W000x) already say what to write, so the
-  pack's "never `&`, `.iter()`, `.unwrap()`" line can shrink to a pointer; (3) the `len() as int` tip was needed in 3 of 120 trials once and can move into the
+  pack's "never `&`, `.iter()`, `.unwrap()`" line can shrink to a pointer; (3) the `len() as int` tip signalled in at most 3 of 120 trials and can move into the
   mismatched-types diagnostic; (4) the stdin recipe is a pure recipe with no diagnostic (no error ever fires), so it must stay in the pack.
 - **Recommendation.** Ship the 1.5 KB sheet as the default pack (about -6k tokens per turn-1 context), keep the full pack as `wj docs` content, point the sheet at
   `wj docs`/`wj explain` rather than MCP, and treat MCP as an IDE integration, not a token saver. Re-run with a tip-ablation arm and 5 trials per cell before cutting further.
