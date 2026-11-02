@@ -18,6 +18,12 @@ use clap::Parser;
 use wj_cli_args::Cli;
 
 fn main() -> anyhow::Result<()> {
+    // `wj --version` / `-V`: identity line (commit, date, dirty flag, profile, build date), before clap and
+    // before any other work.
+    if matches!(std::env::args().nth(1).as_deref(), Some("--version" | "-V")) && std::env::args().len() == 2 {
+        println!("{}", windjammer::toolchain::identity::current().version_line());
+        return Ok(());
+    }
     let cli = Cli::parse();
     wj_cli_cmds::run(cli)
 }
