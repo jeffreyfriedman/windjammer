@@ -7,6 +7,7 @@ Rust implementations behind Windjammer's standard library: when a program does `
 In: calls from generated Rust. Out: stdlib behavior. Signatures are scanned by the compiler (`stdlib_scanner`) to learn ownership requirements.
 
 ## Invariants
+- Heavy modules are cargo-feature gated (`net`, `async`, `cli`, `crypto`, `datetime`, `jwt`, `regex`, `parallel`, `yaml`, `compress`, `csv`, `log`, `db`). The single `#[cfg(feature = "f")]` line directly above `pub mod m;` in `lib.rs` (and `platform/native/mod.rs`) is what the compiler reads to enable only the groups a program uses; keep that one-line shape. `default` enables everything.
 - The public signature of each function is the ownership contract the analyzer reads; changing `&T`/`T` parameters changes generated code.
 - Platform differences live in `platform/{native,wasm}`.
 - No dependency on the compiler crate. `caps_core/` is the one exception in spirit: the compiler compiles that directory too (`#[path]`), so the capability model has a single source; it uses only `std`.

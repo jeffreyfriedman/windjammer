@@ -12,10 +12,11 @@ use super::dependency_management::{
 use super::feature_management::{wasm_output_needs_runtime, WEB_SYS_CARGO_FEATURES};
 
 /// Scan generated `.rs` files to determine which windjammer-runtime features are needed.
-fn detect_runtime_features(output_dir: &Path) -> Vec<&'static str> {
+fn detect_runtime_features(output_dir: &Path, runtime_dir: &Path) -> Vec<String> {
     let mut features = Vec::new();
     let mut uses_db = false;
     let mut uses_server = false;
+    let mut sources = Vec::new();
 
     if let Ok(entries) = walk_rs_files(output_dir) {
         for path in entries {
@@ -29,16 +30,24 @@ fn detect_runtime_features(output_dir: &Path) -> Vec<&'static str> {
                 if content.contains("tower::") || content.contains("tower_http::") {
                     uses_server = true;
                 }
+                sources.push(content);
             }
         }
     }
 
     if uses_db {
-        features.push("db");
+        features.push("db".to_string());
     }
     if uses_server {
-        features.push("server");
+        features.push("server".to_string());
     }
+    let map = super::runtime_features::FeatureMap::load(runtime_dir);
+    features.extend(super::runtime_features::runtime_features(
+        map.as_ref(),
+        sources.iter().map(|s| s.as_str()),
+    ));
+    features.sort();
+    features.dedup();
     features
 }
 
@@ -78,7 +87,7 @@ pub(crate) fn write_cargo_toml(
     let runtime_path = find_windjammer_runtime_path_with(config.runtime_path.as_deref());
     let runtime_path_str = path_to_toml_string(&runtime_path);
 
-    let runtime_features = detect_runtime_features(output_dir);
+    let runtime_features = detect_runtime_features(output_dir, &runtime_path);
     let runtime_dep = if runtime_features.is_empty() {
         format!(
             "windjammer-runtime = {{ path = \"{}\", default-features = false }}",

@@ -92,7 +92,13 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     if matches!(target, crate::CompilationTarget::Rust) {
         build_windjammer_dependencies(path)?;
     }
-    build_quietly(path, output_dir, target)?;
+    // Concurrent runs of one source share this directory: serialize the transpile step so no process
+    // compiles a half-written file (cargo's own build lock serializes the compile).
+    let lock = std::fs::File::create(output_dir.join(".lock"))?;
+    lock.lock()?;
+    let built = build_quietly(path, output_dir, target);
+    let _ = lock.unlock();
+    built?;
 
     // Run with cargo (shared target dir outside the temp project)
     let _ = crate::cargo_cache::reclaim();
