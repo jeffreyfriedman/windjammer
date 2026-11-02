@@ -59,7 +59,7 @@ fn main() {
     let c = take(it);
     let looped = It { n: 3_i64, s: String::from("c") };
     let mut sum = 0_i64;
-    for k in 0_i32..2_i32 {
+    for k in 0_i64..2_i64 {
         sum = sum + take(looped.clone()) + k as i64;
     }
     println!("{}", a + c + sum);
