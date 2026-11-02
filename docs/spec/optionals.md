@@ -2,7 +2,7 @@
 
 `T?` and `x ?? d` ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 5), parser sugar over `Option`: `T?` is `Option<T>`, `x ?? d` is `x.unwrap_or_else(|| d)` (`unwrap_or(d)` when `d` is a literal or a variable, which is equivalent). Optional chaining `a?.b` is `a.__opt_chain(|_oc| _oc.b)` (parser sugar; the interpreter, Go, JS and TS implement it, the Rust backend rejects it until the IR solver supplies the receiver type). On a `Result`, write `r.ok() ?? d`.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/optionals/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/optionals/`.
 
 ## Optional types
 

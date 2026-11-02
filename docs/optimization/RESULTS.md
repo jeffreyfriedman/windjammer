@@ -1,6 +1,6 @@
 # Results: Windjammer-generated Rust vs idiomatic Rust
 
-Produced by `benchmarks/rust_parity/run.py` (10 kernels, `--runs 11`) and rendered by `report.py`;
+Produced by `scripts/wj/rust_parity_run.wj` (10 kernels, `--runs 11`) and rendered by `scripts/wj/rust_parity_report.wj`;
 raw data in `benchmarks/rust_parity/results.json`. Variants per kernel:
 
 - baseline: compiler output WITHOUT the post-codegen optimizer (snapshot `generated_baseline/*.rs`,
@@ -92,6 +92,6 @@ these counts grow on the fixed corpus (`tests/fixtures/optimizer/corpus`).
 
 ```
 cargo build --release --example optimize_rs
-python3 benchmarks/rust_parity/run.py --optimize-rs target/release/examples/optimize_rs --runs 11
-python3 benchmarks/rust_parity/report.py benchmarks/rust_parity/results.json
+wj run scripts/wj/rust_parity_run.wj --optimize-rs target/release/examples/optimize_rs --runs 11
+wj run scripts/wj/rust_parity_report.wj benchmarks/rust_parity/results.json
 ```

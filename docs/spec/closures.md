@@ -2,7 +2,7 @@
 
 `_` shorthand closures ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 2). The parser turns each one into an ordinary closure with parameters `_it0`, `_it1`, ...; types and ownership are those of the equivalent explicit closure.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/closures/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/closures/`.
 
 ## Shorthand closures
 

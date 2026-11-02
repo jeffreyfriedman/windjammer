@@ -1,0 +1,1 @@
+cp bench/interp/baseline.json /tmp/ib-base-$$; mkdir -p scripts && git -C $REPO show $ORIG:scripts/interp_bench.py > scripts/interp_bench.py && python3 scripts/interp_bench.py $W/bin/fakewj --write; rc=$?; rm -rf scripts; sed -E "s/[0-9]+\.[0-9]+/#/g" bench/interp/baseline.json; cp /tmp/ib-base-$$ bench/interp/baseline.json; rm -f /tmp/ib-base-$$; exit $rc

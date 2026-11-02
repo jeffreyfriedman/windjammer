@@ -1,3 +1,5 @@
+WJ ?= wj
+
 .PHONY: help test test-all test-stdlib test-ui test-integration \
         test-quick test-orphans test-verbose clippy fmt check build build-all install \
         example-ui example-http \
@@ -62,7 +64,7 @@ docs-check:
 
 # Fail on test files that no runner reaches
 test-orphans:
-	@scripts/check-orphan-tests.sh
+	@$(WJ) run scripts/wj/check_orphan_tests.wj
 
 # Quick smoke test
 test-quick:
@@ -399,4 +401,4 @@ setup-hooks:
 
 # Check version consistency across all workspace crates
 check-versions:
-	@./scripts/check-versions.sh
+	@$(WJ) run scripts/wj/check_versions.wj

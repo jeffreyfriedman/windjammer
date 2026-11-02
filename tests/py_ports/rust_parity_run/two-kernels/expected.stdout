@@ -1,0 +1,60 @@
+{
+ "runs": 2,
+ "kernels": {
+  "sieve": {
+   "baseline": {
+    "wall": {
+     "median": #,
+     "min": #,
+     "max": #,
+     "stdev": #,
+     "n": 2
+    },
+    "cpu": {
+     "median": #,
+     "min": #,
+     "max": #,
+     "stdev": #,
+     "n": 2
+    },
+    "binary_bytes": 80,
+    "source": {
+     "clone": 1,
+     "to_string": 1,
+     "as_cast": 3,
+     "format": 1,
+     "lines": 7
+    },
+    "heap": {
+     "allocs": 12,
+     "bytes": 3456
+    }
+   },
+   "idiomatic": {
+    "wall": {
+     "median": #,
+     "min": #,
+     "max": #,
+     "stdev": #,
+     "n": 2
+    },
+    "cpu": {
+     "median": #,
+     "min": #,
+     "max": #,
+     "stdev": #,
+     "n": 2
+    },
+    "binary_bytes": 80,
+    "source": {
+     "clone": 0,
+     "to_string": 0,
+     "as_cast": 0,
+     "format": 0,
+     "lines": 3
+    },
+    "heap": {
+     "allocs": 12,
+     "bytes": 3456
+    }
+   },

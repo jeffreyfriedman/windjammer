@@ -1,0 +1,12 @@
+// spec: SPEC-LEX-016
+// expect: 5 4
+// expect: A😀
+// expect: 3
+// expect: bad u{zz}
+fn main() {
+    let word = "caf\u{e9}"
+    println("${word.len()} ${word.chars().count()}")
+    println("${'\u{41}'}${'\u{1F600}'}")
+    println("${"a\0b".len()}")
+    println("bad \u{zz}")
+}

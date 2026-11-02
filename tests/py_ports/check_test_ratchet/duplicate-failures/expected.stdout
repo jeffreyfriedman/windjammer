@@ -1,0 +1,18 @@
+🔧 Running tests with ratcheting (known failures: 2)
+
+fake cargo args: test
+test dup::t ... FAILED
+test dup::t ... FAILED
+test other::t ... FAILED
+stderr line
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Ratchet Report
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Known failures: 2
+   Actual failures: 3
+
+❌ 1 NEW failure(s) — these must be fixed:
+   ✗ dup::t
+
+To add to known failures (if intentional): append to .config/known-test-failures.txt

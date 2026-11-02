@@ -1,0 +1,6 @@
+# known failures
+
+   
+b::broken
+z::was_broken
+y::also_fixed

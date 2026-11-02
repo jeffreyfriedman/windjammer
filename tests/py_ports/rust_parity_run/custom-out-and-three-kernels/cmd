@@ -1,0 +1,1 @@
+PATH="$W/bin:$PATH" $WJ run $ALLOW $SCRIPTS/rust_parity_run.wj --optimize-rs $W/bin/optimize_rs --runs 1 --out custom.json --kernels zeta; rc=$?; sed -E "s/[0-9]+\.[0-9]+/#/g" custom.json | tail -30; rm -f custom.json; exit $rc

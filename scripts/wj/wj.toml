@@ -1,0 +1,31 @@
+[package]
+name = "wj-scripts"
+version = "0.1.0"
+edition = "2025"
+
+# Repository tooling, run with `wj run scripts/wj/<script>.wj [args]`. The packages come from
+# windjammer-ecosystem, checked out (or symlinked) at the repository root as `windjammer-ecosystem/`.
+[dependencies]
+wj_cli_args = { path = "../../windjammer-ecosystem/packages/wj-cli-args" }
+wj_json_doc = { path = "../../windjammer-ecosystem/packages/wj-json-doc" }
+wj_table = { path = "../../windjammer-ecosystem/packages/wj-table" }
+wj_stats = { path = "../../windjammer-ecosystem/packages/wj-stats" }
+wj_proc = { path = "../../windjammer-ecosystem/packages/wj-proc" }
+wj_fs_walk = { path = "../../windjammer-ecosystem/packages/wj-fs-walk" }
+
+# One grant covers every script in this directory (the union of what they need): the repository
+# (scripts run from its root), scratch space under /tmp, and the programs they start themselves.
+[capabilities]
+fs.read = ["./**", "../../**", "/tmp/**"]
+# generated sources and manifests are named by suffix (`*.wj`, `wj.toml`): the pattern says so out loud, a bare `**` never reaches them
+fs.write = ["./**", "../../**", "/tmp/**", "../../tests/check_negative/mutants/*.wj", "/tmp/**/*.wj", "/tmp/**/wj.toml"]
+process = ["bash", "cargo", "sh"]
+env.read = ["*"]
+
+# Packages get their own, narrower grants.
+[capabilities.dependencies.wj_fs_walk]
+fs.read = ["./**", "../../**", "/tmp/**"]
+
+[capabilities.dependencies.wj_proc]
+# `env` and `sh` stand in for the program a script is told to drive (a path cannot be named in a grant)
+process = ["git", "sh", "python3", "env", "/usr/bin/time", "rustc"]

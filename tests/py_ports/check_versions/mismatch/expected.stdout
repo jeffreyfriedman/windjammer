@@ -1,0 +1,6 @@
+Workspace version: 0.50.0
+ERROR: crates/b//Cargo.toml: dependency 'windjammer' has version 0.41.0 (expected 0.50.0)
+ERROR: crates/b//Cargo.toml: dependency 'other-crate' has version 0.49.9 (expected 0.50.0)
+ERROR: crates/b//Cargo.toml: dependency '_weird' has version 9 (expected 0.50.0)
+
+FAILED: Found 3 version mismatch(es)

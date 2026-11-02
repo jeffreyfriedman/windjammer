@@ -1,0 +1,6 @@
+🔧 Running tests with ratcheting (known failures: 1)
+
+fake cargo args: test
+error: could not compile
+stderr line
+❌ Tests failed but couldn't parse failure list

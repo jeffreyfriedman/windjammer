@@ -2,7 +2,7 @@
 
 Windjammer has no exceptions and no null. Recoverable failure is a value (`Result`), absence is a value (`Option`), and bugs are panics.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/errors/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/errors/`.
 
 ## Option and Result
 
