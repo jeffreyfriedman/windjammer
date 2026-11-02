@@ -128,7 +128,8 @@ fn one_journal_two_implementations() {
         let b = Command::new(WJ).args(["build", "-o", "out", "."]).current_dir(&p).env("CARGO_TARGET_DIR", &target).output().unwrap();
         assert!(b.status.success(), "{name}: {}", text(&b));
         // `wj build` runs cargo in the debug profile unless asked otherwise
-        let bin = ["debug", "release"].iter().map(|profile| target.join(profile).join("p")).find(|f| f.is_file());
+        // cargo's target directory is `out/target` (or the caller's `CARGO_TARGET_DIR` on older builds of `wj`)
+        let bin = [p.join("out/target"), target.clone()].iter().flat_map(|t| ["debug", "release"].map(|profile| t.join(profile).join("p"))).find(|f| f.is_file());
         let Some(bin) = bin else {
             failures.push(format!("{name}: no binary `p` under {} (profiles debug, release)", target.display()));
             continue;
