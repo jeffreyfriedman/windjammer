@@ -511,6 +511,44 @@ before; 1.97x in a separate run at load 46), `nbody` 2.22x, `closures` 2.64x (2.
 unchanged, so the difference is load). The round 6 kill criterion, `hashmap` within 2x Node, is met in both runs, though
 narrowly.
 
+### Round 8 (Nov 2): closure calls, packed elements in machine code; nbody profiled
+Each rung was profiled first (macOS `sample`, release, long variants of the kernels), given one attempt, and kept only
+with a measurable change. Every new fast path has a firing counter in `--test fast_paths` and a `nofast-<path>` switch
+shown silencing it.
+- Closures. Per call, the compiled-closure path compared the environment's names with the shape it was compiled for
+  (about 9% of the samples) and swapped in a fresh walker scope (about 4%). The shape is now checked once per closure
+  value: a weak reference to the last value checked keeps its allocation, never its environment, alive, so no other
+  closure can pass unchecked at that address. The body also runs in the caller's scope when that scope is already exactly
+  the fresh one it would install: same module and `Self` type, and no variables, marks, defers, type parameters or return
+  type. Islands install their own scope, and compiled code leaves nothing behind. The 6000-round variant went from 1.75 to
+  1.34 s of CPU. Not attempted: typed parameters for untyped closures (`|x| x * r`). They would need a variant compiled
+  per argument type, guarded at the call; generic arithmetic in closure bodies is about 12% of the samples.
+- `sieve`. Machine-code element reads and writes on a packed vector went through a full `Value` and the walker's `retag`.
+  When the element's machine type is exactly the packing's, `retag` keeps the value as it is and the packing holds what
+  `bits`/`value` encode, so the helpers now read and write the packed storage directly (`packedidx`). The 10M variant
+  went from 0.73 to 0.49 s.
+- `nbody`, profiled and not changed. The time is in the struct-field helpers (`index_field_get`/`_set`). The vector is
+  reached through nested references, and every field access borrows each level's cell. The lever, resolving the vector
+  once per loop entry, is larger than one attempt, so it is recorded here and left for the next round.
+
+`scripts/interp_compare.sh --runs 5`, each run starting only below load 20: the head before this round (load 19.7 at start,
+30.0 at end) and this round (16.5 to 21.2, `bench/interp/compare.json`), resolved / Node:
+
+| kernel | before | after |
+|---|---|---|
+| `structs` | 0.70x | 0.67x |
+| `fib30` | 0.64x | 0.89x |
+| `loop5m` | 0.85x | 0.90x |
+| `sieve` | 1.46x | 1.27x |
+| `strings` | 1.59x | 1.70x |
+| `closures` | 2.26x | 2.07x |
+| `hashmap` | 2.41x | 2.06x |
+| `nbody` | 2.52x | 3.06x |
+
+Kernels whose code did not change (`hashmap`, `nbody`, `fib30`) moved by up to 20% between the two runs, so the
+per-kernel ratios are noisy at this load. The interleaved CPU timings of the long variants above are the evidence for
+the two changes.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to
