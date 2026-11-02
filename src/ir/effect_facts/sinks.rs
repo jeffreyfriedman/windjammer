@@ -259,7 +259,7 @@ pub fn is_not_sink(path: &str) -> bool {
     }
 }
 
-#[cfg(test)]
+/// Every path in the sink table (the audits compare it with the runtimes).
 pub fn all_paths() -> impl Iterator<Item = &'static str> {
     SINKS.iter().map(|(n, _)| *n)
 }

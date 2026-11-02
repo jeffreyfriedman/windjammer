@@ -3,6 +3,6 @@ error[W0006]: string literal `.to_string()` is forbidden Rust leakage
   |
 3 |     let s = "hello".to_string()
   |                     ^^^^^^^^^
-  = help: prefer bare string literal — codegen emits `String::from("…")`
-  = note: Windjammer string literals are already `string`; `.to_string()` is a Rustism
+  = help: write `"text"` instead of `"text".to_string()`
+  = note: a string literal is already a `string`, so the call adds nothing
   = explain: wj explain W0006

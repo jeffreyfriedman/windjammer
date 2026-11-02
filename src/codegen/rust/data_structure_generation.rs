@@ -8,7 +8,7 @@
 //! - Index operations
 //! - Field access
 
-use crate::parser::{Expression, Literal, Type};
+use crate::parser::{Expression, Literal, Statement, Type};
 
 use super::{ast_utilities, float_type_utilities, string_utilities, CodeGenerator};
 
@@ -868,6 +868,8 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+
+                expr_str = self.coerce_if_arm_text_tails(expr, field_name, expr_str);
 
                 // `pub const FOO: string` lowers to &'static str; owned String fields need .to_string().
                 if let Expression::Identifier { name: id, .. } = expr {

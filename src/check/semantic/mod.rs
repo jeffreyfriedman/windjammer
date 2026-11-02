@@ -8,4 +8,4 @@ mod std_methods;
 mod visit;
 
 pub use checker::{check_file, FileInput};
-pub use index::Index;
+pub use index::{is_std_name, Index};

@@ -493,7 +493,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         self.set_assignment_int_target_from_compound_target(target);
-        let mut value_str = self.generate_expression(value);
+        let mut value_str = self.generate_with_list_context(value, tgt_ty.as_ref());
         self.assignment_float_target_type = prev_assign_ty;
         self.assignment_int_target_type = prev_assign_int;
         if matches!(value, Expression::Literal { value: Literal::String(_), .. })

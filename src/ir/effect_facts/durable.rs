@@ -40,6 +40,39 @@ pub struct DurableFacts {
     /// (file, line, column) of every call in a durable body that is a journaled step.
     pub step_sites: BTreeSet<(PathBuf, usize, usize)>,
     pub findings: Vec<DurableFinding>,
+    /// What a compiled build cannot journal yet (methods, user-defined types), one message each. Not errors of `wj check`.
+    pub compiled_blockers: Vec<String>,
+}
+
+/// The name a step is journaled under: the called path, the method name, or `<expr>`. The interpreter and the code generator
+/// both use this, so a journal written by one resumes in the other.
+pub fn step_callee(e: &Expression<'_>) -> String {
+    match e {
+        Expression::Call { function, .. } => match &**function {
+            Expression::Identifier { name, .. } => name.clone(),
+            _ => "<expr>".to_string(),
+        },
+        Expression::MethodCall { method, .. } => method.clone(),
+        Expression::MacroInvocation { name, .. } => name.clone(),
+        _ => String::new(),
+    }
+}
+
+/// Why a compiled build cannot journal a value of type `t` yet (a user-defined type, or a collection the compiled runtime has no
+/// encoding for). `None` when it can.
+pub fn compiled_blocker(t: &Type) -> Option<String> {
+    match t {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => None,
+        Type::Custom(n) => match n.as_str() {
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" | "bool" | "char" | "String" | "str" | "string" => None,
+            other => Some(other.to_string()),
+        },
+        Type::Vec(i) | Type::Option(i) | Type::Reference(i) | Type::MutableReference(i) | Type::Array(i, _) => compiled_blocker(i),
+        Type::Result(a, b) => compiled_blocker(a).or_else(|| compiled_blocker(b)),
+        Type::Tuple(ts) => ts.iter().find_map(compiled_blocker),
+        Type::Parameterized(n, args) if matches!(last_seg(n), "Vec" | "Option" | "Result") => args.iter().find_map(compiled_blocker),
+        other => Some(show(other)),
+    }
 }
 
 pub fn is_durable(d: &FunctionDecl<'_>) -> bool {
@@ -230,6 +263,9 @@ impl Pass<'_, '_> {
             Res::Def(id) => self.r.collected.decls.get(id).and_then(|d| d.return_type.clone()),
             _ => None,
         };
+        if let Some(t) = ret.as_ref().and_then(compiled_blocker) {
+            self.out.compiled_blockers.push(format!("step `{}` of `{}` returns `{t}`", last_seg(&c.callee), self.function));
+        }
         let bad = if handle { Some("a live handle".to_string()) } else { ret.as_ref().and_then(unjournalable) };
         if let Some(t) = bad {
             self.finding(
@@ -438,7 +474,13 @@ pub fn analyze(r: &ResolvedProgram<'_>, facts: &EffectFacts) -> DurableFacts {
         let function = last_seg(&path).to_string();
         let fn_site = r.defs().get(id).location.clone();
         let mut pass = Pass { r, facts, calls: &calls, out: &mut out, function: function.clone(), locals: HashSet::new(), hashes: HashMap::new() };
+        if d.parent_type.is_some() {
+            pass.out.compiled_blockers.push(format!("`{function}` is a method (compiled builds journal free functions only)"));
+        }
         for p in &d.parameters {
+            if let Some(t) = compiled_blocker(&p.type_) {
+                pass.out.compiled_blockers.push(format!("argument `{}` of `{function}` has type `{t}`", p.name));
+            }
             pass.locals.insert(p.name.clone());
             if let Some(kind) = hash_kind(&p.type_) {
                 pass.hashes.insert(p.name.clone(), kind);
@@ -452,6 +494,9 @@ pub fn analyze(r: &ResolvedProgram<'_>, facts: &EffectFacts) -> DurableFacts {
                     "pass data (numbers, strings, collections, structs of those)",
                 );
             }
+        }
+        if let Some(t) = d.return_type.as_ref().and_then(compiled_blocker) {
+            pass.out.compiled_blockers.push(format!("`{function}` returns `{t}`"));
         }
         if let Some(t) = d.return_type.as_ref().and_then(unjournalable) {
             pass.finding("WJ0045", format!("return type `{t}` cannot be journaled"), fn_site.clone(), &d.name, "return data");

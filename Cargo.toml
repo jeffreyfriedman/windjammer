@@ -166,8 +166,26 @@ name = "diagnostics_suite"
 path = "tests/diagnostics_suite.rs"
 
 [[test]]
+name = "diag_hints_suite"
+path = "tests/diag_hints_suite.rs"
+
+[[test]]
+name = "diag_hints_corpus"
+path = "tests/diag_hints_corpus.rs"
+
+[[test]]
 name = "all"
 path = "tests/all.rs"
+
+# Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
+[[test]]
+name = "engine_parity"
+path = "tests/interpreter_engine_parity_test.rs"
+
+# Packed vectors vs unpacked ones through every writing builtin: cargo test --release --test packed_vec
+[[test]]
+name = "packed_vec"
+path = "tests/interpreter_packed_vec_test.rs"
 
 # Machine-code loops vs the tree walker (ADR-0020 round 3) also run standalone:
 #   cargo test --release --test jit_loops
@@ -283,6 +301,18 @@ path = "tests/code_mode_test.rs"
 [[test]]
 name = "effects_spans"
 path = "tests/effects_spans_test.rs"
+
+# wj check: types for pattern-bound values, fields called as methods, unknown module paths
+#   cargo test --release --test check_semantic_types
+[[test]]
+name = "check_semantic_types"
+path = "tests/check_semantic_types_test.rs"
+
+# durable fn in the compiled backend and the journal shared with the interpreter (ADR-0021 E4b)
+#   WJ_DURABLE_COMPILED=1 cargo test --release --test durable_compiled
+[[test]]
+name = "durable_compiled"
+path = "tests/durable_compiled_test.rs"
 
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages

@@ -19,6 +19,11 @@ pub fn run(program: &str, args: &[String]) -> Result<String, String> {
     }
 }
 
+/// Run a program with arguments and return its standard output (the same call as `run`)
+pub fn run_with_args(program: &str, args: &[String]) -> Result<String, String> {
+    run(program, args)
+}
+
 /// Run a command and return full output
 pub fn run_with_output(program: &str, args: &[String]) -> Result<ProcessOutput, String> {
     crate::caps::process(program);

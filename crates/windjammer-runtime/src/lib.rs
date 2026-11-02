@@ -14,6 +14,8 @@ pub mod platform;
 pub mod cap;
 pub mod caps;
 pub mod caps_core;
+pub mod durable;
+pub mod durable_core;
 pub mod fs;
 #[cfg(feature = "net")]
 pub mod http;
@@ -44,6 +46,8 @@ pub mod config;
 pub mod csv_mod;
 #[cfg(feature = "db")]
 pub mod db;
+#[cfg(feature = "db")]
+pub mod db_pg_decode;
 pub mod doc_test;
 pub mod encoding;
 pub mod enumerable;
