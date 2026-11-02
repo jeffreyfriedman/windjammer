@@ -7,7 +7,12 @@ use std::path::{Path, PathBuf};
 pub fn discover(entry: &Path) -> Result<Vec<(PathBuf, usize, usize)>, String> {
     use super::effects::{analyze_project, parse_app_inputs};
     let target = match super::effects::manifest_path(entry) {
-        Some(m) => m.parent().map(Path::to_path_buf).unwrap_or_else(|| entry.to_path_buf()),
+        // a relative `wj.toml` has the empty path as its parent: that is the working directory, not a missing path
+        Some(m) => match m.parent() {
+            Some(p) if p.as_os_str().is_empty() => PathBuf::from("."),
+            Some(p) => p.to_path_buf(),
+            None => entry.to_path_buf(),
+        },
         None => entry.to_path_buf(),
     };
     let files = super::files::collect(&target).map_err(|e| e.to_string())?;
