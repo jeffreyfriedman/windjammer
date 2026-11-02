@@ -1,0 +1,25 @@
+// rust: ok
+struct Stack {
+    items: Vec<int>,
+    top: int,
+}
+
+impl Stack {
+    fn size(self) -> int {
+        self.items.len()
+    }
+    fn peek(self) -> int {
+        self.top
+    }
+}
+
+fn helper(v: Vec<int>) -> int {
+    v.len()
+}
+
+fn main() {
+    let s = Stack { items: [1], top: 1 }
+    println("${s.size()} ${s.peek()} ${helper(s.items)}")
+    let weird = "call(x) \"quoted\" ${helper([1])}"
+    println(weird)
+}

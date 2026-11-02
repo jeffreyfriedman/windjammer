@@ -1,0 +1,3 @@
+#!/bin/sh
+case "$(cat source)" in *rfail*) exit 101 ;; esac
+exit 0

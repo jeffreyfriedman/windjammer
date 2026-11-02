@@ -1,0 +1,1 @@
+cp bench/interp/baseline.json /tmp/ib-base-$$; $WJ run $ALLOW $SCRIPTS/interp_bench.wj $W/bin/fakewj --write; rc=$?; sed -E "s/[0-9]+\.[0-9]+/#/g" bench/interp/baseline.json; cp /tmp/ib-base-$$ bench/interp/baseline.json; rm -f /tmp/ib-base-$$; exit $rc

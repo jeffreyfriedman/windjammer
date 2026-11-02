@@ -2,7 +2,7 @@
 
 Namespaces and name resolution.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/modules/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/modules/`.
 
 ## Inline modules
 

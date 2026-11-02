@@ -1,0 +1,22 @@
+{
+  "interpreter.project_5_cold_ms": {
+    "source": "scripts/interpreter_project_bench.py",
+    "value": 285.5
+  },
+  "interpreter.project_5_warm_ms": {
+    "source": "scripts/interpreter_project_bench.py",
+    "value": 161.4
+  },
+  "interpreter.run_hello_ms": {
+    "source": "scripts/interpreter_project_bench.py",
+    "value": 357.5
+  },
+  "interpreter.watch_restart_ms": {
+    "source": "scripts/interpreter_project_bench.py",
+    "value": 176.1
+  },
+  "other.metric": {
+    "source": "elsewhere",
+    "value": 1.5
+  }
+}

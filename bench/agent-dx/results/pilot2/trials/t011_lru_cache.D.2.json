@@ -1,0 +1,70 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "D",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn find(ks: Vec<int>, k: int) -> int {\n    let mut r: int = -1\n    for i in 0..ks.len() {\n        if ks[i] == k {\n            r = i\n        }\n    }\n    r\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    let mut cap: int = 1\n    let mut first = true\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        if parts[0] == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let i = find(ks.clone(), k)\n            if i >= 0 {\n                ks.remove(i)\n                vs.remove(i)\n            }\n            ks.push(k)\n            vs.push(v)\n            if ks.len() > cap {\n                let e = ks[0]\n                ks.remove(0)\n                vs.remove(0)\n                println(\"evict ${e}\")\n            }\n        } else if parts[0] == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let i = find(ks.clone(), k)\n            if i < 0 {\n                println(\"-1\")\n            } else {\n                let v = vs[i]\n                ks.remove(i)\n                vs.remove(i)\n                ks.push(k)\n                vs.push(v)\n                println(\"${v}\")\n            }\n        } else if parts[0] == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out: Vec<string> = []\n                let mut j = ks.len()\n                while j > 0 {\n                    j -= 1\n                    out.push(\"${ks[j]}\")\n                }\n                println(out.join(\" \"))\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn find(ks: Vec<int>, k: int) -> int {\n    let mut r: int = -1\n    for i in 0..ks.len() {\n        if ks[i] == k {\n            r = i\n        }\n    }\n    r\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    let mut cap: int = 1\n    let mut first = true\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        if parts[0] == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let i = find(ks.clone(), k)\n            if i >= 0 {\n                ks.remove(i)\n                vs.remove(i)\n            }\n            ks.push(k)\n            vs.push(v)\n            if ks.len() > cap {\n                let e = ks[0]\n                ks.remove(0)\n                vs.remove(0)\n                println(\"evict ${e}\")\n            }\n        } else if parts[0] == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let i = find(ks.clone(), k)\n            if i < 0 {\n                println(\"-1\")\n            } else {\n                let v = vs[i]\n                ks.remove(i)\n                vs.remove(i)\n                ks.push(k)\n                vs.push(v)\n                println(\"${v}\")\n            }\n        } else if parts[0] == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out: Vec<string> = []\n                let mut j = ks.len()\n                while j > 0 {\n                    j -= 1\n                    out.push(\"${ks[j]}\")\n                }\n                println(out.join(\" \"))\n            }\n        }\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.083,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 201.538,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 2.32,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T14:21:34",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 16.808,
+ "tool_wait_seconds": 201.62,
+ "trial": 2,
+ "usage": {
+  "api_seconds": 16.808,
+  "cost_usd": 0.0397575,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "The background `wj build main.wj` finished with exit code 0, so the program compiles with the production compiler. Its output file was empty, so there were no build errors or warnings.\n\nThe solution in `main.wj` is complete. Example 1 passed under the interpreter. I did not run Example 2.",
+  "subtype": "success",
+  "tokens_in": 16985,
+  "tokens_out": 93,
+  "turns": 1
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 220.75
+}

@@ -1,0 +1,3 @@
+test dup::t ... FAILED
+test dup::t ... FAILED
+test other::t ... FAILED

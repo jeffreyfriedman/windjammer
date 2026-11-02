@@ -1,0 +1,28 @@
+{
+ "interpreter.run_hello_ms": #,
+ "interpreter.project_5_cold_ms": #,
+ "interpreter.project_5_warm_ms": #,
+ "interpreter.watch_restart_ms": #
+}
+{
+  "interpreter.project_5_cold_ms": {
+    #,
+    "value": #
+  },
+  "interpreter.project_5_warm_ms": {
+    #,
+    "value": #
+  },
+  "interpreter.run_hello_ms": {
+    #,
+    "value": #
+  },
+  "interpreter.watch_restart_ms": {
+    #,
+    "value": #
+  },
+  "other.metric": {
+    #,
+    "value": #
+  }
+}

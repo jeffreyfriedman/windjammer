@@ -172,9 +172,9 @@ pub(crate) fn value_class(v: &Value) -> Option<Class> {
 /// The class of an aggregate reached from a local (references already followed).
 pub(crate) fn class_of(v: &Value) -> Class {
     match v {
-        Value::Vec(items) => Class::Vec(match items.first() {
+        Value::Vec(items) => Class::Vec(match items.get_value(0) {
             None => Elem::Unknown,
-            Some(x) => match (ty_of(x), shape(x)) {
+            Some(x) => match (ty_of(&x), shape(&x)) {
                 (Some(t), _) => Elem::Scalar(t),
                 (_, Some(s)) => Elem::Struct(s),
                 _ => Elem::Unknown,

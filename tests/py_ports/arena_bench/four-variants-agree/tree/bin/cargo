@@ -1,0 +1,6 @@
+#!/bin/sh
+name=$(cat name)
+mkdir -p "$CARGO_TARGET_DIR/release"
+printf '#!/bin/sh\nawk "BEGIN { for (i = 0; i < 300000; i++) x += i }"\necho "checksum=%s"\n' "$name" | sed "s/checksum=.*/checksum=77/" > /dev/null
+printf '#!/bin/sh\nawk "BEGIN { for (i = 0; i < 300000; i++) x += i }"\necho "checksum=%s"\n' "${CHECKSUM:-77}" > "$CARGO_TARGET_DIR/release/$name"
+chmod +x "$CARGO_TARGET_DIR/release/$name"

@@ -1,0 +1,1 @@
+export LC_ALL=C; $WJ run $ALLOW $SCRIPTS/spec_check.wj --bogus

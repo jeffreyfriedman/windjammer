@@ -119,7 +119,7 @@ is cold, later runs hit the cache; `files_cached` in the report says which).
   `tests/diagnostics/golden/`, regenerate with `UPDATE_GOLDEN=1`);
 * `wj check` reports a semantic error on a corpus file that the real build accepts (false-positive sweep).
 
-`scripts/diagnostics-leak-report.sh` measures how many cases still reach rustc and how many of those
+`scripts/wj/diagnostics_leak_report.wj` measures how many cases still reach rustc and how many of those
 come out untranslated (it builds the generated crates with cargo, so it is not part of the test run).
 
 Result on the 47 cases in `tests/diagnostics/cases` (11 of them are errors only rustc finds today):
@@ -139,10 +139,10 @@ named; when none is found the location is marked approximate.
 ## Negative gate (check vs build + rustc)
 
 `tests/check_negative_gate.rs` is a differential test against a recorded rustc oracle. Corpus: 131
-type-error mutants of the `// rust: ok` verified examples (`scripts/gen-check-mutants.py`: string
+type-error mutants of the `// rust: ok` verified examples (`scripts/wj/gen_check_mutants.wj`: string
 into int, int into string, undefined variable / function, dropped / extra / wrong-typed argument,
 wrong return literal, unknown field, unknown method), the diagnostics cases and the error-system
-corpora. `scripts/check-negative-oracle.sh` records whether `wj build --no-cargo` + `cargo check`
+corpora. `scripts/wj/check_negative_oracle.wj` records whether `wj build --no-cargo` + `cargo check`
 accepts each program (`tests/check_negative/oracle.tsv`, keyed by a source hash; the test fails when
 it is stale). Whenever build + rustc rejects a program, `wj check` must report an error, except the
 entries in `tests/check_negative/known_false_negatives.txt` (ratchet: only shrinks). Programs rustc
