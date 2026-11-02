@@ -100,17 +100,7 @@ pub fn check_lexeme(tok: &Token, lexeme: &str, at_eof: bool) -> Result<(), Strin
             let body = lexeme.strip_prefix('\'').ok_or("char must start with '")?;
             let body = body.strip_suffix('\'').unwrap_or(body);
             let decoded = match body.strip_prefix('\\') {
-                Some(esc) => {
-                    let mut it = esc.chars();
-                    let e = it.next().ok_or("empty escape")?;
-                    match e {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '0' => '\0',
-                        other => other,
-                    }
-                }
+                Some(esc) => decode_escape(&mut esc.chars().peekable()).ok_or("empty escape")?,
                 None => body.chars().next().ok_or("empty char literal")?,
             };
             if decoded == *c {
@@ -143,19 +133,41 @@ fn eq(got: &str, want: &str) -> Result<(), String> {
     }
 }
 
+/// The character named by the escape after a backslash: `n t r 0`, `\u{H..}` (1 to 6 hex digits naming a Unicode
+/// scalar value; anything malformed means the escaped character itself, as for any other escaped character).
+fn decode_escape(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<char> {
+    let e = it.next()?;
+    Some(match e {
+        'n' => '\n',
+        't' => '\t',
+        'r' => '\r',
+        '0' => '\0',
+        'u' if it.peek() == Some(&'{') => {
+            let mut look = it.clone();
+            look.next();
+            let digits: String = look.clone().take_while(|c| c.is_ascii_hexdigit()).collect();
+            let after = look.clone().nth(digits.chars().count());
+            match (u32::from_str_radix(&digits, 16), after) {
+                (Ok(v), Some('}')) if (1..=6).contains(&digits.len()) && char::from_u32(v).is_some() => {
+                    for _ in 0..digits.len() + 2 {
+                        it.next();
+                    }
+                    char::from_u32(v)?
+                }
+                _ => 'u',
+            }
+        }
+        other => other,
+    })
+}
+
 /// Independent decoding of the documented escapes of a non-raw, non-interpolated string body.
 fn decode_plain_string(body: &str) -> String {
     let mut out = String::new();
     let mut it = body.chars().peekable();
     while let Some(c) = it.next() {
         match c {
-            '\\' => match it.next() {
-                Some('n') => out.push('\n'),
-                Some('t') => out.push('\t'),
-                Some('r') => out.push('\r'),
-                Some(o) => out.push(o),
-                None => {}
-            },
+            '\\' => out.extend(decode_escape(&mut it)),
             '$' if it.peek() == Some(&'$') => {
                 it.next();
                 out.push('$');
