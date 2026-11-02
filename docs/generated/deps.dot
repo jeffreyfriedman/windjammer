@@ -160,7 +160,7 @@ digraph deps {
   "check" -> "type_classification" [label="3"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="9"];
+  "cli" -> "cargo_cache" [label="17"];
   "cli" -> "cargo_toml" [label="2"];
   "cli" -> "check" [label="9"];
   "cli" -> "codegen" [label="7"];
@@ -333,7 +333,7 @@ digraph deps {
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
-  "interpreter" -> "parser" [label="109"];
+  "interpreter" -> "parser" [label="110"];
   "interpreter" -> "resolve" [label="13"];
   "interpreter" -> "source_map" [label="13"];
   "interpreter" -> "stdlib_surface" [label="1"];
