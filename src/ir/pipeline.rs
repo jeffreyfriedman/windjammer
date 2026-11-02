@@ -263,6 +263,15 @@ impl IrPipeline {
                     }
                 }
 
+                for name in &fc.single_binding_locals {
+                    if let Some(var) = fc.var_map.locals.get(name) {
+                        let defaulted = result.defaulted.get(var.0 as usize).copied().unwrap_or(true);
+                        if !defaulted && matches!(result.types.get(var.0 as usize), Some(Some(BaseType::I64))) {
+                            ir_fn.solver_i64_locals.insert(name.clone());
+                        }
+                    }
+                }
+
                 ir_fn.record_ownership_stage("solver");
 
                 let ret_idx = fc.var_map.return_var.0 as usize;

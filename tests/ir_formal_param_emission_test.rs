@@ -62,6 +62,7 @@ fn wrap(name: string) -> Holder {
         ownership_trail: Default::default(),
         default_int_literals: Default::default(),
         literal_widths: Default::default(),
+        solver_i64_locals: Default::default(),
         last_uses: Default::default(),
         module_path: Vec::new(),
         returned_fields: Default::default(),
