@@ -12,7 +12,7 @@
 //! no decorators, not generic/async/extern, not recursive, whose body is `let`s and a tail
 //! expression machine code lowers.
 
-use super::kinds::{mutant, Shape};
+use super::kinds::Shape;
 use super::lower::{Bind, Lo, StructSpill, Val, E, NO_SLOT};
 use crate::interpreter::engine::FuncDef;
 use crate::parser::{Expression, Pattern, Statement, Type};
@@ -183,8 +183,9 @@ impl Lo<'_, '_> {
 
     /// `recv.method(args)` with a user method machine code can inline.
     pub(super) fn inline_call(&mut self, object: E, method: &str, args: &'static [(Option<String>, E)]) -> Option<Out> {
-        // same-name types in different modules: the method table is keyed by bare name
-        if self.frames.len() >= MAX_INLINE || (!self.it.dup_types.is_empty() && !mutant(self.it, "dupe")) || !self.struct_valued(object) {
+        // the receiver's name is its declared type key, the key methods are registered under, so
+        // same-name types in different modules find their own methods
+        if self.frames.len() >= MAX_INLINE || !self.struct_valued(object) {
             return None;
         }
         let recv = self.vexpr(object)?;
