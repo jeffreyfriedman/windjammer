@@ -84,6 +84,8 @@ pub struct FunctionConstraints {
     /// Integer literals (by their own source position) and their constraint vars, so the solved
     /// width can be published as the NUM-LITERAL-WIDTH fact.
     pub literal_vars: Vec<((usize, usize), ConstraintVar)>,
+    /// Locals bound by exactly one pattern in the body (safe to publish by name).
+    pub single_binding_locals: Vec<String>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -107,6 +109,8 @@ struct AstConstraintWalker<'a, 'ast> {
     literal_vars: Vec<((usize, usize), ConstraintVar)>,
     /// Names bound by `for v in a..b`.
     range_loop_vars: std::collections::HashSet<String>,
+    /// How many times each name is bound by a pattern (shadowed names are not published as local facts).
+    bind_counts: HashMap<String, u32>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -293,6 +297,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             struct_field_types,
             literal_vars: Vec::new(),
             range_loop_vars: std::collections::HashSet::new(),
+            bind_counts: HashMap::new(),
         }
     }
 
@@ -1257,7 +1262,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// Bind a pattern to a constraint var (handles identifier, tuple, etc).
     fn bind_pattern(&mut self, pattern: &Pattern<'ast>) -> ConstraintVar {
         match pattern {
-            Pattern::Identifier(name) | Pattern::MutBinding(name) => self.resolve_var(name),
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => {
+                *self.bind_counts.entry(name.clone()).or_insert(0) += 1;
+                self.resolve_var(name)
+            }
             Pattern::Tuple(pats) => {
                 let var = self.cs.fresh_var();
                 for p in pats {
@@ -1502,6 +1510,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             },
             call_targets: self.call_targets,
             taint_constraints: self.taint_constraints,
+            single_binding_locals: self.bind_counts.iter().filter(|(_, c)| **c == 1).map(|(n, _)| n.clone()).collect(),
             literal_vars: self.literal_vars,
             execution_constraints: self.execution_constraints,
         }

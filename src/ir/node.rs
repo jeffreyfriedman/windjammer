@@ -120,6 +120,10 @@ pub struct IrFunction {
     /// legacy collector until the solver models `len()`/indexing.
     pub literal_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
 
+    /// Semantic fact NUM-LOCAL-I64 (C4): locals bound once whose width the solver fixed to `int` (i64)
+    /// from a use (a typed field, parameter or call formal), never from the numeric default.
+    pub solver_i64_locals: std::collections::BTreeSet<String>,
+
     /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
     /// the binding is never read again on any path.
     pub last_uses: std::collections::BTreeSet<usize>,
@@ -363,6 +367,7 @@ impl IrFunction {
             module_path: analyzed.module_path.clone(),
             default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
             literal_widths: std::collections::BTreeMap::new(),
+            solver_i64_locals: std::collections::BTreeSet::new(),
             last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),
             returned_fields: crate::ir::clone_facts::returned_param_fields(
                 &params,
