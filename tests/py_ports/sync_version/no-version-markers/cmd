@@ -1,0 +1,1 @@
+git init -q && git add -A && git -c user.email=a@b.c -c user.name=n commit -q -m init && $WJ run $ALLOW $SCRIPTS/sync_version.wj 0.60.0; rc=$?; rm -rf .git; exit $rc

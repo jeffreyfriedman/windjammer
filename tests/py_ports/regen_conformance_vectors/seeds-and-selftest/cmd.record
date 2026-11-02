@@ -1,0 +1,1 @@
+git -C $REPO show $ORIG:tests/conformance_programs/regen_vectors.py > tests/conformance_programs/regen_vectors.py && python3 tests/conformance_programs/regen_vectors.py; rc=$?; rm -f tests/conformance_programs/regen_vectors.py; exit $rc

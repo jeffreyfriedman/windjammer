@@ -48,7 +48,7 @@ that keeps its cfg list in sync with `Cargo.toml`.
 
 ## 4. Orphan check
 
-`scripts/check-orphan-tests.sh` (CI job `orphan-tests`, `make test-orphans`) lists tracked test
+`scripts/wj/check_orphan_tests.wj` (CI job `orphan-tests`, `make test-orphans`) lists tracked test
 candidates (`tests/**` `.rs`/`.wj`/`.sh`, `crates/*/tests/**`, `*_test.wj`, `test_*.wj`) and
 fails on any that is not reached. Reached means: top-level `tests/*.rs`; matched by a
 `// consumes: <glob>` line in a `tests/*.rs` runner (`*` stays inside one directory, `**`
@@ -60,7 +60,7 @@ crosses); mentioned by path or file name in a runner (`tests/*.rs`, `src/**`, `s
 
 `.config/known-test-failures.txt` lists failures accepted for now (one test path per line,
 each a genuine compiler bug). CI (`cargo nextest run --release --workspace --profile ci`) and
-`scripts/check-test-ratchet.sh` fail on any failure not in the file and report entries that
+`scripts/wj/check_test_ratchet.wj` fail on any failure not in the file and report entries that
 now pass. Do not add entries to hide new failures.
 
 ## 6. `wj test` discovery

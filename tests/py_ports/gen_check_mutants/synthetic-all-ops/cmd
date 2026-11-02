@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/gen_check_mutants.wj && (cd tests/check_negative/mutants && for f in *.wj; do echo "== $f"; cat "$f"; done); rc=$?; rm -rf tests; exit $rc

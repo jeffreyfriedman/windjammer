@@ -2,7 +2,7 @@
 
 The normative grammar is `docs/spec/grammar.ebnf`. The docs-truth check `tools/docs_truth/spec_grammar.rs` (run by `cargo test --release --test docs_truth spec_grammar` and `wj-docs check spec-grammar`) reads it with the shared EBNF reader of `tools/docs_truth/ebnf.rs`, derives every alternative plus a seeded random corpus, wraps each sentence in the production's `@ctx` template and parses it with the real parser; lexical productions must lex to one token of the stated kind. A disagreement fails the test. This chapter states the conventions that a context-free grammar cannot.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/grammar/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/grammar/`.
 
 **What the grammar test does and does not prove.** It proves *grammar ⊆ parser*: everything the EBNF derives parses. It does not prove *parser ⊆ grammar*: the parser accepts more than the EBNF lists (Rust-style `&`/`*` unary operators, `as` casts, macro-style calls, ranges in expressions, `for`/`return` as expressions, turbofish, lifetimes). Those extensions are deliberately omitted from the normative grammar unless the language wants to keep them; the negative examples (`mode: parse-error`) police the other direction for a few important cases. Productions marked `@status unparsed` document constructs the old grammar advertised but the parser rejects.
 

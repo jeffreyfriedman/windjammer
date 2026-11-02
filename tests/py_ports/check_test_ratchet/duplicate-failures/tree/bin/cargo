@@ -1,0 +1,5 @@
+#!/bin/sh
+echo "fake cargo args: $*"
+cat "$(dirname "$0")/../fake_out.txt"
+echo "stderr line" 1>&2
+exit "$(cat "$(dirname "$0")/../fake_code")"

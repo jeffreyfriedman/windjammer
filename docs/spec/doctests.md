@@ -2,7 +2,7 @@
 
 Code examples in doc comments are tests ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 6). One extractor serves both `wj test` and the documentation checker (`src/doctest/`).
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/doctests/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/doctests/`.
 
 ## Doctests
 
