@@ -1,0 +1,49 @@
+[
+  {
+    "name": "a fresh run records its steps and its result",
+    "journal": null,
+    "args": [{"i": "i64", "v": "7"}],
+    "calls": [{"callee": "a", "live": "x"}, {"callee": "b", "live": {"i": "i64", "v": "2"}}],
+    "finish": {"i": "i64", "v": "3"},
+    "outcome": ["live", "live"],
+    "file": [
+      "{\"args\":[{\"i\":\"i64\",\"v\":\"7\"}],\"fn\":\"f\",\"wj_durable\":1}",
+      "{\"callee\":\"a\",\"result\":\"x\",\"step\":0,\"vt_ns\":0}",
+      "{\"callee\":\"b\",\"result\":{\"i\":\"i64\",\"v\":\"2\"},\"step\":1,\"vt_ns\":0}",
+      "{\"done\":{\"i\":\"i64\",\"v\":\"3\"}}"
+    ]
+  },
+  {
+    "name": "a crashed run replays what it recorded and runs the rest",
+    "journal": ["{\"args\":[],\"fn\":\"f\",\"wj_durable\":1}", "{\"callee\":\"a\",\"result\":\"x\",\"step\":0,\"vt_ns\":5}"],
+    "args": [],
+    "calls": [{"callee": "a", "live": "never"}, {"callee": "b", "live": true}],
+    "outcome": ["replay:\"x\"", "live"],
+    "file": [
+      "{\"args\":[],\"fn\":\"f\",\"wj_durable\":1}",
+      "{\"callee\":\"a\",\"result\":\"x\",\"step\":0,\"vt_ns\":5}",
+      "{\"callee\":\"b\",\"result\":true,\"step\":1,\"vt_ns\":0}"
+    ]
+  },
+  {
+    "name": "a finished run returns its result and runs nothing",
+    "journal": ["{\"args\":[],\"fn\":\"f\",\"wj_durable\":1}", "{\"callee\":\"a\",\"result\":1,\"step\":0,\"vt_ns\":0}", "{\"done\":[1,2]}"],
+    "args": [],
+    "calls": [],
+    "outcome": ["done:[1,2]"]
+  },
+  {
+    "name": "a different call than the journal has is a divergence",
+    "journal": ["{\"args\":[],\"fn\":\"f\",\"wj_durable\":1}", "{\"callee\":\"a\",\"result\":1,\"step\":0,\"vt_ns\":0}"],
+    "args": [],
+    "calls": [{"callee": "z", "live": 1}],
+    "outcome": ["diverge:WJ0049: durable replay diverged at step 0: the journal has `a`, the program now calls `z`"]
+  },
+  {
+    "name": "a line cut short by a crash is not a step",
+    "journal": ["{\"args\":[],\"fn\":\"f\",\"wj_durable\":1}", "{\"callee\":\"a\",\"result\":1,\"step\":0,\"vt_ns\":0}", "{\"callee\":\"b\",\"resu"],
+    "args": [],
+    "calls": [{"callee": "a", "live": 0}, {"callee": "b", "live": 2}],
+    "outcome": ["replay:1", "live"]
+  }
+]

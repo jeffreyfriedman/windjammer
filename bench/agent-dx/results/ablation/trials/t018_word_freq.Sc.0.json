@@ -1,0 +1,590 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "Sc",
+ "arm_name": "sheet-minus-input",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:5:49\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nError: Rust leakage errors:\nRust leakage errors in <tmp>",
+  "error[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:27:52\n   |\n27 |                 let _ = counts.insert(cur.clone(), *n + 1_i64);\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:34:36\n   |\n34 |         let _ = counts.insert(cur, *n + 1_i64);\nerror[E0308]: mismatched types\n  --> main.rs:41:23\n   |\n41 |           if a.1 != b.1 {\nerror[E0308]: mismatched types\n  --> main.rs:43:16\n   |\n43 |           } else {",
+  "error[E0368]: binary assignment operation `+=` cannot be applied to type `&mut i64`\n  --> main.rs:26:21\n   |\n26 |                     c += 1;\nFor more information about this error, try `rustc --explain E0368`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted",
+  "error[E0368]: binary assignment operation `+=` cannot be applied to type `&mut i64`\n  --> main.rs:26:21\n   |\n26 |                     c += 1;\nFor more information about this error, try `rustc --explain E0368`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted",
+  "error[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:26:52\n   |\n26 |                 let _ = counts.insert(cur.clone(), *n + 1_i64);\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:33:36\n   |\n33 |         let _ = counts.insert(cur, *n + 1_i64);\nFor more information about this error, try `rustc --explain E0614`.\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors; 1 warning emitted",
+  "error[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:26:52\n   |\n26 |                 let _ = counts.insert(cur.clone(), *n + 1_i64);\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:33:36\n   |\n33 |         let _ = counts.insert(cur, *n + 1_i64);\nFor more information about this error, try `rustc --explain E0614`.\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors; 1 warning emitted",
+  "error[E0507]: cannot move out of `p.0` which is behind a shared reference\n  --> main.rs:41:27\n   |\n41 |     items.sort_by_key(|p| p.0);\nFor more information about this error, try `rustc --explain E0507`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted",
+  "error[E0507]: cannot move out of `p.0` which is behind a shared reference\n  --> main.rs:41:27\n   |\n41 |     items.sort_by_key(|p| p.0);\nFor more information about this error, try `rustc --explain E0507`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted"
+ ],
+ "diagnostic_categories": {
+  "lint-style": 1,
+  "other": 8,
+  "ownership-borrow": 2,
+  "type-mismatch": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 26,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\") ?? \"\"\n    let mut k = 0\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let mut cur = \"\"\n    let mut in_head = true\n    for c in text.chars() {\n        if in_head {\n            if c == '\\n' {\n                in_head = false\n            } else if c >= '0' && c <= '9' {\n                k = k * 10 + (c as int - '0' as int)\n            }\n            continue\n        }\n        if c.is_ascii_alphanumeric() {\n            cur = cur + c.to_ascii_lowercase().to_string()\n        } else if cur.len() > 0 {\n            counts.entry(cur).and_modify(|v| *v += 1).or_insert(1)\n            cur = \"\"\n        }\n    }\n    if cur.len() > 0 {\n        counts.entry(cur).and_modify(|v| *v += 1).or_insert(1)\n    }\n    let mut items: Vec<(string, int)> = []\n    for key in counts.keys() {\n        items.push((key, counts.get(key) ?? 0))\n    }\n    items.sort_by_key(|p| p.0.clone())\n    items.sort_by_key(|p| 0 - p.1)\n    let mut i = 0\n    for it in items {\n        if i >= k { break }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "first_turn_input": 8013,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.033,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.016,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.026,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.016,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.093,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.022,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.031,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.027,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.01,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.021,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.011,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.014,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.013,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "lint-style",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 0.286,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 7.355,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.022,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.027,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.048,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.025,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.03,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 12.2,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 6.187,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.108,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.078,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.04,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.091,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 4.04,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 5.037,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 3.732,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "ownership-borrow"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 3.976,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "ownership-borrow"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 2.598,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 4.37,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 4.419,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 30,
+ "other_seconds": 18.63,
+ "pack_bytes": 1349,
+ "pack_file": "sheet_minus_input.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-02T02:32:16",
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 94.332,
+ "tool_result_tokens_est": 5009,
+ "tool_wait_seconds": 55.04,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6657,
+   "cache_write": 1354,
+   "calls": [
+    "Bash",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8013,
+   "output": 5,
+   "result_chars": 418,
+   "turn": 1
+  },
+  {
+   "cache_read": 8011,
+   "cache_write": 415,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8428,
+   "output": 16,
+   "result_chars": 1171,
+   "turn": 2
+  },
+  {
+   "cache_read": 8426,
+   "cache_write": 609,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9037,
+   "output": 16,
+   "result_chars": 508,
+   "turn": 3
+  },
+  {
+   "cache_read": 9035,
+   "cache_write": 293,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9330,
+   "output": 16,
+   "result_chars": 344,
+   "turn": 4
+  },
+  {
+   "cache_read": 9328,
+   "cache_write": 250,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9580,
+   "output": 16,
+   "result_chars": 419,
+   "turn": 5
+  },
+  {
+   "cache_read": 9578,
+   "cache_write": 274,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9854,
+   "output": 52,
+   "result_chars": 541,
+   "turn": 6
+  },
+  {
+   "cache_read": 9852,
+   "cache_write": 345,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10199,
+   "output": 16,
+   "result_chars": 1372,
+   "turn": 7
+  },
+  {
+   "cache_read": 10197,
+   "cache_write": 746,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10945,
+   "output": 7,
+   "result_chars": 727,
+   "turn": 8
+  },
+  {
+   "cache_read": 10943,
+   "cache_write": 388,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11333,
+   "output": 6,
+   "result_chars": 985,
+   "turn": 9
+  },
+  {
+   "cache_read": 11331,
+   "cache_write": 1318,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12651,
+   "output": 16,
+   "result_chars": 2126,
+   "turn": 10
+  },
+  {
+   "cache_read": 12649,
+   "cache_write": 1266,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13917,
+   "output": 6,
+   "result_chars": 1676,
+   "turn": 11
+  },
+  {
+   "cache_read": 13915,
+   "cache_write": 972,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14889,
+   "output": 66,
+   "result_chars": 658,
+   "turn": 12
+  },
+  {
+   "cache_read": 14887,
+   "cache_write": 425,
+   "calls": [
+    "Bash",
+    "Write"
+   ],
+   "fresh": 2,
+   "input_total": 15314,
+   "output": 3,
+   "result_chars": 182,
+   "turn": 13
+  },
+  {
+   "cache_read": 15312,
+   "cache_write": 986,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 16300,
+   "output": 3,
+   "result_chars": 870,
+   "turn": 14
+  },
+  {
+   "cache_read": 16298,
+   "cache_write": 824,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 17124,
+   "output": 8,
+   "result_chars": 815,
+   "turn": 15
+  },
+  {
+   "cache_read": 17122,
+   "cache_write": 598,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 17722,
+   "output": 5,
+   "result_chars": 1271,
+   "turn": 16
+  },
+  {
+   "cache_read": 17720,
+   "cache_write": 731,
+   "calls": [
+    "Bash",
+    "Edit",
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 18453,
+   "output": 5,
+   "result_chars": 1420,
+   "turn": 17
+  },
+  {
+   "cache_read": 18451,
+   "cache_write": 1459,
+   "calls": [
+    "Edit",
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 19912,
+   "output": 6,
+   "result_chars": 1472,
+   "turn": 18
+  },
+  {
+   "cache_read": 19910,
+   "cache_write": 1388,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 21300,
+   "output": 38,
+   "result_chars": 556,
+   "turn": 19
+  },
+  {
+   "cache_read": 21298,
+   "cache_write": 690,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 21990,
+   "output": 5,
+   "result_chars": 0,
+   "turn": 20
+  }
+ ],
+ "usage": {
+  "api_seconds": 94.332,
+  "cost_usd": 0.141246,
+  "denied_commands": [
+   "cat /dev/null; wj docs --json \"WINDJAMMER_FOR_AGENTS\" | head -30; wj docs examples/verified | head"
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "`main.wj` is written, and both examples from the task give the expected output when run with `wj run --compiled`.\n\nIt reads all of stdin, takes K from the first line, and splits the rest into lower-cased runs of letters and digits. It counts them in a `HashMap`. It sorts by word ascending, then re-sorts by count descending; that second sort is stable, so ties stay in word order. It prints the firs",
+  "subtype": "success",
+  "tokens_in": 276291,
+  "tokens_out": 5375,
+  "turns": 31
+ },
+ "verify_calls": 11,
+ "verify_calls_to_green": 10,
+ "wall_seconds": 168.01
+}

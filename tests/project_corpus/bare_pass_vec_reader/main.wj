@@ -1,0 +1,11 @@
+// A sibling module's read-only helper receives a bare binding twice; the caller keeps using it afterwards
+// (bare-pass demotion, multipass_bare_pass_demotion.rs). Expected by hand: 1+2+3 = 6, twice, then len 3.
+// expect: 6 6 3
+mod stats
+
+fn main() {
+    let xs = [1, 2, 3]
+    let a = stats::total(xs)
+    let b = stats::total(xs)
+    println("${a} ${b} ${xs.len()}")
+}

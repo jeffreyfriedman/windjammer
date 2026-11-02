@@ -1,0 +1,508 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "Sc",
+ "arm_name": "sheet-minus-input",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error[E0061]: this function takes 1 argument but 0 arguments were supplied\n  --> main.rs:3:16\n   |\n 3 |     let text = io::read_all();\nerror[E0277]: `Result<Vec<u8>, std::io::Error>` doesn't implement `std::fmt::Display`\n --> main.rs:4:52\n  |\n4 |     windjammer_runtime::io::println(&format!(\"{}\", text));\n  |                                               --   ^^^^ `Result<Vec<u8>, std::io::Error>` cannot be formatted with the default formatter\n  |                                               |\n  |                                               required by this formatting parameter\n  |\n  = help:",
+  "error[E0599]: no method named `is_empty` found for struct `SplitWhitespace<'a>` in the current scope\n  --> main.rs:83:18\n   |\n83 |         if parts.is_empty() {\nerror[E0308]: mismatched types\n  --> main.rs:86:27\n   |\n86 |         let out = process(&parts, &mut accts);\nSome errors have detailed explanations: E0308, E0599.\nFor more information about an error, try `rustc --explain E0308`.\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors\nFor more information about an error, try `rustc --explain E0308`.\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors"
+ ],
+ "diagnostic_categories": {
+  "other": 2,
+  "trait-bound": 2,
+  "type-mismatch": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 24,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::io\nuse std::collections::HashMap\n\nfn process(parts: Vec<string>, accts: HashMap<string, int>) -> string {\n    let cmd = parts[0]\n    if cmd == \"balance\" {\n        if parts.len() < 2 { return \"error: invalid amount\" }\n        if !accts.contains_key(parts[1]) { return \"error: unknown account ${parts[1]}\" }\n        return \"${accts[parts[1]]}\"\n    }\n    if cmd == \"open\" {\n        let amt: int = parts[2].parse::<int>().unwrap_or(0)\n        if amt < 0 { return \"error: invalid amount\" }\n        if accts.contains_key(parts[1]) { return \"error: duplicate account\" }\n        accts.insert(parts[1], amt)\n        return \"ok\"\n    }\n    if cmd == \"deposit\" || cmd == \"withdraw\" {\n        let amt: int = parts[2].parse::<int>().unwrap_or(0)\n        if amt <= 0 { return \"error: invalid amount\" }\n        if !accts.contains_key(parts[1]) { return \"error: unknown account ${parts[1]}\" }\n        let bal = accts[parts[1]]\n        if cmd == \"deposit\" {\n            accts.insert(parts[1], bal + amt)\n            return \"ok\"\n        }\n        if amt > bal { return \"error: insufficient funds\" }\n        accts.insert(parts[1], bal - amt)\n        return \"ok\"\n    }\n    if cmd == \"transfer\" {\n        let amt: int = parts[3].parse::<int>().unwrap_or(0)\n        if amt <= 0 { return \"error: invalid amount\" }\n        if !accts.contains_key(parts[1]) { return \"error: unknown account ${parts[1]}\" }\n        if !accts.contains_key(parts[2]) { return \"error: unknown account ${parts[2]}\" }\n        if parts[1] == parts[2] { return \"error: same account\" }\n        let bal = accts[parts[1]]\n        if amt > bal { return \"error: insufficient funds\" }\n        accts.insert(parts[1], bal - amt)\n        let other = accts[parts[2]]\n        accts.insert(parts[2], other + amt)\n        return \"ok\"\n    }\n    \"\"\n}\n\nfn main() {\n    let mut accts: HashMap<string, int> = HashMap::new()\n    loop {\n        let line = match io::read_line() {\n            Ok(l) => l,\n            Err(_) => break,\n        }\n        if line.len() == 0 { break }\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        let out = process(parts, accts)\n        if out.len() > 0 { println(out) }\n    }\n    let mut names: Vec<string> = []\n    for k in accts.keys() { names.push(k) }\n    names.sort()\n    for n in names {\n        println(\"${n} ${accts[n]}\")\n    }\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "first_turn_input": 8287,
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.071,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.158,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.074,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.035,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.072,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.186,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.037,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.038,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.013,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.123,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.087,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.08,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.01,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.087,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.069,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.055,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.046,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.029,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.078,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.104,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.04,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.047,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.06,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.036,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "other",
+    "trait-bound"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 20.345,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "trait-bound",
+    "type-mismatch"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 33.027,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 15.111,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 409.279,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 20,
+ "other_seconds": 30.09,
+ "pack_bytes": 1349,
+ "pack_file": "sheet_minus_input.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-02T02:00:29",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 57.635,
+ "tool_result_tokens_est": 4410,
+ "tool_wait_seconds": 479.4,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 5157,
+   "cache_write": 3128,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8287,
+   "output": 8,
+   "result_chars": 202,
+   "turn": 1
+  },
+  {
+   "cache_read": 8285,
+   "cache_write": 209,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8496,
+   "output": 16,
+   "result_chars": 1493,
+   "turn": 2
+  },
+  {
+   "cache_read": 8494,
+   "cache_write": 754,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9250,
+   "output": 16,
+   "result_chars": 1703,
+   "turn": 3
+  },
+  {
+   "cache_read": 9248,
+   "cache_write": 816,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10066,
+   "output": 16,
+   "result_chars": 344,
+   "turn": 4
+  },
+  {
+   "cache_read": 10064,
+   "cache_write": 250,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10316,
+   "output": 33,
+   "result_chars": 411,
+   "turn": 5
+  },
+  {
+   "cache_read": 10314,
+   "cache_write": 252,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10568,
+   "output": 16,
+   "result_chars": 717,
+   "turn": 6
+  },
+  {
+   "cache_read": 10566,
+   "cache_write": 387,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10955,
+   "output": 16,
+   "result_chars": 954,
+   "turn": 7
+  },
+  {
+   "cache_read": 10953,
+   "cache_write": 524,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11479,
+   "output": 16,
+   "result_chars": 1645,
+   "turn": 8
+  },
+  {
+   "cache_read": 11477,
+   "cache_write": 772,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12251,
+   "output": 16,
+   "result_chars": 727,
+   "turn": 9
+  },
+  {
+   "cache_read": 12249,
+   "cache_write": 349,
+   "calls": [
+    "Bash",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12600,
+   "output": 2,
+   "result_chars": 1017,
+   "turn": 10
+  },
+  {
+   "cache_read": 12598,
+   "cache_write": 731,
+   "calls": [
+    "Write"
+   ],
+   "fresh": 2,
+   "input_total": 13331,
+   "output": 5,
+   "result_chars": 180,
+   "turn": 11
+  },
+  {
+   "cache_read": 13329,
+   "cache_write": 345,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13676,
+   "output": 16,
+   "result_chars": 1905,
+   "turn": 12
+  },
+  {
+   "cache_read": 13674,
+   "cache_write": 957,
+   "calls": [
+    "Grep"
+   ],
+   "fresh": 2,
+   "input_total": 14633,
+   "output": 40,
+   "result_chars": 835,
+   "turn": 13
+  },
+  {
+   "cache_read": 14631,
+   "cache_write": 678,
+   "calls": [
+    "Write"
+   ],
+   "fresh": 2,
+   "input_total": 15311,
+   "output": 2,
+   "result_chars": 180,
+   "turn": 14
+  },
+  {
+   "cache_read": 15309,
+   "cache_write": 1232,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 16543,
+   "output": 3,
+   "result_chars": 1485,
+   "turn": 15
+  },
+  {
+   "cache_read": 16541,
+   "cache_write": 914,
+   "calls": [
+    "Edit"
+   ],
+   "fresh": 2,
+   "input_total": 17457,
+   "output": 8,
+   "result_chars": 180,
+   "turn": 16
+  },
+  {
+   "cache_read": 17455,
+   "cache_write": 341,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 17798,
+   "output": 16,
+   "result_chars": 614,
+   "turn": 17
+  },
+  {
+   "cache_read": 17796,
+   "cache_write": 503,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 18301,
+   "output": 3,
+   "result_chars": 756,
+   "turn": 18
+  },
+  {
+   "cache_read": 18299,
+   "cache_write": 422,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 18723,
+   "output": 53,
+   "result_chars": 87,
+   "turn": 19
+  },
+  {
+   "cache_read": 18721,
+   "cache_write": 243,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 18966,
+   "output": 308,
+   "result_chars": 0,
+   "turn": 20
+  },
+  {
+   "cache_read": 18964,
+   "cache_write": 748,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 19714,
+   "output": 7,
+   "result_chars": 0,
+   "turn": 21
+  }
+ ],
+ "usage": {
+  "api_seconds": 57.635,
+  "cost_usd": 0.12302640000000002,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "The background `wj build main.wj` finished with exit code 0, so `main.wj` compiles with the production toolchain as well as running correctly under `wj run --compiled`.\n\nI didn't read the build's output. The exit code was the only thing I checked.",
+  "subtype": "success",
+  "tokens_in": 19714,
+  "tokens_out": 81,
+  "turns": 1
+ },
+ "verify_calls": 4,
+ "verify_calls_to_green": 3,
+ "wall_seconds": 567.12
+}

@@ -1,0 +1,21 @@
+// Two modules define `take` with different bodies and different parameter modes (owned: returned;
+// borrowed: only read). Each call must use its own definition. Expected output computed by hand.
+// expect: 3 3
+mod a {
+    pub fn take(items: Vec<int>) -> Vec<int> {
+        items
+    }
+}
+
+mod b {
+    pub fn take(items: Vec<int>) -> int {
+        items.len() as int
+    }
+}
+
+fn main() {
+    // Separate lists: reusing one binding after a `pub` read-only formal hits D-OWN-PUB (see c3-inventory.md).
+    let n = b::take([1, 2, 3])
+    let ys = a::take([4, 5, 6])
+    println("${n} ${ys.len()}")
+}

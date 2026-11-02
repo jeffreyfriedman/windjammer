@@ -1,0 +1,4 @@
+# Multi-file projects that fail a project gate (tests/project_gates_test.rs). May only shrink.
+# <project> | <stage>: <first error>   (stages: build, runtime, rustc, output)
+bare_pass_vec_reader | rustc: error[E0308]: mismatched types
+user_module_named_like_std | runtime: needs windjammer_runtime (not compiled by this gate)

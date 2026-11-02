@@ -222,6 +222,13 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             }
         };
         it.flush();
+        if it.jit_debug {
+            let f = it.fast;
+            eprintln!(
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr
+            );
+        }
         if let Some(p) = &opts.result_json {
             let (steps, effect_calls, output_bytes) = it.usage();
             let doc = serde_json::json!({ "exit": code, "effects_used": it.effects_used(), "steps": steps, "effect_calls": effect_calls, "output_bytes": output_bytes });

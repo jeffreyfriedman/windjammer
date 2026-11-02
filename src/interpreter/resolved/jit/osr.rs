@@ -123,6 +123,7 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
             let u = match compile(it, site, &reg, &refs, &sig) {
                 Ok(u) => {
                     if u.plan.inlines {
+                        it.fast.inline += 1;
                         debug(it, site, "inlines method calls");
                     }
                     debug(it, site, "compiled");

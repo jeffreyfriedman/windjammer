@@ -358,8 +358,8 @@ host-bridge externs); `wj explain-effects`; `wj run --sandbox/--allow/--caps`. A
 
 Decisions taken while implementing (all enforced by tests): one URL parser (`scope_match::split_url`) serves both the check and
 the interpreter's http client, so what is checked is what is connected to; `process::run` programs are resolved by
-`parse_command` (shell syntax means `sh`, and a bare name never matches a local `./name`); a glob grant never covers
-`wj.toml`, `*.wj-capabilities.lock` or `*.wj` (only an exact pattern does); `fs::set_current_dir` is `env.write(cwd)`.
+`parse_command` (shell syntax means `sh`, and a bare name never matches a local `./name`); a broad grant (`*`, `**`, `dir/*`) never covers
+`wj.toml`, `*.wj-capabilities.lock` or `*.wj`; only an exact pattern or one whose last segment spells the file's own suffix (no `**` in that segment) does, and names compare case-insensitively (review of the py-audit change, 2026-10-27: boundary pinned by `bound/*` escape cases and a manifest unit test); `fs::set_current_dir` is `env.write(cwd)`.
 Known limits: TOCTOU between check and open; DNS rebinding (hosts are checked by name); redirects (the interpreter
 client does not follow any); per-package grants and `std::cap` values are E2; `console` is not gated at run time.
 
@@ -561,6 +561,37 @@ Differences from the design note above, and why:
 | Record overhead at most 2x on the sink-dense program and at most +3% on the non-sink one | **Measured 2026-10-26** (`scripts/wj/bench_effects_overhead.wj --mode record`, CPU time, median of 18 runs per arm, 8 interleaved rounds; the load average rose from 8 to 52 during the run, so the script's own validity rule still marks it provisional): sink-dense **+44%** (0.82 s to 1.18 s, far inside 2x); non-sink +3.7% (that program makes no recorded call; an earlier run on a quieter machine gave +1.1% for the capability gate and a second noisy run +5.7%, so the non-sink figure is noise around zero rather than a cost). Enforcement re-measured in the same window: non-sink +1.1%, sink-dense 6.9x (unchanged from E2) |
 
 Kill criteria: none triggered. Replay stayed at 100% after routing the sources the audit found; the study found far more than half.
+
+### E4b design (2026-10-27): `durable fn` in the compiled Rust backend
+
+**One journal, two implementations of everything around it.** The journal itself (file layout, run identity, step numbering, replay, the `done` record, the divergence message) is one piece of code, `crates/windjammer-runtime/src/durable_core/`, compiled into both the interpreter (through `#[path]`, like `caps_core`) and `windjammer-runtime`. It deals only in `serde_json::Value`, so it cannot disagree with itself. What differs is the adapter: the interpreter turns its `Value`s into JSON with `effect_port::codec`; compiled code turns Rust values into JSON with a trait, `windjammer_runtime::durable::Journalable`, implemented for `()`, `bool`, all integer and float types, `char`, `String`, `Vec<T>`, `Option<T>`, `Result<T, E>`, tuples and maps of journalable types. Both encode an integer as `{"i": type, "v": "n"}` and decode any integer tag into any integer type that holds the value, so a journal written by one implementation is read by the other.
+
+**Lowering.** The facts are the ones the interpreter uses (`durable::analyze`: the step positions and the four checks). A lowering pass between the analyzer and the code generator rewrites each durable function: its body becomes the closure given to `windjammer_runtime::durable::run("qualified::name", [argument JSON], || body)`, and every call at a step position becomes `windjammer_runtime::durable::step("callee", || call)`. The pass works on the AST so the Rust generator, ownership inference and the portable backends see ordinary code (a call of two runtime functions and two closures). `return` inside the body returns from the closure, which is the right scope.
+
+**Run time.** `run` opens a run exactly as the interpreter does; `step` replays a journaled result or runs the closure, journals the result and honours the crash knob. The location of the journal is `WJ_JOURNAL_DIR` (the compiled program has no command line of its own for it), the crash knob `WJ_CRASH_AFTER=N[:mid]` (exit status 137), both documented next to `wj run --journal`. With neither, the journal is in memory, as in the interpreter.
+
+**What compiled runs do not do.** The interpreter re-derives the random stream per step and restores the virtual clock so that a resumed run in a deterministic world equals an uninterrupted one. Compiled programs use the operating system's generators and clocks; their journaled values are stable across a resume, nothing more is promised. Step results of user-defined struct and enum types are not journalable in this slice: the build stops with an error naming the step and the type (a derive for user types is the next step).
+
+**Gates.**
+1. One journal: a journal written by the interpreter's run that crashed at step k is resumed by the compiled program (and the other way round) and the combined output equals an uninterrupted run, for every k, on at least five sample workflows. This is the cross-implementation test.
+2. Vectors: a table of journal scenarios (`tests/effects/durable_vectors.json`: header, steps, done, divergence, truncated and corrupted lines) run against the core as compiled into the interpreter and into the runtime with identical results, like `tests/effects/vectors.json` for capabilities.
+3. Emitted code: a program with a `durable fn` builds with `wj build` and the generated Rust contains exactly one `durable::run` per durable function and one `durable::step` per step position; a program without durable functions compiles to byte-identical Rust.
+4. Cost: the compiled file-backed journal costs at most 2x per step over the compiled in-memory one.
+
+**Kill / rethink.** If the lowered closures change the meaning of ordinary code (ownership inference moving a value into the closure, a `break` or `?` crossing the closure boundary) in more than 10% of the sample workflows, lower later, in the code generator, where the control flow is known. If a journal written by one implementation cannot be read by the other in a single case, the shared core is wrong: fix the core, never add a compatibility shim. If the cost exceeds 2x, batch writes.
+
+### E4b status (2026-11-02): compiled `durable fn` delivered, gates met except cost (provisional)
+
+Delivered: `durable_core` (one journal implementation compiled into the interpreter and into `windjammer-runtime`), `windjammer_runtime::durable` (`Journalable` encodings, `run`, `step`, `WJ_JOURNAL_DIR`, `WJ_CRASH_AFTER`), lowering in `codegen/rust/durable_lowering.rs`, and a build-time refusal naming what a compiled build cannot journal yet (methods, user-defined types in arguments, returns or step results).
+
+| Gate | Result |
+|---|---|
+| One journal: interpreter crash then compiled resume, and the reverse, output and files equal the uninterrupted run, at every step boundary | **Met: 70 crash points agree, both directions, on the 5 sample workflows** (`WJ_DURABLE_COMPILED=1 cargo test --test durable_compiled`; the run builds the samples, about 3 minutes) |
+| Vectors: journal scenarios and value encodings against both implementations | **Met** (`tests/effects/durable_vectors.json`, `durable_value_vectors.json`; `durable_core` and runtime unit tests) |
+| Emitted code: one `durable::run` per durable function, one `durable::step` per step position, none in a program without `durable fn`, no `#[durable]` attribute | **Met** (`durable_compiled`) |
+| Compiled journal cost at most 2x per step over in-memory | **Not measured** (machine loaded); provisional until the benchmark runs on a quiet machine |
+
+Found by the gate: the generated Rust emitted the `durable` marker as an attribute, and the compiled runtime lacked `fs::append` that the interpreter has. The second produced a new gate (`every_sink_of_an_authority_module_exists_in_the_compiled_runtime`) with a shrink-only list of 8 sinks the compiled runtime still lacks (`env::home_dir`, `env::remove`, `env::set`, `fs::canonicalize`, `fs::metadata`, `fs::set_current_dir`, `fs::write_bytes`, `process::run_with_args`). Kill criteria: none triggered.
 
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 

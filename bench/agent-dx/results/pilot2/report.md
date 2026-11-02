@@ -6,10 +6,10 @@
 
 | arm | name | trials | context pack |
 |---|---|---|---|
-| A | interpreted-first | 30 | yes |
-| B | compiled-first | 30 | yes |
+| A | interpreted-first | 30 | WINDJAMMER_REFERENCE.md |
+| B | compiled-first | 30 | WINDJAMMER_REFERENCE.md |
 | C | no-pack | 30 | no |
-| D | interpreted+final-build | 30 | yes |
+| D | interpreted+final-build | 30 | WINDJAMMER_REFERENCE.md |
 | G | go | 30 | no |
 | P | python | 30 | no |
 | R | rust | 30 | no |
@@ -75,13 +75,13 @@
 | unsupported | 0 | 0 | 33 | 0 | 0 | 0 | 0 |
 | api-misuse | 0 | 0 | 12 | 0 | 0 | 0 | 0 |
 | syntax | 2 | 1 | 4 | 3 | 0 | 0 | 0 |
-| runtime-panic | 0 | 0 | 5 | 0 | 0 | 0 | 0 |
 | trait-bound | 0 | 1 | 0 | 4 | 0 | 0 | 0 |
+| runtime-panic | 0 | 0 | 5 | 0 | 0 | 0 | 0 |
 | name-resolution | 0 | 0 | 4 | 0 | 0 | 0 | 0 |
 
 ## Interpreter vs compiled divergence
 
-50 of 210 trials had an interpreted hidden-oracle result different from the compiled one (44 silent: interpreter green, compiled red).
+50/210 trials had an interpreted hidden-oracle result different from the compiled one (44 silent: interpreter green, compiled red).
 - t003_prime_counts arm A trial 1: interp=True compiled=False
 - t003_prime_counts arm C trial 0: interp=True compiled=False
 - t003_prime_counts arm C trial 2: interp=True compiled=False
@@ -138,6 +138,24 @@ APS = 100 * P^0.4 * I^0.2 * T^0.2 * W^0.2 (ratios baseline/Windjammer, clipped t
 | B | agent-thinking seconds (API time) | 16.2 | 17.6 | +1.4 |
 | B | tool-wait seconds (wj commands) | 66.1 | 98.4 | +32.2 |
 | B | silent divergence (interp pass, compiled fail) | 0.000 | 0.100 | +0.100 |
+
+## Paired differences versus control B (task-clustered 95% CI)
+
+| metric | A - B | C - B | D - B | G - B | P - B | R - B |
+|---|---|---|---|---|---|---|
+| pass@1 (compiled hidden oracle) | -0.467 [-0.733, -0.167] | -0.667 [-0.867, -0.433] | -0.033 [-0.267, 0.167] | 0.133 [0.000, 0.300] | 0.133 [0.000, 0.300] | 0.133 [0.000, 0.300] |
+| verify calls (wj check/run/test/build) | -0.3 [-1.1, 0.3] | 4.8 [3.3, 6.6] | 1.6 [0.8, 2.5] | -1.8 [-2.7, -1.2] | -2.1 [-3.0, -1.6] | -1.1 [-2.1, -0.6] |
+| verify calls to green (passing trials) | -0.5 [-1.5, 0.2] | 2.8 [1.3, 4.7] | 1.0 [0.0, 2.1] | -0.8 [-1.1, -0.4] | n/a | -1.0 [-2.1, -0.4] |
+| agent turns | -1.7 [-2.8, -0.7] | 16.9 [13.2, 19.9] | -1.5 [-3.0, 0.2] | -2.5 [-3.5, -1.5] | -1.4 [-2.8, -0.1] | -2.0 [-3.1, -1.1] |
+| tokens in (incl. cache) | -17160.9 [-31341.8, -6915.9] | 177898.2 [137627.8, 213105.1] | 2858.1 [-22669.0, 29000.9] | -33217.6 [-51043.0, -21126.6] | -28001.5 [-47294.0, -14051.0] | -34448.6 [-51911.6, -22323.2] |
+| tokens out | -329.4 [-535.5, -141.6] | 2185.2 [1551.2, 2798.7] | -1052.6 [-1587.8, -518.0] | -648.3 [-1007.5, -365.2] | -777.0 [-1166.7, -397.6] | -527.1 [-781.7, -299.2] |
+| cost USD | -0.009 [-0.015, -0.005] | 0.080 [0.069, 0.092] | 0.017 [0.009, 0.026] | -0.017 [-0.025, -0.011] | -0.019 [-0.027, -0.011] | -0.016 [-0.023, -0.011] |
+| wall seconds | -90.0 [-169.0, -45.4] | 29.8 [-76.3, 143.4] | 227.1 [131.0, 300.0] | -92.6 [-176.5, -45.1] | -31.4 [-133.0, 42.4] | -90.1 [-170.0, -43.4] |
+| agent-thinking seconds (API time) | -5.1 [-9.3, -1.3] | 48.0 [37.2, 58.5] | 14.5 [6.4, 26.4] | -7.1 [-12.6, -3.0] | -6.5 [-11.6, -2.4] | -7.3 [-12.0, -3.6] |
+| tool-wait seconds (wj commands) | -97.8 [-204.1, -39.4] | -95.7 [-202.0, -37.4] | 228.0 [105.0, 311.8] | -96.8 [-203.2, -38.5] | -98.4 [-204.6, -40.0] | -95.3 [-202.5, -36.7] |
+| harness permission denials (should be 0) | -0.1 [-0.2, 0.0] | 1.0 [0.7, 1.3] | -0.1 [-0.4, 0.0] | -0.1 [-0.3, 0.0] | -0.1 [-0.4, 0.0] | -0.1 [-0.3, 0.0] |
+| capability denials seen (WJ004x) | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] |
+| silent divergence (interp pass, compiled fail) | 0.467 [0.200, 0.733] | 0.567 [0.300, 0.800] | 0.033 [-0.167, 0.267] | -0.100 [-0.267, 0.000] | -0.100 [-0.267, 0.000] | -0.100 [-0.267, 0.000] |
 
 Mode violations (agent used the other arm's loop commands): 0.
 

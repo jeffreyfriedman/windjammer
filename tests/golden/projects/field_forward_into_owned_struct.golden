@@ -1,0 +1,51 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod web;
+
+// Re-export public items
+pub use web::*;
+// ==== main.rs ====
+mod web;
+fn main() {
+    let a = web::Reply { status: 404_i64, body: String::from("missing") };
+    let b = web::Reply { status: 200_i64, body: String::from("ok") };
+    println!("{} {}", web::render(a), web::render(b));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod web;
+
+// Re-export public items
+pub use web::*;
+// ==== web.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Reply {
+    pub status: i64,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Wire {
+    pub text: String,
+}
+
+#[inline]
+pub fn wire(status: i64, body: &str) -> Wire {
+    Wire { text: format!("{}:{}", status, body) }
+}
+
+#[inline]
+pub fn render(reply: Reply) -> String {
+    let w = wire(reply.status, &reply.body);
+    w.text
+}
+

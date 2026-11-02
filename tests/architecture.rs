@@ -172,6 +172,8 @@ fn measure_all(files: &[SrcFile], map: &ModuleMap) -> BTreeMap<&'static str, Cou
         ("allow_dead_code", per_file(files, |f| arch_scan::count_allow_dead_code(&f.code))),
         ("crate_level_allow_dead_code", per_file(files, |f| arch_scan::count_crate_level_allow_dead_code(&f.code))),
         ("get_signature_calls", measure_get_signature(files)),
+        ("get_signature_calls_by_file", per_file(files, |f| arch_scan::count_get_signature(&f.code))),
+        ("signature_fallback_calls", per_file(files, |f| arch_scan::count_signature_fallbacks(&f.code))),
         ("main_lib_module_mismatch", measure_main_lib_mismatch(files)),
     ])
 }
@@ -278,6 +280,20 @@ ratchet_tests!(
     get_signature_calls_do_not_grow,
     get_signature_calls_allowlist_is_tight,
     "Do not add bare-name get_signature(&str) lookups; resolve identities once."
+);
+ratchet_tests!(
+    "get_signature_calls_by_file",
+    get_signature_calls_by_file_do_not_grow,
+    get_signature_calls_by_file_allowlist_is_tight,
+    "Per file: do not add bare-name get_signature(&str) lookups (C3, docs/spec/c3-inventory.md); \
+     look the callee up by the resolver's identity instead."
+);
+ratchet_tests!(
+    "signature_fallback_calls",
+    signature_fallback_calls_do_not_grow,
+    signature_fallback_calls_allowlist_is_tight,
+    "Suffix / bare-name / arity signature searches guess an identity (C3). Use the resolver's \
+     identity, or report Unresolved/Ambiguous as a diagnostic, instead of adding a search."
 );
 
 // ---------------------------------------------------------------------------------------------

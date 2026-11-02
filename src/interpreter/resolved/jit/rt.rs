@@ -231,18 +231,31 @@ pub(crate) unsafe extern "C" fn field_set(c: *mut Ctx, slot: i64, fp: i64, fl: i
 
 /// `v.push(x)`.
 pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) -> i64 {
-    unsafe {
+    // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
+    let off = unsafe { (*(*c).it).fast_off("packed") };
+    let mut packed = false;
+    let r = unsafe {
         with_slot(c, slot, |v| {
             let x = value(x, from_code(xt)?);
             poke(v, |v| match v {
                 Value::Vec(xs) => {
-                    Rc::make_mut(xs).push_value(x);
+                    let body = Rc::make_mut(xs);
+                    if off {
+                        body.push(x);
+                    } else {
+                        body.push_value(x);
+                        packed = body.packed().is_some();
+                    }
                     Some(0)
                 }
                 _ => None,
             })
         })
+    };
+    if packed {
+        unsafe { (*(*c).it).fast.packed += 1 };
     }
+    r
 }
 
 /// `v.len()` of a `Vec`.
@@ -294,8 +307,10 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     {
         // SAFETY: `buf` has `nbuf` slots, every struct field index is one of them.
         let all = unsafe { std::slice::from_raw_parts_mut(buf, plan.nbuf.max(1)) };
+        // test-only mutant `box`: the first write after a struct `let` fills the previous binding's box
+        let reuse = mutant(it, "box");
         for sp in &st.structs {
-            super::osr::write(it, b + sp.slot, reg.kind(sp.slot), super::osr::make_struct(sp, all), sp.fresh);
+            super::osr::write(it, b + sp.slot, reg.kind(sp.slot), super::osr::make_struct(sp, all), sp.fresh && !reuse);
         }
     }
     it.mark(crate::interpreter::resolved::osr::loc(st.stmt));

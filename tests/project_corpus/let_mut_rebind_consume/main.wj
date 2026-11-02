@@ -1,0 +1,13 @@
+// A formal rebound by `let mut out = store` and returned (multipass_bare_pass_demotion unit test
+// restore_undoes_preexisting_mut_borrow_on_let_mut_rebind_consume): it must stay owned even though the
+// caller in another module passes bare bindings. Expected by hand: 1 + 1 + 1, the original unchanged.
+// expect: 3 0
+mod store
+
+fn main() {
+    let s = store::Store { n: 0 }
+    let a = store::put_version(s)
+    let b = store::put_version(a)
+    let c = store::put_version(b)
+    println("${c.n} ${s.n}")
+}

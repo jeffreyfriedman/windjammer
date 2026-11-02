@@ -73,6 +73,17 @@ impl RuntimeError {
             (ErrorKind::Limit, s) => {
                 out.push_str(&format!("error: {}{}", self.message, s.as_ref().map(|s| format!("\n  --> {}", s)).unwrap_or_default()))
             }
+            (ErrorKind::Unsupported | ErrorKind::Semantic, s) if crate::error::runtime_text::classify(&self.message).is_some() => {
+                // Presentation only: stable code + a one-line "what to write" (diagnostics::runtime_text).
+                let c = crate::error::runtime_text::classify(&self.message).unwrap();
+                out.push_str(&format!(
+                    "error: {} [{}]{}\n  = help: {}",
+                    c.message,
+                    c.code,
+                    s.as_ref().map(|s| format!("\n  --> {}", s)).unwrap_or_default(),
+                    c.help
+                ));
+            }
             (ErrorKind::Unsupported, s) => {
                 out.push_str(&format!(
                     "error: unsupported in the interpreter: {}{}\n  = help: run it compiled with `wj run --compiled`",

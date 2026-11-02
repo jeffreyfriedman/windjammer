@@ -82,6 +82,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.pop_function_local_import_scope(import_scope);
         self.in_function_body = old_in_function_body;
+        if func.decorators.iter().any(|d| d.name == "durable") {
+            body_code = self.wrap_durable_body(func, body_code); // ADR-0021 E4b
+        }
 
         // PHASE 6 OPTIMIZATION: Add defer drop logic before function returns
         // This defers heavy deallocations to a background thread for 10,000x speedup

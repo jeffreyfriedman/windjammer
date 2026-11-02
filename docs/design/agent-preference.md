@@ -1,9 +1,7 @@
 ---
-status: proposal
-last_verified: 85a9c47b9571
+status: current
+last_verified: a13878ea351e
 ---
-> **Proposal: not implemented.** This page defines a measurement program; the harness in `bench/agent-dx` exists, the targets below are goals.
-
 # Making Windjammer the language agents prefer
 
 Goal: given the same task, a coding agent finishes sooner, with fewer tokens and fewer retries, in Windjammer than in
@@ -114,7 +112,7 @@ conservative per-turn assumptions; the calibrated estimate is $14). Intervals ar
 | silent divergence (interpreter green, compiled red) | 0.43 | 0 | 0.43 [0.17, 0.70] |
 
 Reading: H1 holds for speed and tokens (about 40% fewer input tokens, a quarter of the wall time) and fails for correctness
-as the compiler and interpreter stand today: 13 of 30 interpreted-first programs ran correctly in the interpreter and did not
+as the compiler and interpreter stand today: 13/30 interpreted-first programs ran correctly in the interpreter and did not
 build, mostly from integer-width literal typing (`docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md`) and a method
 the interpreter accepts but rustc lacks (t018 fails in both arms). The path to H1 is therefore R2/R5 of
 `interpreter-primary-readiness.md` (check-vs-build parity), plus a third arm A' (interpreted-first with one `wj build` before
@@ -189,3 +187,41 @@ F -14.9k [-30.7k, -1.3k], T -15.3k [-29.3k, -4.2k]; cost differences are all wit
   mismatched-types diagnostic; (4) the stdin recipe is a pure recipe with no diagnostic (no error ever fires), so it must stay in the pack.
 - **Recommendation.** Ship the 1.5 KB sheet as the default pack (about -6k tokens per turn-1 context), keep the full pack as `wj docs` content, point the sheet at
   `wj docs`/`wj explain` rather than MCP, and treat MCP as an IDE integration, not a token saver. Re-run with a tip-ablation arm and 5 trials per cell before cutting further.
+
+## Tip ablation (Nov 2026): which sheet tips earn their tokens?
+
+Arms: **S** is the default 1.5 KB sheet (`docs/agent/WINDJAMMER_FOR_AGENTS.md`); **Sa..Sf** each drop one bullet (strings, ownership, input, `len`, printing, tools line).
+Same compiled-first loop, same sandbox, 10 tasks, 3 trials per cell (30 per arm), 210 trials, $12.01. Packs: `bench/agent-dx/packs/ablation/` (a test keeps them equal to a fresh
+render). Records and per-turn logs: `bench/agent-dx/results/ablation/`. Machine load was 40-80 for most of the run, so wall seconds are not reported; control S had a low
+pass rate (0.87) against 0.90-0.97 for the same sheet in pilot 3, so pass-rate differences versus S are inflated by about 0.05-0.1 and no pass difference is significant.
+
+| arm (dropped tip) | pass@1 | turns | tokens in | cost | signal when dropped |
+|---|---|---|---|---|---|
+| S (none) | 0.87 | 6.8 | 46.7k | $0.048 | |
+| Sa strings | 0.97 | 6.3 | 46.4k | $0.046 | String/`char` mismatch in 10 trials vs 6 |
+| Sb ownership | 1.00 | 4.9 | 33.7k | $0.046 | lint codes in 17 trials vs 5 |
+| Sc **input** | 0.83 | **16.6** | **197.9k** | **$0.130** | 794 `wj docs` calls, trait-bound and name errors, all 5 failures hit the 25-turn cap |
+| Sd len | 1.00 | 6.4 | 48.1k | $0.048 | width errors (`usize`/`i32`) in 10 trials vs 3 |
+| Se printing | 0.90 | 4.6 | 33.3k | $0.043 | no Display error in either arm |
+| Sf tools line | 0.97 | 4.5 | 29.7k | $0.040 | `wj docs` used in 0 trials vs 3 |
+
+Paired differences versus S (task-clustered 95% CI): dropping **input** costs +9.8 turns [4.6, 15.5], +151k input tokens [93k, 213k] and +$0.082 per trial [0.065, 0.097]; dropping the tools line
+saves 2.3 turns [-4.4, -0.4], 17k tokens [-36k, -2k] and $0.008 [-0.016, 0.000]; dropping ownership or printing saves 2 turns and 13k tokens with intervals that include zero; strings and `len` change nothing measurable.
+
+Verdict per tip:
+
+| tip | verdict | where the knowledge should live |
+|---|---|---|
+| input recipe (`fs::read_to_string("/dev/stdin")`) | keep, essential: no error ever fires and docs search could not find it (`wj docs stdin` returned nothing) | sheet; plus the docs-search keyword fix below |
+| `len()` is `usize` (`as int`) | prevents 7 of 30 error round trips, costs 40 bytes | sheet until diagnostic R1 lands, then delete (`docs/design/diagnostic-requests-from-agent-pack.md`) |
+| strings (`string` not `String`, no `.to_string()` on literals) | does not earn its bytes | lint W0006/W0010 text and diagnostic R2 |
+| ownership (no `&`, `.iter()`, `.unwrap()`) | does not earn its bytes: lints teach it in one round trip | lint messages (W0001-W0005) |
+| printing `Option`/`Result` with `${x:?}`, HashMap order | no signal either way | reference (`wj docs`) |
+| "Unsure? `wj docs` / `wj explain`" line | agents rarely follow it (3 of 30) and the arm without it was cheaper | `AGENTS.md`, the loop text, and the diagnostics themselves |
+
+Sheet v2 candidate (about 0.9 KB): types and basics, the input recipe, `len() as int`, the build loop. It needs one confirming run (S2 versus S versus the full reference, 5 trials per cell)
+before it replaces the current sheet; the size ratchet stays at 2 KB until then.
+
+Side finding fixed in this change: guide entries in `wj docs` were indexed by heading and first line only, so `wj docs stdin` found nothing and agents without the input tip
+spent 26 turns each searching. Guide sections now carry their 20 most frequent identifier words as search tags (`src/agent_index/docs_search.rs::section_keywords`; `wj docs stdin` now returns the section).
+A follow-up check of the no-input-tip arm with the fixed index (8 trials, `results/ablation-sc-docsfix/`, stopped by the permission-denial guard after agents probed with compound shell commands) did not remove the flailing: 19.9 turns and 24 docs calls per trial, 7 of 8 passing. Searching helps only when the agent asks for the right word, so the recipe stays in the sheet.

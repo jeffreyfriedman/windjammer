@@ -1,0 +1,37 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod stats;
+
+// Re-export public items
+pub use stats::*;
+// ==== main.rs ====
+mod stats;
+fn main() {
+    let xs = vec![1_i64, 2_i64, 3_i64];
+    let a = stats::total(&xs);
+    let b = stats::total(&xs);
+    println!("{} {} {}", a, b, xs.len());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod stats;
+
+// Re-export public items
+pub use stats::*;
+// ==== stats.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn total(xs: Vec<i64>) -> i64 {
+    let mut sum = 0_i64;
+    for x in xs {
+        sum += x;
+    }
+    sum
+}
+

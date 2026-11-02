@@ -31,7 +31,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 pub(super) type E = &'static Expression<'static>;
-type S = &'static Statement<'static>;
+pub(super) type S = &'static Statement<'static>;
 type Loc = Option<&'static Location>;
 
 pub(super) struct Cx<'a> {
@@ -581,6 +581,12 @@ fn stmt_tail(cx: &mut Cx, s: S) -> Option<Tail> {
 /// A statement: lowered when the compiler can, else a walker island (`island.rs`). Only `defer` and a body `use`
 /// (which act on the walker frame) are refused: the function then runs in the walker.
 fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
+    if let Some(c) = super::mapfast::insert_stmt(cx, s) {
+        return Some(c);
+    }
+    if let Some(c) = super::strfast::push_str_stmt(cx, s) {
+        return Some(c);
+    }
     if let Some(c) = stmt_native(cx, s) {
         return Some(c);
     }

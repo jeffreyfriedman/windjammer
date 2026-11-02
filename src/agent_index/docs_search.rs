@@ -242,6 +242,7 @@ fn guide_entries(dir: &Path, root: &Path, out: &mut Vec<DocEntry>) -> Result<()>
                     .find(|n| !n.trim().is_empty() && !n.starts_with("```"))
                     .map(|n| n.trim().to_string())
                     .unwrap_or_default();
+                let body: Vec<&str> = lines[i + 1..].iter().take_while(|n| !n.starts_with("## ")).copied().collect();
                 out.push(DocEntry {
                     kind: "guide".into(),
                     name: h.trim().to_string(),
@@ -249,12 +250,74 @@ fn guide_entries(dir: &Path, root: &Path, out: &mut Vec<DocEntry>) -> Result<()>
                     signature: String::new(),
                     summary: summary.chars().take(200).collect(),
                     source: rel(&f, root),
-                    tags: vec![],
+                    tags: section_keywords(&body),
                 });
             }
         }
     }
     Ok(())
+}
+
+const KEYWORD_STOP: &[&str] = &[
+    "the", "and", "for", "with", "that", "this", "from", "you", "are", "not", "use", "can", "but", "will", "its", "into", "when", "then",
+    "than", "have", "has", "was", "all", "any", "one", "two", "your", "they", "them", "which", "what", "where", "how", "each", "also",
+    "same", "only", "more", "most", "such", "both", "does", "did", "see", "via", "may", "out", "off", "per", "new", "own", "let", "mut",
+    "fn", "println", "expect", "windjammer", "wj",
+];
+
+/// The 20 most frequent identifier-like words of a guide section (prose and code), so a query such as `stdin` finds the section
+/// that shows `fs::read_to_string("/dev/stdin")` even when the word is not in the heading or the first line.
+pub(crate) fn section_keywords(body: &[&str]) -> Vec<String> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for line in body {
+        for w in line.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+            let w = w.to_ascii_lowercase();
+            if w.len() >= 3 && w.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) && !KEYWORD_STOP.contains(&w.as_str()) {
+                *counts.entry(w).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut v: Vec<(String, usize)> = counts.into_iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    v.into_iter().take(20).map(|(w, _)| w).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn section_keywords_surface_words_that_are_only_in_code_or_deep_in_the_section() {
+        let body = ["Programs read input.", "", "```windjammer", "let t = fs::read_to_string(\"/dev/stdin\")", "```", "`stdin` is a device."];
+        let kw = section_keywords(&body);
+        assert!(kw.contains(&"stdin".to_string()), "{kw:?}");
+        assert!(kw.contains(&"read_to_string".to_string()), "{kw:?}");
+        assert!(!kw.contains(&"the".to_string()));
+    }
+
+    #[test]
+    fn keywords_are_capped_and_deterministic() {
+        let text: Vec<String> = (0..60).map(|i| format!("word{i:02}x")).collect();
+        let body: Vec<&str> = text.iter().map(|s| s.as_str()).collect();
+        let a = section_keywords(&body);
+        assert_eq!(a.len(), 20);
+        assert_eq!(a, section_keywords(&body));
+    }
+
+    #[test]
+    fn a_term_only_present_in_a_section_body_finds_that_section() {
+        let idx = vec![DocEntry {
+            kind: "guide".into(),
+            name: "Reading input and arguments".into(),
+            module: "REF".into(),
+            signature: String::new(),
+            summary: "Programs that read standard input".into(),
+            source: "docs/agent/REF.md".into(),
+            tags: section_keywords(&["`fs::read_to_string(\"/dev/stdin\")`", "stdin stdin"]),
+        }];
+        assert_eq!(search(&idx, "stdin", 5).len(), 1);
+        assert!(search(&idx, "zzzz", 5).is_empty());
+    }
 }
 
 fn error_entries(out: &mut Vec<DocEntry>) {

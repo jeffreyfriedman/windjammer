@@ -113,6 +113,10 @@
       "path": "std/cli.wj"
     },
     {
+      "module": "mcp",
+      "path": "std/mcp.wj"
+    },
+    {
       "module": "crypto",
       "path": "std/crypto.wj"
     },

@@ -1,6 +1,6 @@
 //! Shared-schema view of rustc errors that were translated by [`crate::error_mapper`].
 
-use super::model::{Category, Diagnostic, Origin, Severity, Span};
+use super::model::{Applicability, Category, Diagnostic, Edit, Fix, Origin, Severity, Span};
 use super::source::SourceIndex;
 use crate::error_mapper::{DiagnosticLevel, WindjammerDiagnostic};
 use crate::source_map::Location;
@@ -59,6 +59,17 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
         out.origin = Origin::RustcMapped;
     }
     out.primary_span = Some(refine(cache, &d.location, &code, &d.message, &mut out.notes));
+    if let Some(hint) = &d.fix {
+        let file = d.location.file.to_string_lossy().to_string();
+        if let Some(text) = cache.text(&file).map(str::to_string) {
+            if let Some((fix, exact)) = locate_fix(&file, &text, d.location.line, hint, d.primary_text.as_deref()) {
+                if let Some(sp) = exact {
+                    out.primary_span = Some(sp);
+                }
+                out.fixes.push(fix);
+            }
+        }
+    }
     for s in d.spans.iter().filter(|s| !s.is_primary) {
         let mut sp = cache.span(&s.location, 1);
         sp.label = s.label.clone();
@@ -126,4 +137,54 @@ fn refine(cache: &mut SourceCache, loc: &Location, code: &str, message: &str, no
     notes.push("location is approximate (no source map for this file)".to_string());
     let last = lines.len().max(1);
     ix.word_span_at(loc.line.clamp(1, last), 1)
+}
+
+/// Find the expression rustc complained about on the mapped `.wj` line and build the edit.
+/// Only exact, unique matches yield a fix: the fix is never a guess at a location.
+fn locate_fix(
+    file: &str,
+    text: &str,
+    line_no: usize,
+    hint: &super::hints::FixHint,
+    primary_text: Option<&str>,
+) -> Option<(Fix, Option<Span>)> {
+    use super::hints::FixAnchor;
+    let ix = SourceIndex::new(file.to_string(), text);
+    let line_start = ix.offset(line_no, 1);
+    let line = text.get(line_start..)?.lines().next()?;
+    let unique = |needle: &str, whole_word_only: bool| -> Option<usize> {
+        let hits: Vec<usize> = line
+            .match_indices(needle)
+            .map(|(i, _)| i)
+            .filter(|&i| {
+                !whole_word_only
+                    || (!line[..i].chars().next_back().is_some_and(|c| c.is_alphanumeric() || c == '_')
+                        && !line[i + needle.len()..].chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_'))
+            })
+            .collect();
+        (hits.len() == 1).then(|| hits[0])
+    };
+    let insert_at = |at: usize, s: &str| Edit { span: ix.span(line_start + at, line_start + at), replacement: s.to_string() };
+    let (edits, exact) = match &hint.anchor {
+        FixAnchor::Expr { prefix, suffix } => {
+            let needle = primary_text?.trim();
+            if needle.is_empty() {
+                return None;
+            }
+            let i = unique(needle, true)?;
+            let mut edits = Vec::new();
+            if !prefix.is_empty() {
+                edits.push(insert_at(i, prefix));
+            }
+            if !suffix.is_empty() {
+                edits.push(insert_at(i + needle.len(), suffix));
+            }
+            (edits, Some(ix.span(line_start + i, line_start + i + needle.len())))
+        }
+        FixAnchor::BeforeText { needle, insert } => {
+            let i = unique(needle, false)?;
+            (vec![insert_at(i, insert)], None)
+        }
+    };
+    Some((Fix { description: hint.description.clone(), applicability: Applicability::MaybeIncorrect, edits }, exact))
 }
