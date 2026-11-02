@@ -138,8 +138,9 @@ digraph deps {
   "cargo_integration" -> "error_mapper" [label="1"];
   "cargo_integration" -> "source_map" [label="1"];
   "cargo_integration" -> "test_runner" [label="1"];
+  "cargo_toml" -> "cargo_cache" [label="1"];
   "cargo_toml" -> "compiler" [label="1"];
-  "cargo_toml" -> "compiler_config" [label="4"];
+  "cargo_toml" -> "compiler_config" [label="5"];
   "cargo_toml" -> "config" [label="7"];
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="2"];
@@ -161,7 +162,7 @@ digraph deps {
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="19"];
-  "cli" -> "cargo_toml" [label="2"];
+  "cli" -> "cargo_toml" [label="4"];
   "cli" -> "check" [label="11"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="3"];
@@ -182,7 +183,7 @@ digraph deps {
   "cli" -> "package" [label="5"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
-  "cli" -> "source_map" [label="4"];
+  "cli" -> "source_map" [label="6"];
   "cli" -> "test_runner" [label="1"];
   "cli" -> "wjsl" [label="1"];
   "cli_commands" -> "build_utils" [label="1"];
@@ -222,10 +223,10 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="380"];
+  "codegen" -> "ir" [label="381"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="669"];
+  "codegen" -> "parser" [label="670"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
@@ -347,8 +348,8 @@ digraph deps {
   "ir" -> "auto_clone" [label="1"];
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
-  "ir" -> "lexer" [label="18"];
-  "ir" -> "parser" [label="66"];
+  "ir" -> "lexer" [label="20"];
+  "ir" -> "parser" [label="77"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="5"];
   "ir" -> "type_classification" [label="30"];
