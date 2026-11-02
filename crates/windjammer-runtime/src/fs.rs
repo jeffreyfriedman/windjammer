@@ -54,6 +54,9 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub fn size(&self) -> u64 {
+        self.len
+    }
     pub fn len(&self) -> u64 {
         self.len
     }
