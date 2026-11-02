@@ -45,10 +45,10 @@ enum SimpleEnum {
 
 #[inline]
 fn test_number_literals() -> i64 {
-    let hex1 = 255;
+    let hex1 = 255_i64;
     let _hex2 = 3735928559_i64;
     let _hex3 = 4294967295_i64;
-    let bin1 = 10;
+    let bin1 = 10_i64;
     let _bin2 = 240_i64;
     let oct1 = 493_i64;
     let _oct2 = 420_i64;
@@ -85,7 +85,7 @@ fn test_semicolons() -> i32 {
 
 #[inline]
 fn test_auto_mut() -> i32 {
-    let mut x: i32 = 10_i32;
+    let mut x = 10_i32;
     x = 20_i32;
     x
 }
