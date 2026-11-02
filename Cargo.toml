@@ -198,6 +198,11 @@ path = "tests/interpreter_engine_parity_test.rs"
 name = "fast_paths"
 path = "tests/interpreter_fast_paths_test.rs"
 
+# The calls a build-slot gate makes, interpreted: cargo test --release --test slot_gate
+[[test]]
+name = "slot_gate"
+path = "tests/interpreter_slot_gate_test.rs"
+
 # Packed vectors vs unpacked ones through every writing builtin: cargo test --release --test packed_vec
 [[test]]
 name = "packed_vec"
