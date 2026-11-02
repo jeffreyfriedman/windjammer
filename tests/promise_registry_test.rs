@@ -236,6 +236,9 @@ fn bad_mention(cli: &clap::Command, mention: &str) -> Option<String> {
     }
     let mut sub = cli.find_subcommand(first).cloned()?;
     for t in &toks[1..] {
+        if sub.get_name() == "run" && t.ends_with(".wj") {
+            break; // everything after the program file belongs to the script, not to `wj run`
+        }
         if let Some(s) = sub.find_subcommand(t).cloned() {
             sub = s;
             continue;
