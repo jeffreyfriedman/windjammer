@@ -76,6 +76,9 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
         return Ok(status.code().unwrap_or(1));
     }
 
+    // Rust/wasm: a stable per-source directory keeps the program crate warm between runs.
+    let workdir = crate::cargo_cache::build_profile::run_workdir(path);
+    let output_dir = workdir.as_path();
     // Build to temp directory (build_project handles both files and directories)
     let target = match target_str.to_lowercase().as_str() {
         "rust" => crate::CompilationTarget::Rust,
@@ -97,6 +100,9 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     cmd.args(["run", "--quiet"]).current_dir(output_dir);
     if release {
         cmd.arg("--release");
+    }
+    if !release {
+        crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cmd);
     }
     crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared);
 
