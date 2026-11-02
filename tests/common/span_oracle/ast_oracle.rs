@@ -172,6 +172,9 @@ impl<'a> Ctx<'a> {
         let t = self.slice(r);
         if !opts.iter().any(|o| t.ends_with(o)) {
             let tail: String = t.chars().rev().take(16).collect::<Vec<_>>().into_iter().rev().collect();
+            if std::env::var_os("SPAN_ORACLE_VERBOSE").is_some() {
+                eprintln!("DETAIL wrong-last-token:{kind} {:?} (node {}..{})", t.chars().take(60).collect::<String>(), r.0, r.1);
+            }
             f.add("wrong-last-token", kind, format!("slice ...{tail:?} should end with one of {opts:?}"));
         }
     }
