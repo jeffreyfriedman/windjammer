@@ -99,8 +99,8 @@ mod tests {
         assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0_f64");
         let result = generate_literal(&Literal::Float(10.0));
         assert!(
-            result.contains('.') && result.contains("f32"),
-            "Float literal should have decimal point and f32 suffix: {}",
+            result.contains('.') && result.contains("f64"),
+            "Float literal should have decimal point and f64 suffix: {}",
             result
         );
     }

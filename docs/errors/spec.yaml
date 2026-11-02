@@ -32,3 +32,9 @@ codes:
   - code: WJ0010
     title: Non-canonical string type
     rust_codes: []
+  - code: WJ0160
+    title: Arena value escapes its arena
+    rust_codes: []
+  - code: WJ0161
+    title: "`std::arena` is unstable"
+    rust_codes: []
