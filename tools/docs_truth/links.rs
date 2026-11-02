@@ -67,6 +67,9 @@ fn check_wj_command(cli: &Command, text: &str) -> Vec<String> {
         if matches!(t, "|" | ">" | ">>" | "&&" | "||" | ";" | "2>&1") || t.starts_with('#') || t.starts_with('<') || t.starts_with('[') || t.starts_with('$') || t.starts_with('"') {
             break;
         }
+        if chain.last().is_some_and(|c| c.get_name() == "run") && t.ends_with(".wj") {
+            break; // everything after the program file belongs to the script, not to `wj run`
+        }
         if let Some(flag) = t.strip_prefix("--") {
             let flag = flag.split('=').next().unwrap_or(flag);
             if flag.is_empty() || flag == "help" || flag == "version" {
