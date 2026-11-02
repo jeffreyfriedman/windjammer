@@ -80,10 +80,15 @@ fn cargo_diagnostics(output_dir: &Path) -> Vec<Diagnostic> {
 /// Translate the text of a failed `cargo build --message-format=json` into Windjammer diagnostics
 /// (never raw rustc text: untranslatable errors become WJ0099).
 pub(crate) fn map_cargo_failure(output_dir: &Path, text: &str) -> Vec<Diagnostic> {
+    map_cargo_failure_in(output_dir, text, None)
+}
+
+/// As [`map_cargo_failure`], resolving relative `.wj` paths against `source_root` (the project being run).
+pub(crate) fn map_cargo_failure_in(output_dir: &Path, text: &str, source_root: Option<&Path>) -> Vec<Diagnostic> {
     let text = text.to_string();
-    let maps = super::build::load_source_maps(output_dir).unwrap_or_else(|_| crate::source_map::SourceMap::new());
+    let maps = super::build::load_source_maps_quiet(output_dir).unwrap_or_else(|_| crate::source_map::SourceMap::new());
     let mapped = crate::error_mapper::ErrorMapper::new(maps).map_rustc_output(&text);
-    let mut cache = SourceCache::default();
+    let mut cache = source_root.map_or_else(SourceCache::default, SourceCache::with_root);
     let diags: Vec<Diagnostic> = mapped
         .iter()
         .filter(|d| d.level == crate::error_mapper::DiagnosticLevel::Error)

@@ -10,9 +10,23 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct SourceCache {
     texts: HashMap<String, Option<String>>,
+    /// Directory that relative `.wj` paths in source maps are relative to (the project being run).
+    root: Option<std::path::PathBuf>,
 }
 
 impl SourceCache {
+    pub fn with_root(root: impl Into<std::path::PathBuf>) -> Self {
+        Self { texts: HashMap::new(), root: Some(root.into()) }
+    }
+
+    /// A relative path that exists under the root becomes that absolute path.
+    pub fn resolve(&self, file: &std::path::Path) -> std::path::PathBuf {
+        match &self.root {
+            Some(r) if file.is_relative() && !file.exists() && r.join(file).exists() => r.join(file),
+            _ => file.to_path_buf(),
+        }
+    }
+
     pub fn text(&mut self, file: &str) -> Option<&str> {
         self.texts
             .entry(file.to_string())
@@ -21,7 +35,7 @@ impl SourceCache {
     }
 
     fn span(&mut self, loc: &Location, len_hint: usize) -> Span {
-        let file = loc.file.to_string_lossy().to_string();
+        let file = self.resolve(&loc.file).to_string_lossy().to_string();
         match self.text(&file) {
             Some(t) => SourceIndex::new(file, t).word_span_at_or(loc.line, loc.column, len_hint),
             None => Span {
@@ -39,6 +53,9 @@ impl SourceCache {
 }
 
 pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Diagnostic {
+    let mut resolved = d.clone();
+    resolved.location.file = cache.resolve(&d.location.file);
+    let d = &resolved;
     let severity = match d.level {
         DiagnosticLevel::Error => Severity::Error,
         DiagnosticLevel::Warning => Severity::Warning,
@@ -59,10 +76,48 @@ pub fn from_windjammer(d: &WindjammerDiagnostic, cache: &mut SourceCache) -> Dia
         out.origin = Origin::RustcMapped;
     }
     out.primary_span = Some(refine(cache, &d.location, &code, &d.message, &mut out.notes));
+    // The expression rustc highlighted usually appears verbatim in the `.wj` source. When it occurs
+    // exactly once in the file, that is a better location than the (approximate) line map.
+    let mut line_for_fix = d.location.line;
+    if let Some(needle) = d.primary_text.as_deref().map(str::trim).filter(|n| n.chars().count() >= 4) {
+        let file = d.location.file.to_string_lossy().to_string();
+        if let Some(text) = cache.text(&file).map(str::to_string) {
+            let hits: Vec<usize> = text.match_indices(needle).map(|(i, _)| i).collect();
+            if hits.len() == 1 {
+                let sp = SourceIndex::new(file, &text).span(hits[0], hits[0] + needle.len());
+                line_for_fix = sp.line_start;
+                out.primary_span = Some(sp);
+            } else if hits.is_empty() {
+                // Generated Rust adds parentheses and spaces: compare with those removed, line by line.
+                let norm = |t: &str| {
+                    // Codegen also suffixes integer/float literals (`48_i64`).
+                    let mut t = t.to_string();
+                    for suf in ["_i8", "_i16", "_i32", "_i64", "_i128", "_isize", "_u8", "_u16", "_u32", "_u64", "_u128", "_usize", "_f32", "_f64"] {
+                        t = t.replace(suf, "");
+                    }
+                    t.chars().filter(|c| !c.is_whitespace() && *c != '(' && *c != ')').collect::<String>()
+                };
+                let n = norm(needle);
+                if n.chars().count() >= 4 {
+                    let mut found = text.split_inclusive('\n').scan(0usize, |off, l| {
+                        let start = *off;
+                        *off += l.len();
+                        Some((start, l))
+                    }).filter(|(_, l)| norm(l).contains(&n));
+                    if let (Some((start, l)), None) = (found.next(), found.next()) {
+                        let lead = l.len() - l.trim_start().len();
+                        let sp = SourceIndex::new(file, &text).span(start + lead, start + l.trim_end().len());
+                        line_for_fix = sp.line_start;
+                        out.primary_span = Some(sp);
+                    }
+                }
+            }
+        }
+    }
     if let Some(hint) = &d.fix {
         let file = d.location.file.to_string_lossy().to_string();
         if let Some(text) = cache.text(&file).map(str::to_string) {
-            if let Some((fix, exact)) = locate_fix(&file, &text, d.location.line, hint, d.primary_text.as_deref()) {
+            if let Some((fix, exact)) = locate_fix(&file, &text, line_for_fix, hint, d.primary_text.as_deref()) {
                 if let Some(sp) = exact {
                     out.primary_span = Some(sp);
                 }

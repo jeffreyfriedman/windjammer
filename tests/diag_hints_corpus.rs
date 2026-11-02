@@ -63,7 +63,8 @@ fn blocks(sample: &str) -> Vec<Block> {
             b.text.push('\n');
         }
     }
-    out.retain(|b| !b.msg.starts_with("could not compile") && !b.msg.starts_with("aborting"));
+    // Samples were cut at a fixed length: a header that is a prefix of "could not compile" is noise.
+    out.retain(|b| !b.msg.starts_with("could not compile") && !b.msg.starts_with("aborting") && !(b.msg.len() < 17 && "could not compile".starts_with(b.msg.as_str())));
     out
 }
 
