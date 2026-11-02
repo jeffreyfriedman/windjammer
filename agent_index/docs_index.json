@@ -5197,6 +5197,17 @@
   {
     "kind": "stdlib",
     "module": "std::crypto",
+    "name": "constant_time_eq",
+    "signature": "fn constant_time_eq(a: string, b: string) -> bool",
+    "source": "std/crypto.wj",
+    "summary": "/ Constant-time string equality: time depends on the lengths only, never on where the strings / first differ. Use it to compare tokens, signatures and other sec",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
     "name": "hash_password",
     "signature": "fn hash_password(password: string) -> Result<string, string>",
     "source": "std/crypto.wj",
@@ -5223,6 +5234,28 @@
     "signature": "fn hash_password_with_cost(password: string, cost: int) -> Result<string, string>",
     "source": "std/crypto.wj",
     "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "hmac_sha256",
+    "signature": "fn hmac_sha256(key: string, data: string) -> string",
+    "source": "std/crypto.wj",
+    "summary": "HMAC-SHA-256 (RFC 2104; RFC 4231 test vectors). Pure computation: no capability needed. / HMAC-SHA-256 of `data` under `key`, as lowercase hex. Any key length i",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "hmac_sha256_bytes",
+    "signature": "fn hmac_sha256_bytes(key: Vec<u8>, data: Vec<u8>) -> Vec<u8>",
+    "source": "std/crypto.wj",
+    "summary": "/ HMAC-SHA-256 over raw bytes; returns the 32-byte tag.",
     "tags": [
       "fn"
     ]
@@ -5300,6 +5333,17 @@
     "signature": "fn sha512_bytes(data: Vec<u8>) -> Vec<u8>",
     "source": "std/crypto.wj",
     "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "verify_hmac_sha256",
+    "signature": "fn verify_hmac_sha256(key: string, data: string, expected_hex: string) -> bool",
+    "source": "std/crypto.wj",
+    "summary": "/ True when `expected_hex` (hex, any case) is the HMAC-SHA-256 of `data` under `key`. / The comparison is constant-time; malformed or wrong-length hex is `false",
     "tags": [
       "fn"
     ]
