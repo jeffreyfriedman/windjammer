@@ -40,14 +40,12 @@ bench/agent-dx/solutions/wj/t050_cat_number/main.wj W0005
 bench/agent-dx/solutions/wj/t051_file_transform/main.wj W0005
 bench/agent-dx/solutions/wj/t052_csv_columns/main.wj W0005
 bench/agent-dx/solutions/wj/t053_cli_flags/main.wj W0005
-bench/agent-dx/solutions/wj/t054_dir_tree/main.wj WJ0015
 bench/agent-dx/solutions/wj/t055_log_summary/main.wj W0005
 bench/agent-dx/solutions/wj/t056_todo_manager/main.wj W0005
 bench/agent-dx/solutions/wj/t057_inventory/main.wj W0005
 bench/agent-dx/solutions/wj/t058_vending_machine/main.wj W0005,W0007
 bench/agent-dx/solutions/wj/t059_game_of_life/main.wj W0005
 bench/agent-dx/solutions/wj/t060_kv_transactions/main.wj W0005
-benchmarks/arenas/wj/particles_arena.wj W0003,WJ0015,WJ0023
 benchmarks/arenas/wj/particles_arena.wj W0003,WJ0023
 benchmarks/arenas/wj/particles_vec.wj W0003
 benchmarks/rust_parity/wj/byte_hash.wj W0008
@@ -101,9 +99,8 @@ std/regex.wj W0007
 std/storage/mod.wj W0007
 std/strings.wj W0007
 std/test/mod.wj WJ0011
-tests/arena_programs/particles.wj W0003,WJ0015,WJ0023
 tests/arena_programs/particles.wj W0003,WJ0023
-tests/arena_programs/scratch_labels.wj WJ0023
+tests/arena_programs/scratch_labels.wj WJ0023,WJ0028
 tests/array_indexing.wj W0009
 tests/auto_clone/test_combined_patterns.wj W0005
 tests/auto_clone/test_method_calls.wj W0005
