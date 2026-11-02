@@ -294,8 +294,13 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
     }
 
     fn push(&mut self, e: &Expression<'_>, kind: CallKind, callee: String, argc: usize, res: Res) {
+        self.push_with_callee(e, e, kind, callee, argc, res)
+    }
+
+    fn push_with_callee(&mut self, e: &Expression<'_>, f: &Expression<'_>, kind: CallKind, callee: String, argc: usize, res: Res) {
         self.out.push(CallResolution {
             key: ExprKey(e as *const Expression<'_> as usize),
+            callee_key: ExprKey(f as *const Expression<'_> as usize),
             kind,
             callee,
             arg_count: argc,
@@ -332,12 +337,12 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             } else {
                 self.c.resolve_free(&self.ctx, name)
             };
-            self.push(call, CallKind::Free, name.clone(), argc, res);
+            self.push_with_callee(call, callee, CallKind::Free, name.clone(), argc, res);
             return;
         }
         let segs: Vec<&str> = name.split("::").collect();
         let res = self.c.resolve_path(&self.ctx, &segs);
-        self.push(call, CallKind::Path, name.clone(), argc, res);
+        self.push_with_callee(call, callee, CallKind::Path, name.clone(), argc, res);
     }
 
     fn method_call(

@@ -30,6 +30,7 @@ pub(crate) struct IdiomScratch {
 impl<'ast> CodeGenerator<'ast> {
     /// Hand-written trait impls (`impl PartialEq for T`) suppress the matching auto-derive.
     pub(super) fn collect_user_trait_impls(&mut self, program: &Program<'_>) {
+        self.ensure_call_targets(program);
         self.collect_file_scope(program);
         self.idiom.user_trait_impls.clear();
         for item in &program.items {
