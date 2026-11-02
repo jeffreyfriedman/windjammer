@@ -127,9 +127,10 @@ fn one_journal_two_implementations() {
         let target = std::env::temp_dir().join(format!("wj_durable_compiled_target_{}", std::process::id()));
         let b = Command::new(WJ).args(["build", "-o", "out", "."]).current_dir(&p).env("CARGO_TARGET_DIR", &target).output().unwrap();
         assert!(b.status.success(), "{name}: {}", text(&b));
-        let bin = fs::read_dir(target.join("release")).map(|rd| rd.flatten().map(|e| e.path()).find(|f| f.is_file() && f.extension().is_none() && f.file_name().is_some_and(|n| n == "p"))).ok().flatten();
+        // `wj build` runs cargo in the debug profile unless asked otherwise
+        let bin = ["debug", "release"].iter().map(|profile| target.join(profile).join("p")).find(|f| f.is_file());
         let Some(bin) = bin else {
-            failures.push(format!("{name}: no binary found under the target directory"));
+            failures.push(format!("{name}: no binary `p` under {} (profiles debug, release)", target.display()));
             continue;
         };
         let work = |tag: &str| {
@@ -141,7 +142,8 @@ fn one_journal_two_implementations() {
         // the uninterrupted run, by the interpreter
         let clean = work("clean");
         let (code, want_out) = interpreter(clean.path(), &clean.path().join("j"), None);
-        assert_eq!(code, 0, "{name}: {want_out}");
+        assert_eq!(code, 0, "{name}: the uninterrupted interpreter run exited {code}: {want_out}");
+        eprintln!("{name}: {} journaled steps", journal_steps(&clean.path().join("j")));
         let want_files: Vec<_> = listing(clean.path());
         let n = journal_steps(&clean.path().join("j"));
         for k in 1..=n {
