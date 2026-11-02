@@ -134,7 +134,7 @@ eight, the compiled form failed six (rustc rejected the emitted Rust):
 | 10 | `get_signature(name)` for **C** sites | resolver table (callee expression -> `Def::path`), the registry key | started: single-file programs resolve every plain call (`same_crate_callee.rs`, `CallResolution::callee_key`), goldens unchanged. Next: the multipass driver installs the project-wide table, then the name-based steps of `resolve_call_signature` are deleted |
 | 11 | **Q** sites building `"{Type}::{method}"` | `(impl DefId, method)` | not started; blocked on receiver types (the resolver has impls, not expression types) |
 | 12 | **D** sites (definition looks itself up by name) | the definition's own identity | started: #6, module metadata (`collect_analyzed_module_metadata`), the multipass per-file overlay (`own_definition_keys`, `keep_own_definitions`) |
-| 13 | `multipass_bare_pass_demotion.rs` (one promote pass, six `restore_*` passes) | solver-native cross-file ownership per call-graph SCC (C5 iteration note) | gate in place (`tests/project_gates_test.rs`); 3 of 6 restores deleted, see "Step 3 progress" |
+| 13 | `multipass_bare_pass_demotion.rs` (one promote pass, six `restore_*` passes) | solver-native cross-file ownership per call-graph SCC (C5 iteration note) | gate in place (`tests/project_gates_test.rs`); 4 of 6 restores deleted, see "Step 3 progress" |
 
 ## Step 3 inventory: `multipass_bare_pass_demotion.rs`
 
