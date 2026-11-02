@@ -6,7 +6,7 @@
 
 | arm | name | trials | context pack |
 |---|---|---|---|
-| B | compiled-first | 30 | WINDJAMMER_FOR_AGENTS.md |
+| B | compiled-first | 30 | WINDJAMMER_REFERENCE.md |
 | E | tiny-pack+mcp | 30 | tiny_E.md |
 | F | tiny-pack+wj-docs | 30 | tiny_F.md |
 | T | tiny-pack-only | 30 | tiny_T.md |
@@ -69,15 +69,15 @@
 | other | 17 | 21 | 14 | 27 |
 | type-mismatch | 12 | 11 | 6 | 10 |
 | trait-bound | 3 | 6 | 3 | 6 |
-| ownership-borrow | 0 | 1 | 2 | 3 |
 | lint-style | 1 | 4 | 0 | 1 |
+| ownership-borrow | 0 | 1 | 2 | 3 |
 | runtime-panic | 0 | 2 | 0 | 3 |
 | syntax | 1 | 0 | 0 | 2 |
 | name-resolution | 0 | 0 | 1 | 0 |
 
 ## Interpreter vs compiled divergence
 
-16 of 120 trials had an interpreted hidden-oracle result different from the compiled one (6 silent: interpreter green, compiled red).
+16/120 trials had an interpreted hidden-oracle result different from the compiled one (6 silent: interpreter green, compiled red).
 - t003_prime_counts arm T trial 1: interp=True compiled=False
 - t006_base_convert arm T trial 1: interp=True compiled=False
 - t011_lru_cache arm E trial 2: interp=True compiled=False

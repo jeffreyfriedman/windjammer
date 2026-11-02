@@ -25,6 +25,12 @@ class PackGuardrails(unittest.TestCase):
     def test_pack_has_no_task_ids_or_titles(self):
         self.assertEqual(leaks(self.pack), [])
 
+    def test_default_sheet_and_reference_have_no_task_hints(self):
+        import os
+        d = os.path.dirname(arms.PACK_PATH)
+        for n in ("WINDJAMMER_FOR_AGENTS.md", "WINDJAMMER_REFERENCE.md"):
+            self.assertEqual(leaks(open(os.path.join(d, n)).read()), [], n)
+
     def test_leak_detector_is_not_vacuous(self):
         title = T.load_task("t011_lru_cache")["title"]
         self.assertEqual(leaks(self.pack + "\n" + title), ["t011_lru_cache"])

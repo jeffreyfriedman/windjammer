@@ -103,7 +103,7 @@ class TrialAttribution(unittest.TestCase):
             self.assertEqual(tr["docs_calls"], 2)
             self.assertEqual(tr["pack_file"], "tiny_F.md")
             self.assertGreater(tr["pack_bytes"], 1000)
-            self.assertEqual(pilot.run_trial(T, "B", FakeAgent([]), 1, d, grader(), real_wj=real)["pack_file"], "WINDJAMMER_FOR_AGENTS.md")
+            self.assertEqual(pilot.run_trial(T, "B", FakeAgent([]), 1, d, grader(), real_wj=real)["pack_file"], "WINDJAMMER_REFERENCE.md")
 
 
 if __name__ == "__main__":
