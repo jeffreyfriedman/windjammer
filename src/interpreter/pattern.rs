@@ -153,7 +153,7 @@ impl Interpreter {
         }
     }
 
-    fn is_known_variant_name(&self, name: &str) -> bool {
+    pub(crate) fn is_known_variant_name(&self, name: &str) -> bool {
         self.enums.values().any(|d| d.variants.iter().any(|v| v.name == name))
             && !self.structs.contains_key(name)
     }
