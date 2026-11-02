@@ -32,7 +32,7 @@ pub fn run_sh(body: &str, wj_bin: &Path) -> Result<(), String> {
         }
     }
     for (cmd, expected) in cmds {
-        let out = std::process::Command::new("sh").arg("-c").arg(&cmd).current_dir(dir.path()).env("PATH", &path).output().map_err(|e| e.to_string())?;
+        let out = std::process::Command::new("sh").arg("-c").arg(&cmd).current_dir(dir.path()).env("PATH", &path).env("WJ_NO_STALE_WARN", "1").output().map_err(|e| e.to_string())?;
         let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
         if !out.status.success() {
             return Err(format!("`{cmd}` exited {:?}: {}", out.status.code(), text.trim()));
