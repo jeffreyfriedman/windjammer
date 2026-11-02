@@ -404,3 +404,7 @@ debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3
+
+[[test]]
+name = "build_speed_gate"
+path = "tests/build_speed_gate.rs"

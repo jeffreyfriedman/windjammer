@@ -166,13 +166,31 @@ pub fn execute(
         let profile = if release { "release" } else { "dev" };
         println!("\n{} Running cargo build ({})...", "⚙️".bold(), profile);
 
+        // Shared target tree + fast dev profile (docs/design/build-speed.md); the binary is still
+        // published at <output>/target/<profile>/ so the documented location holds.
+        let _ = crate::cargo_cache::reclaim();
         let mut cargo = std::process::Command::new("cargo");
-        cargo.arg("build");
+        cargo.arg("build").arg("--message-format=json-render-diagnostics");
         if release {
             cargo.arg("--release");
+        } else {
+            crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cargo);
         }
-        let cargo_status = cargo.current_dir(output_dir).status();
-
+        crate::cargo_cache::configure_cargo_command(&mut cargo, crate::cargo_cache::TargetKind::Shared);
+        let cargo_status = cargo
+            .current_dir(output_dir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::inherit())
+            .output()
+            .and_then(|out| {
+                if out.status.success() {
+                    let exes = crate::cargo_cache::build_profile::executables_from_cargo_json(
+                        &String::from_utf8_lossy(&out.stdout),
+                    );
+                    crate::cargo_cache::build_profile::publish_executables(output_dir, release, &exes)?;
+                }
+                Ok(out.status)
+            });
         match cargo_status {
             Ok(status) if status.success() => {
                 println!("{} Cargo build complete!", "✅".green().bold());
