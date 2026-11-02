@@ -114,6 +114,29 @@ pub struct IrFunction {
     /// `numeric_defaults::literal_key`) whose class no context constrains; they are `int` (i64).
     pub default_int_literals: std::collections::BTreeSet<(usize, usize)>,
 
+    /// Semantic fact NUM-LITERAL-WIDTH (C4): integer literals (by their own source position) whose
+    /// width the solver fixed from their uses (`i == 0` with `i: i64`, a push into `Vec<i32>`).
+    /// Only signed 32/64-bit widths are published; unsigned and index widths stay with the
+    /// legacy collector until the solver models `len()`/indexing.
+    pub literal_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
+
+    /// Semantic fact NUM-LOCAL-I64 (C4): locals bound once whose width the solver fixed to `int` (i64)
+    /// from a use (a typed field, parameter or call formal), never from the numeric default.
+    pub solver_i64_locals: std::collections::BTreeSet<String>,
+
+    /// Semantic fact NUM-LOCAL-WIDTH (ADR-0028): singly bound locals whose class the solver fixed
+    /// (any integer width, `usize` included), never the numeric default.
+    pub solver_local_widths: std::collections::BTreeMap<String, crate::ir::safety_type::BaseType>,
+
+    /// Semantic fact NUM-USIZE (ADR-0028): the width of each `len()`-like index source (by the call's
+    /// source position). `usize` needs nothing; another width is converted at the call (NUM-USIZE-TO-INT).
+    pub index_source_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
+
+    /// Semantic fact NUM-USIZE-TO-INT (ADR-0028): `usize` values stored where another integer width is
+    /// required (`out.push(i + 1)` into `Vec<int>`), converted at the expression (by
+    /// `numeric_facts::conversion_key`).
+    pub usize_conversions: std::collections::BTreeMap<crate::ir::numeric_facts::ConversionKey, crate::ir::safety_type::BaseType>,
+
     /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
     /// the binding is never read again on any path.
     pub last_uses: std::collections::BTreeSet<usize>,
@@ -168,8 +191,8 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
             "f64" => BaseType::F64,
             "bool" => BaseType::Bool,
             "char" => BaseType::Char,
-            "isize" => BaseType::I64,
-            "usize" => BaseType::U64,
+            "isize" => BaseType::Isize,
+            "usize" => BaseType::Usize,
             "String" | "string" => BaseType::String,
             "()" => BaseType::Unit,
             _ => BaseType::Custom(name.clone()),
@@ -356,6 +379,11 @@ impl IrFunction {
             ownership_trail: std::collections::BTreeMap::new(),
             module_path: analyzed.module_path.clone(),
             default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
+            literal_widths: std::collections::BTreeMap::new(),
+            solver_i64_locals: std::collections::BTreeSet::new(),
+            solver_local_widths: std::collections::BTreeMap::new(),
+            index_source_widths: std::collections::BTreeMap::new(),
+            usize_conversions: std::collections::BTreeMap::new(),
             last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),
             returned_fields: crate::ir::clone_facts::returned_param_fields(
                 &params,

@@ -19,7 +19,7 @@ fn pop(&mut self) -> Option<T> {
 }
 #[inline]
 fn len(&self) -> i64 {
-        self.items.len() as i64
+        (self.items.len() as i64)
 }
 }
 
