@@ -12,14 +12,16 @@ use super::island::{self, Island};
 use super::Code;
 use crate::interpreter::engine::Interpreter;
 use crate::interpreter::error::{panic_ctl, R};
-use crate::interpreter::place::deref_value;
+use crate::interpreter::place::{deref_value, strip_refs};
 use crate::interpreter::value::Value;
-use crate::parser::{Expression, MatchArm, Pattern, UnaryOp};
+use crate::parser::{Expression, MatchArm, Pattern, Statement, UnaryOp};
 
 struct Arm {
     pat: &'static Pattern<'static>,
-    /// The arm's bindings: name -> boxed slot.
+    /// The arm's bindings: name -> slot.
     slots: Vec<(&'static str, usize)>,
+    /// The slots hold the bound values themselves, not boxes (`reads_only`).
+    plain: bool,
     guard: Option<Code>,
     body: Code,
 }
@@ -45,20 +47,26 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
         return None;
     }
     let lookup = super::mapfast::map_get(cx, value);
+    let opt_arms = lookup.is_some() && arms.iter().all(|a| opt_arm(a).is_some());
     let scrut = raw(cx, value)?;
     let mut compiled = Vec::with_capacity(arms.len());
     for arm in arms {
         cx.enter();
         let mut names = Vec::new();
         island::pattern_names(&arm.pattern, &mut names);
-        let slots: Vec<(&'static str, usize)> = names.into_iter().map(|n| (n, cx.declare_boxed(n))).collect();
+        // a map lookup's arm that only reads its binding keeps it unboxed (unless the body still
+        // needs a box, which the compile fixpoint then gives it)
+        let unboxed = opt_arms && !cx.it.fast_off("unboxed") && reads_only(arm.body, &names);
+        let slots: Vec<(&'static str, usize)> =
+            names.into_iter().map(|n| (n, if unboxed { cx.declare_local(n) } else { cx.declare_boxed(n) })).collect();
+        let plain = unboxed && slots.iter().all(|(_, s)| !cx.is_boxed(*s));
         let guard = match arm.guard {
             Some(g) => Some(expr_eval(cx, g)?.code()),
             None => None,
         };
         let body = raw(cx, arm.body);
         cx.leave();
-        compiled.push(Arm { pat: &arm.pattern, slots, guard, body: body? });
+        compiled.push(Arm { pat: &arm.pattern, slots, plain, guard, body: body? });
     }
     let fast = lookup.zip(arms.iter().map(opt_arm).collect::<Option<Vec<Opt>>>());
     Some(Box::new(move |it, b| {
@@ -83,7 +91,8 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
             }
             for (n, val) in binds {
                 if let Some((_, s)) = arm.slots.iter().find(|(m, _)| *m == n) {
-                    super::fast::set(it, b + s, island::boxed(val));
+                    let v = if arm.plain { strip_refs(val)? } else { island::boxed(val) };
+                    super::fast::set(it, b + s, v);
                 }
             }
             if let Some(g) = &arm.guard {
@@ -157,7 +166,9 @@ fn opt_match(it: &mut Interpreter, b: usize, arms: &[Arm], kinds: &[Opt], found:
             (Opt::Some(false), Some(_)) if wild => {}
             (Opt::Some(true), Some(x)) => {
                 if let Some((_, s)) = arm.slots.first() {
-                    super::fast::set(it, b + s, island::boxed(x.clone()));
+                    it.fast.unboxed += arm.plain as u64;
+                    let v = if arm.plain { x.clone() } else { island::boxed(x.clone()) };
+                    super::fast::set(it, b + s, v);
                 }
             }
             _ => continue,
@@ -167,4 +178,31 @@ fn opt_match(it: &mut Interpreter, b: usize, arms: &[Arm], kinds: &[Opt], found:
         return r;
     }
     Err(panic_ctl("no match arm matched value of type `Option`".to_string()))
+}
+
+/// An arm body that only reads its bindings `names`: no call, closure, reference or write through a
+/// place, and no binding assigned. What it reads through a binding cannot change while it runs, so the
+/// bound value itself (not a box the walker's `define` would make) is what every read sees.
+fn reads_only(e: E, names: &[&str]) -> bool {
+    match e {
+        Expression::Literal { .. } | Expression::Identifier { .. } => true,
+        Expression::Binary { left, right, .. } => reads_only(left, names) && reads_only(right, names),
+        Expression::Unary { op: UnaryOp::Deref | UnaryOp::Neg | UnaryOp::Not, operand, .. } => reads_only(operand, names),
+        Expression::FieldAccess { object, .. } => reads_only(object, names),
+        Expression::Block { statements, .. } => statements.iter().all(|s| stmt_reads_only(s, names)),
+        _ => false,
+    }
+}
+
+fn stmt_reads_only(s: &Statement<'static>, names: &[&str]) -> bool {
+    match s {
+        Statement::Expression { expr, .. } => reads_only(expr, names),
+        Statement::Assignment { target: Expression::Identifier { name, .. }, value, .. } => !names.contains(&name.as_str()) && reads_only(value, names),
+        Statement::If { condition, then_block, else_block, .. } => {
+            reads_only(condition, names)
+                && then_block.iter().all(|s| stmt_reads_only(s, names))
+                && else_block.iter().flatten().all(|s| stmt_reads_only(s, names))
+        }
+        _ => false,
+    }
 }

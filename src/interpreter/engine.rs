@@ -163,6 +163,8 @@ pub struct Interpreter {
     pub(crate) jit_debug: bool,
     /// A machine-code check to leave out (`WJ_JIT_MUTANT`; honoured in debug builds only).
     pub(crate) jit_mutant: Option<String>,
+    /// How often each fast path ran (reported with `WJ_JIT_DEBUG`, so a gate can tell one that silently stopped).
+    pub(crate) fast: FastHits,
     /// Statement registries of compiled code (`resolved/osr.rs`), alive as long as the code is.
     pub(crate) osr_regs: Vec<Rc<super::resolved::osr::Reg>>,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
@@ -275,6 +277,7 @@ impl Interpreter {
             jit_loop_hot: 256,
             jit_debug: false,
             jit_mutant: None,
+            fast: FastHits::default(),
             #[cfg(feature = "jit")]
             jit: None,
             subprocesses: HashMap::new(),
@@ -505,5 +508,30 @@ impl Interpreter {
         let ptr: *const Program<'static> = &*boxed;
         self.retained.push(boxed);
         unsafe { &*ptr }
+    }
+}
+
+/// Counts of the fast paths taken in a run: machine-code loops compiled with inlined method calls,
+/// in-place `match m.get(k)` and `m.insert(k, x)`, `push`es that kept a vector packed, the
+/// unboxed arm bindings of in-place lookups, plain `format` templates and in-place `push_str`.
+#[derive(Default, Debug, Clone, Copy)]
+pub(crate) struct FastHits {
+    pub(crate) inline: u64,
+    pub(crate) mapget: u64,
+    pub(crate) mapins: u64,
+    pub(crate) packed: u64,
+    /// Arm bindings of in-place map lookups kept unboxed.
+    pub(crate) unboxed: u64,
+    /// `format` templates of bare `{}`s joined from their pieces.
+    pub(crate) fmt: u64,
+    /// `s.push_str(x)` statements appended in place.
+    pub(crate) pushstr: u64,
+}
+
+impl Interpreter {
+    /// Test-only switch (debug builds, `WJ_JIT_MUTANT=nofast-<path>`): the named fast path is not taken,
+    /// so the gate that asserts each path fires can show it would notice.
+    pub(crate) fn fast_off(&self, path: &str) -> bool {
+        cfg!(debug_assertions) && self.jit_mutant.as_deref().and_then(|m| m.strip_prefix("nofast-")) == Some(path)
     }
 }
