@@ -85,8 +85,8 @@ pub fn mismatch(expected: &str, found: &str) -> Option<Hint> {
     }
     if borrowed(e) && owned(f) {
         return hint(
-            "borrow it: write `&x`; this place needs a borrowed `string`, the value is owned".into(),
-            wrap("borrow the value with `&`", "&", ""),
+            "pass the value as it is: Windjammer borrows for you. If this still errors, it is a compiler bug: please report it".into(),
+            None,
         );
     }
     if let Some(inner) = e.strip_prefix("Option<").and_then(|x| x.strip_suffix('>')) {
@@ -204,11 +204,26 @@ mod tests {
     #[test]
     fn pairs() {
         assert!(mismatch("String", "&str").unwrap().help.contains(".to_string()"));
-        assert!(mismatch("&str", "String").unwrap().help.contains("`&x`"));
+        assert!(mismatch("&str", "String").unwrap().help.contains("borrows for you"));
         assert!(mismatch("i64", "usize").unwrap().help.contains("as int"));
         assert!(mismatch("Option<i64>", "i64").unwrap().help.contains("Some("));
         assert!(mismatch("f32", "f64").unwrap().help.contains("as f32"));
         assert!(mismatch("Vec<i64>", "i64").is_none());
+    }
+
+    /// No hint may advise something the linters reject (`&x` at a call site is W0004, `.as_str()` is W0012).
+    #[test]
+    fn hints_never_advise_linted_constructs() {
+        let types = ["String", "&str", "&String", "i64", "usize", "i32", "u32", "f32", "f64", "Option<i64>", "Option<String>", "()", "char", "bool"];
+        for e in types {
+            for f in types {
+                let Some(h) = mismatch(e, f) else { continue };
+                assert!(!h.help.contains("`&x`") && !h.help.contains(".as_str()"), "{e}/{f}: {}", h.help);
+                if let Some(FixHint { anchor: FixAnchor::Expr { prefix, suffix }, .. }) = &h.fix {
+                    assert!(!prefix.starts_with('&') && !suffix.contains("as_str"), "{e}/{f}");
+                }
+            }
+        }
     }
 
     #[test]
