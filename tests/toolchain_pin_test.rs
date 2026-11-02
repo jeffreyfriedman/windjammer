@@ -7,7 +7,10 @@ use std::process::{Command, Output};
 
 fn wj(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_wj"));
-    c.args(args).current_dir(dir).env("WJ_NO_STALE_WARN", "1").env_remove("WJ_ALLOW_TOOLCHAIN_MISMATCH");
+    c.args(args)
+        .current_dir(dir)
+        .env("WJ_NO_STALE_WARN", "1")
+        .env_remove("WJ_ALLOW_TOOLCHAIN_MISMATCH");
     for (k, v) in env {
         c.env(k, v);
     }
@@ -15,15 +18,28 @@ fn wj(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
 }
 
 fn identity() -> serde_json::Value {
-    let o = Command::new(env!("CARGO_BIN_EXE_wj")).args(["version", "--json"]).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["version", "--json"])
+        .output()
+        .unwrap();
     serde_json::from_slice(&o.stdout).unwrap()
 }
 
 fn project(pin: Option<&str>) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
-    let toolchain = pin.map(|p| format!("\n[toolchain]\nwj = \"{p}\"\n")).unwrap_or_default();
-    fs::write(d.path().join("wj.toml"), format!("[package]\nname = \"pinned\"\nversion = \"0.1.0\"\n{toolchain}")).unwrap();
-    fs::write(d.path().join("main.wj"), "fn main() {\n    println(\"hi\")\n}\n").unwrap();
+    let toolchain = pin
+        .map(|p| format!("\n[toolchain]\nwj = \"{p}\"\n"))
+        .unwrap_or_default();
+    fs::write(
+        d.path().join("wj.toml"),
+        format!("[package]\nname = \"pinned\"\nversion = \"0.1.0\"\n{toolchain}"),
+    )
+    .unwrap();
+    fs::write(
+        d.path().join("main.wj"),
+        "fn main() {\n    println(\"hi\")\n}\n",
+    )
+    .unwrap();
     d
 }
 
@@ -38,7 +54,16 @@ fn guarded(d: &Path) -> Vec<(&'static str, Vec<String>)> {
         ("check", vec!["check".into(), f.clone()]),
         ("run", vec!["run".into(), "--interpret".into(), f.clone()]),
         ("test", vec!["test".into(), d.display().to_string()]),
-        ("build", vec!["build".into(), f, "--no-cargo".into(), "-o".into(), d.join("out").display().to_string()]),
+        (
+            "build",
+            vec![
+                "build".into(),
+                f,
+                "--no-cargo".into(),
+                "-o".into(),
+                d.join("out").display().to_string(),
+            ],
+        ),
     ]
 }
 
@@ -52,7 +77,10 @@ fn mismatching_pin_is_an_error_with_the_install_command_for_all_four_commands() 
         assert_eq!(o.status.code(), Some(1), "{name}: {err}");
         assert!(err.contains("pins wj `0000000`"), "{name}: {err}");
         assert!(err.contains("cargo install --git https://github.com/jeffreyfriedman/windjammer.git --rev 0000000 --bin wj --locked --force"), "{name}: {err}");
-        assert!(err.contains("WJ_ALLOW_TOOLCHAIN_MISMATCH=1"), "{name}: {err}");
+        assert!(
+            err.contains("WJ_ALLOW_TOOLCHAIN_MISMATCH=1"),
+            "{name}: {err}"
+        );
     }
 }
 
@@ -60,22 +88,41 @@ fn mismatching_pin_is_an_error_with_the_install_command_for_all_four_commands() 
 fn override_downgrades_the_error_to_a_warning_and_the_command_runs() {
     let d = project(Some("0000000"));
     let f = d.path().join("main.wj").display().to_string();
-    let o = wj(d.path(), &["run", "--interpret", &f], &[("WJ_ALLOW_TOOLCHAIN_MISMATCH", "1")]);
+    let o = wj(
+        d.path(),
+        &["run", "--interpret", &f],
+        &[("WJ_ALLOW_TOOLCHAIN_MISMATCH", "1")],
+    );
     assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
     assert_eq!(String::from_utf8_lossy(&o.stdout), "hi\n");
-    assert!(stderr(&o).contains("toolchain mismatch allowed"), "{}", stderr(&o));
+    assert!(
+        stderr(&o).contains("toolchain mismatch allowed"),
+        "{}",
+        stderr(&o)
+    );
 }
 
 #[test]
 fn matching_pins_pass_silently_by_commit_prefix_and_by_version() {
     let id = identity();
-    let Some(commit) = id["commit"].as_str() else { return };
-    for pin in [&commit[..7], &commit[..20], commit, id["version"].as_str().unwrap()] {
+    let Some(commit) = id["commit"].as_str() else {
+        return;
+    };
+    for pin in [
+        &commit[..7],
+        &commit[..20],
+        commit,
+        id["version"].as_str().unwrap(),
+    ] {
         let d = project(Some(pin));
         let f = d.path().join("main.wj").display().to_string();
         let o = wj(d.path(), &["run", "--interpret", &f], &[]);
         assert_eq!(o.status.code(), Some(0), "pin {pin}: {}", stderr(&o));
-        assert!(!stderr(&o).contains("toolchain"), "pin {pin}: {}", stderr(&o));
+        assert!(
+            !stderr(&o).contains("toolchain"),
+            "pin {pin}: {}",
+            stderr(&o)
+        );
     }
 }
 
@@ -89,11 +136,25 @@ fn ancestor_pin_file_is_honoured_and_wj_toml_overrides_it() {
     let o = wj(&app, &["check", "main.wj"], &[]);
     let err = stderr(&o);
     assert_eq!(o.status.code(), Some(1), "{err}");
-    assert!(err.contains("--git https://example.com/wj.git --rev 1111111111111111111111111111111111111111"), "{err}");
+    assert!(
+        err.contains(
+            "--git https://example.com/wj.git --rev 1111111111111111111111111111111111111111"
+        ),
+        "{err}"
+    );
     // the project's own wj.toml pin wins over the repo-level file
     let id = identity();
-    let Some(commit) = id["commit"].as_str() else { return };
-    fs::write(app.join("wj.toml"), format!("[package]\nname=\"one\"\n[toolchain]\nwj = \"{}\"\n", &commit[..9])).unwrap();
+    let Some(commit) = id["commit"].as_str() else {
+        return;
+    };
+    fs::write(
+        app.join("wj.toml"),
+        format!(
+            "[package]\nname=\"one\"\n[toolchain]\nwj = \"{}\"\n",
+            &commit[..9]
+        ),
+    )
+    .unwrap();
     let o = wj(&app, &["check", "main.wj"], &[]);
     assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
 }
