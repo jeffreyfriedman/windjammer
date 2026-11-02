@@ -650,10 +650,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        {
-            let target_type = self.get_assignment_target_type(target);
-            self.maybe_cast_usize_to_int_target(&mut value_str, value, target_type.as_deref());
-        }
 
         output.push_str(&value_str);
 
