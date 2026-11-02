@@ -12,6 +12,8 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
+| `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
@@ -92,13 +94,12 @@ Usage: wj build [OPTIONS] <FILE>
 Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
 
 ```text
-Usage: wj run [OPTIONS] [PATH] [ARGS]...
+Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH>` | PATH |  | A .wj file or a directory; omitted: the project containing the current directory (wj.toml) |
-| `<ARGS>` | ARGS |  | Arguments to pass to the program |
+| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
 | `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
 | `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
@@ -111,8 +112,21 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--engine` | ENGINE | resolved | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) |
 | `--no-jit` | NO_JIT |  | Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as `WJ_JIT=0`); they run in the resolved engine's closures |
 | `--jit` | on\|off | on | Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020) |
+| `--jit-loop-hot` | N |  | Interpreted runs: closure-engine iterations before a hot loop enters machine code (testing: 0 makes every loop try at its first iteration) |
+| `--jit-debug` | JIT_DEBUG |  | Interpreted runs: report on stderr which loops run as machine code and why others do not |
+| `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
+| `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
+| `--replay` | FILE |  | Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and none is performed; seeds, arguments and the time mode come from the log (ADR-0021) |
+| `--simulate` | SIMULATE |  | Interpreted runs: run in the deterministic simulated world (virtual clock, seeded random numbers and scheduler, in-memory files, no network); the run is a function of the program and `--seed` (ADR-0021) |
+| `--seed` | N | 1 | With --simulate: the seed of the world |
+| `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
+| `--bind` | NAME=ENDPOINT |  | Interpreted runs: let `mcp::call` reach an MCP server, as NAME=ENDPOINT: `mock:FILE` (canned results) or `stdio:COMMAND ARGS` (a child process speaking MCP; it keeps the credentials). Repeatable (ADR-0021) |
+| `--limits` | LIMITS |  | Interpreted runs: resource limits `fuel=N,wall=SECS,output=BYTES,calls=N,mem=MB`; exceeding one stops the run with exit status 124 |
+| `--result-json` | FILE |  | Interpreted runs: write the exit status, the effects used and the resources used to FILE as JSON |
+| `--journal` | DIR |  | Interpreted runs: keep the step journals of `durable fn` runs in DIR, so a crashed run resumes where it stopped (default: in memory) |
+| `--crash-after` | N[:mid] |  | Interpreted runs: exit abruptly (status 137) after the N-th journaled step of a `durable fn`, or with `N:mid` after performing it but before journaling it (tests crash recovery) |
 | `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`) |
 | `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
 | `--sandbox` | SANDBOX |  | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) |
@@ -128,6 +142,30 @@ Start the Windjammerscript REPL (interactive interpreter)
 ```text
 Usage: wj repl
 ```
+
+## `wj mcp`
+
+MCP tools as typed Windjammer: bindings for code mode (ADR-0021)
+
+```text
+Usage: wj mcp <COMMAND>
+```
+
+## `wj mcp bind`
+
+Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results
+
+```text
+Usage: wj mcp bind [OPTIONS] <SERVER>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<SERVER>` | SERVER |  | Name the tools are bound under (`mcp.NAME.TOOL` is the effect of a call) |
+| `--tools` | FILE |  | The server's `tools/list` result (JSON); `-` reads standard input |
+| `--stdio` | COMMAND |  | Ask a live server instead: the command that starts it (arguments separated by spaces) |
+| `--tool` | NAME |  | Bind only this tool (repeatable): the program's permission request is the tools it can call |
+| `-o`, `--out` | FILE |  | Write the module here (default: standard output) |
 
 ## `wj test`
 
@@ -156,6 +194,10 @@ Usage: wj test [OPTIONS] [PATH]
 | `--list` | LIST |  | List discovered test files and functions, then exit without compiling |
 | `--allow-empty` | ALLOW_EMPTY |  | Exit 0 when no tests are found (default: finding none is an error) |
 | `--interpret` | INTERPRET |  | Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc |
+| `--simulate` | SIMULATE |  | With --interpret: run each test in the deterministic simulated world (ADR-0021) |
+| `--seed` | N |  | With --simulate: the seed of the world |
+| `--seeds` | A..B |  | With --simulate: try every seed in A..B (inclusive); a test fails with the first seed that fails it |
+| `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
 | `--watch` | WATCH |  | Re-run the tests on every source change |
 | `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
 | `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
