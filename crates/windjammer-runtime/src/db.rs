@@ -86,6 +86,8 @@ impl Connection {
 pub struct Row {
     columns: HashMap<String, String>,
     ordered: Vec<String>,
+    /// Columns whose value could not be decoded: reading them is an error, never an empty string.
+    undecodable: HashMap<String, String>,
 }
 
 impl Row {
@@ -95,6 +97,9 @@ impl Row {
 
     pub fn get_string(&self, column: impl AsRef<str>) -> Result<String, String> {
         let column = column.as_ref();
+        if let Some(why) = self.undecodable.get(column) {
+            return Err(format!("column {column} cannot be read: {why}"));
+        }
         self.columns
             .get(column)
             .cloned()
@@ -110,11 +115,8 @@ impl Row {
 
     pub fn get_string_at(&self, index: i64) -> Result<String, String> {
         let idx = usize::try_from(index).map_err(|_| "index out of range".to_string())?;
-        self.ordered
-            .get(idx)
-            .and_then(|name| self.columns.get(name))
-            .cloned()
-            .ok_or_else(|| format!("column index not found: {index}"))
+        let name = self.ordered.get(idx).ok_or_else(|| format!("column index not found: {index}"))?;
+        self.get_string(name)
     }
 
     pub fn get_int_at(&self, index: i64) -> Result<i64, String> {
@@ -127,13 +129,20 @@ impl Row {
 fn row_from_pg(row: &sqlx::postgres::PgRow) -> Row {
     let mut columns = HashMap::new();
     let mut ordered = Vec::new();
+    let mut undecodable = HashMap::new();
     for col in row.columns() {
         let name = col.name().to_string();
-        let value = pg_cell_to_string(row, col.ordinal());
-        ordered.push(name.clone());
-        columns.insert(name, value);
+        match pg_cell_to_string(row, col.ordinal()) {
+            Ok(value) => {
+                columns.insert(name.clone(), value);
+            }
+            Err(why) => {
+                undecodable.insert(name.clone(), why);
+            }
+        }
+        ordered.push(name);
     }
-    Row { columns, ordered }
+    Row { columns, ordered, undecodable }
 }
 
 fn row_from_sqlite(row: &sqlx::sqlite::SqliteRow) -> Row {
@@ -145,34 +154,23 @@ fn row_from_sqlite(row: &sqlx::sqlite::SqliteRow) -> Row {
         ordered.push(name.clone());
         columns.insert(name, value);
     }
-    Row { columns, ordered }
+    Row { columns, ordered, undecodable: HashMap::new() }
 }
 
-fn pg_cell_to_string(row: &sqlx::postgres::PgRow, idx: usize) -> String {
+/// A NULL reads as the empty string; a value that cannot be decoded is an error naming the type.
+fn pg_cell_to_string(row: &sqlx::postgres::PgRow, idx: usize) -> Result<String, String> {
     use sqlx::Row;
-    let Ok(raw) = row.try_get_raw(idx) else {
-        return String::new();
-    };
+    let raw = row.try_get_raw(idx).map_err(|e| e.to_string())?;
     if raw.is_null() {
-        return String::new();
+        return Ok(String::new());
     }
-    let info = raw.type_info();
-    let name = info.name();
-    if name == "INT2" || name == "INT4" || name == "INT8" {
-        return row
-            .try_get::<i64, _>(idx)
-            .map(|v| v.to_string())
-            .unwrap_or_default();
+    let name = raw.type_info().name().to_string();
+    // Text-format values (simple protocol) are already the text form.
+    if raw.format() == sqlx::postgres::PgValueFormat::Text {
+        return raw.as_str().map(|s| s.to_string()).map_err(|e| e.to_string());
     }
-    if name == "BOOL" {
-        return row
-            .try_get::<bool, _>(idx)
-            .map(|v| v.to_string())
-            .unwrap_or_default();
-    }
-    row.try_get::<String, _>(idx)
-        .or_else(|_| row.try_get::<&str, _>(idx).map(|s| s.to_string()))
-        .unwrap_or_default()
+    let bytes = raw.as_bytes().map_err(|e| e.to_string())?;
+    crate::db_pg_decode::decode_binary(&name, bytes).ok_or_else(|| format!("unsupported or malformed {name} value"))
 }
 
 fn sqlite_cell_to_string(row: &sqlx::sqlite::SqliteRow, idx: usize) -> String {

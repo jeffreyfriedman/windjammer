@@ -1,0 +1,313 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "E",
+ "arm_name": "tiny-pack+mcp",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let cs: Vec<char> = line.chars().collect()\n        let n: int = cs.len() as int\n        let mut i: int = 0\n        while i < n {\n            let c = cs[i as usize]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && cs[(i + 1) as usize] == '\"' {\n                        cur = cur + \"\\\"\"\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur = cur + c.to_string()\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let mut out = \"${fields.len()}: \"\n        let mut first = true\n        for f in fields {\n            if !first {\n                out = out + \"|\"\n            }\n            first = false\n            out = out + \"[\" + f + \"]\"\n        }\n        println(out)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let cs: Vec<char> = line.chars().collect()\n        let n: int = cs.len() as int\n        let mut i: int = 0\n        while i < n {\n            let c = cs[i as usize]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && cs[(i + 1) as usize] == '\"' {\n                        cur = cur + \"\\\"\"\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur = cur + c.to_string()\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let mut out = \"${fields.len()}: \"\n        let mut first = true\n        for f in fields {\n            if !first {\n                out = out + \"|\"\n            }\n            first = false\n            out = out + \"[\" + f + \"]\"\n        }\n        println(out)\n    }\n}\n",
+ "first_turn_input": 8628,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 19.314,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 456.53,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 28.692,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 10.298,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 45.825,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 0.831,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 15,
+ "other_seconds": 0.0,
+ "pack_bytes": 1544,
+ "pack_file": "tiny_E.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T21:47:52",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 59.962,
+ "tool_result_tokens_est": 1099,
+ "tool_wait_seconds": 561.49,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write",
+  "mcp__windjammer__check_code",
+  "mcp__windjammer__docs_search",
+  "mcp__windjammer__explain_error"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 8279,
+   "cache_write": 347,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8628,
+   "output": 5,
+   "result_chars": 881,
+   "turn": 1
+  },
+  {
+   "cache_read": 8626,
+   "cache_write": 1243,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9871,
+   "output": 4,
+   "result_chars": 750,
+   "turn": 2
+  },
+  {
+   "cache_read": 9869,
+   "cache_write": 456,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10327,
+   "output": 16,
+   "result_chars": 316,
+   "turn": 3
+  },
+  {
+   "cache_read": 10325,
+   "cache_write": 252,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 10579,
+   "output": 17,
+   "result_chars": 87,
+   "turn": 4
+  },
+  {
+   "cache_read": 10577,
+   "cache_write": 201,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10780,
+   "output": 35,
+   "result_chars": 7,
+   "turn": 5
+  },
+  {
+   "cache_read": 10778,
+   "cache_write": 125,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 10905,
+   "output": 16,
+   "result_chars": 87,
+   "turn": 6
+  },
+  {
+   "cache_read": 10903,
+   "cache_write": 201,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11106,
+   "output": 7,
+   "result_chars": 292,
+   "turn": 7
+  },
+  {
+   "cache_read": 11104,
+   "cache_write": 253,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 11359,
+   "output": 16,
+   "result_chars": 87,
+   "turn": 8
+  },
+  {
+   "cache_read": 11357,
+   "cache_write": 201,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11560,
+   "output": 3,
+   "result_chars": 316,
+   "turn": 9
+  },
+  {
+   "cache_read": 11558,
+   "cache_write": 446,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 12006,
+   "output": 275,
+   "result_chars": 0,
+   "turn": 10
+  },
+  {
+   "cache_read": 12004,
+   "cache_write": 690,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 12696,
+   "output": 3,
+   "result_chars": 87,
+   "turn": 11
+  },
+  {
+   "cache_read": 12694,
+   "cache_write": 217,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 12913,
+   "output": 104,
+   "result_chars": 0,
+   "turn": 12
+  },
+  {
+   "cache_read": 12911,
+   "cache_write": 629,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 13542,
+   "output": 16,
+   "result_chars": 164,
+   "turn": 13
+  },
+  {
+   "cache_read": 13540,
+   "cache_write": 256,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13798,
+   "output": 4,
+   "result_chars": 168,
+   "turn": 14
+  },
+  {
+   "cache_read": 13796,
+   "cache_write": 801,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14599,
+   "output": 4,
+   "result_chars": 542,
+   "turn": 15
+  },
+  {
+   "cache_read": 14597,
+   "cache_write": 625,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 15224,
+   "output": 8,
+   "result_chars": 64,
+   "turn": 16
+  },
+  {
+   "cache_read": 15222,
+   "cache_write": 242,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 15466,
+   "output": 172,
+   "result_chars": 0,
+   "turn": 17
+  }
+ ],
+ "usage": {
+  "api_seconds": 59.962,
+  "cost_usd": 0.082072,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` gives the expected output for both examples, and `wj build main.wj` compiles it. I ran it as `wj run main.wj`. The `--compiled` run only transpiles here (\"cargo build skipped\") and never executes the program.\n\nThe one run covered both examples together, including the empty-line and `,` cases:\n\n```\n3: [a]|[b]|[c]\n2: [x,y]|[z]\n1: []\n2: []|[]\n2: [he said \"hi\"]|[1]\n```\n\nI didn't test any oth",
+  "subtype": "success",
+  "tokens_in": 72629,
+  "tokens_out": 982,
+  "turns": 5
+ },
+ "verify_calls": 6,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 610.91
+}

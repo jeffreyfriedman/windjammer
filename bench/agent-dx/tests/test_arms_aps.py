@@ -32,8 +32,8 @@ class ArmPrompts(unittest.TestCase):
         self.assertIn("Bash(rustc:*)", arms.tool_policy("R")["allowed"])
         for a in arms.ARMS:
             self.assertNotIn("Bash", arms.tool_policy(a)["allowed"])
-            argv = arms.claude_argv(a, T, "sonnet", 25, 2.0)
-            self.assertEqual("--append-system-prompt-file" in argv, arms.ARMS[a]["pack"])
+            argv = arms.claude_argv(a, T, "sonnet", 25, 2.0, mcp_config_path="/x/mcp.json")
+            self.assertEqual("--append-system-prompt-file" in argv, arms.pack_path(a) is not None)
 
     def test_wj_arms_share_the_same_task_text_and_head(self):
         strip = lambda arm: arms.prompt(T, arm).replace(arms.LOOP_TEXT[arms.ARMS[arm]["loop"]], "")

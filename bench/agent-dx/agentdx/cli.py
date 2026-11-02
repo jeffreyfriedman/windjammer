@@ -31,7 +31,7 @@ def _pilot(a):
     if total > BU.PILOT_MAX_TRIALS or a.max_trials > BU.PILOT_MAX_TRIALS:
         print(f"REFUSED: {total} trials planned, ceiling is {BU.PILOT_MAX_TRIALS} (budget.PILOT_MAX_TRIALS)", file=sys.stderr)
         return 2
-    pack_chars = len(open(AR.PACK_PATH).read())
+    pack_chars = len(open(AR.PACK_PATH).read())  # full pack: conservative for the tiny-pack arms
     est = BU.estimate_plan(total, pack_chars, a.max_turns)
     print(f"pilot: {len(tasks)} tasks x {len(arms)} arms x {a.trials} trials = {total} trials, --max-turns {a.max_turns}, model {a.model}")
     print(f"estimated cost: expected ${est['total_expected']:.2f} (${est['per_trial_expected']:.2f}/trial), "
@@ -42,7 +42,7 @@ def _pilot(a):
         print("not started: pass --yes to proceed", file=sys.stderr)
         return 3
     guard = BU.BudgetGuard(a.budget_usd, a.max_trials, est["per_trial_expected"])
-    agent = PL.ClaudeAgent(a.model, a.max_turns, a.max_trial_usd)
+    agent = PL.ClaudeAgent(a.model, a.max_turns, a.max_trial_usd, stream=a.stream)
     r = PL.run_pilot(agent, tasks, arms, a.trials, a.out, guard, workers=a.workers)
     print(json.dumps(r))
     return 4 if r["aborted_reason"] else 0
@@ -81,6 +81,7 @@ def main(argv=None):
     pl.add_argument("--max-trial-usd", type=float, default=2.0)
     pl.add_argument("--out", default="results/pilot")
     pl.add_argument("--workers", type=int, default=2)
+    pl.add_argument("--stream", action="store_true", help="stream-json output: per-turn token log (needed for pack/tool attribution)")
     pl.add_argument("--yes", action="store_true", help="proceed after the estimate is printed")
     pl.add_argument("--estimate-only", action="store_true")
     prg = sub.add_parser("pilot-regrade", help="re-grade non-passing pilot trials from their recorded final source")

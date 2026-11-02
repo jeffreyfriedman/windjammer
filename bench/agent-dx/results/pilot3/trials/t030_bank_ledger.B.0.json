@@ -1,0 +1,104 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::collections::BTreeMap\nuse std::fs\n\nfn bal(m: BTreeMap<string, int>, name: string) -> Option<int> {\n    m.get(name).copied()\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut accts: BTreeMap<string, int> = BTreeMap::new()\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        if parts.len() == 0 {\n            continue\n        }\n        let cmd = parts[0].clone()\n        if cmd == \"open\" {\n            let name = parts[1].clone()\n            let amt: int = parts[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if accts.contains_key(name) {\n                println(\"error: duplicate account\")\n            } else {\n                accts.insert(name, amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" {\n            let name = parts[1].clone()\n            match bal(accts.clone(), name.clone()) {\n                Some(b) => println(\"${b}\"),\n                None => println(\"error: unknown account ${name}\"),\n            }\n        } else if cmd == \"deposit\" || cmd == \"withdraw\" {\n            let name = parts[1].clone()\n            let amt: int = parts[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                match bal(accts.clone(), name.clone()) {\n                    None => println(\"error: unknown account ${name}\"),\n                    Some(b) => {\n                        if cmd == \"deposit\" {\n                            accts.insert(name, b + amt)\n                            println(\"ok\")\n                        } else if amt > b {\n                            println(\"error: insufficient funds\")\n                        } else {\n                            accts.insert(name, b - amt)\n                            println(\"ok\")\n                        }\n                    }\n                }\n            }\n        } else if cmd == \"transfer\" {\n            let from = parts[1].clone()\n            let to = parts[2].clone()\n            let amt: int = parts[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                let fb = bal(accts.clone(), from.clone())\n                let tb = bal(accts.clone(), to.clone())\n                match fb {\n                    None => println(\"error: unknown account ${from}\"),\n                    Some(f) => {\n                        match tb {\n                            None => println(\"error: unknown account ${to}\"),\n                            Some(t) => {\n                                if from == to {\n                                    println(\"error: same account\")\n                                } else if amt > f {\n                                    println(\"error: insufficient funds\")\n                                } else {\n                                    accts.insert(from, f - amt)\n                                    accts.insert(to, t + amt)\n                                    println(\"ok\")\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n    for (k, v) in accts {\n        println(\"${k} ${v}\")\n    }\n}\n",
+ "first_source": "use std::collections::BTreeMap\nuse std::fs\n\nfn bal(m: BTreeMap<string, int>, name: string) -> Option<int> {\n    m.get(name).copied()\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut accts: BTreeMap<string, int> = BTreeMap::new()\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        if parts.len() == 0 {\n            continue\n        }\n        let cmd = parts[0].clone()\n        if cmd == \"open\" {\n            let name = parts[1].clone()\n            let amt: int = parts[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if accts.contains_key(name) {\n                println(\"error: duplicate account\")\n            } else {\n                accts.insert(name, amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" {\n            let name = parts[1].clone()\n            match bal(accts.clone(), name.clone()) {\n                Some(b) => println(\"${b}\"),\n                None => println(\"error: unknown account ${name}\"),\n            }\n        } else if cmd == \"deposit\" || cmd == \"withdraw\" {\n            let name = parts[1].clone()\n            let amt: int = parts[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                match bal(accts.clone(), name.clone()) {\n                    None => println(\"error: unknown account ${name}\"),\n                    Some(b) => {\n                        if cmd == \"deposit\" {\n                            accts.insert(name, b + amt)\n                            println(\"ok\")\n                        } else if amt > b {\n                            println(\"error: insufficient funds\")\n                        } else {\n                            accts.insert(name, b - amt)\n                            println(\"ok\")\n                        }\n                    }\n                }\n            }\n        } else if cmd == \"transfer\" {\n            let from = parts[1].clone()\n            let to = parts[2].clone()\n            let amt: int = parts[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else {\n                let fb = bal(accts.clone(), from.clone())\n                let tb = bal(accts.clone(), to.clone())\n                match fb {\n                    None => println(\"error: unknown account ${from}\"),\n                    Some(f) => {\n                        match tb {\n                            None => println(\"error: unknown account ${to}\"),\n                            Some(t) => {\n                                if from == to {\n                                    println(\"error: same account\")\n                                } else if amt > f {\n                                    println(\"error: insufficient funds\")\n                                } else {\n                                    accts.insert(from, f - amt)\n                                    accts.insert(to, t + amt)\n                                    println(\"ok\")\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n    for (k, v) in accts {\n        println(\"${k} ${v}\")\n    }\n}\n",
+ "first_turn_input": 14669,
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 12.078,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 18.72,
+ "pack_bytes": 16523,
+ "pack_file": "WINDJAMMER_FOR_AGENTS.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T20:50:50",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 11.899,
+ "tool_result_tokens_est": 1573,
+ "tool_wait_seconds": 12.08,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 13041,
+   "cache_write": 1626,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14669,
+   "output": 8,
+   "result_chars": 5506,
+   "turn": 1
+  },
+  {
+   "cache_read": 14667,
+   "cache_write": 3953,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 18622,
+   "output": 342,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 11.899,
+  "cost_usd": 0.043004799999999996,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It compiles and runs with `wj run --compiled`.\n\nI tested it with your Example 1 commands plus two extra lines, a self-transfer and a transfer to an unknown account. The output matched what I expected for every line:\n- **Example 1:** it printed `ok`, `ok`, `ok`, `70`, `error: insufficient funds` and `ok`, then `a 70` and `b 35`.\n- **Extra lines:** the self-transfe",
+  "subtype": "success",
+  "tokens_in": 33291,
+  "tokens_out": 1791,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 42.7
+}

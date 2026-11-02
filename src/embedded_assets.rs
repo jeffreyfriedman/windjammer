@@ -91,15 +91,29 @@ pub fn write_to(asset: Asset, dest: &Path) -> std::io::Result<()> {
     write_tree(asset, dest)
 }
 
+/// Cache directory name for a materialized asset. The content hash is part of the name, so any
+/// edit to the embedded tree (for example a runtime source change) lands in a fresh directory
+/// and therefore a fresh cargo fingerprint: a stale pre-built runtime cannot be reused.
+fn cache_dir_name(slug: &str, version: &str, hash: u64) -> String {
+    format!("{slug}-{version}-{hash:016x}")
+}
+
+/// FNV-1a over `path NUL bytes` for every file, the same function `build.rs` bakes in as `*_HASH`.
+fn content_hash(table: &[(&str, &[u8])]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for (rel, bytes) in table {
+        for b in rel.bytes().chain([0u8]).chain(bytes.iter().copied()) {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+    }
+    h
+}
+
 /// Materialize `asset` and return its directory. Idempotent and safe under concurrent
 /// `wj` processes (write to a private temp sibling, then rename into place).
 pub fn materialize(asset: Asset) -> std::io::Result<PathBuf> {
-    let dir = cache_root().join(format!(
-        "{}-{}-{:016x}",
-        asset.slug(),
-        env!("CARGO_PKG_VERSION"),
-        asset.hash()
-    ));
+    let dir = cache_root().join(cache_dir_name(asset.slug(), env!("CARGO_PKG_VERSION"), asset.hash()));
     if dir.join(".complete").is_file() {
         return Ok(dir);
     }
@@ -171,5 +185,44 @@ mod tests {
         );
         assert!(m.contains("name = \"windjammer-runtime\""));
         assert!(dir.join("src/lib.rs").is_file());
+    }
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+    use super::*;
+
+    /// The property the shared pre-built runtime cache depends on: a different content hash must
+    /// give a different cache directory.
+    fn key_invalidates(key: fn(&str, &str, u64) -> String) -> bool {
+        key("windjammer-runtime", "0.50.0", 1) != key("windjammer-runtime", "0.50.0", 2)
+    }
+
+    #[test]
+    fn runtime_edit_changes_the_cache_directory() {
+        assert!(key_invalidates(cache_dir_name));
+    }
+
+    /// Mutation check: a key that drops the content hash (the bug this gate guards against) must
+    /// be caught by the same property.
+    #[test]
+    fn mutant_key_without_hash_is_detected() {
+        fn mutant(slug: &str, version: &str, _hash: u64) -> String {
+            format!("{slug}-{version}")
+        }
+        assert!(!key_invalidates(mutant));
+    }
+
+    #[test]
+    fn editing_one_byte_changes_the_content_hash() {
+        let a: &[(&str, &[u8])] = &[("src/lib.rs", b"pub fn f() -> u8 { 1 }")];
+        let b: &[(&str, &[u8])] = &[("src/lib.rs", b"pub fn f() -> u8 { 2 }")];
+        assert_ne!(content_hash(a), content_hash(b));
+    }
+
+    #[test]
+    fn baked_hashes_match_the_runtime_hash_function() {
+        assert_eq!(content_hash(RUNTIME_CRATE), RUNTIME_CRATE_HASH);
+        assert_eq!(content_hash(STD_WJ), STD_WJ_HASH);
     }
 }

@@ -1,0 +1,128 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "F",
+ "arm_name": "tiny-pack+wj-docs",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let cs: Vec<char> = line.chars().collect()\n        let n: int = cs.len() as int\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let mut i: int = 0\n        while i < n {\n            let c = cs[i as usize]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && cs[(i + 1) as usize] == '\"' {\n                        cur = cur + \"\\\"\"\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else if c != '\\r' {\n                cur = cur + c.to_string()\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let cnt: int = fields.len() as int\n        let mut out = \"\"\n        let mut first = true\n        for f in fields {\n            if !first {\n                out = out + \"|\"\n            }\n            first = false\n            out = out + \"[\" + f + \"]\"\n        }\n        println(\"${cnt}: ${out}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let cs: Vec<char> = line.chars().collect()\n        let n: int = cs.len() as int\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let mut i: int = 0\n        while i < n {\n            let c = cs[i as usize]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && cs[(i + 1) as usize] == '\"' {\n                        cur = cur + \"\\\"\"\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else if c != '\\r' {\n                cur = cur + c.to_string()\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let cnt: int = fields.len() as int\n        let mut out = \"\"\n        let mut first = true\n        for f in fields {\n            if !first {\n                out = out + \"|\"\n            }\n            first = false\n            out = out + \"[\" + f + \"]\"\n        }\n        println(\"${cnt}: ${out}\")\n    }\n}\n",
+ "first_turn_input": 8129,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 25.124,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 4,
+ "other_seconds": 30.33,
+ "pack_bytes": 1485,
+ "pack_file": "tiny_F.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T21:00:40",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 17.711,
+ "tool_result_tokens_est": 366,
+ "tool_wait_seconds": 25.12,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6699,
+   "cache_write": 1428,
+   "calls": [
+    "Write"
+   ],
+   "fresh": 2,
+   "input_total": 8129,
+   "output": 3,
+   "result_chars": 174,
+   "turn": 1
+  },
+  {
+   "cache_read": 8127,
+   "cache_write": 839,
+   "calls": [
+    "Edit",
+    "Edit"
+   ],
+   "fresh": 2,
+   "input_total": 8968,
+   "output": 7,
+   "result_chars": 348,
+   "turn": 2
+  },
+  {
+   "cache_read": 8966,
+   "cache_write": 618,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9586,
+   "output": 16,
+   "result_chars": 758,
+   "turn": 3
+  },
+  {
+   "cache_read": 9584,
+   "cache_write": 542,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 10128,
+   "output": 123,
+   "result_chars": 0,
+   "turn": 4
+  }
+ ],
+ "usage": {
+  "api_seconds": 17.711,
+  "cost_usd": 0.030481599999999998,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the parser in `main.wj`. It builds, and it gave the right output on a test input that combined the two examples.\n\nThat input had an empty line, a lone comma, an escaped-quote field and a quoted field with a comma. I didn't run any other inputs.\n\nIt also drops any `\\r` outside quotes, so Windows line endings shouldn't add a stray character to the last field.",
+  "subtype": "success",
+  "tokens_in": 36811,
+  "tokens_out": 1342,
+  "turns": 5
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 73.16
+}
