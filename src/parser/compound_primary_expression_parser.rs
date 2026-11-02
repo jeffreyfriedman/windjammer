@@ -134,14 +134,18 @@ impl Parser {
 
             if is_assignment || is_control_flow {
                 // Parse as statement (assignment or break/continue/return)
-                let stmt = self.parse_statement()?;
-                // Wrap in block expression
-                let block = self.alloc_expr(Expression::Block {
-                    statements: vec![stmt],
-                    is_unsafe: false,
-                    location: self.current_location(),
+                // The wrapper block covers exactly the arm's statement (it has no braces of its own), so its span
+                // starts here and not at the enclosing `match`.
+                self.span_enter();
+                let block = self.parse_statement().map(|stmt| {
+                    self.alloc_synthetic(Expression::Block {
+                        statements: vec![stmt],
+                        is_unsafe: false,
+                        location: self.current_location(),
+                    })
                 });
-                (block, false)
+                self.span_exit();
+                (block?, false)
             } else {
                 // Parse as expression
                 (self.parse_expression()?, false)
@@ -271,12 +275,17 @@ impl Parser {
             if is_compound_assign {
                 // Reset and parse as a statement
                 self.rewind(checkpoint);
-                let stmt = self.parse_statement()?;
-                self.alloc_expr(Expression::Block {
-                    statements: vec![stmt],
-                    is_unsafe: false,
-                    location: self.current_location(),
-                })
+                // brace-less wrapper: it covers just the statement (see `parse_match_arm_body`)
+                self.span_enter();
+                let block = self.parse_statement().map(|stmt| {
+                    self.alloc_synthetic(Expression::Block {
+                        statements: vec![stmt],
+                        is_unsafe: false,
+                        location: self.current_location(),
+                    })
+                });
+                self.span_exit();
+                block?
             } else {
                 // Reset and parse as a normal expression
                 self.rewind(checkpoint);

@@ -28,6 +28,9 @@ const SNIPPETS: &[&str] = &[
     "fn h(v: Vec<int>) {\n    for i in v {\n        if i > 1 {\n            return\n        }\n    }\n}\n",
     "fn k() {\n    let r = foo.bar(1, 2).baz\n    let c = |a| a + 1\n}\n",
     "fn m(x: int) {\n    match x {\n        1 => 2,\n        _ => 3,\n    }\n}\n",
+    "fn r(s: string) -> string {\n    match s.find(\"x\") {\n        Some(q) => return s[0..q].to_string(),\n        None => return \"\",\n    }\n}\n",
+    "fn w(words: Vec<string>) {\n    let mut freq = HashMap::new()\n    for w in words {\n        freq.entry(w).and_modify(|c| *c += 1).or_insert(1)\n    }\n}\n",
+    "fn d(a: Option<int>) -> int {\n    let mut n = 0\n    match a {\n        Some(v) => n = v,\n        None => n = 1,\n    }\n    n\n}\n",
 ];
 
 #[test]
