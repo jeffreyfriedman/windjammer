@@ -1,0 +1,53 @@
+// `format` templates of bare `{}`s and `s.push_str(x)` statements, which the resolved engine does
+// without the generic call: escaped and lone braces, a user `Display` (run after every argument is
+// evaluated), arguments with side effects, a string another binding shares, a string a closure
+// captures, a char argument, and a panic while an argument is evaluated (its location).
+struct P {
+    x: int,
+}
+
+impl Display for P {
+    fn fmt(self, f: Formatter) -> FmtResult {
+        println("display ${self.x}")
+        write!(f, "P({})", self.x)
+    }
+}
+
+fn noisy(n: int) -> int {
+    println("arg ${n}")
+    n
+}
+
+fn main() {
+    let mut s = String::new()
+    let mut i = 0
+    while i < 400 {
+        s.push_str("${i % 10},")
+        s.push_str("{${i % 3}}|}")
+        if s.len() > 120 {
+            s = String::new()
+        }
+        i += 1
+    }
+    println("${s.len()} ${s}")
+    let p = P { x: 7 }
+    let t = "${noisy(1)} and ${p} then ${noisy(2)}"
+    println(t)
+    let mut a = "base"
+    let keep = a
+    a.push_str("+more")
+    a.push_str('!')
+    println("${a} ${keep}")
+    let mut c = "cap"
+    let get = || c.len()
+    c.push_str("tured")
+    println("${c} ${get()}")
+    let mut z = String::new()
+    let mut k = 5
+    while k > -2 {
+        let d = 10 / k
+        z.push_str("${d}")
+        k -= 1
+    }
+    println("unreachable ${z}")
+}
