@@ -28,7 +28,7 @@ fn dispatch(req: ServerRequest, state: Arc<Mutex<AuthApp>>) -> ServerResponse {
     match state.lock() {
         Ok(mut app) => {
             // Same-crate HttpMethod — string labels demote `handle`'s method formal
-            // to `&str` then still emit `"GET".to_string()` (DB-168 / auth dogfood).
+            // to `&str` then still emit `"GET".to_string()` (auth dogfood).
             let reply = app.handle_http(
                 req.method,
                 path,

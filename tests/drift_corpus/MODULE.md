@@ -17,7 +17,7 @@ than the interpreter's authors, run under the tree walker, the resolved engine a
 - `compiled_baseline.tsv`, `known_divergences.txt`
 
 ## Invariants
-- The snapshot is byte-identical to `git archive <commit> packages apps` restricted to `wj.toml`, `src/`, `tests/`, `migrations/`.
+- The snapshot is byte-identical to `git archive <commit> packages apps` restricted to `wj.toml`, `src/`, `tests/`, `migrations/`, except the comment scrub recorded in PROVENANCE (public hygiene: no internal ticket ids).
 - A divergence is never fixed by editing the snapshot; reduce it (`wj reduce`), file it in `docs/drift/findings.md`,
   fix the engine.
 - Refresh: `git -C <ecosystem> archive <commit> packages apps | tar -x -C tests/drift_corpus/eco`, delete files outside
