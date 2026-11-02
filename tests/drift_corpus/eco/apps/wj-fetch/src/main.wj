@@ -1,0 +1,30 @@
+use crate::adapters::read_args
+use crate::domain::config_from_env
+use crate::domain::run_fetch
+use crate::domain::url_from_argv
+use std::process
+use std::strings
+
+fn main() {
+    let config = config_from_env()
+    let argv = read_args()
+    match url_from_argv(argv, config) {
+        Ok(req) => {
+            match run_fetch(req) {
+                Ok(out) => {
+                    if strings.len(out) > 0 {
+                        println("{}", out)
+                    }
+                },
+                Err(e) => {
+                    eprintln("wj-fetch: ${e}")
+                    process.exit(1)
+                },
+            }
+        },
+        Err(e) => {
+            eprintln("wj-fetch: ${e}")
+            process.exit(1)
+        },
+    }
+}

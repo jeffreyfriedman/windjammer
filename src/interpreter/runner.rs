@@ -392,10 +392,13 @@ fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
 fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>) -> TestResult {
     let spec = spec.clone();
     let mut it = Interpreter::new_capturing();
-    it.set_env_snapshot(host_env());
+    let env = host_env();
+    // `WJ_TEST_ENGINE=walker` selects the tree walker (the drift gate compares the two engines on tests)
+    let walker = env.iter().any(|(k, v)| k == "WJ_TEST_ENGINE" && v == "walker");
+    it.set_env_snapshot(env);
     it.guard_stack();
     // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
-    it.set_engine_resolved(true);
+    it.set_engine_resolved(!walker);
     // tests are sandboxed like `wj run` (ADR-0021): the project's [capabilities], else the local profile
     let scratch = super::caps::Scratch::new();
     match super::caps::gate_for_run(&spec.file, false, &[], false, "") {

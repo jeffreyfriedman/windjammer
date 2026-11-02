@@ -1,0 +1,214 @@
+use crate::at_least_n_matches
+use crate::escape
+use crate::find
+use crate::find_all
+use crate::find_or
+use crate::has_matches
+use crate::is_match
+use crate::is_valid_pattern
+use crate::match_count
+use crate::none_match
+use crate::replace
+use crate::replace_all
+use crate::require_match
+use crate::require_none
+use crate::require_matches
+use crate::require_at_least
+use crate::split
+use std::strings
+
+@test
+fn test_is_match_digits() {
+    match is_match("\\d+", "abc123") {
+        Ok(ok) => assert(ok, "digits match"),
+        Err(_) => assert(false, "is_match err"),
+    }
+    match is_match("\\d+", "abc") {
+        Ok(ok) => assert(!ok, "no digits"),
+        Err(_) => assert(false, "is_match err2"),
+    }
+}
+
+@test
+fn test_find_first() {
+    match find("\\d+", "abc123def456") {
+        Ok(opt) => {
+            match opt {
+                Some(m) => assert_eq(m, "123"),
+                None => assert(false, "expected match"),
+            }
+        },
+        Err(_) => assert(false, "find err"),
+    }
+}
+
+@test
+fn test_find_none() {
+    match find("\\d+", "abcdef") {
+        Ok(opt) => {
+            match opt {
+                Some(_) => assert(false, "expected None"),
+                None => {},
+            }
+        },
+        Err(_) => assert(false, "find none err"),
+    }
+}
+
+@test
+fn test_find_all() {
+    match find_all("\\d+", "a1b22c333") {
+        Ok(ms) => {
+            assert_eq(ms.len(), 3)
+            assert_eq(ms[0], "1")
+            assert_eq(ms[1], "22")
+            assert_eq(ms[2], "333")
+        },
+        Err(_) => assert(false, "find_all err"),
+    }
+}
+
+@test
+fn test_replace_first() {
+    match replace("\\d+", "a1b2", "X") {
+        Ok(out) => assert_eq(out, "aXb2"),
+        Err(_) => assert(false, "replace err"),
+    }
+}
+
+@test
+fn test_replace_all() {
+    match replace_all("\\d+", "a1b2c3", "X") {
+        Ok(out) => assert_eq(out, "aXbXcX"),
+        Err(_) => assert(false, "replace_all err"),
+    }
+}
+
+@test
+fn test_split_whitespace() {
+    match split("\\s+", "hello  world\tfoo") {
+        Ok(parts) => {
+            assert_eq(parts.len(), 3)
+            assert_eq(parts[0], "hello")
+            assert_eq(parts[1], "world")
+            assert_eq(parts[2], "foo")
+        },
+        Err(_) => assert(false, "split err"),
+    }
+}
+
+@test
+fn test_escape_specials() {
+    let escaped = escape("a+b?")
+    assert(escaped != "a+b?", "escaped differs")
+    match is_match(escaped, "a+b?") {
+        Ok(ok) => assert(ok, "literal match after escape"),
+        Err(_) => assert(false, "escape match"),
+    }
+}
+
+@test
+fn test_invalid_pattern_errors() {
+    match is_match("(", "x") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg != "", "err message"),
+    }
+}
+
+@test
+fn test_match_count() {
+    match match_count("\\d+", "a1b22c333") {
+        Ok(n) => assert_eq(n, 3),
+        Err(_) => assert(false, "match_count err"),
+    }
+    match match_count("\\d+", "abc") {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "match_count zero"),
+    }
+}
+
+@test
+fn test_has_matches_and_none_match() {
+    match has_matches("\\d+", "a1b") {
+        Ok(yes) => assert(yes, "has"),
+        Err(_) => assert(false, "has err"),
+    }
+    match none_match("\\d+", "abc") {
+        Ok(yes) => assert(yes, "none"),
+        Err(_) => assert(false, "none err"),
+    }
+    match none_match("\\d+", "a1") {
+        Ok(yes) => assert(!yes, "has digits"),
+        Err(_) => assert(false, "none digits err"),
+    }
+}
+
+@test
+fn test_is_valid_pattern_and_find_or() {
+    assert(is_valid_pattern("\\d+"), "valid digits")
+    assert(!is_valid_pattern("("), "unclosed group")
+    assert_eq(find_or("\\d+", "a12b", "0"), "12")
+    assert_eq(find_or("\\d+", "abc", "0"), "0")
+    assert_eq(find_or("(", "abc", "fallback"), "fallback")
+}
+
+@test
+fn test_require_exact_count() {
+    use crate::require_exact_count
+    match require_exact_count("\\d+", "a1b22c", 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two runs"),
+    }
+    match require_exact_count("\\d+", "a1b22c", 1) {
+        Ok(_) => assert(false, "not one"),
+        Err(msg) => assert(strings.contains(msg, "exact"), "mentions exact"),
+    }
+    match require_exact_count("(", "abc", 0) {
+        Ok(_) => assert(false, "bad pattern must Err"),
+        Err(msg) => assert(strings.len(msg) > 0, "pattern error"),
+    }
+}
+
+@test
+fn test_require_none() {
+    match require_none("\\d+", "abc") {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "no digits"),
+    }
+    match require_none("\\d+", "a1") {
+        Ok(_) => assert(false, "digit must Err"),
+        Err(msg) => assert(strings.contains(msg, "matches"), "mentions matches"),
+    }
+    match require_none("(", "abc") {
+        Ok(_) => assert(false, "bad pattern must Err"),
+        Err(msg) => assert(strings.len(msg) > 0, "pattern error"),
+    }
+}
+
+@test
+fn test_require_matches() {
+    match require_matches("\\d+", "a1") {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "digit"),
+    }
+    match require_matches("\\d+", "abc") {
+        Ok(_) => assert(false, "no digit must Err"),
+        Err(msg) => assert(strings.contains(msg, "matches"), "mentions matches"),
+    }
+    match require_matches("(", "abc") {
+        Ok(_) => assert(false, "bad pattern must Err"),
+        Err(msg) => assert(strings.len(msg) > 0, "pattern error"),
+    }
+}
+
+@test
+fn test_require_at_least() {
+    match require_at_least("\\d+", "a1b22c333", 3) {
+        Ok(n) => assert_eq(n, 3),
+        Err(_) => assert(false, "three runs"),
+    }
+    match require_at_least("\\d+", "a1b", 3) {
+        Ok(_) => assert(false, "too few must Err"),
+        Err(msg) => assert(strings.contains(msg, "at least"), "mentions at least"),
+    }
+}

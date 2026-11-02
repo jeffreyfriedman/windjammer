@@ -1,0 +1,118 @@
+use std::strings
+
+pub struct CivilTime {
+    pub year: int,
+    pub month: int,
+    pub day: int,
+    pub hour: int,
+    pub minute: int,
+    pub day_of_week: int,
+}
+
+pub fn parse_civil(text: string) -> Result<CivilTime, string> {
+    let parts = strings.split(text, "T")
+    if parts.len() != 2 {
+        return Err("expected YYYY-MM-DDTHH:MM")
+    }
+    let date = match parts.get(0) {
+        Some(v) => v,
+        None => return Err("missing date"),
+    }
+    let clock = match parts.get(1) {
+        Some(v) => v,
+        None => return Err("missing time"),
+    }
+    let dparts = strings.split(date, "-")
+    if dparts.len() != 3 {
+        return Err("bad date")
+    }
+    let tparts = strings.split(clock, ":")
+    if tparts.len() != 2 {
+        return Err("bad time")
+    }
+    let year = match parse_int_field(dparts, 0) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    let month = match parse_int_field(dparts, 1) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    let day = match parse_int_field(dparts, 2) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    let hour = match parse_int_field(tparts, 0) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    let minute = match parse_int_field(tparts, 1) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    if month < 1 || month > 12 {
+        return Err("month out of range")
+    }
+    if day < 1 || day > 31 {
+        return Err("day out of range")
+    }
+    if hour < 0 || hour > 23 {
+        return Err("hour out of range")
+    }
+    if minute < 0 || minute > 59 {
+        return Err("minute out of range")
+    }
+    Ok(CivilTime {
+        year: year,
+        month: month,
+        day: day,
+        hour: hour,
+        minute: minute,
+        day_of_week: day_of_week(year, month, day),
+    })
+}
+
+fn parse_int_field(parts: Vec<string>, idx: int) -> Result<int, string> {
+    match parts.get(idx) {
+        Some(text) => {
+            if strings.len(text) == 0 {
+                return Err("empty number")
+            }
+            Ok(strings.parse_i32(text) as int)
+        },
+        None => Err("missing field"),
+    }
+}
+
+/// Sakamoto's method: 0 = Sunday … 6 = Saturday.
+pub fn day_of_week(year: int, month: int, day: int) -> int {
+    let mut y = year
+    let t0 = 0
+    let t1 = 3
+    let t2 = 2
+    let t3 = 5
+    let t4 = 0
+    let t5 = 3
+    let t6 = 5
+    let t7 = 1
+    let t8 = 4
+    let t9 = 6
+    let t10 = 2
+    let t11 = 4
+    if month < 3 {
+        y = y - 1
+    }
+    let mut t = t0
+    if month == 2 { t = t1 }
+    if month == 3 { t = t2 }
+    if month == 4 { t = t3 }
+    if month == 5 { t = t4 }
+    if month == 6 { t = t5 }
+    if month == 7 { t = t6 }
+    if month == 8 { t = t7 }
+    if month == 9 { t = t8 }
+    if month == 10 { t = t9 }
+    if month == 11 { t = t10 }
+    if month == 12 { t = t11 }
+    (y + y / 4 - y / 100 + y / 400 + t + day) % 7
+}

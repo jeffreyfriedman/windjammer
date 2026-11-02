@@ -1,0 +1,266 @@
+use crate::domain::Hub
+use crate::domain::ChatConfig
+use crate::domain::Delivery
+use crate::domain::default_chat_config
+use crate::domain::issue_token
+
+const SECRET: string = "chat-test-secret-chat-test-secret"
+
+fn hub() -> Hub {
+    let mut config = default_chat_config()
+    config.jwt_secret = SECRET
+    Hub::new(config)
+}
+
+fn token_with(secret: string, user: string) -> string {
+    let mut config = default_chat_config()
+    config.jwt_secret = secret
+    issue_token(config, user, 3600).unwrap()
+}
+
+fn token(user: string) -> string {
+    token_with(SECRET, user)
+}
+
+fn auth_frame(user: string) -> string {
+    "{\"kind\":\"auth\",\"token\":\"${token(user)}\"}"
+}
+
+// Connect and authenticate `user`; returns the connection id.
+fn login(h: Hub, user: string) -> int {
+    let conn = h.connect(0)
+    h.receive(conn, auth_frame(user), 0)
+    conn
+}
+
+fn to_conn(out: Vec<Delivery>, conn: int) -> Vec<string> {
+    let mut texts = Vec::new()
+    for d in out {
+        if d.conn == conn {
+            texts.push(d.text.clone())
+        }
+    }
+    texts
+}
+
+@test
+fn test_connections_get_distinct_ids() {
+    let mut h = hub()
+    assert(h.connect(0) != h.connect(0), "ids differ")
+}
+
+@test
+fn test_commands_require_authentication() {
+    let mut h = hub()
+    let c = h.connect(0)
+    let out = h.receive(c, "{\"kind\":\"join\",\"room\":\"general\"}", 0)
+    let mine = to_conn(out, c)
+    assert_eq(mine.len(), 1)
+    assert_str_contains(mine[0], "\"kind\":\"error\"")
+    assert_str_contains(mine[0], "authenticate")
+}
+
+@test
+fn test_bad_token_is_rejected() {
+    let mut h = hub()
+    let c = h.connect(0)
+    let out = h.receive(c, "{\"kind\":\"auth\",\"token\":\"nonsense\"}", 0)
+    assert_str_contains(to_conn(out, c)[0], "\"kind\":\"error\"")
+}
+
+@test
+fn test_token_signed_with_another_secret_is_rejected() {
+    let mut h = hub()
+    let c = h.connect(0)
+    let forged = token_with("some-other-secret-some-other-secret", "mallory")
+    let out = h.receive(c, "{\"kind\":\"auth\",\"token\":\"${forged}\"}", 0)
+    assert_str_contains(to_conn(out, c)[0], "\"kind\":\"error\"")
+}
+
+@test
+fn test_malformed_frames_get_an_error_not_a_crash() {
+    let mut h = hub()
+    let c = login(h, "ann")
+    let out = h.receive(c, "not json", 0)
+    assert_str_contains(to_conn(out, c)[0], "invalid frame")
+    let unknown = h.receive(c, "{\"kind\":\"dance\"}", 0)
+    assert_str_contains(to_conn(unknown, c)[0], "unknown")
+}
+
+@test
+fn test_say_reaches_everyone_in_the_room_including_sender() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    let bob = login(h, "bob")
+    let cat = login(h, "cat")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    h.receive(cat, "{\"kind\":\"join\",\"room\":\"other\"}", 1)
+    let out = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"hello\"}", 2)
+    assert_eq(to_conn(out, ann).len(), 1)
+    assert_eq(to_conn(out, bob).len(), 1)
+    assert_eq(to_conn(out, cat).len(), 0)
+    assert_str_contains(to_conn(out, bob)[0], "\"from\":\"ann\"")
+    assert_str_contains(to_conn(out, bob)[0], "\"text\":\"hello\"")
+}
+
+@test
+fn test_say_requires_membership_and_nonempty_bounded_text() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    let outside = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"hi\"}", 1)
+    assert_str_contains(to_conn(outside, ann)[0], "not in room")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    let empty = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"\"}", 1)
+    assert_str_contains(to_conn(empty, ann)[0], "\"kind\":\"error\"")
+    let long_text = "x".repeat(3000)
+    let big = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"${long_text}\"}", 1)
+    assert_str_contains(to_conn(big, ann)[0], "too long")
+}
+
+@test
+fn test_join_announces_presence_to_the_room() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    let bob = login(h, "bob")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    let out = h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 2)
+    let to_ann = to_conn(out, ann)
+    assert_eq(to_ann.len(), 1)
+    assert_str_contains(to_ann[0], "\"kind\":\"presence\"")
+    assert_str_contains(to_ann[0], "bob")
+    // the joiner sees the full member list
+    let to_bob = to_conn(out, bob)
+    assert_str_contains(to_bob[0], "ann")
+    assert_str_contains(to_bob[0], "bob")
+}
+
+@test
+fn test_leave_and_disconnect_notify_remaining_members() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    let bob = login(h, "bob")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    let left = h.receive(bob, "{\"kind\":\"leave\",\"room\":\"general\"}", 2)
+    assert_str_contains(to_conn(left, ann)[0], "\"kind\":\"presence\"")
+    // after leaving, bob no longer receives room traffic
+    let out = h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"anyone?\"}", 3)
+    assert_eq(to_conn(out, bob).len(), 0)
+    h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 4)
+    let gone = h.disconnect(bob)
+    assert_str_contains(to_conn(gone, ann)[0], "\"kind\":\"presence\"")
+}
+
+@test
+fn test_direct_messages_reach_only_the_target() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    let bob = login(h, "bob")
+    let cat = login(h, "cat")
+    let out = h.receive(ann, "{\"kind\":\"dm\",\"to\":\"bob\",\"text\":\"psst\"}", 1)
+    assert_eq(to_conn(out, bob).len(), 1)
+    assert_str_contains(to_conn(out, bob)[0], "\"kind\":\"dm\"")
+    assert_eq(to_conn(out, cat).len(), 0)
+    // the sender gets a delivery receipt, not an error
+    assert_str_contains(to_conn(out, ann)[0], "\"kind\":\"ok\"")
+}
+
+@test
+fn test_direct_message_to_offline_user_is_an_error() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    let out = h.receive(ann, "{\"kind\":\"dm\",\"to\":\"ghost\",\"text\":\"hi\"}", 1)
+    assert_str_contains(to_conn(out, ann)[0], "offline")
+}
+
+@test
+fn test_history_replays_recent_room_messages_in_order() {
+    let mut h = hub()
+    let ann = login(h, "ann")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"general\"}", 1)
+    h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"one\"}", 2)
+    h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"two\"}", 3)
+    h.receive(ann, "{\"kind\":\"say\",\"room\":\"general\",\"text\":\"three\"}", 4)
+    let bob = login(h, "bob")
+    h.receive(bob, "{\"kind\":\"join\",\"room\":\"general\"}", 5)
+    let out = h.receive(bob, "{\"kind\":\"history\",\"room\":\"general\",\"limit\":2}", 6)
+    let mine = to_conn(out, bob)
+    assert_eq(mine.len(), 1)
+    assert_str_contains(mine[0], "\"kind\":\"history\"")
+    assert(!mine[0].contains("one"), "limit keeps only the latest two")
+    let two_at = mine[0].find("two").unwrap()
+    let three_at = mine[0].find("three").unwrap()
+    assert(two_at < three_at, "oldest first")
+}
+
+@test
+fn test_history_is_capped() {
+    let mut config = default_chat_config()
+    config.jwt_secret = SECRET
+    config.history_cap = 3
+    let mut h = Hub::new(config)
+    let ann = login(h, "ann")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"r\"}", 1)
+    for i in 0..10 {
+        h.receive(ann, "{\"kind\":\"say\",\"room\":\"r\",\"text\":\"m${i}\"}", 2)
+    }
+    let out = h.receive(ann, "{\"kind\":\"history\",\"room\":\"r\"}", 3)
+    let body = to_conn(out, ann)[0].clone()
+    assert(body.contains("m9"), "newest kept")
+    assert(body.contains("m7"), "third newest kept")
+    assert(!body.contains("m6"), "older dropped")
+}
+
+@test
+fn test_rate_limit_blocks_floods_per_user() {
+    let mut config = default_chat_config()
+    config.jwt_secret = SECRET
+    config.rate_limit = 3
+    config.rate_window_ms = 10000
+    let mut h = Hub::new(config)
+    let ann = login(h, "ann")
+    let bob = login(h, "bob")
+    h.receive(ann, "{\"kind\":\"join\",\"room\":\"r\"}", 1)
+    h.receive(bob, "{\"kind\":\"join\",\"room\":\"r\"}", 1)
+    let say = "{\"kind\":\"say\",\"room\":\"r\",\"text\":\"spam\"}"
+    // join already used one slot for ann: two more messages fit, the third is refused
+    assert_str_contains(to_conn(h.receive(ann, say, 2), ann)[0], "\"kind\":\"message\"")
+    assert_str_contains(to_conn(h.receive(ann, say, 3), ann)[0], "\"kind\":\"message\"")
+    let refused = h.receive(ann, say, 4)
+    assert_str_contains(to_conn(refused, ann)[0], "rate limit")
+    assert_eq(to_conn(refused, bob).len(), 0)
+    // another user is unaffected, and the window reopens
+    assert_str_contains(to_conn(h.receive(bob, say, 5), bob)[0], "\"kind\":\"message\"")
+    assert_str_contains(to_conn(h.receive(ann, say, 20000), ann)[0], "\"kind\":\"message\"")
+}
+
+@test
+fn test_idle_connections_expire_unless_they_pong() {
+    let mut config = default_chat_config()
+    config.jwt_secret = SECRET
+    config.idle_timeout_ms = 1000
+    let mut h = Hub::new(config)
+    let quiet = h.connect(0)
+    let lively = h.connect(0)
+    h.receive(lively, "{\"kind\":\"pong\"}", 900)
+    let expired = h.expired(1500)
+    assert_eq(expired.len(), 1)
+    assert_eq(expired[0], quiet)
+    assert_eq(h.expired(2000).len(), 2)
+}
+
+@test
+fn test_username_can_only_be_online_once_per_connection_replace() {
+    // a second login with the same name takes over: the old connection is told and closed out of rooms
+    let mut h = hub()
+    let first = login(h, "ann")
+    h.receive(first, "{\"kind\":\"join\",\"room\":\"r\"}", 1)
+    let second = h.connect(2)
+    let out = h.receive(second, auth_frame("ann"), 2)
+    assert_str_contains(to_conn(out, first)[0], "signed in elsewhere")
+    let bob = login(h, "bob")
+    let dm = h.receive(bob, "{\"kind\":\"dm\",\"to\":\"ann\",\"text\":\"hi\"}", 3)
+    assert_eq(to_conn(dm, second).len(), 1)
+    assert_eq(to_conn(dm, first).len(), 0)
+}

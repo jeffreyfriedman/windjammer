@@ -1,0 +1,97 @@
+// Coordination primitives — Once, Latch, Barrier (Go sync-class).
+
+use crate::shared::SharedInt
+use crate::shared::shared_int_add
+
+/// Run-once gate.
+pub struct Once {
+    done: bool,
+}
+
+/// Create a fresh Once.
+pub fn once_new() -> Once {
+    Once { done: false }
+}
+
+/// Call shared_int_add(counter, 1) at most once. Returns (Once, SharedInt).
+pub fn once_call(o: Once, counter: SharedInt) -> (Once, SharedInt) {
+    if o.done {
+        return (o, counter)
+    }
+    let next = shared_int_add(counter, 1)
+    (Once { done: true }, next)
+}
+
+/// Countdown latch — opens when count reaches zero.
+pub struct Latch {
+    remaining: int,
+}
+
+pub fn latch_new(count: int) -> Latch {
+    let safe = if count < 0 { 0 } else { count }
+    Latch { remaining: safe }
+}
+
+pub fn latch_countdown(latch: Latch) -> Latch {
+    if latch.remaining <= 0 {
+        return latch
+    }
+    Latch {
+        remaining: latch.remaining - 1,
+    }
+}
+
+pub fn latch_is_open(latch: Latch) -> bool {
+    latch.remaining <= 0
+}
+
+pub fn latch_count(latch: Latch) -> int {
+    latch.remaining
+}
+
+/// Barrier for N parties (same-thread trip for N=1; multi-task later).
+pub struct Barrier {
+    parties: int,
+    waiting: int,
+}
+
+pub fn barrier_new(parties: int) -> Barrier {
+    let p = if parties < 1 { 1 } else { parties }
+    Barrier {
+        parties: p,
+        waiting: 0,
+    }
+}
+
+/// Record one wait; when all parties have waited, reset waiting to 0.
+pub fn barrier_wait(b: Barrier) -> Barrier {
+    let next = b.waiting + 1
+    if next >= b.parties {
+        Barrier {
+            parties: b.parties,
+            waiting: 0,
+        }
+    } else {
+        Barrier {
+            parties: b.parties,
+            waiting: next,
+        }
+    }
+}
+
+pub fn barrier_waiting(b: Barrier) -> int {
+    b.waiting
+}
+
+/// True when no party is currently waiting.
+pub fn barrier_is_idle(b: Barrier) -> bool {
+    barrier_waiting(b) == 0
+}
+
+/// Party count when the barrier is idle, otherwise `Err`.
+pub fn require_idle(b: Barrier) -> Result<int, string> {
+    if barrier_is_idle(b) {
+        return Ok(b.parties)
+    }
+    Err("expected idle barrier")
+}

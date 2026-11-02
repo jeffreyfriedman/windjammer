@@ -1,0 +1,61 @@
+use std::db
+use std::strings
+
+use crate::db_apply::discover_migrations
+use crate::pending
+use crate::select_applied_sql
+use crate::validate_unique_versions
+
+pub struct StatusReport {
+    pub applied_versions: Vec<int>,
+    pub pending_versions: Vec<int>,
+}
+
+/// List applied and pending migration versions for `url` and `migrations_dir`.
+pub fn status_url(url: string, migrations_dir: string) -> Result<StatusReport, string> {
+    match db.connect(url) {
+        Ok(conn) => status_conn(conn, migrations_dir),
+        Err(e) => Err(e),
+    }
+}
+
+fn status_conn(conn: db::Connection, migrations_dir: string) -> Result<StatusReport, string> {
+    let all = match discover_migrations(migrations_dir) {
+        Ok(items) => items,
+        Err(e) => return Err(e),
+    }
+    match validate_unique_versions(all) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    let all = match discover_migrations(migrations_dir) {
+        Ok(items) => items,
+        Err(e) => return Err(e),
+    }
+    let mut applied = Vec::new()
+    let query_params = Vec::new()
+    match conn.query(select_applied_sql(), query_params) {
+        Ok(rows) => {
+            for row in rows {
+                match row.get_int_at(0) {
+                    Ok(v) => applied.push(v),
+                    Err(e) => return Err(e),
+                }
+            }
+        },
+        Err(e) => {
+            if !strings.contains(e, "no such table") {
+                return Err(e)
+            }
+        },
+    }
+    let left = pending(all, applied)
+    let mut pending_versions = Vec::new()
+    for m in left {
+        pending_versions.push(m.version)
+    }
+    Ok(StatusReport {
+        applied_versions: applied,
+        pending_versions: pending_versions,
+    })
+}

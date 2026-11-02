@@ -1,0 +1,151 @@
+use std::json
+use wj_querystring::get as query_get
+
+use crate::domain::inputs::AssignInput
+use crate::domain::inputs::TaskInput
+use crate::domain::inputs::TaskPatch
+use crate::domain::model::TaskFilter
+use crate::domain::model::User
+use crate::domain::model::no_filter
+use crate::domain::reply::Reply
+use crate::domain::reply::error_reply
+use crate::domain::reply::from_json
+use crate::domain::reply::no_content
+use crate::domain::rules::can_write
+use crate::domain::rules::check_priority
+use crate::domain::rules::check_status
+use crate::domain::rules::check_title
+use crate::domain::store::TaskStore
+
+fn filter_from_query(query: string) -> TaskFilter {
+    let mut f = no_filter()
+    f.status = query_get(query, "status").unwrap_or("")
+    f.priority = query_get(query, "priority").unwrap_or("")
+    f.text = query_get(query, "q").unwrap_or("")
+    match query_get(query, "assigned_to") {
+        Some(text) => match text.parse::<int>() {
+            Ok(n) => f.assignee = n,
+            Err(_) => {},
+        },
+        None => {},
+    }
+    f
+}
+
+pub fn task_list(store: TaskStore, user: User, project_id: int, query: string) -> Reply {
+    if store.project(project_id).is_none() {
+        return error_reply(404, "project not found")
+    }
+    if store.role_in(project_id, user.id) == "" {
+        return error_reply(403, "not a member of this project")
+    }
+    from_json(200, json.to_string(store.tasks_of(project_id, filter_from_query(query))))
+}
+
+pub fn task_create(store: TaskStore, user: User, project_id: int, body: string) -> Reply {
+    if store.project(project_id).is_none() {
+        return error_reply(404, "project not found")
+    }
+    if !can_write(store.role_in(project_id, user.id)) {
+        return error_reply(403, "your role cannot change tasks in this project")
+    }
+    let input: TaskInput = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    let priority = input.priority.unwrap_or("medium")
+    match check_title(input.title) {
+        Ok(_) => {},
+        Err(e) => return error_reply(422, e),
+    }
+    match check_priority(priority) {
+        Ok(_) => {},
+        Err(e) => return error_reply(422, e),
+    }
+    let task = store.add_task(project_id, input.title, input.description.unwrap_or(""), "todo", priority, user.id)
+    from_json(201, json.to_string(task))
+}
+
+pub fn task_show(store: TaskStore, user: User, task_id: int) -> Reply {
+    let task = match store.task(task_id) {
+        Some(t) => t,
+        None => return error_reply(404, "task not found"),
+    }
+    if store.role_in(task.project_id, user.id) == "" {
+        return error_reply(403, "not a member of this project")
+    }
+    from_json(200, json.to_string(task))
+}
+
+pub fn task_update(store: TaskStore, user: User, task_id: int, body: string) -> Reply {
+    let task = match store.task(task_id) {
+        Some(t) => t,
+        None => return error_reply(404, "task not found"),
+    }
+    if !can_write(store.role_in(task.project_id, user.id)) {
+        return error_reply(403, "your role cannot change tasks in this project")
+    }
+    let patch: TaskPatch = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    match patch.title.clone() {
+        Some(t) => match check_title(t) {
+            Ok(_) => {},
+            Err(e) => return error_reply(422, e),
+        },
+        None => {},
+    }
+    match patch.status.clone() {
+        Some(s) => match check_status(s) {
+            Ok(_) => {},
+            Err(e) => return error_reply(422, e),
+        },
+        None => {},
+    }
+    match patch.priority.clone() {
+        Some(p) => match check_priority(p) {
+            Ok(_) => {},
+            Err(e) => return error_reply(422, e),
+        },
+        None => {},
+    }
+    match store.update_task(task_id, patch.title, patch.description, patch.status, patch.priority) {
+        Some(updated) => from_json(200, json.to_string(updated)),
+        None => error_reply(404, "task not found"),
+    }
+}
+
+pub fn task_remove(store: TaskStore, user: User, task_id: int) -> Reply {
+    let task = match store.task(task_id) {
+        Some(t) => t,
+        None => return error_reply(404, "task not found"),
+    }
+    if !can_write(store.role_in(task.project_id, user.id)) {
+        return error_reply(403, "your role cannot change tasks in this project")
+    }
+    store.delete_task(task_id)
+    no_content()
+}
+
+pub fn task_assign(store: TaskStore, user: User, task_id: int, body: string) -> Reply {
+    let task = match store.task(task_id) {
+        Some(t) => t,
+        None => return error_reply(404, "task not found"),
+    }
+    if !can_write(store.role_in(task.project_id, user.id)) {
+        return error_reply(403, "your role cannot change tasks in this project")
+    }
+    let input: AssignInput = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    if store.role_in(task.project_id, input.user_id) == "" {
+        return error_reply(422, "assignee must be a member of the project")
+    }
+    store.assign_task(task_id, input.user_id)
+    match store.task(task_id) {
+        Some(updated) => from_json(200, json.to_string(updated)),
+        None => error_reply(404, "task not found"),
+    }
+}

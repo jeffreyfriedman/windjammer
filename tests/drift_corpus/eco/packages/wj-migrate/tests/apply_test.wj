@@ -1,0 +1,124 @@
+use crate::db_apply::apply_url
+use crate::migrations_from_filenames
+use crate::pending
+use crate::Migration
+use std::fs
+
+fn test_migrations_from_filenames_ignores_non_sql() {
+    let mut names = Vec::new()
+    names.push("001_a.sql")
+    names.push("readme.md")
+    names.push("002_b.sql")
+    match migrations_from_filenames(names) {
+        Ok(items) => {
+            assert_eq(items.len(), 2)
+            assert_eq(items[0].version, 1)
+            assert_eq(items[1].version, 2)
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_migrations_from_filenames_rejects_bad_name() {
+    let mut names = Vec::new()
+    names.push("bad.sql")
+    match migrations_from_filenames(names) {
+        Ok(_) => assert(false, "expected error"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+fn test_apply_in_memory_applies_migrations() {
+    let root = "/tmp/wj-migrate-apply-memory"
+    match setup_two_migration_dir(root) {
+        Ok(_) => {},
+        Err(e) => {
+            assert(false, e)
+            return
+        },
+    }
+    match apply_url(":memory:", root) {
+        Ok(report) => {
+            assert_eq(report.applied_count, 2)
+            assert_eq(report.applied_versions.len(), 2)
+            assert_eq(report.applied_versions[0], 1)
+            assert_eq(report.applied_versions[1], 2)
+        },
+        Err(e) => assert(false, e),
+    }
+    teardown_dir(root)
+}
+
+fn test_apply_report_versions_leave_none_pending() {
+    let root = "/tmp/wj-migrate-report-pending"
+    match setup_two_migration_dir(root) {
+        Ok(_) => {},
+        Err(e) => {
+            assert(false, e)
+            return
+        },
+    }
+    match apply_url(":memory:", root) {
+        Ok(report) => {
+            assert_eq(report.applied_count, 2)
+            let mut names = Vec::new()
+            names.push("001_create_items.sql")
+            names.push("002_add_note.sql")
+            match migrations_from_filenames(names) {
+                Ok(all) => {
+                    let left = pending(all, report.applied_versions)
+                    assert_eq(left.len(), 0)
+                },
+                Err(e) => assert(false, e),
+            }
+        },
+        Err(e) => assert(false, e),
+    }
+    teardown_dir(root)
+}
+
+fn test_apply_url_rejects_empty_dir() {
+    let root = "/tmp/wj-migrate-apply-empty"
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    match fs.create_dir_all(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, e),
+    }
+    match apply_url(":memory:", root) {
+        Ok(_) => assert(false, "expected error for empty dir"),
+        Err(e) => assert_str_contains(e, "migration"),
+    }
+    teardown_dir(root)
+}
+
+fn setup_two_migration_dir(root: string) -> Result<(), string> {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    match fs.create_dir_all(root) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    let sql1 = "CREATE TABLE IF NOT EXISTS migrate_items (\n  id INTEGER PRIMARY KEY,\n  label TEXT NOT NULL\n)"
+    let sql2 = "ALTER TABLE migrate_items ADD COLUMN note TEXT"
+    match fs.write("${root}/001_create_items.sql", sql1) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/002_add_note.sql", sql2) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+fn teardown_dir(root: string) {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+}

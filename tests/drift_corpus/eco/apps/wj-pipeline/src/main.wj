@@ -1,0 +1,9 @@
+use crate::adapters::run::time_int_pipeline
+use crate::adapters::run::time_pool_pipeline
+
+fn main() {
+    let same = time_int_pipeline(10)
+    println("same-thread processed=${same.count} sum=${same.sum} elapsed_ms=${same.elapsed_ms}")
+    let pool = time_pool_pipeline(10)
+    println("pool processed=${pool.count} sum=${pool.sum} elapsed_ms=${pool.elapsed_ms}")
+}

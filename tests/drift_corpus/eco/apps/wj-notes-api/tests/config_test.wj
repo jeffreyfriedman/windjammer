@@ -1,0 +1,117 @@
+use crate::domain::NotesConfig
+use crate::domain::config_from_dotenv
+use crate::domain::config_from_toml
+
+fn test_config_defaults() {
+    let cfg = NotesConfig::defaults()
+    assert_eq(cfg.allowed_origins.len(), 1)
+    assert_eq(cfg.allowed_origins[0], "*")
+    assert_eq(cfg.rate_limit, 100)
+    assert_eq(cfg.window_ms, 60_000)
+    assert_eq(cfg.max_title_len, 200)
+    assert_eq(cfg.max_body_len, 10_000)
+    assert_eq(cfg.log_level, "info")
+    assert_eq(cfg.public_base_url, "http://localhost:8080")
+}
+
+fn test_config_from_toml_sets_public_base_url() {
+    let text = "public_base_url = \"https://notes.example.com\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.public_base_url, "https://notes.example.com")
+}
+
+fn test_config_from_toml_overrides_defaults() {
+    let text = "cors_origin = \"https://notes.example.com\"\nrate_limit = 25\nwindow_ms = 30000\nmax_title_len = 80\nmax_body_len = 500\nlog_level = \"debug\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.allowed_origins.len(), 1)
+    assert_eq(cfg.allowed_origins[0], "https://notes.example.com")
+    assert_eq(cfg.rate_limit, 25)
+    assert_eq(cfg.window_ms, 30_000)
+    assert_eq(cfg.max_title_len, 80)
+    assert_eq(cfg.max_body_len, 500)
+    assert_eq(cfg.log_level, "debug")
+}
+
+fn test_config_from_toml_partial_keeps_defaults() {
+    let text = "cors_origin = \"https://partial.example.com\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.allowed_origins[0], "https://partial.example.com")
+    assert_eq(cfg.rate_limit, 100)
+    assert_eq(cfg.window_ms, 60_000)
+    assert_eq(cfg.max_title_len, 200)
+    assert_eq(cfg.max_body_len, 10_000)
+    assert_eq(cfg.log_level, "info")
+}
+
+fn test_config_from_toml_section_limits() {
+    let text = "[limits]\nmax_title_len = 40\nmax_body_len = 1000\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.max_title_len, 40)
+    assert_eq(cfg.max_body_len, 1000)
+    assert_eq(cfg.rate_limit, 100)
+}
+
+fn test_config_from_toml_invalid_log_level_falls_back() {
+    let text = "log_level = \"nope\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.log_level, "info")
+}
+
+fn test_config_from_toml_window_duration() {
+    let text = "window = \"2m\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.window_ms, 120_000)
+}
+
+fn test_config_from_toml_window_ms_duration() {
+    let text = "window_ms = \"30s\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.window_ms, 30_000)
+}
+
+fn test_config_from_dotenv_window_duration() {
+    let text = "RATE_WINDOW=2m\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.window_ms, 120_000)
+}
+
+fn test_config_from_dotenv_overrides_defaults() {
+    let text = "CORS_ORIGIN=https://notes.example.com\nRATE_LIMIT=25\nRATE_WINDOW_MS=30000\nMAX_TITLE_LEN=80\nMAX_BODY_LEN=500\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.allowed_origins.len(), 1)
+    assert_eq(cfg.allowed_origins[0], "https://notes.example.com")
+    assert_eq(cfg.rate_limit, 25)
+    assert_eq(cfg.window_ms, 30_000)
+    assert_eq(cfg.max_title_len, 80)
+    assert_eq(cfg.max_body_len, 500)
+    assert_eq(cfg.log_level, "info")
+}
+
+fn test_config_from_dotenv_partial_keeps_defaults() {
+    let text = "CORS_ORIGIN=https://partial.example.com\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.allowed_origins[0], "https://partial.example.com")
+    assert_eq(cfg.rate_limit, 100)
+    assert_eq(cfg.window_ms, 60_000)
+    assert_eq(cfg.max_title_len, 200)
+    assert_eq(cfg.max_body_len, 10_000)
+}
+
+fn test_config_from_dotenv_skips_comments_and_blanks() {
+    let text = "# comment\n\nRATE_LIMIT=7\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.rate_limit, 7)
+    assert_eq(cfg.allowed_origins[0], "*")
+}
+
+fn test_config_from_dotenv_log_level() {
+    let text = "LOG_LEVEL=warn\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.log_level, "warn")
+}
+
+fn test_config_from_dotenv_invalid_log_level_falls_back() {
+    let text = "LOG_LEVEL=nope\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.log_level, "info")
+}

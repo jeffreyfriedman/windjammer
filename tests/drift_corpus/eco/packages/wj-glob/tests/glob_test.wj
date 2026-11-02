@@ -1,0 +1,326 @@
+use crate::all_match
+use crate::any_match
+use crate::at_least_n_matches
+use crate::at_most_n_matches
+use crate::between_n_matches
+use crate::exactly_n_matches
+use crate::exactly_one_match
+use crate::filter
+use crate::first_match
+use crate::is_match
+use crate::last_match
+use crate::match_count
+use crate::none_match
+use crate::require_none
+use crate::require_at_most
+use crate::require_at_least
+use std::strings
+
+@test
+fn test_exact_match() {
+    assert(is_match("readme.md", "readme.md"), "exact")
+}
+
+@test
+fn test_exact_mismatch() {
+    assert(!is_match("readme.md", "README.md"), "case sensitive")
+}
+
+@test
+fn test_star_suffix() {
+    assert(is_match("*.md", "readme.md"), "*.md")
+}
+
+@test
+fn test_star_suffix_mismatch() {
+    assert(!is_match("*.md", "readme.txt"), "wrong ext")
+}
+
+@test
+fn test_star_prefix() {
+    assert(is_match("src/*", "src/main.wj"), "src/*")
+}
+
+@test
+fn test_star_does_not_cross_slash() {
+    assert(!is_match("src/*", "src/deep/main.wj"), "no cross slash")
+}
+
+@test
+fn test_question_mark() {
+    assert(is_match("file.?", "file.c"), "single char")
+    assert(!is_match("file.?", "file.rs"), "too long")
+}
+
+@test
+fn test_multi_segment_stars() {
+    assert(is_match("src/*/lib.wj", "src/app/lib.wj"), "mid star")
+    assert(!is_match("src/*/lib.wj", "src/app/deep/lib.wj"), "too deep")
+}
+
+@test
+fn test_filter_paths() {
+    let mut paths = Vec::new()
+    paths.push("a.md")
+    paths.push("b.txt")
+    paths.push("c.md")
+    let hits = filter("*.md", paths)
+    assert_eq(hits.len(), 2)
+}
+
+@test
+fn test_double_star_crosses_segments() {
+    assert(is_match("src/**/lib.wj", "src/lib.wj"), "zero middle segs")
+    assert(is_match("src/**/lib.wj", "src/app/lib.wj"), "one middle")
+    assert(is_match("src/**/lib.wj", "src/app/deep/lib.wj"), "two middle")
+    assert(!is_match("src/**/lib.wj", "src/app/other.rs"), "wrong file")
+}
+
+@test
+fn test_double_star_prefix() {
+    assert(is_match("**/main.wj", "main.wj"), "at root")
+    assert(is_match("**/main.wj", "src/main.wj"), "one deep")
+    assert(is_match("**/main.wj", "a/b/c/main.wj"), "many deep")
+    assert(!is_match("**/main.wj", "a/b/other.wj"), "wrong name")
+}
+
+@test
+fn test_double_star_suffix_glob() {
+    assert(is_match("src/**/*.wj", "src/main.wj"), "direct child")
+    assert(is_match("src/**/*.wj", "src/deep/main.wj"), "nested")
+    assert(!is_match("src/**/*.wj", "src/deep/main.rs"), "wrong ext")
+    assert(!is_match("src/**/*.wj", "other/main.wj"), "wrong prefix")
+}
+
+@test
+fn test_double_star_alone() {
+    assert(is_match("**", "a"), "single seg")
+    assert(is_match("**", "a/b/c"), "multi seg")
+}
+
+@test
+fn test_filter_with_double_star() {
+    let mut paths = Vec::new()
+    paths.push("src/main.wj")
+    paths.push("src/deep/util.wj")
+    paths.push("readme.md")
+    let hits = filter("src/**/*.wj", paths)
+    assert_eq(hits.len(), 2)
+}
+
+@test
+fn test_first_match_returns_first_hit() {
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    paths.push("c.md")
+    match first_match("*.md", paths) {
+        Some(hit) => assert_eq(hit, "b.md"),
+        None => assert(false, "expected first md"),
+    }
+}
+
+@test
+fn test_first_match_none_when_empty() {
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    match first_match("*.md", paths) {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+@test
+fn test_match_count() {
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    paths.push("c.md")
+    paths.push("d.txt")
+    assert_eq(match_count("*.md", paths), 2)
+    assert_eq(match_count("*.rs", paths), 0)
+}
+
+@test
+fn test_any_and_none_match() {
+    let mut md_paths = Vec::new()
+    md_paths.push("a.txt")
+    md_paths.push("b.md")
+    assert(any_match("*.md", md_paths), "has md")
+    let mut no_rs = Vec::new()
+    no_rs.push("a.txt")
+    no_rs.push("b.md")
+    assert(!any_match("*.rs", no_rs), "no rs")
+    let mut none_rs = Vec::new()
+    none_rs.push("a.txt")
+    none_rs.push("b.md")
+    assert(none_match("*.rs", none_rs), "none rs")
+    let mut has_md = Vec::new()
+    has_md.push("a.txt")
+    has_md.push("b.md")
+    assert(!none_match("*.md", has_md), "has md so not none")
+}
+
+@test
+fn test_all_match() {
+    let mut all_md = Vec::new()
+    all_md.push("a.md")
+    all_md.push("b.md")
+    assert(all_match("*.md", all_md), "all md")
+    let mut mixed = Vec::new()
+    mixed.push("a.md")
+    mixed.push("b.md")
+    mixed.push("c.txt")
+    assert(!all_match("*.md", mixed), "txt breaks all")
+    let empty = Vec::new()
+    assert(all_match("*.md", empty), "vacuous truth")
+}
+
+@test
+fn test_exactly_one_match() {
+    let mut one = Vec::new()
+    one.push("a.txt")
+    one.push("b.md")
+    assert(exactly_one_match("*.md", one), "one md")
+    let mut two = Vec::new()
+    two.push("a.md")
+    two.push("b.md")
+    assert(!exactly_one_match("*.md", two), "two md")
+    let mut none = Vec::new()
+    none.push("a.txt")
+    assert(!exactly_one_match("*.md", none), "zero")
+}
+
+@test
+fn test_last_match_and_at_least_n() {
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    paths.push("c.md")
+    match last_match("*.md", paths) {
+        Some(v) => assert_eq(v, "c.md"),
+        None => assert(false, "last md"),
+    }
+    match last_match("*.rs", paths) {
+        Some(_) => assert(false, "no rs"),
+        None => {},
+    }
+    assert(at_least_n_matches("*.md", paths, 2), ">=2 md")
+    assert(!at_least_n_matches("*.md", paths, 3), "<3 md")
+    assert(at_least_n_matches("*.txt", paths, 1), "one txt")
+}
+
+@test
+fn test_at_most_n_matches() {
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    paths.push("c.md")
+    assert(at_most_n_matches("*.md", paths, 2), "<=2")
+    assert(!at_most_n_matches("*.md", paths, 1), ">1")
+    assert(at_most_n_matches("*.rs", paths, 0), "zero")
+}
+
+@test
+fn test_exactly_n_and_between_n_matches() {
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    paths.push("c.md")
+    assert(exactly_n_matches("*.md", paths, 2), "exactly 2")
+    assert(!exactly_n_matches("*.md", paths, 1), "not 1")
+    assert(between_n_matches("*.md", paths, 1, 2), "1..2")
+    assert(!between_n_matches("*.md", paths, 3, 5), "out")
+    assert(between_n_matches("*.txt", paths, 1, 1), "one txt")
+}
+
+@test
+fn test_require_match_and_has_meta() {
+    use crate::has_meta
+    use crate::require_match
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    assert(has_meta("*.md"), "star")
+    assert(has_meta("a?c"), "question")
+    assert(!has_meta("a.txt"), "literal")
+    match require_match("*.md", paths) {
+        Ok(p) => assert_eq(p, "b.md"),
+        Err(_) => assert(false, "match"),
+    }
+    match require_match("*.rs", paths) {
+        Ok(_) => assert(false, "none must Err"),
+        Err(msg) => assert(strings.contains(msg, "match"), "mentions match"),
+    }
+}
+
+@test
+fn test_require_exact() {
+    use crate::require_exact
+    let mut paths = Vec::new()
+    paths.push("a.txt")
+    paths.push("b.md")
+    paths.push("c.md")
+    match require_exact("*.md", paths, 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two md"),
+    }
+    match require_exact("*.md", paths, 1) {
+        Ok(_) => assert(false, "not exactly one"),
+        Err(msg) => assert(strings.contains(msg, "exact"), "mentions exact"),
+    }
+}
+
+@test
+fn test_require_none() {
+    let mut miss = Vec::new()
+    miss.push("a.txt")
+    miss.push("b.txt")
+    match require_none("*.md", miss) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "no md"),
+    }
+    let mut hit = Vec::new()
+    hit.push("a.txt")
+    hit.push("b.md")
+    match require_none("*.md", hit) {
+        Ok(_) => assert(false, "md must Err"),
+        Err(msg) => assert(strings.contains(msg, "none"), "mentions none"),
+    }
+}
+
+@test
+fn test_require_at_most() {
+    let mut paths = Vec::new()
+    paths.push("a.md")
+    paths.push("b.txt")
+    match require_at_most("*.md", paths, 1) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "one md"),
+    }
+    let mut many = Vec::new()
+    many.push("a.md")
+    many.push("b.md")
+    match require_at_most("*.md", many, 1) {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "at most"), "mentions at most"),
+    }
+}
+
+@test
+fn test_require_at_least() {
+    let mut paths = Vec::new()
+    paths.push("a.md")
+    paths.push("b.md")
+    match require_at_least("*.md", paths, 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two md"),
+    }
+    let mut few = Vec::new()
+    few.push("a.md")
+    few.push("b.txt")
+    match require_at_least("*.md", few, 2) {
+        Ok(_) => assert(false, "one must Err"),
+        Err(msg) => assert(strings.contains(msg, "at least"), "mentions at least"),
+    }
+}

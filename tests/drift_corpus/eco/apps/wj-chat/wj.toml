@@ -1,0 +1,14 @@
+[package]
+name = "wj-chat"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_jwt = { path = "../../packages/wj-jwt/build" }
+wj_rate_limit = { path = "../../packages/wj-rate-limit/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

@@ -1,0 +1,189 @@
+use std::process
+use std::strings
+
+/// What a finished program left behind.
+pub struct Output {
+    pub status: int,
+    pub stdout: string,
+    pub stderr: string,
+}
+
+/// CPU time a program used, as reported by `/usr/bin/time -p` (10 ms resolution).
+pub struct Timed {
+    pub output: Output,
+    pub user: f64,
+    pub sys: f64,
+}
+
+/// `s` in single quotes, safe to splice into a `sh -c` command line.
+pub fn quote(s: string) -> string {
+    "'" + strings.replace(s, "'", "'\\''") + "'"
+}
+
+/// Run `program` with `args`; Err when it cannot be started. A non-zero exit is an Ok(Output) with the status.
+pub fn capture(program: string, args: Vec<string>) -> Result<Output, string> {
+    match process.run_with_output(program, args) {
+        Ok(o) => Ok(Output { status: o.status as int, stdout: o.stdout, stderr: o.stderr }),
+        Err(e) => Err(e),
+    }
+}
+
+/// Run a command line through `sh -c`.
+pub fn sh(command: string) -> Result<Output, string> {
+    capture("sh", ["-c", command])
+}
+
+/// Run a command line through `sh -c` inside `dir`.
+pub fn sh_in(dir: string, command: string) -> Result<Output, string> {
+    sh("cd " + quote(dir) + " && " + command)
+}
+
+/// Run `program` and report its user and system CPU seconds (child processes included).
+pub fn timed(program: string, args: Vec<string>) -> Result<Timed, string> {
+    let mut all = ["-p", program]
+    for a in args {
+        all.push(a)
+    }
+    let out = capture("/usr/bin/time", all)?
+    let mut user = 0.0
+    let mut sys = 0.0
+    let mut kept = Vec::new()
+    for line in strings.split_lines(out.stderr) {
+        let parts = strings.split_whitespace(line)
+        if parts.len() == 2 && parts[0] == "user" {
+            user = parts[1].parse::<f64>() ?? 0.0
+        } else if parts.len() == 2 && parts[0] == "sys" {
+            sys = parts[1].parse::<f64>() ?? 0.0
+        } else if parts.len() == 2 && parts[0] == "real" {
+            continue
+        } else {
+            kept.push(line)
+        }
+    }
+    // split_lines may or may not yield a final empty element (the interpreter and the compiled runtime differ)
+    while kept.len() > 0 && kept[kept.len() - 1].len() == 0 {
+        kept.pop()
+    }
+    let err_text = if kept.len() == 0 { "" } else { kept.join("\n") + "\n" }
+    Ok(Timed { output: Output { status: out.status, stdout: out.stdout, stderr: err_text }, user: user, sys: sys })
+}
+
+/// The 1-minute load average (0.0 when `uptime` cannot be read or parsed).
+pub fn load_avg() -> f64 {
+    match sh("uptime") {
+        Ok(o) => parse_load(o.stdout),
+        Err(_) => 0.0,
+    }
+}
+
+/// The 1, 5 and 15 minute load averages (zeros when `uptime` cannot be read or parsed).
+pub fn load_avgs() -> Vec<f64> {
+    match sh("uptime") {
+        Ok(o) => parse_loads(o.stdout),
+        Err(_) => zero_loads(),
+    }
+}
+
+/// All load-average figures in `uptime` text, padded with zeros to three.
+pub fn parse_loads(text: string) -> Vec<f64> {
+    let mut out: Vec<f64> = Vec::new()
+    match text.find("load average") {
+        Some(i) => {
+            let rest = text.substring(i, text.len())
+            match rest.find(":") {
+                Some(c) => {
+                    let tail = strings.replace(strings.trim(rest.substring(c + (1 as usize), rest.len())), ",", " ")
+                    for tok in strings.split_whitespace(tail) {
+                        out.push(tok.parse::<f64>() ?? 0.0)
+                    }
+                },
+                None => {},
+            }
+        },
+        None => {},
+    }
+    while out.len() < 3 {
+        out.push(0.0)
+    }
+    out
+}
+
+/// First load-average figure in `uptime` text (`load averages: 1.5 2.0 2.5` or `load average: 1.50, 2.00, 2.50`).
+pub fn parse_load(text: string) -> f64 {
+    let marker = "load average"
+    let at = text.find(marker)
+    match at {
+        Some(i) => {
+            let rest = text.substring(i, text.len())
+            let colon = rest.find(":")
+            match colon {
+                Some(c) => {
+                    let tail = strings.trim(rest.substring(c + (1 as usize), rest.len()))
+                    let cleaned = strings.replace(tail, ",", " ")
+                    let parts = strings.split_whitespace(cleaned)
+                    if parts.len() == 0 {
+                        return 0.0
+                    }
+                    parts[0].parse::<f64>() ?? 0.0
+                },
+                None => 0.0,
+            }
+        },
+        None => 0.0,
+    }
+}
+
+// ---------------------------------------------------------------- git
+
+/// The repository root containing `dir`.
+pub fn git_toplevel(dir: string) -> Result<string, string> {
+    let o = capture("git", ["-C", dir, "rev-parse", "--show-toplevel"])?
+    if o.status != 0 {
+        return Err(strings.trim(o.stderr))
+    }
+    Ok(strings.trim(o.stdout))
+}
+
+/// Tracked files under `dir` matching the git pathspecs (all tracked files when `specs` is empty), sorted.
+pub fn git_ls_files(dir: string, specs: Vec<string>) -> Result<Vec<string>, string> {
+    let mut args = ["-C", dir, "ls-files", "--"]
+    for s in specs {
+        args.push(s)
+    }
+    let o = capture("git", args)?
+    if o.status != 0 {
+        return Err(strings.trim(o.stderr))
+    }
+    let mut files = Vec::new()
+    for line in strings.split_lines(o.stdout) {
+        if strings.len(line) > 0 {
+            files.push(line)
+        }
+    }
+    files.sort()
+    Ok(files)
+}
+
+/// Paths with changes not yet staged (`git diff --name-only`), sorted.
+pub fn git_changed(dir: string) -> Result<Vec<string>, string> {
+    let o = capture("git", ["-C", dir, "diff", "--name-only"])?
+    if o.status != 0 {
+        return Err(strings.trim(o.stderr))
+    }
+    let mut files = Vec::new()
+    for line in strings.split_lines(o.stdout) {
+        if strings.len(line) > 0 {
+            files.push(line)
+        }
+    }
+    files.sort()
+    Ok(files)
+}
+
+fn zero_loads() -> Vec<f64> {
+    let mut out = Vec::new()
+    out.push(0.0)
+    out.push(0.0)
+    out.push(0.0)
+    out
+}

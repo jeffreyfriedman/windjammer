@@ -1,0 +1,6 @@
+use std::env
+
+/// Process argv (`env.args()`), including the program name at index 0.
+pub fn read_args() -> Vec<string> {
+    env.args()
+}

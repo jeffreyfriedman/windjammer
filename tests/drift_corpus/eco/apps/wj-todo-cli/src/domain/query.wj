@@ -1,0 +1,130 @@
+use crate::domain::Todo
+
+pub fn filter_pending(todos: Vec<Todo>) -> Vec<Todo> {
+    let mut out = Vec::new()
+    for todo in todos {
+        if !todo.done {
+            out.push(todo)
+        }
+    }
+    out
+}
+
+pub fn filter_done(todos: Vec<Todo>) -> Vec<Todo> {
+    let mut out = Vec::new()
+    for todo in todos {
+        if todo.done {
+            out.push(todo)
+        }
+    }
+    out
+}
+
+pub fn sort_todos_by_id(todos: Vec<Todo>) -> Vec<Todo> {
+    let mut sorted = Vec::new()
+    for todo in todos {
+        sorted = insert_by_id(sorted, todo)
+    }
+    sorted
+}
+
+/// Returns `(total, pending, done)` counts.
+pub fn count_todos(todos: Vec<Todo>) -> (int, int, int) {
+    let mut pending = 0
+    let mut done = 0
+    for todo in todos {
+        if todo.done {
+            done = done + 1
+        } else {
+            pending = pending + 1
+        }
+    }
+    (pending + done, pending, done)
+}
+
+pub fn pending_count(todos: Vec<Todo>) -> int {
+    let counts = count_todos(todos)
+    counts.1
+}
+
+pub fn done_count(todos: Vec<Todo>) -> int {
+    let counts = count_todos(todos)
+    counts.2
+}
+
+pub fn find_by_id(todos: Vec<Todo>, id: int) -> Option<Todo> {
+    for todo in todos {
+        if todo.id == id {
+            return Some(todo)
+        }
+    }
+    None
+}
+
+pub fn has_pending(todos: Vec<Todo>) -> bool {
+    pending_count(todos) > 0
+}
+
+pub fn total_count(todos: Vec<Todo>) -> int {
+    let counts = count_todos(todos)
+    counts.0
+}
+
+/// The only pending todo, or an error when the list is empty or has more than one open.
+pub fn require_only_pending(todos: Vec<Todo>) -> Result<Todo, string> {
+    match only_pending(todos) {
+        Some(t) => Ok(t),
+        None => Err("expected one pending"),
+    }
+}
+
+/// The only pending todo when exactly one is open.
+pub fn only_pending(todos: Vec<Todo>) -> Option<Todo> {
+    let pending = filter_pending(todos)
+    if pending.len() != 1 {
+        return None
+    }
+    Some(pending[0])
+}
+
+/// Done count when at least one todo is complete.
+pub fn require_done(todos: Vec<Todo>) -> Result<int, string> {
+    let n = done_count(todos)
+    if n == 0 {
+        Err("expected done")
+    } else {
+        Ok(n)
+    }
+}
+
+/// Pending count when at least one todo is open.
+pub fn require_pending(todos: Vec<Todo>) -> Result<int, string> {
+    let n = pending_count(todos)
+    if n == 0 {
+        Err("expected pending")
+    } else {
+        Ok(n)
+    }
+}
+
+fn insert_by_id(sorted: Vec<Todo>, item: Todo) -> Vec<Todo> {
+    let mut before = Vec::new()
+    let mut after = Vec::new()
+    let mut placed = false
+    for todo in sorted {
+        if !placed && item.id < todo.id {
+            placed = true
+        }
+        if placed {
+            after.push(todo)
+        } else {
+            before.push(todo)
+        }
+    }
+    let mut out = before
+    out.push(item)
+    for todo in after {
+        out.push(todo)
+    }
+    out
+}

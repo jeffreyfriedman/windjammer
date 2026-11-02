@@ -1,0 +1,12 @@
+use std::strings
+
+pub fn parse_nonneg_int(text: string) -> Option<int> {
+    if strings.len(text) == 0 {
+        return None
+    }
+    let n = strings.parse_i32(text) as int
+    if n < 0 {
+        return None
+    }
+    Some(n)
+}

@@ -1,0 +1,12 @@
+use wj_migrate::db_apply::apply_url
+use wj_migrate::db_apply::ApplyReport
+use wj_migrate::db_status::status_url
+use wj_migrate::db_status::StatusReport
+
+pub fn run_apply(url: string, dir: string) -> Result<ApplyReport, string> {
+    apply_url(url, dir)
+}
+
+pub fn run_status(url: string, dir: string) -> Result<StatusReport, string> {
+    status_url(url, dir)
+}

@@ -1,0 +1,144 @@
+use crate::domain::MigrateConfig
+use crate::domain::parse_apply
+use crate::domain::parse_command
+use crate::domain::parse_list
+use crate::domain::parse_validate
+
+fn argv_apply_with_flags() -> Vec<string> {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("apply")
+    args.push("--url")
+    args.push(":memory:")
+    args.push("--dir")
+    args.push("./migrations")
+    args
+}
+
+fn test_parse_apply_reads_url_and_dir_flags() {
+    let config = MigrateConfig::defaults()
+    match parse_apply(argv_apply_with_flags(), config) {
+        Ok(req) => {
+            assert_eq(req.url, ":memory:")
+            assert_eq(req.dir, "./migrations")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_apply_dir_from_positional() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("apply")
+    args.push("--url")
+    args.push("postgres://localhost/db")
+    args.push("./fixtures")
+    let config = MigrateConfig::defaults()
+    match parse_apply(args, config) {
+        Ok(req) => {
+            assert_eq(req.url, "postgres://localhost/db")
+            assert_eq(req.dir, "./fixtures")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_apply_uses_env_defaults() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("apply")
+    let config = MigrateConfig {
+        default_url: "sqlite://data.db",
+        default_dir: "./migrations",
+    }
+    match parse_apply(args, config) {
+        Ok(req) => {
+            assert_eq(req.url, "sqlite://data.db")
+            assert_eq(req.dir, "./migrations")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_command_rejects_unknown_subcommand() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("rollback")
+    let config = MigrateConfig::defaults()
+    match parse_command(args, config) {
+        Ok(_) => assert(false, "expected usage error"),
+        Err(e) => assert_str_contains(e, "list"),
+    }
+}
+
+fn test_parse_list_subcommand_dir_only() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("list")
+    args.push("--dir")
+    args.push("./fixtures")
+    let config = MigrateConfig::defaults()
+    match parse_list(args, config) {
+        Ok(req) => assert_eq(req.dir, "./fixtures"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_list_uses_default_dir() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("list")
+    let config = MigrateConfig {
+        default_url: "",
+        default_dir: "./migrations",
+    }
+    match parse_list(args, config) {
+        Ok(req) => assert_eq(req.dir, "./migrations"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_validate_subcommand() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("validate")
+    args.push("--dir")
+    args.push("./fixtures")
+    let config = MigrateConfig::defaults()
+    match parse_validate(args, config) {
+        Ok(req) => assert_eq(req.dir, "./fixtures"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_apply_requires_url_when_unset() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("apply")
+    args.push("--dir")
+    args.push("./migrations")
+    let config = MigrateConfig::defaults()
+    match parse_apply(args, config) {
+        Ok(_) => assert(false, "expected missing url error"),
+        Err(e) => assert_str_contains(e, "url"),
+    }
+}
+
+fn test_parse_status_subcommand() {
+    let mut args = Vec::new()
+    args.push("wj-migrate-cli")
+    args.push("status")
+    args.push("--url")
+    args.push(":memory:")
+    args.push("--dir")
+    args.push("./migrations")
+    let config = MigrateConfig::defaults()
+    match parse_command(args, config) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "status")
+            assert_eq(cmd.url, ":memory:")
+            assert_eq(cmd.dir, "./migrations")
+        },
+        Err(e) => assert(false, e),
+    }
+}

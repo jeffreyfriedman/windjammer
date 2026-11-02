@@ -1,0 +1,7 @@
+// `let five = 5` (no annotation) added to an `int` closure parameter: the compiled backend types the
+// literal's binding i32.
+fn main() {
+    let five = 5
+    let add5 = |x: int| x + five
+    println("${add5(1)}")
+}

@@ -1,0 +1,14 @@
+// `let maybe = Some(7)` captured by a closure and passed to a parameter of type Option<int>: the
+// literal is typed i32 by the compiled backend.
+fn show(x: Option<int>) -> int {
+    match x {
+        Some(v) => v,
+        None => 0,
+    }
+}
+
+fn main() {
+    let maybe = Some(7)
+    let get = || maybe
+    println("${show(get())}")
+}

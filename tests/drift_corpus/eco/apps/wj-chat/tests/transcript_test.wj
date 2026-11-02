@@ -1,0 +1,98 @@
+use crate::adapters::run_transcript
+use crate::domain::ChatConfig
+use crate::domain::default_chat_config
+use crate::domain::issue_token
+
+const SECRET: string = "chat-test-secret-chat-test-secret"
+
+fn script(lines: Vec<string>) -> string {
+    lines.join("\n")
+}
+
+fn auth(conn: int, user: string) -> string {
+    "${conn} {\"kind\":\"auth\",\"token\":\"${issue_token(config(), user, 3600).unwrap()}\"}"
+}
+
+fn config() -> ChatConfig {
+    let mut c = default_chat_config()
+    c.jwt_secret = SECRET
+    c
+}
+
+@test
+fn test_transcript_opens_connections_and_routes_frames() {
+    let mut lines = Vec::new()
+    lines.push("open")
+    lines.push("open")
+    lines.push(auth(1, "ann"))
+    lines.push(auth(2, "bob"))
+    lines.push("1 {\"kind\":\"join\",\"room\":\"r\"}")
+    lines.push("2 {\"kind\":\"join\",\"room\":\"r\"}")
+    lines.push("1 {\"kind\":\"say\",\"room\":\"r\",\"text\":\"hi bob\"}")
+    let out = run_transcript(config(), script(lines))
+    let rows: Vec<string> = out.lines().collect()
+    assert_eq(rows[0], "conn 1")
+    assert_eq(rows[1], "conn 2")
+    assert(out.contains("-> 2 {\"kind\":\"message\",\"room\":\"r\",\"from\":\"ann\",\"text\":\"hi bob\""), "bob receives ann's message")
+}
+
+@test
+fn test_transcript_close_notifies_the_room() {
+    let mut lines = Vec::new()
+    lines.push("open")
+    lines.push("open")
+    lines.push(auth(1, "ann"))
+    lines.push(auth(2, "bob"))
+    lines.push("1 {\"kind\":\"join\",\"room\":\"r\"}")
+    lines.push("2 {\"kind\":\"join\",\"room\":\"r\"}")
+    lines.push("close 2")
+    let out = run_transcript(config(), script(lines))
+    let last: Vec<string> = out.lines().collect()
+    assert_str_contains(last[last.len() - 1], "-> 1 {\"kind\":\"presence\"")
+}
+
+@test
+fn test_transcript_reports_bad_lines_without_stopping() {
+    let mut lines = Vec::new()
+    lines.push("open")
+    lines.push("garbage")
+    lines.push("9 {\"kind\":\"pong\"}")
+    lines.push("1 {\"kind\":\"join\",\"room\":\"r\"}")
+    let out = run_transcript(config(), script(lines))
+    assert_str_contains(out, "line 2: expected")
+    assert_str_contains(out, "line 3: unknown connection 9")
+    assert_str_contains(out, "-> 1 {\"kind\":\"error\"")
+}
+
+// Acceptance: a golden transcript, byte for byte.
+@test
+fn test_acceptance_golden_transcript() {
+    let mut lines = Vec::new()
+    lines.push("open")
+    lines.push("open")
+    lines.push(auth(1, "ann"))
+    lines.push(auth(2, "bob"))
+    lines.push("1 {\"kind\":\"join\",\"room\":\"lobby\"}")
+    lines.push("2 {\"kind\":\"join\",\"room\":\"lobby\"}")
+    lines.push("1 {\"kind\":\"say\",\"room\":\"lobby\",\"text\":\"welcome\"}")
+    lines.push("2 {\"kind\":\"dm\",\"to\":\"ann\",\"text\":\"thanks\"}")
+    lines.push("2 {\"kind\":\"history\",\"room\":\"lobby\"}")
+    lines.push("close 1")
+    let out = run_transcript(config(), script(lines))
+    let expected = [
+        "conn 1",
+        "conn 2",
+        "-> 1 {\"kind\":\"ok\",\"room\":\"\",\"from\":\"\",\"text\":\"\",\"users\":[],\"items\":[]}",
+        "-> 2 {\"kind\":\"ok\",\"room\":\"\",\"from\":\"\",\"text\":\"\",\"users\":[],\"items\":[]}",
+        "-> 1 {\"kind\":\"presence\",\"room\":\"lobby\",\"from\":\"\",\"text\":\"\",\"users\":[\"ann\"],\"items\":[]}",
+        "-> 1 {\"kind\":\"presence\",\"room\":\"lobby\",\"from\":\"\",\"text\":\"\",\"users\":[\"ann\",\"bob\"],\"items\":[]}",
+        "-> 2 {\"kind\":\"presence\",\"room\":\"lobby\",\"from\":\"\",\"text\":\"\",\"users\":[\"ann\",\"bob\"],\"items\":[]}",
+        "-> 1 {\"kind\":\"message\",\"room\":\"lobby\",\"from\":\"ann\",\"text\":\"welcome\",\"users\":[],\"items\":[]}",
+        "-> 2 {\"kind\":\"message\",\"room\":\"lobby\",\"from\":\"ann\",\"text\":\"welcome\",\"users\":[],\"items\":[]}",
+        "-> 1 {\"kind\":\"dm\",\"room\":\"\",\"from\":\"bob\",\"text\":\"thanks\",\"users\":[],\"items\":[]}",
+        "-> 2 {\"kind\":\"ok\",\"room\":\"\",\"from\":\"\",\"text\":\"\",\"users\":[],\"items\":[]}",
+        "-> 2 {\"kind\":\"history\",\"room\":\"lobby\",\"from\":\"\",\"text\":\"\",\"users\":[],\"items\":[{\"from\":\"ann\",\"text\":\"welcome\",\"ts\":7000}]}",
+        "-> 2 {\"kind\":\"presence\",\"room\":\"lobby\",\"from\":\"\",\"text\":\"\",\"users\":[\"bob\"],\"items\":[]}"
+    ]
+    assert_eq(out, expected.join("\n"))
+}

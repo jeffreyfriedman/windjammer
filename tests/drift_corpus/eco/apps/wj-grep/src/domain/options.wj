@@ -1,0 +1,42 @@
+use wj_regex::escape
+
+/// What to search for and how lines are selected.
+pub struct Options {
+    pub pattern: string,
+    pub ignore_case: bool,
+    pub word: bool,
+    pub fixed: bool,
+    pub invert: bool,
+    pub before: int,
+    pub after: int,
+    /// Stop after this many selected lines per file; 0 means unlimited.
+    pub max_count: int,
+}
+
+pub fn default_options() -> Options {
+    Options {
+        pattern: "",
+        ignore_case: false,
+        word: false,
+        fixed: false,
+        invert: false,
+        before: 0,
+        after: 0,
+        max_count: 0,
+    }
+}
+
+/// The regex handed to the engine after applying `fixed`, `word` and `ignore_case`.
+pub fn effective_pattern(o: Options) -> string {
+    let mut p = o.pattern
+    if o.fixed {
+        p = escape(p)
+    }
+    if o.word {
+        p = "\\b(?:${p})\\b"
+    }
+    if o.ignore_case {
+        p = "(?i)${p}"
+    }
+    p
+}

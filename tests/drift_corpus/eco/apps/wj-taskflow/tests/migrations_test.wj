@@ -1,0 +1,23 @@
+use crate::domain::schema_migrations
+use crate::domain::pending_versions
+
+@test
+fn test_schema_files_are_ordered_and_parse() {
+    match schema_migrations() {
+        Ok(items) => {
+            assert(items.len() >= 1, "at least the initial schema")
+            assert_eq(items[0].version, 1)
+            assert_eq(items[0].name, "initial_schema")
+        },
+        Err(e) => assert(false, "schema_migrations failed: ${e}"),
+    }
+}
+
+@test
+fn test_pending_versions_skips_applied() {
+    let none_applied: Vec<int> = Vec::new()
+    assert_eq(pending_versions(none_applied).unwrap().len(), 1)
+    let mut applied: Vec<int> = Vec::new()
+    applied.push(1)
+    assert_eq(pending_versions(applied).unwrap().len(), 0)
+}

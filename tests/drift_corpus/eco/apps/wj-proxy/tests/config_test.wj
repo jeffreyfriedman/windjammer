@@ -1,0 +1,36 @@
+use crate::domain::ProxyConfig
+use std::strings
+
+fn test_config_defaults() {
+    let cfg = ProxyConfig::defaults()
+    assert_eq(cfg.upstream, "http://127.0.0.1:9000")
+    assert_eq(cfg.strip_prefix, "")
+    assert_eq(cfg.rate_limit, 100)
+    assert_eq(cfg.window_ms, 60_000)
+    assert_eq(cfg.log_max, 1000)
+}
+
+fn test_require_upstream_and_rate_limit() {
+    use crate::domain::require_rate_limit
+    use crate::domain::require_upstream
+    match require_upstream(ProxyConfig::defaults()) {
+        Ok(url) => assert_eq(url, "http://127.0.0.1:9000"),
+        Err(_) => assert(false, "default upstream"),
+    }
+    let mut blank = ProxyConfig::defaults()
+    blank.upstream = ""
+    match require_upstream(blank) {
+        Ok(_) => assert(false, "blank upstream must Err"),
+        Err(msg) => assert(strings.contains(msg, "upstream"), "mentions upstream"),
+    }
+    match require_rate_limit(ProxyConfig::defaults()) {
+        Ok(n) => assert_eq(n, 100),
+        Err(_) => assert(false, "default rate"),
+    }
+    let mut zero = ProxyConfig::defaults()
+    zero.rate_limit = 0
+    match require_rate_limit(zero) {
+        Ok(_) => assert(false, "zero rate must Err"),
+        Err(msg) => assert(strings.contains(msg, "rate"), "mentions rate"),
+    }
+}

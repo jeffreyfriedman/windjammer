@@ -1,0 +1,200 @@
+use std::collections::HashMap
+use std::config
+use std::strings
+
+/// Later map wins on shared keys. Keys only in `base` are kept.
+///
+/// Kept as pure WJ until tip `config.resolve` owned-HashMap call sites are GREEN
+/// (`bug_std_config_module_test::std_config_resolve_must_wire`).
+pub fn merge(base: HashMap<string, string>, overlay: HashMap<string, string>) -> HashMap<string, string> {
+    let mut out = base
+    for (key, value) in overlay {
+        out.insert(key, value)
+    }
+    out
+}
+
+/// Overlay `env_map` onto `map` only for keys that already exist (process env must not invent keys).
+pub fn overlay_matching(map: HashMap<string, string>, env_map: HashMap<string, string>) -> HashMap<string, string> {
+    let mut out = map
+    for (key, value) in env_map {
+        if out.contains_key(key) {
+            out.insert(key, value)
+        }
+    }
+    out
+}
+
+/// defaults < file < matching env keys.
+pub fn resolve(defaults: HashMap<string, string>, file: HashMap<string, string>, env_map: HashMap<string, string>) -> HashMap<string, string> {
+    overlay_matching(merge(defaults, file), env_map)
+}
+
+/// Parse TOML config text into a flat dotted-key string map (`std::config.parse_flat`).
+pub fn from_toml(text: string) -> HashMap<string, string> {
+    match config.parse_flat(text, "toml") {
+        Ok(map) => map,
+        Err(_) => HashMap::new(),
+    }
+}
+
+/// Parse YAML config text into a flat dotted-key string map (`std::config.parse_flat`).
+pub fn from_yaml(text: string) -> HashMap<string, string> {
+    match config.parse_flat(text, "yaml") {
+        Ok(map) => map,
+        Err(_) => HashMap::new(),
+    }
+}
+
+/// defaults < TOML file text < matching env keys.
+pub fn resolve_toml(
+    defaults: HashMap<string, string>,
+    toml_text: string,
+    env_map: HashMap<string, string>,
+) -> HashMap<string, string> {
+    resolve(defaults, from_toml(toml_text), env_map)
+}
+
+/// defaults < YAML file text < matching env keys.
+pub fn resolve_yaml(
+    defaults: HashMap<string, string>,
+    yaml_text: string,
+    env_map: HashMap<string, string>,
+) -> HashMap<string, string> {
+    resolve(defaults, from_yaml(yaml_text), env_map)
+}
+
+/// Look up `key`, or return `default` when missing.
+pub fn get_or(map: HashMap<string, string>, key: string, default: string) -> string {
+    match map.get(key) {
+        Some(value) => value,
+        None => default,
+    }
+}
+
+/// True when `key` is present (even if value is empty).
+pub fn has(map: HashMap<string, string>, key: string) -> bool {
+    match map.get(key) {
+        Some(v) => {
+            let _present = v
+            true
+        },
+        None => false,
+    }
+}
+
+/// Number of entries in `map`.
+pub fn key_count(map: HashMap<string, string>) -> int {
+    let mut n = 0
+    for (_key, _value) in map {
+        n = n + 1
+    }
+    n
+}
+
+/// True when `map` has no entries.
+pub fn is_empty(map: HashMap<string, string>) -> bool {
+    key_count(map) == 0
+}
+
+/// Look up `key` as `Option`.
+pub fn get(map: HashMap<string, string>, key: string) -> Option<string> {
+    match map.get(key) {
+        Some(value) => Some(value),
+        None => None,
+    }
+}
+
+/// Look up `key`, or `Err` naming the missing key.
+pub fn require(map: HashMap<string, string>, key: string) -> Result<string, string> {
+    match map.get(key) {
+        Some(value) => Ok(value),
+        None => Err("missing config key: ${key}"),
+    }
+}
+
+/// All keys in `map` (order not guaranteed).
+pub fn keys(map: HashMap<string, string>) -> Vec<string> {
+    let mut out = Vec::new()
+    for (key, _value) in map {
+        out.push(key)
+    }
+    out
+}
+
+/// All values in `map` (order not guaranteed).
+pub fn values(map: HashMap<string, string>) -> Vec<string> {
+    let mut out = Vec::new()
+    for (_key, value) in map {
+        out.push(value)
+    }
+    out
+}
+
+/// `Ok(1)` when every key in `needed` is present, otherwise `Err`.
+pub fn require_keys(map: HashMap<string, string>, needed: Vec<string>) -> Result<int, string> {
+    if has_keys(map, needed) {
+        return Ok(1)
+    }
+    Err("expected keys")
+}
+
+/// True when every key in `needed` is present in `map`.
+pub fn has_keys(map: HashMap<string, string>, needed: Vec<string>) -> bool {
+    let mut i = 0
+    while i < needed.len() {
+        if !has(map, needed[i]) {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+/// True when `map` has at least one entry.
+pub fn has_entries(map: HashMap<string, string>) -> bool {
+    !is_empty(map)
+}
+
+/// `Ok(0)` when `map` has no entries.
+pub fn require_empty(map: HashMap<string, string>) -> Result<int, string> {
+    if is_empty(map) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// True when `key` is missing or its trimmed value is empty.
+pub fn is_blank(map: HashMap<string, string>, key: string) -> bool {
+    match get(map, key) {
+        Some(value) => strings.len(strings.trim(value)) == 0,
+        None => true,
+    }
+}
+
+/// `Ok(key)` when `key` is missing or blank, otherwise `Err`.
+pub fn require_blank(map: HashMap<string, string>, key: string) -> Result<string, string> {
+    if is_blank(map, key) {
+        return Ok(key)
+    }
+    Err("expected blank")
+}
+
+/// Entry count when `map` is nonempty, otherwise `Err`.
+pub fn require_entries(map: HashMap<string, string>) -> Result<int, string> {
+    if !has_entries(map) {
+        return Err("expected entries")
+    }
+    Ok(key_count(map))
+}
+
+/// Value for `key` when it is present and non-blank, otherwise `Err`.
+pub fn require_value(map: HashMap<string, string>, key: string) -> Result<string, string> {
+    if is_blank(map, key) {
+        return Err("expected value")
+    }
+    match get(map, key) {
+        Some(value) => Ok(value),
+        None => Err("expected value"),
+    }
+}

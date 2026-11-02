@@ -1,0 +1,17 @@
+use crate::domain::run_fetch
+use crate::domain::FetchRequest
+
+fn test_run_fetch_fail_flag_logic_without_network() {
+    let mut req = FetchRequest {
+        url: "https://example.invalid.test",
+        fail_on_error: true,
+        max_retries: 0,
+        output_path: "",
+        silent: false,
+        timeout_secs: 1,
+    }
+    match run_fetch(req) {
+        Ok(_) => assert(false, "invalid host should fail"),
+        Err(e) => assert(e.len() > 0, "error required"),
+    }
+}

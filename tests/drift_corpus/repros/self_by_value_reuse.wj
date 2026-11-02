@@ -1,0 +1,22 @@
+// A method taking `self` by value and moving its fields into a new value, called on a non-Copy
+// value that is used again afterwards. The interpreter copies; the compiled backend moves `n`.
+struct Node {
+    label: string,
+    next: Option<int>,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { label: self.label, next: self.next }
+    }
+
+    fn peek(self) -> Option<int> {
+        self.next
+    }
+}
+
+fn main() {
+    let n = Node { label: "a", next: Some(4) }
+    let moved = n.advance()
+    println("${moved.label} ${n.peek().is_some()}")
+}

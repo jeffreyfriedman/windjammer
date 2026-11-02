@@ -1,0 +1,45 @@
+use crate::domain::WebhookConfig
+use crate::domain::max_event_len_of
+use crate::domain::require_origins
+use crate::domain::require_secret
+use std::strings
+
+fn test_config_defaults() {
+    let cfg = WebhookConfig::defaults()
+    assert_eq(cfg.secret, "dev-secret")
+    assert_eq(cfg.allowed_origins.len(), 0)
+    assert_eq(cfg.max_event_len, 128)
+    assert_eq(cfg.max_id_len, 128)
+}
+
+fn test_config_predicates() {
+    assert_eq(max_event_len_of(WebhookConfig::defaults()), 128)
+    let mut cfg = WebhookConfig::defaults()
+    cfg.secret = "prod"
+    cfg.allowed_origins.push("https://example.com")
+    let mut with_cors = WebhookConfig::defaults()
+    with_cors.allowed_origins.push("https://example.com")
+}
+
+fn test_require_secret_and_require_origins() {
+    match require_secret(WebhookConfig::defaults()) {
+        Ok(secret) => assert_eq(secret, "dev-secret"),
+        Err(_) => assert(false, "default secret"),
+    }
+    let mut blank = WebhookConfig::defaults()
+    blank.secret = ""
+    match require_secret(blank) {
+        Ok(_) => assert(false, "blank secret must Err"),
+        Err(msg) => assert(strings.contains(msg, "secret"), "mentions secret"),
+    }
+    match require_origins(WebhookConfig::defaults()) {
+        Ok(_) => assert(false, "no origins must Err"),
+        Err(msg) => assert(strings.contains(msg, "origins"), "mentions origins"),
+    }
+    let mut cfg = WebhookConfig::defaults()
+    cfg.allowed_origins.push("https://a.example")
+    match require_origins(cfg) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "one origin"),
+    }
+}

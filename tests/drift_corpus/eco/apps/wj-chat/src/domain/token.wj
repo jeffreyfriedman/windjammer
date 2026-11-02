@@ -1,0 +1,10 @@
+use wj_jwt::sign
+
+use crate::domain::config::ChatConfig
+
+const TENANT: string = "chat"
+
+/// Mint a session token for `user` valid for `ttl_secs` (what a login service hands to clients).
+pub fn issue_token(config: ChatConfig, user: string, ttl_secs: int) -> Result<string, string> {
+    sign(user, TENANT, config.jwt_secret, ttl_secs)
+}

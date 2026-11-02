@@ -1,0 +1,14 @@
+// wj-first-hour — std-only first-hour showcase (see docs/BETA_SUCCESS_PATH.md)
+
+use crate::domain::build_card
+use crate::domain::format_card
+
+fn main() {
+    let toml = "app.name = \"first-hour\"\napp.port = \"8080\"\n"
+    match build_card("first-hour", toml) {
+        Ok(card) => println!("{}", format_card(card)),
+        Err(e) => {
+            eprintln("wj-first-hour: ${e}")
+        },
+    }
+}

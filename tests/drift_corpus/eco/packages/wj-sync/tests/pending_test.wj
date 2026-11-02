@@ -1,0 +1,22 @@
+use crate::Shared
+use crate::Pending
+use crate::parallel_add
+use crate::parallel_shared_add
+use crate::wait_int
+use crate::wait_shared
+use crate::shared_int
+use crate::shared_int_get
+
+@test
+fn test_parallel_add_waits_for_result() {
+    let pending = parallel_add(10, 5)
+    assert_eq(wait_int(pending), 15)
+}
+
+@test
+fn test_parallel_shared_add() {
+    let s = shared_int(0)
+    let p = parallel_shared_add(s, 7)
+    let s2 = wait_shared(p)
+    assert_eq(shared_int_get(s2), 7)
+}

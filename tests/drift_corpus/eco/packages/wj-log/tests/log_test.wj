@@ -1,0 +1,145 @@
+use crate::parse_level
+use crate::parse_level_or
+use crate::level_label
+use crate::level_rank
+use crate::is_debug_level
+use crate::is_error_level
+use crate::is_info_level
+use crate::is_trace_level
+use crate::is_warn_level
+use crate::init_from_level_text
+use crate::less_severe
+use crate::log_tagged
+use crate::more_severe
+use crate::require_level
+use crate::require_error
+use crate::require_info
+use std::log::LogLevel
+use std::strings
+
+fn test_parse_level_accepts_info() {
+    assert(parse_level("info").is_some(), "info parses")
+    assert(parse_level("INFO").is_some(), "INFO parses")
+}
+
+fn test_parse_level_rejects_unknown() {
+    assert(parse_level("verbose").is_none(), "unknown level")
+}
+
+fn test_init_from_level_text_rejects_unknown() {
+    match init_from_level_text("not-a-level") {
+        Ok(_) => assert(false, "unknown level should fail"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+}
+
+fn test_init_from_level_text_accepts_debug() {
+    match init_from_level_text("debug") {
+        Ok(_) => {},
+        Err(_) => assert(false, "init_from_level_text should accept debug"),
+    }
+}
+
+fn test_log_tagged_info_runs() {
+    log_tagged("info", "api", "started")
+}
+
+fn test_level_label_canonical() {
+    assert_eq(level_label(LogLevel::Trace), "trace")
+    assert_eq(level_label(LogLevel::Debug), "debug")
+    assert_eq(level_label(LogLevel::Info), "info")
+    assert_eq(level_label(LogLevel::Warn), "warn")
+    assert_eq(level_label(LogLevel::Error), "error")
+}
+
+fn test_parse_level_roundtrip_labels() {
+    match parse_level(level_label(LogLevel::Warn)) {
+        Some(level) => assert_eq(level_label(level), "warn"),
+        None => assert(false, "warn roundtrip"),
+    }
+}
+
+fn test_level_rank_ordering() {
+    assert(level_rank(LogLevel::Trace) < level_rank(LogLevel::Debug), "trace < debug")
+    assert(level_rank(LogLevel::Debug) < level_rank(LogLevel::Info), "debug < info")
+    assert(level_rank(LogLevel::Info) < level_rank(LogLevel::Warn), "info < warn")
+    assert(level_rank(LogLevel::Warn) < level_rank(LogLevel::Error), "warn < error")
+}
+
+fn test_is_error_level() {
+    assert(is_error_level(LogLevel::Error), "error")
+    assert(!is_error_level(LogLevel::Warn), "warn")
+    assert(!is_error_level(LogLevel::Info), "info")
+}
+
+fn test_parse_level_or_falls_back() {
+    assert_eq(level_label(parse_level_or("INFO", LogLevel::Error)), "info")
+    assert_eq(level_label(parse_level_or("nope", LogLevel::Warn)), "warn")
+}
+
+fn test_is_warn_and_debug_level() {
+    assert(is_warn_level(LogLevel::Warn), "warn")
+    assert(!is_warn_level(LogLevel::Error), "error not warn")
+    assert(is_debug_level(LogLevel::Debug), "debug")
+    assert(!is_debug_level(LogLevel::Info), "info not debug")
+}
+
+fn test_is_info_level() {
+    assert(is_info_level(LogLevel::Info), "info")
+    assert(!is_info_level(LogLevel::Warn), "warn not info")
+}
+
+fn test_is_trace_level_and_more_severe() {
+    assert(is_trace_level(LogLevel::Trace), "trace")
+    assert(!is_trace_level(LogLevel::Debug), "debug not trace")
+    assert(more_severe(LogLevel::Error, LogLevel::Warn), "error > warn")
+    assert(!more_severe(LogLevel::Info, LogLevel::Warn), "info not > warn")
+    assert(!more_severe(LogLevel::Warn, LogLevel::Warn), "equal not more")
+}
+
+fn test_less_severe_and_require_level() {
+    assert(less_severe(LogLevel::Info, LogLevel::Warn), "info < warn")
+    assert(!less_severe(LogLevel::Error, LogLevel::Warn), "error not < warn")
+    assert(!less_severe(LogLevel::Warn, LogLevel::Warn), "equal not less")
+    match require_level("debug") {
+        Ok(level) => assert(is_debug_level(level), "debug"),
+        Err(_) => assert(false, "require debug"),
+    }
+    match require_level("nope") {
+        Ok(_) => assert(false, "unknown must Err"),
+        Err(msg) => assert(strings.contains(msg, "nope"), "mentions text"),
+    }
+}
+
+fn test_same_severity_and_known_level() {
+    use crate::is_known_level
+    use crate::same_severity
+    assert(same_severity(LogLevel::Warn, LogLevel::Warn), "equal")
+    assert(!same_severity(LogLevel::Info, LogLevel::Error), "different")
+    assert(is_known_level("INFO"), "info alias")
+    assert(is_known_level("warning"), "warning alias")
+    assert(!is_known_level("nope"), "unknown")
+    assert(!is_known_level(""), "empty")
+}
+
+fn test_require_error() {
+    match require_error(LogLevel::Error) {
+        Ok(level) => assert(is_error_level(level), "error"),
+        Err(_) => assert(false, "error ok"),
+    }
+    match require_error(LogLevel::Warn) {
+        Ok(_) => assert(false, "warn must Err"),
+        Err(msg) => assert(strings.contains(msg, "error"), "mentions error"),
+    }
+}
+
+fn test_require_info() {
+    match require_info(LogLevel::Info) {
+        Ok(level) => assert(is_info_level(level), "info"),
+        Err(_) => assert(false, "info ok"),
+    }
+    match require_info(LogLevel::Warn) {
+        Ok(_) => assert(false, "warn must Err"),
+        Err(msg) => assert(strings.contains(msg, "info"), "mentions info"),
+    }
+}

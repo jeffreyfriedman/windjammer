@@ -1,0 +1,159 @@
+use std::strings
+use std::json
+use crate::domain::Todo
+use crate::domain::TodoStore
+
+/// Line format: `id\tdone\ttitle` (`done` is `1` or `0`).
+pub fn encode_line(todo: Todo) -> string {
+    let flag = if todo.done {
+        "1"
+    } else {
+        "0"
+    }
+    "${todo.id}\t${flag}\t${todo.title}"
+}
+
+pub fn decode_line(line: string) -> Result<Todo, string> {
+    let trimmed = strings.trim(line)
+    if strings.len(trimmed) == 0 {
+        return Err("empty line")
+    }
+    let parts = strings.split(trimmed, "\t")
+    if parts.len() < 3 {
+        return Err("expected id\\tdone\\ttitle")
+    }
+    let id_text = parts[0]
+    let flag = parts[1]
+    let mut title = parts[2]
+    let mut i = 3
+    while i < parts.len() {
+        title = "${title}\t${parts[i]}"
+        i = i + 1
+    }
+    let id = strings.parse_i32(id_text) as int
+    let done = flag == "1"
+    Ok(Todo {
+        id: id,
+        title: title,
+        done: done,
+    })
+}
+
+pub fn encode_store(store: TodoStore) -> string {
+    let todos = store.into_todos()
+    let mut out = ""
+    let mut first = true
+    for item in todos {
+        if !first {
+            out = "${out}\n"
+        }
+        first = false
+        out = "${out}${encode_line(item)}"
+    }
+    out
+}
+
+pub fn decode_store(text: string) -> Result<TodoStore, string> {
+    let mut todos = Vec::new()
+    if strings.len(strings.trim(text)) == 0 {
+        return Ok(TodoStore::new())
+    }
+    let lines = strings.split(text, "\n")
+    for line in lines {
+        let trimmed = strings.trim(line)
+        if strings.len(trimmed) == 0 {
+            continue
+        }
+        match decode_line(trimmed) {
+            Ok(todo) => todos.push(todo),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(TodoStore::from_todos(todos))
+}
+
+/// JSON array of todo objects (sorted caller responsibility).
+pub fn todos_to_json(todos: Vec<Todo>) -> Result<string, string> {
+    let mut out = "["
+    let mut first = true
+    let mut i = 0
+    while i < todos.len() {
+        if !first {
+            out = "${out},"
+        }
+        first = false
+        match json.to_string(todos[i]) {
+            Ok(one) => out = "${out}${one}",
+            Err(_) => out = "${out}{}",
+        }
+        i = i + 1
+    }
+    out = "${out}]"
+    Ok(out)
+}
+
+/// Decode a JSON array of todo objects (as produced by `todos_to_json`).
+pub fn todos_from_json(text: string) -> Result<Vec<Todo>, string> {
+    let trimmed = strings.trim(text)
+    if strings.len(trimmed) == 0 || !strings.starts_with(trimmed, "[") {
+        return Err("expected JSON array")
+    }
+    match json.parse(text) {
+        Ok(root) => {
+            let mut todos = Vec::new()
+            let mut i = 0
+            loop {
+                let idx: usize = i as usize
+                match json.get_index(root, idx) {
+                    Some(item) => {
+                        match parse_todo_value(item) {
+                            Ok(todo) => todos.push(todo),
+                            Err(e) => return Err(e),
+                        }
+                        i = i + 1
+                    },
+                    None => break,
+                }
+            }
+            Ok(todos)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn parse_todo_value(item: Value) -> Result<Todo, string> {
+    let id_node = match json.get(item, "id") {
+        Some(v) => v,
+        None => return Err("todo missing id"),
+    }
+    let id = match json.as_i64(id_node) {
+        Some(n) => n as int,
+        None => return Err("todo id must be integer"),
+    }
+    let title_node = match json.get(item, "title") {
+        Some(v) => v,
+        None => return Err("todo missing title"),
+    }
+    let title = match json.as_str(title_node) {
+        Some(s) => s,
+        None => return Err("todo title must be string"),
+    }
+    let done_node = match json.get(item, "done") {
+        Some(v) => v,
+        None => return Err("todo missing done"),
+    }
+    let done = match json.as_bool(done_node) {
+        Some(b) => b,
+        None => return Err("todo done must be boolean"),
+    }
+    Ok(Todo {
+        id: id,
+        title: title,
+        done: done,
+    })
+}
+
+/// Compact JSON object for `stats --json`.
+pub fn stats_to_json(total: int, pending: int, done: int) -> string {
+    "{\"total\":${total},\"pending\":${pending},\"done\":${done}}"
+}

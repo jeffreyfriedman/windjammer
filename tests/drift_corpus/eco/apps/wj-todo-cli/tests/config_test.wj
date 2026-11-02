@@ -1,0 +1,18 @@
+use crate::domain::TodoConfig
+use crate::domain::resolve_file_path
+
+fn test_default_config() {
+    let config = TodoConfig::defaults()
+    assert_eq(config.max_title_len, 200)
+    assert_eq(config.file_name, "todos.txt")
+}
+
+fn test_resolve_file_path_relative() {
+    let path = resolve_file_path("/home/user", "todos.txt")
+    assert_eq(path, "/home/user/todos.txt")
+}
+
+fn test_resolve_file_path_absolute() {
+    let path = resolve_file_path("/home/user", "/var/todos.txt")
+    assert_eq(path, "/var/todos.txt")
+}

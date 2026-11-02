@@ -1,0 +1,49 @@
+/// Format selected lines (`path:N:text`) with `before`/`after` context (`path-N-text`);
+/// non-adjacent groups are separated by `--`. `selected` holds sorted 1-based line numbers.
+pub fn render_file(path: string, text: string, selected: Vec<int>, before: int, after: int, numbers: bool) -> string {
+    let lines: Vec<string> = text.lines().collect()
+    // kind[n]: 0 hidden, 1 context, 2 selected (index 0 unused)
+    let mut kind: Vec<int> = Vec::new()
+    let mut n = 0
+    while n <= lines.len() {
+        kind.push(0)
+        n = n + 1
+    }
+    for line_no in selected {
+        let mut lo = line_no - before
+        if lo < 1 {
+            lo = 1
+        }
+        let mut hi = line_no + after
+        if hi > lines.len() {
+            hi = lines.len()
+        }
+        let mut k = lo
+        while k <= hi {
+            if kind[k] == 0 {
+                kind[k] = 1
+            }
+            k = k + 1
+        }
+        kind[line_no] = 2
+    }
+    let mut out: Vec<string> = Vec::new()
+    let mut prev = 0
+    let mut k = 1
+    while k <= lines.len() {
+        if kind[k] > 0 {
+            if (before > 0 || after > 0) && prev > 0 && k > prev + 1 {
+                out.push("--")
+            }
+            let sep = if kind[k] == 2 { ":" } else { "-" }
+            if numbers {
+                out.push("${path}${sep}${k}${sep}${lines[k - 1]}")
+            } else {
+                out.push("${path}${sep}${lines[k - 1]}")
+            }
+            prev = k
+        }
+        k = k + 1
+    }
+    out.join("\n")
+}

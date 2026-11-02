@@ -1,0 +1,15 @@
+// Composition root — env config + HTTP adapter + proxy domain.
+
+use crate::adapters::serve
+use crate::domain::config_from_env
+use crate::domain::port_from_env
+
+fn main() {
+    let cfg = config_from_env()
+    let port = port_from_env()
+    println("wj-proxy listening on http://0.0.0.0:${port} -> ${cfg.upstream}")
+    match serve(cfg, port) {
+        Ok(_) => {},
+        Err(err) => println("wj-proxy error: ${err}"),
+    }
+}

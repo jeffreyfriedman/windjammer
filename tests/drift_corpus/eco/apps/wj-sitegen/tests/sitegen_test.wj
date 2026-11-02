@@ -1,0 +1,251 @@
+use crate::domain::html_filename
+use crate::domain::html_output_path
+use crate::domain::is_html_path
+use crate::domain::is_markdown_path
+use crate::domain::page_count
+use crate::domain::relative_path_from_root
+use crate::domain::title_from_markdown
+use crate::domain::markdown_to_html
+use crate::domain::render_document
+use crate::domain::generate_page
+use crate::domain::require_only_page
+use crate::domain::dirs_from_args
+use crate::domain::render_sitemap
+use crate::domain::render_rss
+use crate::domain::render_robots
+use crate::domain::join_page_url
+use crate::domain::resolve_src_dir
+use crate::domain::resolve_out_dir
+use crate::domain::FeedEntry
+use crate::domain::GeneratedPage
+use std::strings
+
+fn test_path_predicates_and_page_count() {
+    assert(is_markdown_path("posts/a.md"), "md")
+    assert(!is_markdown_path("posts/a.html"), "not md")
+    assert(is_html_path("posts/a.html"), "html")
+    assert(!is_html_path("posts/a.md"), "not html")
+    let mut pages = Vec::new()
+    pages.push(generate_page("a.md", "# A\n"))
+    pages.push(generate_page("b.md", "# B\n"))
+    assert_eq(page_count(pages), 2)
+    assert_eq(page_count(Vec::new()), 0)
+}
+
+fn test_only_page_and_require_pages() {
+    use crate::domain::only_page
+    use crate::domain::require_pages
+    let empty: Vec<GeneratedPage> = Vec::new()
+    match require_pages(empty) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "pages"), "mentions pages"),
+    }
+    let mut pages = Vec::new()
+    pages.push(generate_page("a.md", "# A\n"))
+    pages.push(generate_page("b.md", "# B\n"))
+    match require_pages(pages) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two pages"),
+    }
+    let mut solo = Vec::new()
+    solo.push(generate_page("only.md", "# Only\n"))
+    match only_page(solo) {
+        Some(page) => assert_eq(page.title, "Only"),
+        None => assert(false, "one page"),
+    }
+    let mut many = Vec::new()
+    many.push(generate_page("a.md", "# A\n"))
+    many.push(generate_page("b.md", "# B\n"))
+    match only_page(many) {
+        Some(_) => assert(false, "two pages is not only"),
+        None => {},
+    }
+}
+
+fn test_require_only_page() {
+    let mut solo = Vec::new()
+    solo.push(generate_page("only.md", "# Only\n"))
+    match require_only_page(solo) {
+        Ok(page) => assert_eq(page.title, "Only"),
+        Err(_) => assert(false, "one page"),
+    }
+    let mut many = Vec::new()
+    many.push(generate_page("a.md", "# A\n"))
+    many.push(generate_page("b.md", "# B\n"))
+    match require_only_page(many) {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "one"), "mentions one"),
+    }
+}
+
+fn test_html_filename_strips_directory_and_md() {
+    assert_eq(html_filename("posts/hello.md"), "hello.html")
+}
+
+fn test_html_output_path_preserves_subdirectory() {
+    assert_eq(html_output_path("posts/hello.md"), "posts/hello.html")
+}
+
+fn test_relative_path_from_root() {
+    assert_eq(relative_path_from_root("/content/posts/a.md", "/content"), "posts/a.md")
+}
+
+fn test_html_filename_bare_file() {
+    assert_eq(html_filename("index.md"), "index.html")
+}
+
+fn test_title_from_markdown_uses_first_h1() {
+    let src = "# Hello\n\nA paragraph."
+    assert_eq(title_from_markdown(src), "Hello")
+}
+
+fn test_title_from_markdown_untitled_without_heading() {
+    assert_eq(title_from_markdown("just text"), "Untitled")
+}
+
+fn test_markdown_to_html_heading_and_paragraph() {
+    let html = markdown_to_html("# Hello\n\nA paragraph.")
+    assert_str_contains(html, "<h1>Hello</h1>")
+    assert_str_contains(html, "<p>A paragraph.</p>")
+}
+
+fn test_markdown_to_html_escapes_markup() {
+    let html = markdown_to_html("<script>")
+    assert_str_contains(html, "&lt;script&gt;")
+}
+
+fn test_render_document_includes_title_and_body() {
+    let page = render_document("Hello", "<p>Hi</p>")
+    assert_str_contains(page, "<title>Hello</title>")
+    assert_str_contains(page, "<p>Hi</p>")
+}
+
+fn test_render_document_escapes_title_quotes() {
+    let page = render_document("Say \"hi\"", "<p>ok</p>")
+    assert_str_contains(page, "&quot;")
+}
+
+fn test_generate_page_combines_filename_title_and_html() {
+    let page = generate_page("docs/intro.md", "# Intro\n\nWelcome.")
+    assert_eq(page.filename, "docs/intro.html")
+    assert_eq(page.title, "Intro")
+    assert_str_contains(page.html, "<h1>Intro</h1>")
+    assert_str_contains(page.html, "<title>Intro</title>")
+}
+
+fn test_dirs_from_args_takes_src_and_out() {
+    let mut args = Vec::new()
+    args.push("wj-sitegen")
+    args.push("content")
+    args.push("site")
+    match dirs_from_args(args) {
+        Ok(dirs) => {
+            assert_eq(dirs.src, "content")
+            assert_eq(dirs.out, "site")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_dirs_from_args_errors_when_missing() {
+    let mut args = Vec::new()
+    args.push("wj-sitegen")
+    match dirs_from_args(args) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "usage message"),
+    }
+}
+
+fn test_resolve_src_dir_uses_env_override() {
+    assert_eq(resolve_src_dir("", "from-env"), "from-env")
+    assert_eq(resolve_src_dir("argv", "from-env"), "argv")
+}
+
+fn test_resolve_out_dir_uses_env_override() {
+    assert_eq(resolve_out_dir("", "out-env"), "out-env")
+    assert_eq(resolve_out_dir("argv", "out-env"), "argv")
+}
+
+fn make_entry(path: string, title: string) -> FeedEntry {
+    FeedEntry {
+        path: path,
+        title: title,
+        html: "",
+    }
+}
+
+fn test_join_page_url_joins_base_and_path() {
+    assert_eq(join_page_url("https://example.com/", "posts/hello.html"), "https://example.com/posts/hello.html")
+}
+
+fn test_render_sitemap_lists_page_locations() {
+    let mut entries = Vec::new()
+    entries.push(make_entry("posts/b.html", "B"))
+    entries.push(make_entry("posts/a.html", "A"))
+    match render_sitemap("https://example.com", entries) {
+        Ok(xml) => {
+            assert_str_contains(xml, "<urlset")
+            assert_str_contains(xml, "https://example.com/posts/a.html")
+            assert_str_contains(xml, "https://example.com/posts/b.html")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_render_sitemap_requires_base_url() {
+    let entries = Vec::new()
+    match render_sitemap("", entries) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert_str_contains(msg, "base url"),
+    }
+}
+
+fn test_render_rss_includes_titles_and_links() {
+    let mut entries = Vec::new()
+    entries.push(make_entry("hello.html", "Hello"))
+    match render_rss("https://example.com/", "My Site", entries) {
+        Ok(xml) => {
+            assert_str_contains(xml, "<rss")
+            assert_str_contains(xml, "<title>My Site</title>")
+            assert_str_contains(xml, "<title>Hello</title>")
+            assert_str_contains(xml, "https://example.com/hello.html")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_render_rss_defaults_site_title() {
+    let mut entries = Vec::new()
+    entries.push(make_entry("index.html", "Home"))
+    match render_rss("https://example.com", "", entries) {
+        Ok(xml) => assert_str_contains(xml, "<title>Site</title>"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_render_rss_escapes_markup_in_titles() {
+    let mut entries = Vec::new()
+    entries.push(make_entry("x.html", "A & B"))
+    match render_rss("https://example.com", "Site", entries) {
+        Ok(xml) => assert_str_contains(xml, "A &amp; B"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_render_robots_includes_sitemap_url() {
+    match render_robots("https://example.com") {
+        Ok(text) => {
+            assert_str_contains(text, "User-agent: *")
+            assert_str_contains(text, "Allow: /")
+            assert_str_contains(text, "Sitemap: https://example.com/sitemap.xml")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_render_robots_requires_base_url() {
+    match render_robots("") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert_str_contains(msg, "base url"),
+    }
+}

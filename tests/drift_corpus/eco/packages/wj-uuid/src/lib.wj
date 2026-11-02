@@ -1,0 +1,388 @@
+use std::crypto
+use std::encoding
+use std::random
+use std::strings
+use std::time
+use std::uuid
+
+const UUID_EPOCH_100NS: i64 = 0x01B21DD213814000
+
+pub const NAMESPACE_DNS: string = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+pub const NAMESPACE_URL: string = "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
+pub const NAMESPACE_OID: string = "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
+pub const NAMESPACE_X500: string = "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
+
+/// All-zero UUID (RFC 9562 nil UUID).
+pub const NIL: string = "00000000-0000-0000-0000-000000000000"
+
+/// All-ones UUID (RFC 9562 max UUID).
+pub const MAX: string = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+
+/// Random RFC 4122 UUID version 4 (thin-wraps `std::uuid.v4`).
+pub fn v4() -> string {
+    uuid.v4()
+}
+
+/// Time-based UUID version 1 using the current UTC clock.
+pub fn v1() -> Result<string, string> {
+    let millis = time.utc_now().timestamp_millis()
+    v1_from_timestamp(millis, random_clock_seq(), random_node_hex())
+}
+
+/// Time-based UUID version 1 from explicit parts (deterministic / testable).
+pub fn v1_from_timestamp(unix_millis: i64, clock_seq: int, node_hex: string) -> Result<string, string> {
+    if clock_seq < 0 || clock_seq > 16383 {
+        return Err("clock_seq must be 0..16383")
+    }
+    match parse_node_hex(node_hex) {
+        Ok(node) => {
+            let bytes = v1_bytes(unix_millis, clock_seq, node)
+            Ok(format_uuid_bytes(bytes))
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Name-based UUID version 5 (SHA-1 of namespace bytes + UTF-8 name).
+pub fn v5(namespace: string, name: string) -> Result<string, string> {
+    match uuid_to_bytes(namespace) {
+        Ok(ns_bytes) => {
+            let payload = concat_bytes(ns_bytes, string_to_bytes(name))
+            let hash = crypto.sha1_bytes(payload)
+            uuid_from_v5_hash(hash)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn v5_dns(name: string) -> Result<string, string> {
+    v5(NAMESPACE_DNS, name)
+}
+
+pub fn v5_url(name: string) -> Result<string, string> {
+    v5(NAMESPACE_URL, name)
+}
+
+/// Unix-ms time-ordered UUID version 7 (RFC 9562; thin-wraps `std::uuid.v7`).
+pub fn v7() -> Result<string, string> {
+    Ok(uuid.v7())
+}
+
+/// UUID version 7 from explicit Unix millis + 10 random bytes (20 hex digits).
+/// Thin-wraps `std::uuid.v7_from_timestamp`.
+pub fn v7_from_timestamp(unix_millis: i64, random_hex: string) -> Result<string, string> {
+    uuid.v7_from_timestamp(unix_millis, random_hex)
+}
+
+/// Version nibble (`1`, `4`, `5`, `7`, …) when `text` is a supported UUID.
+pub fn version(text: string) -> Option<int> {
+    let id = normalize(text)
+    let ver = strings.substring(id, 14, 15)
+    if ver != "1" && ver != "4" && ver != "5" && ver != "7" {
+        return None
+    }
+    if !is_valid_normalized(id) {
+        return None
+    }
+    match ver {
+        "1" => Some(1),
+        "4" => Some(4),
+        "5" => Some(5),
+        "7" => Some(7),
+        _ => None,
+    }
+}
+
+/// True for canonical v1, v4, v5, or v7 UUID strings.
+pub fn is_valid(text: string) -> bool {
+    is_valid_normalized(normalize(text))
+}
+
+/// True when `text` is a valid UUID of the given `ver` (1, 4, 5, or 7).
+pub fn is_version(text: string, ver: int) -> bool {
+    match version(text) {
+        Some(v) => v == ver,
+        None => false,
+    }
+}
+
+/// True when `text` is already lowercase dotted-hex UUID form (no normalize needed).
+pub fn is_canonical(text: string) -> bool {
+    text == normalize(text) && is_valid(text)
+}
+
+/// True when `text` is the nil UUID (all zeros).
+pub fn is_nil(text: string) -> bool {
+    normalize(text) == "00000000-0000-0000-0000-000000000000"
+}
+
+/// True when `text` is the max UUID (all ones).
+pub fn is_max(text: string) -> bool {
+    normalize(text) == "ffffffff-ffff-ffff-ffff-ffffffffffff"
+}
+
+/// Normalized max UUID, or `Err` when `text` is not max.
+pub fn require_max(text: string) -> Result<string, string> {
+    if is_max(text) {
+        return Ok(normalize(text))
+    }
+    Err("expected max")
+}
+
+fn is_valid_normalized(id: string) -> bool {
+    if strings.len(id) != 36 {
+        return false
+    }
+    let ver = strings.substring(id, 14, 15)
+    if ver != "1" && ver != "4" && ver != "5" && ver != "7" {
+        return false
+    }
+    let variant = strings.substring(id, 19, 20)
+    if variant != "8" && variant != "9" && variant != "a" && variant != "b" {
+        return false
+    }
+    canonical_dashes(id) && all_hex_or_dash(id)
+}
+
+/// Lowercase UUID formatting (dashes unchanged).
+pub fn normalize(text: string) -> string {
+    strings.to_lower(text)
+}
+
+/// Strip hyphens from `text` (other characters unchanged).
+pub fn without_hyphens(text: string) -> string {
+    strings.replace(text, "-", "")
+}
+
+/// Insert canonical hyphens into a 32-char hex UUID (already-dashed input unchanged).
+pub fn with_hyphens(text: string) -> string {
+    let bare = without_hyphens(normalize(text))
+    if strings.len(bare) != 32 {
+        return text
+    }
+    let a = strings.substring(bare, 0, 8)
+    let b = strings.substring(bare, 8, 12)
+    let c = strings.substring(bare, 12, 16)
+    let d = strings.substring(bare, 16, 20)
+    let e = strings.substring(bare, 20, 32)
+    "${a}-${b}-${c}-${d}-${e}"
+}
+
+/// Normalize and validate `text`, or `Err` when not a UUID.
+pub fn require_valid(text: string) -> Result<string, string> {
+    let id = normalize(text)
+    if is_valid(id) {
+        return Ok(id)
+    }
+    Err("invalid uuid")
+}
+
+/// Number of `-` characters in `text`.
+pub fn hyphen_count(text: string) -> int {
+    let parts = strings.split(text, "-")
+    parts.len() - 1
+}
+
+/// Require a valid version-4 UUID.
+pub fn require_v4(text: string) -> Result<string, string> {
+    require_version(text, 4)
+}
+
+/// Require a valid version-7 UUID.
+pub fn require_v7(text: string) -> Result<string, string> {
+    require_version(text, 7)
+}
+
+/// Require a valid UUID of the given version number.
+pub fn require_version(text: string, ver: int) -> Result<string, string> {
+    match require_valid(text) {
+        Ok(id) => {
+            if is_version(id, ver) {
+                return Ok(id)
+            }
+            Err("uuid version mismatch")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn v1_bytes(unix_millis: i64, clock_seq: int, node: Vec<u8>) -> Vec<u8> {
+    let intervals = unix_millis * 10000 + UUID_EPOCH_100NS
+    let time_low = intervals & 0xFFFFFFFF
+    let time_mid = (intervals >> 32) & 0xFFFF
+    let time_hi = ((intervals >> 48) & 0x0FFF) | 0x1000
+    let clock_hi = ((clock_seq >> 8) & 0x3F) | 0x80
+    let clock_lo = clock_seq & 0xFF
+    let mut out = push_u32_be(Vec::new(), time_low)
+    out = push_u16_be(out, time_mid)
+    out = push_u16_be(out, time_hi)
+    out.push(clock_hi as u8)
+    out.push(clock_lo as u8)
+    append_bytes(out, node)
+}
+
+fn uuid_from_v5_hash(hash: Vec<u8>) -> Result<string, string> {
+    if hash.len() < 16 {
+        return Err("sha1 digest too short")
+    }
+    let mut bytes = Vec::new()
+    let mut i = 0
+    while i < 16 {
+        bytes.push(hash[i])
+        i = i + 1
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x50
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    Ok(format_uuid_bytes(bytes))
+}
+
+fn format_uuid_bytes(bytes: Vec<u8>) -> string {
+    insert_dashes(encoding.hex_encode(bytes))
+}
+
+fn uuid_to_bytes(text: string) -> Result<Vec<u8>, string> {
+    let compact = strip_dashes(normalize(text))
+    if strings.len(compact) != 32 {
+        return Err("uuid must be 32 hex digits")
+    }
+    encoding.hex_decode(compact)
+}
+
+fn parse_node_hex(node_hex: string) -> Result<Vec<u8>, string> {
+    let compact = normalize(node_hex)
+    if strings.len(compact) != 12 {
+        return Err("node id must be 12 hex digits")
+    }
+    encoding.hex_decode(compact)
+}
+
+fn strip_dashes(text: string) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < strings.len(text) {
+        let ch = strings.substring_chars(text, i, i + 1)
+        if ch != "-" {
+            out = "${out}${ch}"
+        }
+        i = i + 1
+    }
+    out
+}
+
+fn string_to_bytes(text: string) -> Vec<u8> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < strings.len(text) {
+        out.push(strings.byte_at(text, i))
+        i = i + 1
+    }
+    out
+}
+
+fn concat_bytes(a: Vec<u8>, b: Vec<u8>) -> Vec<u8> {
+    let mut out = Vec::new()
+    for byte in a {
+        out.push(byte)
+    }
+    for byte in b {
+        out.push(byte)
+    }
+    out
+}
+
+fn append_bytes(mut out: Vec<u8>, extra: Vec<u8>) -> Vec<u8> {
+    for byte in extra {
+        out.push(byte)
+    }
+    out
+}
+
+fn push_u32_be(mut out: Vec<u8>, value: i64) -> Vec<u8> {
+    out.push(((value >> 24) & 0xff) as u8)
+    out.push(((value >> 16) & 0xff) as u8)
+    out.push(((value >> 8) & 0xff) as u8)
+    out.push((value & 0xff) as u8)
+    out
+}
+
+fn push_u16_be(mut out: Vec<u8>, value: i64) -> Vec<u8> {
+    out.push(((value >> 8) & 0xff) as u8)
+    out.push((value & 0xff) as u8)
+    out
+}
+
+fn random_octets(count: int) -> Vec<u8> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < count {
+        out.push(random.range(0, 256) as u8)
+        i = i + 1
+    }
+    out
+}
+
+fn random_clock_seq() -> int {
+    random.range(0, 16384)
+}
+
+fn random_node_hex() -> string {
+    let bytes = random_octets(6)
+    encoding.hex_encode(bytes)
+}
+
+fn variant_nibble_char() -> string {
+    let pick = random.range(0, 4)
+    if pick == 0 {
+        return "8"
+    }
+    if pick == 1 {
+        return "9"
+    }
+    if pick == 2 {
+        return "a"
+    }
+    "b"
+}
+
+fn patch_version_hex(hex: string, version: string, variant: string) -> string {
+    let head = strings.substring(hex, 0, 12)
+    let mid = strings.substring(hex, 13, 16)
+    let tail = strings.substring(hex, 17, 32)
+    "${head}${version}${mid}${variant}${tail}"
+}
+
+fn insert_dashes(hex: string) -> string {
+    let a = strings.substring(hex, 0, 8)
+    let b = strings.substring(hex, 8, 12)
+    let c = strings.substring(hex, 12, 16)
+    let d = strings.substring(hex, 16, 20)
+    let e = strings.substring(hex, 20, 32)
+    "${a}-${b}-${c}-${d}-${e}"
+}
+
+fn is_hex_digit(ch: string) -> bool {
+    strings.contains("0123456789abcdef", ch)
+}
+
+fn canonical_dashes(id: string) -> bool {
+    strings.substring(id, 8, 9) == "-"
+        && strings.substring(id, 13, 14) == "-"
+        && strings.substring(id, 18, 19) == "-"
+        && strings.substring(id, 23, 24) == "-"
+}
+
+fn all_hex_or_dash(id: string) -> bool {
+    let mut i = 0
+    while i < strings.len(id) {
+        let ch = strings.substring_chars(id, i, i + 1)
+        if ch == "-" {
+            if i != 8 && i != 13 && i != 18 && i != 23 {
+                return false
+            }
+        } else if !is_hex_digit(ch) {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}

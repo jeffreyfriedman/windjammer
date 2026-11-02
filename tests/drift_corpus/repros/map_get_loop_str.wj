@@ -1,0 +1,16 @@
+// `m.get(k)` where `k` is the loop variable over a list of string literals: the compiled backend
+// passes `&&str` to a HashMap<String, _>.
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("a", 1)
+    let mut hits = 0
+    for k in ["a", "b", "a"] {
+        match m.get(k) {
+            Some(_) => { hits += 1 },
+            None => {},
+        }
+    }
+    println("${hits}")
+}

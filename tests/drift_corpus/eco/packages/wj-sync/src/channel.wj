@@ -1,0 +1,125 @@
+// Message-passing channels (CSP). Ownership moves with messages.
+// `unbounded` / `bounded` thin-wrap `std::sync`; typed Sender/Receiver stay package sugar.
+
+use std::sync
+use std::sync::mpsc
+
+/// Sender half of an unbounded/bounded channel.
+pub struct Sender<T> {
+    tx: mpsc::Sender<T>,
+}
+
+/// Receiver half of a channel.
+pub struct Receiver<T> {
+    rx: mpsc::Receiver<T>,
+}
+
+/// Bounded sender (`sync_channel`).
+pub struct BoundedSender<T> {
+    tx: mpsc::SyncSender<T>,
+}
+
+pub type IntSender = Sender<int>
+pub type IntReceiver = Receiver<int>
+pub type BoundedIntSender = BoundedSender<int>
+
+/// Create an unbounded channel (thin-wraps `std::sync::unbounded`).
+pub fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
+    let pair = sync.unbounded()
+    (
+        Sender { tx: pair.0 },
+        Receiver { rx: pair.1 },
+    )
+}
+
+/// Create a bounded channel with capacity `cap`.
+pub fn bounded<T>(cap: int) -> (BoundedSender<T>, Receiver<T>) {
+    let pair = sync.sync_channel(cap)
+    (
+        BoundedSender { tx: pair.0 },
+        Receiver { rx: pair.1 },
+    )
+}
+
+/// Send; ownership of `value` moves into the channel.
+pub fn send<T>(tx: Sender<T>, value: T) -> Sender<T> {
+    match tx.tx.send(value) {
+        Ok(_) => tx,
+        Err(_) => tx,
+    }
+}
+
+/// Send on a bounded sender.
+pub fn send_bounded<T>(tx: BoundedSender<T>, value: T) -> BoundedSender<T> {
+    match tx.tx.send(value) {
+        Ok(_) => tx,
+        Err(_) => tx,
+    }
+}
+
+/// Non-blocking send on a bounded sender: returns (sender, ok).
+pub fn try_send_bounded<T>(tx: BoundedSender<T>, value: T) -> (BoundedSender<T>, bool) {
+    match tx.tx.try_send(value) {
+        Ok(_) => (tx, true),
+        Err(_) => (tx, false),
+    }
+}
+
+/// Blocking receive; returns (receiver, Some(value)) or (receiver, None) if closed.
+pub fn recv<T>(rx: Receiver<T>) -> (Receiver<T>, Option<T>) {
+    match rx.rx.recv() {
+        Ok(v) => (rx, Some(v)),
+        Err(_) => (rx, None),
+    }
+}
+
+/// Non-blocking receive: (receiver, present, value_or_none).
+pub fn try_recv<T>(rx: Receiver<T>) -> (Receiver<T>, bool, Option<T>) {
+    match rx.rx.try_recv() {
+        Ok(v) => (rx, true, Some(v)),
+        Err(_) => (rx, false, None),
+    }
+}
+
+/// Close by dropping the sender (idiomatic CSP close).
+pub fn close<T>(tx: Sender<T>) {
+    let _ = tx
+}
+
+/// Clone an unbounded sender (fan-out producers).
+pub fn clone_sender<T>(tx: Sender<T>) -> (Sender<T>, Sender<T>) {
+    let cloned = Sender {
+        tx: tx.tx.clone(),
+    }
+    (tx, cloned)
+}
+
+// --- int helpers (concrete types; primary API is generic) ---
+
+pub fn unbounded_int() -> (Sender<int>, Receiver<int>) {
+    unbounded()
+}
+
+pub fn bounded_int(cap: int) -> (BoundedSender<int>, Receiver<int>) {
+    bounded(cap)
+}
+
+pub fn send_int(tx: Sender<int>, value: int) -> Sender<int> {
+    send(tx, value)
+}
+
+pub fn recv_int(rx: Receiver<int>) -> (Receiver<int>, int) {
+    let got = recv(rx)
+    match got.1 {
+        Some(v) => (got.0, v),
+        None => (got.0, 0),
+    }
+}
+
+pub fn try_recv_int(rx: Receiver<int>) -> (Receiver<int>, bool, int) {
+    let got = try_recv(rx)
+    match got.2 {
+        Some(v) => (got.0, got.1, v),
+        None => (got.0, got.1, 0),
+    }
+}

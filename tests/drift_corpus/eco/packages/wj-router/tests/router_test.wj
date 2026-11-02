@@ -1,0 +1,191 @@
+use crate::has_param
+use crate::is_param_pattern
+use crate::match_or
+use crate::match_route
+use crate::matches_route
+use crate::param_count
+use crate::param_names
+use crate::param_or
+use crate::first_param_name
+use crate::pattern_param_count
+use crate::require_match
+use crate::require_param
+use std::collections::HashMap
+use std::collections::HashMap
+use std::strings
+
+@test
+fn test_exact_path() {
+    match match_route("/health", "/health") {
+        Some(params) => assert_eq(params.len(), 0),
+        None => assert(false, "exact path should match"),
+    }
+}
+
+@test
+fn test_exact_mismatch() {
+    match match_route("/health", "/ready") {
+        Some(_) => assert(false, "should not match"),
+        None => assert(true, "mismatch"),
+    }
+}
+
+@test
+fn test_param_capture() {
+    match match_route("/users/:id", "/users/42") {
+        Some(params) => {
+            match params.get("id") {
+                Some(id) => assert_eq(id, "42"),
+                None => assert(false, "missing id"),
+            }
+        },
+        None => assert(false, "param route should match"),
+    }
+}
+
+@test
+fn test_multi_param() {
+    match match_route("/orgs/:org/repos/:repo", "/orgs/acme/repos/api") {
+        Some(params) => {
+            match params.get("org") {
+                Some(org) => assert_eq(org, "acme"),
+                None => assert(false, "missing org"),
+            }
+            match params.get("repo") {
+                Some(repo) => assert_eq(repo, "api"),
+                None => assert(false, "missing repo"),
+            }
+        },
+        None => assert(false, "multi-param should match"),
+    }
+}
+
+@test
+fn test_trailing_slash_normalized() {
+    match match_route("/users/:id", "/users/7/") {
+        Some(params) => {
+            match params.get("id") {
+                Some(id) => assert_eq(id, "7"),
+                None => assert(false, "missing id"),
+            }
+        },
+        None => assert(false, "trailing slash should still match"),
+    }
+}
+
+@test
+fn test_segment_count_mismatch() {
+    match match_route("/users/:id", "/users/42/extra") {
+        Some(_) => assert(false, "extra segment should fail"),
+        None => assert(true, "mismatch"),
+    }
+}
+
+@test
+fn test_root() {
+    match match_route("/", "/") {
+        Some(params) => assert_eq(params.len(), 0),
+        None => assert(false, "root should match"),
+    }
+}
+
+@test
+fn test_matches_route() {
+    assert(matches_route("/users/:id", "/users/42"), "match")
+    assert(!matches_route("/users/:id", "/posts/42"), "mismatch")
+}
+
+@test
+fn test_param_or() {
+    match match_route("/users/:id", "/users/42") {
+        Some(params) => assert_eq(param_or(params, "id", "0"), "42"),
+        None => assert(false, "expected match for param_or id"),
+    }
+    match match_route("/users/:id", "/users/42") {
+        Some(params) => assert_eq(param_or(params, "missing", "none"), "none"),
+        None => assert(false, "expected match for param_or missing"),
+    }
+}
+
+@test
+fn test_has_param_and_param_count() {
+    match match_route("/orgs/:org/repos/:repo", "/orgs/acme/repos/api") {
+        Some(params) => {
+            assert(has_param(params, "org"), "org")
+            assert(has_param(params, "repo"), "repo")
+            assert(!has_param(params, "id"), "no id")
+            assert_eq(param_count(params), 2)
+        },
+        None => assert(false, "multi"),
+    }
+    match match_route("/health", "/health") {
+        Some(params) => assert_eq(param_count(params), 0),
+        None => assert(false, "exact"),
+    }
+}
+
+@test
+fn test_is_param_pattern() {
+    assert(is_param_pattern("/users/:id"), "has param")
+    assert(is_param_pattern("/:a/:b"), "two")
+    assert(!is_param_pattern("/health"), "static")
+    assert(!is_param_pattern("/"), "root")
+}
+
+@test
+fn test_param_names_and_require_param() {
+    match match_route("/orgs/:org/repos/:repo", "/orgs/acme/repos/api") {
+        Some(params) => {
+            let names = param_names(params)
+            assert_eq(names.len(), 2)
+            let mut found_org = false
+            let mut found_repo = false
+            let mut i = 0
+            while i < names.len() {
+                if names[i] == "org" {
+                    found_org = true
+                }
+                if names[i] == "repo" {
+                    found_repo = true
+                }
+                i = i + 1
+            }
+            assert(found_org, "org name")
+            assert(found_repo, "repo name")
+            match require_param(params, "org") {
+                Ok(v) => assert_eq(v, "acme"),
+                Err(_) => assert(false, "require org"),
+            }
+        },
+        None => assert(false, "multi"),
+    }
+    match match_route("/users/:id", "/users/42") {
+        Some(params) => {
+            match require_param(params, "missing") {
+                Ok(_) => assert(false, "missing must Err"),
+                Err(msg) => assert(strings.contains(msg, "missing"), "mentions name"),
+            }
+        },
+        None => assert(false, "users"),
+    }
+}
+
+@test
+fn test_first_param_name_and_require_match() {
+    match first_param_name("/users/:id/posts/:pid") {
+        Some(name) => assert_eq(name, "id"),
+        None => assert(false, "first param"),
+    }
+    match first_param_name("/health") {
+        Some(_) => assert(false, "static"),
+        None => {},
+    }
+    match require_match("/users/:id", "/users/7") {
+        Ok(params) => assert_eq(param_or(params, "id", ""), "7"),
+        Err(_) => assert(false, "match"),
+    }
+    match require_match("/users/:id", "/nope") {
+        Ok(_) => assert(false, "miss must Err"),
+        Err(msg) => assert(strings.contains(msg, "match"), "mentions match"),
+    }
+}

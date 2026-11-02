@@ -1,0 +1,22 @@
+[package]
+name = "wj-migrate-cli"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_migrate = { path = "../../packages/wj-migrate/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[capabilities]
+# tests write scratch files under the system temp directory
+fs.read = ["./**", "/tmp/**"]
+fs.write = ["./**", "/tmp/**"]
+
+[capabilities.dependencies.wj_migrate]
+fs.read = ["./**", "/tmp/**"]
+fs.write = ["./**", "/tmp/**"]

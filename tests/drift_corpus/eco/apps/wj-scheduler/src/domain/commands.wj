@@ -1,0 +1,160 @@
+use std::strings
+use wj_cli_args::long_flag_value
+use crate::domain::SchedulerConfig
+
+pub struct CliCommand {
+    pub kind: string,
+    pub expr: string,
+    pub at: string,
+    pub max_minutes: int,
+    pub path: string,
+}
+
+const USAGE: string = "usage: wj-scheduler check|next|explain|list|due …"
+
+pub fn parse_command(argv: Vec<string>, config: SchedulerConfig) -> Result<CliCommand, string> {
+    let rest = tail(argv)
+    if rest.len() == 0 {
+        return Err(USAGE)
+    }
+    let kind = rest[0]
+    if kind == "check" {
+        return parse_check(rest, config)
+    }
+    if kind == "next" {
+        return parse_next(rest, config)
+    }
+    if kind == "explain" {
+        return parse_explain(rest, config)
+    }
+    if kind == "list" {
+        return parse_list(rest, config)
+    }
+    if kind == "due" {
+        return parse_due(rest, config)
+    }
+    Err(USAGE)
+}
+
+fn parse_check(rest: Vec<string>, _config: SchedulerConfig) -> Result<CliCommand, string> {
+    if rest.len() < 2 {
+        return Err(USAGE)
+    }
+    let expr = rest[1]
+    let at = match long_flag_value(rest, "at") {
+        Some(value) => value,
+        None => return Err("missing --at"),
+    }
+    Ok(CliCommand {
+        kind: "check",
+        expr: expr,
+        at: at,
+        max_minutes: 0,
+        path: "",
+    })
+}
+
+fn parse_next(rest: Vec<string>, config: SchedulerConfig) -> Result<CliCommand, string> {
+    if rest.len() < 2 {
+        return Err(USAGE)
+    }
+    let expr = rest[1]
+    let mut at = ""
+    let mut found_from = false
+    let mut max_text = ""
+    let mut found_max = false
+    let mut i = 0
+    while i + 1 < rest.len() {
+        if rest[i] == "--from" {
+            at = rest[i + 1]
+            found_from = true
+        }
+        if rest[i] == "--max" {
+            max_text = rest[i + 1]
+            found_max = true
+        }
+        i = i + 1
+    }
+    if !found_from {
+        return Err("missing --from")
+    }
+    let max_minutes = if found_max {
+        let n = strings.parse_i32(max_text) as int
+        if n <= 0 {
+            return Err("--max must be positive")
+        }
+        n
+    } else {
+        config.default_max_minutes
+    }
+    Ok(CliCommand {
+        kind: "next",
+        expr: expr,
+        at: at,
+        max_minutes: max_minutes,
+        path: "",
+    })
+}
+
+fn parse_explain(rest: Vec<string>, _config: SchedulerConfig) -> Result<CliCommand, string> {
+    if rest.len() < 2 {
+        return Err(USAGE)
+    }
+    Ok(CliCommand {
+        kind: "explain",
+        expr: rest[1],
+        at: "",
+        max_minutes: 0,
+        path: "",
+    })
+}
+
+fn parse_list(rest: Vec<string>, _config: SchedulerConfig) -> Result<CliCommand, string> {
+    if rest.len() < 2 {
+        return Err(USAGE)
+    }
+    Ok(CliCommand {
+        kind: "list",
+        expr: "",
+        at: "",
+        max_minutes: 0,
+        path: rest[1],
+    })
+}
+
+fn parse_due(rest: Vec<string>, _config: SchedulerConfig) -> Result<CliCommand, string> {
+    if rest.len() < 2 {
+        return Err(USAGE)
+    }
+    let path = rest[1]
+    let mut at = ""
+    let mut found = false
+    let mut i = 0
+    while i + 1 < rest.len() {
+        if rest[i] == "--at" {
+            at = rest[i + 1]
+            found = true
+        }
+        i = i + 1
+    }
+    if !found {
+        return Err("missing --at")
+    }
+    Ok(CliCommand {
+        kind: "due",
+        expr: "",
+        at: at,
+        max_minutes: 0,
+        path: path,
+    })
+}
+
+fn tail(argv: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 1
+    while i < argv.len() {
+        out.push(argv[i])
+        i = i + 1
+    }
+    out
+}

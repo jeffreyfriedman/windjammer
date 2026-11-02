@@ -1,0 +1,170 @@
+use crate::csp_of
+use crate::defaults
+use crate::defaults_with_hsts
+use crate::format_headers
+use crate::frame_of
+use crate::header_line_count
+use crate::hsts
+use crate::hsts_enabled
+use crate::nosniff
+use crate::frame_options
+use crate::referrer_of
+use crate::referrer_policy
+use crate::security_header_lines
+use crate::with_csp
+use crate::with_frame_options
+use crate::with_hsts
+use crate::with_referrer
+use crate::without_csp
+use crate::without_hsts
+use std::strings
+
+@test
+fn test_defaults_include_nosniff() {
+    let h = defaults()
+    let text = format_headers(h)
+    assert_str_contains(text, "X-Content-Type-Options: nosniff")
+}
+
+@test
+fn test_defaults_include_frame_deny() {
+    let h = defaults()
+    let text = format_headers(h)
+    assert_str_contains(text, "X-Frame-Options: DENY")
+}
+
+@test
+fn test_defaults_include_referrer() {
+    let h = defaults()
+    let text = format_headers(h)
+    assert_str_contains(text, "Referrer-Policy: no-referrer")
+}
+
+@test
+fn test_hsts_header() {
+    assert_eq(hsts(31536000), "Strict-Transport-Security: max-age=31536000")
+}
+
+@test
+fn test_nosniff_helper() {
+    assert_eq(nosniff(), "X-Content-Type-Options: nosniff")
+}
+
+@test
+fn test_frame_options_sameorigin() {
+    assert_eq(frame_options("SAMEORIGIN"), "X-Frame-Options: SAMEORIGIN")
+}
+
+@test
+fn test_custom_csp_in_defaults() {
+    let mut h = defaults()
+    h.content_security_policy = "default-src 'self'"
+    let text = format_headers(h)
+    assert_str_contains(text, "Content-Security-Policy: default-src 'self'")
+}
+
+@test
+fn test_hsts_optional_in_defaults() {
+    let h = defaults()
+    let text = format_headers(h)
+    assert(!strings.contains(text, "Strict-Transport-Security"), "HSTS off by default")
+}
+
+@test
+fn test_referrer_policy_helper() {
+    assert_eq(referrer_policy("strict-origin"), "Referrer-Policy: strict-origin")
+}
+
+@test
+fn test_defaults_with_hsts_enables_header() {
+    let h = defaults_with_hsts(31536000)
+    let text = format_headers(h)
+    assert_str_contains(text, "Strict-Transport-Security: max-age=31536000")
+    assert_str_contains(text, "X-Content-Type-Options: nosniff")
+}
+
+@test
+fn test_security_header_lines_core_three() {
+    let h = defaults()
+    let lines = security_header_lines(h)
+    assert_eq(lines.len(), 4)
+    assert_eq(lines[0], "X-Content-Type-Options: nosniff")
+    assert_eq(lines[1], "X-Frame-Options: DENY")
+    assert_eq(lines[2], "Referrer-Policy: no-referrer")
+    assert_eq(lines[3], "Content-Security-Policy: default-src 'none'")
+}
+
+@test
+fn test_security_header_lines_with_hsts() {
+    let h = defaults_with_hsts(60)
+    let lines = security_header_lines(h)
+    assert_eq(lines.len(), 5)
+    assert_eq(lines[4], "Strict-Transport-Security: max-age=60")
+}
+
+@test
+fn test_hsts_enabled() {
+    assert(!hsts_enabled(defaults()), "defaults HSTS off")
+    assert(hsts_enabled(defaults_with_hsts(60)), "with HSTS on")
+}
+
+@test
+fn test_header_line_count() {
+    assert_eq(header_line_count(defaults()), 4)
+    assert_eq(header_line_count(defaults_with_hsts(60)), 5)
+}
+
+@test
+fn test_has_csp_and_with_csp() {
+    let h = defaults()
+    let cleared = with_csp(h, "")
+    let custom = with_csp(defaults(), "default-src 'self'")
+    let text = format_headers(custom)
+    assert_str_contains(text, "Content-Security-Policy: default-src 'self'")
+}
+
+@test
+fn test_without_csp_and_frame_helpers() {
+    let h = defaults()
+    let no_csp = without_csp(h)
+    assert_eq(header_line_count(no_csp), 3)
+    let same = with_frame_options(defaults(), "SAMEORIGIN")
+    let text = format_headers(same)
+    assert_str_contains(text, "X-Frame-Options: SAMEORIGIN")
+}
+
+@test
+fn test_with_referrer_and_with_hsts() {
+    let refp = with_referrer(defaults(), "strict-origin")
+    let text = format_headers(refp)
+    assert_str_contains(text, "Referrer-Policy: strict-origin")
+    let secured = with_hsts(defaults(), 120)
+    assert(hsts_enabled(secured), "hsts on")
+    assert_eq(header_line_count(secured), 5)
+}
+
+@test
+fn test_without_hsts_and_is_same_origin_frame() {
+    let secured = with_hsts(defaults(), 120)
+    assert(hsts_enabled(secured), "on")
+    let cleared = without_hsts(secured)
+    assert(!hsts_enabled(cleared), "off")
+    assert_eq(header_line_count(cleared), 4)
+    let same = with_frame_options(defaults(), "SAMEORIGIN")
+}
+
+@test
+fn test_nosniff_and_referrer_accessors() {
+    assert_eq(referrer_of(defaults()), "no-referrer")
+    let custom = with_referrer(defaults(), "strict-origin")
+    assert_eq(referrer_of(custom), "strict-origin")
+}
+
+@test
+fn test_frame_csp_and_has_hsts() {
+    assert_eq(frame_of(defaults()), "DENY")
+    assert_eq(csp_of(defaults()), "default-src 'none'")
+    let secured = with_hsts(defaults(), 60)
+    let with_csp_policy = with_csp(defaults(), "default-src 'self'")
+    assert_eq(csp_of(with_csp_policy), "default-src 'self'")
+}

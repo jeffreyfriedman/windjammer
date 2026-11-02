@@ -1,0 +1,73 @@
+use crate::Receiver
+use crate::recv_int
+use crate::send_int
+use crate::unbounded_int
+use std::sync::mpsc
+
+/// Send `0..n` then sentinel `-1` on an unbounded int channel (same-thread).
+/// Returns the receiver for draining. Dogfoods owned handle reassignment.
+pub fn send_int_range_with_sentinel(n: int) -> Receiver<int> {
+    let pair = unbounded_int()
+    let mut tx = pair.0
+    let mut i: int = 0
+    while i < n {
+        tx = send_int(tx, i)
+        i = i + 1
+    }
+    send_int(tx, -1)
+    pair.1
+}
+
+/// Drain until sentinel `< 0`. Returns (count, sum) with local ints (no Mutex).
+pub fn drain_int_until_sentinel(mut rx: Receiver<int>) -> (int, int) {
+    let mut count: int = 0
+    let mut sum: int = 0
+    while true {
+        let got = recv_int(rx)
+        rx = got.0
+        let v = got.1
+        if v < 0 {
+            break
+        }
+        sum = sum + v
+        count = count + 1
+    }
+    (count, sum)
+}
+
+/// Throughput path: direct mpsc fill/drain (same shape as Rust baseline).
+/// Prefer this for hot loops; use send_*/recv_* when composing with other APIs.
+pub fn channel_sum_range(n: int) -> (int, int) {
+    let pair = mpsc::channel()
+    let tx = pair.0
+    let rx = pair.1
+    let mut i: int = 0
+    while i < n {
+        match tx.send(i) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+        i = i + 1
+    }
+    match tx.send(-1) {
+        Ok(_) => {}
+        Err(_) => {}
+    }
+    let mut count: int = 0
+    let mut sum: int = 0
+    while true {
+        match rx.recv() {
+            Ok(v) => {
+                if v < 0 {
+                    break
+                }
+                sum = sum + v
+                count = count + 1
+            }
+            Err(_) => {
+                break
+            }
+        }
+    }
+    (count, sum)
+}

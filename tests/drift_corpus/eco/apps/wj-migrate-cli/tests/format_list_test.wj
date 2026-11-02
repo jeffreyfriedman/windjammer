@@ -1,0 +1,17 @@
+use crate::domain::MigrationLine
+use crate::domain::format_list_result
+
+fn test_format_list_result_empty() {
+    let lines = Vec::new()
+    let msg = format_list_result(lines)
+    assert_eq(msg, "no migrations found")
+}
+
+fn test_format_list_result_shows_versions_and_names() {
+    let mut lines = Vec::new()
+    lines.push(MigrationLine { version: 1, name: "create_items" })
+    lines.push(MigrationLine { version: 2, name: "add_note" })
+    let msg = format_list_result(lines)
+    assert_str_contains(msg, "001 create_items")
+    assert_str_contains(msg, "002 add_note")
+}
