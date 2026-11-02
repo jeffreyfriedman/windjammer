@@ -93,3 +93,35 @@ fn the_scanner_sees_the_guards_it_is_meant_to_see() {
     let stripped = read.text.replace("caps::fs_read", "removed");
     assert!(OS_TOKENS.iter().any(|t| stripped.contains(t)) && !stripped.contains("caps::"));
 }
+
+/// Interpreter std functions that are sinks but have no function of the same name in the compiled runtime yet: a program that
+/// calls one runs under `wj run --interpret` and fails to compile under `wj build`. The list may only shrink.
+const PARITY_GAPS: &[&str] = &[
+    "env::home_dir", "env::remove", "env::set", "fs::canonicalize", "fs::metadata", "fs::set_current_dir", "fs::write_bytes", "process::run_with_args",
+];
+
+#[test]
+fn every_sink_of_an_authority_module_exists_in_the_compiled_runtime() {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime/src");
+    let mut missing = BTreeSet::new();
+    for path in windjammer::ir::effect_facts::sinks::all_paths() {
+        let Some((module, name)) = path.split_once("::") else { continue };
+        if !["fs", "process", "env", "subprocess"].contains(&module) || name.contains("::") {
+            continue;
+        }
+        let src = std::fs::read_to_string(base.join(format!("{module}.rs"))).unwrap();
+        let has = src.lines().any(|l| {
+            let t = l.trim_start();
+            let rest = t.strip_prefix("pub async fn ").or_else(|| t.strip_prefix("pub fn "));
+            rest.is_some_and(|r| r.split(|c: char| !(c.is_alphanumeric() || c == '_')).next() == Some(name))
+        });
+        if !has {
+            missing.insert(path.to_string());
+        }
+    }
+    let known: BTreeSet<String> = PARITY_GAPS.iter().map(|s| s.to_string()).collect();
+    let new: Vec<_> = missing.difference(&known).collect();
+    assert!(new.is_empty(), "sinks the compiled runtime lacks (add them to windjammer-runtime): {new:?}");
+    let fixed: Vec<_> = known.difference(&missing).collect();
+    assert!(fixed.is_empty(), "now present in the runtime: remove from PARITY_GAPS: {fixed:?}");
+}

@@ -44,7 +44,7 @@ impl DecoratorRegistry {
                 "invariant",
             ],
             wasm_only_decorators: vec!["export"],
-            internal_decorators: vec!["async"],
+            internal_decorators: vec!["async", "durable"],
         }
     }
 
