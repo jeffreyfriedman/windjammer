@@ -185,6 +185,9 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);
         }
+        // a live run waits out its sleeps; reproducible runs (deterministic time, simulation, record and replay,
+        // which must stay byte-identical) keep them virtual (ADR-0021, "Sleep in live runs")
+        it.set_real_sleep(!opts.deterministic_time && opts.simulate.is_none() && opts.record.is_none() && opts.replay.is_none());
         if let Err(m) = setup_code_mode(&mut it, &opts) {
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);
@@ -225,8 +228,8 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if it.jit_debug {
             let f = it.fast;
             eprintln!(
-                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {}",
-                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx
             );
         }
         if let Some(p) = &opts.result_json {

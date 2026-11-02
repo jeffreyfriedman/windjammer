@@ -110,6 +110,10 @@ pub enum BaseType {
     U32,
     U64,
     U128,
+    /// `usize`: a declared `usize`, or an index class (ADR-0028 NUM-USIZE).
+    Usize,
+    /// `isize`.
+    Isize,
     F32,
     F64,
     String,

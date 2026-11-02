@@ -16,6 +16,7 @@ pub mod arm_string_analysis;
 pub mod assignment_statement_generation;
 pub mod ast_utilities;
 pub mod async_generation;
+pub mod solver_widths;
 pub mod auto_super_type_imports;
 pub mod backend;
 pub mod binary_expression_generation;

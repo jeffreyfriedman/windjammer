@@ -165,7 +165,7 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     dep_roots: &[std::path::PathBuf],
     dep_epoch: Option<u64>,
 ) -> anyhow::Result<()> {
-    attach_ir_module_if_missing(codegen, analyzed_functions);
+    attach_ir_module_if_missing(codegen, program, analyzed_functions);
     let auto_arena = codegen.config.auto_arena;
     let rust_code = crate::optimizer::run_with_auto_arena(auto_arena, &codegen.generate_program(program, analyzed_functions));
     let mut registry = std::mem::take(&mut codegen.signature_registry);
@@ -209,17 +209,42 @@ pub(crate) fn write_crate_metadata_json(
     Ok(())
 }
 
+/// Field types of the structs declared in `program` itself (the solver's field-read typing, NUM-FIELD-DECLARED).
+pub(crate) fn local_struct_field_table(
+    program: &crate::parser::Program<'_>,
+) -> std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>> {
+    let mut fields = std::collections::HashMap::new();
+    let mut paths = std::collections::HashMap::new();
+    declaration_stub_registry::merge_struct_fields_from_items(&program.items, &[], &mut fields, &mut paths);
+    // Tuple-variant payloads (`Val::Int(i64)`) are positional fields of `Val::Int` (NUM-FIELD-DECLARED).
+    for item in &program.items {
+        if let crate::parser::Item::Enum { decl, .. } = item {
+            for v in &decl.variants {
+                if let crate::parser::EnumVariantData::Tuple(tys) = &v.data {
+                    let payload = tys.iter().enumerate().map(|(i, t)| (i.to_string(), t.clone())).collect();
+                    fields.insert(format!("{}::{}", decl.name, v.name), payload);
+                }
+            }
+        }
+    }
+    fields
+}
+
 /// IR cutover: attach the solved IR module when the caller has not (the multipass library path
 /// attaches per-file IR itself). Without it codegen falls back to analyzer data and the semantic
 /// facts (NUM-DEFAULT-INT, last_use) are invisible to single-file builds.
 fn attach_ir_module_if_missing<'ast>(
     codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
+    program: &crate::parser::Program<'ast>,
     analyzed: &[crate::analyzer::AnalyzedFunction<'ast>],
 ) {
     if !codegen.ir_module_functions.is_empty() || codegen.config().ir_cutover.all_disabled() {
         return;
     }
-    let ir_module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, &codegen.signature_registry, None);
+    // Field types for the solver: cross-module structs (already on the generator) plus this file's own.
+    let mut fields = codegen.struct_field_types.clone();
+    fields.extend(local_struct_field_table(program));
+    let ir_module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, &codegen.signature_registry, Some(&fields));
     codegen.set_ir_module(ir_module);
 }
 

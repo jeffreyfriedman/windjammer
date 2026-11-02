@@ -1,0 +1,20 @@
+#[inline]
+fn count(n: i64) -> i64 {
+    let mut hits = 0_i64;
+    for i in 0_i64..n {
+        let z = {
+            if i == 0_i64 {
+                1_i64
+            } else {
+                2_i64
+            }
+        };
+        hits += z;
+    }
+    hits
+}
+
+fn main() {
+    println!("{}", count(3_i64));
+}
+

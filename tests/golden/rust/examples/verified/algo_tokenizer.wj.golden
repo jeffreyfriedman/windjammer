@@ -22,7 +22,7 @@ fn show(t: Token) -> String {
 fn tokenize(src: &str) -> Vec<Token> {
     let chars: Vec<char> = src.chars().collect::<Vec<char>>();
     let mut toks: Vec<Token> = vec![];
-    let mut i: usize = 0_usize;
+    let mut i = 0_usize;
     while i < chars.len() {
         let mut c = chars[i];
         if c.is_numeric() {

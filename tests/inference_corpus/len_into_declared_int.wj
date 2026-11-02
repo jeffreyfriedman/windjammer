@@ -1,0 +1,16 @@
+struct Box { n: int }
+
+fn takes(n: int) -> int { n }
+
+fn f(v: Vec<int>) -> int {
+    let idx: int = v.len()
+    let b = Box { n: v.len() }
+    let t = takes(v.len())
+    let mut m: int = 0
+    m = v.len()
+    idx + b.n + t + m
+}
+
+fn main() {
+    println(f([1, 2, 3]))
+}

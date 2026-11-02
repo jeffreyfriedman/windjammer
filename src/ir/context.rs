@@ -28,7 +28,8 @@ pub fn analyze_and_lower<'ast>(program: &Program<'ast>) -> Result<IrContext<'ast
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
     let mut pipeline = IrPipeline::new();
-    let module = pipeline.lower_to_ir(&analyzed, &registry, None);
+    let fields = crate::compiler::local_struct_field_table(program);
+    let module = pipeline.lower_to_ir(&analyzed, &registry, Some(&fields));
 
     Ok(IrContext {
         analyzed,

@@ -29,6 +29,10 @@ pub enum Constraint {
     IsInteger(ConstraintVar),
     /// A type variable must be a float type.
     IsFloat(ConstraintVar),
+    /// NUM-USIZE (ADR-0028): the value is an index source (`len()`, `count()`) or an index use
+    /// (`v[i]`). Soft: a class with no exact width resolves to `usize` instead of the `int` default;
+    /// a class with an exact width keeps it (the backend converts at the site, NUM-USIZE-TO-INT).
+    PrefersUsize(ConstraintVar),
 
     // --- Ownership constraints ---
     /// A variable must have a specific ownership mode.

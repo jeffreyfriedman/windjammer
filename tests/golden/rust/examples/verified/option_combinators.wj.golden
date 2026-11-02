@@ -13,6 +13,6 @@ fn main() {
     println!("{:?}", n.map(|x| x * 2_i64));
     println!("{:?}", Some(12).and_then(half));
     println!("{}", Some(10).map_or(0, |x| x + 1_i64));
-    println!("{}", n.map_or(-1, |x| x + 1_i64));
+    println!("{}", n.map_or(-1_i64, |x| x + 1_i64));
 }
 

@@ -798,6 +798,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 field_type,
                                 arg_ty.as_ref(),
                             );
+                            self.convert_usize_into_declared_int(&mut expr_str, expr, field_type);
                         }
                     }
                 }
