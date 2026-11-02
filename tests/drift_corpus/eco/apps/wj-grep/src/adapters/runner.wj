@@ -1,0 +1,87 @@
+use std::fs
+use wj_fs_walk::walk_files
+
+use crate::adapters::cli::Command
+use crate::domain::match_lines
+use crate::domain::render_file
+use crate::domain::replace_text
+use crate::domain::select_files
+
+fn files_for(root: string, cmd: Command) -> Result<Vec<string>, string> {
+    if fs.is_file(root) {
+        let mut single = Vec::new()
+        single.push(root)
+        return Ok(single)
+    }
+    let all = match walk_files(root) {
+        Ok(paths) => paths,
+        Err(e) => return Err("cannot read ${root}: ${e}"),
+    }
+    let ignore_path = "${root}/.gitignore"
+    let mut ignore_text = ""
+    if cmd.respect_ignore && fs.is_file(ignore_path) {
+        ignore_text = match fs.read_to_string(ignore_path) {
+            Ok(text) => text,
+            Err(_) => "",
+        }
+    }
+    let mut selected = select_files(root, all, ignore_text, cmd.respect_ignore, cmd.include_hidden)
+    // read_dir order is unspecified; sorted paths make the output reproducible.
+    selected.sort()
+    Ok(selected)
+}
+
+/// Run the command; returns the text to print and the number of selected lines (or replacements).
+pub fn run(cmd: Command) -> Result<(string, int), string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut total = 0
+    for root in cmd.paths {
+        let files = match files_for(root, cmd) {
+            Ok(list) => list,
+            Err(e) => return Err(e),
+        }
+        for path in files {
+            // Unreadable (e.g. binary) files are skipped, like ripgrep.
+            let text = match fs.read_to_string(path) {
+                Ok(t) => t,
+                Err(_) => continue,
+            }
+            match cmd.replace {
+                Some(replacement) => {
+                    let result = match replace_text(text, cmd.options, replacement) {
+                        Ok(r) => r,
+                        Err(e) => return Err(e),
+                    }
+                    if result.1 > 0 {
+                        total = total + result.1
+                        out.push("${path}: ${result.1} replacement(s)")
+                        if cmd.write {
+                            match fs.write(path, result.0) {
+                                Ok(_) => {},
+                                Err(e) => return Err("cannot write ${path}: ${e}"),
+                            }
+                        }
+                    }
+                },
+                None => {
+                    let lines = match match_lines(text, cmd.options) {
+                        Ok(l) => l,
+                        Err(e) => return Err(e),
+                    }
+                    if lines.len() == 0 {
+                        continue
+                    }
+                    total = total + lines.len()
+                    if cmd.count_only {
+                        out.push("${path}:${lines.len()}")
+                    } else if cmd.files_with_matches {
+                        out.push(path)
+                    } else {
+                        out.push(render_file(path, text, lines, cmd.options.before, cmd.options.after, cmd.line_numbers))
+                    }
+                },
+            }
+        }
+    }
+    Ok((out.join("\n"), total))
+}

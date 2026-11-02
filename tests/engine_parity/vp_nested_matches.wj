@@ -1,0 +1,76 @@
+// Nested matches in value position: a match as the arm result of a match, as a `let` initializer, as a
+// call argument and inside a binary expression; Option<Option<_>> and tuples of Options.
+fn inner(x: Option<int>) -> Option<int> {
+    match x {
+        Some(v) => if v > 2 { Some(v) } else { None },
+        None => None,
+    }
+}
+
+fn outer(x: Option<Option<int>>) -> Option<int> {
+    match x {
+        Some(i) => match i {
+            Some(v) => Some(v + 1),
+            None => None,
+        },
+        None => None,
+    }
+}
+
+fn pair(a: Option<int>, b: Option<int>) -> string {
+    match (a, b) {
+        (Some(x), Some(y)) => "both ${x + y}",
+        (Some(x), None) => "left ${x}",
+        (None, Some(y)) => "right ${y}",
+        (None, None) => "neither",
+    }
+}
+
+fn depth(x: Option<Option<Option<int>>>) -> int {
+    match x {
+        None => 0,
+        Some(a) => match a {
+            None => 1,
+            Some(b) => match b {
+                None => 2,
+                Some(_) => 3,
+            },
+        },
+    }
+}
+
+fn show(x: Option<int>) -> string {
+    match x {
+        Some(v) => "some ${v}",
+        None => "none",
+    }
+}
+
+fn main() {
+    println(show(inner(Some(5))))
+    println(show(inner(Some(1))))
+    println(show(inner(None)))
+    println(show(outer(Some(Some(1)))))
+    println(show(outer(Some(None))))
+    println(show(outer(None)))
+    println(pair(Some(1), Some(2)))
+    println(pair(Some(1), None))
+    println(pair(None, Some(2)))
+    println(pair(None, None))
+    println("${depth(None)} ${depth(Some(None))} ${depth(Some(Some(None)))} ${depth(Some(Some(Some(4))))}")
+    let n = match inner(Some(9)) {
+        Some(v) => match inner(Some(v - 8)) {
+            Some(w) => w,
+            None => -1,
+        },
+        None => -2,
+    }
+    println("${n}")
+    let seven: Option<int> = Some(7)
+    let left: int = match inner(seven) { Some(v) => v, None => 0 }
+    let right: int = match inner(None) { Some(v) => v, None => 100 }
+    let total = left + right
+    println("${total}")
+    println(show(match inner(Some(3)) { Some(v) => Some(v * 2), None => None }))
+    println(show(match inner(Some(2)) { Some(v) => Some(v * 2), None => None }))
+}

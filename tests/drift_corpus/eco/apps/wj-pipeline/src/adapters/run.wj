@@ -1,0 +1,55 @@
+use crate::domain::pipeline::Job
+use crate::domain::pipeline::transform
+use wj_sync::channel_sum_range
+use wj_sync::pool_sum_double
+use std::time
+
+/// Timed pipeline result for CLI reporting.
+pub struct TimedResult {
+    pub count: int,
+    pub sum: int,
+    pub elapsed_ms: int,
+}
+
+/// Same-thread pipeline: channel fan-out + Shared counter via `channel_sum_range`,
+/// plus domain `transform` on `0..n` (doubled payloads).
+pub fn run_int_pipeline(n: int) -> (int, int) {
+    let raw = channel_sum_range(n)
+    let mut i: int = 0
+    let mut sum: int = 0
+    while i < n {
+        let r = transform(Job { id: i, payload: i })
+        sum = sum + r.value
+        i = i + 1
+    }
+    (raw.0, sum)
+}
+
+/// Parallel pipeline via `wj_sync::pool_sum_double` (Pool dogfood).
+pub fn run_pool_pipeline(n: int) -> (int, int) {
+    pool_sum_double(4, n)
+}
+
+/// Wall-clock timed same-thread pipeline.
+pub fn time_int_pipeline(n: int) -> TimedResult {
+    let start = time.utc_now().timestamp_millis()
+    let out = run_int_pipeline(n)
+    let end = time.utc_now().timestamp_millis()
+    TimedResult {
+        count: out.0,
+        sum: out.1,
+        elapsed_ms: end - start,
+    }
+}
+
+/// Wall-clock timed pool pipeline.
+pub fn time_pool_pipeline(n: int) -> TimedResult {
+    let start = time.utc_now().timestamp_millis()
+    let out = run_pool_pipeline(n)
+    let end = time.utc_now().timestamp_millis()
+    TimedResult {
+        count: out.0,
+        sum: out.1,
+        elapsed_ms: end - start,
+    }
+}

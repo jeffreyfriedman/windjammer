@@ -1,0 +1,67 @@
+use std::http::*
+use std::sync::{Arc, Mutex}
+use std::time
+
+use crate::domain::Reply
+use crate::domain::Taskflow
+
+/// Serve `app` on `port` using the standard-library HTTP server.
+pub fn serve(port: int, app: Taskflow) -> Result<(), string> {
+    let shared = Arc::new(Mutex::new(app))
+    server_serve("0.0.0.0", port, |req| dispatch(req, shared))
+}
+
+fn method_name(method: HttpMethod) -> string {
+    match method {
+        HttpMethod::GET => "GET",
+        HttpMethod::POST => "POST",
+        HttpMethod::PATCH => "PATCH",
+        HttpMethod::DELETE => "DELETE",
+        _ => "OTHER",
+    }
+}
+
+fn header_or(req: ServerRequest, name: string, default: string) -> string {
+    req.header(name).unwrap_or(default)
+}
+
+fn target_with_query(req: ServerRequest) -> string {
+    let mut pairs = Vec::new()
+    for (key, value) in req.query {
+        pairs.push("${key}=${value}")
+    }
+    if pairs.len() == 0 {
+        return req.path
+    }
+    "${req.path}?${pairs.join("&")}"
+}
+
+fn dispatch(req: ServerRequest, state: Arc<Mutex<Taskflow>>) -> ServerResponse {
+    let now_ms = time::utc_now().timestamp_millis()
+    match state.lock() {
+        Ok(mut app) => {
+            let reply = app.handle(
+                method_name(req.method),
+                target_with_query(req),
+                header_or(req, "Authorization", ""),
+                header_or(req, "X-Client-Key", "anonymous"),
+                now_ms,
+                req.body,
+            )
+            to_response(reply)
+        },
+        Err(_) => ServerResponse::internal_error("{\"error\":\"internal error\"}"),
+    }
+}
+
+fn to_response(reply: Reply) -> ServerResponse {
+    let mut resp = ServerResponse::with_status(reply.status as u16, reply.body)
+    resp = resp.header("Content-Type", "application/json")
+    for line in reply.headers.lines() {
+        let kv: Vec<string> = line.split(": ").collect()
+        if kv.len() == 2 {
+            resp = resp.header(kv[0], kv[1])
+        }
+    }
+    resp
+}

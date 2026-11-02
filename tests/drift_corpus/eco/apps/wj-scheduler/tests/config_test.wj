@@ -1,0 +1,8 @@
+use crate::domain::SchedulerConfig
+use crate::domain::max_minutes_of
+use std::strings
+
+fn test_config_defaults_and_accessors() {
+    let cfg = SchedulerConfig::defaults()
+    assert_eq(max_minutes_of(cfg), 1440)
+}

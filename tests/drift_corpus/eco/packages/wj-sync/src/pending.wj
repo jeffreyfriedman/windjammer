@@ -1,0 +1,83 @@
+// Pending work — `parallel` / `task` vocabulary (not spawn/async/go).
+// Generics-first Pending<T>.
+
+use std::sync::mpsc
+
+use crate::shared::SharedInt
+use crate::shared::shared_int_add
+use crate::shared::shared_int
+
+/// Unfinished result from parallel / task work.
+pub struct Pending<T> {
+    rx: mpsc::Receiver<T>,
+}
+
+pub type PendingInt = Pending<int>
+pub type PendingShared = Pending<SharedInt>
+
+/// Block until pending work completes (consumes the handle).
+pub fn wait<T>(pending: Pending<T>) -> Option<T> {
+    let Pending { rx } = pending
+    match rx.recv() {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    }
+}
+
+/// Run `a + b` on a parallel OS worker; result via `wait`.
+pub fn parallel_int(a: int, b: int) -> PendingInt {
+    let pair = mpsc::channel()
+    let tx = pair.0
+    let rx = pair.1
+    std::thread::spawn(|| {
+        match tx.send(a + b) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    })
+    Pending { rx: rx }
+}
+
+/// Cooperative-named alias (same as parallel until scheduler exists).
+pub fn task_int(a: int, b: int) -> PendingInt {
+    parallel_int(a, b)
+}
+
+/// Run `a + b` on a parallel worker; wait with `wait_int`.
+pub fn parallel_add(a: int, b: int) -> PendingInt {
+    parallel_int(a, b)
+}
+
+/// Block until parallel int work completes (consumes the handle).
+pub fn wait_int(pending: PendingInt) -> int {
+    let Pending { rx } = pending
+    match rx.recv() {
+        Ok(v) => v,
+        Err(_) => 0,
+    }
+}
+
+/// Add `delta` to a Shared<int> on a parallel worker.
+pub fn parallel_shared_add(s: SharedInt, delta: int) -> PendingShared {
+    let pair = mpsc::channel()
+    let tx = pair.0
+    let rx = pair.1
+    let shared = s
+    std::thread::spawn(|| {
+        let next = shared_int_add(shared, delta)
+        match tx.send(next) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    })
+    Pending { rx: rx }
+}
+
+/// Block until parallel Shared<int> work completes (consumes the handle).
+pub fn wait_shared(pending: PendingShared) -> SharedInt {
+    let Pending { rx } = pending
+    match rx.recv() {
+        Ok(v) => v,
+        Err(_) => shared_int(0),
+    }
+}

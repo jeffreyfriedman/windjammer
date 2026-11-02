@@ -1,0 +1,138 @@
+use crate::bcrypt_cost
+use crate::hash_password
+use crate::is_empty_hash
+use crate::is_min_cost
+use crate::require_cost
+use crate::require_min_cost
+use crate::require_nonempty
+use crate::looks_like_bcrypt
+use crate::verify_ok
+use crate::verify_password
+use std::strings
+
+@test
+fn test_hash_and_verify_roundtrip() {
+    match hash_password("secret123") {
+        Ok(digest) => {
+            assert(strings.len(digest) > 0, "nonempty hash")
+            assert(looks_like_bcrypt(digest), "bcrypt prefix")
+            match verify_password("secret123", digest) {
+                Ok(ok) => assert(ok, "valid password"),
+                Err(_) => assert(false, "verify ok"),
+            }
+        },
+        Err(_) => assert(false, "hash"),
+    }
+}
+
+@test
+fn test_verify_rejects_wrong_password() {
+    match hash_password("correct-horse") {
+        Ok(digest) => {
+            match verify_password("wrong-password", digest) {
+                Ok(ok) => assert(!ok, "wrong password"),
+                Err(_) => assert(false, "verify wrong"),
+            }
+        },
+        Err(_) => assert(false, "hash for wrong"),
+    }
+}
+
+@test
+fn test_hash_differs_per_call() {
+    match hash_password("same-input") {
+        Ok(a) => {
+            match hash_password("same-input") {
+                Ok(b) => assert(a != b, "bcrypt salt randomizes"),
+                Err(_) => assert(false, "second hash"),
+            }
+        },
+        Err(_) => assert(false, "first hash"),
+    }
+}
+
+@test
+fn test_verify_rejects_garbage_hash() {
+    match verify_password("pw", "not-a-bcrypt-hash") {
+        Ok(ok) => assert(!ok, "garbage hash"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_looks_like_bcrypt() {
+    assert(looks_like_bcrypt("$2b$12$abcdefghijklmnopqrstuv"), "2b")
+    assert(looks_like_bcrypt("$2a$10$abcdefghijklmnopqrstuv"), "2a")
+    assert(!looks_like_bcrypt("sha256:deadbeef"), "not bcrypt")
+    assert(!looks_like_bcrypt(""), "empty")
+}
+
+@test
+fn test_verify_ok() {
+    match hash_password("token") {
+        Ok(digest) => {
+            assert(verify_ok("token", digest), "match")
+            assert(!verify_ok("other", digest), "mismatch")
+        },
+        Err(_) => assert(false, "hash for verify_ok"),
+    }
+    assert(!verify_ok("pw", "not-a-bcrypt-hash"), "garbage false")
+}
+
+@test
+fn test_bcrypt_cost_and_is_empty_hash() {
+    match bcrypt_cost("$2a$10$abcdefghijklmnopqrstuv") {
+        Some(c) => assert_eq(c, 10),
+        None => assert(false, "cost 10"),
+    }
+    match bcrypt_cost("$2b$12$abcdefghijklmnopqrstuv") {
+        Some(c) => assert_eq(c, 12),
+        None => assert(false, "cost 12"),
+    }
+    match bcrypt_cost("plain") {
+        Some(_) => assert(false, "plain has no cost"),
+        None => {},
+    }
+    assert(is_empty_hash(""), "empty")
+    assert(is_empty_hash("   "), "whitespace")
+    assert(!is_empty_hash("$2a$10$x"), "bcrypt not empty")
+}
+
+@test
+fn test_require_cost_and_is_min_cost() {
+    match require_cost("$2a$10$abcdefghijklmnopqrstuv") {
+        Ok(c) => assert_eq(c, 10),
+        Err(_) => assert(false, "cost 10"),
+    }
+    match require_cost("plain") {
+        Ok(_) => assert(false, "plain must Err"),
+        Err(msg) => assert(strings.contains(msg, "cost"), "mentions cost"),
+    }
+    assert(is_min_cost("$2b$12$abcdefghijklmnopqrstuv", 10), "12 meets 10")
+    assert(!is_min_cost("$2a$10$abcdefghijklmnopqrstuv", 12), "10 below 12")
+    assert(!is_min_cost("plain", 1), "plain")
+}
+
+@test
+fn test_require_min_cost() {
+    match require_min_cost("$2b$12$abcdefghijklmnopqrstuv", 10) {
+        Ok(c) => assert_eq(c, 12),
+        Err(_) => assert(false, "12 meets 10"),
+    }
+    match require_min_cost("$2a$10$abcdefghijklmnopqrstuv", 12) {
+        Ok(_) => assert(false, "below min must Err"),
+        Err(msg) => assert(strings.contains(msg, "cost"), "mentions cost"),
+    }
+}
+
+@test
+fn test_require_nonempty() {
+    match require_nonempty("$2b$12$abcdefghijklmnopqrstuv") {
+        Ok(h) => assert_eq(h, "$2b$12$abcdefghijklmnopqrstuv"),
+        Err(_) => assert(false, "hash present"),
+    }
+    match require_nonempty("   ") {
+        Ok(_) => assert(false, "blank must Err"),
+        Err(msg) => assert(strings.contains(msg, "hash"), "mentions hash"),
+    }
+}

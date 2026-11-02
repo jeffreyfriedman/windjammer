@@ -1,0 +1,311 @@
+use crate::cookie_count
+use crate::cookie_name
+use crate::cookie_names
+use crate::cookie_path
+use crate::cookie_value
+use crate::delete_cookie_header
+use crate::format_cookie_header
+use crate::format_set_cookie
+use crate::get_cookie
+use crate::get_cookie_or
+use crate::has_cookie
+use crate::is_empty
+use crate::is_http_only
+use crate::is_none_same_site
+use crate::is_secure
+use crate::require_empty
+use crate::require_none
+use crate::same_site_of
+use crate::parse_cookie_header
+use crate::parse_set_cookie
+use crate::require_cookie
+use crate::session_cookie
+use crate::with_same_site
+use std::collections::HashMap
+use std::strings
+
+@test
+fn test_parse_and_format_cookie_header_contains_pairs() {
+    match parse_cookie_header("a=1; b=two") {
+        Ok(map) => {
+            let header = format_cookie_header(map)
+            assert(strings.contains(header, "a=1"), "missing a=1")
+            assert(strings.contains(header, "b=two"), "missing b=two")
+        },
+        Err(_) => assert(false, "parse pairs"),
+    }
+}
+
+@test
+fn test_parse_cookie_header_empty_formats_empty() {
+    match parse_cookie_header("") {
+        Ok(map) => {
+            let header = format_cookie_header(map)
+            assert_eq(header, "")
+        },
+        Err(_) => assert(false, "parse empty"),
+    }
+}
+
+@test
+fn test_parse_cookie_header_trims() {
+    match parse_cookie_header("  x = 1 ; y = 2 ") {
+        Ok(map) => {
+            let header = format_cookie_header(map)
+            assert(strings.contains(header, "x=1"), "missing x=1")
+            assert(strings.contains(header, "y=2"), "missing y=2")
+        },
+        Err(_) => assert(false, "parse trims"),
+    }
+}
+
+@test
+fn test_format_cookie_header_roundtrip() {
+    let mut map = HashMap::new()
+    map.insert("sid", "abc")
+    map.insert("theme", "dark")
+    let header = format_cookie_header(map)
+    match parse_cookie_header(header) {
+        Ok(parsed) => {
+            let again = format_cookie_header(parsed)
+            assert(strings.contains(again, "sid=abc"), "missing sid")
+            assert(strings.contains(again, "theme=dark"), "missing theme")
+        },
+        Err(_) => assert(false, "roundtrip parse"),
+    }
+}
+
+@test
+fn test_parse_set_cookie_basic() {
+    match parse_set_cookie("session=xyz; Path=/; HttpOnly; Secure; SameSite=Lax") {
+        Ok(c) => {
+            assert_eq(c.name, "session")
+            assert_eq(c.value, "xyz")
+            assert_eq(c.path, "/")
+            assert(c.http_only, "HttpOnly")
+            assert(c.secure, "Secure")
+            assert_eq(c.same_site, "Lax")
+        },
+        Err(_) => assert(false, "parse set-cookie basic"),
+    }
+}
+
+@test
+fn test_parse_set_cookie_minimal() {
+    match parse_set_cookie("token=abc") {
+        Ok(c) => {
+            assert_eq(c.name, "token")
+            assert_eq(c.value, "abc")
+            assert_eq(c.path, "")
+            assert(!c.http_only, "no HttpOnly")
+            assert(!c.secure, "no Secure")
+            assert_eq(c.same_site, "")
+        },
+        Err(_) => assert(false, "parse set-cookie minimal"),
+    }
+}
+
+@test
+fn test_format_set_cookie_roundtrip() {
+    match parse_set_cookie("token=abc; Path=/app; HttpOnly") {
+        Ok(c) => {
+            let out = format_set_cookie(c)
+            match parse_set_cookie(out) {
+                Ok(again) => {
+                    assert_eq(again.name, "token")
+                    assert_eq(again.value, "abc")
+                    assert_eq(again.path, "/app")
+                    assert(again.http_only, "HttpOnly")
+                },
+                Err(_) => assert(false, "reparse set-cookie"),
+            }
+        },
+        Err(_) => assert(false, "parse for format"),
+    }
+}
+
+@test
+fn test_parse_set_cookie_missing_equals() {
+    match parse_set_cookie("novalue") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "rejected"),
+    }
+}
+
+@test
+fn test_get_cookie_returns_value() {
+    match parse_cookie_header("sid=abc; theme=dark") {
+        Ok(map) => {
+            match get_cookie(map, "sid") {
+                Some(v) => assert_eq(v, "abc"),
+                None => assert(false, "expected sid"),
+            }
+            match get_cookie(map, "missing") {
+                Some(_) => assert(false, "expected None"),
+                None => assert(true, "missing"),
+            }
+        },
+        Err(_) => assert(false, "parse for get"),
+    }
+}
+
+@test
+fn test_session_cookie_defaults() {
+    let c = session_cookie("sid", "xyz")
+    assert_eq(c.name, "sid")
+    assert_eq(c.value, "xyz")
+    assert_eq(c.path, "/")
+    assert(c.http_only, "HttpOnly")
+    assert(c.secure, "Secure")
+    assert_eq(c.same_site, "Lax")
+    let header = format_set_cookie(c)
+    assert_str_contains(header, "Path=/")
+    assert_str_contains(header, "HttpOnly")
+    assert_str_contains(header, "Secure")
+    assert_str_contains(header, "SameSite=Lax")
+}
+
+@test
+fn test_cookie_accessors_and_lax() {
+    assert_eq(cookie_name(session_cookie("sid", "xyz")), "sid")
+    assert_eq(cookie_value(session_cookie("sid", "xyz")), "xyz")
+    assert_eq(cookie_path(session_cookie("sid", "xyz")), "/")
+}
+
+@test
+fn test_has_cookie_present_and_missing() {
+    match parse_cookie_header("sid=abc; theme=dark") {
+        Ok(map) => {
+            assert(has_cookie(map, "sid"), "sid present")
+            assert(has_cookie(map, "theme"), "theme present")
+            assert(!has_cookie(map, "missing"), "missing absent")
+        },
+        Err(_) => assert(false, "parse for has_cookie"),
+    }
+}
+
+@test
+fn test_cookie_count() {
+    match parse_cookie_header("a=1; b=2; c=3") {
+        Ok(map) => assert_eq(cookie_count(map), 3),
+        Err(_) => assert(false, "parse for count"),
+    }
+    match parse_cookie_header("") {
+        Ok(map) => assert_eq(cookie_count(map), 0),
+        Err(_) => assert(false, "parse empty for count"),
+    }
+}
+
+@test
+fn test_get_cookie_or_and_is_empty() {
+    match parse_cookie_header("sid=abc") {
+        Ok(map) => {
+            assert_eq(get_cookie_or(map, "sid", "none"), "abc")
+            assert_eq(get_cookie_or(map, "missing", "none"), "none")
+            assert(!is_empty(map), "nonempty")
+        },
+        Err(_) => assert(false, "parse for get_or"),
+    }
+    match parse_cookie_header("") {
+        Ok(map) => assert(is_empty(map), "empty map"),
+        Err(_) => assert(false, "parse empty"),
+    }
+}
+
+@test
+fn test_delete_cookie_header() {
+    let header = delete_cookie_header("sid")
+    assert_str_contains(header, "sid=")
+    assert_str_contains(header, "Max-Age=0")
+    assert_str_contains(header, "Path=/")
+}
+
+@test
+fn test_cookie_names() {
+    match parse_cookie_header("sid=abc; theme=dark") {
+        Ok(map) => {
+            let names = cookie_names(map)
+            assert_eq(names.len(), 2)
+            assert(strings.contains(names[0], "s") || strings.contains(names[1], "s"), "has sid-ish")
+            // Order is HashMap-iteration; just check membership via has_cookie already covered.
+            let mut found_sid = false
+            let mut found_theme = false
+            let mut i = 0
+            while i < names.len() {
+                if names[i] == "sid" {
+                    found_sid = true
+                }
+                if names[i] == "theme" {
+                    found_theme = true
+                }
+                i = i + 1
+            }
+            assert(found_sid, "sid")
+            assert(found_theme, "theme")
+        },
+        Err(_) => assert(false, "parse names"),
+    }
+}
+
+@test
+fn test_session_secure_http_only() {
+    let c = session_cookie("sid", "abc")
+    assert(is_secure(c), "secure")
+    assert(is_http_only(c), "httpOnly")
+}
+
+@test
+fn test_require_cookie() {
+    match parse_cookie_header("sid=abc; theme=dark") {
+        Ok(map) => {
+            match require_cookie(map, "sid") {
+                Ok(v) => assert_eq(v, "abc"),
+                Err(_) => assert(false, "require sid"),
+            }
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    match parse_cookie_header("sid=abc") {
+        Ok(map) => {
+            match require_cookie(map, "missing") {
+                Ok(_) => assert(false, "missing must Err"),
+                Err(msg) => assert(strings.contains(msg, "missing"), "mentions name"),
+            }
+        },
+        Err(_) => assert(false, "parse missing"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    match parse_cookie_header("") {
+        Ok(map) => {
+            match require_empty(map) {
+                Ok(n) => assert_eq(n, 0),
+                Err(_) => assert(false, "empty ok"),
+            }
+        },
+        Err(_) => assert(false, "parse empty"),
+    }
+    match parse_cookie_header("sid=abc") {
+        Ok(map) => {
+            match require_empty(map) {
+                Ok(_) => assert(false, "nonempty must Err"),
+                Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+            }
+        },
+        Err(_) => assert(false, "parse sid"),
+    }
+}
+
+@test
+fn test_require_none() {
+    match require_none(with_same_site(session_cookie("sid", "abc"), "None")) {
+        Ok(c) => assert(is_none_same_site(c), "none"),
+        Err(_) => assert(false, "none ok"),
+    }
+    match require_none(session_cookie("sid", "abc")) {
+        Ok(_) => assert(false, "lax must Err"),
+        Err(msg) => assert(strings.contains(msg, "none"), "mentions none"),
+    }
+}

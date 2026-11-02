@@ -1,0 +1,19 @@
+pub struct SchedulerConfig {
+    pub default_max_minutes: int,
+}
+
+impl SchedulerConfig {
+    pub fn defaults() -> SchedulerConfig {
+        SchedulerConfig {
+            default_max_minutes: 1440,
+        }
+    }
+}
+
+pub fn config_from_env() -> SchedulerConfig {
+    SchedulerConfig::defaults()
+}
+
+pub fn max_minutes_of(cfg: SchedulerConfig) -> int {
+    cfg.default_max_minutes
+}

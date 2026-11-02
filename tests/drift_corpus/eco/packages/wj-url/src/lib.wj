@@ -1,0 +1,450 @@
+use std::encoding
+use std::strings
+use std::url
+
+pub struct Url {
+    pub scheme: string,
+    pub host: string,
+    pub port: string,
+    pub path: string,
+    pub query: string,
+    pub fragment: string,
+}
+
+/// Parse an absolute URL: `scheme://host[:port][/path][?query][#fragment]`.
+pub fn parse(text: string) -> Result<Url, string> {
+    if strings.len(text) == 0 {
+        return Err("empty url")
+    }
+    match split_scheme(text) {
+        Ok(scheme_rest) => {
+            let scheme = scheme_rest.0
+            let after_scheme = scheme_rest.1
+            if !strings.starts_with(after_scheme, "//") {
+                return Err("expected // after scheme")
+            }
+            let authority_and_rest = strings.substring(after_scheme, 2, strings.len(after_scheme))
+            match split_authority_host_port(authority_and_rest) {
+                Ok(parts) => {
+                    let host = parts.0
+                    let port = parts.1
+                    let rest = parts.2
+                    match split_path_query_fragment(rest) {
+                        Ok(pqf) => Ok(Url {
+                            scheme: scheme,
+                            host: host,
+                            port: port,
+                            path: pqf.0,
+                            query: pqf.1,
+                            fragment: pqf.2,
+                        }),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Format a URL back to an absolute string.
+pub fn format_url(u: Url) -> string {
+    let mut out = "${u.scheme}://${u.host}"
+    if strings.len(u.port) > 0 {
+        out = "${out}:${u.port}"
+    }
+    out = "${out}${u.path}"
+    if strings.len(u.query) > 0 {
+        out = "${out}?${u.query}"
+    }
+    if strings.len(u.fragment) > 0 {
+        out = "${out}#${u.fragment}"
+    }
+    out
+}
+
+/// Resolve `relative` against absolute `base` (absolute relative replaces base).
+/// Relative may include `?query` and `#fragment`.
+/// Named `join_url` to avoid clashing with `std::strings.join`.
+pub fn join_url(base: string, relative: string) -> Result<string, string> {
+    url.join(base, relative)
+}
+
+/// First value for `key` in `a=1&b=2` query text (no leading `?`).
+/// Decodes `+` / `%HH` (form-urlencoded). Thin-wrap `wj-querystring` once
+/// cross-crate owned→`&str` demotion is tip-green.
+pub fn query_get(query: string, key: string) -> Option<string> {
+    if strings.len(query) == 0 {
+        return None
+    }
+    let pairs = strings.split(query, "&")
+    let mut i = 0
+    while i < pairs.len() {
+        let pair = pairs[i]
+        match split_once(pair, "=") {
+            Some(kv) => {
+                if decode_component(kv.0) == key {
+                    return Some(decode_component(kv.1))
+                }
+            },
+            None => {
+                if decode_component(pair) == key {
+                    return Some(empty_string())
+                }
+            },
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// True when `key` appears at least once in query text.
+pub fn query_has(query: string, key: string) -> bool {
+    match query_get(query, key) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Set `key=value` in query text, replacing any existing `key` (form-encoded).
+pub fn query_set(query: string, key: string, value: string) -> string {
+    let mut out_parts = Vec::new()
+    let mut found = false
+    let enc_key = encode_component(key)
+    let enc_val = encode_component(value)
+    if strings.len(query) > 0 {
+        let pairs = strings.split(query, "&")
+        let mut i = 0
+        while i < pairs.len() {
+            let pair = pairs[i]
+            if strings.len(pair) > 0 {
+                match split_once(pair, "=") {
+                    Some(kv) => {
+                        if decode_component(kv.0) == key {
+                            out_parts.push("${enc_key}=${enc_val}")
+                            found = true
+                        } else {
+                            out_parts.push(pair)
+                        }
+                    },
+                    None => {
+                        if decode_component(pair) == key {
+                            out_parts.push("${enc_key}=${enc_val}")
+                            found = true
+                        } else {
+                            out_parts.push(pair)
+                        }
+                    },
+                }
+            }
+            i = i + 1
+        }
+    }
+    if !found {
+        out_parts.push("${enc_key}=${enc_val}")
+    }
+    strings.join(out_parts, "&")
+}
+
+/// Drop every pair whose key equals `key`.
+pub fn query_remove(query: string, key: string) -> string {
+    let mut out_parts = Vec::new()
+    if strings.len(query) == 0 {
+        return empty_string()
+    }
+    let pairs = strings.split(query, "&")
+    let mut i = 0
+    while i < pairs.len() {
+        let pair = pairs[i]
+        if strings.len(pair) > 0 {
+            match split_once(pair, "=") {
+                Some(kv) => {
+                    if decode_component(kv.0) != key {
+                        out_parts.push(pair)
+                    }
+                },
+                None => {
+                    if decode_component(pair) != key {
+                        out_parts.push(pair)
+                    }
+                },
+            }
+        }
+        i = i + 1
+    }
+    strings.join(out_parts, "&")
+}
+
+/// Return a copy of `u` with `query` replaced.
+pub fn with_query(u: Url, query: string) -> Url {
+    Url {
+        scheme: u.scheme,
+        host: u.host,
+        port: u.port,
+        path: u.path,
+        query: query,
+        fragment: u.fragment,
+    }
+}
+
+/// `scheme://host[:port]` (no path/query/fragment).
+pub fn origin(u: Url) -> string {
+    let mut out = "${u.scheme}://${u.host}"
+    if strings.len(u.port) > 0 {
+        out = "${out}:${u.port}"
+    }
+    out
+}
+
+/// True when scheme is `https` (case-sensitive, as parsed).
+pub fn is_https(u: Url) -> bool {
+    u.scheme == "https"
+}
+
+/// First query value for `key`, or `default` when missing.
+pub fn query_get_or(query: string, key: string, default: string) -> string {
+    match query_get(query, key) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// Return a copy of `u` with the fragment cleared.
+pub fn without_fragment(u: Url) -> Url {
+    Url {
+        scheme: u.scheme,
+        host: u.host,
+        port: u.port,
+        path: u.path,
+        query: u.query,
+        fragment: "",
+    }
+}
+
+/// Return a copy of `u` with the query cleared.
+pub fn without_query(u: Url) -> Url {
+    Url {
+        scheme: u.scheme,
+        host: u.host,
+        port: u.port,
+        path: u.path,
+        query: "",
+        fragment: u.fragment,
+    }
+}
+
+/// Return a copy of `u` with `fragment` replaced.
+pub fn with_fragment(u: Url, fragment: string) -> Url {
+    Url {
+        scheme: u.scheme,
+        host: u.host,
+        port: u.port,
+        path: u.path,
+        query: u.query,
+        fragment: fragment,
+    }
+}
+
+/// URL scheme (`https`, `http`, …).
+pub fn scheme_of(u: Url) -> string {
+    u.scheme
+}
+
+pub fn host_of(u: Url) -> string {
+    u.host
+}
+
+/// Ok(url) when the scheme is `https`; otherwise Err.
+pub fn require_https(u: Url) -> Result<Url, string> {
+    if is_https(u) {
+        return Ok(u)
+    }
+    Err("expected https url")
+}
+
+/// True when path is empty or exactly `/`.
+pub fn is_root_path(u: Url) -> bool {
+    strings.len(u.path) == 0 || u.path == "/"
+}
+
+/// Ok(url) when the path is empty or `/`; otherwise Err.
+pub fn require_root(u: Url) -> Result<Url, string> {
+    if is_root_path(u) {
+        return Ok(u)
+    }
+    Err("expected root")
+}
+
+fn empty_string() -> string {
+    ""
+}
+
+fn split_scheme(text: string) -> Result<(string, string), string> {
+    let mut i = 0
+    while i < strings.len(text) {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == ":" {
+            if i == 0 {
+                return Err("empty scheme")
+            }
+            return Ok((strings.substring(text, 0, i), strings.substring(text, i + 1, strings.len(text))))
+        }
+        i = i + 1
+    }
+    Err("missing scheme")
+}
+
+fn split_authority_host_port(text: string) -> Result<(string, string, string), string> {
+    let n = strings.len(text)
+    let mut auth_end = 0
+    let mut found_end = false
+    let mut i = 0
+    while i < n {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == "/" || ch == "?" || ch == "#" {
+            auth_end = i
+            found_end = true
+            break
+        }
+        i = i + 1
+    }
+    let authority = if found_end {
+        strings.substring(text, 0, auth_end)
+    } else {
+        strings.substring(text, 0, n)
+    }
+    let rest = if found_end {
+        strings.substring(text, auth_end, n)
+    } else {
+        empty_string()
+    }
+    let an = strings.len(authority)
+    if an == 0 {
+        return Err("empty host")
+    }
+    let mut colon_at = 0
+    let mut found_colon = false
+    let mut j = 0
+    while j < an {
+        if strings.substring(authority, j, j + 1) == ":" {
+            colon_at = j
+            found_colon = true
+            break
+        }
+        j = j + 1
+    }
+    let host = if found_colon {
+        strings.substring(authority, 0, colon_at)
+    } else {
+        strings.substring(authority, 0, an)
+    }
+    let port = if found_colon {
+        strings.substring(authority, colon_at + 1, an)
+    } else {
+        empty_string()
+    }
+    Ok((host, port, rest))
+}
+
+fn split_path_query_fragment(text: string) -> Result<(string, string, string), string> {
+    let n = strings.len(text)
+    let mut hash_at = 0
+    let mut query_at = 0
+    let mut found_hash = false
+    let mut found_query = false
+    let mut i = 0
+    while i < n {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == "?" && !found_query && !found_hash {
+            query_at = i
+            found_query = true
+        }
+        if ch == "#" {
+            hash_at = i
+            found_hash = true
+            break
+        }
+        i = i + 1
+    }
+    // Branch on flags only — do not mix `hash_at` (int) with `n` (usize) in one if/else.
+    if found_query && found_hash {
+        Ok((
+            strings.substring(text, 0, query_at),
+            strings.substring(text, query_at + 1, hash_at),
+            strings.substring(text, hash_at + 1, n),
+        ))
+    } else if found_query {
+        Ok((
+            strings.substring(text, 0, query_at),
+            strings.substring(text, query_at + 1, n),
+            empty_string(),
+        ))
+    } else if found_hash {
+        Ok((
+            strings.substring(text, 0, hash_at),
+            empty_string(),
+            strings.substring(text, hash_at + 1, n),
+        ))
+    } else {
+        Ok((
+            strings.substring(text, 0, n),
+            empty_string(),
+            empty_string(),
+        ))
+    }
+}
+
+fn split_once(text: string, sep: string) -> Option<(string, string)> {
+    let mut i = 0
+    while i < strings.len(text) {
+        let rest = strings.substring(text, i, strings.len(text))
+        if strings.starts_with(rest, sep) {
+            return Some((
+                strings.substring(text, 0, i),
+                strings.substring(text, i + strings.len(sep), strings.len(text)),
+            ))
+        }
+        i = i + 1
+    }
+    None
+}
+
+fn encode_component(text: string) -> string {
+    let enc = encoding.url_encode(text)
+    replace_all(enc, "%20", "+")
+}
+
+fn decode_component(text: string) -> string {
+    let normalized = replace_all(text, "+", "%20")
+    match encoding.url_decode(normalized) {
+        Ok(s) => s,
+        Err(_) => text,
+    }
+}
+
+fn replace_all(text: string, from: string, to: string) -> string {
+    if strings.len(from) == 0 {
+        return text
+    }
+    let mut out = ""
+    let mut i = 0
+    let n = strings.len(text)
+    let fl = strings.len(from)
+    while i < n {
+        let end = i + fl
+        if end <= n {
+            if strings.substring(text, i, end) == from {
+                out = "${out}${to}"
+                i = end
+            } else {
+                out = "${out}${strings.substring(text, i, i + 1)}"
+                i = i + 1
+            }
+        } else {
+            out = "${out}${strings.substring(text, i, i + 1)}"
+            i = i + 1
+        }
+    }
+    out
+}

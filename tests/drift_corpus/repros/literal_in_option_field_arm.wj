@@ -1,0 +1,20 @@
+// `Some(v - 1)` in an if-expression inside a `let`-bound match over an Option<int> field, the result
+// stored into a struct: the literal is typed i32 next to the i64 binding.
+struct Node {
+    next: Option<int>,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        let nx = match self.next {
+            Some(v) => if v > 2 { Some(v - 1) } else { None },
+            None => None,
+        }
+        Node { next: nx }
+    }
+}
+
+fn main() {
+    let n = Node { next: Some(4) }
+    println("${n.advance().next.is_some()}")
+}

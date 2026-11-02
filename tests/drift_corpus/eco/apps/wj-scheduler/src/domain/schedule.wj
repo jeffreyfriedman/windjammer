@@ -1,0 +1,51 @@
+use wj_cron::parse_cron
+use wj_cron::matches_cron
+use wj_cron::next_run
+use wj_cron::CronDateTime
+use crate::domain::CivilTime
+
+pub struct ExplainResult {
+    pub minute: string,
+    pub hour: string,
+    pub day_of_month: string,
+    pub month: string,
+    pub day_of_week: string,
+}
+
+pub fn check_schedule(expr: string, at: CivilTime) -> Result<bool, string> {
+    // Owned copy for cross-crate owned formal (local formal may demote to &str).
+    match parse_cron("${expr}") {
+        Ok(cron) => Ok(matches_cron(cron, at.minute, at.hour, at.day, at.month, at.day_of_week)),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn next_schedule(expr: string, from: CivilTime, max_minutes: int) -> Result<Option<CronDateTime>, string> {
+    match parse_cron("${expr}") {
+        Ok(cron) => {
+            let start = CronDateTime {
+                year: from.year,
+                month: from.month,
+                day_of_month: from.day,
+                hour: from.hour,
+                minute: from.minute,
+                day_of_week: from.day_of_week,
+            }
+            Ok(next_run(cron, start, max_minutes))
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn explain_schedule(expr: string) -> Result<ExplainResult, string> {
+    match parse_cron("${expr}") {
+        Ok(cron) => Ok(ExplainResult {
+            minute: cron.minute,
+            hour: cron.hour,
+            day_of_month: cron.day_of_month,
+            month: cron.month,
+            day_of_week: cron.day_of_week,
+        }),
+        Err(e) => Err(e),
+    }
+}

@@ -1,0 +1,8 @@
+pub struct Note {
+    pub id: int,
+    pub uid: string,
+    pub slug: string,
+    pub created_at: string,
+    pub title: string,
+    pub body: string,
+}

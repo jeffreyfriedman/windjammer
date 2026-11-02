@@ -1,0 +1,311 @@
+use crate::cell_or
+use crate::column_count
+use crate::column_index
+use crate::get_cell
+use crate::get_row
+use crate::has_column
+use crate::is_empty
+use crate::parse
+use crate::parse_with_headers
+use crate::require_column
+use crate::require_row
+use crate::require_cell
+use crate::require_empty
+use crate::row_count
+use crate::write
+use std::strings
+
+@test
+fn test_parse_simple_rows() {
+    let text = "a,b,c\n1,2,3\n4,5,6"
+    match parse(text) {
+        Ok(rows) => {
+            assert_eq(rows.len(), 3)
+            assert_eq(rows[0][0], "a")
+            assert_eq(rows[1][2], "3")
+        },
+        Err(_) => assert(false, "parse simple"),
+    }
+}
+
+@test
+fn test_parse_quoted_commas() {
+    let text = "name,note\nalice,\"hello, world\""
+    match parse(text) {
+        Ok(rows) => {
+            assert_eq(rows.len(), 2)
+            assert_eq(rows[1][0], "alice")
+            assert_eq(rows[1][1], "hello, world")
+        },
+        Err(_) => assert(false, "parse quoted"),
+    }
+}
+
+@test
+fn test_parse_with_headers_splits_first_row() {
+    let text = "id,name\n1,alice\n2,bob"
+    match parse_with_headers(text) {
+        Ok(pair) => {
+            let headers = pair.0
+            let rows = pair.1
+            assert_eq(headers.len(), 2)
+            assert_eq(headers[0], "id")
+            assert_eq(headers[1], "name")
+            assert_eq(rows.len(), 2)
+            assert_eq(rows[0][1], "alice")
+        },
+        Err(_) => assert(false, "parse_with_headers"),
+    }
+}
+
+@test
+fn test_write_roundtrip() {
+    let mut row1 = Vec::new()
+    row1.push("x")
+    row1.push("y")
+    let mut row2 = Vec::new()
+    row2.push("1")
+    row2.push("2")
+    let mut rows = Vec::new()
+    rows.push(row1)
+    rows.push(row2)
+    match write(rows) {
+        Ok(text) => {
+            assert(strings.contains(text, "x"), "has x")
+            assert(strings.contains(text, "1"), "has 1")
+            match parse(text) {
+                Ok(again) => {
+                    assert_eq(again.len(), 2)
+                    assert_eq(again[0][0], "x")
+                    assert_eq(again[1][1], "2")
+                },
+                Err(_) => assert(false, "reparse"),
+            }
+        },
+        Err(_) => assert(false, "write"),
+    }
+}
+
+@test
+fn test_parse_empty_string_is_empty_rows() {
+    match parse("") {
+        Ok(rows) => assert_eq(rows.len(), 0),
+        Err(_) => assert(false, "empty parse"),
+    }
+}
+
+@test
+fn test_write_empty_rows() {
+    let rows = Vec::new()
+    match write(rows) {
+        Ok(text) => assert_eq(text, ""),
+        Err(_) => assert(false, "empty write"),
+    }
+}
+
+@test
+fn test_row_count_and_column_count() {
+    let text = "a,b\n1,2\n3,4"
+    match parse(text) {
+        Ok(rows) => {
+            assert_eq(row_count(rows), 3)
+            assert_eq(column_count(rows), 2)
+        },
+        Err(_) => assert(false, "parse for counts"),
+    }
+    let empty = Vec::new()
+    assert_eq(row_count(empty), 0)
+    assert_eq(column_count(empty), 0)
+}
+
+@test
+fn test_is_empty() {
+    let empty = Vec::new()
+    assert(is_empty(empty), "empty table")
+    match parse("a,b\n1,2") {
+        Ok(rows) => assert(!is_empty(rows), "nonempty"),
+        Err(_) => assert(false, "parse for is_empty"),
+    }
+}
+
+@test
+fn test_get_cell() {
+    match parse("a,b\n1,2\n3,4") {
+        Ok(rows) => {
+            match get_cell(rows, 1, 0) {
+                Some(v) => assert_eq(v, "1"),
+                None => assert(false, "cell 1,0"),
+            }
+        },
+        Err(_) => assert(false, "parse for get_cell"),
+    }
+    match parse("a,b\n1,2") {
+        Ok(rows) => {
+            match get_cell(rows, 9, 0) {
+                Some(_) => assert(false, "oob row"),
+                None => {},
+            }
+        },
+        Err(_) => assert(false, "parse for oob"),
+    }
+}
+
+@test
+fn test_has_column() {
+    match parse_with_headers("name,age\nalice,30") {
+        Ok(parsed) => {
+            assert(has_column(parsed.0, "name"), "name")
+            assert(has_column(parsed.0, "age"), "age")
+            assert(!has_column(parsed.0, "email"), "missing")
+        },
+        Err(_) => assert(false, "parse headers"),
+    }
+}
+
+@test
+fn test_column_index() {
+    match parse_with_headers("name,age\nalice,30") {
+        Ok(parsed) => {
+            match column_index(parsed.0, "age") {
+                Some(i) => assert_eq(i, 1),
+                None => assert(false, "age idx"),
+            }
+            match column_index(parsed.0, "email") {
+                Some(_) => assert(false, "missing"),
+                None => {},
+            }
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+@test
+fn test_require_column_and_get_row() {
+    match parse_with_headers("name,age\nalice,30") {
+        Ok(parsed) => {
+            match require_column(parsed.0, "age") {
+                Ok(i) => assert_eq(i, 1),
+                Err(_) => assert(false, "require age"),
+            }
+            match require_column(parsed.0, "email") {
+                Ok(_) => assert(false, "missing must Err"),
+                Err(msg) => assert(strings.contains(msg, "email"), "mentions col"),
+            }
+        },
+        Err(_) => assert(false, "parse headers"),
+    }
+    match parse("a,b\n1,2\n3,4") {
+        Ok(rows) => {
+            match get_row(rows, 1) {
+                Some(row) => {
+                    assert_eq(row.len(), 2)
+                    assert_eq(row[0], "1")
+                    assert_eq(row[1], "2")
+                },
+                None => assert(false, "row 1"),
+            }
+            match get_row(rows, 9) {
+                Some(_) => assert(false, "oob"),
+                None => {},
+            }
+        },
+        Err(_) => assert(false, "parse rows"),
+    }
+}
+
+@test
+fn test_has_rows_require_row_and_cell_or() {
+    match parse("a,b\n1,2") {
+        Ok(rows) => {
+            match require_row(rows, 1) {
+                Ok(row) => {
+                    assert_eq(row[0], "1")
+                    assert_eq(row[1], "2")
+                },
+                Err(_) => assert(false, "require row 1"),
+            }
+            match require_row(rows, 9) {
+                Ok(_) => assert(false, "oob must Err"),
+                Err(msg) => assert(strings.contains(msg, "9"), "mentions index"),
+            }
+            assert_eq(cell_or(rows, 1, 0, "x"), "1")
+            assert_eq(cell_or(rows, 9, 0, "fallback"), "fallback")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    let empty: Vec<Vec<string>> = Vec::new()
+}
+
+@test
+fn test_last_row_and_rectangular() {
+    use crate::is_rectangular
+    use crate::last_row
+    match parse("a,b\n1,2\n3,4") {
+        Ok(rows) => {
+            assert(is_rectangular(rows), "even rows")
+            match last_row(rows) {
+                Some(row) => {
+                    assert_eq(row[0], "3")
+                    assert_eq(row[1], "4")
+                },
+                None => assert(false, "last"),
+            }
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    let mut ragged: Vec<Vec<string>> = Vec::new()
+    let mut wide = Vec::new()
+    wide.push("a")
+    wide.push("b")
+    ragged.push(wide)
+    let mut short = Vec::new()
+    short.push("1")
+    ragged.push(short)
+    assert(!is_rectangular(ragged), "ragged")
+    let empty: Vec<Vec<string>> = Vec::new()
+    assert(is_rectangular(empty), "empty is rectangular")
+    match last_row(empty) {
+        Some(_) => assert(false, "empty last"),
+        None => {},
+    }
+}
+
+@test
+fn test_require_cell() {
+    match parse("a,b\n1,2") {
+        Ok(rows) => {
+            match require_cell(rows, 1, 0) {
+                Ok(v) => assert_eq(v, "1"),
+                Err(_) => assert(false, "cell"),
+            }
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    match parse("a,b\n1,2") {
+        Ok(rows) => {
+            match require_cell(rows, 9, 0) {
+                Ok(_) => assert(false, "missing cell must Err"),
+                Err(msg) => assert(strings.contains(msg, "cell"), "mentions cell"),
+            }
+        },
+        Err(_) => assert(false, "parse missing"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    let empty: Vec<Vec<string>> = Vec::new()
+    match require_empty(empty) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty table"),
+    }
+    match parse("a,b\n1,2") {
+        Ok(rows) => {
+            match require_empty(rows) {
+                Ok(_) => assert(false, "rows must Err"),
+                Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+            }
+        },
+        Err(_) => assert(false, "parse rows"),
+    }
+}

@@ -1,0 +1,89 @@
+use crate::domain::encode_store
+use crate::domain::decode_store
+use crate::domain::todos_to_json
+use crate::domain::todos_from_json
+use crate::domain::Todo
+use crate::domain::TodoStore
+
+fn test_todos_to_json_empty() {
+    let todos = Vec::new()
+    match todos_to_json(todos) {
+        Ok(text) => assert_eq(text, "[]"),
+        Err(_) => assert(false, "json empty"),
+    }
+}
+
+fn test_todos_to_json_includes_fields() {
+    let mut todos = Vec::new()
+    todos.push(Todo {
+        id: 1,
+        title: "task",
+        done: false,
+    })
+    match todos_to_json(todos) {
+        Ok(text) => {
+            assert_str_contains(text, "task")
+            assert_str_contains(text, "id")
+            assert_str_contains(text, "[")
+        },
+        Err(_) => assert(false, "json encode"),
+    }
+}
+
+fn test_export_store_preserves_items() {
+    let store = TodoStore::new()
+    match store.add("keep", 200) {
+        Ok(pair) => {
+            let snapshot = encode_store(pair.0)
+            match decode_store(snapshot) {
+                Ok(copy) => {
+                    let raw = copy.into_todos()
+                    match todos_to_json(raw) {
+                        Ok(_) => {
+                            match decode_store(snapshot) {
+                                Ok(restored) => {
+                                    let left = restored.into_todos()
+                                    assert_eq(left.len(), 1)
+                                },
+                                Err(_) => assert(false, "restore"),
+                            }
+                        },
+                        Err(_) => assert(false, "json"),
+                    }
+                },
+                Err(_) => assert(false, "decode"),
+            }
+        },
+        Err(_) => assert(false, "add"),
+    }
+}
+
+fn test_todos_from_json_roundtrip() {
+    let mut todos = Vec::new()
+    todos.push(Todo {
+        id: 2,
+        title: "ship",
+        done: true,
+    })
+    match todos_to_json(todos) {
+        Ok(text) => {
+            match todos_from_json(text) {
+                Ok(parsed) => {
+                    assert_eq(parsed.len(), 1)
+                    assert_eq(parsed[0].id, 2)
+                    assert_eq(parsed[0].title, "ship")
+                    assert(parsed[0].done, "done flag")
+                },
+                Err(_) => assert(false, "decode json"),
+            }
+        },
+        Err(_) => assert(false, "encode json"),
+    }
+}
+
+fn test_todos_from_json_rejects_non_array() {
+    match todos_from_json("{}") {
+        Ok(_) => assert(false, "object must fail"),
+        Err(msg) => assert_str_contains(msg, "array"),
+    }
+}

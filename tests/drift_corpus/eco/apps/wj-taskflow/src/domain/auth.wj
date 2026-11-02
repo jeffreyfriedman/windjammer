@@ -1,0 +1,81 @@
+use std::json
+use wj_hash::hash_password
+use wj_hash::verify_password
+use wj_jwt::sign
+use wj_jwt::verify_bearer
+
+use crate::domain::config::Config
+use crate::domain::inputs::LoginInput
+use crate::domain::inputs::RegisterInput
+use crate::domain::inputs::TokenBody
+use crate::domain::model::User
+use crate::domain::reply::Reply
+use crate::domain::reply::error_reply
+use crate::domain::reply::from_json
+use crate::domain::rules::check_registration
+use crate::domain::store::TaskStore
+
+const TENANT: string = "taskflow"
+
+pub fn register_user(store: TaskStore, body: string) -> Reply {
+    let input: RegisterInput = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    match check_registration(input.username, input.email, input.password) {
+        Ok(_) => {},
+        Err(e) => return error_reply(422, e),
+    }
+    let hash = match hash_password(input.password) {
+        Ok(h) => h,
+        Err(_) => return error_reply(500, "could not hash password"),
+    }
+    match store.add_user(input.username, input.email, hash) {
+        Ok(user) => from_json(201, json.to_string(user.view())),
+        Err(e) => error_reply(409, e),
+    }
+}
+
+pub fn login_user(store: TaskStore, config: Config, body: string) -> Reply {
+    let input: LoginInput = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    // Same message for unknown user and wrong password: no account enumeration.
+    let denied = error_reply(401, "invalid credentials")
+    let user = match store.user_by_name(input.username) {
+        Some(u) => u,
+        None => return denied,
+    }
+    let matches = match verify_password(input.password, user.password_hash) {
+        Ok(ok) => ok,
+        Err(_) => false,
+    }
+    if !matches {
+        return denied
+    }
+    match sign("${user.id}", TENANT, config.jwt_secret, config.token_ttl_secs) {
+        Ok(token) => from_json(200, json.to_string(TokenBody { token: token, expires_in: config.token_ttl_secs })),
+        Err(_) => error_reply(500, "could not sign token"),
+    }
+}
+
+/// Resolve the `Authorization: Bearer ...` header to a user, or the 401 reply to send.
+pub fn authenticate(store: TaskStore, config: Config, authorization: string) -> Result<User, Reply> {
+    if authorization == "" {
+        return Err(error_reply(401, "missing bearer token"))
+    }
+    // wj-jwt parses the whole header line, so rebuild it from the header value.
+    let claims = match verify_bearer("Authorization: ${authorization}", config.jwt_secret) {
+        Ok(c) => c,
+        Err(_) => return Err(error_reply(401, "invalid or expired token")),
+    }
+    let id = match claims.sub.parse::<int>() {
+        Ok(n) => n,
+        Err(_) => return Err(error_reply(401, "invalid token subject")),
+    }
+    match store.user(id) {
+        Some(user) => Ok(user),
+        None => Err(error_reply(401, "unknown user")),
+    }
+}

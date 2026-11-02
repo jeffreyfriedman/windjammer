@@ -1,0 +1,154 @@
+use std::log::*
+
+/// Parse `trace` / `debug` / `info` / `warn` / `error` (case-insensitive aliases included).
+pub fn parse_level(text: string) -> Option<LogLevel> {
+    match text {
+        "trace" | "TRACE" | "Trace" => Some(LogLevel::Trace),
+        "debug" | "DEBUG" | "Debug" => Some(LogLevel::Debug),
+        "info" | "INFO" | "Info" => Some(LogLevel::Info),
+        "warn" | "WARN" | "Warn" | "warning" | "WARNING" => Some(LogLevel::Warn),
+        "error" | "ERROR" | "Error" => Some(LogLevel::Error),
+        _ => None,
+    }
+}
+
+/// Canonical lowercase label for a log level.
+pub fn level_label(level: LogLevel) -> string {
+    match level {
+        LogLevel::Trace => "trace",
+        LogLevel::Debug => "debug",
+        LogLevel::Info => "info",
+        LogLevel::Warn => "warn",
+        LogLevel::Error => "error",
+    }
+}
+
+/// Numeric severity rank (Trace=0 … Error=4) for comparisons.
+pub fn level_rank(level: LogLevel) -> int {
+    match level {
+        LogLevel::Trace => 0,
+        LogLevel::Debug => 1,
+        LogLevel::Info => 2,
+        LogLevel::Warn => 3,
+        LogLevel::Error => 4,
+    }
+}
+
+/// True when `level` is Error.
+pub fn is_error_level(level: LogLevel) -> bool {
+    match level {
+        LogLevel::Error => true,
+        _ => false,
+    }
+}
+
+/// True when `level` is Warn.
+pub fn is_warn_level(level: LogLevel) -> bool {
+    match level {
+        LogLevel::Warn => true,
+        _ => false,
+    }
+}
+
+/// True when `level` is Debug.
+pub fn is_debug_level(level: LogLevel) -> bool {
+    match level {
+        LogLevel::Debug => true,
+        _ => false,
+    }
+}
+
+/// True when `level` is Info.
+pub fn is_info_level(level: LogLevel) -> bool {
+    match level {
+        LogLevel::Info => true,
+        _ => false,
+    }
+}
+
+/// `Ok(level)` when it is the info level, otherwise `Err`.
+pub fn require_info(level: LogLevel) -> Result<LogLevel, string> {
+    if is_info_level(level) {
+        return Ok(level)
+    }
+    Err("expected info level")
+}
+
+/// True when `level` is Trace.
+pub fn is_trace_level(level: LogLevel) -> bool {
+    match level {
+        LogLevel::Trace => true,
+        _ => false,
+    }
+}
+
+/// True when `left` is strictly more severe than `right`.
+pub fn more_severe(left: LogLevel, right: LogLevel) -> bool {
+    level_rank(left) > level_rank(right)
+}
+
+/// True when `left` is strictly less severe than `right`.
+pub fn less_severe(left: LogLevel, right: LogLevel) -> bool {
+    level_rank(left) < level_rank(right)
+}
+
+/// True when both levels share the same severity rank.
+pub fn same_severity(left: LogLevel, right: LogLevel) -> bool {
+    level_rank(left) == level_rank(right)
+}
+
+/// True when `text` parses as a known log level.
+pub fn is_known_level(text: string) -> bool {
+    match parse_level(text) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Parse `text` as a log level, or `Err` naming the unknown text.
+pub fn require_level(text: string) -> Result<LogLevel, string> {
+    match parse_level(text) {
+        Some(level) => Ok(level),
+        None => Err("unknown log level: ${text}"),
+    }
+}
+
+/// `Ok(level)` when it is the error level, otherwise `Err`.
+pub fn require_error(level: LogLevel) -> Result<LogLevel, string> {
+    if is_error_level(level) {
+        return Ok(level)
+    }
+    Err("expected error level")
+}
+
+/// Parse `text`, or return `fallback` when unknown.
+pub fn parse_level_or(text: string, fallback: LogLevel) -> LogLevel {
+    match parse_level(text) {
+        Some(level) => level,
+        None => fallback,
+    }
+}
+
+/// Initialize logging at the given level text; returns an error when the level is unknown.
+pub fn init_from_level_text(text: string) -> Result<(), string> {
+    match parse_level(text) {
+        Some(level) => {
+            init_with_level(level)
+            Ok(())
+        },
+        None => Err("unknown log level: ${text}"),
+    }
+}
+
+/// Route a tagged message to the matching std log function. Unknown levels fall back to info.
+pub fn log_tagged(level: string, tag: string, message: string) {
+    let line = "[${tag}] ${message}"
+    match level {
+        "trace" | "TRACE" | "Trace" => trace(line),
+        "debug" | "DEBUG" | "Debug" => debug(line),
+        "info" | "INFO" | "Info" => info(line),
+        "warn" | "WARN" | "Warn" | "warning" | "WARNING" => warn(line),
+        "error" | "ERROR" | "Error" => error(line),
+        _ => info(line),
+    }
+}

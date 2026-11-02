@@ -1,0 +1,26 @@
+use wj_regex::is_match
+
+use crate::domain::options::Options
+use crate::domain::options::effective_pattern
+
+/// 1-based numbers of the lines selected by `o` (matching, or non-matching with `invert`).
+pub fn match_lines(text: string, o: Options) -> Result<Vec<int>, string> {
+    let pattern = effective_pattern(o)
+    let lines: Vec<string> = text.lines().collect()
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < lines.len() {
+        let hit = match is_match(pattern, lines[i]) {
+            Ok(value) => value,
+            Err(e) => return Err(e),
+        }
+        if hit != o.invert {
+            out.push(i + 1)
+            if o.max_count > 0 && out.len() >= o.max_count {
+                break
+            }
+        }
+        i = i + 1
+    }
+    Ok(out)
+}

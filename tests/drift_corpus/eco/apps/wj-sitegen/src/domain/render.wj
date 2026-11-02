@@ -1,0 +1,231 @@
+use std::collections::HashMap
+use std::strings
+
+use wj_template::escape_html
+use wj_template::render
+
+use crate::domain::config::resolve_src_dir
+use crate::domain::config::resolve_out_dir
+use crate::domain::config::config_from_env
+
+pub struct SiteDirs {
+    pub src: string,
+    pub out: string,
+}
+
+pub struct GeneratedPage {
+    pub filename: string,
+    pub title: string,
+    pub html: string,
+}
+
+fn last_path_segment(path: string) -> string {
+    let parts = strings.split(path, "/")
+    let mut last = ""
+    for part in parts {
+        last = part
+    }
+    last
+}
+
+fn join_strings(parts: Vec<string>, sep: string) -> string {
+    let mut out = ""
+    let mut first = true
+    for part in parts {
+        if first {
+            out = part
+            first = false
+        } else {
+            out = "${out}${sep}${part}"
+        }
+    }
+    out
+}
+
+fn skip_first_join(parts: Vec<string>) -> string {
+    let mut rest = Vec::new()
+    let mut first = true
+    for part in parts {
+        if first {
+            first = false
+            continue
+        }
+        rest.push(part)
+    }
+    join_strings(rest, " ")
+}
+
+fn heading_text(parts: Vec<string>) -> string {
+    skip_first_join(parts)
+}
+
+/// Strip `root` prefix from a walked file path (`/content/posts/a.md` → `posts/a.md`).
+pub fn relative_path_from_root(full_path: string, root: string) -> string {
+    let mut prefix = root
+    if strings.ends_with(prefix, "/") {
+        prefix = strings.substring(prefix, 0, strings.len(prefix) - 1)
+    }
+    if !strings.starts_with(full_path, prefix) {
+        return full_path
+    }
+    let rest = strings.substring(full_path, strings.len(prefix), strings.len(full_path))
+    if strings.len(rest) > 0 && strings.starts_with(rest, "/") {
+        return strings.substring(rest, 1, strings.len(rest))
+    }
+    rest
+}
+
+/// Markdown path (`posts/hello.md`) → output file (`posts/hello.html`).
+pub fn html_output_path(relative_md: string) -> string {
+    if strings.ends_with(relative_md, ".md") {
+        return strings.replace(relative_md, ".md", ".html")
+    }
+    "${relative_md}.html"
+}
+
+/// Basename-only HTML filename (`posts/hello.md` → `hello.html`).
+pub fn html_filename(path: string) -> string {
+    let name = last_path_segment(path)
+    html_output_path(name)
+}
+
+pub fn is_markdown_path(path: string) -> bool {
+    strings.ends_with(path, ".md")
+}
+
+pub fn is_html_path(path: string) -> bool {
+    strings.ends_with(path, ".html")
+}
+
+pub fn page_count(pages: Vec<GeneratedPage>) -> int {
+    let mut n = 0
+    for _ in pages {
+        n = n + 1
+    }
+    n
+}
+
+/// Page count when the list is non-empty.
+pub fn require_pages(pages: Vec<GeneratedPage>) -> Result<int, string> {
+    let n = page_count(pages)
+    if n == 0 {
+        Err("expected pages")
+    } else {
+        Ok(n)
+    }
+}
+
+/// The only page, or an error when the list is empty or has more than one.
+pub fn require_only_page(pages: Vec<GeneratedPage>) -> Result<GeneratedPage, string> {
+    match only_page(pages) {
+        Some(page) => Ok(page),
+        None => Err("expected one page"),
+    }
+}
+
+/// The only page when the list has exactly one entry.
+pub fn only_page(pages: Vec<GeneratedPage>) -> Option<GeneratedPage> {
+    let mut kept = GeneratedPage {
+        filename: "",
+        title: "",
+        html: "",
+    }
+    let mut n = 0
+    for page in pages {
+        n = n + 1
+        if n == 1 {
+            kept = page
+        }
+    }
+    if n == 1 {
+        Some(kept)
+    } else {
+        None
+    }
+}
+
+fn parse_markdown(source: string) -> (string, string) {
+    let lines = strings.split_lines(source)
+    let mut title = "Untitled"
+    let mut chunks = Vec::new()
+    let mut seen_h1 = false
+    for line in lines {
+        let trimmed = strings.trim(line)
+        if trimmed.len() == 0 {
+            continue
+        }
+        let parts = strings.split(trimmed, " ")
+        if parts.len() >= 2 && parts[0] == "##" {
+            let text = html_escape(heading_text(parts))
+            chunks.push("<h2>${text}</h2>")
+            continue
+        }
+        if parts.len() >= 2 && parts[0] == "#" {
+            let text = heading_text(parts)
+            if !seen_h1 {
+                title = "${text}"
+                seen_h1 = true
+            }
+            let html_text = html_escape(text)
+            chunks.push("<h1>${html_text}</h1>")
+            continue
+        }
+        let text = html_escape(trimmed)
+        chunks.push("<p>${text}</p>")
+    }
+    (title, join_strings(chunks, "\n"))
+}
+
+/// First ATX h1 (`# Title`); otherwise `Untitled`.
+pub fn title_from_markdown(source: string) -> string {
+    let parsed = parse_markdown(source)
+    parsed.0
+}
+
+/// Tiny markdown subset: `#` / `##` headings and paragraph lines. HTML-escaped.
+pub fn markdown_to_html(source: string) -> string {
+    let parsed = parse_markdown(source)
+    parsed.1
+}
+
+pub fn render_document(title: string, body_html: string) -> string {
+    let mut vars = HashMap::new()
+    vars.insert("title", html_escape(title))
+    vars.insert("body", body_html)
+    render(
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>{{title}}</title>\n</head>\n<body>\n{{body}}\n</body>\n</html>\n",
+        vars,
+    )
+}
+
+/// Domain pipeline: one markdown file → one HTML page.
+pub fn generate_page(relative_path: string, markdown: string) -> GeneratedPage {
+    let filename = html_output_path(relative_path)
+    let parsed = parse_markdown(markdown)
+    let title = parsed.0
+    let body = parsed.1
+    let html = render_document("${title}", body)
+    GeneratedPage {
+        filename: filename,
+        title: title,
+        html: html,
+    }
+}
+
+/// Program name + source dir + output dir (+ optional env overrides).
+pub fn dirs_from_args(args: Vec<string>) -> Result<SiteDirs, string> {
+    if args.len() < 3 {
+        return Err("usage: wj-sitegen <src-dir> <out-dir>")
+    }
+    let config = config_from_env()
+    let src = resolve_src_dir(args[1], config.src_override)
+    let out = resolve_out_dir(args[2], config.out_override)
+    if src.len() == 0 || out.len() == 0 {
+        return Err("usage: wj-sitegen <src-dir> <out-dir>")
+    }
+    Ok(SiteDirs { src: src, out: out })
+}
+
+fn html_escape(text: string) -> string {
+    escape_html(text)
+}

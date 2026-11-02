@@ -1,0 +1,77 @@
+use std::collections::HashMap
+use std::config
+use std::encoding
+use std::path
+use std::strings
+use std::time
+use std::uuid
+
+/// First-hour session card — tip-green std surfaces only.
+pub struct Card {
+    pub id: string,
+    pub created_at: string,
+    pub app: string,
+    pub data_path: string,
+    pub query: string,
+    pub port: string,
+}
+
+/// Assemble a card from tip-green std only.
+pub fn build_card(app_name: string, config_toml: string) -> Result<Card, string> {
+    match config.parse_flat(config_toml, "toml") {
+        Ok(flat) => {
+            let id = uuid.v4()
+            let now = time.utc_now()
+            let created = now.to_rfc3339()
+            let data_path = path.join("data", app_name)
+            let query = "name=${encoding.url_encode(app_name)}"
+            let port = flat_get(flat, "app.port", "0")
+            Ok(Card {
+                id: id,
+                created_at: created,
+                app: app_name,
+                data_path: data_path,
+                query: query,
+                port: port,
+            })
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Render card as a single JSON object line (demo print path).
+pub fn format_card(card: Card) -> string {
+    "{\"id\":\"${card.id}\",\"created_at\":\"${card.created_at}\",\"app\":\"${card.app}\",\"data_path\":\"${card.data_path}\",\"query\":\"${card.query}\",\"port\":\"${card.port}\"}"
+}
+
+pub fn card_app(card: Card) -> string {
+    card.app
+}
+
+pub fn card_port(card: Card) -> string {
+    card.port
+}
+
+/// Short human line for CLI demos.
+pub fn card_summary(card: Card) -> string {
+    "${card.app}@${card.port}"
+}
+
+pub fn card_id(card: Card) -> string {
+    card.id
+}
+
+pub fn card_data_path(card: Card) -> string {
+    card.data_path
+}
+
+pub fn card_query(card: Card) -> string {
+    card.query
+}
+
+fn flat_get(flat: HashMap<string, string>, key: string, fallback: string) -> string {
+    match flat.get(key) {
+        Some(v) => v,
+        None => fallback,
+    }
+}

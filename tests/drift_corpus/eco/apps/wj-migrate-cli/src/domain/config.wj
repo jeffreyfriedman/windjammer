@@ -1,0 +1,33 @@
+use std::env
+
+pub struct MigrateConfig {
+    pub default_url: string,
+    pub default_dir: string,
+}
+
+impl MigrateConfig {
+    pub fn defaults() -> MigrateConfig {
+        MigrateConfig {
+            default_url: "",
+            default_dir: "./migrations",
+        }
+    }
+}
+
+pub fn config_from_env() -> MigrateConfig {
+    let mut config = MigrateConfig::defaults()
+    match env.get("MIGRATE_URL") {
+        Some(value) => config.default_url = value,
+        None => {
+            match env.get("DATABASE_URL") {
+                Some(value) => config.default_url = value,
+                None => {},
+            }
+        },
+    }
+    match env.get("MIGRATIONS_DIR") {
+        Some(value) => config.default_dir = value,
+        None => {},
+    }
+    config
+}

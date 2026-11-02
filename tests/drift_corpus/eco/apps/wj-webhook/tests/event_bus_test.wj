@@ -1,0 +1,23 @@
+use crate::domain::WebhookApp
+
+fn test_post_webhook_emits_to_event_bus() {
+    let mut app = WebhookApp::new("secret")
+    let body = "{\"event\":\"order.created\",\"id\":\"99\"}"
+    let reply = app.handle("POST", "/webhook", "", "secret", "", body)
+    assert_eq(reply.status, 200)
+
+    let drained = app.handle("GET", "/bus/drain", "", "", "", "")
+    assert_eq(drained.status, 200)
+    assert_str_contains(drained.body, "order.created")
+    assert_str_contains(drained.body, "99")
+}
+
+fn test_bus_drain_is_empty_after_first_drain() {
+    let mut app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"1\"}"
+    app.handle("POST", "/webhook", "", "secret", "", body)
+    app.handle("GET", "/bus/drain", "", "", "", "")
+    let again = app.handle("GET", "/bus/drain", "", "", "", "")
+    assert_eq(again.status, 200)
+    assert_str_contains(again.body, "[]")
+}

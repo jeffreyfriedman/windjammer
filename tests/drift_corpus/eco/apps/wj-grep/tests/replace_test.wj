@@ -1,0 +1,53 @@
+use crate::domain::default_options
+use crate::domain::replace_text
+
+@test
+fn test_replace_counts_and_rewrites_every_match() {
+    let mut o = default_options()
+    o.pattern = "foo"
+    match replace_text("foo bar foo\nfoo\n", o, "baz") {
+        Ok(result) => {
+            assert_eq(result.0, "baz bar baz\nbaz\n")
+            assert_eq(result.1, 3)
+        },
+        Err(e) => assert(false, "replace failed: ${e}"),
+    }
+}
+
+@test
+fn test_replace_supports_capture_groups() {
+    let mut o = default_options()
+    o.pattern = "(\\w+)@(\\w+)"
+    match replace_text("bob@host", o, "$2:$1") {
+        Ok(result) => assert_eq(result.0, "host:bob"),
+        Err(e) => assert(false, "replace failed: ${e}"),
+    }
+}
+
+@test
+fn test_replace_respects_whole_word_and_case() {
+    let mut o = default_options()
+    o.pattern = "cat"
+    o.word = true
+    o.ignore_case = true
+    match replace_text("Cat concat CAT", o, "dog") {
+        Ok(result) => {
+            assert_eq(result.0, "dog concat dog")
+            assert_eq(result.1, 2)
+        },
+        Err(e) => assert(false, "replace failed: ${e}"),
+    }
+}
+
+@test
+fn test_replace_no_match_returns_text_unchanged() {
+    let mut o = default_options()
+    o.pattern = "zzz"
+    match replace_text("abc", o, "x") {
+        Ok(result) => {
+            assert_eq(result.0, "abc")
+            assert_eq(result.1, 0)
+        },
+        Err(e) => assert(false, "replace failed: ${e}"),
+    }
+}

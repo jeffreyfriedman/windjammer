@@ -1,0 +1,44 @@
+use crate::recv_int
+use crate::send_int
+use crate::try_recv_int
+use crate::unbounded_int
+use crate::clone_sender
+
+@test
+fn test_unbounded_send_recv() {
+    let pair = unbounded_int()
+    send_int(pair.0, 42)
+    let got = recv_int(pair.1)
+    assert_eq(got.1, 42)
+}
+
+@test
+fn test_try_recv_empty() {
+    let pair = unbounded_int()
+    let got = try_recv_int(pair.1)
+    assert(!got.1, "empty channel has no value")
+}
+
+@test
+fn test_try_recv_after_send() {
+    let pair = unbounded_int()
+    send_int(pair.0, 7)
+    let got = try_recv_int(pair.1)
+    assert(got.1, "value present")
+    assert_eq(got.2, 7)
+}
+
+@test
+fn test_clone_sender_fan_in() {
+    let pair = unbounded_int()
+    let cloned = clone_sender(pair.0)
+    send_int(cloned.0, 1)
+    send_int(cloned.1, 2)
+    let first = recv_int(pair.1)
+    let second = recv_int(first.0)
+    let a = first.1
+    let b = second.1
+    assert(a == 1 || a == 2, "first value from either sender")
+    assert(b == 1 || b == 2, "second value from either sender")
+    assert(a != b, "both messages received")
+}

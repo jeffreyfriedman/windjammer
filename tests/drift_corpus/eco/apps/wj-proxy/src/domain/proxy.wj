@@ -1,0 +1,354 @@
+use std::collections::HashMap
+use std::json
+use std::strings
+
+use wj_headers::defaults
+use wj_headers::format_headers
+use wj_rate_limit::check_key
+use wj_rate_limit::fixed_window
+use wj_rate_limit::rate_limit_headers
+use wj_rate_limit::WindowBucket
+
+use crate::domain::config::ProxyConfig
+use crate::domain::url_join::join_upstream_url
+
+/// True when the reverse proxy may forward this HTTP method upstream.
+pub fn can_forward_method(method: string) -> bool {
+    let method = own(method)
+    if method == "GET" {
+        return true
+    }
+    if method == "POST" {
+        return true
+    }
+    if method == "PUT" {
+        return true
+    }
+    if method == "DELETE" {
+        return true
+    }
+    if method == "PATCH" {
+        return true
+    }
+    if method == "HEAD" {
+        return true
+    }
+    false
+}
+
+/// True for methods that are safe / cacheable under HTTP semantics.
+pub fn is_safe_method(method: string) -> bool {
+    let method = own(method)
+    method == "GET" || method == "HEAD"
+}
+
+/// True for methods that mutate server state when forwarded.
+pub fn is_mutating_method(method: string) -> bool {
+    let method = own(method)
+    method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE"
+}
+
+pub struct HttpReply {
+    pub status: u16,
+    pub body: string,
+    pub extra_headers: string,
+}
+
+pub struct ForwardResult {
+    pub status: u16,
+    pub body: string,
+}
+
+pub struct RequestLogEntry {
+    pub method: string,
+    pub path: string,
+    pub upstream_url: string,
+    pub status: u16,
+    pub client_key: string,
+}
+
+struct RateBucket {
+    window_start_ms: int,
+    count: int,
+}
+
+struct OkBody {
+    ok: bool,
+}
+
+struct ErrorBody {
+    error: string,
+}
+
+struct StatsBody {
+    log_count: int,
+    rate_limit: int,
+    window_ms: int,
+}
+
+struct ClearLogsBody {
+    cleared: int,
+}
+
+pub struct ProxyApp {
+    pub config: ProxyConfig,
+    logs: Vec<RequestLogEntry>,
+    buckets: HashMap<string, RateBucket>,
+}
+
+impl ProxyApp {
+    pub fn new(config: ProxyConfig) -> ProxyApp {
+        ProxyApp {
+            config: config,
+            logs: Vec::new(),
+            buckets: HashMap::new(),
+        }
+    }
+
+    pub fn handle_local(
+        self,
+        method: string,
+        path: string,
+        body: string,
+        client_key: string,
+        signature: string,
+        now_ms: int,
+    ) -> HttpReply {
+        let method = own(method)
+        let path = own(path)
+        let _body = own(body)
+        let _client = own(client_key)
+        let _sig = own(signature)
+        let _now = now_ms
+        if path == "/health" || path == "/health/" {
+            if method == "GET" {
+                return apply_security(json_ok())
+            }
+            return apply_security(json_error(404, "not found"))
+        }
+        if path == "/logs" || path == "/logs/" {
+            if method == "GET" {
+                return apply_security(self.list_logs())
+            }
+            if method == "DELETE" {
+                return apply_security(self.clear_logs())
+            }
+            return apply_security(json_error(404, "not found"))
+        }
+        if path == "/stats" || path == "/stats/" {
+            if method == "GET" {
+                let entries = self.logs
+                let mut count = 0
+                for _entry in entries {
+                    count = count + 1
+                }
+                let payload = StatsBody {
+                    log_count: count,
+                    rate_limit: self.config.rate_limit,
+                    window_ms: self.config.window_ms,
+                }
+                match json.to_string(payload) {
+                    Ok(text) => {
+                        return apply_security(HttpReply {
+                            status: 200,
+                            body: text,
+                            extra_headers: "",
+                        })
+                    },
+                    Err(_) => {
+                        return apply_security(json_error(500, "serialization failed"))
+                    },
+                }
+            }
+            return apply_security(json_error(404, "not found"))
+        }
+        apply_security(json_error(404, "not found"))
+    }
+
+    pub fn complete_proxy(
+        self,
+        method: string,
+        path: string,
+        client_key: string,
+        forward: ForwardResult,
+        now_ms: int,
+    ) -> HttpReply {
+        let method = own(method)
+        let incoming_path = own(path)
+        let client_key = own(client_key)
+        match self.check_rate(client_key, now_ms) {
+            Some(limit_reply) => {
+                return apply_security(limit_reply)
+            },
+            None => {},
+        }
+        let stripped = stripped_path(self.config.strip_prefix, incoming_path)
+        match join_upstream_url(self.config.upstream, stripped) {
+            Ok(upstream_url) => {
+                self.record_log(RequestLogEntry {
+                    method: method,
+                    path: incoming_path,
+                    upstream_url: upstream_url,
+                    status: forward.status,
+                    client_key: client_key,
+                })
+                apply_security(HttpReply {
+                    status: forward.status,
+                    body: forward.body,
+                    extra_headers: "",
+                })
+            },
+            Err(e) => apply_security(json_error(502, e)),
+        }
+    }
+
+    fn list_logs(self) -> HttpReply {
+        let entries = self.logs
+        match json.to_string(entries) {
+            Ok(text) => HttpReply { status: 200, body: text, extra_headers: "" },
+            Err(_) => json_error(500, "serialization failed"),
+        }
+    }
+
+    fn clear_logs(self) -> HttpReply {
+        let mut count = 0
+        while self.logs.len() > 0 {
+            let _ = self.logs.pop()
+            count = count + 1
+        }
+        let payload = ClearLogsBody { cleared: count }
+        match json.to_string(payload) {
+            Ok(text) => HttpReply { status: 200, body: text, extra_headers: "" },
+            Err(_) => json_error(500, "serialization failed"),
+        }
+    }
+
+    fn check_rate(self, client_key: string, now_ms: int) -> Option<HttpReply> {
+        if self.config.rate_limit < 1 {
+            return None
+        }
+        let key = rate_key(client_key)
+        let lim = fixed_window(self.config.rate_limit, self.config.window_ms)
+        let checked = check_key(lim, buckets_for_limit(self.buckets), key, now_ms)
+        self.buckets = buckets_from_limit(checked.0)
+        let result = checked.1
+        if result.allowed {
+            return None
+        }
+        let header_block = rate_limit_headers(result)
+        Some(HttpReply {
+            status: 429,
+            body: "{\"error\":\"rate limit exceeded\"}",
+            extra_headers: header_block,
+        })
+    }
+
+    fn record_log(self, entry: RequestLogEntry) {
+        self.logs.push(entry)
+        if self.config.log_max > 0 {
+            while self.logs.len() > self.config.log_max {
+                let _ = self.logs.remove(0)
+            }
+        }
+    }
+}
+
+pub fn stripped_path(prefix: string, path: string) -> string {
+    let pfx = own(prefix)
+    let p = own(path)
+    if strings.len(pfx) == 0 {
+        return p
+    }
+    if starts_with_string(p, pfx) {
+        let rest = strings.substring(p, strings.len(pfx), strings.len(p))
+        if strings.len(rest) == 0 {
+            return "/"
+        }
+        if strings.starts_with(rest, "/") {
+            return rest
+        }
+        return "/${rest}"
+    }
+    p
+}
+
+fn starts_with_string(hay: string, needle: string) -> bool {
+    if strings.len(needle) > strings.len(hay) {
+        return false
+    }
+    let head = strings.substring(hay, 0, strings.len(needle))
+    head == needle
+}
+
+fn json_ok() -> HttpReply {
+    let mut payload = OkBody { ok: true }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply { status: 200, body: text, extra_headers: "" },
+        Err(_) => HttpReply { status: 200, body: "{\"ok\":true}", extra_headers: "" },
+    }
+}
+
+fn json_error(status: u16, message: string) -> HttpReply {
+    let mut payload = ErrorBody { error: message }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply { status: status, body: text, extra_headers: "" },
+        Err(_) => HttpReply { status: status, body: "{\"error\":\"unknown\"}", extra_headers: "" },
+    }
+}
+
+fn apply_security(reply: HttpReply) -> HttpReply {
+    let security = security_header_block()
+    let merged = merge_header_blocks(reply.extra_headers, security)
+    HttpReply {
+        status: reply.status,
+        body: reply.body,
+        extra_headers: merged,
+    }
+}
+
+fn security_header_block() -> string {
+    format_headers(defaults())
+}
+
+fn merge_header_blocks(left: string, right: string) -> string {
+    if strings.len(left) == 0 {
+        return right
+    }
+    if strings.len(right) == 0 {
+        return left
+    }
+    "${left}\n${right}"
+}
+
+fn rate_key(client_key: string) -> string {
+    if strings.len(client_key) == 0 {
+        return "anonymous"
+    }
+    client_key
+}
+
+fn buckets_for_limit(buckets: HashMap<string, RateBucket>) -> HashMap<string, WindowBucket> {
+    let mut out = HashMap::new()
+    for (key, bucket) in buckets {
+        out.insert(key, WindowBucket {
+            window_start_ms: bucket.window_start_ms,
+            count: bucket.count,
+        })
+    }
+    out
+}
+
+fn buckets_from_limit(buckets: HashMap<string, WindowBucket>) -> HashMap<string, RateBucket> {
+    let mut out = HashMap::new()
+    for (key, bucket) in buckets {
+        out.insert(key, RateBucket {
+            window_start_ms: bucket.window_start_ms,
+            count: bucket.count,
+        })
+    }
+    out
+}
+
+fn own(value: string) -> string {
+    value
+}

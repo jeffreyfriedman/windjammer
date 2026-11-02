@@ -1,0 +1,111 @@
+// Enum values (unit variants, tuple variants, struct variants) as arm results, returns, struct fields,
+// Vec elements, loop-carried state and closure captures; variant names reused as pattern bindings.
+enum Level {
+    Low,
+    Mid,
+    High,
+}
+
+enum Shape {
+    Dot,
+    Line(int),
+    Box { w: int, h: int },
+}
+
+struct Reading {
+    level: Level,
+    shape: Shape,
+}
+
+fn classify(n: int) -> Level {
+    if n < 10 {
+        Level::Low
+    } else if n < 100 {
+        Level::Mid
+    } else {
+        Level::High
+    }
+}
+
+fn bump(l: Level) -> Level {
+    match l {
+        Low => Level::Mid,
+        Mid => Level::High,
+        High => Level::High,
+    }
+}
+
+fn level_name(l: Level) -> string {
+    match l {
+        Level::Low => "low",
+        Level::Mid => "mid",
+        Level::High => "high",
+    }
+}
+
+fn make_shape(n: int) -> Shape {
+    match n % 3 {
+        0 => Shape::Dot,
+        1 => Shape::Line(n),
+        _ => Shape::Box { w: n, h: n + 1 },
+    }
+}
+
+fn area(s: Shape) -> int {
+    match s {
+        Shape::Dot => 0,
+        Shape::Line(n) => n,
+        Shape::Box { w, h } => w * h,
+    }
+}
+
+fn first_high(xs: Vec<int>) -> Level {
+    for x in xs {
+        let l = classify(x)
+        match l {
+            Level::High => return l,
+            _ => {}
+        }
+    }
+    Level::Low
+}
+
+fn main() {
+    let mut l = Level::Low
+    let mut path = ""
+    for i in 0..4 {
+        l = bump(l)
+        path = path + level_name(l) + ","
+        if i == 9 {
+            break
+        }
+    }
+    println(path)
+    let mut total = 0
+    for n in 0..9 {
+        total += area(make_shape(n))
+    }
+    println("${total}")
+    println(level_name(first_high([1, 20, 300, 4000])))
+    println(level_name(first_high([1, 2, 3])))
+    let r = Reading { level: classify(55), shape: make_shape(5) }
+    let again = match r.level {
+        Level::Mid => Level::High,
+        other => other,
+    }
+    println("${level_name(again)} ${area(r.shape)}")
+    let mut ls: Vec<Level> = Vec::new()
+    for n in [5, 50, 500] {
+        ls.push(classify(n))
+    }
+    let mut names = ""
+    for x in ls {
+        names = names + level_name(x) + " "
+    }
+    println(names)
+    let pick = |n: int| classify(n)
+    println("${level_name(pick(7))} ${level_name(pick(70))}")
+    let captured = classify(1000)
+    let name_of = || level_name(captured)
+    println(name_of())
+}

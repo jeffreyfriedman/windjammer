@@ -10,6 +10,7 @@ Repository tooling written in interpreted Windjammer (`wj run scripts/wj/<script
 ## Layout
 - `wj.toml`: package, path dependencies on ecosystem packages, and the capability grant (one grant for the directory; packages get narrower grants).
 - Ports: `check_versions`, `sync_version`, `check_orphan_tests`, `check_test_ratchet`, `check_negative_oracle`, `spec_check`, `diagnostics_leak_report` (shell originals); `coverage_report`, `gen_check_mutants`, `regen_conformance_vectors`, `rust_parity_report`, `rust_parity_run`, `arena_bench`, `interp_bench`, `bench_effects_overhead`, `interpreter_project_bench` (Python originals).
+- Drift gate (`docs/testing/DRIFT.md`): `drift_gate.wj` (one command, step table, exit status), `drift_corpus.wj` (runs the differential corpus under walker, resolved and compiled; TSV out), `drift_ledger.wj` (judges a run against the shrink-only ledger), `drift_selftest.wj` (planted divergences the ledger must reject).
 - `port_gates.wj`: runs the cases under `tests/py_ports/` (`--record` re-derives expectations from the original; `--time N` produces the CPU-time table of `docs/design/python-replacement-audit.md`).
 
 ## Invariants

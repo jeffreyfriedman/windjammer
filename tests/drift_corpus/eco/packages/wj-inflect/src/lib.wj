@@ -1,0 +1,387 @@
+use std::strings
+
+/// Convert camelCase / PascalCase / kebab-case to snake_case.
+pub fn snake_case(text: string) -> string {
+    let s = strings.trim(text)
+    if strings.len(s) == 0 {
+        return ""
+    }
+    let mut out = ""
+    let mut prev_lower = false
+    let mut prev_under = false
+    for ch in strings.chars(s) {
+        if ch == '-' || ch == ' ' {
+            if !prev_under && strings.len(out) > 0 {
+                out = "${out}_"
+                prev_under = true
+            }
+            prev_lower = false
+        } else if is_upper(ch) {
+            if prev_lower && !prev_under {
+                out = "${out}_"
+            }
+            out = "${out}${to_lower_char(ch)}"
+            prev_lower = false
+            prev_under = false
+        } else {
+            out = "${out}${ch}"
+            prev_lower = is_lower(ch) || is_digit_char(ch)
+            prev_under = ch == '_'
+        }
+    }
+    out
+}
+
+/// Convert snake_case / kebab-case to camelCase.
+pub fn camel_case(text: string) -> string {
+    let parts = split_words(text)
+    let mut out = ""
+    let mut first = true
+    for part in parts {
+        if strings.len(part) == 0 {
+            continue
+        }
+        if first {
+            out = "${out}${to_lower_string(part)}"
+            first = false
+        } else {
+            out = "${out}${capitalize(part)}"
+        }
+    }
+    out
+}
+
+/// Convert snake_case / kebab-case to PascalCase.
+pub fn pascal_case(text: string) -> string {
+    let parts = split_words(text)
+    let mut out = ""
+    for part in parts {
+        if strings.len(part) == 0 {
+            continue
+        }
+        out = "${out}${capitalize(part)}"
+    }
+    out
+}
+
+/// Convert camelCase / PascalCase / snake_case to kebab-case.
+pub fn kebab_case(text: string) -> string {
+    strings.replace(snake_case(text), "_", "-")
+}
+
+/// Title Case: capitalize each word, space-separated.
+pub fn title_case(text: string) -> string {
+    let parts = split_words(text)
+    let mut out = ""
+    let mut first = true
+    for part in parts {
+        if strings.len(part) == 0 {
+            continue
+        }
+        if !first {
+            out = "${out} "
+        }
+        out = "${out}${capitalize(part)}"
+        first = false
+    }
+    out
+}
+
+/// URL-safe slug: lowercase, non-alnum → `-`, collapse/trim hyphens.
+pub fn slugify(text: string) -> string {
+    let mut out = ""
+    let mut last_hyphen = true
+    for ch in strings.chars(text) {
+        if is_alnum(ch) {
+            out = "${out}${to_lower_char(ch)}"
+            last_hyphen = false
+        } else {
+            if !last_hyphen {
+                out = "${out}-"
+                last_hyphen = true
+            }
+        }
+    }
+    if strings.ends_with(out, "-") {
+        out = strings.substring(out, 0, strings.len(out) - 1)
+    }
+    out
+}
+
+/// SCREAMING_SNAKE_CASE from camel / kebab / pascal / snake input.
+pub fn constant_case(text: string) -> string {
+    let snake = snake_case(text)
+    let mut out = ""
+    for ch in strings.chars(snake) {
+        out = "${out}${to_upper_char(ch)}"
+    }
+    out
+}
+
+/// True when `text` is non-empty snake_case (`[a-z0-9_]+`, no uppercase / hyphens).
+pub fn is_snake_case(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    for ch in strings.chars(text) {
+        if is_upper(ch) {
+            return false
+        }
+        if ch == '-' {
+            return false
+        }
+        if !(is_lower(ch) || is_digit_char(ch) || ch == '_') {
+            return false
+        }
+    }
+    true
+}
+
+/// True when `text` is non-empty kebab-case (`[a-z0-9-]+`, no uppercase / underscores).
+pub fn is_kebab_case(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    for ch in strings.chars(text) {
+        if is_upper(ch) {
+            return false
+        }
+        if ch == '_' {
+            return false
+        }
+        if !(is_lower(ch) || is_digit_char(ch) || ch == '-') {
+            return false
+        }
+    }
+    true
+}
+
+/// True when `text` is non-empty SCREAMING_SNAKE (`[A-Z0-9_]+`).
+pub fn is_constant_case(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    for ch in strings.chars(text) {
+        if is_lower(ch) {
+            return false
+        }
+        if ch == '-' {
+            return false
+        }
+        if !(is_upper(ch) || is_digit_char(ch) || ch == '_') {
+            return false
+        }
+    }
+    true
+}
+
+/// True when `text` is camelCase (starts lower, alnum only, no separators).
+pub fn is_camel_case(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    let mut first = true
+    for ch in strings.chars(text) {
+        if first {
+            if !is_lower(ch) {
+                return false
+            }
+            first = false
+        } else {
+            if !is_alnum(ch) {
+                return false
+            }
+        }
+    }
+    true
+}
+
+/// True when `text` is PascalCase (starts upper, alnum only, no separators).
+pub fn is_pascal_case(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    let mut first = true
+    for ch in strings.chars(text) {
+        if first {
+            if !is_upper(ch) {
+                return false
+            }
+            first = false
+        } else {
+            if !is_alnum(ch) {
+                return false
+            }
+        }
+    }
+    true
+}
+
+/// True when `text` is a URL slug (lowercase alnum + hyphens, no leading/trailing `-`).
+pub fn is_slug(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    if strings.starts_with(text, "-") || strings.ends_with(text, "-") {
+        return false
+    }
+    for ch in strings.chars(text) {
+        if ch == '-' {
+            continue
+        }
+        if !is_lower(ch) && !is_digit_char(ch) {
+            return false
+        }
+    }
+    true
+}
+
+/// True when `text` equals `title_case(text)` and contains at least one space-separated word.
+pub fn is_title_case(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    title_case(text) == text
+}
+
+/// True when `text` is empty or only whitespace.
+pub fn is_blank(text: string) -> bool {
+    strings.len(strings.trim(text)) == 0
+}
+
+/// Ok(text) when `text` is empty or only whitespace; otherwise Err.
+pub fn require_blank(text: string) -> Result<string, string> {
+    if is_blank(text) {
+        Ok(text)
+    } else {
+        Err("expected blank")
+    }
+}
+
+/// Number of words after splitting on case and separators.
+pub fn word_count(text: string) -> int {
+    let parts = split_words(text)
+    let mut n = 0
+    for _w in parts {
+        n = n + 1
+    }
+    n
+}
+
+fn split_words(text: string) -> Vec<string> {
+    let snake = snake_case(text)
+    let mut parts: Vec<string> = Vec::new()
+    let mut current = ""
+    for ch in strings.chars(snake) {
+        if ch == '_' || ch == '-' {
+            if strings.len(current) > 0 {
+                parts.push(current)
+                current = ""
+            }
+        } else {
+            current = "${current}${ch}"
+        }
+    }
+    if strings.len(current) > 0 {
+        parts.push(current)
+    }
+    parts
+}
+
+fn capitalize(word: string) -> string {
+    let mut out = ""
+    let mut first = true
+    for ch in strings.chars(word) {
+        if first {
+            out = "${out}${to_upper_char(ch)}"
+            first = false
+        } else {
+            out = "${out}${to_lower_char(ch)}"
+        }
+    }
+    out
+}
+
+fn to_lower_string(word: string) -> string {
+    let mut out = ""
+    for ch in strings.chars(word) {
+        out = "${out}${to_lower_char(ch)}"
+    }
+    out
+}
+
+fn is_upper(ch: char) -> bool {
+    ch >= 'A' && ch <= 'Z'
+}
+
+fn is_lower(ch: char) -> bool {
+    ch >= 'a' && ch <= 'z'
+}
+
+fn is_digit_char(ch: char) -> bool {
+    ch >= '0' && ch <= '9'
+}
+
+fn is_alnum(ch: char) -> bool {
+    is_lower(ch) || is_upper(ch) || is_digit_char(ch)
+}
+
+fn to_lower_char(ch: char) -> char {
+    if ch == 'A' { return 'a' }
+    if ch == 'B' { return 'b' }
+    if ch == 'C' { return 'c' }
+    if ch == 'D' { return 'd' }
+    if ch == 'E' { return 'e' }
+    if ch == 'F' { return 'f' }
+    if ch == 'G' { return 'g' }
+    if ch == 'H' { return 'h' }
+    if ch == 'I' { return 'i' }
+    if ch == 'J' { return 'j' }
+    if ch == 'K' { return 'k' }
+    if ch == 'L' { return 'l' }
+    if ch == 'M' { return 'm' }
+    if ch == 'N' { return 'n' }
+    if ch == 'O' { return 'o' }
+    if ch == 'P' { return 'p' }
+    if ch == 'Q' { return 'q' }
+    if ch == 'R' { return 'r' }
+    if ch == 'S' { return 's' }
+    if ch == 'T' { return 't' }
+    if ch == 'U' { return 'u' }
+    if ch == 'V' { return 'v' }
+    if ch == 'W' { return 'w' }
+    if ch == 'X' { return 'x' }
+    if ch == 'Y' { return 'y' }
+    if ch == 'Z' { return 'z' }
+    ch
+}
+
+fn to_upper_char(ch: char) -> char {
+    if ch == 'a' { return 'A' }
+    if ch == 'b' { return 'B' }
+    if ch == 'c' { return 'C' }
+    if ch == 'd' { return 'D' }
+    if ch == 'e' { return 'E' }
+    if ch == 'f' { return 'F' }
+    if ch == 'g' { return 'G' }
+    if ch == 'h' { return 'H' }
+    if ch == 'i' { return 'I' }
+    if ch == 'j' { return 'J' }
+    if ch == 'k' { return 'K' }
+    if ch == 'l' { return 'L' }
+    if ch == 'm' { return 'M' }
+    if ch == 'n' { return 'N' }
+    if ch == 'o' { return 'O' }
+    if ch == 'p' { return 'P' }
+    if ch == 'q' { return 'Q' }
+    if ch == 'r' { return 'R' }
+    if ch == 's' { return 'S' }
+    if ch == 't' { return 'T' }
+    if ch == 'u' { return 'U' }
+    if ch == 'v' { return 'V' }
+    if ch == 'w' { return 'W' }
+    if ch == 'x' { return 'X' }
+    if ch == 'y' { return 'Y' }
+    if ch == 'z' { return 'Z' }
+    ch
+}

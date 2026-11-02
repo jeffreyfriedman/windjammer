@@ -1,0 +1,351 @@
+use std::strings
+
+pub struct SemVer {
+    pub major: int,
+    pub minor: int,
+    pub patch: int,
+    pub pre: string,
+    pub build: string,
+}
+
+/// Parse `major.minor.patch`, optional `-pre`, optional `+build`.
+pub fn parse(text: string) -> Result<SemVer, string> {
+    if strings.len(text) == 0 {
+        return Err("empty version")
+    }
+    match split_build(text) {
+        Ok(pair) => {
+            let core_and_pre = pair.0
+            let build = pair.1
+            match split_pre(core_and_pre) {
+                Ok(pre_pair) => {
+                    let core = pre_pair.0
+                    let pre = pre_pair.1
+                    match parse_core(core) {
+                        Ok(nums) => Ok(SemVer {
+                            major: nums.0,
+                            minor: nums.1,
+                            patch: nums.2,
+                            pre: pre,
+                            build: build,
+                        }),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// `-1` when `a < b`, `0` when equal (ignoring build metadata), `1` when `a > b`.
+pub fn compare(a: SemVer, b: SemVer) -> int {
+    if a.major != b.major {
+        return cmp_int(a.major, b.major)
+    }
+    if a.minor != b.minor {
+        return cmp_int(a.minor, b.minor)
+    }
+    if a.patch != b.patch {
+        return cmp_int(a.patch, b.patch)
+    }
+    compare_pre(a.pre, b.pre)
+}
+
+pub fn format_version(v: SemVer) -> string {
+    let mut out = "${v.major}.${v.minor}.${v.patch}"
+    if strings.len(v.pre) > 0 {
+        out = "${out}-${v.pre}"
+    }
+    if strings.len(v.build) > 0 {
+        out = "${out}+${v.build}"
+    }
+    out
+}
+
+/// True when `a` is strictly newer than `b` (build metadata ignored).
+pub fn is_newer(a: SemVer, b: SemVer) -> bool {
+    compare(a, b) > 0
+}
+
+/// True when `a` is strictly older than `b` (build metadata ignored).
+pub fn is_older(a: SemVer, b: SemVer) -> bool {
+    compare(a, b) < 0
+}
+
+/// True when `a` and `b` compare equal (build metadata ignored).
+pub fn is_equal(a: SemVer, b: SemVer) -> bool {
+    compare(a, b) == 0
+}
+
+/// `Ok(a)` when `a` and `b` compare equal, otherwise `Err`.
+pub fn require_equal(a: SemVer, b: SemVer) -> Result<SemVer, string> {
+    if is_equal(a, b) {
+        return Ok(a)
+    }
+    Err("expected equal")
+}
+
+/// Increment patch; clears prerelease and build metadata.
+pub fn bump_patch(v: SemVer) -> SemVer {
+    SemVer {
+        major: v.major,
+        minor: v.minor,
+        patch: v.patch + 1,
+        pre: "",
+        build: "",
+    }
+}
+
+/// Increment minor, reset patch; clears prerelease and build metadata.
+pub fn bump_minor(v: SemVer) -> SemVer {
+    SemVer {
+        major: v.major,
+        minor: v.minor + 1,
+        patch: 0,
+        pre: "",
+        build: "",
+    }
+}
+
+/// Increment major, reset minor/patch; clears prerelease and build metadata.
+pub fn bump_major(v: SemVer) -> SemVer {
+    SemVer {
+        major: v.major + 1,
+        minor: 0,
+        patch: 0,
+        pre: "",
+        build: "",
+    }
+}
+
+/// Drop prerelease identifier; keep build metadata.
+pub fn clear_prerelease(v: SemVer) -> SemVer {
+    SemVer {
+        major: v.major,
+        minor: v.minor,
+        patch: v.patch,
+        pre: "",
+        build: v.build,
+    }
+}
+
+/// Drop build metadata; keep prerelease identifier.
+pub fn clear_build(v: SemVer) -> SemVer {
+    SemVer {
+        major: v.major,
+        minor: v.minor,
+        patch: v.patch,
+        pre: v.pre,
+        build: "",
+    }
+}
+
+pub fn major_of(v: SemVer) -> int {
+    v.major
+}
+
+pub fn minor_of(v: SemVer) -> int {
+    v.minor
+}
+
+pub fn patch_of(v: SemVer) -> int {
+    v.patch
+}
+
+/// True when the major component is zero.
+pub fn is_zero_major(v: SemVer) -> bool {
+    major_of(v) == 0
+}
+
+/// `Ok(v)` when the major component is zero, otherwise `Err`.
+pub fn require_zero_major(v: SemVer) -> Result<SemVer, string> {
+    if is_zero_major(v) {
+        return Ok(v)
+    }
+    Err("expected zero major")
+}
+
+/// True when major, minor, and patch are all zero.
+pub fn is_zero_version(v: SemVer) -> bool {
+    v.major == 0 && v.minor == 0 && v.patch == 0
+}
+
+/// Prerelease identifier string (empty when absent).
+pub fn prerelease_of(v: SemVer) -> string {
+    v.pre
+}
+
+/// Build metadata string (empty when absent).
+pub fn build_of(v: SemVer) -> string {
+    v.build
+}
+
+fn split_build(text: string) -> Result<(string, string), string> {
+    let mut core = text
+    let mut build = ""
+    let mut i = 0
+    while i < strings.len(text) {
+        let ch = strings.substring_chars(text, i, i + 1)
+        if ch == "+" {
+            core = strings.substring(text, 0, i)
+            build = strings.substring(text, i + 1, strings.len(text))
+            i = strings.len(text)
+        } else {
+            i = i + 1
+        }
+    }
+    Ok((core, build))
+}
+
+fn split_pre(text: string) -> Result<(string, string), string> {
+    let mut core = text
+    let mut pre = ""
+    let mut i = 0
+    while i < strings.len(text) {
+        let ch = strings.substring_chars(text, i, i + 1)
+        if ch == "-" {
+            core = strings.substring(text, 0, i)
+            pre = strings.substring(text, i + 1, strings.len(text))
+            i = strings.len(text)
+        } else {
+            i = i + 1
+        }
+    }
+    Ok((core, pre))
+}
+
+fn parse_core(text: string) -> Result<(int, int, int), string> {
+    let parts = strings.split(text, ".")
+    if parts.len() != 3 {
+        return Err("expected major.minor.patch")
+    }
+    match parse_nonneg(parts[0]) {
+        Ok(major) => {
+            match parse_nonneg(parts[1]) {
+                Ok(minor) => {
+                    match parse_nonneg(parts[2]) {
+                        Ok(patch) => Ok((major, minor, patch)),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn parse_nonneg(text: string) -> Result<int, string> {
+    if strings.len(text) == 0 {
+        return Err("empty number")
+    }
+    let n = to_int(text)
+    if n < 0 {
+        return Err("negative number")
+    }
+    Ok(n)
+}
+
+fn to_int(text: string) -> int {
+    strings.parse_i32(text) as int
+}
+
+fn compare_pre(a: string, b: string) -> int {
+    if a == b {
+        return 0
+    }
+    if strings.len(a) == 0 {
+        return 1
+    }
+    if strings.len(b) == 0 {
+        return -1
+    }
+    let a_parts = strings.split(a, ".")
+    let b_parts = strings.split(b, ".")
+    let mut i = 0
+    while i < a_parts.len() || i < b_parts.len() {
+        if i >= a_parts.len() {
+            return -1
+        }
+        if i >= b_parts.len() {
+            return 1
+        }
+        let left = a_parts[i]
+        let right = b_parts[i]
+        if left == right {
+            i = i + 1
+        } else {
+            let ord = compare_identifiers(left, right)
+            if ord != 0 {
+                return ord
+            }
+            i = i + 1
+        }
+    }
+    0
+}
+
+fn compare_identifiers(left: string, right: string) -> int {
+    if is_all_digits(left) && is_all_digits(right) {
+        return cmp_int(to_int(left), to_int(right))
+    }
+    if is_all_digits(left) {
+        return -1
+    }
+    if is_all_digits(right) {
+        return 1
+    }
+    cmp_string(left, right)
+}
+
+fn is_all_digits(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    let mut i = 0
+    while i < strings.len(text) {
+        if !is_digit(strings.substring_chars(text, i, i + 1)) {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+fn is_digit(ch: string) -> bool {
+    strings.contains("0123456789", ch)
+}
+
+fn cmp_string(a: string, b: string) -> int {
+    let mut i = 0
+    while i < strings.len(a) && i < strings.len(b) {
+        let la = strings.byte_at(a, i)
+        let lb = strings.byte_at(b, i)
+        if la != lb {
+            if la < lb {
+                return -1
+            }
+            return 1
+        }
+        i = i + 1
+    }
+    if strings.len(a) < strings.len(b) {
+        return -1
+    }
+    if strings.len(a) > strings.len(b) {
+        return 1
+    }
+    0
+}
+
+fn cmp_int(a: int, b: int) -> int {
+    if a < b {
+        return -1
+    }
+    if a > b {
+        return 1
+    }
+    0
+}

@@ -1,0 +1,213 @@
+use crate::first_placeholder
+use crate::render
+use crate::render_strict
+use crate::render_with_defaults
+use crate::render_html
+use crate::escape_html
+use crate::has_placeholders
+use crate::is_plain
+use crate::last_placeholder
+use crate::missing_count
+use crate::require_plain
+use crate::require_last
+use crate::require_placeholder
+use crate::missing_keys
+use crate::placeholder_count
+use crate::require_fully_bound
+use crate::unique_placeholder_count
+use std::collections::HashMap
+use std::strings
+
+fn vars_one() -> HashMap<string, string> {
+    let mut vars = HashMap::new()
+    vars.insert("name", "Ada")
+    vars
+}
+
+fn test_render_single_placeholder() {
+    let out = render("Hello {{name}}!", vars_one())
+    assert_eq(out, "Hello Ada!")
+}
+
+fn test_render_multiple_placeholders() {
+    let mut vars = HashMap::new()
+    vars.insert("greeting", "Hi")
+    vars.insert("name", "Bob")
+    let out = render("{{greeting}}, {{name}}.", vars)
+    assert_eq(out, "Hi, Bob.")
+}
+
+fn test_render_adjacent_placeholders() {
+    let mut vars = HashMap::new()
+    vars.insert("a", "1")
+    vars.insert("b", "2")
+    let out = render("{{a}}{{b}}", vars)
+    assert_eq(out, "12")
+}
+
+fn test_render_missing_key_left_unchanged() {
+    let out = render("Hello {{name}}!", HashMap::new())
+    assert_eq(out, "Hello {{name}}!")
+}
+
+fn test_render_no_placeholders() {
+    let out = render("plain text", vars_one())
+    assert_eq(out, "plain text")
+}
+
+fn test_render_strict_ok() {
+    match render_strict("Hello {{name}}!", vars_one()) {
+        Ok(out) => assert_eq(out, "Hello Ada!"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_render_strict_missing_key() {
+    match render_strict("Hello {{name}}!", HashMap::new()) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(strings.contains(msg, "name"), "names missing key"),
+    }
+}
+
+fn test_missing_keys_finds_gaps() {
+    let mut vars = HashMap::new()
+    vars.insert("a", "1")
+    let gaps = missing_keys("{{a}} and {{b}}", vars)
+    assert_eq(gaps.len(), 1)
+    assert_eq(gaps[0], "b")
+}
+
+fn test_render_with_defaults_fills_missing() {
+    let mut defaults = HashMap::new()
+    defaults.insert("greeting", "Hello")
+    let mut vars = HashMap::new()
+    vars.insert("name", "Ada")
+    let out = render_with_defaults("{{greeting}}, {{name}}!", vars, defaults)
+    assert_eq(out, "Hello, Ada!")
+}
+
+fn test_render_with_defaults_vars_override() {
+    let mut defaults = HashMap::new()
+    defaults.insert("name", "Default")
+    let mut vars = HashMap::new()
+    vars.insert("name", "Override")
+    let out = render_with_defaults("Hi {{name}}", vars, defaults)
+    assert_eq(out, "Hi Override")
+}
+
+fn test_placeholder_trims_whitespace() {
+    let mut vars = HashMap::new()
+    vars.insert("name", "Ada")
+    let out = render("Hello {{ name }}!", vars)
+    assert_eq(out, "Hello Ada!")
+}
+
+fn test_escape_html() {
+    assert_eq(escape_html("a & b"), "a &amp; b")
+    assert_eq(escape_html("<script>"), "&lt;script&gt;")
+    assert_eq(escape_html("\"x\""), "&quot;x&quot;")
+}
+
+fn test_render_html_escapes_values() {
+    let mut vars = HashMap::new()
+    vars.insert("body", "<b>hi</b>")
+    let out = render_html("<p>{{body}}</p>", vars)
+    assert_eq(out, "<p>&lt;b&gt;hi&lt;/b&gt;</p>")
+}
+
+fn test_has_placeholders_true() {
+    assert(has_placeholders("Hello {{name}}!"), "expected placeholders")
+}
+
+fn test_has_placeholders_false_for_plain() {
+    assert(!has_placeholders("plain text"), "expected no placeholders")
+}
+
+fn test_has_placeholders_false_for_unclosed() {
+    assert(!has_placeholders("Hello {{name"), "unclosed is not a placeholder")
+}
+
+fn test_placeholder_count() {
+    assert_eq(placeholder_count("Hello {{name}}!"), 1)
+    assert_eq(placeholder_count("{{a}} {{b}} {{a}}"), 3)
+    assert_eq(placeholder_count("plain"), 0)
+}
+
+fn test_unique_placeholder_count_and_is_fully_bound() {
+    assert_eq(unique_placeholder_count("{{a}} {{b}} {{a}}"), 2)
+    assert_eq(unique_placeholder_count("plain"), 0)
+    let empty = HashMap::new()
+}
+
+fn test_missing_count_and_require_fully_bound() {
+    assert_eq(missing_count("Hello {{name}}!", vars_one()), 0)
+    let empty = HashMap::new()
+    assert_eq(missing_count("Hello {{name}}!", empty), 1)
+    match require_fully_bound("Hello {{name}}!", vars_one()) {
+        Ok(t) => assert_eq(t, "Hello {{name}}!"),
+        Err(_) => assert(false, "fully bound"),
+    }
+    match require_fully_bound("Hello {{name}}!", empty) {
+        Ok(_) => assert(false, "unbound must Err"),
+        Err(msg) => assert(strings.contains(msg, "unbound"), "mentions unbound"),
+    }
+}
+
+@test
+fn test_is_plain_has_missing_and_first_placeholder() {
+    assert(is_plain("Hello world"), "plain")
+    assert(!is_plain("Hello {{name}}!"), "has placeholder")
+    let empty = HashMap::new()
+    match first_placeholder("Hello {{name}}!") {
+        Some(n) => assert_eq(n, "name"),
+        None => assert(false, "first name"),
+    }
+    match first_placeholder("plain") {
+        Some(_) => assert(false, "plain has none"),
+        None => {},
+    }
+}
+
+@test
+fn test_last_placeholder_and_require_plain() {
+    match last_placeholder("Hello {{name}} and {{title}}!") {
+        Some(n) => assert_eq(n, "title"),
+        None => assert(false, "last"),
+    }
+    match last_placeholder("plain") {
+        Some(_) => assert(false, "none"),
+        None => {},
+    }
+    match require_plain("Hello world") {
+        Ok(t) => assert_eq(t, "Hello world"),
+        Err(_) => assert(false, "plain"),
+    }
+    match require_plain("Hello {{name}}!") {
+        Ok(_) => assert(false, "placeholder must Err"),
+        Err(msg) => assert(strings.contains(msg, "plain"), "mentions plain"),
+    }
+}
+
+@test
+fn test_require_placeholder() {
+    match require_placeholder("Hello {{name}}!") {
+        Ok(name) => assert_eq(name, "name"),
+        Err(_) => assert(false, "has placeholder"),
+    }
+    match require_placeholder("Hello world") {
+        Ok(_) => assert(false, "plain must Err"),
+        Err(msg) => assert(strings.contains(msg, "placeholder"), "mentions placeholder"),
+    }
+}
+
+@test
+fn test_require_last() {
+    match require_last("Hello {{name}} and {{city}}!") {
+        Ok(name) => assert_eq(name, "city"),
+        Err(_) => assert(false, "last placeholder"),
+    }
+    match require_last("Hello world") {
+        Ok(_) => assert(false, "plain must Err"),
+        Err(msg) => assert(strings.contains(msg, "last"), "mentions last"),
+    }
+}

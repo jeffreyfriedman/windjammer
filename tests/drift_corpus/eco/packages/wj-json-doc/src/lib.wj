@@ -1,0 +1,657 @@
+use std::strings
+
+/// A JSON value whose objects keep their members in document order.
+@derive(Clone)
+pub enum Json {
+    Null,
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Str(string),
+    Arr(Vec<Json>),
+    Obj(Vec<Member>),
+}
+
+@derive(Clone)
+pub struct Member {
+    pub key: string,
+    pub value: Json,
+}
+
+// ---------------------------------------------------------------- building
+
+pub fn member(key: string, value: Json) -> Member {
+    Member { key: key, value: value }
+}
+
+pub fn object() -> Json {
+    Json::Obj(Vec::new())
+}
+
+pub fn array() -> Json {
+    Json::Arr(Vec::new())
+}
+
+pub fn from_str(s: string) -> Json {
+    Json::Str(s)
+}
+
+pub fn from_int(n: i64) -> Json {
+    Json::Int(n)
+}
+
+pub fn from_float(x: f64) -> Json {
+    Json::Float(x)
+}
+
+/// The object with `key` set: replaces an existing member in place, appends a new one.
+pub fn with(doc: Json, key: string, value: Json) -> Json {
+    match doc {
+        Json::Obj(members) => {
+            let mut out = Vec::new()
+            let mut done = false
+            for m in members {
+                if m.key == key {
+                    out.push(Member { key: key, value: value })
+                    done = true
+                } else {
+                    out.push(m)
+                }
+            }
+            if !done {
+                out.push(Member { key: key, value: value })
+            }
+            Json::Obj(out)
+        },
+        other => other,
+    }
+}
+
+/// The array with `value` appended.
+pub fn push(doc: Json, value: Json) -> Json {
+    match doc {
+        Json::Arr(items) => {
+            let mut out = items
+            out.push(value)
+            Json::Arr(out)
+        },
+        other => other,
+    }
+}
+
+// ---------------------------------------------------------------- reading
+
+/// Member `key` of an object.
+pub fn get(doc: Json, key: string) -> Option<Json> {
+    match doc {
+        Json::Obj(members) => {
+            for m in members {
+                if m.key == key {
+                    return Some(m.value)
+                }
+            }
+            None
+        },
+        _ => None,
+    }
+}
+
+/// Element `index` of an array.
+pub fn at(doc: Json, index: int) -> Option<Json> {
+    match doc {
+        Json::Arr(items) => {
+            if index >= 0 && index < items.len() {
+                return Some(items[index])
+            }
+            None
+        },
+        _ => None,
+    }
+}
+
+/// Keys of an object, in document order.
+pub fn keys(doc: Json) -> Vec<string> {
+    let mut out = Vec::new()
+    match doc {
+        Json::Obj(members) => {
+            for m in members {
+                out.push(m.key)
+            }
+        },
+        _ => {},
+    }
+    out
+}
+
+/// Elements of an array (empty for anything else).
+pub fn items(doc: Json) -> Vec<Json> {
+    match doc {
+        Json::Arr(xs) => xs,
+        _ => Vec::new(),
+    }
+}
+
+/// Members of an object, in document order (empty for anything else).
+pub fn members(doc: Json) -> Vec<Member> {
+    match doc {
+        Json::Obj(ms) => ms,
+        _ => Vec::new(),
+    }
+}
+
+pub fn as_str(doc: Json) -> Option<string> {
+    match doc {
+        Json::Str(s) => Some(s),
+        _ => None,
+    }
+}
+
+pub fn as_i64(doc: Json) -> Option<i64> {
+    match doc {
+        Json::Int(n) => Some(n),
+        _ => None,
+    }
+}
+
+/// Numbers read as floats, integers included.
+pub fn as_f64(doc: Json) -> Option<f64> {
+    match doc {
+        Json::Float(x) => Some(x),
+        Json::Int(n) => Some(n as f64),
+        _ => None,
+    }
+}
+
+pub fn as_bool(doc: Json) -> Option<bool> {
+    match doc {
+        Json::Bool(b) => Some(b),
+        _ => None,
+    }
+}
+
+pub fn is_null(doc: Json) -> bool {
+    match doc {
+        Json::Null => true,
+        _ => false,
+    }
+}
+
+// ---------------------------------------------------------------- parsing
+
+struct Parser {
+    chars: Vec<char>,
+    pos: usize,
+}
+
+impl Parser {
+    fn eof(self) -> bool {
+        self.pos >= self.chars.len()
+    }
+
+    fn peek(self) -> char {
+        self.chars[self.pos]
+    }
+
+    fn skip_ws(self) {
+        while self.pos < self.chars.len() {
+            let c = self.chars[self.pos]
+            if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
+                self.pos = self.pos + 1
+            } else {
+                break
+            }
+        }
+    }
+
+    fn fail(self, what: string) -> string {
+        "JSON parse error at char ${self.pos}: ${what}"
+    }
+
+    fn expect_word(self, word: string) -> bool {
+        let w: Vec<char> = word.chars().collect()
+        if self.pos + w.len() > self.chars.len() {
+            return false
+        }
+        let mut i = 0
+        while i < w.len() {
+            if self.chars[self.pos + i] != w[i] {
+                return false
+            }
+            i = i + 1
+        }
+        self.pos = self.pos + w.len()
+        true
+    }
+
+    fn value(self) -> Result<Json, string> {
+        self.skip_ws()
+        if self.eof() {
+            return Err(self.fail("unexpected end of input"))
+        }
+        let c = self.peek()
+        if c == '{' {
+            return self.object()
+        }
+        if c == '[' {
+            return self.array()
+        }
+        if c == '"' {
+            let s = self.read_string()?
+            return Ok(Json::Str(s))
+        }
+        if c == 't' {
+            if self.expect_word("true") {
+                return Ok(Json::Bool(true))
+            }
+            return Err(self.fail("expected true"))
+        }
+        if c == 'f' {
+            if self.expect_word("false") {
+                return Ok(Json::Bool(false))
+            }
+            return Err(self.fail("expected false"))
+        }
+        if c == 'n' {
+            if self.expect_word("null") {
+                return Ok(Json::Null)
+            }
+            return Err(self.fail("expected null"))
+        }
+        self.number()
+    }
+
+    fn number(self) -> Result<Json, string> {
+        let start = self.pos
+        let mut is_float = false
+        while self.pos < self.chars.len() {
+            let c = self.chars[self.pos]
+            if c == '.' || c == 'e' || c == 'E' {
+                is_float = true
+                self.pos = self.pos + 1
+            } else if c == '-' || c == '+' || (c >= '0' && c <= '9') {
+                self.pos = self.pos + 1
+            } else {
+                break
+            }
+        }
+        if self.pos == start {
+            return Err(self.fail("unexpected character"))
+        }
+        let mut text = ""
+        let mut i = start
+        while i < self.pos {
+            text = text + self.chars[i].to_string()
+            i = i + 1
+        }
+        if is_float {
+            return match text.parse::<f64>() {
+                Ok(x) => Ok(Json::Float(x)),
+                Err(_) => Err(self.fail("bad number ${text}")),
+            }
+        }
+        match text.parse::<i64>() {
+            Ok(n) => Ok(Json::Int(n)),
+            Err(_) => match text.parse::<f64>() {
+                Ok(x) => Ok(Json::Float(x)),
+                Err(_) => Err(self.fail("bad number ${text}")),
+            },
+        }
+    }
+
+    fn hex4(self) -> Result<u32, string> {
+        let mut code: u32 = 0
+        let mut k = 0
+        while k < 4 {
+            if self.eof() {
+                return Err(self.fail("bad \\u escape"))
+            }
+            let c = self.chars[self.pos]
+            let d = hex_digit(c)
+            if d < 0 {
+                return Err(self.fail("bad \\u escape"))
+            }
+            code = code * 16 + (d as u32)
+            self.pos = self.pos + 1
+            k = k + 1
+        }
+        Ok(code)
+    }
+
+    fn read_string(self) -> Result<string, string> {
+        self.pos = self.pos + 1
+        let mut out = ""
+        while self.pos < self.chars.len() {
+            let c = self.chars[self.pos]
+            self.pos = self.pos + 1
+            if c == '"' {
+                return Ok(out)
+            }
+            if c != '\\' {
+                out = out + c.to_string()
+                continue
+            }
+            if self.eof() {
+                break
+            }
+            let e = self.chars[self.pos]
+            self.pos = self.pos + 1
+            if e == 'n' {
+                out = out + "\n"
+            } else if e == 't' {
+                out = out + "\t"
+            } else if e == 'r' {
+                out = out + "\r"
+            } else if e == 'b' {
+                out = out + "" + chr(8) + ""
+            } else if e == 'f' {
+                out = out + "" + chr(12) + ""
+            } else if e == '/' {
+                out = out + "/"
+            } else if e == '"' {
+                out = out + "\""
+            } else if e == '\\' {
+                out = out + "\\"
+            } else if e == 'u' {
+                let mut code = self.hex4()?
+                // a high surrogate pairs with the \uXXXX that follows
+                if code >= 55296 && code < 56320 && self.pos + 1 < self.chars.len() && self.chars[self.pos] == '\\' && self.chars[self.pos + 1] == 'u' {
+                    self.pos = self.pos + 2
+                    let low = self.hex4()?
+                    let hi_part: i64 = (code as i64) - 55296
+                    let lo_part: i64 = (low as i64) - 56320
+                    let combined: i64 = 65536 + hi_part * 1024 + lo_part
+                    code = combined as u32
+                }
+                match char::from_u32(code) {
+                    Some(ch) => { out = out + ch.to_string() },
+                    None => { out = out + chr(65533) },
+                }
+            } else {
+                return Err(self.fail("bad escape"))
+            }
+        }
+        Err(self.fail("unterminated string"))
+    }
+
+    fn array(self) -> Result<Json, string> {
+        self.pos = self.pos + 1
+        let mut items = Vec::new()
+        self.skip_ws()
+        if !self.eof() && self.peek() == ']' {
+            self.pos = self.pos + 1
+            return Ok(Json::Arr(items))
+        }
+        loop {
+            let v = self.value()?
+            items.push(v)
+            self.skip_ws()
+            if self.eof() {
+                return Err(self.fail("unterminated array"))
+            }
+            let c = self.peek()
+            self.pos = self.pos + 1
+            if c == ']' {
+                return Ok(Json::Arr(items))
+            }
+            if c != ',' {
+                return Err(self.fail("expected , or ]"))
+            }
+        }
+    }
+
+    fn object(self) -> Result<Json, string> {
+        self.pos = self.pos + 1
+        let mut members = Vec::new()
+        self.skip_ws()
+        if !self.eof() && self.peek() == '}' {
+            self.pos = self.pos + 1
+            return Ok(Json::Obj(members))
+        }
+        loop {
+            self.skip_ws()
+            if self.eof() || self.peek() != '"' {
+                return Err(self.fail("expected a string key"))
+            }
+            let key = self.read_string()?
+            self.skip_ws()
+            if self.eof() || self.peek() != ':' {
+                return Err(self.fail("expected :"))
+            }
+            self.pos = self.pos + 1
+            let v = self.value()?
+            // a repeated key keeps its first position and takes the last value (as Python's json does)
+            let mut replaced = false
+            let mut next = Vec::new()
+            for m in members {
+                if m.key == key {
+                    next.push(Member { key: key.clone(), value: v.clone() })
+                    replaced = true
+                } else {
+                    next.push(m)
+                }
+            }
+            if !replaced {
+                next.push(Member { key: key, value: v })
+            }
+            members = next
+            self.skip_ws()
+            if self.eof() {
+                return Err(self.fail("unterminated object"))
+            }
+            let c = self.peek()
+            self.pos = self.pos + 1
+            if c == '}' {
+                return Ok(Json::Obj(members))
+            }
+            if c != ',' {
+                return Err(self.fail("expected , or }"))
+            }
+        }
+    }
+}
+
+fn hex_digit(c: char) -> int {
+    if c >= '0' && c <= '9' {
+        return (c as int) - ('0' as int)
+    }
+    if c >= 'a' && c <= 'f' {
+        return (c as int) - ('a' as int) + 10
+    }
+    if c >= 'A' && c <= 'F' {
+        return (c as int) - ('A' as int) + 10
+    }
+    -1
+}
+
+/// Parse a JSON document; object members keep document order.
+pub fn parse(text: string) -> Result<Json, string> {
+    let chars: Vec<char> = text.chars().collect()
+    let mut p = Parser { chars: chars, pos: 0 }
+    let v = p.value()?
+    p.skip_ws()
+    if !p.eof() {
+        return Err(p.fail("trailing characters"))
+    }
+    Ok(v)
+}
+
+// ---------------------------------------------------------------- writing
+
+/// Python's `repr(float)`: shortest round-trip digits, `1e+16` / `1e-05` exponent form outside
+/// `1e-4 <= |x| < 1e16`, and a trailing `.0` for whole numbers.
+pub fn float_repr(x: f64) -> string {
+    if x != x {
+        return "NaN"
+    }
+    if x > 1.7976931348623157e308 {
+        return "Infinity"
+    }
+    if x < -1.7976931348623157e308 {
+        return "-Infinity"
+    }
+    let neg = x < 0.0 || (x == 0.0 && (1.0 / x) < 0.0)
+    let shown = if neg { "${-x}" } else { "${x}" }
+    // `shown` is plain decimal (never an exponent): split into digit string and decimal exponent
+    let parts = strings.split(shown, ".")
+    let int_part = parts[0]
+    let frac_part = if parts.len() > 1 { parts[1] } else { "" }
+    let mut point: int = int_part.len() as int
+    let mut digits = int_part + frac_part
+    // strip leading zeros (moves the point), then trailing zeros
+    while digits.len() > 1 && digits.starts_with("0") {
+        digits = digits.substring(1, digits.len())
+        point = point - 1
+    }
+    while digits.len() > 1 && digits.ends_with("0") {
+        digits = digits.substring(0, digits.len() - 1)
+    }
+    if digits == "0" {
+        return if neg { "-0.0" } else { "0.0" }
+    }
+    // value = 0.DIGITS * 10^point ; scientific exponent:
+    let exp: int = point - 1
+    let sign = if neg { "-" } else { "" }
+    if exp < -4 || exp >= 16 {
+        let mantissa = if digits.len() == 1 { digits } else { digits.substring(0, 1) + "." + digits.substring(1, digits.len()) }
+        let e = if exp < 0 { "-" } else { "+" }
+        let mag: int = if exp < 0 { 0 - exp } else { exp }
+        let mag_text = if mag < 10 { "0${mag}" } else { "${mag}" }
+        return sign + mantissa + "e" + e + mag_text
+    }
+    let ndig: int = digits.len() as int
+    if point <= 0 {
+        return sign + "0." + repeat_text("0", 0 - point) + digits
+    }
+    if point >= ndig {
+        return sign + digits + repeat_text("0", point - ndig) + ".0"
+    }
+    let cut: usize = point as usize
+    sign + digits.substring(0, cut) + "." + digits.substring(cut, digits.len())
+}
+
+/// JSON string literal. `ascii_only` escapes every non-ASCII character as `\uXXXX`, as Python's default does.
+pub fn quote(s: string, ascii_only: bool) -> string {
+    let mut out = "\""
+    for c in s.chars() {
+        let n = c as u32
+        if c == '"' {
+            out = out + "\\\""
+        } else if c == '\\' {
+            out = out + "\\\\"
+        } else if c == '\n' {
+            out = out + "\\n"
+        } else if c == '\r' {
+            out = out + "\\r"
+        } else if c == '\t' {
+            out = out + "\\t"
+        } else if n == 8 {
+            out = out + "\\b"
+        } else if n == 12 {
+            out = out + "\\f"
+        } else if n < 32 {
+            out = out + "\\u" + hex_pad(n)
+        } else if n > 126 && ascii_only {
+            if n >= 65536 {
+                let v = n - 65536
+                out = out + "\\u" + hex_pad(55296 + v / 1024) + "\\u" + hex_pad(56320 + v % 1024)
+            } else {
+                out = out + "\\u" + hex_pad(n)
+            }
+        } else {
+            out = out + c.to_string()
+        }
+    }
+    out + "\""
+}
+
+fn hex_pad(n: u32) -> string {
+    let digits = "0123456789abcdef"
+    let d: Vec<char> = digits.chars().collect()
+    let a = d[((n / 4096) % 16) as usize].to_string()
+    let b = d[((n / 256) % 16) as usize].to_string()
+    let c = d[((n / 16) % 16) as usize].to_string()
+    let e = d[(n % 16) as usize].to_string()
+    a + b + c + e
+}
+
+fn scalar(doc: Json, ascii_only: bool) -> string {
+    match doc {
+        Json::Null => "null",
+        Json::Bool(b) => if b { "true" } else { "false" },
+        Json::Int(n) => "${n}",
+        Json::Float(x) => float_repr(x),
+        Json::Str(s) => quote(s, ascii_only),
+        _ => "",
+    }
+}
+
+fn write_value(doc: Json, indent: int, level: int, sort_keys: bool, ascii_only: bool) -> string {
+    match doc {
+        Json::Arr(xs) => {
+            if xs.len() == 0 {
+                return "[]"
+            }
+            let mut parts = Vec::new()
+            for x in xs {
+                parts.push(write_value(x, indent, level + 1, sort_keys, ascii_only))
+            }
+            join_container("[", "]", parts, indent, level, false)
+        },
+        Json::Obj(ms) => {
+            if ms.len() == 0 {
+                return "{}"
+            }
+            let mut ordered = ms
+            if sort_keys {
+                ordered.sort_by(|a, b| a.key.cmp(b.key))
+            }
+            let mut parts = Vec::new()
+            for m in ordered {
+                let colon = ": "
+                parts.push(quote(m.key, ascii_only) + colon + write_value(m.value, indent, level + 1, sort_keys, ascii_only))
+            }
+            join_container("{", "}", parts, indent, level, true)
+        },
+        other => scalar(other, ascii_only),
+    }
+}
+
+fn join_container(open: string, close: string, parts: Vec<string>, indent: int, level: int, is_obj: bool) -> string {
+    if indent <= 0 {
+        let head = open.to_string()
+        return head + parts.join(", ") + close
+    }
+    let inner = repeat_text(" ", (level + 1) * indent)
+    let outer = repeat_text(" ", level * indent)
+    let head = open.to_string()
+    head + "\n" + inner + parts.join(",\n" + inner) + "\n" + outer + close
+}
+
+/// Python's `json.dumps(doc, indent=indent, sort_keys=sort_keys)`. `indent == 0` is the single-line form
+/// (`{"a": 1, "b": [1, 2]}`); `indent > 0` puts one member per line.
+pub fn dumps(doc: Json, indent: int, sort_keys: bool) -> string {
+    write_value(doc, indent, 0, sort_keys, true)
+}
+
+/// `dumps` with non-ASCII characters kept as they are (Python's `ensure_ascii=False`).
+pub fn dumps_unicode(doc: Json, indent: int, sort_keys: bool) -> string {
+    write_value(doc, indent, 0, sort_keys, false)
+}
+
+/// The character with code point `n` (U+FFFD when `n` is not a scalar value).
+pub fn chr(n: u32) -> string {
+    match char::from_u32(n) {
+        Some(c) => c.to_string(),
+        None => "?",
+    }
+}
+
+fn repeat_text(piece: string, n: int) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < n {
+        out = out + piece
+        i = i + 1
+    }
+    out
+}

@@ -1,0 +1,186 @@
+use crate::get
+use crate::get_or
+use crate::has
+use crate::has_keys
+use crate::is_blank
+use crate::is_empty
+use crate::key_count
+use crate::require_empty
+use crate::require_nonempty
+use crate::require_value
+use crate::require_blank
+use crate::keys
+use crate::merge
+use crate::parse
+use crate::load
+use crate::require
+use crate::value_count
+use crate::values
+use std::fs
+use std::strings
+
+fn test_parse_simple_key_value() {
+    let map = parse("HOST=localhost\nPORT=8080\n")
+    assert(map.get("HOST").is_some(), "HOST present")
+    assert(map.get("PORT").is_some(), "PORT present")
+    assert_eq(map.len(), 2)
+}
+
+fn test_parse_skips_comments_and_blank_lines() {
+    let content = "# comment\n\nNAME=windjammer\n  # indented comment\nEMPTY=\n"
+    let map = parse(content)
+    assert(map.get("NAME").is_some(), "NAME present")
+    assert(map.get("EMPTY").is_some(), "EMPTY present")
+    assert_eq(map.len(), 2)
+}
+
+fn test_parse_trims_whitespace_and_keeps_equals_in_value() {
+    let map = parse("  KEY = value=with=equals  \n")
+    assert(map.get("KEY").is_some(), "KEY present")
+    assert_eq(map.len(), 1)
+}
+
+fn test_parse_ignores_lines_without_equals() {
+    let map = parse("NOEQUALS\nOK=yes\n")
+    assert_eq(map.len(), 1)
+    assert(map.get("OK").is_some(), "OK present")
+}
+
+fn test_load_missing_file_is_err() {
+    match load("/tmp/wj-dotenv-does-not-exist-xyz.env") {
+        Ok(_) => assert(false, "missing file must be Err"),
+        Err(_) => {},
+    }
+}
+
+fn test_load_reads_file() {
+    let path = "/tmp/wj-dotenv-test-load.env"
+    match fs.write(path, "APP=ecosystem\n") {
+        Ok(_) => {},
+        Err(_) => assert(false, "write fixture failed"),
+    }
+    match load(path) {
+        Ok(map) => {
+            assert(map.get("APP").is_some(), "APP present")
+        },
+        Err(_) => assert(false, "load should succeed"),
+    }
+    let _ = fs.remove_file(path)
+}
+
+fn test_get_or_returns_value_or_default() {
+    let map = parse("HOST=localhost\n")
+    assert_eq(get_or(map, "HOST", "127.0.0.1"), "localhost")
+    let missing = parse("HOST=localhost\n")
+    assert_eq(get_or(missing, "PORT", "8080"), "8080")
+}
+
+fn test_has_key() {
+    let map = parse("HOST=localhost\n")
+    assert(has(map, "HOST"), "HOST")
+    assert(!has(map, "PORT"), "PORT missing")
+}
+
+fn test_require_key() {
+    let map = parse("HOST=localhost\n")
+    match require(map, "HOST") {
+        Ok(v) => assert_eq(v, "localhost"),
+        Err(_) => assert(false, "require HOST"),
+    }
+    let again = parse("HOST=localhost\n")
+    match require(again, "PORT") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "PORT"), "mentions key"),
+    }
+}
+
+fn test_keys_and_key_count() {
+    let map = parse("HOST=localhost\nPORT=8080\n")
+    let ks = keys(map)
+    assert_eq(ks.len(), 2)
+    assert_eq(key_count(parse("HOST=localhost\nPORT=8080\n")), 2)
+    assert_eq(key_count(parse("")), 0)
+}
+
+fn test_is_empty() {
+    assert(is_empty(parse("")), "empty")
+    assert(!is_empty(parse("A=1\n")), "non-empty")
+}
+
+fn test_get_and_values() {
+    let map = parse("HOST=localhost\nPORT=8080\n")
+    match get(map, "HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST"),
+    }
+    match get(parse("HOST=localhost\n"), "PORT") {
+        Some(_) => assert(false, "missing"),
+        None => {},
+    }
+    let vals = values(parse("HOST=localhost\nPORT=8080\n"))
+    assert_eq(vals.len(), 2)
+}
+
+fn test_merge_overlay_wins() {
+    let base = parse("HOST=localhost\nPORT=8080\n")
+    let overlay = parse("PORT=9090\nDEBUG=1\n")
+    let merged = merge(base, overlay)
+    assert_eq(get_or(merged, "HOST", ""), "localhost")
+    assert_eq(get_or(merged, "PORT", ""), "9090")
+    assert_eq(get_or(merged, "DEBUG", ""), "1")
+    assert_eq(key_count(merged), 3)
+}
+
+fn test_has_keys_and_value_count() {
+    assert(has_keys(parse("A=1\n")), "has")
+    assert(!has_keys(parse("")), "empty")
+    assert_eq(value_count(parse("HOST=localhost\nPORT=8080\n")), 2)
+    assert_eq(value_count(parse("")), 0)
+}
+
+fn test_is_blank_and_require_nonempty() {
+    assert(is_blank(parse("A=\n"), "A"), "empty value")
+    assert(is_blank(parse("A=1\n"), "Z"), "missing")
+    assert(!is_blank(parse("A=1\n"), "A"), "present")
+    match require_nonempty(parse("A=1\nB=2\n")) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "nonempty"),
+    }
+    match require_nonempty(parse("")) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "entries"), "mentions entries"),
+    }
+}
+
+fn test_require_value() {
+    match require_value(parse("HOST=localhost\n"), "HOST") {
+        Ok(v) => assert_eq(v, "localhost"),
+        Err(_) => assert(false, "present"),
+    }
+    match require_value(parse("HOST=\n"), "HOST") {
+        Ok(_) => assert(false, "blank must Err"),
+        Err(msg) => assert(strings.contains(msg, "value"), "mentions value"),
+    }
+}
+
+fn test_require_empty() {
+    match require_empty(parse("")) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty file"),
+    }
+    match require_empty(parse("A=1\n")) {
+        Ok(_) => assert(false, "entry must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+}
+
+fn test_require_blank() {
+    match require_blank(parse("A=\n"), "A") {
+        Ok(key) => assert_eq(key, "A"),
+        Err(_) => assert(false, "blank value"),
+    }
+    match require_blank(parse("A=1\n"), "A") {
+        Ok(_) => assert(false, "present must Err"),
+        Err(msg) => assert(strings.contains(msg, "blank"), "mentions blank"),
+    }
+}

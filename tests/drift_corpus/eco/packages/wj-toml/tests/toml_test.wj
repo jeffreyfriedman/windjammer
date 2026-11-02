@@ -1,0 +1,413 @@
+use crate::first_key
+use crate::get
+use crate::get_or
+use crate::has
+use crate::has_keys
+use crate::is_empty
+use crate::is_singleton
+use crate::key_count
+use crate::keys
+use crate::last_key
+use crate::merge
+use crate::parse
+use crate::require
+use crate::require_empty
+use crate::require_keys
+use crate::require_singleton
+use crate::require_first_key
+use crate::require_last_key
+use crate::require_values
+use crate::value_count
+use crate::values
+use std::strings
+
+@test
+fn test_parse_flat_strings() {
+    let text = "host = \"localhost\"\nport = \"8080\"\n"
+    let map = parse(text)
+    match map.get("host") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "host"),
+    }
+    match map.get("port") {
+        Some(v) => assert_eq(v, "8080"),
+        None => assert(false, "port"),
+    }
+}
+
+@test
+fn test_parse_unquoted_scalars() {
+    let text = "port = 3000\ndebug = true\nname = alice\n"
+    let map = parse(text)
+    match map.get("port") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "port"),
+    }
+    match map.get("debug") {
+        Some(v) => assert_eq(v, "true"),
+        None => assert(false, "debug"),
+    }
+    match map.get("name") {
+        Some(v) => assert_eq(v, "alice"),
+        None => assert(false, "name"),
+    }
+}
+
+@test
+fn test_parse_skips_comments_and_blanks() {
+    let text = "# header\n\nhost = \"x\"\n# trailing\n"
+    let map = parse(text)
+    assert_eq(map.len(), 1)
+    match map.get("host") {
+        Some(v) => assert_eq(v, "x"),
+        None => assert(false, "host"),
+    }
+}
+
+@test
+fn test_parse_section_dotted_keys() {
+    let text = "[server]\nhost = \"127.0.0.1\"\nport = 9090\n[db]\nurl = \"postgres://x\"\n"
+    let map = parse(text)
+    match map.get("server.host") {
+        Some(v) => assert_eq(v, "127.0.0.1"),
+        None => assert(false, "server.host"),
+    }
+    match map.get("server.port") {
+        Some(v) => assert_eq(v, "9090"),
+        None => assert(false, "server.port"),
+    }
+    match map.get("db.url") {
+        Some(v) => assert_eq(v, "postgres://x"),
+        None => assert(false, "db.url"),
+    }
+}
+
+@test
+fn test_parse_inline_comment() {
+    let text = "port = 8080 # listen port\n"
+    let map = parse(text)
+    match map.get("port") {
+        Some(v) => assert_eq(v, "8080"),
+        None => assert(false, "port"),
+    }
+}
+
+@test
+fn test_get_helper() {
+    match get("[app]\nname = \"notes\"\n", "app.name") {
+        Some(v) => assert_eq(v, "notes"),
+        None => assert(false, "get"),
+    }
+    match get("[app]\nname = \"notes\"\n", "missing") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+@test
+fn test_parse_empty_is_empty_map() {
+    let map = parse("")
+    assert_eq(map.len(), 0)
+}
+
+@test
+fn test_parse_equals_in_quoted_value() {
+    let text = "dsn = \"a=b&c=d\"\n"
+    let map = parse(text)
+    match map.get("dsn") {
+        Some(v) => assert_eq(v, "a=b&c=d"),
+        None => assert(false, "dsn"),
+    }
+}
+
+@test
+fn test_parse_string_array() {
+    let text = "tags = [\"red\", \"blue\"]\n"
+    let map = parse(text)
+    match map.get("tags") {
+        Some(v) => assert_eq(v, "[\"red\",\"blue\"]"),
+        None => assert(false, "tags"),
+    }
+}
+
+@test
+fn test_parse_int_array() {
+    let text = "ports = [80, 443]\n"
+    let map = parse(text)
+    match map.get("ports") {
+        Some(v) => assert_eq(v, "[80,443]"),
+        None => assert(false, "ports"),
+    }
+}
+
+@test
+fn test_parse_array_in_section() {
+    let text = "[app]\nmodes = [\"dev\", \"prod\"]\n"
+    let map = parse(text)
+    match map.get("app.modes") {
+        Some(v) => assert_eq(v, "[\"dev\",\"prod\"]"),
+        None => assert(false, "app.modes"),
+    }
+}
+
+@test
+fn test_parse_empty_array() {
+    let text = "items = []\n"
+    let map = parse(text)
+    match map.get("items") {
+        Some(v) => assert_eq(v, "[]"),
+        None => assert(false, "items"),
+    }
+}
+
+@test
+fn test_parse_dotted_left_hand_key() {
+    let text = "server.host = \"127.0.0.1\"\nserver.port = 8080\n"
+    let map = parse(text)
+    match map.get("server.host") {
+        Some(v) => assert_eq(v, "127.0.0.1"),
+        None => assert(false, "server.host"),
+    }
+    match map.get("server.port") {
+        Some(v) => assert_eq(v, "8080"),
+        None => assert(false, "server.port"),
+    }
+}
+
+@test
+fn test_parse_dotted_key_under_section() {
+    let text = "[app]\ndb.url = \"postgres://x\"\n"
+    let map = parse(text)
+    match map.get("app.db.url") {
+        Some(v) => assert_eq(v, "postgres://x"),
+        None => assert(false, "app.db.url"),
+    }
+}
+
+@test
+fn test_parse_inline_table() {
+    let text = "point = { x = 1, y = 2 }\n"
+    let map = parse(text)
+    match map.get("point.x") {
+        Some(v) => assert_eq(v, "1"),
+        None => assert(false, "point.x"),
+    }
+    match map.get("point.y") {
+        Some(v) => assert_eq(v, "2"),
+        None => assert(false, "point.y"),
+    }
+}
+
+@test
+fn test_parse_inline_table_strings_and_bool() {
+    let text = "meta = { name = \"notes\", debug = true }\n"
+    let map = parse(text)
+    match map.get("meta.name") {
+        Some(v) => assert_eq(v, "notes"),
+        None => assert(false, "meta.name"),
+    }
+    match map.get("meta.debug") {
+        Some(v) => assert_eq(v, "true"),
+        None => assert(false, "meta.debug"),
+    }
+}
+
+@test
+fn test_parse_inline_table_in_section() {
+    let text = "[server]\nlisten = { host = \"0.0.0.0\", port = 9090 }\n"
+    let map = parse(text)
+    match map.get("server.listen.host") {
+        Some(v) => assert_eq(v, "0.0.0.0"),
+        None => assert(false, "server.listen.host"),
+    }
+    match map.get("server.listen.port") {
+        Some(v) => assert_eq(v, "9090"),
+        None => assert(false, "server.listen.port"),
+    }
+}
+
+@test
+fn test_get_or_and_has() {
+    let text = "host = \"localhost\"\n"
+    assert_eq(get_or(text, "host", "127.0.0.1"), "localhost")
+    assert_eq(get_or(text, "port", "8080"), "8080")
+    assert(has(text, "host"), "has host")
+    assert(!has(text, "port"), "no port")
+}
+
+@test
+fn test_is_empty_and_key_count() {
+    assert(is_empty(""), "empty text")
+    assert(is_empty("# only comment\n"), "comments only")
+    let text = "host = \"localhost\"\nport = 8080\n"
+    assert(!is_empty(text), "nonempty")
+    assert_eq(key_count(text), 2)
+    assert_eq(key_count(""), 0)
+}
+
+@test
+fn test_keys_contains_parsed_names() {
+    let text = "host = \"localhost\"\nport = 8080\n"
+    let ks = keys(text)
+    assert_eq(ks.len(), 2)
+    let mut saw_host = false
+    let mut saw_port = false
+    let mut i = 0
+    while i < ks.len() {
+        if ks[i] == "host" {
+            saw_host = true
+        }
+        if ks[i] == "port" {
+            saw_port = true
+        }
+        i = i + 1
+    }
+    assert(saw_host, "host key")
+    assert(saw_port, "port key")
+}
+
+@test
+fn test_require_and_values() {
+    let text = "host = \"localhost\"\nport = 8080\n"
+    match require(text, "host") {
+        Ok(v) => assert_eq(v, "localhost"),
+        Err(_) => assert(false, "require host"),
+    }
+    match require(text, "missing") {
+        Ok(_) => assert(false, "missing"),
+        Err(msg) => assert(strings.contains(msg, "missing"), "err"),
+    }
+    let vals = values(text)
+    assert_eq(vals.len(), 2)
+}
+
+@test
+fn test_merge_overlay_wins() {
+    let base = "host = \"localhost\"\nport = 8080\n"
+    let overlay = "port = 9090\ndebug = true\n"
+    let merged = merge(base, overlay)
+    assert_eq(get_or(merged, "host", ""), "localhost")
+    assert_eq(get_or(merged, "port", ""), "9090")
+    assert_eq(get_or(merged, "debug", ""), "true")
+    assert_eq(key_count(merged), 3)
+}
+
+@test
+fn test_has_keys_and_first_key() {
+    assert(has_keys("host = \"localhost\"\n"), "has")
+    assert(!has_keys(""), "empty")
+    match first_key("host = \"localhost\"\n") {
+        Some(k) => assert_eq(k, "host"),
+        None => assert(false, "first"),
+    }
+    match first_key("") {
+        Some(_) => assert(false, "none"),
+        None => {},
+    }
+}
+
+@test
+fn test_last_key_value_count_and_singleton() {
+    let text = "host = \"localhost\"\nport = 8080\n"
+    match last_key("solo = \"x\"\n") {
+        Some(k) => assert_eq(k, "solo"),
+        None => assert(false, "last solo"),
+    }
+    match last_key("") {
+        Some(_) => assert(false, "empty"),
+        None => {},
+    }
+    match last_key(text) {
+        Some(k) => assert(k == "host" || k == "port", "one of keys"),
+        None => assert(false, "last multi"),
+    }
+    assert_eq(value_count(text), 2)
+    assert(is_singleton("host = \"localhost\"\n"), "one")
+    assert(!is_singleton(text), "two")
+    assert(!is_singleton(""), "empty")
+}
+
+@test
+fn test_require_singleton_and_require_keys() {
+    match require_singleton("host = \"localhost\"\n") {
+        Ok(k) => assert_eq(k, "host"),
+        Err(_) => assert(false, "singleton"),
+    }
+    match require_singleton("host = \"localhost\"\nport = 8080\n") {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "singleton"), "mentions singleton"),
+    }
+    match require_keys("host = \"localhost\"\nport = 8080\n") {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two keys"),
+    }
+    match require_keys("") {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "keys"), "mentions keys"),
+    }
+}
+
+@test
+fn test_require_nonblank() {
+    use crate::require_nonblank
+    match require_nonblank("host = \"localhost\"\n", "host") {
+        Ok(v) => assert_eq(v, "localhost"),
+        Err(_) => assert(false, "host"),
+    }
+    match require_nonblank("host = \"\"\n", "host") {
+        Ok(_) => assert(false, "blank must Err"),
+        Err(msg) => assert(strings.contains(msg, "blank"), "mentions blank"),
+    }
+    match require_nonblank("host = \"localhost\"\n", "port") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "port"), "mentions key"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    match require_empty("") {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty"),
+    }
+    match require_empty("host = \"localhost\"\n") {
+        Ok(_) => assert(false, "keys must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+}
+
+@test
+fn test_require_first_key() {
+    match require_first_key("host = \"localhost\"\n") {
+        Ok(k) => assert_eq(k, "host"),
+        Err(_) => assert(false, "first key"),
+    }
+    match require_first_key("") {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}
+
+@test
+fn test_require_last_key() {
+    match require_last_key("host = \"localhost\"\n") {
+        Ok(k) => assert_eq(k, "host"),
+        Err(_) => assert(false, "last key"),
+    }
+    match require_last_key("") {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "last"), "mentions last"),
+    }
+}
+
+@test
+fn test_require_values() {
+    match require_values("host = \"localhost\"\n", 1) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "one value"),
+    }
+    match require_values("host = \"localhost\"\n", 2) {
+        Ok(_) => assert(false, "one must Err"),
+        Err(msg) => assert(strings.contains(msg, "values"), "mentions values"),
+    }
+}

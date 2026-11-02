@@ -1,0 +1,69 @@
+/// Account. `password_hash` never leaves the domain; use `UserView` for responses.
+@derive(Clone)
+pub struct User {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+    pub password_hash: string,
+}
+
+pub struct UserView {
+    pub id: int,
+    pub username: string,
+    pub email: string,
+}
+
+impl User {
+    pub fn view(self) -> UserView {
+        UserView {
+            id: self.id,
+            username: self.username,
+            email: self.email,
+        }
+    }
+}
+
+@derive(Clone)
+pub struct Project {
+    pub id: int,
+    pub name: string,
+    pub description: string,
+    pub owner_id: int,
+}
+
+/// A user's role inside one project: owner, admin, member or viewer.
+@derive(Clone)
+pub struct Member {
+    pub project_id: int,
+    pub user_id: int,
+    pub role: string,
+}
+
+@derive(Clone)
+pub struct Task {
+    pub id: int,
+    pub project_id: int,
+    pub title: string,
+    pub description: string,
+    pub status: string,
+    pub priority: string,
+    pub assigned_to: Option<int>,
+    pub created_by: int,
+}
+
+/// Task list filter; empty text / zero assignee mean "any".
+pub struct TaskFilter {
+    pub status: string,
+    pub priority: string,
+    pub assignee: int,
+    pub text: string,
+}
+
+pub fn no_filter() -> TaskFilter {
+    TaskFilter {
+        status: "",
+        priority: "",
+        assignee: 0,
+        text: "",
+    }
+}

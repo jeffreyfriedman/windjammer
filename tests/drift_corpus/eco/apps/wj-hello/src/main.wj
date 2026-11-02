@@ -1,0 +1,8 @@
+// wj-hello — std-only seed binary (ecosystem 80% floor smoke test)
+// Prints a version string and exits 0. No crates, no extern fn, no ffi.
+
+use crate::domain::version
+
+fn main() {
+    println!("{}", version())
+}

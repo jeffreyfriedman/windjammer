@@ -1,0 +1,50 @@
+use crate::adapters::run_status
+use std::fs
+
+fn test_run_status_fresh_db() {
+    let root = "/tmp/wj-migrate-cli-status"
+    match setup_two_migration_dir(root) {
+        Ok(_) => {},
+        Err(e) => {
+            assert(false, e)
+            return
+        },
+    }
+    match run_status(":memory:", root) {
+        Ok(report) => {
+            assert_eq(report.applied_versions.len(), 0)
+            assert_eq(report.pending_versions.len(), 2)
+        },
+        Err(e) => assert(false, e),
+    }
+    teardown_dir("/tmp/wj-migrate-cli-status")
+}
+
+fn setup_two_migration_dir(root: string) -> Result<(), string> {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    match fs.create_dir_all(root) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    let sql1 = "CREATE TABLE IF NOT EXISTS cli_status_items (\n  id INTEGER PRIMARY KEY,\n  label TEXT NOT NULL\n)"
+    let sql2 = "ALTER TABLE cli_status_items ADD COLUMN note TEXT"
+    match fs.write("${root}/001_create_items.sql", sql1) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/002_add_note.sql", sql2) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+fn teardown_dir(root: string) {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+}

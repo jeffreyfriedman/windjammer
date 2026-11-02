@@ -1,0 +1,85 @@
+use std::crypto
+use std::strings
+
+/// Hash a password with bcrypt (default cost).
+pub fn hash_password(password: string) -> Result<string, string> {
+    crypto.hash_password(password)
+}
+
+/// Verify a password against a bcrypt hash from `hash_password`.
+pub fn verify_password(password: string, hash: string) -> Result<bool, string> {
+    crypto.verify_password(password, hash)
+}
+
+/// True when `hash` looks like a bcrypt digest (`$2a$` / `$2b$` / `$2y$` …).
+pub fn looks_like_bcrypt(hash: string) -> bool {
+    if strings.len(hash) < 4 {
+        return false
+    }
+    strings.starts_with(hash, "$2")
+}
+
+/// Verify a password; returns `false` on mismatch or verify errors.
+pub fn verify_ok(password: string, hash: string) -> bool {
+    match verify_password(password, hash) {
+        Ok(ok) => ok,
+        Err(_) => false,
+    }
+}
+
+/// Bcrypt cost factor from `$2?$NN$…`, or `None` when not bcrypt-shaped.
+pub fn bcrypt_cost(hash: string) -> Option<int> {
+    if !looks_like_bcrypt(hash) {
+        return None
+    }
+    let parts = strings.split(hash, "$")
+    // "", "2a", "10", "salt…"
+    if parts.len() < 4 {
+        return None
+    }
+    let cost_text = parts[2]
+    if strings.len(cost_text) == 0 {
+        return None
+    }
+    Some(strings.parse_i32(cost_text) as int)
+}
+
+/// True when `hash` is empty or whitespace-only.
+pub fn is_empty_hash(hash: string) -> bool {
+    strings.len(strings.trim(hash)) == 0
+}
+
+/// `Ok(hash)` when it is not blank, otherwise `Err`.
+pub fn require_nonempty(hash: string) -> Result<string, string> {
+    if is_empty_hash(hash) {
+        return Err("expected hash")
+    }
+    Ok(hash)
+}
+
+/// Bcrypt cost, or `Err` when `hash` is not bcrypt-shaped.
+pub fn require_cost(hash: string) -> Result<int, string> {
+    match bcrypt_cost(hash) {
+        Some(cost) => Ok(cost),
+        None => Err("expected cost"),
+    }
+}
+
+/// True when the bcrypt cost is at least `min`.
+pub fn is_min_cost(hash: string, min: int) -> bool {
+    match bcrypt_cost(hash) {
+        Some(cost) => cost >= min,
+        None => false,
+    }
+}
+
+/// Bcrypt cost when it is at least `min`, otherwise `Err`.
+pub fn require_min_cost(hash: string, min: int) -> Result<int, string> {
+    if !is_min_cost(hash, min) {
+        return Err("expected min cost")
+    }
+    match bcrypt_cost(hash) {
+        Some(cost) => Ok(cost),
+        None => Err("expected min cost"),
+    }
+}

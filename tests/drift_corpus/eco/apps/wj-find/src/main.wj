@@ -1,0 +1,28 @@
+// wj-find — walk + glob dogfood (see docs/BETA_SUCCESS_PATH.md)
+
+use crate::domain::find_matching
+use crate::domain::find_under
+use crate::domain::format_hits
+
+fn main() {
+    let root = "../wj-hello/src"
+    match find_under(root, "**/*.wj") {
+        Ok(hits) => {
+            if hits.len() > 0 {
+                println!("{}", format_hits(hits))
+            } else {
+                demo_sample()
+            }
+        },
+        Err(_) => demo_sample(),
+    }
+}
+
+fn demo_sample() {
+    let mut paths = Vec::new()
+    paths.push("src/main.wj")
+    paths.push("src/lib.rs")
+    paths.push("README.md")
+    let hits = find_matching("**/*.wj", paths)
+    println!("{}", format_hits(hits))
+}

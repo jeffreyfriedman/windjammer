@@ -1,0 +1,14 @@
+[package]
+name = "wj-todo-cli"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_validate = { path = "../../packages/wj-validate/build" }
+wj_path = { path = "../../packages/wj-path/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

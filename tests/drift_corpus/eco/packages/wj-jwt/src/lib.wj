@@ -1,0 +1,146 @@
+use std::jwt
+use std::strings
+
+/// Idiomatic claims view (mirrors `std::jwt::JwtClaims`).
+pub struct Claims {
+    pub sub: string,
+    pub tenant_slug: string,
+    pub tenant_id: Option<string>,
+    pub entity_id: Option<string>,
+    pub email: Option<string>,
+    pub exp: int,
+}
+
+/// Mint an HS256 JWT for `sub` in `tenant_slug` with `ttl_secs` lifetime.
+pub fn sign(sub: string, tenant_slug: string, secret: string, ttl_secs: int) -> Result<string, string> {
+    jwt.sign_hs256(sub, tenant_slug, secret, ttl_secs)
+}
+
+/// Mint HS256 JWT with tenant/entity/email claims.
+pub fn sign_scoped(
+    sub: string,
+    tenant_slug: string,
+    tenant_id: string,
+    entity_id: string,
+    email: string,
+    secret: string,
+    ttl_secs: int,
+) -> Result<string, string> {
+    jwt.sign_hs256_scoped(sub, tenant_slug, tenant_id, entity_id, email, secret, ttl_secs)
+}
+
+/// Verify HS256 signature + expiration; returns claims.
+pub fn verify(token: string, secret: string) -> Result<Claims, string> {
+    match jwt.verify_hs256(token, secret) {
+        Ok(c) => Ok(Claims {
+            sub: c.sub,
+            tenant_slug: c.tenant_slug,
+            tenant_id: c.tenant_id,
+            entity_id: c.entity_id,
+            email: c.email,
+            exp: c.exp,
+        }),
+        Err(e) => Err(e),
+    }
+}
+
+/// `Authorization: Bearer <token>` header line.
+pub fn bearer_header(token: string) -> string {
+    "Authorization: Bearer ${token}"
+}
+
+/// Extract the token from an `Authorization: Bearer …` header, if present.
+pub fn extract_bearer(header: string) -> Option<string> {
+    let trimmed = strings.trim(header)
+    let prefix = "Authorization: Bearer "
+    if !strings.starts_with(trimmed, prefix) {
+        return None
+    }
+    let token = strings.trim(strings.substring(trimmed, strings.len(prefix), strings.len(trimmed)))
+    if strings.len(token) == 0 {
+        return None
+    }
+    Some(token)
+}
+
+/// True when `header` is an `Authorization: Bearer …` line.
+pub fn is_bearer_header(header: string) -> bool {
+    match extract_bearer(header) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Bearer token when `header` is `Authorization: Bearer …`.
+pub fn require_bearer(header: string) -> Result<string, string> {
+    match extract_bearer(header) {
+        Some(token) => Ok(token),
+        None => Err("expected bearer"),
+    }
+}
+
+/// Extract bearer token from `header`, then verify with `secret`.
+pub fn verify_bearer(header: string, secret: string) -> Result<Claims, string> {
+    match extract_bearer(header) {
+        Some(token) => verify(token, secret),
+        None => Err("missing or invalid Authorization: Bearer header"),
+    }
+}
+
+/// True when `token` has three non-empty `.`-separated segments (JWT shape).
+pub fn looks_like_jwt(token: string) -> bool {
+    let trimmed = strings.trim(token)
+    if strings.len(trimmed) == 0 {
+        return false
+    }
+    let parts = strings.split(trimmed, ".")
+    if parts.len() != 3 {
+        return false
+    }
+    if strings.len(parts[0]) == 0 {
+        return false
+    }
+    if strings.len(parts[1]) == 0 {
+        return false
+    }
+    if strings.len(parts[2]) == 0 {
+        return false
+    }
+    true
+}
+
+/// Subject claim (`sub`).
+pub fn subject(claims: Claims) -> string {
+    claims.sub
+}
+
+/// Tenant slug claim.
+pub fn tenant_slug(claims: Claims) -> string {
+    claims.tenant_slug
+}
+
+/// Expiration claim (`exp`) as unix seconds.
+pub fn expires_at(claims: Claims) -> int {
+    claims.exp
+}
+
+/// True when `claims` includes an email.
+pub fn has_email(claims: Claims) -> bool {
+    match claims.email {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Email claim, if present.
+pub fn email_of(claims: Claims) -> Option<string> {
+    claims.email
+}
+
+/// Email claim, or `Err` when it is absent.
+pub fn require_email(claims: Claims) -> Result<string, string> {
+    match email_of(claims) {
+        Some(email) => Ok(email),
+        None => Err("missing email"),
+    }
+}

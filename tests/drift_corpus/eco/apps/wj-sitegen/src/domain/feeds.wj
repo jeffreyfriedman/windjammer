@@ -1,0 +1,118 @@
+use std::strings
+
+use wj_template::escape_html
+
+pub struct FeedEntry {
+    pub path: string,
+    pub title: string,
+    pub html: string,
+}
+
+/// Join absolute site base with relative HTML path (sitemap-safe subset).
+pub fn join_page_url(base_url: string, html_path: string) -> string {
+    if strings.starts_with(html_path, "/") {
+        let trimmed = strings.substring(html_path, 1, strings.len(html_path))
+        if strings.ends_with(base_url, "/") {
+            return "${base_url}${trimmed}"
+        }
+        return "${base_url}/${trimmed}"
+    }
+    if strings.ends_with(base_url, "/") {
+        return "${base_url}${html_path}"
+    }
+    "${base_url}/${html_path}"
+}
+
+fn sort_entries(entries: Vec<FeedEntry>) -> Vec<FeedEntry> {
+    let mut out = entries
+    let mut i = 0
+    while i < out.len() {
+        let mut j = i + 1
+        while j < out.len() {
+            if out[j].path < out[i].path {
+                let tmp = out[i]
+                out[i] = out[j]
+                out[j] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    out
+}
+
+fn xml_escape(text: string) -> string {
+    escape_html(text)
+}
+
+/// XML sitemap for generated HTML pages (requires absolute `base_url`).
+pub fn render_sitemap(base_url: string, entries: Vec<FeedEntry>) -> Result<string, string> {
+    if strings.len(base_url) == 0 {
+        return Err("base url required for sitemap")
+    }
+    let ordered = sort_entries(entries)
+    let mut body = ""
+    for entry in ordered {
+        let loc = join_page_url(base_url, entry.path)
+        let safe = xml_escape(loc)
+        body = "${body}  <url>\n    <loc>${safe}</loc>\n  </url>\n"
+    }
+    Ok("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n${body}</urlset>\n")
+}
+
+/// RSS 2.0 feed for generated pages (requires absolute `base_url`).
+pub fn render_rss(base_url: string, site_title: string, entries: Vec<FeedEntry>) -> Result<string, string> {
+    if strings.len(base_url) == 0 {
+        return Err("base url required for rss")
+    }
+    let channel_title = if strings.len(site_title) == 0 {
+        xml_escape("Site")
+    } else {
+        xml_escape(site_title)
+    }
+    let channel_link = xml_escape(base_url)
+    let ordered = sort_entries(entries)
+    let mut items = ""
+    for entry in ordered {
+        let link = join_page_url(base_url, entry.path)
+        let item_title = xml_escape(entry.title)
+        let item_link = xml_escape(link)
+        items = "${items}    <item>\n      <title>${item_title}</title>\n      <link>${item_link}</link>\n      <guid>${item_link}</guid>\n    </item>\n"
+    }
+    Ok("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\">\n  <channel>\n    <title>${channel_title}</title>\n    <link>${channel_link}</link>\n${items}  </channel>\n</rss>\n")
+}
+
+/// Build sitemap and RSS from one sorted pass over `entries`.
+pub fn render_feeds(base_url: string, site_title: string, entries: Vec<FeedEntry>) -> Result<(string, string), string> {
+    if strings.len(base_url) == 0 {
+        return Err("base url required for feeds")
+    }
+    let channel_title = if strings.len(site_title) == 0 {
+        xml_escape("Site")
+    } else {
+        xml_escape(site_title)
+    }
+    let channel_link = xml_escape(base_url)
+    let ordered = sort_entries(entries)
+    let mut sitemap_body = ""
+    let mut rss_items = ""
+    for entry in ordered {
+        let link = join_page_url(base_url, entry.path)
+        let safe_link = xml_escape(link)
+        sitemap_body = "${sitemap_body}  <url>\n    <loc>${safe_link}</loc>\n  </url>\n"
+        let item_title = xml_escape(entry.title)
+        rss_items = "${rss_items}    <item>\n      <title>${item_title}</title>\n      <link>${safe_link}</link>\n      <guid>${safe_link}</guid>\n    </item>\n"
+    }
+    let sitemap = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n${sitemap_body}</urlset>\n"
+    let rss = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\">\n  <channel>\n    <title>${channel_title}</title>\n    <link>${channel_link}</link>\n${rss_items}  </channel>\n</rss>\n"
+    Ok((sitemap, rss))
+}
+
+/// robots.txt pointing crawlers at the sitemap (requires absolute `base_url`).
+pub fn render_robots(base_url: string) -> Result<string, string> {
+    if strings.len(base_url) == 0 {
+        return Err("base url required for robots")
+    }
+    let sitemap = join_page_url(base_url, "sitemap.xml")
+    Ok("User-agent: *\nAllow: /\n\nSitemap: ${sitemap}\n")
+}

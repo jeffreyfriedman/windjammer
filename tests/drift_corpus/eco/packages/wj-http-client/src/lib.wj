@@ -1,0 +1,170 @@
+use std::http
+use std::strings
+
+/// Status code + response body text from an HTTP call.
+pub struct HttpResult {
+    pub status: u16,
+    pub body: string,
+}
+
+/// Build an `HttpResult` (useful in tests and adapters).
+pub fn from_parts(status: u16, body: string) -> HttpResult {
+    HttpResult { status: status, body: body }
+}
+
+/// True when `status` is in the 2xx range.
+pub fn status_is_success(status: u16) -> bool {
+    status >= 200 && status < 300
+}
+
+/// `Ok(status)` when it is a 2xx success, otherwise `Err`.
+pub fn require_success(status: u16) -> Result<u16, string> {
+    if status_is_success(status) {
+        return Ok(status)
+    }
+    Err("expected success")
+}
+
+/// True when `status` is in the 4xx range.
+pub fn status_is_client_error(status: u16) -> bool {
+    status >= 400 && status < 500
+}
+
+/// True when `status` is in the 5xx range.
+pub fn status_is_server_error(status: u16) -> bool {
+    status >= 500 && status < 600
+}
+
+/// True when `status` is exactly `200 OK`.
+pub fn status_is_ok(status: u16) -> bool {
+    status == 200
+}
+
+/// True when `status` is exactly `201 Created`.
+pub fn status_is_created(status: u16) -> bool {
+    status == 201
+}
+
+/// True when `status` is exactly `204 No Content`.
+pub fn status_is_no_content(status: u16) -> bool {
+    status == 204
+}
+
+/// Body length of `result`.
+pub fn body_len(result: HttpResult) -> int {
+    strings.len(result.body)
+}
+
+/// True when `status` is in the 3xx range.
+pub fn status_is_redirect(status: u16) -> bool {
+    status >= 300 && status < 400
+}
+
+/// `Ok(status)` when it is a 3xx redirect, otherwise `Err`.
+pub fn require_redirect(status: u16) -> Result<u16, string> {
+    if status_is_redirect(status) {
+        return Ok(status)
+    }
+    Err("expected redirect")
+}
+
+/// True when `status` is in the 1xx range.
+pub fn status_is_informational(status: u16) -> bool {
+    status >= 100 && status < 200
+}
+
+/// True when `status` is exactly `401 Unauthorized`.
+pub fn status_is_unauthorized(status: u16) -> bool {
+    status == 401
+}
+
+/// True when `status` is exactly `404 Not Found`.
+pub fn status_is_not_found(status: u16) -> bool {
+    status == 404
+}
+
+/// Status code accessor.
+pub fn status_of(result: HttpResult) -> u16 {
+    result.status
+}
+
+/// Body text accessor.
+pub fn body_of(result: HttpResult) -> string {
+    result.body
+}
+
+/// Human-readable error for a failed response.
+pub fn error_message(status: u16, body: string) -> string {
+    "HTTP ${status}: ${body}"
+}
+
+/// Return the body when the status is 2xx; otherwise an error string.
+pub fn require_ok(result: HttpResult) -> Result<string, string> {
+    if status_is_success(result.status) {
+        return Ok(result.body)
+    }
+    Err(error_message(result.status, result.body))
+}
+
+/// True for HTTP 4xx and 5xx statuses.
+pub fn is_error_status(status: u16) -> bool {
+    status_is_client_error(status) || status_is_server_error(status)
+}
+
+/// Status when it is 4xx or 5xx.
+pub fn require_error(result: HttpResult) -> Result<u16, string> {
+    if is_error_status(result.status) {
+        return Ok(result.status)
+    }
+    Err("expected error status")
+}
+
+impl HttpResult {
+    pub fn is_success(self) -> bool {
+        status_is_success(self.status)
+    }
+}
+
+/// GET `url` and return status + body text.
+pub fn get_text(url: string) -> Result<HttpResult, string> {
+    match http.get(url) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(body) => Ok(from_parts(status, body)),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// POST `url` with a raw body; return status + body text.
+pub fn post_text(url: string, body: string) -> Result<HttpResult, string> {
+    match http.post(url, body) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(text) => Ok(from_parts(status, text)),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// GET and require 2xx; returns body text.
+pub fn get_ok(url: string) -> Result<string, string> {
+    match get_text(url) {
+        Ok(result) => require_ok(result),
+        Err(e) => Err(e),
+    }
+}
+
+/// POST and require 2xx; returns body text.
+pub fn post_ok(url: string, body: string) -> Result<string, string> {
+    match post_text(url, body) {
+        Ok(result) => require_ok(result),
+        Err(e) => Err(e),
+    }
+}
