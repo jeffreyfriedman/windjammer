@@ -27,6 +27,19 @@ fn parse_external_metadata_args(metadata: &[String]) -> Result<Vec<(&str, &Path)
     Ok(out)
 }
 
+fn stop_on_rust_crate_errors(path: &Path) -> Result<()> {
+    let checked = crate::check::rust_crate_calls(path)?;
+    let errors: Vec<_> = checked.report.diagnostics.iter().filter(|d| d.is_error()).collect();
+    if errors.is_empty() {
+        return Ok(());
+    }
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    for d in &errors {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    anyhow::bail!("{} error(s) in calls into Rust crates: the build stops before generating code", errors.len())
+}
+
 /// Build options for JavaScript target
 pub struct BuildOptions {
     pub tree_shake: bool,
@@ -65,6 +78,8 @@ pub fn execute(
     if !path.exists() {
         anyhow::bail!("path not found: {}", path.display());
     }
+    // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
+    stop_on_rust_crate_errors(path)?;
     // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
     let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
     // ADR-0021 E4b: the calls of `durable fn`s that are journaled steps
