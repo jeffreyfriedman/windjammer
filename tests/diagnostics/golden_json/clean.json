@@ -1,0 +1,14 @@
+{
+  "command": "check",
+  "diagnostics": [],
+  "schema_version": 2,
+  "success": true,
+  "summary": {
+    "elapsed_ms": 0,
+    "errors": 0,
+    "files_cached": 0,
+    "files_checked": 0,
+    "warnings": 0
+  },
+  "windjammer_version": "VERSION"
+}

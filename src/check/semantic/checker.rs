@@ -463,7 +463,10 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
                 d = d.at(sp.clone().with_label("unknown field"));
             }
             d = d.with_help(format!("`{name}` has the fields: {}", declared.join(", ")));
-            if let (Some(best), Some(sp)) = (closest(fname, declared.iter().map(|s| s.to_string()).collect::<Vec<_>>().iter()), span) {
+            // Only fields not already given may be suggested: renaming onto a given field would
+            // trade this error for a duplicate (gate: applying a fix never adds a diagnostic).
+            let unused: Vec<String> = declared.iter().filter(|d| !fields.iter().any(|(n, _)| n == *d)).map(|s| s.to_string()).collect();
+            if let (Some(best), Some(sp)) = (closest(fname, unused.iter()), span) {
                 d = d.with_fix(replace_fix(&sp, &best, format!("rename the field to `{best}`")));
             }
             self.cx.out.push(d);

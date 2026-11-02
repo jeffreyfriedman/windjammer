@@ -106,6 +106,16 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
                 _ => t("WJ0003", "mismatched types".to_string(), Some(generic)),
             }
         }
+        Some("E0423") => t(
+            "WJ0002",
+            format!("`{name}` is a type or module, not a function"),
+            Some("construct a struct with `Name { field: value }`, or call its constructor (`Name::new(..)`)"),
+        ),
+        Some("E0608") => t(
+            "WJ0035",
+            wjify(&format!("this value cannot be indexed: {msg}")),
+            Some("only lists, maps and strings can be indexed with `[..]`: for other values use a method or field, and collect an iterator into a list first"),
+        ),
         Some("E0384") => t(
             "WJ0004",
             format!("cannot assign twice to immutable variable `{name}`"),
@@ -158,11 +168,7 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
         Some("E0277") if msg.contains("cannot be built from an iterator") => match super::hints::collect_elements(msg) {
             Some(h) => Translated {
                 code: h.code,
-                message: wjify(&format!(
-                    "the collected elements have the wrong type: `{}` cannot be built from elements of type `{}`",
-                    between(msg, "a value of type `", "`").unwrap_or("collection"),
-                    between(msg, "elements of type `", "`").unwrap_or("?"),
-                )),
+                message: super::hints::collect_message(msg).unwrap_or_else(|| wjify(msg)),
                 help: Some(h.help),
                 fix: h.fix,
             },
