@@ -20,7 +20,7 @@ Layer `driver`. May import: every module in a lower layer (support < syntax < re
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`cache_root`, `target_dir(kind)`, `configure_cargo_command`, `apply_lean_build_env` (src/cargo_cache/mod.rs).
+`cache_root`, `target_dir(kind)`, `configure_cargo_command`, `apply_lean_build_env` (src/cargo_cache/mod.rs); `build_profile::{apply_fast_dev_env, executables_from_cargo_json, publish_executables}` (the dev profile and documented-binary-location step shared by `wj build` and `wj run --compiled`).
 
 ## Tests
 Inline unit tests in src/cargo_cache/mod.rs.

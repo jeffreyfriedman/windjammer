@@ -4,6 +4,8 @@
 //! projects when they share one target directory. See
 //! `docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md`.
 
+pub mod build_profile;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -391,6 +393,7 @@ pub fn reclaim() -> PruneReport {
         auto_low_disk: true,
         ..PruneOptions::default()
     });
+    report.freed_bytes += build_profile::prune_run_workdirs(&root, Duration::from_secs(14 * 24 * 3600));
     let tree = root.join("cargo-target");
     report.freed_bytes += enforce_size_budget(&tree, cache_max_bytes(), &mut report);
     report
@@ -404,13 +407,21 @@ fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u6
         return 0;
     }
     let mut excess = size - budget;
+    // Incremental state is cheap to regenerate and goes first; compiled dependency artifacts (the
+    // pre-built runtime and its crates, minutes of CPU) go last, oldest first.
     let mut files: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
     for profile in ["debug", "release"] {
-        for sub in ["deps", "build", "incremental"] {
-            collect_files(&tree.join(profile).join(sub), &mut files);
-        }
+        collect_files(&tree.join(profile).join("incremental"), &mut files);
     }
     files.sort_by_key(|(mtime, _, _)| *mtime);
+    let mut rest: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
+    for profile in ["debug", "release"] {
+        for sub in ["build", "deps"] {
+            collect_files(&tree.join(profile).join(sub), &mut rest);
+        }
+    }
+    rest.sort_by_key(|(mtime, _, _)| *mtime);
+    files.extend(rest);
     let mut freed = 0u64;
     for (_, len, path) in files {
         if excess == 0 {
