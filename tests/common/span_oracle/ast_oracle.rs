@@ -17,6 +17,11 @@ use windjammer::parser_impl::Parser;
 pub trait SpanSource {
     fn expr(&self, e: &Expression) -> Option<NodeSpan>;
     fn stmt(&self, s: &Statement) -> Option<NodeSpan>;
+    /// A node the parser invented while desugaring (`x ?? d`, `a?.b`): its span must be well-formed and nest
+    /// correctly, but it has no surface shape of its own, so token-shape and re-parse checks do not apply.
+    fn is_synthetic(&self, _e: &Expression) -> bool {
+        false
+    }
 }
 
 impl SpanSource for Parser {
@@ -25,6 +30,9 @@ impl SpanSource for Parser {
     }
     fn stmt(&self, s: &Statement) -> Option<NodeSpan> {
         self.stmt_span(s)
+    }
+    fn is_synthetic(&self, e: &Expression) -> bool {
+        self.is_synthetic_expr(e)
     }
 }
 
@@ -67,7 +75,7 @@ pub fn check_source(file: &str, src: &str) -> ParseOutcome {
 
 pub fn check_program(src: &str, prog: &Program, spans: &dyn SpanSource) -> Findings {
     let mut f = Findings::default();
-    let ctx = Ctx { src, spans };
+    let ctx = Ctx { src, spans, skip_shape: std::cell::Cell::new(false) };
     for item in &prog.items {
         ctx.item(item, &mut f);
     }
@@ -77,7 +85,7 @@ pub fn check_program(src: &str, prog: &Program, spans: &dyn SpanSource) -> Findi
 /// Check hand-built items against a hand-built span table (mutation self-tests).
 pub fn check_items(src: &str, items: &[Item], spans: &dyn SpanSource) -> Findings {
     let mut f = Findings::default();
-    let ctx = Ctx { src, spans };
+    let ctx = Ctx { src, spans, skip_shape: std::cell::Cell::new(false) };
     for i in items {
         ctx.item(i, &mut f);
     }
@@ -87,6 +95,8 @@ pub fn check_items(src: &str, items: &[Item], spans: &dyn SpanSource) -> Finding
 struct Ctx<'a> {
     src: &'a str,
     spans: &'a dyn SpanSource,
+    /// Set while checking a synthetic node: shape checks are skipped for it (and restored for its parent).
+    skip_shape: std::cell::Cell<bool>,
 }
 
 type ByteRange = (usize, usize);
@@ -127,9 +137,10 @@ impl<'a> Ctx<'a> {
     }
 
     fn order(&self, r: Option<ByteRange>, kind: &str, f: &mut Findings, prev: &mut Option<ByteRange>) {
+        let skip = self.skip_shape.get();
         if let Some((s, e)) = r {
             if let Some((_, pe)) = *prev {
-                if s < pe && !(s == 0 && e == 0) {
+                if s < pe && !(s == 0 && e == 0) && !skip {
                     // siblings may not overlap or go backwards
                     f.add("siblings-out-of-order", kind, format!("{s}..{e} starts before previous sibling ends at {pe}"));
                 }
@@ -143,6 +154,9 @@ impl<'a> Ctx<'a> {
     }
 
     fn starts(&self, f: &mut Findings, kind: &str, r: Option<ByteRange>, opts: &[&str]) {
+        if self.skip_shape.get() {
+            return;
+        }
         let Some(r) = r else { return };
         let t = self.slice(r);
         if !opts.iter().any(|o| t.starts_with(o)) {
@@ -151,6 +165,9 @@ impl<'a> Ctx<'a> {
     }
 
     fn ends(&self, f: &mut Findings, kind: &str, r: Option<ByteRange>, opts: &[&str]) {
+        if self.skip_shape.get() {
+            return;
+        }
         let Some(r) = r else { return };
         let t = self.slice(r);
         if !opts.iter().any(|o| t.ends_with(o)) {
@@ -162,6 +179,9 @@ impl<'a> Ctx<'a> {
     /// The node's end must be its last child's end, give or take closing parentheses of a
     /// parenthesised operand and a statement-terminating `;`.
     fn ends_with_child(&self, f: &mut Findings, kind: &str, r: Option<ByteRange>, child: Option<NodeSpan>) {
+        if self.skip_shape.get() {
+            return;
+        }
         if let (Some(r), Some(c)) = (r, child) {
             let ok = r.1 >= c.byte_end
                 && self.src.get(c.byte_end..r.1).is_some_and(|gap| gap.chars().all(|ch| ch == ')' || ch == ';' || ch.is_whitespace()));
@@ -173,6 +193,7 @@ impl<'a> Ctx<'a> {
 
     fn expr(&self, e: &Expression, f: &mut Findings, parent: Option<ByteRange>) {
         use Expression::*;
+        let outer_skip = self.skip_shape.replace(self.spans.is_synthetic(e));
         let kind = expr_kind(e);
         let sp = self.spans.expr(e);
         let me = self.check_span(f, kind, sp, parent);
@@ -326,9 +347,13 @@ impl<'a> Ctx<'a> {
         if let Some(r) = me {
             self.reparse(f, e, kind, r);
         }
+        self.skip_shape.set(outer_skip);
     }
 
     fn starts_with_child(&self, f: &mut Findings, kind: &str, r: Option<ByteRange>, child: Option<NodeSpan>) {
+        if self.skip_shape.get() {
+            return;
+        }
         if let (Some(r), Some(c)) = (r, child) {
             // A parenthesised base `(a).b` legitimately starts before its child.
             let before = &self.src[r.0..c.byte_start.max(r.0).min(self.src.len())];
@@ -341,6 +366,9 @@ impl<'a> Ctx<'a> {
     /// The node's own text must parse as one expression of the same kind.
     fn reparse(&self, f: &mut Findings, e: &Expression, kind: &str, r: ByteRange) {
         use Expression::*;
+        if self.skip_shape.get() {
+            return;
+        }
         // Blocks/maps are ambiguous in isolation; synthetic format() macro nodes have no source form.
         if matches!(e, Block { .. } | MapLiteral { .. } | MacroInvocation { .. } | Literal { value: windjammer::parser::ast::Literal::String(_), .. }) {
             return;

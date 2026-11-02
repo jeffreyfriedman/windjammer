@@ -255,3 +255,48 @@ fn oracle_rejects_wrong_last_token() {
     let e = b.e(Expression::Call { function: f, arguments: vec![], location: None }, Some(span_of("ab", 0)));
     rejected("wrong-last-token", b.run(e, span_of("ab + cd", 0)));
 }
+
+// ---- desugared nodes: synthetic ones have no surface shape, real ones keep every check ----------------------
+
+/// Hides the parser's synthetic marks, as the oracle saw spans before desugared nodes were tracked.
+struct NoSyntheticMarks<'p>(&'p windjammer::parser_impl::Parser);
+impl SpanSource for NoSyntheticMarks<'_> {
+    fn expr(&self, e: &Expression) -> Option<NodeSpan> {
+        self.0.expr_span(e)
+    }
+    fn stmt(&self, s: &Statement) -> Option<NodeSpan> {
+        self.0.stmt_span(s)
+    }
+}
+
+fn parse_with_spans(src: &str) -> (windjammer::parser_impl::Parser, Program<'static>) {
+    let tokens = windjammer::lexer::Lexer::new(src).tokenize_with_locations();
+    let mut p = windjammer::parser_impl::Parser::new_with_source(tokens, "t.wj".into(), src.into());
+    p.enable_span_log();
+    let prog = p.parse().expect("parse");
+    (p, prog)
+}
+
+#[test]
+fn desugared_nil_coalesce_and_optional_chain_are_sound_and_the_skip_is_what_clears_them() {
+    for src in [
+        "fn f(a: Option<string>, n: Option<int>) -> string {\n    let s = a ?? make().to_string()\n    s\n}\n",
+        "fn g(a: Option<P>) {\n    let x = a?.name\n    let y = a?.len(1)\n}\n",
+    ] {
+        let (p, prog) = parse_with_spans(src);
+        let with_marks = check_program(src, &prog, &p);
+        assert!(with_marks.by_class.is_empty(), "{src}\n{}", classes(&with_marks).join("\n"));
+        let without = check_program(src, &prog, &NoSyntheticMarks(&p));
+        assert!(!without.by_class.is_empty(), "the synthetic marks must be what clears these shapes:\n{src}");
+    }
+}
+
+#[test]
+fn a_real_node_inside_a_synthetic_one_keeps_every_shape_check() {
+    // `make().to_string()` is the default of `??`: its own MethodCall must still end with `)`.
+    let src = "fn f(a: Option<string>) -> string {\n    a ?? make().to_string()\n}\n";
+    let (p, prog) = parse_with_spans(src);
+    let f = check_program(src, &prog, &p);
+    assert!(f.by_class.is_empty(), "{}", classes(&f).join("\n"));
+    assert!(f.nodes >= 5, "the default's call chain is visited ({} nodes)", f.nodes);
+}
