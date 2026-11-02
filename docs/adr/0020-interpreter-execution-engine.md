@@ -412,6 +412,47 @@ unpacked lazily by the accessors the builtins share; every `Vec` builtin goes th
 a hashed index for maps kept in step by `KMap`'s mutation methods (today `KMap` derefs to `BTreeMap` mutably, so the index needs
 those mutations to go through `KMap` first); method inlining in machine-code loops with non-escaping structs in registers.
 
+### Round 5 (Nov 1): struct locals in registers and inlined methods (rung 5, built)
+`resolved/jit/lower_struct.rs` (about 320 lines, with about 100 more in `lower*.rs`/`osr.rs`/`rt.rs`):
+- A struct local whose fields are all scalars, held directly (no destructor identity), is one machine-code variable per field.
+  This covers a live-in local (classified `Class::Value` at entry), a loop `let` of a struct literal, and an inlined call's
+  result. Struct literals of a declared struct build such values with no allocation: fields in declaration order, each
+  coerced to its declared type.
+- `recv.m(args)` on such a value inlines the user method when it has `self` first, a return type, no decorators or type
+  parameters, is not async or extern, mutates neither `self` nor a parameter, and its body is `let`s plus a tail expression
+  machine code lowers. Nesting stops at four. The callee sees only its own names. Arguments are evaluated in the caller's
+  scope, and the parameters and result are coerced as the call would coerce them. Same-name types in different modules turn
+  inlining off: the method table is keyed by bare name.
+- Failure semantics are unchanged. Anything that fails inside an inlined body leaves machine code at the caller's statement,
+  and the closure engine then runs the real call, so panics and backtraces come from it (`V2::div` in the backtrace of
+  `jit_loop_inline.wj`). The depth check is the exception: a unit that inlines enters only with 1 MiB of interpreter stack
+  to spare.
+- Struct locals are rebuilt into their slots at every exit, and before (and reloaded after) every closure-run statement. A
+  boxed struct `let` (a closure captures it, or it is passed to a method) gets its box from the first write after the
+  binding; later writes in the iteration fill that box. This is exact in the `let`'s own block. A closure-run statement in a
+  nested block while the box is still to be made refuses the loop.
+
+Checks:
+- New engine-parity programs: `jit_loop_inline.wj` covers nested and struct-returning calls, `let`s in the callee, `i32`/`u8`
+  results, a method the inliner refuses, a closure capturing a loop's struct `let` (read before and after machine code changes
+  a field, and after the loop), and a zero divisor inside an inlined method. `same_name_types.wj` gains live-in structs of
+  same-name types.
+- The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a planted zero
+  divisor inside an inlined method. Its coverage test requires a quarter of the generated loops to inline.
+- Debug mutants `box` (the box made again at every write) and `dupe` (inlining on with same-name types) must each change
+  their corpus program's output (`every_inlining_check_is_load_bearing`, debug builds).
+
+Kill criterion (`structs` within 2x Node, inliner under 1.5k lines): met. `scripts/interp_compare.sh --runs 5`, starting at
+load 39 and ending at 96 (`bench/interp/compare.json`), resolved / Node: `structs` 0.60x (8.05x the run before, at load
+15), `loop5m` 0.94x, `fib30` 0.76x, `sieve` 1.42x, `strings` 2.19x, `closures` 2.54x, `nbody` 2.73x, `hashmap` 3.88x.
+`structs` is 24x faster than the walker and 6.5x faster than Python.
+
+Packed `Vec` writers: `tests/interpreter_packed_vec_test.rs` (`--test packed_vec`) builds each generated vector packed and
+unpacked and drives both through every builtin that writes, comparing walker, resolved and eager-JIT output with the
+unpacked walker. The first version passed with a planted bug, a `reverse` that wrote the read cache without unpacking, because
+almost every write unpacks for good. The packed program now repacks before each step and reads results element by element,
+and the planted bug makes 19 of 80 programs differ.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to
