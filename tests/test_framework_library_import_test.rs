@@ -97,7 +97,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = {{ path = "{}", default-features = false }}
+windjammer-runtime = {{ path = "{}", default-features = false, features = ["full"] }}
 
 [lib]
 name = "test_lib"

@@ -36,7 +36,9 @@ pub(crate) fn find_windjammer_runtime_path_with(override_path: Option<&Path>) ->
     // Installed/embedded runtime crate (baked into the binary, materialized into the
     // wj cache). Never discovered via the cwd, the checkout the binary was built from,
     // or directories next to the executable.
-    crate::embedded_assets::materialize(crate::embedded_assets::Asset::RuntimeCrate)
+    // Persistent root: the compiled runtime lives in the shared cargo tree, so its source must outlive OS temp purges.
+    let root = crate::cargo_cache::cache_root().join("embedded");
+    crate::embedded_assets::materialize_in(crate::embedded_assets::Asset::RuntimeCrate, &root)
         .unwrap_or_else(|e| panic!("cannot materialize embedded windjammer-runtime: {e}"))
 }
 

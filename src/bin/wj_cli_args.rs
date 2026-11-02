@@ -724,6 +724,8 @@ pub enum CacheCommand {
         #[arg(long)]
         aggressive: bool,
     },
+    /// Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm)
+    Warm,
     /// Write env.sh / env.ps1 for bare `cargo` invocations
     Setup,
 }

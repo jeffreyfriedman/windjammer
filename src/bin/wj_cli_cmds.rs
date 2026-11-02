@@ -303,18 +303,11 @@ pub fn run(cli: Cli) -> Result<()> {
             windjammer::cli::clean::execute(all)?;
         }
         Commands::Cache { action } => match action {
-            CacheCommand::Path { verify } => {
-                windjammer::cli::cache::execute_path(verify)?;
-            }
-            CacheCommand::Status => {
-                windjammer::cli::cache::execute_status()?;
-            }
-            CacheCommand::Prune { aggressive } => {
-                windjammer::cli::cache::execute_prune(aggressive)?;
-            }
-            CacheCommand::Setup => {
-                windjammer::cli::cache::execute_setup()?;
-            }
+            CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,
+            CacheCommand::Status => windjammer::cli::cache::execute_status()?,
+            CacheCommand::Prune { aggressive } => windjammer::cli::cache::execute_prune(aggressive)?,
+            CacheCommand::Warm => windjammer::cli::cache::execute_warm()?,
+            CacheCommand::Setup => windjammer::cli::cache::execute_setup()?,
         },
         Commands::SelfInstall { dry_run } => {
             windjammer::cli::self_install::execute(dry_run)?;

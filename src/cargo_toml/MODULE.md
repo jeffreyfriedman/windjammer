@@ -8,6 +8,7 @@ In: source dir, project name, deps. Out: Cargo.toml text/files.
 
 ## Invariants
 - Process-global `skip` flag exists (ratcheted state).
+- Runtime feature selection (`runtime_features.rs`) reads the module-to-feature map from the runtime's own `src/lib.rs` and falls back to `full` whenever a generated file names something it cannot classify: a miss costs compile time, never correctness.
 
 ## Owns
 Manifest generation.
