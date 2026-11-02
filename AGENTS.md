@@ -21,7 +21,8 @@ generic failing test under `tests/` (`bug_<behavior>_test.rs`), then fix it. Kno
 
 Add `tests/<name>_test.rs`; `build.rs` picks it up automatically (see `tests/README.md`).
 
-```bash
+<!-- ignore: contributor workflow commands; CI runs the test suites directly -->
+```bash,ignore
 cargo test --release --test all <filter>    # targeted
 wj run scripts/wj/check_orphan_tests.wj      # every test file must be reached by a runner
 scripts/update-architecture-baselines.sh    # after adding modules/files (also declare new top-level modules in src/lib.rs and src/main.rs)

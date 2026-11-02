@@ -162,7 +162,9 @@ fn early_owner_drops(src: &str) -> Vec<String> {
     let mut bad = Vec::new();
     let mut chunks: Vec<&str> = Vec::new();
     let mut start = 0;
-    for (i, _) in src.match_indices("\nfn ").chain(src.match_indices("\n    fn ")) {
+    let mut cuts: Vec<usize> = src.match_indices("\nfn ").chain(src.match_indices("\n    fn ")).map(|(i, _)| i).collect();
+    cuts.sort_unstable();
+    for i in cuts {
         chunks.push(&src[start..i]);
         start = i;
     }

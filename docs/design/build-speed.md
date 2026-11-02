@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 97f86dd45e86
+---
 # Build speed
 
 Compiled Windjammer builds are fast when the dependency work is done once and shared. This note records
@@ -23,7 +27,7 @@ Phases of a compiled build: `wj` transpile, cargo resolve (no-op with a lockfile
 | base `wj build`, warm same output dir | 10.7 | 0.5 | 40 |
 | base `wj build` into a **new** output dir | **828** | **193** | 43 |
 | base `wj run --compiled`, warm | 18 to 20 | 1.1 | 25 |
-| `wj transpile` only (`--no-cargo`) | 0.2 | 0.1 | 18 |
+| `wj build --no-cargo` only | 0.2 | 0.1 | 18 |
 
 Findings:
 
