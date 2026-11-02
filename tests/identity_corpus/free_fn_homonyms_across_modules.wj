@@ -1,0 +1,21 @@
+// Two modules define `take` with different bodies and different parameter modes (owned: returned;
+// borrowed: only read). Each call must use its own definition. Expected output computed by hand.
+// expect: 3 3
+mod a {
+    pub fn take(items: Vec<int>) -> Vec<int> {
+        items
+    }
+}
+
+mod b {
+    pub fn take(items: Vec<int>) -> int {
+        items.len() as int
+    }
+}
+
+fn main() {
+    let xs = [1, 2, 3]
+    let n = b::take(xs)
+    let ys = a::take(xs)
+    println("${n} ${ys.len()}")
+}

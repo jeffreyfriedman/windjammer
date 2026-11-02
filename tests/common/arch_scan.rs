@@ -360,6 +360,55 @@ pub fn count_get_signature(code: &str) -> u64 {
     code.matches("get_signature(").count() as u64
 }
 
+/// Name-based signature searches that guess an identity from a bare or suffix name (C3 of
+/// docs/spec/convergence-plan.md). Each call site is a place where resolution is missing.
+pub const SIGNATURE_FALLBACKS: [&str; 11] = [
+    "find_signature_ending_with",
+    "find_unique_signature_ending_with",
+    "find_signature_by_name_and_arg_count",
+    "find_own_signature_by_name_and_arg_count",
+    "find_signature_by_name_and_arg_count_with_global",
+    "lookup_method",
+    "signatures_matching_suffix",
+    "signatures_for_method_name",
+    "all_signatures_for_suffix_search",
+    "callee_lookup_keys",
+    "method_keys_for",
+];
+
+/// Calls of `token(` that are not its definition (`fn token(`) and not part of a longer identifier.
+pub fn count_calls_of(code: &str, token: &str) -> u64 {
+    let pat = format!("{token}(");
+    code.match_indices(&pat)
+        .filter(|(i, _)| {
+            let before = &code[..*i];
+            let prev_ident = before.chars().next_back().is_some_and(is_ident_char);
+            !prev_ident && !before.trim_end().ends_with("fn")
+        })
+        .count() as u64
+}
+
+pub fn count_signature_fallbacks(code: &str) -> u64 {
+    SIGNATURE_FALLBACKS.iter().map(|t| count_calls_of(code, t)).sum()
+}
+
+#[cfg(test)]
+mod signature_scan_tests {
+    use super::*;
+
+    #[test]
+    fn count_calls_of_skips_definitions_and_longer_names() {
+        let code = "fn lookup_method(x) {}\n a.lookup_method(n); b.my_lookup_method(n); lookup_method(m)";
+        assert_eq!(count_calls_of(code, "lookup_method"), 2);
+    }
+
+    #[test]
+    fn signature_fallbacks_count_every_listed_search() {
+        let code = "r.find_signature_ending_with(s); r.find_unique_signature_ending_with(s); r.get_signature(s)";
+        assert_eq!(count_signature_fallbacks(code), 2);
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // File loading and ratchet comparison
 // ---------------------------------------------------------------------------------------------

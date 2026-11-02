@@ -1,0 +1,24 @@
+// A free function and a method share the name `label` with different parameter lists and modes.
+// Expected by hand: "x" + 4, one element, the literal unchanged.
+// expect: x4 1 x
+struct Counter {
+    n: int,
+}
+
+impl Counter {
+    pub fn label(self, tag: string) -> string {
+        "${tag}${self.n}"
+    }
+}
+
+fn label(tags: Vec<string>) -> Vec<string> {
+    tags
+}
+
+fn main() {
+    let c = Counter { n: 4 }
+    let t = "x"
+    let a = c.label(t)
+    let b = label([a])
+    println("${a} ${b.len()} ${t}")
+}

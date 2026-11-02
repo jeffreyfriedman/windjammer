@@ -1,0 +1,45 @@
+// Two modules define `Counter` with an impl each: same type name, same method names, different
+// fields and bodies. Expected by hand: 1 + 10, then "ab" has length 2 after two pushes.
+// expect: 11 2
+mod a {
+    pub struct Counter {
+        pub n: int,
+    }
+    impl Counter {
+        pub fn new() -> Counter {
+            Counter { n: 1 }
+        }
+        pub fn bump(self) {
+            self.n = self.n + 10
+        }
+        pub fn get(self) -> int {
+            self.n
+        }
+    }
+}
+
+mod b {
+    pub struct Counter {
+        pub s: string,
+    }
+    impl Counter {
+        pub fn new() -> Counter {
+            Counter { s: "" }
+        }
+        pub fn bump(self) {
+            self.s = self.s + "a"
+        }
+        pub fn get(self) -> int {
+            self.s.len() as int
+        }
+    }
+}
+
+fn main() {
+    let mut x = a::Counter::new()
+    x.bump()
+    let mut y = b::Counter::new()
+    y.bump()
+    y.bump()
+    println("${x.get()} ${y.get()}")
+}

@@ -1,0 +1,35 @@
+// Two modules define an enum `Shape` with different variants and payload types, and a function
+// `area` each. Variant literals and bodies must bind to their own module. Expected by hand.
+// expect: 4 6 9
+mod a {
+    pub enum Shape {
+        Circle(f64),
+        Dot,
+    }
+    pub fn area(s: Shape) -> f64 {
+        match s {
+            Shape::Circle(r) => r * r,
+            Shape::Dot => 0.0,
+        }
+    }
+}
+
+mod b {
+    pub enum Shape {
+        Circle(int),
+        Square(int),
+    }
+    pub fn area(s: Shape) -> int {
+        match s {
+            Shape::Circle(r) => r * 3,
+            Shape::Square(k) => k * k,
+        }
+    }
+}
+
+fn main() {
+    let x = a::area(a::Shape::Circle(2.0))
+    let y = b::area(b::Shape::Circle(2))
+    let z = b::area(b::Shape::Square(3))
+    println("${x} ${y} ${z}")
+}

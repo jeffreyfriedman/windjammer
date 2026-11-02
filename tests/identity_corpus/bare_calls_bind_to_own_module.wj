@@ -1,0 +1,28 @@
+// Inside a module a bare call binds to that module's definition, not to a homonym elsewhere.
+// `a::keep` owns (returns) its argument, `b::keep` only reads it. Expected by hand: 3 * 2, 3 + 3.
+// expect: 6 6
+mod a {
+    pub fn keep(xs: Vec<int>) -> Vec<int> {
+        xs
+    }
+    pub fn twice(xs: Vec<int>) -> int {
+        let k = keep(xs)
+        k.len() as int * 2
+    }
+}
+
+mod b {
+    pub fn keep(xs: Vec<int>) -> int {
+        xs.len() as int
+    }
+    pub fn twice(xs: Vec<int>) -> int {
+        keep(xs) + keep(xs)
+    }
+}
+
+fn main() {
+    let xs = [1, 2, 3]
+    let p = a::twice(xs)
+    let q = b::twice(xs)
+    println("${p} ${q}")
+}

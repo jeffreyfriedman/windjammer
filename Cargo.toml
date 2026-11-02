@@ -187,6 +187,11 @@ path = "tests/backend_conformance_test.rs"
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
 
+# Same-name definitions across modules/types, interpreted and compiled (C3): cargo test --release --test identity_corpus
+[[test]]
+name = "identity_corpus"
+path = "tests/identity_corpus_test.rs"
+
 # Session-shared stdlib taint/effect tables equal the per-pipeline computation: cargo test --release --test stdlib_tables
 [[test]]
 name = "stdlib_tables"
