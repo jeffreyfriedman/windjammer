@@ -30,6 +30,7 @@ digraph deps {
     "main";
     "output_generation";
     "test_runner";
+    "toolchain";
   }
   subgraph cluster_ir {
     label="ir";
@@ -422,6 +423,7 @@ digraph deps {
   "test_runner" -> "rust_integration_tests" [label="1"];
   "test_runner" -> "test_module_gate" [label="1"];
   "test_utils" -> "parser" [label="2",color=red,fontcolor=red];
+  "toolchain" -> "cargo_cache" [label="2"];
   "type_classification" -> "analyzer" [label="1",color=red,fontcolor=red];
   "type_classification" -> "parser" [label="13"];
   "type_display" -> "parser" [label="1"];
