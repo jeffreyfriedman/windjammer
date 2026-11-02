@@ -56,7 +56,23 @@ Findings:
 
 ## After
 
-RESULTS_PLACEHOLDER
+| scenario (small program) | wall s | CPU s | load |
+|---|---|---|---|
+| `wj build` into a new output dir, cold shared tree (one time per machine) | 287 | 181 | 28 |
+| `wj build` into a **new** output dir, warm shared tree | **13.9 to 25.6** | **1.5 to 2.1** | 20 to 28 |
+| `wj build`, same output dir, unchanged | 8.8 | 0.5 | 28 |
+| `wj run --compiled`, warm | 15 to 19 | 0.4 to 0.9 | 20 to 25 |
+
+The new-output-dir build, the case the pilot's final `wj build` hits, drops from 193 CPU seconds to about
+2 (roughly 100x). Wall time on a loaded machine is dominated by scheduling and disk waits for a process that
+needs one to two CPU seconds; on an idle machine these runs finish in the CPU time. The first compiled build
+on a machine still compiles the runtime once (181 CPU seconds); every later build and run shares it.
+
+Cache disk cost: the compiled runtime and its dependencies take about 1.1 GiB in the shared tree
+(`<cache>/cargo-target/shared/debug/build/windjammer-runtime`), plus about 150 MiB of incremental state; the
+whole shared tree on the measuring machine is 5.7 GiB including other projects, under the 8 GiB cap
+(`WJ_CACHE_MAX_GIB`). Per-source run directories hold a few KiB each.
+
 
 ## Gates
 

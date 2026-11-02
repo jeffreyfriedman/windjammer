@@ -16,10 +16,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Warm run budget in CPU seconds (measured ~X on an idle machine; see the design doc).
-const RUN_WARM_CPU_BUDGET: f64 = 6.0;
+/// Warm run budget in CPU seconds (measured 0.4 to 0.9 under load 20; see the design doc).
+const RUN_WARM_CPU_BUDGET: f64 = 5.0;
 /// Warm build budget in CPU seconds into a fresh output dir with a warm shared cache.
-const BUILD_WARM_CPU_BUDGET: f64 = 6.0;
+const BUILD_WARM_CPU_BUDGET: f64 = 8.0;
 
 const PROGRAM: &str = "fn main() {\n    let mut s = 0\n    for i in 0..10 { s = s + i }\n    println(\"sum {}\", s)\n}\n";
 
