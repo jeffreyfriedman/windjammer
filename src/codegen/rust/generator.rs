@@ -383,6 +383,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inline_module_names: std::collections::HashSet<String>,
     /// Inline modules containing the function being generated (its `AnalyzedFunction::module_path`, C3).
     pub(crate) current_module_path: Vec<String>,
+    /// Callee expression address -> resolver definition path (`same_crate_callee.rs`, C3).
+    pub(crate) call_targets: std::collections::HashMap<usize, String>,
     /// Methods whose self receiver was upgraded from Borrowed to MutBorrowed
     /// during codegen (body-modification analysis). Used to update registry
     /// before writing metadata so cross-file builds see correct ownership.
@@ -525,46 +527,6 @@ impl<'ast> CodeGenerator<'ast> {
             return self.runtime_std_module_imports.contains(original);
         }
         false
-    }
-
-    /// Callee key for registry / IR signature lookup (`use dep::fn as alias` → `dep::fn`).
-    /// Same-crate `crate::mod::fn` registers as `mod::fn` in library multipass.
-    pub(in crate::codegen::rust) fn signature_lookup_callee_name<'a>(
-        &self,
-        callee_name: &'a str,
-    ) -> std::borrow::Cow<'a, str> {
-        if let Some(rest) = callee_name.strip_prefix("crate::") {
-            // `crate::mod::fn` registers as `mod::fn`. Do not collapse `crate::fn`
-            // to a bare name — that ORs HashMap::get / log::get homonyms.
-            if rest.contains("::") {
-                if let Some(q) = self.import_fn_alias_map.get(rest) {
-                    return std::borrow::Cow::Owned(q.clone());
-                }
-                return std::borrow::Cow::Owned(rest.to_string());
-            }
-        }
-        if callee_name.contains("::") {
-            let same_crate = self.same_crate_callee_key(callee_name).filter(|k| !callee_name.starts_with("crate::") && k.contains("::"));
-            if let Some(key) = same_crate {
-                return std::borrow::Cow::Owned(key);
-            }
-            return std::borrow::Cow::Borrowed(callee_name);
-        }
-        // Lexical scope (C3): inside `mod m`, bare `f` is `m::f` when `m` defines it.
-        let scoped = self.signature_registry.scoped_key(&self.current_module_path, callee_name);
-        if let Some(q) = scoped.or_else(|| {
-            let g = self.global_signature_registry.as_ref()?;
-            g.scoped_key(&self.current_module_path, callee_name)
-        }) {
-            return std::borrow::Cow::Owned(q);
-        }
-        if let Some(q) = self.import_fn_alias_map.get(callee_name) {
-            return std::borrow::Cow::Owned(q.clone());
-        }
-        if let Some(q) = self.imported_runtime_qualified_callee(callee_name) {
-            return std::borrow::Cow::Owned(q);
-        }
-        std::borrow::Cow::Borrowed(callee_name)
     }
 
     /// Path-dep import alias (`use dep::fn as alias` → bare `alias` at call sites).
@@ -805,6 +767,7 @@ impl<'ast> CodeGenerator<'ast> {
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
             current_module_path: Vec::new(),
+            call_targets: std::collections::HashMap::new(),
             self_receiver_upgrades: std::collections::HashMap::new(),
             ir_cutover: IrCutoverConfig::production(),
             config: crate::compiler_config::CompilerConfig::default(),

@@ -56,6 +56,9 @@ pub struct ExprKey(pub usize);
 #[derive(Debug, Clone)]
 pub struct CallResolution {
     pub key: ExprKey,
+    /// Identity of the callee expression (`f` in `f(x)`), for consumers that see the callee but not the
+    /// call node (the Rust backend); the call key for method calls.
+    pub callee_key: ExprKey,
     pub kind: CallKind,
     /// `f`, `A::b`, or the method name for method calls.
     pub callee: String,
