@@ -1,0 +1,12 @@
+// `let item = item + 1` inside the arm that binds `item` (an Option<int> payload): the literal is
+// typed i32 and cast, next to the i64 binding.
+fn main() {
+    let item: Option<int> = Some(5)
+    match item {
+        Some(item) => {
+            let item = item + 1
+            println("inner ${item}")
+        }
+        None => println("none"),
+    }
+}

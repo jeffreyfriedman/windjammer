@@ -1,0 +1,21 @@
+// Composition root — env config + HTTP adapter + auth domain.
+
+use crate::adapters::serve
+use crate::domain::config_from_env
+use crate::domain::port_from_env
+use wj_log::init_from_level_text
+
+fn main() {
+    let config = config_from_env()
+    let level = config.log_level
+    match init_from_level_text(level) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    let port = port_from_env()
+    println("wj-auth-api listening on http://0.0.0.0:${port}")
+    match serve(port, config) {
+        Ok(_) => {},
+        Err(err) => println("wj-auth-api error: ${err}"),
+    }
+}

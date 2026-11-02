@@ -1,0 +1,402 @@
+use crate::Rfc3339
+use crate::compare
+use crate::day_of
+use crate::days_in_month
+use crate::diff_secs
+use crate::format_rfc3339
+use crate::from_epoch_secs
+use crate::add_secs
+use crate::hour_of
+use crate::is_after
+use crate::is_before
+use crate::is_equal
+use crate::is_leap_year
+use crate::is_same_day
+use crate::is_same_month
+use crate::month_of
+use crate::now_epoch_secs
+use crate::now_rfc3339
+use crate::parse_rfc3339
+use crate::sub_secs
+use crate::to_epoch_secs
+use crate::year_of
+use crate::require_equal
+use std::strings
+
+@test
+fn test_parse_rfc3339_zulu() {
+    match parse_rfc3339("2024-01-15T12:30:00Z") {
+        Ok(t) => {
+            assert_eq(t.year, 2024)
+            assert_eq(t.month, 1)
+            assert_eq(t.day, 15)
+            assert_eq(t.hour, 12)
+            assert_eq(t.minute, 30)
+            assert_eq(t.second, 0)
+            assert_eq(t.offset_minutes, 0)
+        },
+        Err(_) => assert(false, "parse zulu"),
+    }
+}
+
+@test
+fn test_format_rfc3339_zulu() {
+    match parse_rfc3339("2024-01-15T12:30:00Z") {
+        Ok(t) => assert_eq(format_rfc3339(t), "2024-01-15T12:30:00Z"),
+        Err(_) => assert(false, "parse for format"),
+    }
+}
+
+@test
+fn test_roundtrip() {
+    match parse_rfc3339("2020-06-01T08:05:09Z") {
+        Ok(t) => assert_eq(format_rfc3339(t), "2020-06-01T08:05:09Z"),
+        Err(_) => assert(false, "roundtrip parse"),
+    }
+}
+
+@test
+fn test_parse_positive_offset() {
+    match parse_rfc3339("2024-03-10T18:45:00+05:30") {
+        Ok(t) => {
+            assert_eq(t.year, 2024)
+            assert_eq(t.month, 3)
+            assert_eq(t.day, 10)
+            assert_eq(t.hour, 18)
+            assert_eq(t.minute, 45)
+            assert_eq(t.second, 0)
+            assert_eq(t.offset_minutes, 330)
+        },
+        Err(_) => assert(false, "parse positive offset"),
+    }
+}
+
+@test
+fn test_parse_negative_offset() {
+    match parse_rfc3339("2024-07-04T09:00:00-08:00") {
+        Ok(t) => {
+            assert_eq(t.hour, 9)
+            assert_eq(t.offset_minutes, -480)
+        },
+        Err(_) => assert(false, "parse negative offset"),
+    }
+}
+
+@test
+fn test_format_positive_offset() {
+    match parse_rfc3339("2024-03-10T18:45:00+05:30") {
+        Ok(t) => assert_eq(format_rfc3339(t), "2024-03-10T18:45:00+05:30"),
+        Err(_) => assert(false, "format offset"),
+    }
+}
+
+@test
+fn test_format_negative_offset() {
+    match parse_rfc3339("2024-07-04T09:00:00-08:00") {
+        Ok(t) => assert_eq(format_rfc3339(t), "2024-07-04T09:00:00-08:00"),
+        Err(_) => assert(false, "format neg offset"),
+    }
+}
+
+@test
+fn test_parse_zero_offset() {
+    match parse_rfc3339("2024-01-01T00:00:00+00:00") {
+        Ok(t) => {
+            assert_eq(t.offset_minutes, 0)
+            assert_eq(format_rfc3339(t), "2024-01-01T00:00:00Z")
+        },
+        Err(_) => assert(false, "parse zero offset"),
+    }
+}
+
+@test
+fn test_parse_rejects_empty() {
+    match parse_rfc3339("") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_parse_rejects_bad_shape() {
+    match parse_rfc3339("not-a-date") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_epoch_zulu() {
+    match parse_rfc3339("1970-01-01T00:00:00Z") {
+        Ok(t) => assert_eq(to_epoch_secs(t), 0),
+        Err(_) => assert(false, "epoch parse"),
+    }
+}
+
+@test
+fn test_epoch_known_date() {
+    match parse_rfc3339("2024-01-01T00:00:00Z") {
+        Ok(t) => {
+            let e = to_epoch_secs(t)
+            assert(e > 1704000000, "epoch 2024")
+            assert(e < 1704100000, "epoch 2024 upper")
+        },
+        Err(_) => assert(false, "epoch 2024 parse"),
+    }
+}
+
+@test
+fn test_from_epoch_secs_zero() {
+    let t = from_epoch_secs(0)
+    assert_eq(t.year, 1970)
+    assert_eq(t.month, 1)
+    assert_eq(t.day, 1)
+    assert_eq(t.hour, 0)
+}
+
+@test
+fn test_epoch_roundtrip() {
+    match parse_rfc3339("2024-06-15T10:30:45Z") {
+        Ok(t) => {
+            let e = to_epoch_secs(t)
+            let back = from_epoch_secs(e)
+            assert_eq(back.year, 2024)
+            assert_eq(back.month, 6)
+            assert_eq(back.day, 15)
+            assert_eq(back.hour, 10)
+            assert_eq(back.minute, 30)
+            assert_eq(back.second, 45)
+        },
+        Err(_) => assert(false, "epoch roundtrip parse"),
+    }
+}
+
+@test
+fn test_compare_equal() {
+    match parse_rfc3339("2024-01-01T00:00:00Z") {
+        Ok(a) => {
+            match parse_rfc3339("2024-01-01T00:00:00Z") {
+                Ok(b) => assert_eq(compare(a, b), 0),
+                Err(_) => assert(false, "b"),
+            }
+        },
+        Err(_) => assert(false, "a"),
+    }
+}
+
+@test
+fn test_compare_before_after() {
+    match parse_rfc3339("2024-01-01T00:00:00Z") {
+        Ok(a) => {
+            match parse_rfc3339("2024-06-01T00:00:00Z") {
+                Ok(b) => {
+                    assert(is_before(a, b), "a before b")
+                    assert(is_after(b, a), "b after a")
+                    assert_eq(compare(a, b), -1)
+                    assert_eq(compare(b, a), 1)
+                },
+                Err(_) => assert(false, "b"),
+            }
+        },
+        Err(_) => assert(false, "a"),
+    }
+}
+
+@test
+fn test_is_leap_year() {
+    assert(is_leap_year(2000), "2000 leap")
+    assert(is_leap_year(2024), "2024 leap")
+    assert(!is_leap_year(1900), "1900 not leap")
+    assert(!is_leap_year(2023), "2023 not leap")
+}
+
+@test
+fn test_days_in_month() {
+    assert_eq(days_in_month(2024, 1), 31)
+    assert_eq(days_in_month(2024, 2), 29)
+    assert_eq(days_in_month(2023, 2), 28)
+    assert_eq(days_in_month(2024, 4), 30)
+    assert_eq(days_in_month(2024, 12), 31)
+}
+
+@test
+fn test_now_rfc3339_shape() {
+    let s = now_rfc3339()
+    assert(strings.len(s) >= 20, "rfc3339 min length")
+    assert(strings.contains(s, "T"), "has T separator")
+}
+
+@test
+fn test_now_epoch_secs_positive() {
+    assert(now_epoch_secs() > 1_700_000_000, "after 2023")
+}
+
+@test
+fn test_is_equal() {
+    match parse_rfc3339("2024-01-15T12:00:00Z") {
+        Ok(a) => {
+            match parse_rfc3339("2024-01-15T12:00:00Z") {
+                Ok(b) => {
+                    assert(is_equal(a, b), "same instant")
+                    assert_eq(compare(a, b), 0)
+                },
+                Err(_) => assert(false, "b"),
+            }
+        },
+        Err(_) => assert(false, "a"),
+    }
+}
+
+@test
+fn test_add_secs() {
+    match parse_rfc3339("2024-01-15T12:00:00Z") {
+        Ok(t) => {
+            let later = add_secs(t, 90)
+            assert_eq(later.hour, 12)
+            assert_eq(later.minute, 1)
+            assert_eq(later.second, 30)
+        },
+        Err(_) => assert(false, "parse later"),
+    }
+    match parse_rfc3339("2024-01-15T12:00:00Z") {
+        Ok(t) => {
+            let earlier = add_secs(t, -30)
+            assert_eq(earlier.minute, 59)
+            assert_eq(earlier.second, 30)
+            assert_eq(earlier.hour, 11)
+        },
+        Err(_) => assert(false, "parse earlier"),
+    }
+}
+
+@test
+fn test_diff_secs_and_sub_secs() {
+    match parse_rfc3339("2024-01-15T12:00:00Z") {
+        Ok(a) => {
+            match parse_rfc3339("2024-01-15T12:01:30Z") {
+                Ok(b) => {
+                    assert_eq(diff_secs(b, a), 90)
+                    assert_eq(diff_secs(a, b), -90)
+                    let earlier = sub_secs(b, 90)
+                    assert(is_equal(earlier, a), "sub_secs round-trip")
+                },
+                Err(_) => assert(false, "parse b"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+}
+
+@test
+fn test_is_same_day() {
+    match parse_rfc3339("2024-01-15T01:00:00Z") {
+        Ok(a) => {
+            match parse_rfc3339("2024-01-15T23:00:00Z") {
+                Ok(b) => assert(is_same_day(a, b), "same calendar day"),
+                Err(_) => assert(false, "parse b"),
+            }
+            match parse_rfc3339("2024-01-16T00:00:00Z") {
+                Ok(c) => assert(!is_same_day(a, c), "next day"),
+                Err(_) => assert(false, "parse c"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+}
+
+@test
+fn test_is_same_month_and_year() {
+    match parse_rfc3339("2024-01-15T12:00:00Z") {
+        Ok(a) => {
+            match parse_rfc3339("2024-01-31T00:00:00Z") {
+                Ok(b) => {
+                    assert(is_same_month(a, b), "same month")
+                },
+                Err(_) => assert(false, "parse b"),
+            }
+            match parse_rfc3339("2024-02-01T00:00:00Z") {
+                Ok(c) => {
+                    assert(!is_same_month(a, c), "next month")
+                },
+                Err(_) => assert(false, "parse c"),
+            }
+            match parse_rfc3339("2025-01-15T00:00:00Z") {
+                Ok(d) => {
+                    assert(!is_same_month(a, d), "different year")
+                },
+                Err(_) => assert(false, "parse d"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+}
+
+fn sample_zulu() -> Rfc3339 {
+    match parse_rfc3339("2024-01-15T12:30:00Z") {
+        Ok(t) => t,
+        Err(_) => Rfc3339 {
+            year: 0,
+            month: 0,
+            day: 0,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            offset_minutes: 0,
+        },
+    }
+}
+
+@test
+fn test_minute_second_and_midnight() {
+    use crate::is_midnight
+    use crate::minute_of
+    use crate::second_of
+    match parse_rfc3339("2024-01-15T00:00:00Z") {
+        Ok(t) => {
+            assert_eq(minute_of(t), 0)
+            assert_eq(second_of(t), 0)
+            assert(is_midnight(t), "midnight")
+        },
+        Err(_) => assert(false, "midnight parse"),
+    }
+    match parse_rfc3339("2024-01-15T12:34:56Z") {
+        Ok(t) => {
+            assert_eq(minute_of(t), 34)
+            assert_eq(second_of(t), 56)
+            assert(!is_midnight(t), "noon not midnight")
+        },
+        Err(_) => assert(false, "clock parse"),
+    }
+}
+
+@test
+fn test_require_equal() {
+    match parse_rfc3339("2024-01-15T12:30:00Z") {
+        Ok(left) => {
+            match parse_rfc3339("2024-01-15T12:30:00Z") {
+                Ok(right) => {
+                    match require_equal(left, right) {
+                        Ok(kept) => assert(is_equal(kept, right), "equal"),
+                        Err(_) => assert(false, "equal ok"),
+                    }
+                },
+                Err(_) => assert(false, "parse right"),
+            }
+        },
+        Err(_) => assert(false, "parse left"),
+    }
+    match parse_rfc3339("2024-01-15T12:30:00Z") {
+        Ok(left) => {
+            match parse_rfc3339("2024-01-15T12:30:01Z") {
+                Ok(right) => {
+                    match require_equal(left, right) {
+                        Ok(_) => assert(false, "mismatch must Err"),
+                        Err(msg) => assert(strings.contains(msg, "equal"), "mentions equal"),
+                    }
+                },
+                Err(_) => assert(false, "parse right again"),
+            }
+        },
+        Err(_) => assert(false, "parse left again"),
+    }
+}

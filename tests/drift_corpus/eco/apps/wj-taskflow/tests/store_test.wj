@@ -1,0 +1,119 @@
+use crate::domain::TaskStore
+use crate::domain::TaskFilter
+use crate::domain::no_filter
+
+fn seeded() -> TaskStore {
+    let mut store = TaskStore::new()
+    store.add_user("ann", "ann@example.com", "hash-a")
+    store.add_user("bob", "bob@example.com", "hash-b")
+    store.add_project("Alpha", "first", 1)
+    store
+}
+
+@test
+fn test_ids_are_assigned_per_entity_starting_at_one() {
+    let store = seeded()
+    assert_eq(store.user_by_name("ann").unwrap().id, 1)
+    assert_eq(store.user_by_name("bob").unwrap().id, 2)
+    assert_eq(store.project(1).unwrap().name, "Alpha")
+}
+
+@test
+fn test_usernames_are_unique() {
+    let mut store = seeded()
+    match store.add_user("ann", "other@example.com", "h") {
+        Ok(_) => assert(false, "duplicate username accepted"),
+        Err(e) => assert_str_contains(e, "username"),
+    }
+}
+
+@test
+fn test_emails_are_unique_case_insensitively() {
+    let mut store = seeded()
+    match store.add_user("carl", "ANN@example.com", "h") {
+        Ok(_) => assert(false, "duplicate email accepted"),
+        Err(e) => assert_str_contains(e, "email"),
+    }
+}
+
+@test
+fn test_creator_becomes_project_owner() {
+    let store = seeded()
+    assert_eq(store.role_in(1, 1), "owner")
+    assert_eq(store.role_in(1, 2), "")
+}
+
+@test
+fn test_members_can_be_added_and_replaced() {
+    let mut store = seeded()
+    store.set_member(1, 2, "viewer")
+    assert_eq(store.role_in(1, 2), "viewer")
+    store.set_member(1, 2, "member")
+    assert_eq(store.role_in(1, 2), "member")
+    assert_eq(store.members_of(1).len(), 2)
+}
+
+@test
+fn test_projects_for_user_lists_owned_and_joined() {
+    let mut store = seeded()
+    store.add_project("Beta", "second", 2)
+    store.set_member(2, 1, "member")
+    assert_eq(store.projects_for(1).len(), 2)
+    assert_eq(store.projects_for(2).len(), 1)
+}
+
+@test
+fn test_deleting_a_project_removes_its_tasks_and_memberships() {
+    let mut store = seeded()
+    store.add_task(1, "t1", "", "todo", "low", 1)
+    store.add_task(1, "t2", "", "todo", "low", 1)
+    assert(store.delete_project(1), "deleted")
+    assert(store.project(1).is_none(), "project gone")
+    assert_eq(store.tasks_of(1, no_filter()).len(), 0)
+    assert_eq(store.role_in(1, 1), "")
+    assert(!store.delete_project(1), "second delete reports absence")
+}
+
+@test
+fn test_filter_by_status_priority_assignee_and_text() {
+    let mut store = seeded()
+    store.add_task(1, "Write docs", "readme and guide", "todo", "low", 1)
+    store.add_task(1, "Fix bug", "crash on start", "in_progress", "high", 1)
+    store.add_task(1, "Ship release", "after the bug fix", "todo", "high", 1)
+    store.assign_task(3, 2)
+
+    let mut f = no_filter()
+    f.status = "todo"
+    assert_eq(store.tasks_of(1, f).len(), 2)
+
+    let mut f = no_filter()
+    f.priority = "high"
+    assert_eq(store.tasks_of(1, f).len(), 2)
+
+    let mut f = no_filter()
+    f.assignee = 2
+    let hits = store.tasks_of(1, f)
+    assert_eq(hits.len(), 1)
+    assert_eq(hits[0].title, "Ship release")
+
+    let mut f = no_filter()
+    f.text = "BUG"
+    assert_eq(store.tasks_of(1, f).len(), 2)
+
+    let mut f = no_filter()
+    f.status = "todo"
+    f.priority = "high"
+    assert_eq(store.tasks_of(1, f).len(), 1)
+}
+
+@test
+fn test_update_task_changes_only_given_fields() {
+    let mut store = seeded()
+    store.add_task(1, "Old", "desc", "todo", "low", 1)
+    store.update_task(1, Some("New"), None, Some("done"), None)
+    let t = store.task(1).unwrap()
+    assert_eq(t.title, "New")
+    assert_eq(t.description, "desc")
+    assert_eq(t.status, "done")
+    assert_eq(t.priority, "low")
+}

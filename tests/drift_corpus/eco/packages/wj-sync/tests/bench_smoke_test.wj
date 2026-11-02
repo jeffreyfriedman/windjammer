@@ -1,0 +1,43 @@
+use crate::Shared
+use crate::channel_sum_range
+use crate::pool_sum_double
+use crate::shared_int
+use crate::shared_int_add
+use crate::shared_int_get
+use std::time
+
+/// Same-thread channel+Shared throughput smoke (wall-clock, soft gate).
+@test
+fn test_channel_sum_range_bench_smoke() {
+    let start = time.utc_now().timestamp_millis()
+    let out = channel_sum_range(10_000)
+    let end = time.utc_now().timestamp_millis()
+    assert_eq(out.0, 10_000)
+    assert_eq(out.1, 49995000)
+    let elapsed = end - start
+    assert(elapsed < 5000, "channel_sum_range(10k) too slow")
+}
+
+@test
+fn test_shared_int_bench_smoke() {
+    let start = time.utc_now().timestamp_millis()
+    let mut s = shared_int(0)
+    let mut i: int = 0
+    while i < 10_000 {
+        s = shared_int_add(s, 1)
+        i = i + 1
+    }
+    let end = time.utc_now().timestamp_millis()
+    assert_eq(shared_int_get(s), 10_000)
+    assert(end - start < 5000, "shared_int 10k incs too slow")
+}
+
+@test
+fn test_pool_sum_double_bench_smoke() {
+    let start = time.utc_now().timestamp_millis()
+    let out = pool_sum_double(4, 500)
+    let end = time.utc_now().timestamp_millis()
+    assert_eq(out.0, 500)
+    assert_eq(out.1, 249500)
+    assert(end - start < 5000, "pool_sum_double(500) too slow")
+}

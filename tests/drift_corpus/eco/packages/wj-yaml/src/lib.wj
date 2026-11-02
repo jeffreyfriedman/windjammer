@@ -1,0 +1,214 @@
+use std::json
+use std::strings
+use std::yaml
+
+/// Parse YAML config into compact JSON text.
+///
+/// Thin-wraps `std::yaml.to_json` (serde_yaml backend). Supports full YAML 1.x
+/// including block scalars, flow style, and multi-document (first doc wins for
+/// JSON bridge). Package sugar: dotted-path getters below.
+pub fn to_json(text: string) -> Result<string, string> {
+    yaml.to_json(text)
+}
+
+/// String scalar (or stringified JSON leaf) at a dotted path.
+pub fn get_str(text: string, path: string) -> Option<string> {
+    match load_root(text) {
+        Some(root) => {
+            match walk_path(root, path) {
+                Some(node) => {
+                    match json.as_str(node) {
+                        Some(s) => Some(s),
+                        None => {
+                            match json.stringify(node) {
+                                Ok(s) => Some(s),
+                                Err(_) => None,
+                            }
+                        },
+                    }
+                },
+                None => None,
+            }
+        },
+        None => None,
+    }
+}
+
+/// Integer scalar at a dotted path.
+pub fn get_int(text: string, path: string) -> Option<int> {
+    match load_root(text) {
+        Some(root) => {
+            match walk_path(root, path) {
+                Some(node) => {
+                    match json.as_i64(node) {
+                        Some(n) => Some(n as int),
+                        None => None,
+                    }
+                },
+                None => None,
+            }
+        },
+        None => None,
+    }
+}
+
+/// Boolean scalar at a dotted path.
+pub fn get_bool(text: string, path: string) -> Option<bool> {
+    match load_root(text) {
+        Some(root) => {
+            match walk_path(root, path) {
+                Some(node) => json.as_bool(node),
+                None => None,
+            }
+        },
+        None => None,
+    }
+}
+
+/// First string at `path`, or `default` when missing.
+pub fn get_str_or(text: string, path: string, default: string) -> string {
+    match get_str(text, path) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// True when a value exists at the dotted path.
+pub fn has_path(text: string, path: string) -> bool {
+    match load_root(text) {
+        Some(root) => {
+            match walk_path(root, path) {
+                Some(_) => true,
+                None => false,
+            }
+        },
+        None => false,
+    }
+}
+
+/// Integer at `path`, or `default` when missing / not an int.
+pub fn get_int_or(text: string, path: string, default: int) -> int {
+    match get_int(text, path) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// Boolean at `path`, or `default` when missing / not a bool.
+pub fn get_bool_or(text: string, path: string, default: bool) -> bool {
+    match get_bool(text, path) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// True when `text` parses as YAML (non-empty and convertible to JSON).
+pub fn is_valid(text: string) -> bool {
+    if strings.len(strings.trim(text)) == 0 {
+        return false
+    }
+    match to_json(text) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+/// True when `text` is empty or whitespace-only.
+pub fn is_empty(text: string) -> bool {
+    strings.len(strings.trim(text)) == 0
+}
+
+/// `Ok(text)` when `text` is empty or whitespace, otherwise `Err`.
+pub fn require_empty(text: string) -> Result<string, string> {
+    if is_empty(text) {
+        return Ok(text)
+    }
+    Err("expected empty")
+}
+
+/// Look up string path, or `Err` naming the missing path.
+pub fn require_str(text: string, path: string) -> Result<string, string> {
+    match get_str(text, path) {
+        Some(v) => Ok(v),
+        None => Err("missing yaml path: ${path}"),
+    }
+}
+
+/// Look up int path, or `Err` naming the missing path.
+pub fn require_int(text: string, path: string) -> Result<int, string> {
+    match get_int(text, path) {
+        Some(v) => Ok(v),
+        None => Err("missing yaml path: ${path}"),
+    }
+}
+
+/// Ok(text) when `text` parses as YAML; otherwise Err.
+pub fn require_valid(text: string) -> Result<string, string> {
+    if is_valid(text) {
+        return Ok(text)
+    }
+    Err("expected yaml document")
+}
+
+/// Look up bool path, or `Err` naming the missing path.
+pub fn require_bool(text: string, path: string) -> Result<bool, string> {
+    match get_bool(text, path) {
+        Some(v) => Ok(v),
+        None => Err("missing yaml path: ${path}"),
+    }
+}
+
+/// `Ok(true)` when the bool at `path` is true, otherwise `Err`.
+pub fn require_true(text: string, path: string) -> Result<bool, string> {
+    match require_bool(text, path) {
+        Ok(v) => {
+            if v {
+                return Ok(true)
+            }
+            Err("expected true")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(false)` when the bool at `path` is false, otherwise `Err`.
+pub fn require_false(text: string, path: string) -> Result<bool, string> {
+    match require_bool(text, path) {
+        Ok(v) => {
+            if !v {
+                return Ok(false)
+            }
+            Err("expected false")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn load_root(text: string) -> Option<Value> {
+    match to_json(text) {
+        Ok(j) => {
+            match json.parse(j) {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            }
+        },
+        Err(_) => None,
+    }
+}
+
+fn walk_path(root: Value, path: string) -> Option<Value> {
+    if strings.len(path) == 0 {
+        return Some(root)
+    }
+    let parts = strings.split(path, ".")
+    let mut current = root
+    for seg in parts {
+        match json.get(current, seg) {
+            Some(next) => {
+                current = next
+            },
+            None => return None,
+        }
+    }
+    Some(current)
+}

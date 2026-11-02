@@ -1,0 +1,134 @@
+use std::encoding
+use std::strings
+
+/// Base64-encode UTF-8 text.
+pub fn encode(text: string) -> string {
+    encoding.base64_encode_string(text)
+}
+
+/// Alias of `encode` — prefer this name at app call sites (cargo-bin may
+/// over-borrow a bare `encode` into an owned formal).
+pub fn encode_text(text: string) -> string {
+    encode(text)
+}
+
+/// Decode a base64 string to UTF-8 text.
+pub fn decode(text: string) -> Result<string, string> {
+    encoding.base64_decode_string(text)
+}
+
+/// Alias of `decode` for symmetry with `encode_text`.
+pub fn decode_text(text: string) -> Result<string, string> {
+    decode(text)
+}
+
+/// Base64-encode raw bytes.
+pub fn encode_bytes(data: Vec<u8>) -> string {
+    encoding.base64_encode(data)
+}
+
+/// Decode a base64 string to raw bytes.
+pub fn decode_bytes(text: string) -> Result<Vec<u8>, string> {
+    encoding.base64_decode(text)
+}
+
+/// HTTP `Authorization: Basic …` header for `user` / `pass`.
+pub fn basic_auth_header(user: string, pass: string) -> string {
+    let token = encode("${user}:${pass}")
+    "Authorization: Basic ${token}"
+}
+
+/// True when `header` is an `Authorization: Basic …` line.
+pub fn is_basic_auth_header(header: string) -> bool {
+    strings.starts_with(strings.trim(header), "Authorization: Basic ")
+}
+
+/// HTTP `Authorization: Bearer …` header for `token`.
+pub fn bearer_auth_header(token: string) -> string {
+    "Authorization: Bearer ${token}"
+}
+
+/// True when `header` is an `Authorization: Bearer …` line.
+pub fn is_bearer_auth_header(header: string) -> bool {
+    strings.starts_with(strings.trim(header), "Authorization: Bearer ")
+}
+
+/// `Ok(header)` when it is a Bearer authorization line, otherwise `Err`.
+pub fn require_bearer(header: string) -> Result<string, string> {
+    if is_bearer_auth_header(header) {
+        return Ok(header)
+    }
+    Err("expected bearer")
+}
+
+/// Decode base64 text, or `default` when decoding fails.
+pub fn decode_or(text: string, default: string) -> string {
+    match decode(text) {
+        Ok(value) => value,
+        Err(_) => default,
+    }
+}
+
+/// True when `text` uses only base64 alphabet characters (and optional `=` padding).
+pub fn looks_like_base64(text: string) -> bool {
+    let trimmed = strings.trim(text)
+    if strings.len(trimmed) == 0 {
+        return false
+    }
+    let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+    let mut i = 0
+    while i < strings.len(trimmed) {
+        let ch = strings.substring(trimmed, i, i + 1)
+        if !strings.contains(alphabet, ch) {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+/// True when `text` looks like base64 and successfully decodes.
+pub fn is_encoded(text: string) -> bool {
+    if !looks_like_base64(text) {
+        return false
+    }
+    match decode(text) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+/// True when `text` ends with one or more `=` padding characters.
+pub fn has_padding(text: string) -> bool {
+    strings.ends_with(strings.trim(text), "=")
+}
+
+/// Drop trailing `=` padding from `text`.
+pub fn strip_padding(text: string) -> string {
+    let mut out = strings.trim(text)
+    while strings.ends_with(out, "=") {
+        out = strings.substring(out, 0, strings.len(out) - 1)
+    }
+    out
+}
+
+/// Ensure `text` length is a multiple of 4 by appending `=` padding.
+pub fn ensure_padding(text: string) -> string {
+    let bare = strip_padding(text)
+    let rem = strings.len(bare) % 4
+    if rem == 0 {
+        return bare
+    }
+    if rem == 2 {
+        return "${bare}=="
+    }
+    if rem == 3 {
+        return "${bare}="
+    }
+    bare
+}
+
+/// True when `text` needs `=` padding to reach a multiple of 4.
+pub fn needs_padding(text: string) -> bool {
+    ensure_padding(text) != strings.trim(text)
+}

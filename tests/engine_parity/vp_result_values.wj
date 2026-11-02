@@ -1,0 +1,84 @@
+// Result values in value position: `Ok`/`Err` as arm results, as returns from inside loops, rebuilt
+// from a matched error (`Err(e) => Err(e)`), passed through `?`, stored in a Vec and in a struct field.
+fn parse_digit(s: string) -> Result<int, string> {
+    match s {
+        "0" => Ok(0),
+        "1" => Ok(1),
+        "2" => Ok(2),
+        _ => Err("bad digit ${s}"),
+    }
+}
+
+fn forward(s: string) -> Result<int, string> {
+    match parse_digit(s) {
+        Ok(v) => Ok(v + 100),
+        Err(e) => Err(e),
+    }
+}
+
+fn sum_all(items: Vec<string>) -> Result<int, string> {
+    let mut total = 0
+    for it in items {
+        let v = parse_digit(it)?
+        total += v
+    }
+    Ok(total)
+}
+
+fn first_bad(items: Vec<string>) -> Result<int, string> {
+    let mut i = 0
+    while i < items.len() {
+        match parse_digit(items[i]) {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        i += 1
+    }
+    Ok(items.len() as int)
+}
+
+struct Slot {
+    res: Result<int, string>,
+}
+
+fn describe(r: Result<int, string>) -> string {
+    match r {
+        Ok(v) => "ok ${v}",
+        Err(e) => "err ${e}",
+    }
+}
+
+fn main() {
+    println(describe(forward("1")))
+    println(describe(forward("9")))
+    println(describe(sum_all(["1", "2", "2"])))
+    println(describe(sum_all(["1", "x", "2"])))
+    println(describe(first_bad(["0", "1"])))
+    println(describe(first_bad(["0", "7", "q"])))
+    let mut rs: Vec<Result<int, string>> = Vec::new()
+    for s in ["0", "5", "2"] {
+        rs.push(parse_digit(s))
+    }
+    let mut oks = 0
+    let mut errs = 0
+    for r in rs {
+        match r {
+            Ok(_) => { oks += 1 },
+            Err(_) => { errs += 1 },
+        }
+    }
+    println("${oks} ${errs}")
+    let slot = Slot { res: forward("2") }
+    let again = match slot.res {
+        Ok(v) => Ok(v * 2),
+        Err(e) => Err(e),
+    }
+    println(describe(again))
+    let miss = Slot { res: forward("8") }
+    let again2 = match miss.res {
+        Ok(v) => Ok(v * 2),
+        Err(e) => Err(e),
+    }
+    println(describe(again2))
+    println("${forward("0").is_ok()} ${forward("z").is_err()} ${forward("z").unwrap_or(-5)}")
+}

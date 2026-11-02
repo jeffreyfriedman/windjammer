@@ -1,0 +1,202 @@
+use std::fs
+use std::strings
+
+use crate::domain::encode_line
+use crate::domain::decode_line
+use crate::domain::encode_store
+use crate::domain::decode_store
+use crate::domain::todos_to_json
+use crate::domain::todos_from_json
+use crate::domain::stats_to_json
+use crate::domain::count_todos
+use crate::domain::Command
+use crate::domain::Todo
+use crate::domain::TodoConfig
+use crate::domain::TodoStore
+use crate::domain::parse_command
+use crate::domain::filter_pending
+use crate::domain::filter_done
+use crate::domain::sort_todos_by_id
+
+/// Execute a CLI command against an in-memory store; returns updated store + stdout.
+pub fn run_args(
+    store: TodoStore,
+    args: Vec<string>,
+    config: TodoConfig,
+) -> Result<(TodoStore, string), string> {
+    match parse_command(args) {
+        Ok(cmd) => apply(store, cmd, config),
+        Err(e) => Err(e),
+    }
+}
+
+fn apply(
+    store: TodoStore,
+    cmd: Command,
+    config: TodoConfig,
+) -> Result<(TodoStore, string), string> {
+    if cmd.kind == "add" {
+        match store.add(cmd.title, config.max_title_len) {
+            Ok(pair) => Ok((pair.0, "added #${pair.1.id}: ${pair.1.title}")),
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "list" {
+        let raw = store.into_todos()
+        let filtered = if cmd.filter == "pending" {
+            filter_pending(raw)
+        } else if cmd.filter == "done" {
+            filter_done(raw)
+        } else {
+            raw
+        }
+        let todos = sort_todos_by_id(filtered)
+        if cmd.json {
+            return render_json_and_restore(todos)
+        }
+        match render_and_restore(todos) {
+            Ok(pair) => Ok(pair),
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "done" {
+        match store.complete(cmd.id) {
+            Ok(pair) => Ok((pair.0, "done #${pair.1.id}: ${pair.1.title}")),
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "edit" {
+        match store.rename(cmd.id, cmd.title, config.max_title_len) {
+            Ok(pair) => Ok((pair.0, "edited #${pair.1.id}: ${pair.1.title}")),
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "rm" {
+        match store.remove(cmd.id) {
+            Ok(next) => Ok((next, "removed #${cmd.id}")),
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "clear" {
+        if cmd.filter == "done" {
+            let result = store.clear_done()
+            Ok((result.0, "removed ${result.1} done todo(s)"))
+        } else {
+            Ok((store.clear_all(), "cleared all todos"))
+        }
+    } else if cmd.kind == "export" {
+        let snapshot = encode_store(store)
+        match decode_store(snapshot) {
+            Ok(copy) => {
+                let raw = copy.into_todos()
+                let filtered = if cmd.filter == "pending" {
+                    filter_pending(raw)
+                } else if cmd.filter == "done" {
+                    filter_done(raw)
+                } else {
+                    raw
+                }
+                let todos = sort_todos_by_id(filtered)
+                match todos_to_json(todos) {
+                    Ok(body) => {
+                        match decode_store(snapshot) {
+                            Ok(restored) => {
+                                if strings.len(cmd.out_path) > 0 {
+                                    match fs.write(cmd.out_path, body) {
+                                        Ok(_) => Ok((restored, "exported to ${cmd.out_path}")),
+                                        Err(e) => Err(e),
+                                    }
+                                } else {
+                                    Ok((restored, body))
+                                }
+                            },
+                            Err(e) => Err(e),
+                        }
+                    },
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "import" {
+        match fs.read_to_string(cmd.title) {
+            Ok(body) => {
+                let text = "${body}"
+                match todos_from_json(text) {
+                    Ok(imported) => {
+                        let count = imported.len()
+                        if cmd.filter == "merge" {
+                            let result = store.merge_from(imported)
+                            Ok((result.0, "imported ${result.1} todo(s) (merge)"))
+                        } else {
+                            Ok((TodoStore::from_todos(imported), "imported ${count} todo(s)"))
+                        }
+                    },
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
+    } else if cmd.kind == "stats" {
+        let snapshot = encode_store(store)
+        match decode_store(snapshot) {
+            Ok(copy) => {
+                let counts = count_todos(copy.into_todos())
+                match decode_store(snapshot) {
+                    Ok(restored) => {
+                        if cmd.json {
+                            Ok((restored, stats_to_json(counts.0, counts.1, counts.2)))
+                        } else {
+                            Ok((restored, "${counts.0} total (${counts.1} pending, ${counts.2} done)"))
+                        }
+                    },
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
+    } else {
+        Err("unknown command")
+    }
+}
+
+fn render_json_and_restore(todos: Vec<Todo>) -> Result<(TodoStore, string), string> {
+    let mut restored = Vec::new()
+    for todo in todos {
+        let line = encode_line(todo)
+        match decode_line(line) {
+            Ok(item) => restored.push(item),
+            Err(e) => return Err(e),
+        }
+    }
+    match todos_to_json(restored) {
+        Ok(out) => Ok((TodoStore::from_todos(restored), out)),
+        Err(e) => Err(e),
+    }
+}
+
+fn render_and_restore(todos: Vec<Todo>) -> Result<(TodoStore, string), string> {
+    let mut out = ""
+    let mut first = true
+    let mut restored = Vec::new()
+    for todo in todos {
+        let line = encode_line(todo)
+        match decode_line(line) {
+            Ok(item) => {
+                let mark = if item.done {
+                    "x"
+                } else {
+                    " "
+                }
+                let row = "[${mark}] ${item.id}: ${item.title}"
+                if first {
+                    out = row
+                    first = false
+                } else {
+                    out = "${out}\n${row}"
+                }
+                restored.push(item)
+            },
+            Err(e) => return Err(e),
+        }
+    }
+    if first {
+        out = "(no todos)"
+    }
+    Ok((TodoStore::from_todos(restored), out))
+}

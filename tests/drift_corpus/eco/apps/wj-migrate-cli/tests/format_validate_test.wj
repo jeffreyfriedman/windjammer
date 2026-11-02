@@ -1,0 +1,7 @@
+use crate::domain::format_validate_result
+
+fn test_format_validate_result() {
+    let msg = format_validate_result(3)
+    assert_str_contains(msg, "validated")
+    assert_str_contains(msg, "3")
+}

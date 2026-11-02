@@ -1,0 +1,29 @@
+use crate::domain::join_upstream_url
+
+fn test_join_upstream_appends_path() {
+    match join_upstream_url("http://127.0.0.1:9000", "/users/1") {
+        Ok(url) => assert_eq(url, "http://127.0.0.1:9000/users/1"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_join_upstream_trims_trailing_slash_on_base() {
+    match join_upstream_url("http://127.0.0.1:9000/", "/users/1") {
+        Ok(url) => assert_eq(url, "http://127.0.0.1:9000/users/1"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_join_upstream_root_path() {
+    match join_upstream_url("http://127.0.0.1:9000", "/") {
+        Ok(url) => assert_eq(url, "http://127.0.0.1:9000/"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_join_upstream_rejects_empty_base() {
+    match join_upstream_url("", "/x") {
+        Ok(_) => assert(false, "expected error"),
+        Err(e) => assert_str_contains(e, "upstream"),
+    }
+}

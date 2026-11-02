@@ -1,0 +1,87 @@
+use std::http
+
+use crate::domain::ForwardResult
+
+/// Forward a GET to `url`.
+pub fn forward_get(url: string) -> Result<ForwardResult, string> {
+    match http.get(url) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(body) => Ok(ForwardResult { status: status, body: body }),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Forward a POST with body to `url`.
+pub fn forward_post(url: string, body: string) -> Result<ForwardResult, string> {
+    match http.post(url, body) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(text) => Ok(ForwardResult { status: status, body: text }),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Forward a PUT with body to `url`.
+pub fn forward_put(url: string, body: string) -> Result<ForwardResult, string> {
+    match http.put(url, body) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(text) => Ok(ForwardResult { status: status, body: text }),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Forward a PATCH with body to `url`.
+pub fn forward_patch(url: string, body: string) -> Result<ForwardResult, string> {
+    match http.patch(url, body) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(text) => Ok(ForwardResult { status: status, body: text }),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Forward a DELETE to `url`.
+pub fn forward_delete(url: string) -> Result<ForwardResult, string> {
+    match http.delete(url) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(text) => Ok(ForwardResult { status: status, body: text }),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Forward a HEAD to `url`.
+pub fn forward_head(url: string) -> Result<ForwardResult, string> {
+    match http.head(url) {
+        Ok(response) => {
+            let status = response.status_code()
+            match response.text() {
+                Ok(text) => Ok(ForwardResult { status: status, body: text }),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}

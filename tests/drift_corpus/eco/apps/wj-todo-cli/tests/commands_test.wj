@@ -1,0 +1,270 @@
+use crate::domain::parse_command
+
+@test
+fn test_parse_add() {
+    let mut args = Vec::new()
+    args.push("add")
+    args.push("buy milk")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "add")
+            assert_eq(cmd.title, "buy milk")
+        },
+        Err(_) => assert(false, "parse add"),
+    }
+}
+
+@test
+fn test_parse_list() {
+    let mut args = Vec::new()
+    args.push("list")
+    match parse_command(args) {
+        Ok(cmd) => assert_eq(cmd.kind, "list"),
+        Err(_) => assert(false, "parse list"),
+    }
+}
+
+@test
+fn test_parse_done() {
+    let mut args = Vec::new()
+    args.push("done")
+    args.push("3")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "done")
+            assert_eq(cmd.id, 3)
+        },
+        Err(_) => assert(false, "parse done"),
+    }
+}
+
+@test
+fn test_parse_remove() {
+    let mut args = Vec::new()
+    args.push("rm")
+    args.push("2")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "rm")
+            assert_eq(cmd.id, 2)
+        },
+        Err(_) => assert(false, "parse rm"),
+    }
+}
+
+fn test_parse_list_json() {
+    let mut args = Vec::new()
+    args.push("list")
+    args.push("--json")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "list")
+            assert(cmd.json, "list --json sets json flag")
+            assert_eq(cmd.filter, "")
+        },
+        Err(_) => assert(false, "parse list --json"),
+    }
+}
+
+fn test_parse_list_pending() {
+    let mut args = Vec::new()
+    args.push("list")
+    args.push("--pending")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "list")
+            assert_eq(cmd.filter, "pending")
+        },
+        Err(_) => assert(false, "parse list --pending"),
+    }
+}
+
+fn test_parse_list_done_json() {
+    let mut args = Vec::new()
+    args.push("list")
+    args.push("--done")
+    args.push("--json")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.filter, "done")
+            assert(cmd.json, "json flag")
+        },
+        Err(_) => assert(false, "parse list --done --json"),
+    }
+}
+
+fn test_parse_list_rejects_conflicting_filters() {
+    let mut args = Vec::new()
+    args.push("list")
+    args.push("--pending")
+    args.push("--done")
+    match parse_command(args) {
+        Ok(_) => assert(false, "conflicting filters must fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+fn test_parse_list_rejects_extra_args() {
+    let mut args = Vec::new()
+    args.push("list")
+    args.push("extra")
+    match parse_command(args) {
+        Ok(_) => assert(false, "list with unknown arg must fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+fn test_parse_clear() {
+    let mut args = Vec::new()
+    args.push("clear")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "clear")
+            assert_eq(cmd.filter, "")
+        },
+        Err(_) => assert(false, "parse clear"),
+    }
+}
+
+fn test_parse_clear_done() {
+    let mut args = Vec::new()
+    args.push("clear")
+    args.push("--done")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "clear")
+            assert_eq(cmd.filter, "done")
+        },
+        Err(_) => assert(false, "parse clear --done"),
+    }
+}
+
+fn test_parse_clear_rejects_unknown_flags() {
+    let mut args = Vec::new()
+    args.push("clear")
+    args.push("--all")
+    match parse_command(args) {
+        Ok(_) => assert(false, "unknown clear flag must fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+fn test_parse_export() {
+    let mut args = Vec::new()
+    args.push("export")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "export")
+            assert_eq(cmd.filter, "")
+            assert_eq(cmd.out_path, "")
+        },
+        Err(_) => assert(false, "parse export"),
+    }
+}
+
+fn test_parse_export_pending() {
+    let mut args = Vec::new()
+    args.push("export")
+    args.push("--pending")
+    match parse_command(args) {
+        Ok(cmd) => assert_eq(cmd.filter, "pending"),
+        Err(_) => assert(false, "parse export --pending"),
+    }
+}
+
+fn test_parse_export_out() {
+    let mut args = Vec::new()
+    args.push("export")
+    args.push("--out")
+    args.push("backup.json")
+    match parse_command(args) {
+        Ok(cmd) => assert_eq(cmd.out_path, "backup.json"),
+        Err(_) => assert(false, "parse export --out"),
+    }
+}
+
+fn test_parse_import() {
+    let mut args = Vec::new()
+    args.push("import")
+    args.push("backup.json")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "import")
+            assert_eq(cmd.title, "backup.json")
+            assert_eq(cmd.filter, "")
+        },
+        Err(_) => assert(false, "parse import"),
+    }
+}
+
+fn test_parse_import_merge() {
+    let mut args = Vec::new()
+    args.push("import")
+    args.push("--merge")
+    args.push("backup.json")
+    match parse_command(args) {
+        Ok(cmd) => assert_eq(cmd.filter, "merge"),
+        Err(_) => assert(false, "parse import --merge"),
+    }
+}
+
+fn test_parse_edit() {
+    let mut args = Vec::new()
+    args.push("edit")
+    args.push("2")
+    args.push("buy")
+    args.push("oat milk")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "edit")
+            assert_eq(cmd.id, 2)
+            assert_eq(cmd.title, "buy oat milk")
+        },
+        Err(_) => assert(false, "parse edit"),
+    }
+}
+
+fn test_parse_edit_requires_title() {
+    let mut args = Vec::new()
+    args.push("edit")
+    args.push("1")
+    match parse_command(args) {
+        Ok(_) => assert(false, "edit without title must fail"),
+        Err(msg) => assert_str_contains(msg, "edit"),
+    }
+}
+
+fn test_parse_stats() {
+    let mut args = Vec::new()
+    args.push("stats")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "stats")
+            assert(!cmd.json, "plain stats")
+        },
+        Err(_) => assert(false, "parse stats"),
+    }
+}
+
+fn test_parse_stats_json() {
+    let mut args = Vec::new()
+    args.push("stats")
+    args.push("--json")
+    match parse_command(args) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "stats")
+            assert(cmd.json, "stats --json")
+        },
+        Err(_) => assert(false, "parse stats --json"),
+    }
+}
+
+@test
+fn test_parse_unknown() {
+    let mut args = Vec::new()
+    args.push("nope")
+    match parse_command(args) {
+        Ok(_) => assert(false, "should fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}

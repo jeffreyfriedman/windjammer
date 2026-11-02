@@ -1,0 +1,71 @@
+// Domain: version identity for the wj-hello smoke binary.
+
+use std::strings
+
+/// Package / binary crate name.
+pub fn crate_name() -> string {
+    "wj-hello"
+}
+
+/// Semver for this smoke app.
+pub fn semver() -> string {
+    "0.1.0"
+}
+
+/// Combined identity line (`crate_name` + space + `semver`).
+pub fn version() -> string {
+    "${crate_name()} ${semver()}"
+}
+
+/// True when the smoke app still reports a 0.x semver major.
+pub fn is_zero_major() -> bool {
+    let v = semver()
+    strings.starts_with(v, "0.")
+}
+
+/// Identity line when crate name and semver both match.
+pub fn require_identity(name: string, ver: string) -> Result<string, string> {
+    if matches_identity(name, ver) {
+        Ok(version())
+    } else {
+        Err("expected identity")
+    }
+}
+
+/// True when crate name and semver both match the smoke identity.
+pub fn matches_identity(name: string, ver: string) -> bool {
+    crate_name() == name && semver() == ver
+}
+
+/// Ok(crate_name) when `name` matches; otherwise Err naming the expected value.
+pub fn require_crate(name: string) -> Result<string, string> {
+    if crate_name() == name {
+        Ok(crate_name())
+    } else {
+        Err("expected crate: ${name}")
+    }
+}
+
+/// Current semver when the major is still 0.
+pub fn require_zero_major() -> Result<string, string> {
+    if is_zero_major() {
+        Ok(semver())
+    } else {
+        Err("expected zero major")
+    }
+}
+
+/// Ok(semver) when `ver` matches this smoke app; otherwise Err.
+pub fn require_semver(ver: string) -> Result<string, string> {
+    if semver() == ver {
+        Ok(semver())
+    } else {
+        Err("expected semver")
+    }
+}
+
+/// True when the identity line is the crate name plus its semver.
+pub fn is_smoke_identity() -> bool {
+    let line = version()
+    strings.starts_with(line, crate_name()) && strings.contains(line, semver())
+}

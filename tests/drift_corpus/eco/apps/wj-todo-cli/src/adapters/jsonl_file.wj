@@ -1,0 +1,18 @@
+use std::fs
+use crate::domain::TodoStore
+use crate::domain::decode_store
+use crate::domain::encode_store
+
+/// Load todos from a tab-separated file (empty store if missing).
+pub fn load_store(path: string) -> Result<TodoStore, string> {
+    match fs.read_to_string(path) {
+        Ok(text) => decode_store(text),
+        Err(_) => Ok(TodoStore::new()),
+    }
+}
+
+/// Persist store to disk.
+pub fn save_store(path: string, store: TodoStore) -> Result<(), string> {
+    let body = encode_store(store)
+    fs.write(path, body)
+}

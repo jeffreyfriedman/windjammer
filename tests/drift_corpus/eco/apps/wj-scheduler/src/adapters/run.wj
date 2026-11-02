@@ -1,0 +1,77 @@
+use std::fs
+use crate::domain::check_schedule
+use crate::domain::next_schedule
+use crate::domain::explain_schedule
+use crate::domain::parse_civil
+use crate::domain::parse_crontab
+use crate::domain::due_schedules
+use crate::domain::format_check
+use crate::domain::format_next
+use crate::domain::format_explain
+use crate::domain::format_list
+use crate::domain::format_due
+
+pub fn run_check(expr: string, at_text: string) -> Result<string, string> {
+    match parse_civil(at_text) {
+        Ok(at) => {
+            match check_schedule(expr, at) {
+                Ok(matched) => Ok(format_check(matched)),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn run_next(expr: string, from_text: string, max_minutes: int) -> Result<string, string> {
+    match parse_civil(from_text) {
+        Ok(from) => {
+            match next_schedule(expr, from, max_minutes) {
+                Ok(when) => Ok(format_next(when)),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn run_explain(expr: string) -> Result<string, string> {
+    match explain_schedule(expr) {
+        Ok(exp) => Ok(format_explain(exp)),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn run_list(path: string) -> Result<string, string> {
+    match fs.read_to_string(path) {
+        Ok(text) => {
+            match parse_crontab(text) {
+                Ok(exprs) => Ok(format_list(exprs)),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err("${e}"),
+    }
+}
+
+pub fn run_due(path: string, at_text: string) -> Result<string, string> {
+    match fs.read_to_string(path) {
+        Ok(text) => {
+            match parse_crontab(text) {
+                Ok(exprs) => {
+                    match parse_civil(at_text) {
+                        Ok(at) => {
+                            match due_schedules(exprs, at) {
+                                Ok(due) => Ok(format_due(due)),
+                                Err(e) => Err(e),
+                            }
+                        },
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err("${e}"),
+    }
+}

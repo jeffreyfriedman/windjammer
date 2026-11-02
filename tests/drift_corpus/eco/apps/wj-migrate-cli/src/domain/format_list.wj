@@ -1,0 +1,26 @@
+pub struct MigrationLine {
+    pub version: int,
+    pub name: string,
+}
+
+fn pad3(value: int) -> string {
+    if value < 10 {
+        return "00${value}"
+    }
+    if value < 100 {
+        return "0${value}"
+    }
+    "${value}"
+}
+
+pub fn format_list_result(lines: Vec<MigrationLine>) -> string {
+    if lines.len() == 0 {
+        return "no migrations found"
+    }
+    let mut out = "migrations:"
+    for line in lines {
+        let version = pad3(line.version)
+        out = "${out}\n${version} ${line.name}"
+    }
+    out
+}

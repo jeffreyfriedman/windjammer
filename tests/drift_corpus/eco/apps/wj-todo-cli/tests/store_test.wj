@@ -1,0 +1,196 @@
+use crate::domain::Todo
+use crate::domain::TodoStore
+
+@test
+fn test_add_assigns_ids() {
+    let store = TodoStore::new()
+    match store.add("buy milk", 200) {
+        Ok(pair) => {
+            assert_eq(pair.1.id, 1)
+            match pair.0.add("write code", 200) {
+                Ok(pair2) => assert_eq(pair2.1.id, 2),
+                Err(_) => assert(false, "add second"),
+            }
+        },
+        Err(_) => assert(false, "add first"),
+    }
+}
+
+@test
+fn test_add_rejects_empty() {
+    let store = TodoStore::new()
+    match store.add("  ", 200) {
+        Ok(_) => assert(false, "blank title must fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+fn test_add_rejects_title_over_max() {
+    let store = TodoStore::new()
+    let long = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+    match store.add(long, 50) {
+        Ok(_) => assert(false, "long title must fail"),
+        Err(msg) => assert_str_contains(msg, "at most"),
+    }
+}
+
+@test
+fn test_list_and_done() {
+    let store = TodoStore::new()
+    match store.add("task", 200) {
+        Ok(pair) => {
+            match pair.0.complete(1) {
+                Ok(pair2) => {
+                    assert(pair2.1.done, "should be done")
+                    let todos = pair2.0.into_todos()
+                    assert_eq(todos.len(), 1)
+                    assert(todos[0].done, "listed item done")
+                },
+                Err(_) => assert(false, "complete"),
+            }
+        },
+        Err(_) => assert(false, "add"),
+    }
+}
+
+@test
+fn test_complete_missing() {
+    let store = TodoStore::new()
+    match store.complete(9) {
+        Ok(_) => assert(false, "missing"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+@test
+fn test_remove() {
+    let store = TodoStore::new()
+    match store.add("temp", 200) {
+        Ok(pair) => {
+            match pair.0.remove(1) {
+                Ok(next) => {
+                    let todos = next.into_todos()
+                    assert_eq(todos.len(), 0)
+                },
+                Err(_) => assert(false, "remove"),
+            }
+        },
+        Err(_) => assert(false, "add"),
+    }
+}
+
+fn test_rename_updates_title() {
+    let store = TodoStore::new()
+    let new_title = "new title"
+    match store.add("old title", 200) {
+        Ok(pair) => {
+            match pair.0.rename(1, new_title, 200) {
+                Ok(pair2) => {
+                    assert_eq(pair2.1.title, "new title")
+                    let todos = pair2.0.into_todos()
+                    assert_eq(todos[0].title, "new title")
+                },
+                Err(_) => assert(false, "rename"),
+            }
+        },
+        Err(_) => assert(false, "add"),
+    }
+}
+
+fn test_rename_preserves_done_flag() {
+    let store = TodoStore::new()
+    let renamed = "renamed"
+    match store.add("task", 200) {
+        Ok(pair) => {
+            match pair.0.complete(1) {
+                Ok(pair2) => {
+                    match pair2.0.rename(1, renamed, 200) {
+                        Ok(pair3) => {
+                            assert(pair3.1.done, "done flag preserved")
+                            assert_eq(pair3.1.title, "renamed")
+                        },
+                        Err(_) => assert(false, "rename"),
+                    }
+                },
+                Err(_) => assert(false, "complete"),
+            }
+        },
+        Err(_) => assert(false, "add"),
+    }
+}
+
+fn test_rename_missing() {
+    let store = TodoStore::new()
+    let title = "nope"
+    match store.rename(9, title, 200) {
+        Ok(_) => assert(false, "missing id must fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}
+
+fn test_clear_all_empties_store() {
+    let store = TodoStore::new()
+    match store.add("one", 200) {
+        Ok(pair) => {
+            match pair.0.add("two", 200) {
+                Ok(pair2) => {
+                    let cleared = pair2.0.clear_all()
+                    match cleared.add("fresh", 200) {
+                        Ok(pair3) => {
+                            assert_eq(pair3.1.id, 1)
+                            let todos = pair3.0.into_todos()
+                            assert_eq(todos.len(), 1)
+                        },
+                        Err(_) => assert(false, "add after clear"),
+                    }
+                },
+                Err(_) => assert(false, "add two"),
+            }
+        },
+        Err(_) => assert(false, "add one"),
+    }
+}
+
+fn test_merge_from_overwrites_existing_id() {
+    let store = TodoStore::new()
+    match store.add("old", 200) {
+        Ok(pair) => {
+            let mut imported = Vec::new()
+            imported.push(Todo {
+                id: 1,
+                title: "new",
+                done: false,
+            })
+            let result = pair.0.merge_from(imported)
+            let todos = result.0.into_todos()
+            assert_eq(todos.len(), 1)
+            assert_eq(todos[0].title, "new")
+        },
+        Err(_) => assert(false, "add"),
+    }
+}
+
+fn test_clear_done_keeps_pending() {
+    let store = TodoStore::new()
+    match store.add("open", 200) {
+        Ok(pair) => {
+            match pair.0.add("finish me", 200) {
+                Ok(pair2) => {
+                    match pair2.0.complete(2) {
+                        Ok(pair3) => {
+                            let result = pair3.0.clear_done()
+                            assert_eq(result.1, 1)
+                            let todos = result.0.into_todos()
+                            assert_eq(todos.len(), 1)
+                            assert_eq(todos[0].title, "open")
+                            assert(!todos[0].done, "pending kept")
+                        },
+                        Err(_) => assert(false, "complete"),
+                    }
+                },
+                Err(_) => assert(false, "add second"),
+            }
+        },
+        Err(_) => assert(false, "add first"),
+    }
+}

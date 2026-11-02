@@ -1,0 +1,62 @@
+use crate::SharedMap
+use crate::Receiver
+use crate::channel_sum_range
+use crate::clone_sender
+use crate::recv_int
+use crate::send_int
+use crate::shared_map_insert
+use crate::shared_map_len
+use crate::shared_map_new
+use crate::try_recv_int
+use crate::unbounded_int
+
+@test
+fn test_fan_in_three_senders() {
+    let pair = unbounded_int()
+    let c1 = clone_sender(pair.0)
+    let c2 = clone_sender(c1.1)
+    send_int(c1.0, 10)
+    send_int(c2.0, 20)
+    send_int(c2.1, 30)
+    let a = recv_int(pair.1)
+    let b = recv_int(a.0)
+    let c = recv_int(b.0)
+    let sum = a.1 + b.1 + c.1
+    assert_eq(sum, 60)
+}
+
+@test
+fn test_try_recv_drain_until_empty() {
+    let pair = unbounded_int()
+    send_int(pair.0, 1)
+    send_int(pair.0, 2)
+    let mut rx = pair.1
+    let mut sum: int = 0
+    let mut n: int = 0
+    while true {
+        let got = try_recv_int(rx)
+        rx = got.0
+        if !got.1 {
+            break
+        }
+        sum = sum + got.2
+        n = n + 1
+    }
+    assert_eq(n, 2)
+    assert_eq(sum, 3)
+}
+
+@test
+fn test_shared_map_overwrite_keeps_len() {
+    let m = shared_map_new()
+    let m = shared_map_insert(m, "k", 1)
+    let m = shared_map_insert(m, "k", 9)
+    assert_eq(shared_map_len(m), 1)
+}
+
+@test
+fn test_channel_sum_range_zero() {
+    let out = channel_sum_range(0)
+    assert_eq(out.0, 0)
+    assert_eq(out.1, 0)
+}

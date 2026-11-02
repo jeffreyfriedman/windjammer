@@ -1,0 +1,274 @@
+use std::time
+
+/// Exponential backoff parameters (milliseconds).
+pub struct Backoff {
+    pub initial_ms: int,
+    pub multiplier: int,
+    pub max_ms: int,
+}
+
+/// `Ok(expected)` when the delay before `attempt` equals `expected`, otherwise `Err`.
+pub fn require_delay(backoff: Backoff, attempt: int, expected: int) -> Result<int, string> {
+    if delay_ms(backoff, attempt) == expected {
+        return Ok(expected)
+    }
+    Err("expected delay")
+}
+
+/// Delay before attempt `n` (0-based): `min(initial * multiplier^n, max)`.
+pub fn delay_ms(backoff: Backoff, attempt: int) -> int {
+    if attempt < 0 {
+        return backoff.initial_ms
+    }
+    let mut delay = backoff.initial_ms
+    let mut i = 0
+    while i < attempt {
+        delay = delay * backoff.multiplier
+        if delay >= backoff.max_ms {
+            return backoff.max_ms
+        }
+        i = i + 1
+    }
+    if delay > backoff.max_ms {
+        return backoff.max_ms
+    }
+    delay
+}
+
+/// True when `attempt` (0-based) is still within `max_attempts` tries.
+pub fn should_retry(attempt: int, max_attempts: int) -> bool {
+    if max_attempts <= 0 {
+        return false
+    }
+    attempt < max_attempts
+}
+
+/// Delay for `attempt` when retries remain; `None` when `should_retry` is false.
+pub fn retry_delay(backoff: Backoff, attempt: int, max_attempts: int) -> Option<int> {
+    if !should_retry(attempt, max_attempts) {
+        return None
+    }
+    Some(delay_ms(backoff, attempt))
+}
+
+/// How many tries remain including the current `attempt` (0-based).
+/// Returns 0 when exhausted or when `max_attempts` is non-positive.
+pub fn attempts_remaining(attempt: int, max_attempts: int) -> int {
+    if max_attempts <= 0 {
+        return 0
+    }
+    if attempt >= max_attempts {
+        return 0
+    }
+    max_attempts - attempt
+}
+
+/// `Ok(n)` when that many attempts remain, otherwise `Err`.
+pub fn require_remaining(attempt: int, max_attempts: int, n: int) -> Result<int, string> {
+    if attempts_remaining(attempt, max_attempts) == n {
+        return Ok(n)
+    }
+    Err("expected remaining")
+}
+
+/// Sensible HTTP/client defaults: 100ms ×2, cap 30s.
+pub fn default_backoff() -> Backoff {
+    Backoff {
+        initial_ms: 100,
+        multiplier: 2,
+        max_ms: 30000,
+    }
+}
+
+/// `Ok(n)` when the summed retry delay equals `n`, otherwise `Err`.
+pub fn require_total(backoff: Backoff, max_attempts: int, n: int) -> Result<int, string> {
+    if total_delay_ms(backoff, max_attempts) == n {
+        return Ok(n)
+    }
+    Err("expected total")
+}
+
+/// Sum of `delay_ms` for attempts `0 .. max_attempts-1` (0 when non-positive).
+pub fn total_delay_ms(backoff: Backoff, max_attempts: int) -> int {
+    if max_attempts <= 0 {
+        return 0
+    }
+    let mut total = 0
+    let mut i = 0
+    while i < max_attempts {
+        total = total + delay_ms(backoff, i)
+        i = i + 1
+    }
+    total
+}
+
+/// Clamp `ms` into `[min_ms, max_ms]` (inclusive).
+pub fn clamp_delay_ms(ms: int, min_ms: int, max_ms: int) -> int {
+    if ms < min_ms {
+        return min_ms
+    }
+    if ms > max_ms {
+        return max_ms
+    }
+    ms
+}
+
+/// `Ok(expected)` when clamping `ms` into the range yields `expected`, otherwise `Err`.
+pub fn require_clamp(ms: int, min_ms: int, max_ms: int, expected: int) -> Result<int, string> {
+    if clamp_delay_ms(ms, min_ms, max_ms) == expected {
+        return Ok(expected)
+    }
+    Err("expected clamp")
+}
+
+/// Copy of `backoff` with `max_ms` replaced.
+pub fn with_max_ms(backoff: Backoff, max_ms: int) -> Backoff {
+    Backoff {
+        initial_ms: backoff.initial_ms,
+        multiplier: backoff.multiplier,
+        max_ms: max_ms,
+    }
+}
+
+/// Copy of `backoff` with `initial_ms` replaced.
+pub fn with_initial_ms(backoff: Backoff, initial_ms: int) -> Backoff {
+    Backoff {
+        initial_ms: initial_ms,
+        multiplier: backoff.multiplier,
+        max_ms: backoff.max_ms,
+    }
+}
+
+/// Copy of `backoff` with `multiplier` replaced.
+pub fn with_multiplier(backoff: Backoff, multiplier: int) -> Backoff {
+    Backoff {
+        initial_ms: backoff.initial_ms,
+        multiplier: multiplier,
+        max_ms: backoff.max_ms,
+    }
+}
+
+/// Initial delay in milliseconds.
+pub fn initial_of(backoff: Backoff) -> int {
+    backoff.initial_ms
+}
+
+/// `Ok(n)` when the initial delay is `n`, otherwise `Err`.
+pub fn require_initial(backoff: Backoff, n: int) -> Result<int, string> {
+    if initial_of(backoff) == n {
+        return Ok(n)
+    }
+    Err("expected initial")
+}
+
+/// Multiplier applied per attempt.
+pub fn multiplier_of(backoff: Backoff) -> int {
+    backoff.multiplier
+}
+
+/// `Ok(n)` when the multiplier is `n`, otherwise `Err`.
+pub fn require_multiplier(backoff: Backoff, n: int) -> Result<int, string> {
+    if multiplier_of(backoff) == n {
+        return Ok(n)
+    }
+    Err("expected multiplier")
+}
+
+/// Maximum delay cap in milliseconds.
+pub fn max_of(backoff: Backoff) -> int {
+    backoff.max_ms
+}
+
+/// `Ok(n)` when the delay cap is `n`, otherwise `Err`.
+pub fn require_max(backoff: Backoff, n: int) -> Result<int, string> {
+    if max_of(backoff) == n {
+        return Ok(n)
+    }
+    Err("expected max")
+}
+
+/// Build a `Backoff` from explicit components.
+pub fn new_backoff(initial_ms: int, multiplier: int, max_ms: int) -> Backoff {
+    Backoff {
+        initial_ms: initial_ms,
+        multiplier: multiplier,
+        max_ms: max_ms,
+    }
+}
+
+/// True when `backoff` matches `default_backoff()` values.
+pub fn is_default_backoff(backoff: Backoff) -> bool {
+    backoff.initial_ms == 100 && backoff.multiplier == 2 && backoff.max_ms == 30000
+}
+
+/// True when `attempt` is the first try (0-based).
+pub fn is_first_attempt(attempt: int) -> bool {
+    attempt == 0
+}
+
+/// `Ok(attempt)` for the first try, otherwise `Err`.
+pub fn require_first(attempt: int) -> Result<int, string> {
+    if is_first_attempt(attempt) {
+        return Ok(attempt)
+    }
+    Err("expected first attempt")
+}
+
+/// The attempt index that follows `attempt`.
+pub fn next_attempt(attempt: int) -> int {
+    attempt + 1
+}
+
+/// `Ok(expected)` when the following attempt index is `expected`, otherwise `Err`.
+pub fn require_next(attempt: int, expected: int) -> Result<int, string> {
+    if next_attempt(attempt) == expected {
+        return Ok(expected)
+    }
+    Err("expected next")
+}
+
+/// Remaining tries when another attempt is allowed.
+pub fn require_retry(attempt: int, max_attempts: int) -> Result<int, string> {
+    let left = attempts_remaining(attempt, max_attempts)
+    if left == 0 {
+        Err("expected retry")
+    } else {
+        Ok(left)
+    }
+}
+
+/// How many attempts have been consumed (clamped to `max_attempts`).
+pub fn attempts_used(attempt: int, max_attempts: int) -> int {
+    if max_attempts <= 0 {
+        return 0
+    }
+    if attempt < 0 {
+        return 0
+    }
+    if attempt > max_attempts {
+        return max_attempts
+    }
+    attempt
+}
+
+/// `Ok(n)` when `attempts_used` equals `n`, otherwise `Err`.
+pub fn require_used(attempt: int, max_attempts: int, n: int) -> Result<int, string> {
+    if attempts_used(attempt, max_attempts) == n {
+        return Ok(n)
+    }
+    Err("expected used")
+}
+
+/// Blocking pause between retry attempts (milliseconds).
+/// Uses `std::time` spin-wait until `std::async_runtime::sleep_ms_blocking` import codegen is fixed.
+pub fn pause_ms(ms: int) {
+    if ms <= 0 {
+        return
+    }
+    let start = time.utc_now().timestamp_millis()
+    let deadline = start + ms
+    let mut now = start
+    while now < deadline {
+        now = time.utc_now().timestamp_millis()
+    }
+}

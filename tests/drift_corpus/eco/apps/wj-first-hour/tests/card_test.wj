@@ -1,0 +1,77 @@
+// TDD: first-hour card must assemble tip-green std surfaces.
+
+use crate::domain::Card
+use crate::domain::build_card
+use crate::domain::card_app
+use crate::domain::card_data_path
+use crate::domain::card_id
+use crate::domain::card_port
+use crate::domain::card_query
+use crate::domain::card_summary
+use crate::domain::format_card
+use std::strings
+
+fn test_build_card_ok() {
+    let toml = "app.name = \"demo\"\napp.port = \"8080\"\n"
+    match build_card("demo", toml) {
+        Ok(card) => {
+            assert(strings.len(card.id) > 0, "id nonempty")
+            assert(strings.len(card.created_at) > 0, "created_at nonempty")
+            assert_eq(card.app, "demo")
+            assert(strings.len(card.data_path) > 0, "data_path nonempty")
+            assert(strings.len(card.query) > 0, "query nonempty")
+            assert_eq(card.port, "8080")
+        },
+        Err(e) => assert(false, "build_card failed: ${e}"),
+    }
+}
+
+fn test_build_card_rejects_empty_config() {
+    match build_card("demo", "   ") {
+        Ok(_) => assert(false, "empty config must fail"),
+        Err(e) => assert(strings.len(e) > 0, "error message"),
+    }
+}
+
+fn test_build_card_query_is_urlencoded() {
+    let toml = "app.name = \"demo\"\n"
+    match build_card("hello world", toml) {
+        Ok(card) => {
+            assert(!strings.contains(card.query, " "), "spaces encoded in query")
+            assert(strings.contains(card.query, "name="), "query has name=")
+            let rendered = format_card(card)
+            assert(strings.len(rendered) > 0, "format nonempty")
+        },
+        Err(e) => assert(false, "unexpected: ${e}"),
+    }
+}
+
+fn sample_card() -> Card {
+    let toml = "app.name = \"demo\"\napp.port = \"8080\"\n"
+    match build_card("demo", toml) {
+        Ok(card) => card,
+        Err(_) => Card {
+            id: "",
+            created_at: "",
+            app: "",
+            data_path: "",
+            query: "",
+            port: "",
+        },
+    }
+}
+
+fn test_card_id_path_query_and_has_id() {
+    let card = sample_card()
+    assert(strings.len(card_id(card)) > 0, "id nonempty")
+    assert(strings.contains(card_data_path(card), "demo"), "path has app")
+    assert(strings.contains(card_query(card), "name="), "query has name")
+    let empty = Card {
+        id: "",
+        created_at: "",
+        app: "",
+        data_path: "",
+        query: "",
+        port: "",
+    }
+}

@@ -1,0 +1,213 @@
+use crate::check_fixed_window
+use crate::check_key
+use crate::empty_bucket
+use crate::fixed_window
+use crate::is_allowed
+use crate::is_denied
+use crate::is_fresh_bucket
+use crate::is_positive_window
+use crate::limit_of
+use crate::peek_fixed_window
+use crate::remaining_slots
+use crate::reset_at_ms_of
+use crate::retry_after_header
+use crate::retry_after_ms_of
+use crate::rate_limit_headers
+use crate::rate_limit_header_lines
+use crate::slots_remaining
+use crate::slots_used
+use crate::window_exhausted
+use crate::window_ms_of
+use std::collections::HashMap
+use std::strings
+
+@test
+fn test_first_request_allowed() {
+    let lim = fixed_window(5, 60000)
+    let checked = check_fixed_window(lim, empty_bucket(), 1000)
+    let result = checked.1
+    assert(result.allowed, "first request allowed")
+    assert_eq(result.remaining, 4)
+    assert_eq(result.limit, 5)
+}
+
+@test
+fn test_under_limit() {
+    let lim = fixed_window(3, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    assert(c1.1.allowed, "req 1")
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    assert(c2.1.allowed, "req 2")
+    let c3 = check_fixed_window(lim, c2.0, 1000)
+    assert(c3.1.allowed, "req 3")
+    assert_eq(c3.1.remaining, 0)
+}
+
+@test
+fn test_over_limit_denied() {
+    let lim = fixed_window(2, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    let c3 = check_fixed_window(lim, c2.0, 1000)
+    assert(!c3.1.allowed, "third request denied")
+    assert_gt(c3.1.retry_after_ms, 0)
+}
+
+@test
+fn test_window_reset() {
+    let lim = fixed_window(2, 10000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    let denied = check_fixed_window(lim, c2.0, 1000)
+    assert(!denied.1.allowed, "blocked in window")
+    let after = check_fixed_window(lim, denied.0, 11001)
+    assert(after.1.allowed, "new window allows again")
+    assert_eq(after.1.remaining, 1)
+}
+
+@test
+fn test_check_key_isolates_clients() {
+    let lim = fixed_window(1, 60000)
+    let mut store = HashMap::new()
+    let r1 = check_key(lim, store, "alice", 1000)
+    store = r1.0
+    assert(r1.1.allowed, "alice first")
+    let r2 = check_key(lim, store, "bob", 1000)
+    store = r2.0
+    assert(r2.1.allowed, "bob independent")
+    let r3 = check_key(lim, store, "alice", 1000)
+    assert(!r3.1.allowed, "alice second denied")
+}
+
+@test
+fn test_retry_after_header_seconds() {
+    let h = retry_after_header(5500)
+    assert_eq(h, "Retry-After: 6")
+}
+
+@test
+fn test_rate_limit_headers() {
+    let lim = fixed_window(10, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 5000)
+    let c2 = check_fixed_window(lim, c1.0, 5000)
+    let c3 = check_fixed_window(lim, c2.0, 5000)
+    let c4 = check_fixed_window(lim, c3.0, 5000)
+    let headers = rate_limit_headers(c4.1)
+    assert_str_contains(headers, "X-RateLimit-Limit: 10")
+    assert_str_contains(headers, "X-RateLimit-Remaining: 6")
+    assert_str_contains(headers, "X-RateLimit-Reset:")
+}
+
+@test
+fn test_rate_limit_headers_when_denied() {
+    let lim = fixed_window(1, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    let denied = check_fixed_window(lim, c1.0, 1000)
+    let headers = rate_limit_headers(denied.1)
+    assert_str_contains(headers, "X-RateLimit-Remaining: 0")
+    assert_str_contains(headers, "Retry-After:")
+}
+
+@test
+fn test_rate_limit_header_lines_allowed() {
+    let lim = fixed_window(5, 60000)
+    let checked = check_fixed_window(lim, empty_bucket(), 1000)
+    let lines = rate_limit_header_lines(checked.1)
+    assert_eq(lines.len(), 3)
+    assert_eq(lines[0], "X-RateLimit-Limit: 5")
+    assert_eq(lines[1], "X-RateLimit-Remaining: 4")
+    assert_str_contains(lines[2], "X-RateLimit-Reset:")
+}
+
+@test
+fn test_rate_limit_header_lines_denied_includes_retry() {
+    let lim = fixed_window(1, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    let denied = check_fixed_window(lim, c1.0, 1000)
+    let lines = rate_limit_header_lines(denied.1)
+    assert_eq(lines.len(), 4)
+    assert_str_contains(lines[3], "Retry-After:")
+}
+
+@test
+fn test_peek_fixed_window_does_not_consume() {
+    let lim = fixed_window(2, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    assert(c1.1.allowed, "first consumed")
+    assert_eq(c1.1.remaining, 1)
+    let peek = peek_fixed_window(lim, c1.0, 1000)
+    assert(peek.allowed, "peek still allowed")
+    assert_eq(peek.remaining, 1)
+    let peek2 = peek_fixed_window(lim, c1.0, 1000)
+    assert_eq(peek2.remaining, 1)
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    assert(c2.1.allowed, "second consumed")
+    assert_eq(c2.1.remaining, 0)
+    let peek_denied = peek_fixed_window(lim, c2.0, 1000)
+    assert(!peek_denied.allowed, "peek at limit denied")
+    assert_eq(peek_denied.remaining, 0)
+}
+
+@test
+fn test_is_allowed_and_is_denied() {
+    let lim = fixed_window(1, 60000)
+    let ok = check_fixed_window(lim, empty_bucket(), 1000)
+    assert(is_allowed(ok.1), "first allowed")
+    assert(!is_denied(ok.1), "first not denied")
+    let denied = check_fixed_window(lim, ok.0, 1000)
+    assert(is_denied(denied.1), "second denied")
+    assert(!is_allowed(denied.1), "second not allowed")
+}
+
+@test
+fn test_slots_used() {
+    assert_eq(slots_used(empty_bucket()), 0)
+    let lim = fixed_window(5, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    assert_eq(slots_used(c1.0), 1)
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    assert_eq(slots_used(c2.0), 2)
+}
+
+@test
+fn test_remaining_and_slots_remaining() {
+    let lim = fixed_window(3, 60000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    assert_eq(remaining_slots(c1.1), 2)
+    assert_eq(slots_remaining(lim, c1.0), 2)
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    assert_eq(slots_remaining(lim, c2.0), 1)
+}
+
+@test
+fn test_is_at_limit_and_accessors() {
+    let lim = fixed_window(2, 30000)
+    assert_eq(limit_of(lim), 2)
+    assert_eq(window_ms_of(lim), 30000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 1000)
+    let c2 = check_fixed_window(lim, c1.0, 1000)
+    assert(is_allowed(c2.1), "second still allowed")
+    let denied = check_fixed_window(lim, c2.0, 1000)
+    assert(is_denied(denied.1), "denied")
+}
+
+@test
+fn test_fresh_bucket_and_result_timings() {
+    assert(is_fresh_bucket(empty_bucket()), "fresh")
+    let lim = fixed_window(1, 1000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 500)
+    assert(!is_fresh_bucket(c1.0), "used")
+    assert_eq(retry_after_ms_of(c1.1), 0)
+    assert(reset_at_ms_of(c1.1) > 500, "reset future")
+    let denied = check_fixed_window(lim, c1.0, 500)
+    assert(retry_after_ms_of(denied.1) > 0, "retry")
+}
+
+@test
+fn test_window_exhausted_and_is_zero_retry() {
+    let lim = fixed_window(1, 1000)
+    let c1 = check_fixed_window(lim, empty_bucket(), 500)
+    assert(!window_exhausted(c1.1), "allowed not exhausted")
+    let denied = check_fixed_window(lim, c1.0, 500)
+    assert(window_exhausted(denied.1), "denied exhausted")
+}

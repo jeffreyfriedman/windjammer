@@ -1,0 +1,421 @@
+use crate::basename_of
+use crate::count_dirs
+use crate::count_entries
+use crate::require_files
+use crate::require_dirs
+use crate::require_empty_tree
+use crate::require_hidden
+use crate::require_entries
+use crate::require_suffix
+use crate::count_files
+use crate::count_visible_files
+use crate::has_dirs
+use crate::has_entries
+use crate::has_files
+use crate::has_suffix_files
+use crate::is_empty_tree
+use crate::is_hidden_name
+use crate::walk
+use crate::walk_files
+use crate::walk_dirs
+use crate::walk_files_skip_hidden
+use crate::walk_files_with_suffix
+use std::fs
+use std::strings
+
+fn setup_tree(root: string) -> Result<(), string> {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    match fs.create_dir_all("${root}/sub/nested") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/a.txt", "a") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/sub/b.md", "b") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/sub/nested/c.txt", "c") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/.hidden", "h") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+fn teardown_tree(root: string) {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+}
+
+fn contains_path(paths: Vec<string>, needle: string) -> bool {
+    let mut i = 0
+    while i < paths.len() {
+        let p = paths[i]
+        if p == needle {
+            return true
+        }
+        if strings.ends_with(p, needle) {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+fn test_is_hidden_name() {
+    assert(is_hidden_name(".git"), ".git")
+    assert(is_hidden_name(".env"), ".env")
+    assert(!is_hidden_name("git"), "git")
+    assert(!is_hidden_name("a.txt"), "a.txt")
+}
+
+fn test_walk_lists_files_and_dirs() {
+    let root = "/tmp/wj-fs-walk-tree-list"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match walk(root) {
+        Ok(paths) => {
+            assert(paths.len() >= 4, "expected nested entries")
+            assert(contains_path(paths, "${root}/a.txt"), "a.txt")
+            assert(contains_path(paths, "${root}/sub"), "sub dir")
+            assert(contains_path(paths, "${root}/sub/b.md"), "b.md")
+            assert(contains_path(paths, "${root}/sub/nested/c.txt"), "c.txt")
+        },
+        Err(_) => assert(false, "walk failed"),
+    }
+    teardown_tree(root)
+}
+
+fn test_walk_files_skips_directories() {
+    let root = "/tmp/wj-fs-walk-tree-files"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match walk_files(root) {
+        Ok(paths) => {
+            assert(contains_path(paths, "${root}/a.txt"), "a.txt")
+            assert(contains_path(paths, "${root}/sub/b.md"), "b.md")
+            assert(contains_path(paths, "${root}/sub/nested/c.txt"), "c.txt")
+            assert(!contains_path(paths, "${root}/sub"), "no bare sub dir")
+            for p in paths {
+                assert(fs.is_file(p), "every walk_files path is a file")
+            }
+        },
+        Err(_) => assert(false, "walk_files failed"),
+    }
+    teardown_tree(root)
+}
+
+fn test_walk_dirs_skips_files() {
+    let root = "/tmp/wj-fs-walk-tree-dirs"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match walk_dirs(root) {
+        Ok(paths) => {
+            assert(contains_path(paths, "${root}/sub"), "sub")
+            assert(contains_path(paths, "${root}/sub/nested"), "nested")
+            assert(!contains_path(paths, "${root}/a.txt"), "no file")
+            for p in paths {
+                assert(fs.is_dir(p), "every walk_dirs path is a dir")
+            }
+        },
+        Err(_) => assert(false, "walk_dirs failed"),
+    }
+    teardown_tree(root)
+}
+
+fn test_walk_files_with_suffix() {
+    let root = "/tmp/wj-fs-walk-tree-suffix"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match walk_files_with_suffix(root, ".md") {
+        Ok(paths) => {
+            assert_eq(paths.len(), 1)
+            assert(contains_path(paths, "${root}/sub/b.md"), "only md")
+        },
+        Err(_) => assert(false, "suffix walk failed"),
+    }
+    teardown_tree(root)
+}
+
+fn test_walk_missing_root_errors() {
+    match walk("/tmp/wj-fs-walk-does-not-exist-xyz") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+}
+
+fn test_walk_files_skip_hidden_excludes_dotfiles() {
+    let root = "/tmp/wj-fs-walk-tree-skip-hidden"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match walk_files_skip_hidden(root) {
+        Ok(paths) => {
+            assert(contains_path(paths, "${root}/a.txt"), "a.txt kept")
+            assert(contains_path(paths, "${root}/sub/b.md"), "b.md kept")
+            assert(!contains_path(paths, "${root}/.hidden"), "dotfile skipped")
+            for p in paths {
+                let name = basename(p)
+                assert(!is_hidden_name(name), "no hidden basenames")
+            }
+        },
+        Err(_) => assert(false, "walk_files_skip_hidden failed"),
+    }
+    teardown_tree(root)
+}
+
+fn basename(path: string) -> string {
+    let parts = strings.split(path, "/")
+    if parts.len() == 0 {
+        return path
+    }
+    parts[parts.len() - 1]
+}
+
+fn test_count_files() {
+    let root = "/tmp/wj-fs-walk-tree-count"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match count_files(root) {
+        Ok(n) => assert_eq(n, 4),
+        Err(_) => assert(false, "count_files failed"),
+    }
+    match count_files("/tmp/wj-fs-walk-does-not-exist-xyz") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+    teardown_tree(root)
+}
+
+fn test_has_files() {
+    let root = "/tmp/wj-fs-walk-tree-has"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "setup failed"),
+    }
+    match has_files(root) {
+        Ok(yes) => assert(yes, "tree has files"),
+        Err(_) => assert(false, "has_files failed"),
+    }
+    match has_files("/tmp/wj-fs-walk-does-not-exist-xyz") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+    teardown_tree(root)
+}
+
+fn test_count_dirs_and_has_dirs() {
+    // Unique root — parallel tests share /tmp and must not collide under ENOSPC.
+    let root = "/tmp/wj-fs-walk-tree-dirs-solo"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match count_dirs(root) {
+        Ok(n) => assert(n >= 2, "sub + nested"),
+        Err(e) => assert(false, "count_dirs: ${e}"),
+    }
+    match has_dirs(root) {
+        Ok(yes) => assert(yes, "has dirs"),
+        Err(e) => assert(false, "has_dirs: ${e}"),
+    }
+    teardown_tree(root)
+}
+
+fn test_count_entries_and_has_entries() {
+    let root = "/tmp/wj-fs-walk-tree-entries-solo"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match count_entries(root) {
+        Ok(n) => assert(n >= 5, "files + dirs"),
+        Err(e) => assert(false, "count_entries: ${e}"),
+    }
+    match has_entries(root) {
+        Ok(yes) => assert(yes, "has entries"),
+        Err(e) => assert(false, "has_entries: ${e}"),
+    }
+    teardown_tree(root)
+}
+
+fn test_visible_suffix_and_empty_tree() {
+    let root = "/tmp/wj-fs-walk-tree-visible-solo"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match count_visible_files(root) {
+        Ok(n) => assert(n >= 1, "visible files"),
+        Err(e) => assert(false, "count_visible: ${e}"),
+    }
+    match has_suffix_files(root, ".txt") {
+        Ok(yes) => assert(yes, "has txt"),
+        Err(e) => assert(false, "has_suffix: ${e}"),
+    }
+    match is_empty_tree(root) {
+        Ok(yes) => assert(!yes, "tree not empty"),
+        Err(e) => assert(false, "is_empty_tree: ${e}"),
+    }
+    teardown_tree(root)
+    let empty_root = "/tmp/wj-fs-walk-empty-solo"
+    match fs.create_dir_all(empty_root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "create empty"),
+    }
+    match is_empty_tree(empty_root) {
+        Ok(yes) => assert(yes, "empty dir"),
+        Err(e) => assert(false, "empty check: ${e}"),
+    }
+    teardown_tree(empty_root)
+}
+
+fn test_basename_of_and_require_files() {
+    assert_eq(basename_of("/tmp/a.txt"), "a.txt")
+    assert_eq(basename_of("plain"), "plain")
+    let root = "/tmp/wj-fs-walk-tree-require-solo"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match require_files(root) {
+        Ok(n) => assert(n >= 1, "has files"),
+        Err(e) => assert(false, "require_files: ${e}"),
+    }
+    teardown_tree(root)
+    let empty_root = "/tmp/wj-fs-walk-empty-require-solo"
+    match fs.create_dir_all(empty_root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "create empty"),
+    }
+    match require_files(empty_root) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "files"), "mentions files"),
+    }
+    teardown_tree(empty_root)
+}
+
+fn test_require_dirs() {
+    let root = "/tmp/wj-fs-walk-tree-require-dirs"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match require_dirs(root) {
+        Ok(n) => assert(n >= 1, "has dirs"),
+        Err(e) => assert(false, "require_dirs: ${e}"),
+    }
+    teardown_tree(root)
+    let empty_root = "/tmp/wj-fs-walk-empty-require-dirs"
+    match fs.create_dir_all(empty_root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "create empty"),
+    }
+    match require_dirs(empty_root) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "dirs"), "mentions dirs"),
+    }
+    teardown_tree(empty_root)
+}
+
+fn test_require_empty_tree() {
+    let empty_root = "/tmp/wj-fs-walk-empty-require-tree"
+    match fs.create_dir_all(empty_root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "create empty"),
+    }
+    match require_empty_tree(empty_root) {
+        Ok(n) => assert_eq(n, 0),
+        Err(e) => assert(false, "empty tree: ${e}"),
+    }
+    teardown_tree(empty_root)
+    let root = "/tmp/wj-fs-walk-tree-require-empty"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match require_empty_tree(root) {
+        Ok(_) => assert(false, "tree must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+    teardown_tree(root)
+}
+
+fn test_require_hidden() {
+    match require_hidden(".git") {
+        Ok(name) => assert(is_hidden_name(name), "hidden"),
+        Err(_) => assert(false, "dotfile"),
+    }
+    match require_hidden("git") {
+        Ok(_) => assert(false, "plain must Err"),
+        Err(msg) => assert(strings.contains(msg, "hidden"), "mentions hidden"),
+    }
+}
+
+fn test_require_entries() {
+    let root = "/tmp/wj-fs-walk-tree-require-entries"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match require_entries(root) {
+        Ok(n) => assert(n > 0, "has entries"),
+        Err(e) => assert(false, "require_entries: ${e}"),
+    }
+    teardown_tree(root)
+    let empty_root = "/tmp/wj-fs-walk-empty-require-entries"
+    match fs.create_dir_all(empty_root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "create empty"),
+    }
+    match require_entries(empty_root) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "entries"), "mentions entries"),
+    }
+    teardown_tree(empty_root)
+}
+
+fn test_require_suffix() {
+    let root = "/tmp/wj-fs-walk-tree-require-suffix"
+    match setup_tree(root) {
+        Ok(_) => {},
+        Err(e) => assert(false, "setup failed: ${e}"),
+    }
+    match require_suffix(root, ".txt") {
+        Ok(n) => assert(n > 0, "txt files"),
+        Err(e) => assert(false, "require_suffix: ${e}"),
+    }
+    teardown_tree(root)
+    let empty_root = "/tmp/wj-fs-walk-empty-require-suffix"
+    match fs.create_dir_all(empty_root) {
+        Ok(_) => {},
+        Err(_) => assert(false, "create empty"),
+    }
+    match require_suffix(empty_root, ".txt") {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "suffix"), "mentions suffix"),
+    }
+    teardown_tree(empty_root)
+}

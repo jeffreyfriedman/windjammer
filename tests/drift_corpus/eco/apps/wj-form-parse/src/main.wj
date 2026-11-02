@@ -1,0 +1,16 @@
+// wj-form-parse — multipart dogfood CLI (see docs/BETA_SUCCESS_PATH.md)
+
+use crate::domain::format_fields
+use crate::domain::parse_form_fields
+
+fn main() {
+    let boundary = "----wjdemo"
+    let ct = "multipart/form-data; boundary=${boundary}"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nHello\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"body\"\r\n\r\nWorld\r\n--${boundary}--"
+    match parse_form_fields(ct, body) {
+        Ok(fields) => println!("{}", format_fields(fields)),
+        Err(e) => {
+            eprintln("wj-form-parse: ${e}")
+        },
+    }
+}

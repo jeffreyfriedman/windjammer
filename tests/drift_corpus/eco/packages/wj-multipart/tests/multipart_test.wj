@@ -1,0 +1,376 @@
+use crate::boundary_from_content_type
+use crate::content_type_header
+use crate::field_names
+use crate::file_count
+use crate::first_field_name
+use crate::format_multipart
+use crate::get_field
+use crate::get_field_or
+use crate::get_file
+use crate::has_field
+use crate::has_file
+use crate::is_empty
+use crate::parse
+use crate::parse_multipart
+use crate::part_count
+use crate::require_field
+use crate::require_text
+use crate::require_file
+use crate::require_empty
+use crate::require_first_name
+use crate::require_files
+use crate::text_count
+use crate::MultipartBody
+use crate::Part
+use std::strings
+
+@test
+fn test_boundary_from_content_type() {
+    match boundary_from_content_type("multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxk") {
+        Ok(b) => assert_eq(b, "----WebKitFormBoundary7MA4YWxk"),
+        Err(_) => assert(false, "expected boundary"),
+    }
+}
+
+@test
+fn test_boundary_rejects_non_multipart() {
+    match boundary_from_content_type("application/json") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_parse_text_fields() {
+    let boundary = "----bound"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nHello\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"count\"\r\n\r\n3\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            assert_eq(parts.len(), 2)
+            assert_eq(parts[0].name, "title")
+            assert_eq(parts[0].body, "Hello")
+            assert_eq(parts[0].filename, "")
+            assert_eq(parts[1].name, "count")
+            assert_eq(parts[1].body, "3")
+        },
+        Err(_) => assert(false, "parse text fields"),
+    }
+}
+
+@test
+fn test_parse_owned_input_roundtrip() {
+    let boundary = "----own"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n--${boundary}--"
+    match parse(MultipartBody {
+        boundary: boundary,
+        body: body,
+    }) {
+        Ok(parts) => {
+            assert_eq(parts.len(), 1)
+            assert_eq(parts[0].name, "a")
+            assert_eq(parts[0].body, "1")
+        },
+        Err(_) => assert(false, "parse MultipartBody"),
+    }
+}
+
+@test
+fn test_parse_file_part() {
+    let boundary = "----file"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            assert_eq(parts.len(), 1)
+            assert_eq(parts[0].name, "avatar")
+            assert_eq(parts[0].filename, "a.txt")
+            assert_eq(parts[0].content_type, "text/plain")
+            assert_eq(parts[0].body, "hi")
+        },
+        Err(_) => assert(false, "parse file part"),
+    }
+}
+
+@test
+fn test_get_field_returns_first_match() {
+    let boundary = "----g"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n2\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match get_field(parts, "a") {
+                Some(v) => assert_eq(v, "1"),
+                None => assert(false, "expected field a"),
+            }
+        },
+        Err(_) => assert(false, "parse for get_field"),
+    }
+}
+
+@test
+fn test_get_file_returns_named_upload() {
+    let boundary = "----f"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"doc\"; filename=\"x.md\"\r\nContent-Type: text/markdown\r\n\r\n# hi\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match get_file(parts, "doc") {
+                Some(p) => {
+                    assert_eq(p.filename, "x.md")
+                    assert_eq(p.body, "# hi")
+                },
+                None => assert(false, "expected file"),
+            }
+        },
+        Err(_) => assert(false, "parse for get_file"),
+    }
+}
+
+@test
+fn test_format_roundtrip_text_field() {
+    let boundary = "----rt"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            let out = format_multipart(boundary, parts)
+            assert(strings.contains(out, "name=\"msg\""), "has disposition")
+            assert(strings.contains(out, "ok"), "has body")
+            assert(strings.contains(out, "----rt--"), "has closing")
+            match parse_multipart("----rt", out) {
+                Ok(again) => {
+                    assert_eq(again.len(), 1)
+                    assert_eq(again[0].body, "ok")
+                },
+                Err(_) => assert(false, "reparse formatted"),
+            }
+        },
+        Err(_) => assert(false, "parse for format"),
+    }
+}
+
+@test
+fn test_content_type_header() {
+    let header = content_type_header("----abc")
+    assert(strings.starts_with(header, "multipart/form-data"), "mime")
+    assert(strings.contains(header, "boundary=----abc"), "boundary")
+}
+
+@test
+fn test_parse_rejects_missing_boundary_marker() {
+    match parse_multipart("----b", "not multipart") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_has_field() {
+    let boundary = "----hf"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            assert(has_field(parts, "msg"), "msg present")
+            assert(!has_field(parts, "missing"), "missing absent")
+        },
+        Err(_) => assert(false, "parse for has_field"),
+    }
+}
+
+@test
+fn test_part_count_and_field_names() {
+    let boundary = "----pc"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"b\"\r\n\r\n2\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => assert_eq(part_count(parts), 2),
+        Err(_) => assert(false, "parse for count"),
+    }
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            let names = field_names(parts)
+            assert_eq(names.len(), 2)
+            assert_eq(names[0], "a")
+            assert_eq(names[1], "b")
+        },
+        Err(_) => assert(false, "parse for names"),
+    }
+}
+
+@test
+fn test_get_field_or() {
+    let boundary = "----gfo"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => assert_eq(get_field_or(parts, "msg", "def"), "ok"),
+        Err(_) => assert(false, "parse for get_field_or hit"),
+    }
+    match parse_multipart(boundary, body) {
+        Ok(parts) => assert_eq(get_field_or(parts, "missing", "def"), "def"),
+        Err(_) => assert(false, "parse for get_field_or miss"),
+    }
+}
+
+@test
+fn test_is_empty_and_file_count() {
+    let empty = Vec::new()
+    assert(is_empty(empty), "empty parts")
+    let boundary = "----fc"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n\r\ndata\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            assert(!is_empty(parts), "nonempty")
+            assert_eq(file_count(parts), 1)
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+@test
+fn test_require_field_and_has_file() {
+    let boundary = "----rf"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n\r\ndata\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match require_field(parts, "msg") {
+                Ok(v) => assert_eq(v, "ok"),
+                Err(_) => assert(false, "require msg"),
+            }
+            assert(has_file(parts, "f"), "file f")
+            assert(!has_file(parts, "msg"), "msg not file")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match require_field(parts, "missing") {
+                Ok(_) => assert(false, "missing must Err"),
+                Err(msg) => assert(strings.contains(msg, "missing"), "mentions field"),
+            }
+        },
+        Err(_) => assert(false, "parse missing"),
+    }
+}
+
+@test
+fn test_text_count_has_parts_and_require_file() {
+    let empty = Vec::new()
+    let boundary = "----tc"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n\r\ndata\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            assert_eq(text_count(parts), 1)
+            assert_eq(file_count(parts), 1)
+            match require_file(parts, "f") {
+                Ok(part) => assert_eq(part.filename, "a.txt"),
+                Err(_) => assert(false, "require file f"),
+            }
+            match require_file(parts, "msg") {
+                Ok(_) => assert(false, "msg not file"),
+                Err(msg) => assert(strings.contains(msg, "msg"), "mentions name"),
+            }
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+@test
+fn test_parse_empty_field_body() {
+    let boundary = "----blank"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\n\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            assert_eq(parts.len(), 1)
+            assert_eq(parts[0].name, "note")
+            assert_eq(parts[0].body, "")
+        },
+        Err(e) => assert(false, "empty body: ${e}"),
+    }
+}
+
+@test
+fn test_require_text() {
+    let boundary = "----txt"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match require_text(parts) {
+                Ok(n) => assert_eq(n, 1),
+                Err(_) => assert(false, "text field"),
+            }
+        },
+        Err(_) => assert(false, "parse text"),
+    }
+    let file_boundary = "----fileonly"
+    let file_body = "--${file_boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n--${file_boundary}--"
+    match parse_multipart(file_boundary, file_body) {
+        Ok(parts) => {
+            match require_text(parts) {
+                Ok(_) => assert(false, "file only must Err"),
+                Err(msg) => assert(strings.contains(msg, "text"), "mentions text"),
+            }
+        },
+        Err(_) => assert(false, "parse file"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    let empty = Vec::new()
+    match require_empty(empty) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty parts"),
+    }
+    let boundary = "----ne"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match require_empty(parts) {
+                Ok(_) => assert(false, "nonempty must Err"),
+                Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+            }
+        },
+        Err(_) => assert(false, "parse nonempty"),
+    }
+}
+
+@test
+fn test_require_first_name() {
+    let boundary = "----first"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match require_first_name(parts) {
+                Ok(name) => assert_eq(name, "msg"),
+                Err(_) => assert(false, "first name"),
+            }
+        },
+        Err(_) => assert(false, "parse first"),
+    }
+    let empty = Vec::new()
+    match require_first_name(empty) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}
+
+@test
+fn test_require_files() {
+    let boundary = "----files"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n--${boundary}--"
+    match parse_multipart(boundary, body) {
+        Ok(parts) => {
+            match require_files(parts) {
+                Ok(n) => assert_eq(n, 1),
+                Err(_) => assert(false, "file part"),
+            }
+        },
+        Err(_) => assert(false, "parse file"),
+    }
+    let text_boundary = "----nofile"
+    let text_body = "--${text_boundary}\r\nContent-Disposition: form-data; name=\"msg\"\r\n\r\nok\r\n--${text_boundary}--"
+    match parse_multipart(text_boundary, text_body) {
+        Ok(parts) => {
+            match require_files(parts) {
+                Ok(_) => assert(false, "text must Err"),
+                Err(msg) => assert(strings.contains(msg, "files"), "mentions files"),
+            }
+        },
+        Err(_) => assert(false, "parse text"),
+    }
+}

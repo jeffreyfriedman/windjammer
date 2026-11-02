@@ -1,0 +1,208 @@
+use crate::content_type
+use crate::content_type_css
+use crate::content_type_html
+use crate::content_type_javascript
+use crate::content_type_json
+use crate::content_type_png
+use crate::content_type_xml
+use crate::css
+use crate::from_extension
+use crate::from_path
+use crate::is_audio
+use crate::is_css
+use crate::is_html
+use crate::is_image
+use crate::require_plain
+use crate::require_text
+use crate::content_type_jpeg
+use crate::is_jpeg
+use crate::is_json
+use crate::is_javascript
+use crate::jpeg
+use crate::is_octet_stream
+use crate::is_plain
+use crate::is_png
+use crate::is_text
+use crate::is_video
+use crate::is_xml
+use crate::javascript
+use crate::json
+use crate::html
+use crate::octet_stream
+use crate::plain
+use crate::png
+use crate::content_type_plain
+use crate::xml
+use std::strings
+
+@test
+fn test_json_constant() {
+    assert_eq(json(), "application/json; charset=utf-8")
+}
+
+@test
+fn test_html_constant() {
+    assert_eq(html(), "text/html; charset=utf-8")
+}
+
+@test
+fn test_octet_stream_constant() {
+    assert_eq(octet_stream(), "application/octet-stream")
+}
+
+@test
+fn test_from_extension_json() {
+    assert_eq(from_extension("json"), "application/json; charset=utf-8")
+}
+
+@test
+fn test_from_extension_unknown() {
+    assert_eq(from_extension("zzz"), "application/octet-stream")
+}
+
+@test
+fn test_from_path_html() {
+    assert_eq(from_path("index.html"), "text/html; charset=utf-8")
+}
+
+@test
+fn test_from_path_unknown() {
+    assert_eq(from_path("file.unknown"), "application/octet-stream")
+}
+
+@test
+fn test_is_text_json() {
+    assert(is_text("application/json; charset=utf-8"), "json is text")
+}
+
+@test
+fn test_is_text_png() {
+    assert(!is_text("image/png"), "png not text")
+}
+
+@test
+fn test_is_image_png() {
+    assert(is_image("image/png"), "png is image")
+}
+
+@test
+fn test_is_audio_mpeg() {
+    assert(is_audio("audio/mpeg"), "mp3 mime")
+}
+
+@test
+fn test_is_video_mp4() {
+    assert(is_video("video/mp4"), "mp4 mime")
+}
+
+@test
+fn test_content_type_header() {
+    assert_eq(content_type(json()), "Content-Type: application/json; charset=utf-8")
+}
+
+@test
+fn test_is_json() {
+    assert(is_json("application/json"), "bare json")
+    assert(is_json("application/json; charset=utf-8"), "with charset")
+    assert(!is_json("text/html"), "html is not json")
+}
+
+@test
+fn test_is_html() {
+    assert(is_html("text/html"), "bare html")
+    assert(is_html("text/html; charset=utf-8"), "with charset")
+    assert(!is_html("application/json"), "json is not html")
+}
+
+@test
+fn test_is_octet_stream() {
+    assert(is_octet_stream(octet_stream()), "constant")
+    assert(is_octet_stream("application/octet-stream"), "bare")
+    assert(!is_octet_stream("application/json"), "json not octet")
+}
+
+@test
+fn test_content_type_json_and_html() {
+    assert_eq(content_type_json(), "Content-Type: application/json; charset=utf-8")
+    assert_eq(content_type_html(), "Content-Type: text/html; charset=utf-8")
+}
+
+@test
+fn test_plain_css_xml() {
+    assert_eq(plain(), "text/plain; charset=utf-8")
+    assert_eq(content_type_plain(), "Content-Type: text/plain; charset=utf-8")
+    assert(is_css("text/css"), "css")
+    assert(is_css("text/css; charset=utf-8"), "css charset")
+    assert(!is_css("text/html"), "not css")
+    assert(is_xml("application/xml"), "xml")
+    assert(is_xml("application/xml; charset=utf-8"), "xml charset")
+    assert(!is_xml("application/json"), "not xml")
+}
+
+@test
+fn test_is_plain_and_javascript() {
+    assert(is_plain(plain()), "plain constant")
+    assert(is_plain("text/plain"), "bare plain")
+    assert(is_plain("text/plain; charset=utf-8"), "plain charset")
+    assert(!is_plain("text/html"), "not plain")
+    assert_eq(javascript(), "application/javascript; charset=utf-8")
+    assert(is_javascript(javascript()), "js constant")
+    assert(is_javascript("application/javascript"), "bare js")
+    assert(is_javascript("text/javascript"), "legacy text/javascript")
+    assert(!is_javascript("application/json"), "not js")
+}
+
+@test
+fn test_css_xml_constants_and_headers() {
+    assert_eq(css(), "text/css; charset=utf-8")
+    assert_eq(xml(), "application/xml; charset=utf-8")
+    assert(is_css(css()), "css const")
+    assert(is_xml(xml()), "xml const")
+    assert_eq(content_type_css(), "Content-Type: text/css; charset=utf-8")
+    assert_eq(content_type_xml(), "Content-Type: application/xml; charset=utf-8")
+    assert_eq(content_type_javascript(), "Content-Type: application/javascript; charset=utf-8")
+}
+
+@test
+fn test_png_helpers() {
+    assert_eq(png(), "image/png")
+    assert(is_png(png()), "png const")
+    assert(is_png("image/png"), "bare png")
+    assert(is_png("image/png; charset=binary"), "png params")
+    assert(!is_png("image/jpeg"), "not png")
+    assert_eq(content_type_png(), "Content-Type: image/png")
+}
+
+@test
+fn test_jpeg_helpers() {
+    assert_eq(jpeg(), "image/jpeg")
+    assert(is_jpeg(jpeg()), "jpeg const")
+    assert(is_jpeg("image/jpeg"), "bare jpeg")
+    assert(is_jpeg("image/jpeg; charset=binary"), "jpeg params")
+    assert(!is_jpeg("image/png"), "not jpeg")
+    assert_eq(content_type_jpeg(), "Content-Type: image/jpeg")
+}
+
+@test
+fn test_require_plain() {
+    match require_plain(plain()) {
+        Ok(v) => assert(is_plain(v), "plain"),
+        Err(_) => assert(false, "plain ok"),
+    }
+    match require_plain(json()) {
+        Ok(_) => assert(false, "json must Err"),
+        Err(msg) => assert(strings.contains(msg, "plain"), "mentions plain"),
+    }
+}
+
+@test
+fn test_require_text() {
+    match require_text(plain()) {
+        Ok(v) => assert(is_text(v), "text"),
+        Err(_) => assert(false, "plain is text"),
+    }
+    match require_text(png()) {
+        Ok(_) => assert(false, "png must Err"),
+        Err(msg) => assert(strings.contains(msg, "text"), "mentions text"),
+    }
+}

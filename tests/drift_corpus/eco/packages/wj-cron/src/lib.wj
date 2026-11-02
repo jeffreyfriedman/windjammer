@@ -1,0 +1,360 @@
+use std::strings
+
+pub struct CronExpr {
+    pub minute: string,
+    pub hour: string,
+    pub day_of_month: string,
+    pub month: string,
+    pub day_of_week: string,
+    pub source: string,
+}
+
+pub fn parse_cron(expr: string) -> Result<CronExpr, string> {
+    let trimmed = strings.trim("${expr}")
+    if strings.starts_with(trimmed, "@") {
+        return parse_alias(trimmed, expr)
+    }
+    let parts = strings.split_whitespace(trimmed)
+    if parts.len() != 5 {
+        return Err("expected 5 fields, got different count")
+    }
+    let minute = match parts.get(0) {
+        Some(v) => v,
+        None => return Err("missing minute field"),
+    }
+    let hour = match parts.get(1) {
+        Some(v) => v,
+        None => return Err("missing hour field"),
+    }
+    let day_of_month = match parts.get(2) {
+        Some(v) => v,
+        None => return Err("missing day_of_month field"),
+    }
+    let month = match parts.get(3) {
+        Some(v) => v,
+        None => return Err("missing month field"),
+    }
+    let day_of_week = match parts.get(4) {
+        Some(v) => v,
+        None => return Err("missing day_of_week field"),
+    }
+    Ok(CronExpr {
+        minute: minute,
+        hour: hour,
+        day_of_month: day_of_month,
+        month: month,
+        day_of_week: day_of_week,
+        source: expr,
+    })
+}
+
+fn parse_alias(name: string, source: string) -> Result<CronExpr, string> {
+    if name == "@hourly" {
+        return Ok(CronExpr {
+            minute: "0",
+            hour: "*",
+            day_of_month: "*",
+            month: "*",
+            day_of_week: "*",
+            source: source,
+        })
+    }
+    if name == "@daily" {
+        return Ok(CronExpr {
+            minute: "0",
+            hour: "0",
+            day_of_month: "*",
+            month: "*",
+            day_of_week: "*",
+            source: source,
+        })
+    }
+    if name == "@weekly" {
+        return Ok(CronExpr {
+            minute: "0",
+            hour: "0",
+            day_of_month: "*",
+            month: "*",
+            day_of_week: "0",
+            source: source,
+        })
+    }
+    if name == "@monthly" {
+        return Ok(CronExpr {
+            minute: "0",
+            hour: "0",
+            day_of_month: "1",
+            month: "*",
+            day_of_week: "*",
+            source: source,
+        })
+    }
+    if name == "@yearly" {
+        return Ok(CronExpr {
+            minute: "0",
+            hour: "0",
+            day_of_month: "1",
+            month: "1",
+            day_of_week: "*",
+            source: source,
+        })
+    }
+    if name == "@annually" {
+        return Ok(CronExpr {
+            minute: "0",
+            hour: "0",
+            day_of_month: "1",
+            month: "1",
+            day_of_week: "*",
+            source: source,
+        })
+    }
+    Err("unknown cron alias")
+}
+
+pub fn matches_field(field: string, value: int) -> bool {
+    if field == "*" {
+        return true
+    }
+    // Step: */N
+    if strings.starts_with(field, "*/") {
+        let step_str = strings.substring(field, 2, strings.len(field))
+        let step = strings.parse_i32(step_str) as int
+        if step <= 0 {
+            return false
+        }
+        return value % step == 0
+    }
+    // List: a,b,c
+    if strings.contains(field, ",") {
+        let items = strings.split(field, ",")
+        for item in items {
+            let n = strings.parse_i32(item) as int
+            if n == value {
+                return true
+            }
+        }
+        return false
+    }
+    // Range with step: a-b/N
+    if strings.contains(field, "-") && strings.contains(field, "/") {
+        return matches_range_step(field, value)
+    }
+    // Range: a-b
+    if strings.contains(field, "-") {
+        let range_parts = strings.split(field, "-")
+        if range_parts.len() == 2 {
+            let lo_str = match range_parts.get(0) {
+                Some(v) => v,
+                None => return false,
+            }
+            let hi_str = match range_parts.get(1) {
+                Some(v) => v,
+                None => return false,
+            }
+            let lo = strings.parse_i32(lo_str) as int
+            let hi = strings.parse_i32(hi_str) as int
+            return value >= lo && value <= hi
+        }
+        return false
+    }
+    // Exact value
+    let n = strings.parse_i32(field) as int
+    return n == value
+}
+
+fn matches_range_step(field: string, value: int) -> bool {
+    let slash_parts = strings.split(field, "/")
+    if slash_parts.len() != 2 {
+        return false
+    }
+    let range_str = match slash_parts.get(0) {
+        Some(v) => v,
+        None => return false,
+    }
+    let step_str = match slash_parts.get(1) {
+        Some(v) => v,
+        None => return false,
+    }
+    let step = strings.parse_i32(step_str) as int
+    if step <= 0 {
+        return false
+    }
+    let range_parts = strings.split(range_str, "-")
+    if range_parts.len() != 2 {
+        return false
+    }
+    let lo_str = match range_parts.get(0) {
+        Some(v) => v,
+        None => return false,
+    }
+    let hi_str = match range_parts.get(1) {
+        Some(v) => v,
+        None => return false,
+    }
+    let lo = strings.parse_i32(lo_str) as int
+    let hi = strings.parse_i32(hi_str) as int
+    if value < lo || value > hi {
+        return false
+    }
+    (value - lo) % step == 0
+}
+
+pub fn matches_cron(expr: CronExpr, minute: int, hour: int, day_of_month: int, month: int, day_of_week: int) -> bool {
+    matches_field(expr.minute, minute)
+        && matches_field(expr.hour, hour)
+        && matches_field(expr.day_of_month, day_of_month)
+        && matches_field(expr.month, month)
+        && matches_field(expr.day_of_week, day_of_week)
+}
+
+/// True when a cron field is the pure wildcard `*`.
+pub fn is_wildcard_field(field: string) -> bool {
+    field == "*"
+}
+
+/// Expression that matches every minute (`* * * * *`).
+pub fn every_minute() -> CronExpr {
+    CronExpr {
+        minute: "*",
+        hour: "*",
+        day_of_month: "*",
+        month: "*",
+        day_of_week: "*",
+        source: "* * * * *",
+    }
+}
+
+/// Expression that matches the top of every hour (`0 * * * *`).
+pub fn every_hour() -> CronExpr {
+    CronExpr {
+        minute: "0",
+        hour: "*",
+        day_of_month: "*",
+        month: "*",
+        day_of_week: "*",
+        source: "0 * * * *",
+    }
+}
+
+/// Expression that matches midnight every day (`0 0 * * *`).
+pub fn every_day() -> CronExpr {
+    CronExpr {
+        minute: "0",
+        hour: "0",
+        day_of_month: "*",
+        month: "*",
+        day_of_week: "*",
+        source: "0 0 * * *",
+    }
+}
+
+/// Parse `text` as cron, or `Err` whose message mentions cron.
+pub fn require_cron(text: string) -> Result<CronExpr, string> {
+    match parse_cron(text) {
+        Ok(expr) => Ok(expr),
+        Err(msg) => Err("invalid cron: ${msg}"),
+    }
+}
+
+/// Original source text preserved on `expr`.
+pub fn source_of(expr: CronExpr) -> string {
+    expr.source
+}
+
+/// Format five cron fields as a space-separated expression.
+pub fn format_cron(expr: CronExpr) -> string {
+    "${expr.minute} ${expr.hour} ${expr.day_of_month} ${expr.month} ${expr.day_of_week}"
+}
+
+pub struct CronDateTime {
+    pub year: int,
+    pub month: int,
+    pub day_of_month: int,
+    pub hour: int,
+    pub minute: int,
+    pub day_of_week: int,
+}
+
+pub fn next_run(expr: CronExpr, start: CronDateTime, max_minutes_ahead: int) -> Option<CronDateTime> {
+    let mut current = start
+    let mut left = max_minutes_ahead
+    while left > 0 {
+        current = add_minute(current)
+        left = left - 1
+        if matches_cron(expr, current.minute, current.hour, current.day_of_month, current.month, current.day_of_week) {
+            return Some(current)
+        }
+    }
+    None
+}
+
+fn add_minute(dt: CronDateTime) -> CronDateTime {
+    let mut minute = dt.minute + 1
+    let mut hour = dt.hour
+    let mut day = dt.day_of_month
+    let mut month = dt.month
+    let mut year = dt.year
+    let mut dow = dt.day_of_week
+    if minute >= 60 {
+        minute = 0
+        hour = hour + 1
+    }
+    if hour >= 24 {
+        hour = 0
+        day = day + 1
+        dow = dow + 1
+        if dow >= 7 {
+            dow = 0
+        }
+        let dim = days_in_month(year, month)
+        if day > dim {
+            day = 1
+            month = month + 1
+            if month > 12 {
+                month = 1
+                year = year + 1
+            }
+        }
+    }
+    CronDateTime {
+        year: year,
+        month: month,
+        day_of_month: day,
+        hour: hour,
+        minute: minute,
+        day_of_week: dow,
+    }
+}
+
+fn days_in_month(year: int, month: int) -> int {
+    if month == 2 {
+        if is_leap_year(year) {
+            return 29
+        }
+        return 28
+    }
+    if month == 4 {
+        return 30
+    }
+    if month == 6 {
+        return 30
+    }
+    if month == 9 {
+        return 30
+    }
+    if month == 11 {
+        return 30
+    }
+    31
+}
+
+fn is_leap_year(year: int) -> bool {
+    if year % 400 == 0 {
+        return true
+    }
+    if year % 100 == 0 {
+        return false
+    }
+    year % 4 == 0
+}

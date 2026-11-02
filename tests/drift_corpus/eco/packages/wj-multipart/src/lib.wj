@@ -1,0 +1,452 @@
+use std::strings
+
+/// One part of a `multipart/form-data` body (text-oriented; binary as opaque string).
+pub struct Part {
+    pub name: string,
+    pub filename: string,
+    pub content_type: string,
+    pub body: string,
+}
+
+/// Owned parse input — prefer this at cross-crate call sites so tip does not demote
+/// `boundary: string` to `&str` while leaving `body` owned (E0308).
+pub struct MultipartBody {
+    pub boundary: string,
+    pub body: string,
+}
+
+/// Extract boundary token from a Content-Type header value.
+pub fn boundary_from_content_type(header: string) -> Result<string, string> {
+    let trimmed = strings.trim(header)
+    if !strings.contains(trimmed, "multipart/") {
+        return Err("not multipart content-type")
+    }
+    match after_first(trimmed, "boundary=") {
+        Some(rest) => {
+            let token = strip_quotes(take_until_semi(rest))
+            if strings.len(token) == 0 {
+                return Err("empty boundary")
+            }
+            Ok(token)
+        },
+        None => Err("missing boundary"),
+    }
+}
+
+/// Build `multipart/form-data; boundary=…` Content-Type value (no header name).
+pub fn content_type_header(boundary: string) -> string {
+    "multipart/form-data; boundary=${boundary}"
+}
+
+/// Parse a multipart body given an already-extracted boundary.
+pub fn parse_multipart(boundary: string, body: string) -> Result<Vec<Part>, string> {
+    parse(MultipartBody {
+        boundary: boundary,
+        body: body,
+    })
+}
+
+/// Cross-crate-friendly parse entry (owned struct; fields stay owned inside this crate).
+pub fn parse(input: MultipartBody) -> Result<Vec<Part>, string> {
+    let boundary = input.boundary
+    let body = input.body
+    let delim = "--${boundary}"
+    let close = "--${boundary}--"
+    let normalized = strings.replace(body, "\r\n", "\n")
+    let close_n = strings.replace(close, "\r\n", "\n")
+    let delim_n = strings.replace(delim, "\r\n", "\n")
+    if !strings.contains(normalized, delim_n) {
+        return Err("missing boundary delimiter")
+    }
+    let without_close = strip_closing(normalized, close_n)
+    let chunks = strings.split(without_close, delim_n)
+    let mut parts = Vec::new()
+    let mut i = 0
+    while i < chunks.len() {
+        let chunk = strings.trim_start(chunks[i])
+        i = i + 1
+        if strings.len(chunk) == 0 {
+            continue
+        }
+        match parse_part_headers_body(chunk) {
+            Ok(part) => {
+                parts.push(part)
+            },
+            Err(e) => {
+                return Err(e)
+            },
+        }
+    }
+    if parts.len() == 0 {
+        return Err("no parts")
+    }
+    Ok(parts)
+}
+
+/// Serialize parts into a multipart body (CRLF separators, closing `--boundary--`).
+pub fn format_multipart(boundary: string, parts: Vec<Part>) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < parts.len() {
+        let part = parts[i]
+        out = "${out}--${boundary}\r\n"
+        if strings.len(part.filename) > 0 {
+            out = "${out}Content-Disposition: form-data; name=\"${part.name}\"; filename=\"${part.filename}\"\r\n"
+        } else {
+            out = "${out}Content-Disposition: form-data; name=\"${part.name}\"\r\n"
+        }
+        if strings.len(part.content_type) > 0 {
+            out = "${out}Content-Type: ${part.content_type}\r\n"
+        }
+        out = "${out}\r\n${part.body}\r\n"
+        i = i + 1
+    }
+    "${out}--${boundary}--"
+}
+
+/// First field body for `name` (any part; files included).
+pub fn get_field(parts: Vec<Part>, name: string) -> Option<string> {
+    let mut i = 0
+    while i < parts.len() {
+        let part = parts[i]
+        if part.name == name {
+            return Some(part.body)
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// True when a part named `name` is present.
+pub fn has_field(parts: Vec<Part>, name: string) -> bool {
+    match get_field(parts, name) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Number of parts in a parsed multipart body.
+pub fn part_count(parts: Vec<Part>) -> int {
+    let mut n = 0
+    let mut i = 0
+    while i < parts.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+/// Part names in encounter order (duplicates preserved).
+pub fn field_names(parts: Vec<Part>) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < parts.len() {
+        out.push(parts[i].name)
+        i = i + 1
+    }
+    out
+}
+
+/// First field body for `name`, or `default` when missing.
+pub fn get_field_or(parts: Vec<Part>, name: string, default: string) -> string {
+    match get_field(parts, name) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// First file part named `name` (requires non-empty filename).
+pub fn get_file(parts: Vec<Part>, name: string) -> Option<Part> {
+    let mut i = 0
+    while i < parts.len() {
+        let part = parts[i]
+        if part.name == name && strings.len(part.filename) > 0 {
+            return Some(part)
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// True when `parts` is empty.
+pub fn is_empty(parts: Vec<Part>) -> bool {
+    part_count(parts) == 0
+}
+
+/// `Ok(0)` when `parts` is empty, otherwise `Err`.
+pub fn require_empty(parts: Vec<Part>) -> Result<int, string> {
+    if is_empty(parts) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// `Ok(1)` when at least one part is a file upload, otherwise `Err`.
+pub fn require_files(parts: Vec<Part>) -> Result<int, string> {
+    if file_count(parts) > 0 {
+        return Ok(1)
+    }
+    Err("expected files")
+}
+
+/// Number of parts that include a filename (file uploads).
+pub fn file_count(parts: Vec<Part>) -> int {
+    let mut n = 0
+    let mut i = 0
+    while i < parts.len() {
+        if strings.len(parts[i].filename) > 0 {
+            n = n + 1
+        }
+        i = i + 1
+    }
+    n
+}
+
+/// Field body for `name`, or `Err` naming the missing field.
+pub fn require_field(parts: Vec<Part>, name: string) -> Result<string, string> {
+    match get_field(parts, name) {
+        Some(v) => Ok(v),
+        None => Err("missing field: ${name}"),
+    }
+}
+
+/// True when a file part named `name` is present.
+pub fn has_file(parts: Vec<Part>, name: string) -> bool {
+    match get_file(parts, name) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Number of parts without a filename (plain form fields).
+pub fn text_count(parts: Vec<Part>) -> int {
+    let mut n = 0
+    let mut i = 0
+    while i < parts.len() {
+        if strings.len(parts[i].filename) == 0 {
+            n = n + 1
+        }
+        i = i + 1
+    }
+    n
+}
+
+/// Count of plain form fields when at least one exists.
+pub fn require_text(parts: Vec<Part>) -> Result<int, string> {
+    let n = text_count(parts)
+    if n > 0 {
+        return Ok(n)
+    }
+    Err("expected text")
+}
+
+/// First part name in encounter order, if any.
+pub fn first_field_name(parts: Vec<Part>) -> Option<string> {
+    let names = field_names(parts)
+    if names.len() == 0 {
+        return None
+    }
+    Some(names[0])
+}
+
+/// The first part name, or `Err` when there are no parts.
+pub fn require_first_name(parts: Vec<Part>) -> Result<string, string> {
+    match first_field_name(parts) {
+        Some(name) => Ok(name),
+        None => Err("expected first"),
+    }
+}
+
+/// File part named `name`, or `Err` naming the missing file field.
+pub fn require_file(parts: Vec<Part>, name: string) -> Result<Part, string> {
+    match get_file(parts, name) {
+        Some(part) => Ok(part),
+        None => Err("missing file: ${name}"),
+    }
+}
+/// Returns `(headers, body)` then builds a `Part` — kept as one owned pipeline
+/// so demoted `&str` helpers do not fight owned locals at call sites.
+fn parse_part_headers_body(chunk: string) -> Result<Part, string> {
+    match split_once(chunk, "\n\n") {
+        Some(hb) => {
+            let headers = hb.0
+            let body = trim_trailing_newline(hb.1)
+            let mut name = ""
+            let mut filename = ""
+            let mut content_type = ""
+            let lines = strings.split(headers, "\n")
+            let mut i = 0
+            while i < lines.len() {
+                let line = strings.trim(lines[i])
+                i = i + 1
+                if strings.len(line) == 0 {
+                    continue
+                }
+                let lower = to_lower("${line}")
+                if strings.starts_with(lower, "content-disposition:") {
+                    match disposition_attr("${line}", "name") {
+                        Some(v) => {
+                            name = v
+                        },
+                        None => {},
+                    }
+                    match disposition_attr("${line}", "filename") {
+                        Some(v) => {
+                            filename = v
+                        },
+                        None => {},
+                    }
+                }
+                if strings.starts_with(lower, "content-type:") {
+                    match after_first("${line}", ":") {
+                        Some(rest) => {
+                            content_type = strings.trim(rest)
+                        },
+                        None => {},
+                    }
+                }
+            }
+            if strings.len(name) == 0 {
+                return Err("part missing name")
+            }
+            Ok(Part {
+                name: name,
+                filename: filename,
+                content_type: content_type,
+                body: body,
+            })
+        },
+        None => Err("part missing header/body separator"),
+    }
+}
+
+fn trim_trailing_newline(text: string) -> string {
+    let mut out = text
+    if strings.ends_with(out, "\n") {
+        out = drop_last(out)
+    }
+    if strings.ends_with(out, "\r") {
+        out = drop_last(out)
+    }
+    out
+}
+
+fn drop_last(text: string) -> string {
+    if strings.len(text) == 0 {
+        return text
+    }
+    strings.substring(text, 0, strings.len(text) - 1)
+}
+
+fn strip_closing(body: string, close: string) -> string {
+    match before_first(body, close) {
+        Some(prefix) => prefix,
+        None => body,
+    }
+}
+
+fn disposition_attr(header: string, key: string) -> Option<string> {
+    let needle = "${key}=\""
+    match after_first(header, needle) {
+        Some(rest) => {
+            match before_first(rest, "\"") {
+                Some(v) => Some(v),
+                None => None,
+            }
+        },
+        None => {
+            let bare = "${key}="
+            match after_first(header, bare) {
+                Some(rest) => Some(take_until_semi(strip_quotes(rest))),
+                None => None,
+            }
+        },
+    }
+}
+
+fn take_until_semi(text: string) -> string {
+    match before_first(text, ";") {
+        Some(prefix) => strings.trim(prefix),
+        None => strings.trim(text),
+    }
+}
+
+fn strip_quotes(text: string) -> string {
+    let t = strings.trim(text)
+    if strings.starts_with(t, "\"") && strings.ends_with(t, "\"") && strings.len(t) >= 2 {
+        return drop_last(strings.substring(t, 1, strings.len(t)))
+    }
+    t
+}
+
+fn after_first(hay: string, needle: string) -> Option<string> {
+    match split_once(hay, needle) {
+        Some(parts) => Some(parts.1),
+        None => None,
+    }
+}
+
+fn before_first(hay: string, needle: string) -> Option<string> {
+    match split_once(hay, needle) {
+        Some(parts) => Some(parts.0),
+        None => None,
+    }
+}
+
+fn split_once(text: string, sep: string) -> Option<(string, string)> {
+    let mut i = 0
+    while i < strings.len(text) {
+        let end = i + strings.len(sep)
+        if end <= strings.len(text) {
+            if strings.substring(text, i, end) == sep {
+                return Some((
+                    strings.substring(text, 0, i),
+                    strings.substring(text, end, strings.len(text)),
+                ))
+            }
+        }
+        i = i + 1
+    }
+    None
+}
+
+fn to_lower(text: string) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < strings.len(text) {
+        let ch = strings.substring(text, i, i + 1)
+        out = "${out}${lower_one(ch)}"
+        i = i + 1
+    }
+    out
+}
+
+fn lower_one(ch: string) -> string {
+    if ch == "A" { return "a" }
+    if ch == "B" { return "b" }
+    if ch == "C" { return "c" }
+    if ch == "D" { return "d" }
+    if ch == "E" { return "e" }
+    if ch == "F" { return "f" }
+    if ch == "G" { return "g" }
+    if ch == "H" { return "h" }
+    if ch == "I" { return "i" }
+    if ch == "J" { return "j" }
+    if ch == "K" { return "k" }
+    if ch == "L" { return "l" }
+    if ch == "M" { return "m" }
+    if ch == "N" { return "n" }
+    if ch == "O" { return "o" }
+    if ch == "P" { return "p" }
+    if ch == "Q" { return "q" }
+    if ch == "R" { return "r" }
+    if ch == "S" { return "s" }
+    if ch == "T" { return "t" }
+    if ch == "U" { return "u" }
+    if ch == "V" { return "v" }
+    if ch == "W" { return "w" }
+    if ch == "X" { return "x" }
+    if ch == "Y" { return "y" }
+    if ch == "Z" { return "z" }
+    ch
+}

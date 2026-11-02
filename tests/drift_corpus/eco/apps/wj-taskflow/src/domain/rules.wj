@@ -1,0 +1,101 @@
+use wj_validate::require_email
+use wj_validate::require_len_range
+use wj_validate::require_max_len
+use wj_validate::require_min_len
+use wj_validate::require_nonempty
+use wj_validate::require_one_of
+
+pub fn statuses() -> Vec<string> {
+    let mut v = Vec::new()
+    v.push("todo")
+    v.push("in_progress")
+    v.push("done")
+    v.push("archived")
+    v
+}
+
+pub fn priorities() -> Vec<string> {
+    let mut v = Vec::new()
+    v.push("low")
+    v.push("medium")
+    v.push("high")
+    v.push("critical")
+    v
+}
+
+pub fn member_roles() -> Vec<string> {
+    let mut v = Vec::new()
+    v.push("admin")
+    v.push("member")
+    v.push("viewer")
+    v
+}
+
+/// Owners, admins and members may change tasks; viewers may only read.
+pub fn can_write(role: string) -> bool {
+    role == "owner" || role == "admin" || role == "member"
+}
+
+/// Owners and admins manage membership and may delete the project.
+pub fn can_admin(role: string) -> bool {
+    role == "owner" || role == "admin"
+}
+
+pub fn check_registration(username: string, email: string, password: string) -> Result<(), string> {
+    match require_len_range("username", username, 3, 32) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match require_email("email", email) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match require_min_len("password", password, 8) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+pub fn check_project_name(name: string) -> Result<(), string> {
+    match require_nonempty("name", name) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match require_max_len("name", name, 255) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn check_title(title: string) -> Result<(), string> {
+    match require_nonempty("title", title) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match require_max_len("title", title, 255) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn check_status(value: string) -> Result<(), string> {
+    match require_one_of("status", value, statuses()) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn check_priority(value: string) -> Result<(), string> {
+    match require_one_of("priority", value, priorities()) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn check_member_role(value: string) -> Result<(), string> {
+    match require_one_of("role", value, member_roles()) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
+}

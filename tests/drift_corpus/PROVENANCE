@@ -1,0 +1,4 @@
+source: windjammer-ecosystem (public), branch feat/wj-sync
+commit: a306998829ba1349130cf6d332e8f7a25466725e
+taken: 2026-11-02 with `git archive <commit> packages apps`, keeping wj.toml, src/, tests/ and migrations/ of every package and app
+contents: 44 packages, 17 apps, 322 .wj files

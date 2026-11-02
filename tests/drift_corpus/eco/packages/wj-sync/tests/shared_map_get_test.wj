@@ -1,0 +1,28 @@
+use crate::SharedMap
+use crate::shared_map_get
+use crate::shared_map_has
+use crate::shared_map_insert
+use crate::shared_map_new
+
+@test
+fn test_shared_map_get_hit() {
+    let m = shared_map_new()
+    let m = shared_map_insert(m, "k", 42)
+    let got = shared_map_get(m, "k")
+    assert(got.1, "key present")
+    assert_eq(got.2, 42)
+}
+
+@test
+fn test_shared_map_get_miss() {
+    let m = shared_map_new()
+    let got = shared_map_get(m, "missing")
+    assert(!got.1, "key absent")
+}
+
+@test
+fn test_shared_map_has() {
+    let m = shared_map_new()
+    let m = shared_map_insert(m, "a", 1)
+    assert(shared_map_has(m, "a"), "has a")
+}

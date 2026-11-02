@@ -1,0 +1,112 @@
+/// One pipeline job (int payload for sync dogfood).
+pub struct Job {
+    pub id: int,
+    pub payload: int,
+}
+
+/// Stage output.
+pub struct JobResult {
+    pub id: int,
+    pub value: int,
+}
+
+/// Pure stage: double the payload.
+pub fn transform(job: Job) -> JobResult {
+    JobResult {
+        id: job.id,
+        value: job.payload * 2,
+    }
+}
+
+/// Sum result values.
+pub fn sum_results(results: Vec<JobResult>) -> int {
+    let mut total = 0
+    for r in results {
+        total = total + r.value
+    }
+    total
+}
+
+pub fn result_count(results: Vec<JobResult>) -> int {
+    let mut n = 0
+    for _ in results {
+        n = n + 1
+    }
+    n
+}
+
+pub fn max_result_value(results: Vec<JobResult>) -> int {
+    let mut max = 0
+    let mut seen = false
+    for r in results {
+        if !seen || r.value > max {
+            max = r.value
+            seen = true
+        }
+    }
+    max
+}
+
+/// The result with `id`, or an error when it is missing.
+pub fn require_by_id(results: Vec<JobResult>, id: int) -> Result<JobResult, string> {
+    match find_result_by_id(results, id) {
+        Some(r) => Ok(r),
+        None => Err("expected result"),
+    }
+}
+
+pub fn find_result_by_id(results: Vec<JobResult>, id: int) -> Option<JobResult> {
+    for r in results {
+        if r.id == id {
+            return Some(r)
+        }
+    }
+    None
+}
+
+pub fn min_result_value(results: Vec<JobResult>) -> int {
+    let mut min = 0
+    let mut seen = false
+    for r in results {
+        if !seen || r.value < min {
+            min = r.value
+            seen = true
+        }
+    }
+    min
+}
+
+/// Result count when the list is non-empty.
+pub fn require_results(results: Vec<JobResult>) -> Result<int, string> {
+    let n = result_count(results)
+    if n == 0 {
+        Err("expected results")
+    } else {
+        Ok(n)
+    }
+}
+
+/// The sole result, or an error when the list is empty or has more than one.
+pub fn require_only_result(results: Vec<JobResult>) -> Result<JobResult, string> {
+    match only_result(results) {
+        Some(r) => Ok(r),
+        None => Err("expected one result"),
+    }
+}
+
+/// The sole result when the list has exactly one entry.
+pub fn only_result(results: Vec<JobResult>) -> Option<JobResult> {
+    let mut kept = JobResult { id: 0, value: 0 }
+    let mut n = 0
+    for r in results {
+        n = n + 1
+        if n == 1 {
+            kept = r
+        }
+    }
+    if n == 1 {
+        Some(kept)
+    } else {
+        None
+    }
+}

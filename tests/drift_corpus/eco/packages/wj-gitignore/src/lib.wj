@@ -1,0 +1,115 @@
+use std::strings
+use wj_glob::is_match
+
+/// One parsed `.gitignore` line.
+pub struct Rule {
+    pub pattern: string,
+    pub negated: bool,
+    pub dir_only: bool,
+    pub anchored: bool,
+}
+
+/// Parse `.gitignore` text. Blank lines and `#` comments are dropped.
+pub fn parse(text: string) -> Vec<Rule> {
+    let mut rules = Vec::new()
+    let lines = text.lines()
+    for line in lines {
+        let trimmed = line.trim()
+        if trimmed.is_empty() {
+            continue
+        }
+        if trimmed.starts_with("#") {
+            continue
+        }
+        rules.push(parse_rule(trimmed))
+    }
+    rules
+}
+
+fn parse_rule(line: string) -> Rule {
+    let mut body = line
+    let mut negated = false
+    if body.starts_with("!") {
+        negated = true
+        body = strings.substring(body, 1, body.len())
+    }
+    let mut dir_only = false
+    if body.ends_with("/") {
+        dir_only = true
+        body = strings.substring(body, 0, body.len() - 1)
+    }
+    let mut anchored = false
+    if body.starts_with("/") {
+        anchored = true
+        body = strings.substring(body, 1, body.len())
+    }
+    if body.contains("/") {
+        anchored = true
+    }
+    Rule {
+        pattern: body,
+        negated: negated,
+        dir_only: dir_only,
+        anchored: anchored,
+    }
+}
+
+fn basename(path: string) -> string {
+    let parts: Vec<string> = path.split("/").collect()
+    parts[parts.len() - 1]
+}
+
+fn rule_matches(rule: Rule, path: string) -> bool {
+    if rule.anchored {
+        return is_match(rule.pattern, path)
+    }
+    is_match(rule.pattern, basename(path))
+}
+
+// Verdict for exactly this path (ancestors are checked by the caller).
+fn verdict(rules: Vec<Rule>, path: string, is_dir: bool) -> bool {
+    let mut ignored = false
+    for rule in rules {
+        if rule.dir_only && !is_dir {
+            continue
+        }
+        if rule_matches(rule, path) {
+            ignored = !rule.negated
+        }
+    }
+    ignored
+}
+
+/// Whether `path` (relative to the ignore file, `/`-separated) is ignored.
+/// A path under an ignored directory is ignored and cannot be re-included.
+pub fn is_ignored(rules: Vec<Rule>, path: string, is_dir: bool) -> bool {
+    let parts: Vec<string> = path.split("/").collect()
+    let mut prefix = ""
+    let mut i = 0
+    while i < parts.len() {
+        if i == 0 {
+            prefix = parts[0]
+        } else {
+            prefix = "${prefix}/${parts[i]}"
+        }
+        let last = i == parts.len() - 1
+        let dir = if last { is_dir } else { true }
+        if verdict(rules, prefix, dir) {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Paths (files) not ignored by `.gitignore` text, input order preserved.
+pub fn filter_unignored(text: string, paths: Vec<string>) -> Vec<string> {
+    let rules = parse(text)
+    let mut out = Vec::new()
+    for path in paths {
+        if !is_ignored(rules, path, false) {
+            out.push(path)
+        }
+    }
+    out
+}

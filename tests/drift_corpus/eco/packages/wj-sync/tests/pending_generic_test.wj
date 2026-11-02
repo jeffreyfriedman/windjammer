@@ -1,0 +1,29 @@
+use crate::Pending
+use crate::wait
+use crate::parallel_int
+use crate::task_int
+use crate::wait_int
+use crate::parallel_add
+
+@test
+fn test_pending_wait_option() {
+    let p = parallel_int(2, 3)
+    match wait(p) {
+        Some(v) => assert_eq(v, 5),
+        None => assert(false, "expected Some"),
+    }
+}
+
+@test
+fn test_task_int_alias() {
+    let p = task_int(10, 1)
+    match wait(p) {
+        Some(v) => assert_eq(v, 11),
+        None => assert(false, "expected Some"),
+    }
+}
+
+@test
+fn test_parallel_add_compat() {
+    assert_eq(wait_int(parallel_add(4, 5)), 9)
+}

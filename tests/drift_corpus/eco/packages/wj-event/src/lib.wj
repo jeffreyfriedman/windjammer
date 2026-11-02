@@ -1,0 +1,208 @@
+use std::strings
+
+pub struct Event {
+    pub name: string,
+    pub payload: string,
+}
+
+struct Listener {
+    id: string,
+    pattern: string,
+}
+
+pub struct EventBus {
+    listeners: Vec<Listener>,
+    queue: Vec<Event>,
+}
+
+pub fn new_bus() -> EventBus {
+    EventBus {
+        listeners: Vec::new(),
+        queue: Vec::new(),
+    }
+}
+
+pub fn subscribe(bus: EventBus, id: string, pattern: string) -> EventBus {
+    let mut listeners = bus.listeners
+    listeners.push(Listener { id: id, pattern: pattern })
+    EventBus {
+        listeners: listeners,
+        queue: bus.queue,
+    }
+}
+
+pub fn unsubscribe(bus: EventBus, id: string) -> EventBus {
+    let mut kept = Vec::new()
+    let mut i = 0
+    while i < bus.listeners.len() {
+        let listener = bus.listeners[i]
+        if listener.id != id {
+            kept.push(listener)
+        }
+        i = i + 1
+    }
+    EventBus {
+        listeners: kept,
+        queue: bus.queue,
+    }
+}
+
+pub fn emit(bus: EventBus, name: string, payload: string) -> EventBus {
+    let mut queue = bus.queue
+    queue.push(Event { name: name, payload: payload })
+    EventBus {
+        listeners: bus.listeners,
+        queue: queue,
+    }
+}
+
+pub fn drain(bus: EventBus) -> (EventBus, Vec<Event>) {
+    let taken = bus.queue
+    let empty = Vec::new()
+    let next = EventBus {
+        listeners: bus.listeners,
+        queue: empty,
+    }
+    (next, taken)
+}
+
+pub fn queue_len(bus: EventBus) -> int {
+    bus.queue.len()
+}
+
+/// True when the bus has at least one queued event.
+pub fn has_pending(bus: EventBus) -> bool {
+    queue_len(bus) > 0
+}
+
+/// `Ok(1)` when the bus has a queued event, otherwise `Err`.
+pub fn require_pending(bus: EventBus) -> Result<int, string> {
+    if has_pending(bus) {
+        return Ok(1)
+    }
+    Err("expected pending")
+}
+
+pub fn clear_queue(bus: EventBus) -> EventBus {
+    EventBus {
+        listeners: bus.listeners,
+        queue: Vec::new(),
+    }
+}
+
+pub fn listener_count(bus: EventBus) -> int {
+    bus.listeners.len()
+}
+
+/// `Ok(n)` when exactly `n` listeners are registered, otherwise `Err`.
+pub fn require_listener_count(bus: EventBus, n: int) -> Result<int, string> {
+    if listener_count(bus) == n {
+        return Ok(n)
+    }
+    Err("expected listener count")
+}
+
+pub fn listener_ids(bus: EventBus, event_name: string) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < bus.listeners.len() {
+        let listener = bus.listeners[i]
+        if match_pattern(listener.pattern, event_name) {
+            out.push(listener.id)
+        }
+        i = i + 1
+    }
+    out
+}
+
+pub fn match_pattern(pattern: string, event_name: string) -> bool {
+    if pattern == "*" {
+        return true
+    }
+    if strings.ends_with(pattern, "*") {
+        let prefix_len = strings.len(pattern) - 1
+        if prefix_len == 0 {
+            return true
+        }
+        let prefix = strings.substring(pattern, 0, prefix_len)
+        return strings.starts_with(event_name, prefix)
+    }
+    pattern == event_name
+}
+
+/// True when the bus has no subscribers.
+pub fn is_empty(bus: EventBus) -> bool {
+    listener_count(bus) == 0
+}
+
+/// `Ok(0)` when the bus has no subscribers, otherwise `Err`.
+pub fn require_empty(bus: EventBus) -> Result<int, string> {
+    if is_empty(bus) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// Peek at the front queued event without draining (`(bus, Option<Event>)`).
+pub fn peek(bus: EventBus) -> (EventBus, Option<Event>) {
+    if bus.queue.len() == 0 {
+        return (bus, None)
+    }
+    let first = bus.queue[0]
+    (bus, Some(first))
+}
+
+/// Number of queued events (alias of `queue_len`).
+pub fn pending_count(bus: EventBus) -> int {
+    queue_len(bus)
+}
+
+/// `Ok(n)` when the queue holds exactly `n` events, otherwise `Err`.
+pub fn require_pending_count(bus: EventBus, n: int) -> Result<int, string> {
+    if pending_count(bus) == n {
+        return Ok(n)
+    }
+    Err("expected pending count")
+}
+
+pub fn has_listener(bus: EventBus, id: string) -> bool {
+    let mut i = 0
+    while i < bus.listeners.len() {
+        if bus.listeners[i].id == id {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Drop all subscribers; keep the queued events.
+pub fn clear_listeners(bus: EventBus) -> EventBus {
+    EventBus {
+        listeners: Vec::new(),
+        queue: bus.queue,
+    }
+}
+
+/// True when the bus has no queued events.
+pub fn is_idle(bus: EventBus) -> bool {
+    !has_pending(bus)
+}
+
+/// `Ok(0)` when the bus has no queued events.
+pub fn require_idle(bus: EventBus) -> Result<int, string> {
+    if is_idle(bus) {
+        return Ok(0)
+    }
+    Err("expected idle")
+}
+
+/// Event name accessor.
+pub fn event_name(event: Event) -> string {
+    event.name
+}
+
+/// Event payload accessor.
+pub fn event_payload(event: Event) -> string {
+    event.payload
+}

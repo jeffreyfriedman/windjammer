@@ -1,0 +1,190 @@
+use crate::domain::NoteStore
+use std::strings
+
+fn empty_title() -> string {
+    strings.substring("x", 0, 0)
+}
+
+fn max_title() -> int {
+    200
+}
+
+fn max_body() -> int {
+    10_000
+}
+
+fn test_create_assigns_incrementing_ids() {
+    let mut store = NoteStore::new()
+    match store.create("first", "a", max_title(), max_body(), 0) {
+        Ok(n) => assert_eq(n.id, 1),
+        Err(_) => assert(false, "create first"),
+    }
+    match store.create("second", "b", max_title(), max_body(), 0) {
+        Ok(n) => assert_eq(n.id, 2),
+        Err(_) => assert(false, "create second"),
+    }
+}
+
+fn test_create_assigns_uuid_uid() {
+    let mut store = NoteStore::new()
+    match store.create("first", "a", max_title(), max_body(), 0) {
+        Ok(n) => {
+            assert_eq(strings.len(n.uid), 36)
+            assert_str_contains(n.uid, "-")
+            assert_ne(n.uid, "")
+        },
+        Err(_) => assert(false, "create for uid"),
+    }
+}
+
+fn test_create_sets_rfc3339_created_at() {
+    let mut store = NoteStore::new()
+    // 1_700_000_000 seconds → 2023-11-14T22:13:20Z
+    match store.create("first", "a", max_title(), max_body(), 1_700_000_000_000) {
+        Ok(n) => {
+            assert_str_contains(n.created_at, "T")
+            assert_str_contains(n.created_at, "Z")
+            assert_str_contains(n.created_at, "2023")
+        },
+        Err(_) => assert(false, "create for created_at"),
+    }
+}
+
+fn test_update_preserves_uid_and_created_at() {
+    let mut store = NoteStore::new()
+    match store.create("old", "x", max_title(), max_body(), 1_700_000_000_000) {
+        Ok(created) => {
+            let uid = created.uid
+            let created_at = created.created_at
+            match store.update(created.id, "new", "y", max_title(), max_body()) {
+                Ok(updated) => {
+                    assert_eq(updated.uid, uid)
+                    assert_eq(updated.created_at, created_at)
+                    assert_eq(updated.title, "new")
+                },
+                Err(_) => assert(false, "update should succeed"),
+            }
+        },
+        Err(_) => assert(false, "create for update preserve"),
+    }
+}
+
+fn test_create_slugifies_title() {
+    let mut store = NoteStore::new()
+    match store.create("Hello World!", "body", max_title(), max_body(), 0) {
+        Ok(n) => assert_eq(n.slug, "hello-world"),
+        Err(_) => assert(false, "create for slug"),
+    }
+}
+
+fn test_update_reslugifies_title() {
+    let mut store = NoteStore::new()
+    match store.create("Old Title", "x", max_title(), max_body(), 0) {
+        Ok(created) => {
+            match store.update(created.id, "New Title Here", "y", max_title(), max_body()) {
+                Ok(updated) => assert_eq(updated.slug, "new-title-here"),
+                Err(_) => assert(false, "update for slug"),
+            }
+        },
+        Err(_) => assert(false, "create for update slug"),
+    }
+}
+
+fn test_create_rejects_empty_title() {
+    let mut store = NoteStore::new()
+    match store.create(empty_title(), "body", max_title(), max_body(), 0) {
+        Ok(_) => assert(false, "empty title must be Err"),
+        Err(msg) => assert(msg.len() > 0, "error message required"),
+    }
+}
+
+fn test_create_rejects_empty_body() {
+    let mut store = NoteStore::new()
+    match store.create("title", empty_title(), max_title(), max_body(), 0) {
+        Ok(_) => assert(false, "empty body must be Err"),
+        Err(msg) => assert(msg.len() > 0, "error message required"),
+    }
+}
+
+fn test_get_returns_created_note() {
+    let mut store = NoteStore::new()
+    match store.create("hello", "world", max_title(), max_body(), 0) {
+        Ok(created) => {
+            match store.get(created.id) {
+                Some(found) => {
+                    assert_eq(found.id, created.id)
+                    assert_eq(found.title, "hello")
+                    assert_eq(found.body, "world")
+                },
+                None => assert(false, "get after create"),
+            }
+        },
+        Err(_) => assert(false, "create hello"),
+    }
+}
+
+fn test_get_missing_is_none() {
+    let store = NoteStore::new()
+    match store.get(99) {
+        Some(_) => assert(false, "missing id must be None"),
+        None => {},
+    }
+}
+
+fn test_list_returns_all_notes() {
+    let mut store = NoteStore::new()
+    let _ = store.create("a", "1", max_title(), max_body(), 0)
+    let _ = store.create("b", "2", max_title(), max_body(), 0)
+    let notes = store.list()
+    assert_eq(notes.len(), 2)
+}
+
+fn test_update_changes_title_and_body() {
+    let mut store = NoteStore::new()
+    match store.create("old", "x", max_title(), max_body(), 0) {
+        Ok(created) => {
+            match store.update(created.id, "new", "y", max_title(), max_body()) {
+                Ok(updated) => {
+                    assert_eq(updated.title, "new")
+                    assert_eq(updated.body, "y")
+                },
+                Err(_) => assert(false, "update should succeed"),
+            }
+        },
+        Err(_) => assert(false, "create for update"),
+    }
+}
+
+fn test_update_missing_is_err() {
+    let mut store = NoteStore::new()
+    match store.update(1, "t", "b", max_title(), max_body()) {
+        Ok(_) => assert(false, "missing update must be Err"),
+        Err(_) => {},
+    }
+}
+
+fn test_delete_removes_note() {
+    let mut store = NoteStore::new()
+    match store.create("gone", "z", max_title(), max_body(), 0) {
+        Ok(created) => {
+            match store.delete(created.id) {
+                Ok(_) => {
+                    match store.get(created.id) {
+                        Some(_) => assert(false, "deleted note still present"),
+                        None => {},
+                    }
+                },
+                Err(_) => assert(false, "delete should succeed"),
+            }
+        },
+        Err(_) => assert(false, "create for delete"),
+    }
+}
+
+fn test_delete_missing_is_err() {
+    let mut store = NoteStore::new()
+    match store.delete(1) {
+        Ok(_) => assert(false, "missing delete must be Err"),
+        Err(_) => {},
+    }
+}

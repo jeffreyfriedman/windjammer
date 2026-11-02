@@ -1,0 +1,42 @@
+use std::strings
+use wj_gitignore::is_ignored
+use wj_gitignore::parse
+
+fn relative_to(root: string, path: string) -> string {
+    let mut prefix = root
+    if !prefix.ends_with("/") {
+        prefix = "${prefix}/"
+    }
+    if path.starts_with(prefix) {
+        return strings.substring(path, prefix.len(), path.len())
+    }
+    path
+}
+
+fn has_hidden_segment(rel: string) -> bool {
+    let parts: Vec<string> = rel.split("/").collect()
+    for part in parts {
+        if part.starts_with(".") && part != "." && part != ".." {
+            return true
+        }
+    }
+    false
+}
+
+/// Files under `root` that a search should read: dot-files/dirs are dropped unless
+/// `include_hidden`, and `.gitignore` text (relative to `root`) is applied when `respect_ignore`.
+pub fn select_files(root: string, paths: Vec<string>, gitignore: string, respect_ignore: bool, include_hidden: bool) -> Vec<string> {
+    let rules = parse(gitignore)
+    let mut out = Vec::new()
+    for path in paths {
+        let rel = relative_to(root, path)
+        if !include_hidden && has_hidden_segment(rel) {
+            continue
+        }
+        if respect_ignore && is_ignored(rules, rel, false) {
+            continue
+        }
+        out.push(path)
+    }
+    out
+}

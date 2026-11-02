@@ -1,0 +1,143 @@
+use crate::HttpResult
+use crate::body_len
+use crate::body_of
+use crate::status_is_client_error
+use crate::status_is_created
+use crate::status_is_informational
+use crate::status_is_no_content
+use crate::status_is_not_found
+use crate::status_is_ok
+use crate::status_is_redirect
+use crate::status_is_server_error
+use crate::status_is_success
+use crate::status_is_unauthorized
+use crate::status_of
+use crate::require_error
+use crate::require_ok
+use crate::require_redirect
+use crate::require_success
+use crate::error_message
+use crate::from_parts
+use std::strings
+
+fn test_status_is_success_accepts_2xx() {
+    assert(status_is_success(200), "200")
+    assert(status_is_success(201), "201")
+    assert(status_is_success(204), "204")
+    assert(!status_is_success(199), "199")
+    assert(!status_is_success(300), "300")
+    assert(!status_is_success(404), "404")
+    assert(!status_is_success(500), "500")
+}
+
+fn test_status_is_client_and_server_error() {
+    assert(status_is_client_error(400), "400")
+    assert(status_is_client_error(404), "404")
+    assert(!status_is_client_error(500), "500 not client")
+    assert(status_is_server_error(500), "500")
+    assert(status_is_server_error(503), "503")
+    assert(!status_is_server_error(404), "404 not server")
+}
+
+fn test_require_ok_returns_body_on_success() {
+    let result = from_parts(200, "{\"ok\":true}")
+    match require_ok(result) {
+        Ok(body) => assert_str_contains(body, "ok"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_require_ok_errors_on_4xx() {
+    let result = from_parts(404, "missing")
+    match require_ok(result) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => {
+            assert_str_contains(msg, "404")
+            assert_str_contains(msg, "missing")
+        },
+    }
+}
+
+fn test_error_message_includes_status_and_body() {
+    let msg = error_message(500, "boom")
+    assert_str_contains(msg, "500")
+    assert_str_contains(msg, "boom")
+}
+
+fn test_from_parts_builds_result() {
+    let result = from_parts(201, "created")
+    assert_eq(result.status, 201)
+    assert_eq(result.body, "created")
+}
+
+fn test_http_result_is_success_method() {
+    let ok = from_parts(204, "")
+    assert(ok.is_success(), "204 should succeed")
+    let bad = from_parts(401, "nope")
+    assert(!bad.is_success(), "401 should fail")
+}
+
+fn test_status_is_ok_redirect_informational() {
+    assert(status_is_ok(200), "200")
+    assert(!status_is_ok(201), "201 not ok")
+    assert(status_is_redirect(301), "301")
+    assert(status_is_redirect(302), "302")
+    assert(!status_is_redirect(200), "200 not redirect")
+    assert(status_is_informational(100), "100")
+    assert(!status_is_informational(200), "200 not 1xx")
+}
+
+fn test_created_no_content_and_body_helpers() {
+    assert(status_is_created(201), "201")
+    assert(!status_is_created(200), "200 not created")
+    assert(status_is_no_content(204), "204")
+    assert(!status_is_no_content(200), "200 not no-content")
+    let filled = from_parts(200, "hello")
+    assert_eq(body_len(filled), 5)
+    let empty = from_parts(204, "")
+    assert_eq(body_len(empty), 0)
+}
+
+fn test_status_auth_not_found_and_accessors() {
+    assert(status_is_unauthorized(401), "401")
+    assert(!status_is_unauthorized(403), "403 not unauthorized")
+    assert(status_is_not_found(404), "404")
+    assert(!status_is_not_found(400), "400 not not-found")
+    let result = from_parts(200, "hello")
+    assert_eq(status_of(result), 200)
+    assert_eq(body_of(result), "hello")
+    let empty = from_parts(204, "")
+}
+
+fn test_require_error() {
+    match require_error(from_parts(404, "missing")) {
+        Ok(status) => assert_eq(status, 404),
+        Err(_) => assert(false, "404"),
+    }
+    match require_error(from_parts(200, "ok")) {
+        Ok(_) => assert(false, "success must Err"),
+        Err(msg) => assert(strings.contains(msg, "error"), "mentions error"),
+    }
+}
+
+fn test_require_redirect() {
+    match require_redirect(301) {
+        Ok(status) => assert(status_is_redirect(status), "redirect"),
+        Err(_) => assert(false, "301 ok"),
+    }
+    match require_redirect(200) {
+        Ok(_) => assert(false, "ok must Err"),
+        Err(msg) => assert(strings.contains(msg, "redirect"), "mentions redirect"),
+    }
+}
+
+fn test_require_success() {
+    match require_success(204) {
+        Ok(status) => assert(status_is_success(status), "success"),
+        Err(_) => assert(false, "204 ok"),
+    }
+    match require_success(404) {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "success"), "mentions success"),
+    }
+}

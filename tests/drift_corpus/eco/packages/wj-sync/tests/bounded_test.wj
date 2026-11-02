@@ -1,0 +1,21 @@
+use crate::BoundedSender
+use crate::bounded_int
+use crate::recv_int
+use crate::send_bounded
+
+@test
+fn test_bounded_send_recv() {
+    let pair = bounded_int(2)
+    let _ = send_bounded(pair.0, 7)
+    let got = recv_int(pair.1)
+    assert_eq(got.1, 7)
+}
+
+@test
+fn test_bounded_capacity_two() {
+    let pair = bounded_int(2)
+    let _ = send_bounded(send_bounded(pair.0, 1), 2)
+    let a = recv_int(pair.1)
+    let b = recv_int(a.0)
+    assert_eq(a.1 + b.1, 3)
+}

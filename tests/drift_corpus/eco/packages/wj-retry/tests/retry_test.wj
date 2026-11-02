@@ -1,0 +1,294 @@
+use crate::Backoff
+use crate::attempts_remaining
+use crate::attempts_used
+use crate::clamp_delay_ms
+use crate::default_backoff
+use crate::delay_ms
+use crate::is_default_backoff
+use crate::new_backoff
+use crate::retry_delay
+use crate::require_used
+use crate::require_remaining
+use crate::require_next
+use crate::require_total
+use crate::require_clamp
+use crate::require_delay
+use crate::require_initial
+use crate::require_multiplier
+use crate::require_max
+use crate::require_first
+use crate::should_retry
+use crate::total_delay_ms
+use crate::pause_ms
+use crate::initial_of
+use crate::max_of
+use crate::multiplier_of
+use crate::with_initial_ms
+use crate::with_max_ms
+use crate::with_multiplier
+use std::strings
+
+fn test_delay_ms_exponential() {
+    let b = Backoff {
+        initial_ms: 100,
+        multiplier: 2,
+        max_ms: 1000,
+    }
+    assert_eq(delay_ms(b, 0), 100)
+    assert_eq(delay_ms(b, 1), 200)
+    assert_eq(delay_ms(b, 2), 400)
+    assert_eq(delay_ms(b, 3), 800)
+    assert_eq(delay_ms(b, 4), 1000)
+    assert_eq(delay_ms(b, 5), 1000)
+}
+
+fn test_delay_ms_zero_attempt() {
+    let b = Backoff {
+        initial_ms: 50,
+        multiplier: 3,
+        max_ms: 500,
+    }
+    assert_eq(delay_ms(b, 0), 50)
+}
+
+fn test_should_retry_respects_max_attempts() {
+    assert(should_retry(0, 3), "attempt 0 of 3")
+    assert(should_retry(2, 3), "attempt 2 of 3")
+    assert(!should_retry(3, 3), "attempt 3 of 3")
+    assert(!should_retry(4, 3), "attempt 4 of 3")
+}
+
+fn test_should_retry_zero_max() {
+    assert(!should_retry(0, 0), "max 0")
+}
+
+fn test_pause_ms_zero_is_noop() {
+    pause_ms(0)
+}
+
+fn test_retry_delay_some_while_retries_remain() {
+    let b = Backoff {
+        initial_ms: 100,
+        multiplier: 2,
+        max_ms: 1000,
+    }
+    match retry_delay(b, 0, 3) {
+        Some(ms) => assert_eq(ms, 100),
+        None => assert(false, "attempt 0 should retry"),
+    }
+    match retry_delay(b, 2, 3) {
+        Some(ms) => assert_eq(ms, 400),
+        None => assert(false, "attempt 2 should retry"),
+    }
+}
+
+fn test_retry_delay_none_when_exhausted() {
+    let b = Backoff {
+        initial_ms: 100,
+        multiplier: 2,
+        max_ms: 1000,
+    }
+    match retry_delay(b, 3, 3) {
+        Some(_) => assert(false, "exhausted"),
+        None => {},
+    }
+}
+
+fn test_attempts_remaining() {
+    assert_eq(attempts_remaining(0, 3), 3)
+    assert_eq(attempts_remaining(2, 3), 1)
+    assert_eq(attempts_remaining(3, 3), 0)
+    assert_eq(attempts_remaining(5, 3), 0)
+    assert_eq(attempts_remaining(0, 0), 0)
+}
+
+fn test_default_backoff() {
+    let b = default_backoff()
+    assert_eq(b.initial_ms, 100)
+    assert_eq(b.multiplier, 2)
+    assert_eq(b.max_ms, 30000)
+    assert_eq(delay_ms(b, 0), 100)
+    assert_eq(delay_ms(b, 1), 200)
+}
+
+fn test_total_delay_ms() {
+    let b = Backoff {
+        initial_ms: 100,
+        multiplier: 2,
+        max_ms: 1000,
+    }
+    // attempts 0..2 → 100 + 200 + 400
+    assert_eq(total_delay_ms(b, 3), 700)
+    assert_eq(total_delay_ms(b, 0), 0)
+    assert_eq(total_delay_ms(b, 1), 100)
+}
+
+fn test_clamp_delay_ms() {
+    assert_eq(clamp_delay_ms(50, 100, 1000), 100)
+    assert_eq(clamp_delay_ms(500, 100, 1000), 500)
+    assert_eq(clamp_delay_ms(5000, 100, 1000), 1000)
+}
+
+fn test_with_max_ms() {
+    let b = default_backoff()
+    let capped = with_max_ms(b, 250)
+    assert_eq(capped.initial_ms, 100)
+    assert_eq(capped.multiplier, 2)
+    assert_eq(capped.max_ms, 250)
+    assert_eq(delay_ms(capped, 3), 250)
+}
+
+fn test_with_initial_ms() {
+    let b = default_backoff()
+    let bumped = with_initial_ms(b, 50)
+    assert_eq(bumped.initial_ms, 50)
+    assert_eq(bumped.multiplier, 2)
+    assert_eq(bumped.max_ms, 30000)
+    assert_eq(delay_ms(bumped, 0), 50)
+}
+
+fn test_with_multiplier_and_accessors() {
+    let b = default_backoff()
+    assert_eq(initial_of(b), 100)
+    assert_eq(multiplier_of(b), 2)
+    assert_eq(max_of(b), 30000)
+    let scaled = with_multiplier(b, 3)
+    assert_eq(multiplier_of(scaled), 3)
+    assert_eq(initial_of(scaled), 100)
+    assert_eq(delay_ms(scaled, 1), 300)
+}
+
+fn test_new_backoff_is_default_and_attempts_used() {
+    let custom = new_backoff(50, 3, 5000)
+    assert_eq(initial_of(custom), 50)
+    assert_eq(multiplier_of(custom), 3)
+    assert_eq(max_of(custom), 5000)
+    assert(is_default_backoff(default_backoff()), "defaults")
+    assert(!is_default_backoff(custom), "custom")
+    assert_eq(attempts_used(0, 5), 0)
+    assert_eq(attempts_used(2, 5), 2)
+    assert_eq(attempts_used(5, 5), 5)
+    assert_eq(attempts_used(9, 5), 5)
+}
+
+fn test_require_retry() {
+    use crate::require_retry
+    match require_retry(0, 3) {
+        Ok(left) => assert_eq(left, 3),
+        Err(_) => assert(false, "retries remain"),
+    }
+    match require_retry(3, 3) {
+        Ok(_) => assert(false, "exhausted must Err"),
+        Err(msg) => assert(strings.contains(msg, "retry"), "mentions retry"),
+    }
+}
+
+fn test_require_first() {
+    match require_first(0) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "first"),
+    }
+    match require_first(1) {
+        Ok(_) => assert(false, "later must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}
+
+fn test_require_used() {
+    match require_used(2, 5, 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two used"),
+    }
+    match require_used(2, 5, 4) {
+        Ok(_) => assert(false, "four must Err"),
+        Err(msg) => assert(strings.contains(msg, "used"), "mentions used"),
+    }
+}
+
+fn test_require_remaining() {
+    match require_remaining(0, 3, 3) {
+        Ok(n) => assert_eq(n, 3),
+        Err(_) => assert(false, "three left"),
+    }
+    match require_remaining(3, 3, 1) {
+        Ok(_) => assert(false, "none left must Err"),
+        Err(msg) => assert(strings.contains(msg, "remaining"), "mentions remaining"),
+    }
+}
+
+fn test_require_next() {
+    match require_next(1, 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "next attempt"),
+    }
+    match require_next(1, 9) {
+        Ok(_) => assert(false, "wrong next must Err"),
+        Err(msg) => assert(strings.contains(msg, "next"), "mentions next"),
+    }
+}
+
+fn test_require_total() {
+    match require_total(default_backoff(), 1, 100) {
+        Ok(n) => assert_eq(n, 100),
+        Err(_) => assert(false, "first delay"),
+    }
+    match require_total(default_backoff(), 1, 0) {
+        Ok(_) => assert(false, "zero must Err"),
+        Err(msg) => assert(strings.contains(msg, "total"), "mentions total"),
+    }
+}
+
+fn test_require_clamp() {
+    match require_clamp(5, 10, 20, 10) {
+        Ok(n) => assert_eq(n, 10),
+        Err(_) => assert(false, "raised to min"),
+    }
+    match require_clamp(5, 10, 20, 5) {
+        Ok(_) => assert(false, "raw must Err"),
+        Err(msg) => assert(strings.contains(msg, "clamp"), "mentions clamp"),
+    }
+}
+
+fn test_require_delay() {
+    match require_delay(default_backoff(), 0, 100) {
+        Ok(n) => assert_eq(n, 100),
+        Err(_) => assert(false, "initial delay"),
+    }
+    match require_delay(default_backoff(), 0, 1) {
+        Ok(_) => assert(false, "wrong delay must Err"),
+        Err(msg) => assert(strings.contains(msg, "delay"), "mentions delay"),
+    }
+}
+
+fn test_require_initial() {
+    match require_initial(default_backoff(), 100) {
+        Ok(n) => assert_eq(n, 100),
+        Err(_) => assert(false, "initial 100"),
+    }
+    match require_initial(default_backoff(), 1) {
+        Ok(_) => assert(false, "wrong initial must Err"),
+        Err(msg) => assert(strings.contains(msg, "initial"), "mentions initial"),
+    }
+}
+
+fn test_require_multiplier() {
+    match require_multiplier(default_backoff(), 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "multiplier 2"),
+    }
+    match require_multiplier(default_backoff(), 1) {
+        Ok(_) => assert(false, "wrong multiplier must Err"),
+        Err(msg) => assert(strings.contains(msg, "multiplier"), "mentions multiplier"),
+    }
+}
+
+fn test_require_max() {
+    match require_max(default_backoff(), 30000) {
+        Ok(n) => assert_eq(n, 30000),
+        Err(_) => assert(false, "max 30000"),
+    }
+    match require_max(default_backoff(), 1) {
+        Ok(_) => assert(false, "wrong max must Err"),
+        Err(msg) => assert(strings.contains(msg, "max"), "mentions max"),
+    }
+}

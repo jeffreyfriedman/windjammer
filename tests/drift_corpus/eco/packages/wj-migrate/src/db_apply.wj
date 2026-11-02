@@ -1,0 +1,192 @@
+use std::db
+use std::fs
+use std::strings
+use std::time
+
+use crate::Migration
+use crate::parse_filename
+use crate::record_applied_sql
+use crate::schema_table_sql
+use crate::select_applied_sql
+use crate::validate_unique_versions
+use crate::version_applied
+
+struct LocatedMigration {
+    migration: Migration,
+    path: string,
+}
+
+pub struct ApplyReport {
+    pub applied_count: int,
+    pub applied_versions: Vec<int>,
+}
+
+/// Connect, ensure bookkeeping table, apply pending SQL from `migrations_dir`.
+pub fn apply_url(url: string, migrations_dir: string) -> Result<ApplyReport, string> {
+    match db.connect(url) {
+        Ok(conn) => apply_conn(conn, migrations_dir),
+        Err(e) => Err(e),
+    }
+}
+
+/// Discover and parse `.sql` migrations from a directory (sorted by version).
+pub fn discover_migrations(dir: string) -> Result<Vec<Migration>, string> {
+    match discover_migration_paths(dir) {
+        Ok(located) => {
+            let mut all = Vec::new()
+            for item in located {
+                all.push(item.migration)
+            }
+            Ok(all)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Read applied version numbers from `schema_migrations` (empty when table missing).
+pub fn read_applied_versions(conn: db::Connection) -> Result<Vec<int>, string> {
+    let mut applied = Vec::new()
+    let query_params = Vec::new()
+    match conn.query(select_applied_sql(), query_params) {
+        Ok(rows) => {
+            for row in rows {
+                match row.get_int_at(0) {
+                    Ok(v) => applied.push(v),
+                    Err(e) => return Err(e),
+                }
+            }
+        },
+        Err(e) => {
+            if !strings.contains(e, "no such table") {
+                return Err(e)
+            }
+        },
+    }
+    Ok(applied)
+}
+
+fn apply_conn(conn: db::Connection, migrations_dir: string) -> Result<ApplyReport, string> {
+    let empty_params = Vec::new()
+    match conn.execute(schema_table_sql(), empty_params) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    let located = match discover_migration_paths(migrations_dir) {
+        Ok(items) => items,
+        Err(e) => return Err(e),
+    }
+    let mut all = Vec::new()
+    let mut i = 0
+    while i < located.len() {
+        all.push(located[i].migration)
+        i = i + 1
+    }
+    match validate_unique_versions(all) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    let applied = match read_applied_versions(conn) {
+        Ok(items) => items,
+        Err(e) => return Err(e),
+    }
+    let mut applied_versions = Vec::new()
+    let mut applied_count = 0
+    for item in located {
+        if version_applied(applied, item.migration.version) {
+            continue
+        }
+        let m = item.migration
+        let path = item.path
+        let sql_body = match fs.read_to_string(path) {
+            Ok(text) => text,
+            Err(e) => return Err(e),
+        }
+        let stamp = time.utc_now().to_rfc3339()
+        let exec_params = Vec::new()
+        match conn.execute(sql_body, exec_params) {
+            Ok(_) => {},
+            Err(e) => return Err(e),
+        }
+        let record = record_applied_sql(m, stamp)
+        let record_params = Vec::new()
+        match conn.execute(record, record_params) {
+            Ok(_) => {},
+            Err(e) => return Err(e),
+        }
+        applied_versions.push(m.version)
+        applied_count = applied_count + 1
+    }
+    Ok(ApplyReport {
+        applied_count: applied_count,
+        applied_versions: applied_versions,
+    })
+}
+
+fn discover_migration_paths(dir: string) -> Result<Vec<LocatedMigration>, string> {
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            let mut items = Vec::new()
+            for entry in entries {
+                if !entry.is_file() {
+                    continue
+                }
+                let path = entry.path()
+                let name = file_name(path)
+                if !strings.ends_with(name, ".sql") {
+                    continue
+                }
+                match parse_filename(name) {
+                    Ok(m) => items.push(LocatedMigration { migration: m, path: path }),
+                    Err(e) => return Err(e),
+                }
+            }
+            if items.len() == 0 {
+                return Err("no migration .sql files found")
+            }
+            Ok(sort_located(items))
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn sort_located(items: Vec<LocatedMigration>) -> Vec<LocatedMigration> {
+    let mut out: Vec<LocatedMigration> = Vec::new()
+    for item in items {
+        out = insert_located_sorted(out, item)
+    }
+    out
+}
+
+fn insert_located_sorted(sorted: Vec<LocatedMigration>, item: LocatedMigration) -> Vec<LocatedMigration> {
+    let mut before: Vec<LocatedMigration> = Vec::new()
+    let mut after: Vec<LocatedMigration> = Vec::new()
+    let mut found_spot = false
+    for existing in sorted {
+        if !found_spot && item.migration.version < existing.migration.version {
+            found_spot = true
+        }
+        if found_spot {
+            after.push(existing)
+        } else {
+            before.push(existing)
+        }
+    }
+    let mut result = before
+    result.push(item)
+    for existing in after {
+        result.push(existing)
+    }
+    result
+}
+
+fn file_name(path: string) -> string {
+    let mut i = strings.len(path)
+    while i > 0 {
+        i = i - 1
+        let ch = strings.substring(path, i, i + 1)
+        if ch == "/" {
+            return strings.substring(path, i + 1, strings.len(path))
+        }
+    }
+    path
+}

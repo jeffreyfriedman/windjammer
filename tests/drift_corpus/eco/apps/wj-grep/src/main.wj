@@ -1,0 +1,31 @@
+use std::process
+use wj_cli_args::read_argv
+
+use crate::adapters::parse_args
+use crate::adapters::run
+
+fn main() {
+    let cmd = match parse_args(read_argv()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln("wj-grep: ${e}")
+            process.exit(2)
+            return
+        },
+    }
+    match run(cmd) {
+        Ok(result) => {
+            if result.0.len() > 0 {
+                println("${result.0}")
+            }
+            // grep convention: 0 when something matched, 1 when nothing did.
+            if result.1 == 0 {
+                process.exit(1)
+            }
+        },
+        Err(e) => {
+            eprintln("wj-grep: ${e}")
+            process.exit(2)
+        },
+    }
+}

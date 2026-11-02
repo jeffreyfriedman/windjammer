@@ -1,0 +1,255 @@
+use std::encoding
+
+/// Parse `a=1&b=2` (optional leading `?`) into ordered key/value pairs.
+/// Thin-wraps `std::encoding.form_parse`, which also strips the leading `?`.
+pub fn parse(text: string) -> Vec<(string, string)> {
+    encoding.form_parse(text)
+}
+
+/// Serialize pairs as `key=value&…` with form encoding (` ` → `+`, reserved → `%HH`).
+pub fn stringify(pairs: Vec<(string, string)>) -> string {
+    encoding.form_stringify(pairs)
+}
+
+/// First value for `key`, or None.
+pub fn get(query: string, key: string) -> Option<string> {
+    let pairs = parse(query)
+    let mut i = 0
+    while i < pairs.len() {
+        let pair = pairs[i]
+        if pair.0 == key {
+            return Some(pair.1)
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// All values for `key` (repeated keys).
+pub fn get_all(query: string, key: string) -> Vec<string> {
+    let mut out = Vec::new()
+    let pairs = parse(query)
+    let mut i = 0
+    while i < pairs.len() {
+        let pair = pairs[i]
+        if pair.0 == key {
+            out.push(pair.1)
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// True when `key` appears at least once.
+pub fn has(query: string, key: string) -> bool {
+    match get(query, key) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Drop every pair whose key equals `key`.
+pub fn remove(query: string, key: string) -> string {
+    let pairs = parse(query)
+    let mut kept = Vec::new()
+    let mut i = 0
+    while i < pairs.len() {
+        let pair = pairs[i]
+        if pair.0 != key {
+            kept.push(pair)
+        }
+        i = i + 1
+    }
+    stringify(kept)
+}
+
+/// Append `key=value` without removing existing keys.
+pub fn append(query: string, key: string, value: string) -> string {
+    let mut pairs = parse(query)
+    pairs.push((key, value))
+    stringify(pairs)
+}
+
+/// Set `key=value`, replacing every existing occurrence of `key`.
+pub fn set(query: string, key: string, value: string) -> string {
+    append(remove(query, key), key, value)
+}
+
+/// First value for `key`, or `default` when missing.
+pub fn get_or(query: string, key: string, default: string) -> string {
+    match get(query, key) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// True when `query` has no key/value pairs.
+pub fn is_empty(query: string) -> bool {
+    pair_count(query) == 0
+}
+
+/// `Ok(0)` when `query` has no pairs.
+pub fn require_empty(query: string) -> Result<int, string> {
+    if is_empty(query) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// Number of key/value pairs in `query` (repeated keys count separately).
+pub fn pair_count(query: string) -> int {
+    let pairs = parse(query)
+    let mut n = 0
+    let mut i = 0
+    while i < pairs.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+/// `Ok(n)` when `query` has exactly `n` pairs, otherwise `Err`.
+pub fn require_pair_count(query: string, n: int) -> Result<int, string> {
+    if pair_count(query) == n {
+        return Ok(n)
+    }
+    Err("expected pair count")
+}
+
+/// Unique keys in first-seen order.
+pub fn keys(query: string) -> Vec<string> {
+    let pairs = parse(query)
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < pairs.len() {
+        let key = pairs[i].0
+        let mut seen = false
+        let mut j = 0
+        while j < out.len() {
+            if out[j] == key {
+                seen = true
+            }
+            j = j + 1
+        }
+        if !seen {
+            out.push(key)
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// Number of unique keys in `query`.
+pub fn unique_key_count(query: string) -> int {
+    let ks = keys(query)
+    let mut n = 0
+    let mut i = 0
+    while i < ks.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+/// `Ok(n)` when `query` has exactly `n` unique keys, otherwise `Err`.
+pub fn require_unique(query: string, n: int) -> Result<int, string> {
+    if unique_key_count(query) == n {
+        return Ok(n)
+    }
+    Err("expected unique")
+}
+
+/// `Ok(n)` when `key` has exactly `n` values, otherwise `Err`.
+pub fn require_count(query: string, key: string, n: int) -> Result<int, string> {
+    if value_count(query, key) == n {
+        return Ok(n)
+    }
+    Err("expected count")
+}
+
+/// How many values are associated with `key` (including duplicates).
+pub fn value_count(query: string, key: string) -> int {
+    let vals = get_all(query, key)
+    let mut n = 0
+    let mut i = 0
+    while i < vals.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+/// First value for `key`, or `Err` naming the missing key.
+pub fn require(query: string, key: string) -> Result<string, string> {
+    match get(query, key) {
+        Some(v) => Ok(v),
+        None => Err("missing query key: ${key}"),
+    }
+}
+
+/// First unique key in parse order, if any.
+pub fn first_key(query: string) -> Option<string> {
+    let ks = keys(query)
+    if ks.len() == 0 {
+        return None
+    }
+    Some(ks[0])
+}
+
+/// The first unique key, or `Err` when the query is empty.
+pub fn require_first_key(query: string) -> Result<string, string> {
+    match first_key(query) {
+        Some(k) => Ok(k),
+        None => Err("expected first"),
+    }
+}
+
+/// Last unique key in parse order, if any.
+pub fn last_key(query: string) -> Option<string> {
+    let ks = keys(query)
+    if ks.len() == 0 {
+        return None
+    }
+    Some(ks[ks.len() - 1])
+}
+
+/// The last unique key, or `Err` when the query is empty.
+pub fn require_last_key(query: string) -> Result<string, string> {
+    match last_key(query) {
+        Some(k) => Ok(k),
+        None => Err("expected last"),
+    }
+}
+
+/// True when the query has exactly one key/value pair.
+pub fn is_singleton(query: string) -> bool {
+    pair_count(query) == 1
+}
+
+/// Last value for `key` in parse order, if any.
+pub fn last_value(query: string, key: string) -> Option<string> {
+    let values = get_all(query, key)
+    if values.len() == 0 {
+        return None
+    }
+    Some(values[values.len() - 1])
+}
+
+/// The last value for `key`, or `Err` when the key is absent.
+pub fn require_last_value(query: string, key: string) -> Result<string, string> {
+    match last_value(query, key) {
+        Some(v) => Ok(v),
+        None => Err("expected value"),
+    }
+}
+
+/// The sole key when the query has exactly one pair, otherwise `Err`.
+pub fn require_singleton(query: string) -> Result<string, string> {
+    if !is_singleton(query) {
+        return Err("expected singleton query")
+    }
+    match first_key(query) {
+        Some(k) => Ok(k),
+        None => Err("expected singleton query"),
+    }
+}

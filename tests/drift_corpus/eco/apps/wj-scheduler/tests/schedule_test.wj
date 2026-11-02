@@ -1,0 +1,99 @@
+use crate::domain::check_schedule
+use crate::domain::next_schedule
+use crate::domain::explain_schedule
+use crate::domain::parse_civil
+
+fn test_check_schedule_matches_hourly_alias() {
+    match parse_civil("2026-01-01T09:00") {
+        Ok(at) => {
+            match check_schedule("@hourly", at) {
+                Ok(matched) => assert(matched, "@hourly at :00 should match"),
+                Err(_e) => assert(false, "check should succeed"),
+            }
+        },
+        Err(_e) => assert(false, "civil parse"),
+    }
+}
+
+fn test_check_schedule_rejects_off_minute() {
+    match parse_civil("2026-01-01T09:05") {
+        Ok(at) => {
+            match check_schedule("@hourly", at) {
+                Ok(matched) => assert(!matched, "@hourly at :05 should not match"),
+                Err(_e) => assert(false, "check should succeed"),
+            }
+        },
+        Err(_e) => assert(false, "civil parse"),
+    }
+}
+
+fn test_check_schedule_bad_expr() {
+    match parse_civil("2026-01-01T00:00") {
+        Ok(at) => {
+            assert(check_schedule("@reboot", at).is_err(), "unknown alias")
+            assert(check_schedule("* * *", at).is_err(), "too few fields")
+        },
+        Err(_e) => assert(false, "civil parse"),
+    }
+}
+
+fn test_next_schedule_every_5_minutes() {
+    match parse_civil("2026-01-01T12:00") {
+        Ok(from) => {
+            match next_schedule("*/5 * * * *", from, 10) {
+                Ok(opt) => {
+                    match opt {
+                        Some(dt) => {
+                            assert_eq(dt.hour, 12)
+                            assert_eq(dt.minute, 5)
+                        },
+                        None => assert(false, "expected next run"),
+                    }
+                },
+                Err(_e) => assert(false, "next should succeed"),
+            }
+        },
+        Err(_e) => assert(false, "civil parse"),
+    }
+}
+
+fn test_next_schedule_none_within_window() {
+    match parse_civil("2026-01-02T00:00") {
+        Ok(from) => {
+            match next_schedule("0 0 1 1 *", from, 60) {
+                Ok(opt) => {
+                    match opt {
+                        Some(_dt) => assert(false, "should be none"),
+                        None => {},
+                    }
+                },
+                Err(_e) => assert(false, "next should succeed"),
+            }
+        },
+        Err(_e) => assert(false, "civil parse"),
+    }
+}
+
+fn test_explain_alias_hourly() {
+    match explain_schedule("@hourly") {
+        Ok(exp) => {
+            assert_eq(exp.minute, "0")
+            assert_eq(exp.hour, "*")
+            assert_eq(exp.day_of_month, "*")
+            assert_eq(exp.month, "*")
+            assert_eq(exp.day_of_week, "*")
+        },
+        Err(_e) => assert(false, "explain @hourly"),
+    }
+}
+
+fn test_explain_five_field() {
+    match explain_schedule("*/5 9 * * 1-5") {
+        Ok(exp) => {
+            assert_eq(exp.minute, "*/5")
+            assert_eq(exp.hour, "9")
+            assert_eq(exp.day_of_week, "1-5")
+        },
+        Err(_e) => assert(false, "explain five-field"),
+    }
+}

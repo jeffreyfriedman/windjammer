@@ -1,0 +1,13 @@
+// A closure whose branches return `Some(1)` / `None`, passed to a parameter of type Option<int>: the
+// literal is typed i32 by the compiled backend.
+fn show(x: Option<int>) -> int {
+    match x {
+        Some(v) => v,
+        None => 0,
+    }
+}
+
+fn main() {
+    let pick = |flag: bool| if flag { Some(1) } else { None }
+    println("${show(pick(true))}")
+}

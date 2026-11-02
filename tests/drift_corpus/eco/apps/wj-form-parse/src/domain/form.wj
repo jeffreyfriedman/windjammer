@@ -1,0 +1,192 @@
+use wj_multipart::boundary_from_content_type
+use wj_multipart::parse_multipart
+use wj_multipart::Part
+use std::strings
+
+/// Parse multipart body into ordered `(name, body)` pairs (files included by field name).
+pub fn parse_form_fields(content_type: string, body: string) -> Result<Vec<(string, string)>, string> {
+    let ct = strings.trim(content_type)
+    if !strings.contains(ct, "multipart/") {
+        return Err("expected multipart content-type")
+    }
+    match boundary_from_content_type(ct) {
+        Ok(boundary) => {
+            match parse_multipart(boundary, body) {
+                Ok(parts) => Ok(parts_to_fields(parts)),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// First value for `name`, or None.
+pub fn field_get(fields: Vec<(string, string)>, name: string) -> Option<string> {
+    let mut i = 0
+    while i < fields.len() {
+        let pair = fields[i]
+        if pair.0 == name {
+            return Some(pair.1)
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// Number of fields in the parsed form.
+pub fn field_count(fields: Vec<(string, string)>) -> int {
+    fields.len() as int
+}
+
+/// True when at least one field matches `name`.
+pub fn has_field(fields: Vec<(string, string)>, name: string) -> bool {
+    match field_get(fields, name) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// First value for `name`, or `default` when absent.
+pub fn field_get_or(fields: Vec<(string, string)>, name: string, default: string) -> string {
+    match field_get(fields, name) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// First value for `name`, or Err naming the missing field.
+pub fn require_field(fields: Vec<(string, string)>, name: string) -> Result<string, string> {
+    match field_get(fields, name) {
+        Some(v) => Ok(v),
+        None => Err("missing field: ${name}"),
+    }
+}
+
+/// Zero when the field list is empty.
+pub fn require_empty(fields: Vec<(string, string)>) -> Result<int, string> {
+    if is_empty_fields(fields) {
+        Ok(0)
+    } else {
+        Err("expected empty")
+    }
+}
+
+/// True when the field list is empty.
+pub fn is_empty_fields(fields: Vec<(string, string)>) -> bool {
+    fields.len() == 0
+}
+
+/// Field count when the list is non-empty.
+pub fn require_fields(fields: Vec<(string, string)>) -> Result<int, string> {
+    let n = fields.len()
+    if n == 0 {
+        Err("expected fields")
+    } else {
+        Ok(n as int)
+    }
+}
+
+/// Field count when any value is empty after trim.
+pub fn require_blank(fields: Vec<(string, string)>) -> Result<int, string> {
+    if has_blank_value(fields) {
+        Ok(fields.len() as int)
+    } else {
+        Err("expected blank")
+    }
+}
+
+/// True when any field value is empty after trim.
+pub fn has_blank_value(fields: Vec<(string, string)>) -> bool {
+    let mut i = 0
+    while i < fields.len() {
+        let pair = fields[i]
+        if strings.len(strings.trim(pair.1)) == 0 {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Name of the first field, or an error when the list is empty.
+pub fn require_first(fields: Vec<(string, string)>) -> Result<string, string> {
+    match first_field_name(fields) {
+        Some(name) => Ok(name),
+        None => Err("expected first field"),
+    }
+}
+
+/// Name of the first field, or None when empty.
+pub fn first_field_name(fields: Vec<(string, string)>) -> Option<string> {
+    if fields.len() == 0 {
+        return None
+    }
+    let pair = fields[0]
+    Some(pair.0)
+}
+
+/// Name of the last field, or an error when the list is empty.
+pub fn require_last(fields: Vec<(string, string)>) -> Result<string, string> {
+    match last_field_name(fields) {
+        Some(name) => Ok(name),
+        None => Err("expected last field"),
+    }
+}
+
+/// Name of the last field, or None when empty.
+pub fn last_field_name(fields: Vec<(string, string)>) -> Option<string> {
+    let n = fields.len()
+    if n == 0 {
+        return None
+    }
+    let pair = fields[n - 1]
+    Some(pair.0)
+}
+
+/// The sought value when any field equals it.
+pub fn require_value(fields: Vec<(string, string)>, value: string) -> Result<string, string> {
+    if has_value(fields, value) {
+        Ok(value)
+    } else {
+        Err("expected value")
+    }
+}
+
+/// True when any field value equals `value`.
+pub fn has_value(fields: Vec<(string, string)>, value: string) -> bool {
+    let mut i = 0
+    while i < fields.len() {
+        let pair = fields[i]
+        if pair.1 == value {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Render fields as `name=value` lines (demo / CLI output).
+pub fn format_fields(fields: Vec<(string, string)>) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < fields.len() {
+        let pair = fields[i]
+        if i > 0 {
+            out = "${out}\n"
+        }
+        out = "${out}${pair.0}=${pair.1}"
+        i = i + 1
+    }
+    out
+}
+
+fn parts_to_fields(parts: Vec<Part>) -> Vec<(string, string)> {
+    let mut fields = Vec::new()
+    let mut i = 0
+    while i < parts.len() {
+        let part = parts[i]
+        fields.push((part.name, part.body))
+        i = i + 1
+    }
+    fields
+}

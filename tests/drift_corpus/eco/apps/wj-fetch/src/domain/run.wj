@@ -1,0 +1,100 @@
+use crate::adapters::fetch_url
+use crate::adapters::pause_ms
+use crate::adapters::write_body
+use crate::domain::FetchRequest
+use crate::domain::format_fetch_error
+use crate::domain::resolve_fetch_output
+use crate::domain::pause_ms_for_attempt
+use crate::domain::should_attempt
+use crate::domain::should_retry_fetch
+use std::strings
+
+fn status_is_success(status: u16) -> bool {
+    let code = copy_u16(status)
+    if code >= 200 && code < 300 {
+        return true
+    }
+    false
+}
+
+fn error_message(status: u16, body: string) -> string {
+    format_fetch_error(copy_u16(status), body)
+}
+
+fn copy_u16(value: u16) -> u16 {
+    value
+}
+
+fn total_attempts(max_retries: int) -> int {
+    max_retries + 1
+}
+
+fn wait_before_retry(attempt: int) {
+    pause_ms(pause_ms_for_attempt(attempt))
+}
+
+fn deliver_success(status: u16, body: string, output_path: string, silent: bool) -> Result<string, string> {
+    match resolve_fetch_output(status, body, output_path, silent) {
+        Ok(pair) => {
+            if strings.len(pair.0) > 0 {
+                match write_body(output_path, pair.0) {
+                    Ok(_) => Ok(pair.1),
+                    Err(e) => Err(e),
+                }
+            } else {
+                Ok(pair.1)
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn run_fetch(req: FetchRequest) -> Result<string, string> {
+    let url = req.url
+    let fail_on_error = req.fail_on_error
+    let max_retries = req.max_retries
+    let output_path = req.output_path
+    let silent = req.silent
+    let timeout_secs = req.timeout_secs
+    let max_attempts = total_attempts(max_retries)
+    let mut attempt = 0
+    while should_attempt(attempt, max_attempts) {
+        let mut attempt_req = FetchRequest {
+            url: url,
+            fail_on_error: fail_on_error,
+            max_retries: max_retries,
+            output_path: output_path,
+            silent: silent,
+            timeout_secs: timeout_secs,
+        }
+        match fetch_url(attempt_req) {
+            Ok(mut pair) => {
+                let status = pair.0
+                let body = pair.1
+                if fail_on_error && !status_is_success(status) {
+                    if should_retry_fetch(status, attempt, max_attempts) {
+                        wait_before_retry(attempt)
+                        attempt = attempt + 1
+                        continue
+                    }
+                    return Err(error_message(status, body))
+                }
+                if should_retry_fetch(status, attempt, max_attempts) {
+                    wait_before_retry(attempt)
+                    attempt = attempt + 1
+                    continue
+                }
+                return deliver_success(status, body, output_path, silent)
+            },
+            Err(e) => {
+                if should_attempt(attempt + 1, max_attempts) {
+                    wait_before_retry(attempt)
+                    attempt = attempt + 1
+                    continue
+                }
+                return Err(e)
+            },
+        }
+    }
+    Err("fetch failed after retries")
+}

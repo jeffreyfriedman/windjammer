@@ -1,0 +1,111 @@
+use wj_json_util::pretty
+use std::strings
+
+/// True for HTTP 2xx responses.
+pub fn is_success_status(status: u16) -> bool {
+    status >= 200 && status < 300
+}
+
+/// True for HTTP 4xx client errors.
+pub fn is_client_error_status(status: u16) -> bool {
+    status >= 400 && status < 500
+}
+
+/// True for HTTP 1xx informational responses.
+pub fn is_informational_status(status: u16) -> bool {
+    status >= 100 && status < 200
+}
+
+/// True for HTTP 3xx redirects.
+pub fn is_redirect_status(status: u16) -> bool {
+    status >= 300 && status < 400
+}
+
+/// True for HTTP 5xx server errors.
+pub fn is_server_error_status(status: u16) -> bool {
+    status >= 500 && status < 600
+}
+
+/// 1xx status, or Err when the code is outside that range.
+pub fn require_info(status: u16) -> Result<u16, string> {
+    if is_informational_status(status) {
+        Ok(status)
+    } else {
+        Err("expected informational")
+    }
+}
+
+/// 3xx status, or Err when the code is outside that range.
+pub fn require_redirect(status: u16) -> Result<u16, string> {
+    if is_redirect_status(status) {
+        Ok(status)
+    } else {
+        Err("expected redirect")
+    }
+}
+
+/// 2xx status, or Err when the code is outside that range.
+pub fn require_success(status: u16) -> Result<u16, string> {
+    if is_success_status(status) {
+        Ok(status)
+    } else {
+        Err("expected success")
+    }
+}
+
+/// Coarse HTTP class: `1xx` through `5xx`, or `other`.
+pub fn status_class(status: u16) -> string {
+    if is_informational_status(status) {
+        return "1xx"
+    }
+    if is_success_status(status) {
+        return "2xx"
+    }
+    if is_redirect_status(status) {
+        return "3xx"
+    }
+    if is_client_error_status(status) {
+        return "4xx"
+    }
+    if is_server_error_status(status) {
+        return "5xx"
+    }
+    "other"
+}
+
+/// Pretty-print JSON when possible; otherwise return the raw body.
+pub fn format_body(body: string) -> string {
+    pretty(own(body))
+}
+
+fn own(value: string) -> string {
+    value
+}
+
+/// Human-readable fetch summary for CLI stdout.
+pub fn format_fetch_result(status: u16, body: string) -> string {
+    let formatted = format_body(body)
+    "HTTP ${status}\n${formatted}"
+}
+
+/// Error line when `--fail` and status is not 2xx.
+pub fn format_fetch_error(status: u16, body: string) -> string {
+    let snippet = format_body(body)
+    "HTTP ${status}\n${snippet}"
+}
+
+/// Resolve stdout message and optional file body when `--output` / `--silent` are set.
+pub fn resolve_fetch_output(status: u16, body: string, output_path: string, silent: bool) -> Result<(string, string), string> {
+    let formatted = format_body(body)
+    if strings.len(output_path) > 0 {
+        if silent {
+            return Ok((formatted, ""))
+        }
+        let message = "HTTP ${status}\nwritten to ${output_path}"
+        return Ok((formatted, message))
+    }
+    if silent {
+        return Ok(("", formatted))
+    }
+    Ok(("", format_fetch_result(status, body)))
+}

@@ -1,0 +1,146 @@
+use std::env
+use std::strings
+
+pub struct WebhookConfig {
+    pub secret: string,
+    pub allowed_origins: Vec<string>,
+    pub max_event_len: int,
+    pub max_id_len: int,
+}
+
+impl WebhookConfig {
+    pub fn defaults() -> WebhookConfig {
+        WebhookConfig {
+            secret: "dev-secret",
+            allowed_origins: Vec::new(),
+            max_event_len: 128,
+            max_id_len: 128,
+        }
+    }
+}
+
+pub fn config_from_env() -> WebhookConfig {
+    WebhookConfig {
+        secret: secret_from_env(),
+        allowed_origins: cors_origins_from_env(),
+        max_event_len: max_len_from_env("WEBHOOK_MAX_EVENT_LEN", 128),
+        max_id_len: max_len_from_env("WEBHOOK_MAX_ID_LEN", 128),
+    }
+}
+
+pub fn port_from_env() -> int {
+    match env.get("PORT") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(port) => port,
+                None => 8090,
+            }
+        },
+        None => 8090,
+    }
+}
+
+pub fn max_event_len_of(cfg: WebhookConfig) -> int {
+    cfg.max_event_len
+}
+
+/// Max allowed webhook id length from config.
+pub fn max_id_len_of(cfg: WebhookConfig) -> int {
+    cfg.max_id_len
+}
+
+/// Configured signing secret.
+pub fn secret_of(cfg: WebhookConfig) -> string {
+    cfg.secret
+}
+
+/// Number of CORS allowed origins.
+pub fn origin_count(cfg: WebhookConfig) -> int {
+    cfg.allowed_origins.len() as int
+}
+
+/// Configured secret when it is non-empty.
+pub fn require_secret(cfg: WebhookConfig) -> Result<string, string> {
+    if strings.len(cfg.secret) == 0 {
+        Err("expected secret")
+    } else {
+        Ok(cfg.secret)
+    }
+}
+
+/// Origin count when at least one origin is configured.
+pub fn require_origins(cfg: WebhookConfig) -> Result<int, string> {
+    let n = origin_count(cfg)
+    if n == 0 {
+        Err("expected origins")
+    } else {
+        Ok(n)
+    }
+}
+
+fn secret_from_env() -> string {
+    match env.get("WEBHOOK_SECRET") {
+        Some(value) => value,
+        None => "dev-secret",
+    }
+}
+
+fn cors_origins_from_env() -> Vec<string> {
+    match env.get("CORS_ORIGIN") {
+        Some(value) => {
+            let trimmed = strings.trim(value)
+            if strings.len(trimmed) == 0 {
+                return Vec::new()
+            }
+            let mut out = Vec::new()
+            out.push(trimmed)
+            out
+        },
+        None => Vec::new(),
+    }
+}
+
+fn max_len_from_env(name: string, default: int) -> int {
+    match env.get(name) {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => default,
+            }
+        },
+        None => default,
+    }
+}
+
+fn parse_positive_int(text: string) -> Option<int> {
+    if text.len() == 0 {
+        return None
+    }
+    let mut total: int = 0
+    for ch in strings.chars(text) {
+        match char_to_digit(ch) {
+            Some(digit) => {
+                total = total * 10 + digit
+            },
+            None => return None,
+        }
+    }
+    if total < 1 {
+        return None
+    }
+    Some(total)
+}
+
+fn char_to_digit(ch: char) -> Option<int> {
+    if ch == '0' { return Some(0) }
+    if ch == '1' { return Some(1) }
+    if ch == '2' { return Some(2) }
+    if ch == '3' { return Some(3) }
+    if ch == '4' { return Some(4) }
+    if ch == '5' { return Some(5) }
+    if ch == '6' { return Some(6) }
+    if ch == '7' { return Some(7) }
+    if ch == '8' { return Some(8) }
+    if ch == '9' { return Some(9) }
+    None
+}
