@@ -429,6 +429,30 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
+    /// Name of a declared signed integer type as `maybe_cast_usize_to_int_target` expects it.
+    pub(in crate::codegen::rust) fn declared_int_target_name(t: &Type) -> Option<&'static str> {
+        match t {
+            Type::Int => Some("int"),
+            Type::Int32 => Some("i32"),
+            Type::Custom(n) if n == "int" || n == "i64" => Some("int"),
+            Type::Custom(n) if n == "i32" => Some("i32"),
+            _ => None,
+        }
+    }
+
+    /// A `usize`-producing value (`v.len()`, `s.len()`, ...) stored where the program declared an `int`
+    /// field or binding is converted at the store (plan C4: one width owner; the language `int` is i64).
+    pub(in crate::codegen::rust) fn convert_usize_into_declared_int(
+        &self,
+        expr_str: &mut String,
+        expr: &Expression<'ast>,
+        declared: &Type,
+    ) {
+        if let Some(target) = Self::declared_int_target_name(declared) {
+            self.maybe_cast_usize_to_int_target(expr_str, expr, Some(target));
+        }
+    }
+
     /// Cast a `usize`-producing expression to the target int type when needed.
     ///
     /// Handles: `expr` → `(expr) as i64`, `(expr) as i32`, or no-op when target
