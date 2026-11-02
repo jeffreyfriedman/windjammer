@@ -870,7 +870,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if self.assignment_int_target_type.is_none() && self.solver_pins_int_literal_init_for(var_name, value) { self.stamp_solver_int_binding(var_name, value); }
-                if self.assignment_int_target_type.is_none() && self.function_prefers_i32_coord_locals() {
+                // NUM-LOCAL-WIDTH (ADR-0028): a width the solver fixed for this local beats every paint above.
+                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
+                if self.assignment_int_target_type.is_none() && solver_local_width.is_none() && self.function_prefers_i32_coord_locals() {
                     // negative int literal inits stay WJ `int` (i64), even in i32 builders.
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
                         self.assignment_int_target_type = Some(Type::Int);
@@ -951,6 +953,10 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                         self.assignment_int_target_type = Some(peer);
                     }
+                }
+
+                if let (Some(vn), Some(w)) = (var_name, solver_local_width.as_ref()) {
+                    self.stamp_solver_local_width(vn, w);
                 }
 
                 // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
@@ -1552,6 +1558,23 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// NUM-LOCAL-WIDTH: record the solver's width as the binding's type for every later reader.
+    fn stamp_solver_local_width(&mut self, name: &str, w: &crate::ir::safety_type::BaseType) {
+        let Some(ty) = crate::codegen::rust::solver_widths::int_width_as_type(w) else { return };
+        self.assignment_int_target_type = Some(ty.clone());
+        self.local_var_types.insert(name.to_string(), ty);
+        if matches!(w, crate::ir::safety_type::BaseType::I32) {
+            self.codegen_i32_binding_names.insert(name.to_string());
+        } else {
+            self.codegen_i32_binding_names.remove(name);
+        }
+        if matches!(w, crate::ir::safety_type::BaseType::Usize) {
+            self.usize_variables.insert(name.to_string());
+        } else {
+            self.usize_variables.remove(name);
+        }
+    }
+
     /// The solver resolved this literal init to `int`: the peer scans are width heuristics and must
     /// not override it (C4, D-WIDTH-OWNERS). A scalar binding *is* an `int`; for a collection
     /// literal only its elements are.

@@ -222,7 +222,7 @@ impl IrPipeline {
             taint_constraints_forwarded.extend(fc.taint_constraints.iter().cloned());
 
             // Forward execution constraints from async/spawn call sites.
-            execution_constraints_forwarded.extend(fc.execution_constraints.into_iter());
+            execution_constraints_forwarded.extend(fc.execution_constraints.iter().cloned());
 
             let solver = Solver::new(&fc.constraints);
             let result = solver.solve(&fc.constraints);
@@ -254,14 +254,7 @@ impl IrPipeline {
                     }
                 }
 
-                for (key, var) in &fc.literal_vars {
-                    if let Some(Some(base)) = result.types.get(var.0 as usize) {
-                        let defaulted = result.defaulted.get(var.0 as usize).copied().unwrap_or(true);
-                        if !defaulted && matches!(base, BaseType::I32 | BaseType::I64) {
-                            ir_fn.literal_widths.insert(*key, base.clone());
-                        }
-                    }
-                }
+                crate::ir::numeric_facts::publish(&fc, &result, ir_fn);
 
                 for name in &fc.single_binding_locals {
                     if let Some(var) = fc.var_map.locals.get(name) {

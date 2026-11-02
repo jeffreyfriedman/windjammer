@@ -86,6 +86,10 @@ pub struct FunctionConstraints {
     pub literal_vars: Vec<((usize, usize), ConstraintVar)>,
     /// Locals bound by exactly one pattern in the body (safe to publish by name).
     pub single_binding_locals: Vec<String>,
+    /// NUM-USIZE index sources (`len()`, `count()`, by the call's source position) and their vars.
+    pub index_sources: Vec<((usize, usize), ConstraintVar)>,
+    /// NUM-USIZE index uses (`v[i]` operands).
+    pub index_uses: Vec<ConstraintVar>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -107,6 +111,10 @@ struct AstConstraintWalker<'a, 'ast> {
     /// Struct field types for resolving `deps.writer` → `Writer` (not outer `AppDeps`).
     struct_field_types: Option<&'a HashMap<String, HashMap<String, Type>>>,
     literal_vars: Vec<((usize, usize), ConstraintVar)>,
+    index_sources: Vec<((usize, usize), ConstraintVar)>,
+    index_uses: Vec<ConstraintVar>,
+    /// Declared types of annotated locals (`let q: VecDeque<int> = ...`), for receiver classification.
+    local_decl_types: HashMap<String, BaseType>,
     /// Names bound by `for v in a..b`.
     range_loop_vars: std::collections::HashSet<String>,
     /// How many times each name is bound by a pattern (shadowed names are not published as local facts).
@@ -296,6 +304,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             registry,
             struct_field_types,
             literal_vars: Vec::new(),
+            index_sources: Vec::new(),
+            index_uses: Vec::new(),
+            local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: HashMap::new(),
         }
@@ -546,6 +557,44 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         crate::ir::receiver_type::infer_receiver_type_name(object, &self.analyzed.decl, fields)
     }
 
+    /// Some registered method of this name (a user `len(self) -> int`) returns another type: an
+    /// unresolved receiver may be that type, so the call is not known to be an index source.
+    fn has_non_usize_homonym(&self, method: &str) -> bool {
+        self.registry.is_some_and(|r| {
+            r.signatures_for_method_name(method).any(|(_, s)| {
+                s.return_type.as_ref().is_some_and(|t| parser_type_to_base_type(t) != BaseType::Usize)
+            })
+        })
+    }
+
+    /// `v.get(i)` / `q.remove(i)` / `v.swap(i, j)` on a declared `Vec`, array or `VecDeque`: every
+    /// argument is an index (ADR-0028 NUM-USIZE).
+    fn std_sequence_index_method(&self, object: &Expression<'ast>, method: &str) -> bool {
+        if !matches!(method, "get" | "get_mut" | "remove" | "swap" | "truncate" | "split_off" | "swap_remove") {
+            return false;
+        }
+        let declared = match object {
+            Expression::Identifier { name, .. } => self.local_decl_types.get(name).cloned().or_else(|| {
+                self.analyzed
+                    .decl
+                    .parameters
+                    .iter()
+                    .find(|p| &p.name == name)
+                    .map(|p| parser_type_to_base_type(&p.type_))
+            }),
+            other => {
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                crate::ir::expr_static_type::declared_type_of(other, &self.analyzed.decl, fields)
+                    .map(|t| parser_type_to_base_type(&t))
+            }
+        };
+        match declared {
+            Some(BaseType::Vec(_) | BaseType::Array(..)) => true,
+            Some(BaseType::Custom(n)) => crate::type_classification::type_name_leaf(&n) == "VecDeque",
+            _ => false,
+        }
+    }
+
     /// MutRef the root param of a method receiver (`c.increment()`, `deps.writer.push(...)`).
     /// Readonly field methods must not MutRef the outer param.
     fn emit_mutref_on_receiver_root(&mut self, object: &Expression<'ast>) {
@@ -648,6 +697,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
                 if let Some(ty) = type_ {
                     let base = parser_type_to_base_type(ty);
+                    if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
+                        self.local_decl_types.insert(n.clone(), base.clone());
+                    }
                     if base != BaseType::Inferred {
                         self.cs.add_because(Constraint::TypeIs(bound_var, base.clone()), tagged("NUM-DECLARED"));
                         emit_numeric_class_constraint(&mut self.cs, bound_var, &base);
@@ -836,6 +888,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 Constraint::IsInteger(var),
                 origin("NUM-DEFAULT-INT", "unsuffixed integer literal: width from its uses, else int (i64)", location),
             );
+            if let Some(l) = location {
+                self.literal_vars.push(((l.line, l.column), var));
+            }
             return var;
         }
         let base = literal_to_base_type(value);
@@ -859,8 +914,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let l = self.walk_expression(left);
                 let r = self.walk_expression(right);
-                self.note_literal_paired_with_range_var(left, l, right);
-                self.note_literal_paired_with_range_var(right, r, left);
                 let result = self.cs.fresh_var();
 
                 if is_comparison_op(op) {
@@ -1025,15 +1078,42 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
                 let result = self.cs.fresh_var();
 
-                if let Some(sig) = sig.as_ref() {
+                // NUM-USIZE (ADR-0028): `v.get(i)`, `q.remove(i)` on a std sequence take an index; a
+                // same-named signature of another type (a homonym) must not type the argument.
+                let seq_index = self.std_sequence_index_method(object, method);
+                if seq_index {
+                    for (&v, (_, a)) in arg_vars.iter().zip(arguments.iter()) {
+                        self.index_uses.push(v);
+                        self.cs.add_because(
+                            Constraint::IsNumeric(v),
+                            origin("NUM-INDEX", format!("argument of `.{}()` on a sequence is an index", method), &a.location()),
+                        );
+                        self.cs.add_because(
+                            Constraint::PrefersUsize(v),
+                            origin("NUM-USIZE", format!("argument of `.{}()` on a sequence is an index", method), &a.location()),
+                        );
+                    }
+                }
+                if let Some(sig) = sig.as_ref().filter(|_| !seq_index) {
                     self.emit_call_site_constraints(sig, &arg_vars);
                 }
-                self.emit_call_result_type_constraints(result, sig.as_ref(), Some(method.as_str()));
-                // NUM-USIZE (ADR-0028): a length or count with no user signature is an index source.
-                if arguments.is_empty()
+                // NUM-USIZE (ADR-0028): a length or count (no user signature, or a std one returning
+                // `usize`) is an index source: soft `usize`, so a declared width in its class wins and
+                // the source is converted at the site.
+                let declared_ret = sig.as_ref().and_then(|s| s.return_type.as_ref()).map(parser_type_to_base_type);
+                let index_source = arguments.is_empty()
                     && is_index_source_method(method)
-                    && sig.as_ref().is_none_or(|s| s.return_type.is_none())
-                {
+                    && matches!(declared_ret, None | Some(BaseType::Usize))
+                    && (sig.is_some() || !self.has_non_usize_homonym(method));
+                self.emit_call_result_type_constraints(
+                    result,
+                    sig.as_ref().filter(|_| !seq_index && !index_source),
+                    Some(method.as_str()),
+                );
+                if index_source {
+                    if let Some(l) = expr.location() {
+                        self.index_sources.push(((l.line, l.column), result));
+                    }
                     self.cs.add_because(
                         Constraint::PrefersUsize(result),
                         origin("NUM-USIZE", format!("`.{}()` is a length: an index class unless a width is declared", method), &expr.location()),
@@ -1136,6 +1216,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     other => self.walk_expression(other),
                 };
                 self.cs.add_because(Constraint::IsNumeric(idx_var), tagged("NUM-INDEX"));
+                self.index_uses.push(idx_var);
                 self.cs.add_because(
                     Constraint::PrefersUsize(idx_var),
                     origin("NUM-USIZE", "an index: an index class unless a width is declared", &index.location()),
@@ -1323,21 +1404,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Pattern::Reference(inner) => self.bind_pattern(inner),
             Pattern::Ref(name) | Pattern::RefMut(name) => self.resolve_var(name),
-        }
-    }
-
-    /// NUM-LITERAL-WIDTH: publish the solved width of an integer literal that is an operand next to
-    /// a `for a..b` loop variable. The loop variable's width is fixed by its bounds, so the literal
-    /// has no other claim. Wider publication waits for the solver to model `len()`/indexing.
-    fn note_literal_paired_with_range_var(&mut self, lit: &Expression<'ast>, lit_var: ConstraintVar, other: &Expression<'ast>) {
-        let (Expression::Literal { value: Literal::Int(_), location }, Expression::Identifier { name, .. }) = (lit, other) else {
-            return;
-        };
-        if !self.range_loop_vars.contains(name) {
-            return;
-        }
-        if let Some(l) = location {
-            self.literal_vars.push(((l.line, l.column), lit_var));
         }
     }
 
@@ -1534,6 +1600,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             taint_constraints: self.taint_constraints,
             single_binding_locals: self.bind_counts.iter().filter(|(_, c)| **c == 1).map(|(n, _)| n.clone()).collect(),
             literal_vars: self.literal_vars,
+            index_sources: self.index_sources,
+            index_uses: self.index_uses,
             execution_constraints: self.execution_constraints,
         }
     }
@@ -1708,6 +1776,24 @@ mod tests {
         assert_eq!(solved_local(index_src, "f", "j"), Some(BaseType::Usize));
         let plain_src = "pub fn f() -> bool {\n    let mut i = 0\n    while i < 10 {\n        i = i + 1\n    }\n    true\n}\n";
         assert_eq!(solved_local(plain_src, "f", "i"), Some(BaseType::I64));
+    }
+
+    #[test]
+    fn declared_int_param_fixes_the_class_of_a_len_sum() {
+        let src = "pub fn f(v: Vec<string>, n: int) -> int {\n    let mut t = v.len() + n\n    t = t + 1\n    t\n}\n";
+        let analyzed = analyze_source(src);
+        let fc = generate_constraints(&analyzed[0], None);
+        let r = crate::ir::solver::Solver::new(&fc.constraints).solve(&fc.constraints);
+        let n = fc.var_map.params["n"];
+        let t = fc.var_map.locals["t"];
+        assert_eq!(r.types[t.0 as usize], Some(BaseType::I64), "n={:?} diags={:?} cs={:?}", r.types[n.0 as usize], r.diagnostics, fc.constraints.iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn len_call_is_recorded_as_an_index_source() {
+        let analyzed = analyze_source("pub fn f(v: Vec<string>) -> bool {\n    let mut i = 0\n    while i < v.len() {\n        i = i + 1\n    }\n    true\n}\n");
+        let fc = generate_constraints(&analyzed[0], None);
+        assert_eq!(fc.index_sources.len(), 1, "{:?}", fc.index_sources);
     }
 
     #[test]
