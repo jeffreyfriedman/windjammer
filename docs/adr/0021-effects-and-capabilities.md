@@ -580,6 +580,19 @@ Kill criteria: none triggered. Replay stayed at 100% after routing the sources t
 
 **Kill / rethink.** If the lowered closures change the meaning of ordinary code (ownership inference moving a value into the closure, a `break` or `?` crossing the closure boundary) in more than 10% of the sample workflows, lower later, in the code generator, where the control flow is known. If a journal written by one implementation cannot be read by the other in a single case, the shared core is wrong: fix the core, never add a compatibility shim. If the cost exceeds 2x, batch writes.
 
+### E4b status (2026-11-02): compiled `durable fn` delivered, gates met except cost (provisional)
+
+Delivered: `durable_core` (one journal implementation compiled into the interpreter and into `windjammer-runtime`), `windjammer_runtime::durable` (`Journalable` encodings, `run`, `step`, `WJ_JOURNAL_DIR`, `WJ_CRASH_AFTER`), lowering in `codegen/rust/durable_lowering.rs`, and a build-time refusal naming what a compiled build cannot journal yet (methods, user-defined types in arguments, returns or step results).
+
+| Gate | Result |
+|---|---|
+| One journal: interpreter crash then compiled resume, and the reverse, output and files equal the uninterrupted run, at every step boundary | **Met: 70 crash points agree, both directions, on the 5 sample workflows** (`WJ_DURABLE_COMPILED=1 cargo test --test durable_compiled`; the run builds the samples, about 3 minutes) |
+| Vectors: journal scenarios and value encodings against both implementations | **Met** (`tests/effects/durable_vectors.json`, `durable_value_vectors.json`; `durable_core` and runtime unit tests) |
+| Emitted code: one `durable::run` per durable function, one `durable::step` per step position, none in a program without `durable fn`, no `#[durable]` attribute | **Met** (`durable_compiled`) |
+| Compiled journal cost at most 2x per step over in-memory | **Not measured** (machine loaded); provisional until the benchmark runs on a quiet machine |
+
+Found by the gate: the generated Rust emitted the `durable` marker as an attribute, and the compiled runtime lacked `fs::append` that the interpreter has. The second produced a new gate (`every_sink_of_an_authority_module_exists_in_the_compiled_runtime`) with a shrink-only list of 8 sinks the compiled runtime still lacks (`env::home_dir`, `env::remove`, `env::set`, `fs::canonicalize`, `fs::metadata`, `fs::set_current_dir`, `fs::write_bytes`, `process::run_with_args`). Kill criteria: none triggered.
+
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 
 Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
