@@ -99,8 +99,10 @@ mod workdir_tests {
         let (a, b) = (t.path().join("a.wj"), t.path().join("b.wj"));
         std::fs::write(&a, "").unwrap();
         std::fs::write(&b, "").unwrap();
-        assert_eq!(run_workdir(&a), run_workdir(&a));
-        assert_ne!(run_workdir(&a), run_workdir(&b));
+        // compare the hash component only: the cache root comes from the environment, which other tests change concurrently
+        let leaf = |p: PathBuf| p.file_name().unwrap().to_owned();
+        assert_eq!(leaf(run_workdir(&a)), leaf(run_workdir(&a)));
+        assert_ne!(leaf(run_workdir(&a)), leaf(run_workdir(&b)));
     }
 }
 
