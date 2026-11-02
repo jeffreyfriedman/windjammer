@@ -123,11 +123,13 @@ fn one_journal_two_implementations() {
         let src = sample(name);
         // build the program once
         let p = project(&src);
-        let b = Command::new(WJ).args(["build", "-o", "out", "."]).current_dir(&p).output().unwrap();
+        // one target directory for all samples (the dependencies compile once); the binary of each sample is built and used in turn
+        let target = std::env::temp_dir().join(format!("wj_durable_compiled_target_{}", std::process::id()));
+        let b = Command::new(WJ).args(["build", "-o", "out", "."]).current_dir(&p).env("CARGO_TARGET_DIR", &target).output().unwrap();
         assert!(b.status.success(), "{name}: {}", text(&b));
-        let bin = fs::read_dir(p.join("out/target/release")).map(|rd| rd.flatten().map(|e| e.path()).find(|f| f.is_file() && f.extension().is_none() && f.file_name().is_some_and(|n| n == "p"))).ok().flatten();
+        let bin = fs::read_dir(target.join("release")).map(|rd| rd.flatten().map(|e| e.path()).find(|f| f.is_file() && f.extension().is_none() && f.file_name().is_some_and(|n| n == "p"))).ok().flatten();
         let Some(bin) = bin else {
-            failures.push(format!("{name}: no binary found under out/target/release"));
+            failures.push(format!("{name}: no binary found under the target directory"));
             continue;
         };
         let work = |tag: &str| {
@@ -168,6 +170,7 @@ fn one_journal_two_implementations() {
         }
         let _ = fs::remove_dir_all(&p);
     }
+    let _ = fs::remove_dir_all(std::env::temp_dir().join(format!("wj_durable_compiled_target_{}", std::process::id())));
     eprintln!("cross-implementation crash points: {points}");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(points >= 40, "{points}");
