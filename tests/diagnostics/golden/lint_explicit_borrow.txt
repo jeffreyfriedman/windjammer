@@ -3,6 +3,6 @@ error[W0004]: explicit borrow in function call
   |
 8 |     show(&n)
   |          ^
-  = help: remove explicit borrow - pass value directly
+  = help: write `f(x)` instead of `f(&x)`: the compiler decides how to pass the value
   = note: Windjammer infers borrowing automatically
   = explain: wj explain W0004

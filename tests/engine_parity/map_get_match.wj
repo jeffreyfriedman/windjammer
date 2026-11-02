@@ -1,0 +1,109 @@
+// `match m.get(&k) { .. }` and `m.insert(k, x)` on maps, which the resolved engine does in place:
+// hits and misses, arms in either order, `Some(_)` and `_`, keys by reference, by value and literal,
+// string keys, struct values, a `Vec` receiver (not a map: the generic call), inserts into a shared
+// map, an insert whose value is used, and a panic inside an arm (its backtrace).
+use std::collections::HashMap
+use std::collections::BTreeMap
+
+struct P {
+    x: int,
+}
+
+fn main() {
+    let mut m: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < 5000 {
+        let k = (i * 7919) % 1009
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+    let mut hits = 0
+    let mut misses = 0
+    let mut j = 0
+    while j < 1200 {
+        match m.get(&j) {
+            None => { misses += 1 }
+            Some(v) => {
+                if *v > 4 { hits += *v }
+            }
+        }
+        match m.get(j) {
+            Some(_) => { hits += 1 }
+            _ => {}
+        }
+        j += 1
+    }
+    let lit = match m.get(&3) {
+        Some(v) => *v * 100,
+        None => -1,
+    }
+    let mut names: BTreeMap<string, P> = BTreeMap::new()
+    names.insert("a", P { x: 1 })
+    names.insert("b", P { x: 2 })
+    let key = "b"
+    let px = match names.get(&key) {
+        Some(p) => p.x * 10,
+        None => 0,
+    }
+    let miss = match names.get(&"zz") {
+        Some(p) => p.x,
+        None => 7,
+    }
+    let v = [10, 20, 30]
+    let mut s = 0
+    let mut q = 0
+    while q < 5 {
+        let at = q
+        s += match v.get(at) {
+            Some(x) => *x,
+            None => 1000,
+        }
+        q += 1
+    }
+    // an arm that captures its binding in a closure keeps it boxed
+    let mut caught = 0
+    let mut z = 0
+    while z < 50 {
+        caught += match m.get(&z) {
+            Some(v) => {
+                let f = || *v * 2
+                f()
+            }
+            None => 0,
+        }
+        z += 1
+    }
+    println("${m.len()} ${hits} ${misses} ${lit} ${px} ${miss} ${s} ${caught}")
+    // inserts into a map another binding shares (the copy keeps its entries), by reference and
+    // literal keys, a replaced value, an insert whose value is the block's (the generic call)
+    let snapshot = m
+    let mut w = 0
+    while w < 300 {
+        let kk = w * 3
+        m.insert(kk, w)
+        m.insert(&kk, w + 1)
+        names.insert("c", P { x: w })
+        w += 1
+    }
+    m.insert(-1, 5)
+    let old = { m.insert(-1, 6) }
+    let got = match old {
+        Some(o) => o,
+        None => 0,
+    }
+    println("${m.len()} ${snapshot.len()} ${got} ${names.len()} ${match snapshot.get(&3) { Some(v) => *v, None => -1 }}")
+    let mut t = 0
+    let mut r = 0
+    while r < 2000 {
+        t += match m.get(&r) {
+            Some(v) => 100 / (*v - *v),
+            None => 1,
+        }
+        r += 1
+    }
+    println("unreachable ${t}")
+}

@@ -103,6 +103,11 @@ pub struct WindjammerDiagnostic {
     pub help: Vec<String>,
     /// Notes
     pub notes: Vec<String>,
+    /// A mechanical fix for the expression `primary_text` (see `diagnostics::hints`).
+    pub fix: Option<crate::diagnostics::hints::FixHint>,
+    /// The Rust source text rustc highlighted for the primary span (one line), used to locate the
+    /// same expression in the `.wj` source.
+    pub primary_text: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -256,6 +261,7 @@ impl ErrorMapper {
 
         // Errors are rewritten into Windjammer terms with a stable WJ code; anything the
         // translator does not know becomes WJ0099 (an internal coverage gap), never raw rustc.
+        let mut fix = None;
         let (message, wj_code, help) = if rustc_diag.level == "error" {
             let tr = crate::diagnostics::rustc_text::translate(
                 rustc_diag.code.as_ref().map(|c| c.code.as_str()),
@@ -278,6 +284,7 @@ impl ErrorMapper {
             if tr.code == "WJ0003" && tr.message.contains("`int`") && tr.message.contains("`float`") {
                 help.push("convert with `x as int` / `x as float`".to_string());
             }
+            fix = tr.fix;
             (tr.message, Some(tr.code.to_string()), help)
         } else {
             (message, wj_code, help)
@@ -297,6 +304,17 @@ impl ErrorMapper {
             code: wj_code.or_else(|| rustc_diag.code.as_ref().map(|c| c.code.clone())),
             help,
             notes,
+            fix,
+            primary_text: primary_span
+                .text
+                .as_ref()
+                .filter(|t| t.len() == 1)
+                .and_then(|t| {
+                    let line = t.first()?;
+                    let chars: Vec<char> = line.text.chars().collect();
+                    let (s, e) = (line.highlight_start.checked_sub(1)?, line.highlight_end.checked_sub(1)?);
+                    (s < e && e <= chars.len()).then(|| chars[s..e].iter().collect())
+                }),
         })
     }
 
@@ -868,6 +886,8 @@ mod tests {
             code: Some("E0308".to_string()),
             help: vec!["Try using .parse()".to_string()],
             notes: vec![],
+            fix: None,
+            primary_text: None,
         };
 
         let formatted = diag.format();
@@ -962,6 +982,8 @@ mod tests {
             code: None,
             help: vec![],
             notes: vec![],
+            fix: None,
+            primary_text: None,
         };
 
         let help = diag.get_contextual_help();
@@ -983,6 +1005,8 @@ mod tests {
             code: None,
             help: vec![],
             notes: vec![],
+            fix: None,
+            primary_text: None,
         };
 
         let help = diag.get_contextual_help();

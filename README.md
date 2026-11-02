@@ -27,7 +27,7 @@ target Go, JavaScript and WebAssembly from the same code. Designed for developer
 
 Windjammer is young, so start from its own docs rather than Rust or Python habits:
 
-- Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md): the loop, idioms and pitfalls; its code runs in CI.
+- Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md): a 2 KB sheet; the full [reference](docs/agent/WINDJAMMER_REFERENCE.md) is searchable with `wj docs <terms>`. Its code runs in CI.
 - Machine-readable index: [llms.txt](llms.txt). Everything inline: [llms-full.txt](llms-full.txt). Both are generated and drift-checked.
 - Check with `wj check --json FILE`, run with `wj run FILE` (or `wj run` inside a project), look things up with `wj docs <terms>`.
 - MCP server: [crates/windjammer-mcp](crates/windjammer-mcp/README.md) (check, run, test, format, docs search, explain error, more).
@@ -230,7 +230,7 @@ $ wj test --interpret .
 test result: ok. 1 passed; 0 failed
 ```
 
-More: [agent guide](docs/agent/WINDJAMMER_FOR_AGENTS.md), [grammar](docs/windjammer.ebnf),
+More: [agent sheet](docs/agent/WINDJAMMER_FOR_AGENTS.md), [agent reference](docs/agent/WINDJAMMER_REFERENCE.md), [grammar](docs/windjammer.ebnf),
 [keywords](docs/reference/keywords.md), [standard library](docs/reference/stdlib.md), and cheatsheets from
 [Rust](docs/agent/cheatsheet_from_rust.md), [Go](docs/agent/cheatsheet_from_go.md),
 [Python](docs/agent/cheatsheet_from_python.md) and [TypeScript](docs/agent/cheatsheet_from_typescript.md).

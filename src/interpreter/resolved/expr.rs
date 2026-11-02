@@ -301,8 +301,25 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
         Expression::MacroInvocation { name, args, is_repeat: false, location, .. } if name == "format" => {
             let cs = evals(cx, args.iter().copied())?;
             let loc = location.as_ref();
+            // a template of bare `{}`s: split once here, joined with each argument's display
+            let pieces = match args.first() {
+                Some(Expression::Literal { value: crate::parser::Literal::String(t), .. }) => crate::interpreter::format::plain_template(t, args.len() - 1),
+                _ => None,
+            };
             X::V(Box::new(move |it, b| {
                 it.mark(loc);
+                if let Some(pieces) = pieces.as_ref().filter(|_| !it.fast_off("fmt")) {
+                    // every argument first, then the displays (a user `Display` runs after them all)
+                    let vals = run_all(it, b, &cs[1..])?;
+                    let mut out = pieces[0].clone();
+                    for (v, piece) in vals.into_iter().zip(&pieces[1..]) {
+                        let v = crate::interpreter::place::deref_value(v)?;
+                        out.push_str(&it.display_string(&v)?);
+                        out.push_str(piece);
+                    }
+                    it.fast.fmt += 1;
+                    return Ok(Value::str(out));
+                }
                 let vals = run_all(it, b, &cs)?;
                 Ok(Value::str(it.format_args(&vals)?))
             }))

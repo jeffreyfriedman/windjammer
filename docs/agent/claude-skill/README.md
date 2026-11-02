@@ -4,10 +4,10 @@ Copy this directory to `.claude/skills/windjammer/` in your project (or `~/.clau
 
 ```bash
 mkdir -p .claude/skills/windjammer
-cp SKILL.md ../WINDJAMMER_FOR_AGENTS.md .claude/skills/windjammer/
+cp SKILL.md ../WINDJAMMER_FOR_AGENTS.md ../WINDJAMMER_REFERENCE.md .claude/skills/windjammer/
 ```
 
-Optionally register the MCP server so the agent can call `check_code`, `run_code`, `test_code`, `format_code`,
+Optionally (IDE use; the shell commands `wj docs` and `wj explain` cost fewer tokens) register the MCP server so the agent can call `check_code`, `run_code`, `test_code`, `format_code`,
 `explain_error` and `docs_search` directly:
 
 ```bash

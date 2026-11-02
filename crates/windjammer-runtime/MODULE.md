@@ -26,3 +26,4 @@ Third-party crates only; must not import `windjammer`.
 
 ## Tests
 `cargo test -p windjammer-runtime` (crates/windjammer-runtime/tests and inline tests).
+`durable_core` (shared with the interpreter via `#[path]`): journal file format, run identity, `RunJournal`; `durable`: `Journalable` encodings and `run`/`step` for compiled `durable fn` (ADR-0021 E4b; vectors in `tests/effects/durable_*vectors.json`).

@@ -3617,111 +3617,423 @@
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
+    "name": "Code mode: one program instead of many tool calls",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
+    "summary": "When you have a set of MCP tools, write a Windjammer program that calls them instead of calling them one by one. `wj mcp bind SERVER --tools tools.json --tool list_issues --tool create_issue` writes t",
+    "tags": [
+      "tool",
+      "tools",
+      "mcp",
+      "bind",
+      "name",
+      "program",
+      "calls",
+      "grant",
+      "json",
+      "main",
+      "needs",
+      "run",
+      "server",
+      "wrong",
+      "above",
+      "acting",
+      "allow",
+      "another",
+      "anything",
+      "arguments"
+    ]
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Collections and iteration",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`let v = [1, 2, 3]` is a growable `Vec`. Iterate directly: `for x in v`, `for (i, x) in v.enumerate()`. Adapter",
-    "tags": []
+    "tags": [
+      "int",
+      "vec",
+      "hashmap",
+      "keys",
+      "map",
+      "string",
+      "collect",
+      "line",
+      "add",
+      "collections",
+      "double",
+      "enumerate",
+      "insert",
+      "iter",
+      "join",
+      "main",
+      "method",
+      "push",
+      "sort",
+      "squares"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Compiled path gaps (be honest with the user)",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: today about half of",
-    "tags": []
+    "tags": [
+      "int",
+      "build",
+      "interpreter",
+      "len",
+      "runs",
+      "rust",
+      "about",
+      "accepts",
+      "adapter",
+      "additionally",
+      "bare",
+      "behaviour",
+      "between",
+      "carry",
+      "chains",
+      "classes",
+      "code",
+      "collection",
+      "comparing",
+      "compiled"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Core idioms",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Types: `int` (64-bit), `float` (f64), `bool`, `string`, `char`, `Vec<T>`, `Option<T>`, `Result<T, E>`,",
-    "tags": []
+    "tags": [
+      "parts",
+      "push",
+      "else",
+      "string",
+      "ada",
+      "age",
+      "best",
+      "int",
+      "main",
+      "name",
+      "size",
+      "small",
+      "some",
+      "vec",
+      "after",
+      "assert",
+      "assert_eq",
+      "assert_ne",
+      "bit",
+      "block"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Error handling",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Use `Option`/`Result`, `match`, `?`, `unwrap_or`, `map_err`, `ok_or`. `.unwrap()` and `.expect()` are lint errors",
-    "tags": []
+    "tags": [
+      "int",
+      "result",
+      "string",
+      "double",
+      "option",
+      "parse",
+      "bad",
+      "err",
+      "error",
+      "map_err",
+      "match",
+      "none",
+      "unwrap_or",
+      "build",
+      "custom",
+      "display",
+      "docs",
+      "enclosing",
+      "enum",
+      "enums"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Modules and tests",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Inline `mod name { pub fn .. }` and one-file-per-module (`a.wj` or `a/mod.wj`, found next to the importer or in the",
-    "tags": []
+    "tags": [
+      "int",
+      "area",
+      "expected",
+      "mod",
+      "square",
+      "test",
+      "assert_eq",
+      "geo",
+      "pub",
+      "test_cases",
+      "field",
+      "file",
+      "found",
+      "functions",
+      "importer",
+      "inline",
+      "live",
+      "main",
+      "module",
+      "name"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Permissions: exit 126 and the fix line",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,",
-    "tags": []
+    "tags": [
+      "net",
+      "allow",
+      "api",
+      "cap",
+      "capabilities",
+      "com",
+      "connect",
+      "example",
+      "files",
+      "run",
+      "toml",
+      "directory",
+      "env",
+      "error",
+      "grant",
+      "nothing",
+      "program",
+      "value",
+      "write",
+      "already"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
+    "name": "Races, flaky tests and replays: `--simulate`, `--record`, `--replay`",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
+    "summary": "A test that passes \"usually\" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a",
+    "tags": [
+      "run",
+      "interpret",
+      "runs",
+      "seed",
+      "test",
+      "clock",
+      "program",
+      "replay",
+      "step",
+      "call",
+      "cannot",
+      "command",
+      "crash",
+      "effect",
+      "every",
+      "faults",
+      "files",
+      "first",
+      "function",
+      "hashmap"
+    ]
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Reading input and arguments",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Programs that read standard input should use one spelling that behaves the same under `wj run --interpret` and `wj build`:",
-    "tags": []
+    "tags": [
+      "env",
+      "stdin",
+      "args",
+      "dev",
+      "line",
+      "programs",
+      "read_line",
+      "std",
+      "text",
+      "behaves",
+      "build",
+      "compiled",
+      "forever",
+      "form",
+      "implemented",
+      "input",
+      "instead",
+      "interpret",
+      "interpreter",
+      "iterator"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Structs, enums, traits",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Methods take plain `self`; whether it is read-only, mutating or consuming is inferred from the body. Mutating a",
-    "tags": []
+    "tags": [
+      "self",
+      "rect",
+      "circle",
+      "int",
+      "shape",
+      "area",
+      "string",
+      "describe",
+      "label",
+      "match",
+      "show",
+      "big",
+      "bucket",
+      "impl",
+      "inferred",
+      "main",
+      "mutating",
+      "named",
+      "patterns",
+      "struct"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "The 25 things agents get wrong first",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "1. `println!(\"{}\", x)`: macros do not exist. Write `println(\"${x}\")` (W0007/W0008, ADR-0014).",
-    "tags": []
+    "tags": [
+      "literal",
+      "self",
+      "string",
+      "write",
+      "adr",
+      "char",
+      "exit",
+      "int",
+      "needed",
+      "return",
+      "vec",
+      "abc",
+      "build",
+      "bytes",
+      "clone",
+      "display",
+      "fails",
+      "finding",
+      "first",
+      "inferred"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "The loop",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->",
-    "tags": []
+    "tags": [
+      "file",
+      "cargo",
+      "check",
+      "interpret",
+      "path",
+      "run",
+      "build",
+      "dir",
+      "exit",
+      "ignore",
+      "interpreter",
+      "json",
+      "lint",
+      "program",
+      "rust",
+      "test",
+      "accepts",
+      "against",
+      "bash",
+      "built"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "What not to write",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Each of these is flagged by `wj check` (the block must produce a diagnostic):",
-    "tags": []
+    "tags": [
+      "bad",
+      "derive",
+      "int",
+      "main",
+      "first",
+      "should_fail",
+      "sum",
+      "vec",
+      "attribute",
+      "block",
+      "check",
+      "clone",
+      "debug",
+      "diagnostic",
+      "flagged",
+      "get",
+      "i32",
+      "iter",
+      "must",
+      "produce"
+    ]
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Where to look next",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_rust.md`, `_python`, `_go`, `_typescript`),",
-    "tags": []
+    "tags": [
+      "docs",
+      "design",
+      "examples",
+      "verified",
+      "adr",
+      "built",
+      "cheat",
+      "cheatsheet_from_rust",
+      "decisions",
+      "guide",
+      "indexed",
+      "interpreter",
+      "json",
+      "manifest",
+      "methods",
+      "operator",
+      "pipe",
+      "searches",
+      "sheets",
+      "signatures"
+    ]
   },
   {
     "kind": "guide",
@@ -3730,7 +4042,21 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_go.md",
     "summary": "// expect: circle 12",
-    "tags": []
+    "tags": [
+      "self",
+      "circle",
+      "int",
+      "square",
+      "area",
+      "name",
+      "shape",
+      "show",
+      "string",
+      "impl",
+      "struct",
+      "main",
+      "trait"
+    ]
   },
   {
     "kind": "guide",
@@ -3739,7 +4065,28 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_go.md",
     "summary": "| Go | Windjammer |",
-    "tags": []
+    "tags": [
+      "int",
+      "err",
+      "string",
+      "div",
+      "defer",
+      "match",
+      "result",
+      "divide",
+      "done",
+      "exit",
+      "fmt",
+      "hashmap",
+      "impl",
+      "nil",
+      "range",
+      "return",
+      "run",
+      "self",
+      "struct",
+      "zero"
+    ]
   },
   {
     "kind": "guide",
@@ -3748,7 +4095,22 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_go.md",
     "summary": "// expect: [2, 3]",
-    "tags": []
+    "tags": [
+      "hashmap",
+      "seen",
+      "bool",
+      "collections",
+      "insert",
+      "int",
+      "join",
+      "len",
+      "main",
+      "push",
+      "std",
+      "string",
+      "true",
+      "vec"
+    ]
   },
   {
     "kind": "guide",
@@ -3757,7 +4119,14 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_go.md",
     "summary": "fn abs_diff(a: int, b: int) -> int {",
-    "tags": []
+    "tags": [
+      "abs_diff",
+      "int",
+      "test",
+      "assert_eq",
+      "else",
+      "symmetric"
+    ]
   },
   {
     "kind": "guide",
@@ -3766,7 +4135,21 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_python.md",
     "summary": "// expect: Ann owes 25",
-    "tags": []
+    "tags": [
+      "account",
+      "owner",
+      "self",
+      "owed",
+      "ann",
+      "charge",
+      "owes",
+      "show",
+      "string",
+      "int",
+      "impl",
+      "main",
+      "struct"
+    ]
   },
   {
     "kind": "guide",
@@ -3775,7 +4158,28 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_python.md",
     "summary": "Types are checked: `1 + 1.5` is an error, convert with `x as float`. Integer division truncates (`7 / 2` is `3`);",
-    "tags": []
+    "tags": [
+      "float",
+      "items",
+      "accident",
+      "bool",
+      "checked",
+      "conditions",
+      "convert",
+      "division",
+      "error",
+      "false",
+      "int",
+      "integer",
+      "is_empty",
+      "main",
+      "missing",
+      "never",
+      "none",
+      "option",
+      "overflow",
+      "panics"
+    ]
   },
   {
     "kind": "guide",
@@ -3784,7 +4188,18 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_python.md",
     "summary": "// expect: parsed 12",
-    "tags": []
+    "tags": [
+      "err",
+      "parse",
+      "int",
+      "match",
+      "number",
+      "parsed",
+      "string",
+      "twelve",
+      "main",
+      "result"
+    ]
   },
   {
     "kind": "guide",
@@ -3793,7 +4208,28 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_python.md",
     "summary": "| Python | Windjammer |",
-    "tags": []
+    "tags": [
+      "int",
+      "string",
+      "hashmap",
+      "join",
+      "keys",
+      "vec",
+      "insert",
+      "none",
+      "apples",
+      "collect",
+      "enumerate",
+      "get",
+      "len",
+      "max",
+      "parts",
+      "price",
+      "push",
+      "result",
+      "sum",
+      "assert"
+    ]
   },
   {
     "kind": "guide",
@@ -3802,7 +4238,27 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_rust.md",
     "summary": "`Result`, `Option`, `?`, `match`, `impl Trait for Type`, `use a::b` and `mod` work as in Rust.",
-    "tags": []
+    "tags": [
+      "string",
+      "root",
+      "self",
+      "err",
+      "greet",
+      "impl",
+      "int",
+      "neg",
+      "result",
+      "trait",
+      "main",
+      "match",
+      "mod",
+      "option",
+      "return",
+      "rust",
+      "struct",
+      "type",
+      "work"
+    ]
   },
   {
     "kind": "guide",
@@ -3811,7 +4267,24 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_rust.md",
     "summary": "`extern fn` and `rust { }` blocks (ADR-0012) are the only places Rust syntax is expected; everything else is linted.",
-    "tags": []
+    "tags": [
+      "rust",
+      "adr",
+      "bad",
+      "blocks",
+      "else",
+      "everything",
+      "expected",
+      "extern",
+      "i32",
+      "iter",
+      "linted",
+      "main",
+      "places",
+      "sum",
+      "syntax",
+      "vec"
+    ]
   },
   {
     "kind": "guide",
@@ -3820,7 +4293,28 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_rust.md",
     "summary": "| Rust | Windjammer |",
-    "tags": []
+    "tags": [
+      "int",
+      "map",
+      "self",
+      "adr",
+      "collect",
+      "to_string",
+      "vec",
+      "evens",
+      "first_even",
+      "i64",
+      "inferred",
+      "string",
+      "args",
+      "async",
+      "boundaries",
+      "call",
+      "calls",
+      "checked",
+      "clone",
+      "concurrency"
+    ]
   },
   {
     "kind": "guide",
@@ -3829,7 +4323,28 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_rust.md",
     "summary": "You never write a lifetime. A function that only reads a parameter borrows it; one that mutates it takes `&mut`;",
-    "tags": []
+    "tags": [
+      "int",
+      "add_one_more",
+      "push",
+      "takes",
+      "total",
+      "vec",
+      "borrows",
+      "callers",
+      "function",
+      "keep",
+      "len",
+      "lifetime",
+      "main",
+      "mutates",
+      "never",
+      "ownership",
+      "parameter",
+      "reads",
+      "stores",
+      "sum"
+    ]
   },
   {
     "kind": "guide",
@@ -3838,7 +4353,18 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_typescript.md",
     "summary": "// expect: circle area 12",
-    "tags": []
+    "tags": [
+      "shape",
+      "circle",
+      "rect",
+      "area",
+      "describe",
+      "int",
+      "enum",
+      "main",
+      "match",
+      "string"
+    ]
   },
   {
     "kind": "guide",
@@ -3847,7 +4373,28 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_typescript.md",
     "summary": "| TypeScript | Windjammer |",
-    "tags": []
+    "tags": [
+      "int",
+      "map",
+      "string",
+      "collect",
+      "number",
+      "async",
+      "err",
+      "filter",
+      "fold",
+      "match",
+      "tripled",
+      "vec",
+      "array",
+      "await",
+      "bool",
+      "boolean",
+      "bugs",
+      "catch",
+      "class",
+      "code"
+    ]
   },
   {
     "kind": "guide",
@@ -3856,7 +4403,25 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_typescript.md",
     "summary": "// expect: none",
-    "tags": []
+    "tags": [
+      "int",
+      "none",
+      "match",
+      "err",
+      "find",
+      "found",
+      "parse",
+      "bad",
+      "input",
+      "some",
+      "string",
+      "target",
+      "main",
+      "option",
+      "position",
+      "result",
+      "vec"
+    ]
   },
   {
     "kind": "guide",
@@ -3865,7 +4430,13 @@
     "signature": "",
     "source": "docs/agent/cheatsheet_from_typescript.md",
     "summary": "// expect: 14",
-    "tags": []
+    "tags": [
+      "int",
+      "add",
+      "double",
+      "main",
+      "to_uppercase"
+    ]
   },
   {
     "kind": "stdlib",
@@ -6822,6 +7393,116 @@
     "signature": "fn trunc(x: f64) -> f64",
     "source": "std/math.wj",
     "summary": "Truncate (remove fractional part)",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "call",
+    "signature": "fn call(server: string, tool: string, args_json: string) -> Result<string, string>",
+    "source": "std/mcp.wj",
+    "summary": "std::mcp — tools of Model Context Protocol servers (ADR-0021 section 12, code mode) Interpreter only: `wj build` stops with an error for programs that use it. `",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_bool",
+    "signature": "fn get_bool(json: string, key: string) -> Option<bool>",
+    "source": "std/mcp.wj",
+    "summary": "/ The boolean at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_float",
+    "signature": "fn get_float(json: string, key: string) -> Option<float>",
+    "source": "std/mcp.wj",
+    "summary": "/ The number at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_int",
+    "signature": "fn get_int(json: string, key: string) -> Option<int>",
+    "source": "std/mcp.wj",
+    "summary": "/ The integer at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_ints",
+    "signature": "fn get_ints(json: string, key: string) -> Vec<int>",
+    "source": "std/mcp.wj",
+    "summary": "/ The integers of the array at `key` (other elements are skipped).",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_items",
+    "signature": "fn get_items(json: string, key: string) -> Vec<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The JSON text of each element of the array at `key`.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_raw",
+    "signature": "fn get_raw(json: string, key: string) -> Option<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The JSON text of the value at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_string",
+    "signature": "fn get_string(json: string, key: string) -> Option<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The string at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_strings",
+    "signature": "fn get_strings(json: string, key: string) -> Vec<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The strings of the array at `key` (other elements are skipped).",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "quote",
+    "signature": "fn quote(s: string) -> string",
+    "source": "std/mcp.wj",
+    "summary": "/ `s` as a JSON string literal, quotes included.",
     "tags": [
       "fn"
     ]

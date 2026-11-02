@@ -4,6 +4,7 @@
 //!
 //! Only a scrutinee that is not a place (`match m.get(&k)`, `match f(x)`, a literal...) is lowered:
 //! matching a place binds by reference when it is reached through one, which the walker decides.
+//! `match m.get(&k) { Some(v) => .., None => .. }` on a map looks the key up in place (`mapfast.rs`).
 
 use super::compile::{Cx, E};
 use super::expr::{expr, expr_eval};
@@ -11,14 +12,16 @@ use super::island::{self, Island};
 use super::Code;
 use crate::interpreter::engine::Interpreter;
 use crate::interpreter::error::{panic_ctl, R};
-use crate::interpreter::place::deref_value;
+use crate::interpreter::place::{deref_value, strip_refs};
 use crate::interpreter::value::Value;
-use crate::parser::{Expression, MatchArm, Pattern, UnaryOp};
+use crate::parser::{Expression, MatchArm, Pattern, Statement, UnaryOp};
 
 struct Arm {
     pat: &'static Pattern<'static>,
-    /// The arm's bindings: name -> boxed slot.
+    /// The arm's bindings: name -> slot.
     slots: Vec<(&'static str, usize)>,
+    /// The slots hold the bound values themselves, not boxes (`reads_only`).
+    plain: bool,
     guard: Option<Code>,
     body: Code,
 }
@@ -43,22 +46,35 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
     if matches!(value, Expression::Unary { op: UnaryOp::MutRef, .. }) || Interpreter::is_place_expr(value) {
         return None;
     }
+    let lookup = super::mapfast::map_get(cx, value);
+    let opt_arms = lookup.is_some() && arms.iter().all(|a| opt_arm(a).is_some());
     let scrut = raw(cx, value)?;
     let mut compiled = Vec::with_capacity(arms.len());
     for arm in arms {
         cx.enter();
         let mut names = Vec::new();
         island::pattern_names(&arm.pattern, &mut names);
-        let slots: Vec<(&'static str, usize)> = names.into_iter().map(|n| (n, cx.declare_boxed(n))).collect();
+        // a map lookup's arm that only reads its binding keeps it unboxed (unless the body still
+        // needs a box, which the compile fixpoint then gives it)
+        let unboxed = opt_arms && !cx.it.fast_off("unboxed") && reads_only(arm.body, &names);
+        let slots: Vec<(&'static str, usize)> =
+            names.into_iter().map(|n| (n, if unboxed { cx.declare_local(n) } else { cx.declare_boxed(n) })).collect();
+        let plain = unboxed && slots.iter().all(|(_, s)| !cx.is_boxed(*s));
         let guard = match arm.guard {
             Some(g) => Some(expr_eval(cx, g)?.code()),
             None => None,
         };
         let body = raw(cx, arm.body);
         cx.leave();
-        compiled.push(Arm { pat: &arm.pattern, slots, guard, body: body? });
+        compiled.push(Arm { pat: &arm.pattern, slots, plain, guard, body: body? });
     }
+    let fast = lookup.zip(arms.iter().map(opt_arm).collect::<Option<Vec<Opt>>>());
     Some(Box::new(move |it, b| {
+        if let Some((get, kinds)) = &fast {
+            if let Some(found) = get.run(it, b)? {
+                return opt_match(it, b, &compiled, kinds, found);
+            }
+        }
         let raw = scrut(it, b)?;
         let (v, place, by_ref) = match raw {
             Value::Ref(p) => {
@@ -75,7 +91,8 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
             }
             for (n, val) in binds {
                 if let Some((_, s)) = arm.slots.iter().find(|(m, _)| *m == n) {
-                    super::fast::set(it, b + s, island::boxed(val));
+                    let v = if arm.plain { strip_refs(val)? } else { island::boxed(val) };
+                    super::fast::set(it, b + s, v);
                 }
             }
             if let Some(g) = &arm.guard {
@@ -112,5 +129,80 @@ fn release(it: &mut Interpreter, b: usize, slots: &[(&'static str, usize)], r: &
     }
     for (_, s) in slots {
         super::fast::set(it, b + s, Value::Unit);
+    }
+}
+
+/// An arm of a `match` over an `Option` the fast path takes: `Some(x)`/`Some(_)`, `None`, `_`.
+#[derive(Clone, Copy)]
+enum Opt {
+    Some(bool),
+    None,
+    Any,
+}
+
+fn opt_arm(arm: &MatchArm<'static>) -> Option<Opt> {
+    use crate::parser::EnumPatternBinding as P;
+    if arm.guard.is_some() {
+        return None;
+    }
+    match &arm.pattern {
+        Pattern::Wildcard => Some(Opt::Any),
+        Pattern::EnumVariant(n, P::Single(_)) if n == "Some" || n == "Option::Some" => Some(Opt::Some(true)),
+        Pattern::EnumVariant(n, P::Wildcard) if n == "Some" || n == "Option::Some" => Some(Opt::Some(false)),
+        Pattern::EnumVariant(n, P::None) if n == "None" || n == "Option::None" => Some(Opt::None),
+        // a bare `None` parses as an identifier, which the walker matches as the unit variant
+        Pattern::Identifier(n) if n == "None" => Some(Opt::None),
+        _ => None,
+    }
+}
+
+/// The first arm `found` matches, run as the generic path runs it (binding boxed, released after).
+fn opt_match(it: &mut Interpreter, b: usize, arms: &[Arm], kinds: &[Opt], found: Option<Value>) -> R {
+    // test-only mutant (debug builds): `Some(_)` no longer matches, so the corpus must notice
+    let wild = !(cfg!(debug_assertions) && it.jit_mutant.as_deref() == Some("mapget"));
+    for (arm, k) in arms.iter().zip(kinds) {
+        match (k, &found) {
+            (Opt::Any, _) | (Opt::None, None) => {}
+            (Opt::Some(false), Some(_)) if wild => {}
+            (Opt::Some(true), Some(x)) => {
+                if let Some((_, s)) = arm.slots.first() {
+                    it.fast.unboxed += arm.plain as u64;
+                    let v = if arm.plain { x.clone() } else { island::boxed(x.clone()) };
+                    super::fast::set(it, b + s, v);
+                }
+            }
+            _ => continue,
+        }
+        let r = (arm.body)(it, b);
+        release(it, b, &arm.slots, &r);
+        return r;
+    }
+    Err(panic_ctl("no match arm matched value of type `Option`".to_string()))
+}
+
+/// An arm body that only reads its bindings `names`: no call, closure, reference or write through a
+/// place, and no binding assigned. What it reads through a binding cannot change while it runs, so the
+/// bound value itself (not a box the walker's `define` would make) is what every read sees.
+fn reads_only(e: E, names: &[&str]) -> bool {
+    match e {
+        Expression::Literal { .. } | Expression::Identifier { .. } => true,
+        Expression::Binary { left, right, .. } => reads_only(left, names) && reads_only(right, names),
+        Expression::Unary { op: UnaryOp::Deref | UnaryOp::Neg | UnaryOp::Not, operand, .. } => reads_only(operand, names),
+        Expression::FieldAccess { object, .. } => reads_only(object, names),
+        Expression::Block { statements, .. } => statements.iter().all(|s| stmt_reads_only(s, names)),
+        _ => false,
+    }
+}
+
+fn stmt_reads_only(s: &Statement<'static>, names: &[&str]) -> bool {
+    match s {
+        Statement::Expression { expr, .. } => reads_only(expr, names),
+        Statement::Assignment { target: Expression::Identifier { name, .. }, value, .. } => !names.contains(&name.as_str()) && reads_only(value, names),
+        Statement::If { condition, then_block, else_block, .. } => {
+            reads_only(condition, names)
+                && then_block.iter().all(|s| stmt_reads_only(s, names))
+                && else_block.iter().flatten().all(|s| stmt_reads_only(s, names))
+        }
+        _ => false,
     }
 }

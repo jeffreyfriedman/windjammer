@@ -6,7 +6,8 @@ Version 0.50.0 (pre-1.0: language and compiler behaviour can change between mino
 
 ## Start here
 
-- [Windjammer for agents](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/agent/WINDJAMMER_FOR_AGENTS.md): The edit-check-run loop, core idioms and pitfalls; every code block is executed in CI
+- [Windjammer for agents](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/agent/WINDJAMMER_FOR_AGENTS.md): The 2 KB sheet: types, idioms, input, the build loop; its code block is executed in CI
+- [Windjammer reference for agents](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/agent/WINDJAMMER_REFERENCE.md): The full guide behind the sheet (also searchable with `wj docs`); every code block is executed in CI
 - [CLI reference](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/cli.md): Every `wj` subcommand, generated from the clap definitions
 - [Backend support matrix](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/targets.md): Which backends pass how much of the conformance corpus (generated)
 
