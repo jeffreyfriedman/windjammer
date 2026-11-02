@@ -13,7 +13,7 @@ In: `Program` + analyzer output + registry. Out: a Rust source string.
 - Clone insertion is converging on the semantic layer (convergence plan C6): `move_at_last_use.rs` publishes the liveness fact (`ir::liveness`) to every reuse-clone query, so the last use of an owned binding always moves; "is it read again?" questions go to `read_after_current_statement` (the same fact), never to a statement scan.
 
 ## Owns
-Rust text emission: `expression_generation`, `statement` files, `function_generation_*`, `data_structure_generation`, `struct_field_coercion` (if-arm text tails for String fields), `list_literal_context` (ADR-0014 list-vs-array decision), `call_expression_generation/`, `ir_call_site`, `signature_promotion`.
+Rust text emission: `expression_generation`, `statement` files, `function_generation_*`, `data_structure_generation`, `method_receiver_resolution` (module function vs value method), `struct_field_coercion` (if-arm text tails for String fields), `list_literal_context` (ADR-0014 list-vs-array decision), `call_expression_generation/`, `ir_call_site`, `signature_promotion`.
 
 ## Never decides
 Cross-function ownership policy, numeric inference, module resolution.

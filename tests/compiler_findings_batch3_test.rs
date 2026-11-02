@@ -618,3 +618,66 @@ fn main() {
 "#,
     );
 }
+
+/// A local variable named like a std module (`fs`) is a value: method calls on it follow its type's
+/// signatures, not the module's functions of the same name.
+#[test]
+fn local_variable_named_like_a_std_module_follows_its_type() {
+    type_checks(
+        r#"pub struct Disk {
+    pub names: Vec<string>,
+    pub data: Vec<Vec<u8>>,
+}
+
+impl Disk {
+    pub fn new() -> Disk {
+        Disk { names: Vec::new(), data: Vec::new() }
+    }
+
+    pub fn append(self, name: string, bytes: Vec<u8>) -> bool {
+        self.names.push(name)
+        self.data.push(bytes)
+        true
+    }
+}
+
+pub fn test_append() {
+    let mut fs = Disk::new()
+    fs.append("k", vec![1, 2, 3])
+}
+"#,
+    );
+}
+
+/// Ownership (convergence): reading a `Copy` field of a parameter and passing it to a call
+/// (`same(db.last, 3)`, `assert_eq(db.last, 3)`) does not consume the parameter: it is borrowed, so the caller
+/// can use it again. (A field read in a comparison, or `db.items.len()`, already keeps the parameter borrowed.)
+#[test]
+fn copy_field_passed_as_call_argument_keeps_the_parameter_borrowed() {
+    let dir = write_project(&[(
+        "m.wj",
+        r#"pub struct Store {
+    pub items: Vec<u64>,
+    pub last: u64,
+}
+
+fn same(a: u64, b: u64) -> bool {
+    a == b
+}
+
+fn check(db: Store) -> bool {
+    same(db.last, 3)
+}
+
+fn main() {
+    let db = Store { items: vec![1, 1], last: 3 }
+    println(check(db))
+    println(check(db))
+}
+"#,
+    )]);
+    let o = Command::new(WJ).args(["build", "m.wj", "--no-cargo", "--output", "out"]).current_dir(dir.path()).output().unwrap();
+    assert!(o.status.success());
+    let rs = fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
+    assert!(rs.contains("fn check(db: &Store)"), "a Copy field read made the parameter owned:\n{rs}");
+}
