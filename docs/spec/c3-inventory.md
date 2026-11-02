@@ -178,3 +178,20 @@ modules were emitted a second time at file level; the name filter only saw the f
 Found on the way, not identity: a `pub fn f(v: Vec<int>)` that only reads `v` keeps an owned formal (D-OWN-PUB) and the
 caller does not clone a binding it uses again, so `let n = f(xs); let m = f(xs)` is E0382 (single file, no modules).
 Owner: C5 (OWN-PUB) with C6 (clone at the reusing call).
+
+## Still failing: homonyms across files (library multipass)
+
+A three-file project (`main.wj` with `mod a` / `mod b`; `a.wj` and `b.wj` each define `pub enum Shape` and
+`pub fn take`) runs correctly in the interpreter and fails compiled:
+
+- `let n = b::take([1, 2, 3])` is emitted `let n: Vec<i64> = b::take(..)`: the call takes `a::take`'s return type. In
+  the multipass merge (`library_multipass.rs`, convergence loop) a file's entries are compared with the global
+  registry by **bare** name and skipped as "passthrough" when ownership matches, so `b::take` never gets its own
+  module-qualified entry when the homonym differs only in types. Fix direction: compare and insert per
+  module-qualified key (the resolver path), keep the bare key as legacy.
+- `b::Shape::Circle(2)` (payload `int`) is emitted `2_i32`: the variant payload type is looked up by the bare enum
+  name. Width is C4's decider; the identity half (which `Shape`) is C3's. Repro shape: the
+  `enum_homonyms_across_modules` program split into files.
+
+Gate to add first: extend `tests/identity_corpus_test.rs` to directories (`<name>/main.wj` + modules), built with
+`wj build <dir> --no-cargo` and checked with `rustc main.rs`; then the multipass fix lands test-first.
