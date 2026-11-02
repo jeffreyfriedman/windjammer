@@ -96,9 +96,7 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
 }
 
 pub fn run(cli: Cli) -> Result<()> {
-    if let Some(done) = toolchain_pre(&cli.command) {
-        return done;
-    }
+    if let Some(done) = toolchain_pre(&cli.command) { return done }
     match cli.command {
         Commands::New { name, template } => {
             windjammer::cli::new::handle_new_command(&name, &template)

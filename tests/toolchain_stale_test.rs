@@ -91,7 +91,7 @@ fn inside_a_checkout_the_binary_is_measured_against_the_newest_commit_there() {
 #[test]
 fn a_binary_younger_than_thirty_days_pays_almost_nothing() {
     let Some(ts) = commit_ts() else { return };
-    let missing = std::env::temp_dir().join("wj-stale-hotpath-never-created");
+    let missing = std::env::temp_dir().join(format!("wj-stale-hotpath-{}", std::process::id()));
     std::env::set_var("WJ_CARGO_TARGET_ROOT", &missing);
     std::env::remove_var("WJ_NO_STALE_WARN");
     let id = identity::current();
