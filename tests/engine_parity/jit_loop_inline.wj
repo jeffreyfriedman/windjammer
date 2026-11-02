@@ -1,0 +1,110 @@
+// Struct locals and small methods inlined into machine-code loops: struct-returning and scalar
+// methods, nested calls, a method with `let`s, typed parameters and results that coerce, methods the
+// inliner refuses (a loop in the body), copies that keep their values, and a zero divisor
+// inside an inlined method, whose panic and backtrace come from the real call.
+struct V2 {
+    x: int,
+    y: int,
+}
+
+impl V2 {
+    fn add(self, o: V2) -> V2 {
+        V2 { x: self.x + o.x, y: self.y + o.y }
+    }
+    fn dot(self, o: V2) -> int {
+        self.x * o.x + self.y * o.y
+    }
+    fn twice(self) -> V2 {
+        self.add(self)
+    }
+    fn wrap(self, m: int) -> V2 {
+        let a = self.x % m
+        let b = self.y % m
+        V2 { x: a, y: b }
+    }
+    fn narrow(self) -> i32 {
+        (self.x % 1000) as i32
+    }
+    fn sum_to(self) -> int {
+        let mut s = 0
+        let mut k = 0
+        while k < self.x % 5 {
+            s += k
+            k += 1
+        }
+        s
+    }
+    fn shift(self, k: i32) -> i32 {
+        k * 2 + (self.y % 3) as i32
+    }
+    fn div(self, d: int) -> int {
+        self.x / d
+    }
+}
+
+struct F {
+    v: f64,
+    n: u8,
+}
+
+impl F {
+    fn scaled(self, k: f64) -> F {
+        F { v: self.v * k, n: self.n }
+    }
+    fn bump(self) -> u8 {
+        self.n + 1
+    }
+}
+
+fn main() {
+    let mut acc = V2 { x: 0, y: 0 }
+    let keep = acc
+    let mut s = 0
+    let mut w: i32 = 0
+    let mut i = 0
+    while i < 3000 {
+        let v = V2 { x: i % 13, y: i % 7 }
+        acc = acc.add(v).wrap(100003)
+        s += acc.dot(v) % 1000 + v.twice().x
+        w = acc.narrow()
+        s += acc.sum_to() + v.x
+        w = acc.shift(w % 1000)
+        i += 1
+    }
+    let mut f = F { v: 1.0, n: 3 }
+    let mut c: u8 = 0
+    let mut j = 0
+    while j < 500 {
+        f = f.scaled(1.001)
+        c = f.bump() % 7
+        j += 1
+    }
+    println("${acc.x} ${acc.y} ${s} ${w} ${keep.x} ${f.v} ${c}")
+    // a closure captures a struct `let` of the loop (its slot is boxed): each iteration's binding is
+    // its own, and a field machine code changes afterwards is what the closure reads
+    let mut seen = 0
+    let mut fns: Vec<fn() -> int> = Vec::new()
+    let mut m = 0
+    while m < 400 {
+        let mut u = V2 { x: m, y: 1 }
+        let get = || u.x * 10 + u.y
+        u.y = u.dot(u) % 9
+        seen += get()
+        if m % 100 == 0 { fns.push(get) }
+        u.x += 1
+        seen += get() % 7
+        m += 1
+    }
+    let mut late = 0
+    for g in fns {
+        late += g()
+    }
+    println("${seen} ${late}")
+    let mut t = 0
+    let mut k = 10
+    while k > -5 {
+        t += acc.div(k)
+        k -= 1
+    }
+    println("unreachable ${t}")
+}
