@@ -106,6 +106,8 @@ fn schedule_exploration_finds_the_lost_update_and_is_reproducible() {
 
 #[test]
 fn sleeping_threads_wake_in_deadline_order_on_the_virtual_clock() {
+    // a live `wj run` also waits the sleeps out in real time (ADR-0021): the threads sleep together, so the run
+    // waits for the latest deadline once, not for the sum of the sleeps
     let src = r#"
 use std::sync::mpsc
 use std::thread
@@ -131,7 +133,7 @@ fn main() {
     let t0 = std::time::Instant::now();
     let o = run(src, &[]);
     assert_eq!(o.stdout, "woke 100\nwoke 200\nwoke 300\nslept true\n", "{}", o.stderr);
-    assert!(t0.elapsed() < std::time::Duration::from_secs(5), "virtual sleep must not wait in real time");
+    assert!(t0.elapsed() < std::time::Duration::from_secs(5), "concurrent sleeps must overlap, not add up");
 }
 
 #[test]
