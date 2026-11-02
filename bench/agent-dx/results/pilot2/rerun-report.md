@@ -6,9 +6,9 @@
 
 | arm | name | trials | context pack |
 |---|---|---|---|
-| A | interpreted-first | 20 | yes |
-| B | compiled-first | 21 | yes |
-| D | interpreted+final-build | 19 | yes |
+| A | interpreted-first | 20 | WINDJAMMER_REFERENCE.md |
+| B | compiled-first | 21 | WINDJAMMER_REFERENCE.md |
+| D | interpreted+final-build | 19 | WINDJAMMER_REFERENCE.md |
 
 ## Arm means
 
@@ -73,7 +73,7 @@
 
 ## Interpreter vs compiled divergence
 
-15 of 60 trials had an interpreted hidden-oracle result different from the compiled one (11 silent: interpreter green, compiled red).
+15/60 trials had an interpreted hidden-oracle result different from the compiled one (11 silent: interpreter green, compiled red).
 - t006_base_convert arm A trial 0: interp=True compiled=False
 - t006_base_convert arm A trial 1: interp=True compiled=False
 - t009_rpn_eval arm A trial 1: interp=True compiled=False
@@ -84,6 +84,24 @@
 - t018_word_freq arm A trial 1: interp=True compiled=False
 - t022_csv_parse arm D trial 0: interp=True compiled=False
 - t030_bank_ledger arm A trial 0: interp=True compiled=False
+
+## Paired differences versus control B (task-clustered 95% CI)
+
+| metric | A - B | D - B |
+|---|---|---|
+| pass@1 (compiled hidden oracle) | -0.452 [-0.750, -0.159] | -0.058 [-0.294, 0.139] |
+| verify calls (wj check/run/test/build) | -0.1 [-0.8, 0.6] | 2.3 [0.9, 3.7] |
+| verify calls to green (passing trials) | -0.7 [-1.2, -0.3] | 1.6 [0.3, 2.9] |
+| agent turns | -1.6 [-2.9, -0.5] | -1.3 [-3.4, 0.8] |
+| tokens in (incl. cache) | -12366.7 [-23202.3, -3764.4] | 12630.2 [-11500.4, 38922.5] |
+| tokens out | -326.3 [-670.1, -88.1] | -1072.0 [-1698.9, -513.0] |
+| cost USD | -0.007 [-0.019, 0.003] | 0.031 [0.015, 0.046] |
+| wall seconds | -47.7 [-70.5, -26.4] | 383.4 [290.7, 479.4] |
+| agent-thinking seconds (API time) | -3.9 [-10.7, 0.3] | 22.5 [13.1, 31.9] |
+| tool-wait seconds (wj commands) | -40.9 [-57.1, -26.1] | 333.7 [243.5, 426.9] |
+| harness permission denials (should be 0) | -0.0 [-0.2, 0.0] | -0.0 [-0.2, 0.0] |
+| capability denials seen (WJ004x) | 0.0 [0.0, 0.0] | 0.0 [0.0, 0.0] |
+| silent divergence (interp pass, compiled fail) | 0.450 [0.200, 0.750] | 0.105 [0.000, 0.294] |
 
 Mode violations (agent used the other arm's loop commands): 0.
 

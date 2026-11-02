@@ -1,5 +1,6 @@
 ---
-status: proposal
+status: current
+last_verified: a13878ea351e
 ---
 # Making Windjammer the language agents prefer
 
@@ -111,7 +112,7 @@ conservative per-turn assumptions; the calibrated estimate is $14). Intervals ar
 | silent divergence (interpreter green, compiled red) | 0.43 | 0 | 0.43 [0.17, 0.70] |
 
 Reading: H1 holds for speed and tokens (about 40% fewer input tokens, a quarter of the wall time) and fails for correctness
-as the compiler and interpreter stand today: 13 of 30 interpreted-first programs ran correctly in the interpreter and did not
+as the compiler and interpreter stand today: 13/30 interpreted-first programs ran correctly in the interpreter and did not
 build, mostly from integer-width literal typing (`docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md`) and a method
 the interpreter accepts but rustc lacks (t018 fails in both arms). The path to H1 is therefore R2/R5 of
 `interpreter-primary-readiness.md` (check-vs-build parity), plus a third arm A' (interpreted-first with one `wj build` before

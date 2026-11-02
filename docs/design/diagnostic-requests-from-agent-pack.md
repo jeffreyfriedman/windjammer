@@ -1,5 +1,6 @@
 ---
-status: proposal
+status: current
+last_verified: a13878ea351e
 ---
 # Diagnostic change requests from the agent pack
 
@@ -15,7 +16,7 @@ agent untranslated: `error[E0308]: mismatched types --> main.rs:60:17`, a genera
 Request: capture cargo with `--message-format=json` in `run.rs` and render through the same `ErrorMapper` + `diagnostics::rustc_text::translate`
 path as `wj build`, mapping spans back to the `.wj` file via the source map. Test: a `tests/` case running `wj run --compiled` on the R1 repro
 and asserting stderr contains `WJ0003` and `.wj:` and does not contain `main.rs` or `rustc --explain`.
-Evidence: 74 of 240 trials contained a raw `main.rs` span and 62 a `rustc --explain` line in a tool result.
+Evidence: 74/240 trials contained a raw `main.rs` span and 62 a `rustc --explain` line in a tool result.
 
 ## R1. `usize` / `int` width hint (pack tip: "`len()` is `usize` when compiled: `v.len() as int`")
 
@@ -38,7 +39,7 @@ Same hint for the E0277 `can't compare` / `cannot add` forms (`Some("E0277")` ar
 match `msg` containing `can't compare` or `cannot add` with a `usize`/`i32`/`i64` pair and use the same help. Also wire `wj explain WJ0003` (`src/error_catalog.rs`
 E0308 entry, around line 125, whose solutions list is about string/int conversion) to include the `as int` example.
 Tests: extend `rustc_text.rs` unit tests (`type_spellings_are_translated` style): `translate(Some("E0308"), "mismatched types", Some("expected `i64`, found `usize`")).help` contains `as int`; E0277 `can't compare `usize` with `i32``.
-Pilot evidence: 6 trials show it in recorded output (pilot 2 stored only message heads), 9 of 12 re-built interpreted-first failures in pilot 2 (`docs/known-issues/agent-dx-compiled-len-to-int-binding.md`).
+Pilot evidence: 6 trials show it in recorded output (pilot 2 stored only message heads), 9/12 re-built interpreted-first failures in pilot 2 (`docs/known-issues/agent-dx-compiled-len-to-int-binding.md`).
 Better still: lower `len()` into an `int` binding with the cast in codegen so the error never fires; the hint is the fallback.
 
 ## R2. `string` / `char` / `&str` mismatch hint (pack tips: "use `string`, never `String`", "literals need no `.to_string()`")
@@ -57,7 +58,7 @@ Change in the same E0308 arm of `rustc_text.rs`: when the raw pair contains `cha
 `` `char` and `string` are different types: use `c.to_string()` to make a string from a character, or `s.chars()` to walk a string ``.
 When the expected type is `()` and the found type is `String`/`&str` (seen in 5 trials: an `if` branch whose value is dropped), set help to
 `` a block's value is its last expression: an `if` without `else` has no value, so add an `else` branch or end the branch with a statement ``.
-Tests: two new `translate` cases as above. Evidence: 23 of 240 trials carried a String/`&str`/`char` mismatch (pilot 3 arm T, with no `wj docs`, hit it in 7 of 30).
+Tests: two new `translate` cases as above. Evidence: 23/240 trials carried a String/`&str`/`char` mismatch (pilot 3 arm T, with no `wj docs`, hit it in 7/30).
 
 ## R3. `collect` element type (pack tip: none; agents learned it from the error)
 
@@ -84,7 +85,7 @@ Today: `a value of type `Vec<String>` cannot be built from an iterator over elem
 Change: in the `Some("E0277")` arm, match `msg.contains("cannot be built from an iterator over elements of type")` first and emit
 message `` cannot collect `&str` items into `Vec<string>` `` with help `` the iterator yields borrowed text: add `.map(|s| s.to_string())` before `.collect()` ``.
 Better: fix the lowering (`.collect::<Vec<string>>()` and `trim().split(..).collect()` should insert the owning map; the plain `let p: Vec<string> = s.split(" ").collect()` already does).
-Tests: `translate` unit test plus the two repros as compiled corpus programs. Evidence: 19 of 240 trials.
+Tests: `translate` unit test plus the two repros as compiled corpus programs. Evidence: 19/240 trials.
 
 ## R4. Lint messages already carry the fix (no change; pack can drop the "never `&`, `.iter()`, `.unwrap()`" detail)
 

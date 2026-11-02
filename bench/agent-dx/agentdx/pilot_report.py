@@ -86,7 +86,7 @@ def build_report(trials, n_boot=2000, prev=None):
         md.append(f"| {c} | " + " | ".join(str(cats[a][c]) for a in arms) + " |")
     div = [t for t in trials if t["divergence"]["diverged"]]
     md += ["", "## Interpreter vs compiled divergence", "",
-           f"{len(div)} of {len(trials)} trials had an interpreted hidden-oracle result different from the compiled one "
+           f"{len(div)}/{len(trials)} trials had an interpreted hidden-oracle result different from the compiled one "
            f"({sum(t['divergence']['silent'] for t in trials)} silent: interpreter green, compiled red)."]
     for t in div[:10]:
         md.append(f"- {t['task']} arm {t['arm']} trial {t['trial']}: interp={t['divergence']['interp_pass']} compiled={t['divergence']['compiled_pass']}")
