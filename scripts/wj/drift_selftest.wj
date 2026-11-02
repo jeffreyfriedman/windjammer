@@ -23,6 +23,14 @@ fn run_ledger(wj: string, results: string, ledger: string, extra: string, envs: 
     }
 }
 
+fn run_probe(wj: string, engine: string) -> string {
+    let cmd = "cd tests/drift_corpus/engine_probe && WJ_TEST_ENGINE=${engine} ${quote(wj)} test --interpret 2>&1; echo \"exit=$?\""
+    match sh(cmd) {
+        Ok(r) => r.stdout,
+        Err(e) => "error ${e}",
+    }
+}
+
 struct Check {
     name: string,
     out: string,
@@ -61,6 +69,10 @@ fn main() {
     let split2 = "kept\tpass\tfail\tpass\nb\tpass\tfail\tpass\n"
     checks.push(Check { name: "ledger growth fails", out: run_ledger(wj, split2, grown, "--base-ledger ${DIR}/b.txt", ""), exit: 1, needle: "grew      b" })
     checks.push(Check { name: "growth can be recorded", out: run_ledger(wj, split2, grown, "--base-ledger ${DIR}/b.txt", "DRIFT_ALLOW_GROWTH=1"), exit: 0, needle: "" })
+    // WJ_TEST_ENGINE must really switch engines: the probe passes under the walker and fails under the
+    // resolved engine, or the corpus would compare an engine with itself
+    checks.push(Check { name: "the walker runs the engine probe", out: run_probe(wj, "walker"), exit: 0, needle: "1 passed" })
+    checks.push(Check { name: "the resolved engine runs the engine probe", out: run_probe(wj, "resolved"), exit: 1, needle: "1 failed" })
     let mut bad = 0
     for c in checks {
         let v = verdict(c)
