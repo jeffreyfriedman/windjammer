@@ -969,10 +969,9 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}_i64", i);
                 }
                 // NUM-LITERAL-WIDTH: the solver fixed this literal's width from its uses.
-                if let Some(base) = self.current_ir_function.as_ref().and_then(|f| {
-                    crate::ir::numeric_defaults::literal_key(expr).and_then(|k| f.literal_widths.get(&k))
-                }) {
-                    let suffix = if matches!(base, crate::ir::safety_type::BaseType::I32) { "i32" } else { "i64" };
+                if let Some(suffix) =
+                    self.solver_literal_width(expr).and_then(crate::codegen::rust::solver_widths::rust_int_name)
+                {
                     return format!("{}_{}", i, suffix);
                 }
                 use crate::type_inference::IntType;

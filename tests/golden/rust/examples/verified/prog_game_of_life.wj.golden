@@ -19,9 +19,9 @@ fn neighbors(g: &Vec<Vec<bool>>, r: i64, c: i64) -> i64 {
 #[inline]
 fn render(g: &Vec<Vec<bool>>) -> String {
     let mut rows: Vec<String> = vec![];
-    for r in 0_i32..5_i32 {
+    for r in 0_usize..5_usize {
         let mut s = String::new();
-        for c in 0_i32..5_i32 {
+        for c in 0_usize..5_usize {
             s = s + &{
                 if g[(r as usize)][(c as usize)] {
                     String::from("#")

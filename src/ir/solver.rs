@@ -30,6 +30,8 @@ pub struct SolverResult {
     /// Variables whose type is the numeric default (ADR-0015 `int`/`float`), not a width some use
     /// fixed. Indexed by variable.
     pub defaulted: Vec<bool>,
+    /// Union-find class of each variable (an opaque id; equal ids mean one class).
+    pub class_of: Vec<u32>,
 }
 
 /// A diagnostic emitted by the solver.
@@ -252,7 +254,9 @@ impl Solver {
             .collect();
 
         let defaulted: Vec<bool> = (0..n).map(|v| self.defaulted_roots.contains(&self.uf.find(v))).collect();
+        let class_of: Vec<u32> = (0..n).map(|v| self.uf.find(v)).collect();
         SolverResult {
+            class_of,
             defaulted,
             types,
             ownership: self.ownership,
@@ -513,7 +517,7 @@ fn is_numeric_type(ty: &BaseType) -> bool {
     is_integer_type(ty) || is_float_type(ty)
 }
 
-fn is_integer_type(ty: &BaseType) -> bool {
+pub(crate) fn is_integer_type(ty: &BaseType) -> bool {
     matches!(
         ty,
         BaseType::I8
