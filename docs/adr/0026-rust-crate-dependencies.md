@@ -8,7 +8,7 @@ last_verified: cd2d3eb9c11c
 - **Date:** 2026-11-02
 - **Related:** [ADR-0012](0012-rust-interop-boundary.md) (interop boundary, option A), [ADR-0021](0021-effects-and-capabilities.md) §11 (externs and crates),
   [ADR-0022](0022-interpret-by-default.md) (interpret by default), [ADR-0023](0023-interpreter-rust-crate-bridge.md) (host bridge),
-  `src/rust_crates/`, `src/config.rs`, `src/cargo_toml/dependency_management.rs`, `src/compiler/compilation_pipeline.rs`,
+  `src/package/rust_surface.rs`, `src/check/rust_calls.rs`, `src/compiler/rust_surface_metadata.rs`, `src/ir/effect_facts/crates.rs`, `src/config.rs`, `src/cargo_toml/dependency_management.rs`, `src/compiler/compilation_pipeline.rs`,
   `src/check/project.rs`, `src/ir/effect_facts/analysis.rs`, `src/interpreter/preflight.rs`, `src/ejector.rs`
 
 ## Context
@@ -50,7 +50,7 @@ Pros: one syntax, reviewable, works offline, deterministic, can be generated. Co
 ### B. Read the crate's rustdoc JSON at build time
 Pros: no hand-written file. Cons: needs a nightly toolchain and a crate download at check time, makes `wj check`
 slow and network-dependent, and Rust signatures (generics, lifetimes, traits) do not map to Windjammer types
-automatically. Better as a **generator** for A (`wj rust-surface strsim`) than as the source of truth.
+automatically. Better as a **generator** for A (a proposed `rust-surface` subcommand) than as the source of truth.
 
 ### C. Trust the call (today's behaviour, minus `compile_error!`)
 Emit the call verbatim and let rustc judge. Pros: zero work. Cons: errors arrive as rustc text about generated code,
@@ -114,7 +114,7 @@ Rejected by ADR-0012 and ADR-0014: leaks Rust into the surface, defeats checking
 
 ## Next (ambition ladder)
 1. `wj check` warning for calls into crates without a surface, then an error once the generator exists.
-2. Generator: `wj rust-surface <crate>` from rustdoc JSON for the functions whose signatures map (scalars, `&str`,
+2. Generator: a `rust-surface` subcommand that writes `rust/<crate>.wji` from rustdoc JSON for the functions whose signatures map (scalars, `&str`,
    `String`, `Vec`, `Option`, `Result`); first experiment `strsim`, `hex`, `itoa`; kill criterion: fewer than 80% of
    the public free functions of five popular small crates map without hand edits.
 3. Host-bridge shims generated from surfaces (scalars and strings, ADR-0023's ABI), so surfaced crates run
