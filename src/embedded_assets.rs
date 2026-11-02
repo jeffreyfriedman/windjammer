@@ -43,23 +43,12 @@ impl Asset {
     }
 }
 
-static ROOT_PROVIDER: std::sync::OnceLock<fn() -> PathBuf> = std::sync::OnceLock::new();
-
-/// Let the driver choose a persistent cache root (the `wj` binary passes `cargo_cache::cache_root`).
-/// The embedded runtime then lives next to its compiled artifacts and survives OS temp-dir purges,
-/// which would otherwise force a full runtime rebuild. Core code reads no env vars itself.
-pub fn set_cache_root_provider(provider: fn() -> PathBuf) {
-    let _ = ROOT_PROVIDER.set(provider);
-}
-
-/// Cache root: the driver-provided persistent root when registered, else the OS temp dir (never
-/// the cwd or the build checkout). If the dir is unwritable, [`materialize`] falls back to a
-/// private per-process dir.
+/// Default cache root: the OS temp dir (never the cwd or the build checkout). Drivers that want a
+/// persistent root (the compiled runtime lives next to its build artifacts and must survive OS temp
+/// purges) call [`materialize_in`]. If the dir is unwritable, materializing falls back to a private
+/// per-process dir.
 fn cache_root() -> PathBuf {
-    match ROOT_PROVIDER.get() {
-        Some(p) => p().join("embedded"),
-        None => std::env::temp_dir().join("wj-embedded"),
-    }
+    std::env::temp_dir().join("wj-embedded")
 }
 
 /// The runtime crate's manifest inherits `version`/`authors`/`license` from the compiler
@@ -126,7 +115,12 @@ fn content_hash(table: &[(&str, &[u8])]) -> u64 {
 /// Materialize `asset` and return its directory. Idempotent and safe under concurrent
 /// `wj` processes (write to a private temp sibling, then rename into place).
 pub fn materialize(asset: Asset) -> std::io::Result<PathBuf> {
-    let dir = cache_root().join(cache_dir_name(asset.slug(), env!("CARGO_PKG_VERSION"), asset.hash()));
+    materialize_in(asset, &cache_root())
+}
+
+/// [`materialize`] under an explicit cache root.
+pub fn materialize_in(asset: Asset, root: &Path) -> std::io::Result<PathBuf> {
+    let dir = root.join(cache_dir_name(asset.slug(), env!("CARGO_PKG_VERSION"), asset.hash()));
     if dir.join(".complete").is_file() {
         return Ok(dir);
     }
