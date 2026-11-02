@@ -78,6 +78,18 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | ADR-0028 step 1: usize class (NUM-USIZE) | 49bce0147 | 0 | ~120 | 81 -> 69 |
 | ADR-0028 step 2: width facts read by codegen | 911b99fe8 | ~20 | ~300 | 65 -> 60; narrowing casts 14 -> 12 |
 | ADR-0028 step 3: NUM-USIZE-TO-INT, variant payloads, tail-cast helper | aa0bbcebe | 50 | ~150 | 60 -> 58; narrowing casts 12 -> 11; rustc rejects 93 -> 91 |
+| ADR-0028: lexical scoping (per-binding vars) | c1df05cfb | 0 | ~70 | 58 -> 58 (no corpus program shadows a width-carrying name) |
+| ADR-0028: delete five never-firing W5 sites | 3c6a01667 | 106 | 1 | 58 -> 58 |
+
+### Kill criterion reached (2026-11-02, wt/c4-usize2)
+
+Two consecutive steps did not lower D-WIDTH-OWNERS (58). The 58 findings are: 25 `i64 -> i32` locals in
+*defaulted* classes (the solver says `int`, the legacy paint says i32), 3 `f64 -> f32` (float, out of C4 scope) and about
+29 compound types the meter still compares by spelling (`Custom("Stack")` vs `Stack<i64>`, `Vec(Tuple(..))` vs
+`Vec<(..)>`, `HashMap` vs `BTreeMap`, a type alias). Publishing the defaulted classes (experiment, env-gated, not
+committed) makes rustc reject 31 more goldens: the solver does not yet model closure parameters, collection element
+types or std method arguments, so the legacy paint still has information the solver lacks. Next: model those three
+uses, then publish defaulted classes; separately, normalise generic arguments in the meter.
 
 ### Why the width-deletion step did not move D-WIDTH-OWNERS (kill criterion, 2026-11-02)
 

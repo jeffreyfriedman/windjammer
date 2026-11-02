@@ -67,12 +67,32 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> HashSet<u32>
             held.extend(view.class(v));
         }
     }
+    // A name the walk met without a binding (a constant, a global, a closure parameter) is not named
+    // by the facts; with lexical scoping every `let`/`for` binding has its own variable.
+    let bound: HashSet<&str> = fc.binding_vars.iter().map(|(n, _)| n.as_str()).collect();
     for (name, v) in &fc.var_map.locals {
-        if !fc.single_binding_locals.contains(name) {
+        if !bound.contains(name.as_str()) {
             held.extend(view.class(*v));
         }
     }
+    // Bindings of one name with different widths cannot be named by one fact: their classes stay legacy.
+    for (_, widths) in binding_widths(fc, &view) {
+        if widths.iter().any(|w| w.1 != widths[0].1) {
+            held.extend(widths.iter().filter_map(|(v, _)| view.class(*v)));
+        }
+    }
     held
+}
+
+/// Each binding's solved width, grouped by name (`None` for a defaulted or non-integer binding).
+fn binding_widths(fc: &FunctionConstraints, view: &View<'_>) -> std::collections::BTreeMap<String, Vec<(ConstraintVar, Option<BaseType>)>> {
+    let mut out: std::collections::BTreeMap<String, Vec<(ConstraintVar, Option<BaseType>)>> = Default::default();
+    for (name, v) in &fc.binding_vars {
+        let defaulted = view.result.defaulted.get(v.0 as usize).copied().unwrap_or(true);
+        let w = if defaulted { None } else { view.int_type(*v) };
+        out.entry(name.clone()).or_default().push((*v, w));
+    }
+    out
 }
 
 pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFunction) {
@@ -89,8 +109,14 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
         if !defaulted && matches!(result.types.get(var.0 as usize), Some(Some(BaseType::I64))) {
             ir_fn.solver_i64_locals.insert(name.clone());
         }
-        if let Some(base) = view.published(var) {
-            ir_fn.solver_local_widths.insert(name.clone(), base);
+    }
+    // NUM-LOCAL-WIDTH: a name all of whose bindings the solver fixed to one width.
+    for (name, widths) in binding_widths(fc, &view) {
+        let ws: Vec<Option<BaseType>> = widths.iter().map(|(v, _)| view.published(*v)).collect();
+        if let Some(Some(w)) = ws.first() {
+            if ws.iter().all(|x| x.as_ref() == Some(w)) {
+                ir_fn.solver_local_widths.insert(name, w.clone());
+            }
         }
     }
     // NUM-USIZE-TO-INT: an index source in a class of another width is converted where it is produced.
@@ -159,11 +185,19 @@ mod tests {
         assert_eq!(f.usize_conversions.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?}", f.usize_conversions);
     }
 
-    /// A shadowed local cannot be named by a fact, so its class is held.
+    /// Rebinding a name in a later scope (`for j in ..` then `let mut j = ..`) is a separate class;
+    /// both bindings fix one width, so the name is published.
     #[test]
-    fn shadowed_local_class_is_held() {
-        let f = facts("pub fn f(n: i32) -> i32 {\n    let x = 1\n    let x = x + n\n    x\n}\n", "f");
-        assert!(f.solver_local_widths.get("x").is_none());
-        assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
+    fn rebound_name_with_one_width_is_published() {
+        let f = facts("pub fn f(v: Vec<int>) -> int {\n    let mut s = 0\n    for j in 0..v.len() {\n        s = s + v[j]\n    }\n    let mut i = 0\n    while i < v.len() {\n        let mut j = i + 1\n        while j < v.len() {\n            j = j + 1\n        }\n        i = i + 1\n    }\n    s\n}\n", "f");
+        assert_eq!(f.solver_local_widths.get("j"), Some(&BaseType::Usize), "{:?}", f.solver_local_widths);
+        assert_eq!(f.solver_local_widths.get("i"), Some(&BaseType::Usize));
+    }
+
+    /// Bindings of one name with different widths cannot be named by one fact: held.
+    #[test]
+    fn rebound_name_with_two_widths_is_held() {
+        let f = facts("pub fn f(n: i32, v: Vec<int>) -> i32 {\n    let x = n + 1\n    let mut k = 0\n    while k < v.len() {\n        k = k + 1\n    }\n    let x = k\n    n\n}\n", "f");
+        assert!(f.solver_local_widths.get("x").is_none(), "{:?}", f.solver_local_widths);
     }
 }

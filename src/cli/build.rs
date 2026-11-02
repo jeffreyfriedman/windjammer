@@ -83,7 +83,8 @@ pub fn execute(
     // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
     let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
     // ADR-0021 E4b: the calls of `durable fn`s that are journaled steps
-    let config = config.with_durable_steps(crate::check::durable_sites::discover(path).map_err(anyhow::Error::msg)?);
+    let (steps, reads) = crate::check::durable_sites::discover_split(path).map_err(anyhow::Error::msg)?;
+    let config = config.with_durable_steps(steps).with_durable_read_steps(reads);
 
     if target_str.eq_ignore_ascii_case("rust") {
         if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
