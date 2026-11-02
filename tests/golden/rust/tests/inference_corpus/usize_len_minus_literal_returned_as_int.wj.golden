@@ -1,0 +1,18 @@
+#[inline]
+fn pieces(text: String) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    out.push(text.clone());
+    out.push(text);
+    out
+}
+
+#[inline]
+fn gaps(text: String) -> i64 {
+    let parts: Vec<String> = pieces(text);
+    (parts.len() as i64) - 1_i64
+}
+
+fn main() {
+    println!("{}", gaps("a".to_string()));
+}
+
