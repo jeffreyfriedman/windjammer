@@ -131,13 +131,6 @@ impl<'a> ProgramLookup<'a> {
         })
     }
 
-    fn declares_pub_vec_formal_at(&self, callee_key: &str, param_idx: usize) -> bool {
-        let Some(decl) = self.pub_free_fn(callee_key) else {
-            return false;
-        };
-        non_self_param(&decl.parameters, param_idx).is_some_and(|p| is_vec_container_type(&p.type_))
-    }
-
     fn function_body(
         &self,
         registry_key: &str,
@@ -191,10 +184,6 @@ fn promote_callees_from_bare_pass_callers_inner(
         }
         apply_bare_pass_hint(registry, &callee_key, param_idx, mode);
     }
-    // Undo MutBorrowed on Custom formals that only forward fields into callees
-    // (`to_response(reply) { base_response(reply.status, reply.body) }`). Those must
-    // stay owned moves — `&mut HttpReply` cannot move `reply.body`.
-    restore_owned_field_forward_formals(registry, programs);
     restore_pub_owned_non_copy_api_formals_with_cache(registry, programs, &cache);
     // wrappers that forward bare into owned FFI/`Vec` formals must
     // stay owned — demoting to `&Vec` then bare-passing into `*_ffi(Vec)` is E0308.
@@ -496,94 +485,6 @@ fn restore_pub_owned_non_copy_api_formals_with_cache(
                     new_sig.param_types[idx] = owned_ty.clone();
                 }
                 if new_sig.formal_param_types.len() > idx {
-                    new_sig.formal_param_types[idx] = owned_ty;
-                }
-            }
-            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
-                if flags.len() > idx {
-                    flags[idx] = false;
-                }
-            }
-            changed = true;
-        }
-        if changed {
-            registry.signatures.insert(key.clone(), new_sig.clone());
-            if let Some(bare) = key.rsplit("::").next() {
-                if bare != key.as_str() && registry.signatures.contains_key(bare) {
-                    registry.signatures.insert(bare.to_string(), new_sig);
-                }
-            }
-        }
-    }
-}
-
-/// When a formal was demoted to `MutBorrowed` but the body only forwards `param.field`
-/// into call arguments, restore owned `T` (HTTP adapter / consume-via-fields pattern).
-pub fn restore_owned_field_forward_formals(
-    registry: &mut SignatureRegistry,
-    programs: &[&Program],
-) {
-    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
-    for key in keys {
-        let Some(sig) = registry.get_signature(&key).cloned() else {
-            continue;
-        };
-        let n = sig.param_ownership.len();
-        let mut changed = false;
-        let mut new_sig = sig.clone();
-        for idx in 0..n {
-            // MutBorrowed field-forwards + Borrowed field-moves (`csr.neighbors`).
-            if !matches!(
-                new_sig.param_ownership.get(idx),
-                Some(OwnershipMode::MutBorrowed | OwnershipMode::Borrowed)
-            ) {
-                continue;
-            }
-            let formal_ty = new_sig
-                .formal_param_types
-                .get(idx)
-                .or_else(|| new_sig.param_types.get(idx));
-            let Some(formal_ty) = formal_ty else {
-                continue;
-            };
-            let bare = match formal_ty {
-                Type::Custom(name) => name.clone(),
-                Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
-                    Type::Custom(name) => name.clone(),
-                    _ => continue,
-                },
-                _ => continue,
-            };
-            if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
-                continue;
-            }
-            let Some((param_name, body)) = find_function_body_for_registry_key(programs, &key, idx)
-            else {
-                continue;
-            };
-            // Do not restore from Let field moves alone (`let name = tree.nodes[i].name`).
-            // Analyzer already keeps Owned for consuming field moves; text field lets are
-            // cloned from `&T`. Using Let moves here undid Borrowed BT ticks.
-            if !(param_forwards_fields_in_call_args_only(body, param_name)
-                || param_stored_in_struct_literal(body, param_name)
-                || param_whole_binding_returned(body, param_name)
-                || param_moved_into_let_binding(body, param_name)
-                || param_used_only_as_match_scrutinee(body, param_name)
-                || param_has_non_let_field_or_index_move(body, param_name))
-            {
-                continue;
-            }
-            new_sig.param_ownership[idx] = OwnershipMode::Owned;
-            let owned_ty = Type::Custom(bare);
-            if new_sig.param_types.len() > idx {
-                new_sig.param_types[idx] = owned_ty.clone();
-            }
-            if new_sig.formal_param_types.len() > idx {
-                // Keep AST formal as the bare Custom when present.
-                if matches!(
-                    new_sig.formal_param_types[idx],
-                    Type::Reference(_) | Type::MutableReference(_)
-                ) {
                     new_sig.formal_param_types[idx] = owned_ty;
                 }
             }
@@ -1105,35 +1006,6 @@ fn put_version(store: Store) -> Store {
     }
 
     #[test]
-    fn restore_undoes_preexisting_mut_borrow_on_let_mut_rebind_consume() {
-        let program = parse_program(
-            r#"
-struct Store { n: int }
-fn put_version(store: Store) -> Store {
-    let mut out = store
-    out.n = out.n + 1
-    out
-}
-"#,
-        );
-        let mut registry = SignatureRegistry::new();
-        let mut sig = owned_custom_sig("put_version", "Store");
-        sig.param_ownership[0] = OwnershipMode::MutBorrowed;
-        sig.param_types[0] = Type::MutableReference(Box::new(Type::Custom("Store".into())));
-        registry.signatures.insert("put_version".to_string(), sig);
-        let programs = vec![program];
-        let copy_types = std::collections::HashSet::new();
-        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
-        let out = registry.signatures.get("put_version").unwrap();
-        assert_eq!(
-            out.param_ownership[0],
-            OwnershipMode::Owned,
-            "restore must undo MutBorrowed let-mut-rebind consume; got {:?}",
-            out.param_ownership
-        );
-    }
-
-    #[test]
     fn bare_pass_skips_custom_field_call_arg_move_p3583() {
         let types = parse_program(
             r#"
@@ -1266,42 +1138,6 @@ fn base_response(status: u16, body: string) -> int {
             OwnershipMode::Owned,
             "field-forward HttpReply helper must stay owned, got {:?}",
             sig.param_ownership
-        );
-    }
-
-    #[test]
-    fn restore_undoes_preexisting_mut_borrow_on_field_forward() {
-        let program = parse_program(
-            r#"
-struct HttpReply { status: u16, body: string }
-fn to_response(reply: HttpReply) -> int {
-    let resp = base_response(reply.status, reply.body)
-    resp
-}
-fn base_response(status: u16, body: string) -> int {
-    status
-}
-"#,
-        );
-        let mut registry = SignatureRegistry::new();
-        let mut sig = owned_custom_sig("to_response", "HttpReply");
-        sig.param_ownership[0] = OwnershipMode::MutBorrowed;
-        sig.param_types[0] = Type::MutableReference(Box::new(Type::Custom("HttpReply".into())));
-        registry.signatures.insert("to_response".to_string(), sig);
-        let programs = vec![program];
-        let copy_types = std::collections::HashSet::new();
-        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
-        let out = registry.signatures.get("to_response").unwrap();
-        assert_eq!(
-            out.param_ownership[0],
-            OwnershipMode::Owned,
-            "restore must undo MutBorrowed field-forward formal; got {:?}",
-            out.param_ownership
-        );
-        assert!(
-            matches!(out.param_types[0], Type::Custom(ref n) if n == "HttpReply"),
-            "param type must unwrap to owned HttpReply; got {:?}",
-            out.param_types[0]
         );
     }
 
@@ -3768,7 +3604,6 @@ fn resolve_struct_field_type(owner_ty: &Type, field: &str, programs: &[&Program]
 }
 
 /// Field/index moves in return/expression position (not `let` bindings).
-/// Used by `restore_owned_field_forward_formals` so text field lets do not undo Borrowed.
 fn param_has_non_let_field_or_index_move(body: &[&Statement], param_name: &str) -> bool {
     body.iter()
         .any(|stmt| stmt_has_non_let_field_move(stmt, param_name))

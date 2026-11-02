@@ -131,10 +131,10 @@ eight, the compiled form failed six (rustc rejected the emitted Rust):
 | 7 | `find_signature_ending_with` (first homonym) | `find_unique_signature_ending_with`; homonyms stay unresolved | 12 of 14 callers cut over; `auto_clone.rs` (2) belongs to the C6 stream; delete the API when those go |
 | 8 | `find_delegation_callee` (first homonym with the same arity) | none (no caller) | deleted |
 | 9 | `resolve_callee_signature` first-match branch (`constraint_gen`, `storage_tracking`) | none | deleted |
-| 10 | `get_signature(name)` for **C** sites | `CallResolution` table (`ExprKey -> Res`) in the session; `Def::path` is the registry key | not started: needs the registry built from resolver paths for every file (multi-file keys are `module::fn` from `library_multipass` today) |
+| 10 | `get_signature(name)` for **C** sites | resolver table (callee expression -> `Def::path`), the registry key | started: single-file programs resolve every plain call (`same_crate_callee.rs`, `CallResolution::callee_key`), goldens unchanged. Next: the multipass driver installs the project-wide table, then the name-based steps of `resolve_call_signature` are deleted |
 | 11 | **Q** sites building `"{Type}::{method}"` | `(impl DefId, method)` | not started; blocked on receiver types (the resolver has impls, not expression types) |
-| 12 | **D** sites (definition looks itself up by name) | the definition's own identity | started (#6); 38 sites |
-| 13 | `multipass_bare_pass_demotion.rs` (one promote pass, six `restore_*` passes) | solver-native cross-file ownership per call-graph SCC (C5 iteration note) | blocked: the convergence gates cover single-file programs only, and these passes run only in `library_multipass` (multi-file builds). First add a multi-file golden corpus (gate 1 over projects, rustc on the generated crate, interpreter output), then prove per pass what it protects |
+| 12 | **D** sites (definition looks itself up by name) | the definition's own identity | started: #6, module metadata (`collect_analyzed_module_metadata`), the multipass per-file overlay (`own_definition_keys`, `keep_own_definitions`) |
+| 13 | `multipass_bare_pass_demotion.rs` (one promote pass, six `restore_*` passes) | solver-native cross-file ownership per call-graph SCC (C5 iteration note) | gate in place (`tests/project_gates_test.rs`); 3 of 6 restores deleted, see "Step 3 progress" |
 
 ## Step 3 inventory: `multipass_bare_pass_demotion.rs`
 
@@ -179,19 +179,37 @@ Found on the way, not identity: a `pub fn f(v: Vec<int>)` that only reads `v` ke
 caller does not clone a binding it uses again, so `let n = f(xs); let m = f(xs)` is E0382 (single file, no modules).
 Owner: C5 (OWN-PUB) with C6 (clone at the reusing call).
 
-## Still failing: homonyms across files (library multipass)
+## Homonyms across files (library multipass): fixed
 
 A three-file project (`main.wj` with `mod a` / `mod b`; `a.wj` and `b.wj` each define `pub enum Shape` and
-`pub fn take`) runs correctly in the interpreter and fails compiled:
+`pub fn take`) ran correctly in the interpreter and failed compiled: `b::take` got `a::take`'s return type and
+`b::Shape::Circle(2)` got `2_i32`. The trace (`a`'s signature under `b::take` only at codegen time) showed the cause:
+the per-file codegen overlay let a "fresher" global entry of another file's same-name function beat the file's own
+analysis, and the global promotion copied it back over. Fixed by identity (own definitions keep their own analysis
+unless the global entry has the same declared shape), plus module-keyed numeric return types and module-qualified
+metadata lookups. Both are gate cases now (`fn_homonyms_across_files`, `enum_payload_homonyms_across_files`); the
+second also fixed the literal width, so nothing is left for C4 there.
 
-- `let n = b::take([1, 2, 3])` is emitted `let n: Vec<i64> = b::take(..)`: the call takes `a::take`'s return type. In
-  the multipass merge (`library_multipass.rs`, convergence loop) a file's entries are compared with the global
-  registry by **bare** name and skipped as "passthrough" when ownership matches, so `b::take` never gets its own
-  module-qualified entry when the homonym differs only in types. Fix direction: compare and insert per
-  module-qualified key (the resolver path), keep the bare key as legacy.
-- `b::Shape::Circle(2)` (payload `int`) is emitted `2_i32`: the variant payload type is looked up by the bare enum
-  name. Width is C4's decider; the identity half (which `Shape`) is C3's. Repro shape: the
-  `enum_homonyms_across_modules` program split into files.
+## Step 3 progress (project gate, differential per pass)
 
-Gate to add first: extend `tests/identity_corpus_test.rs` to directories (`<name>/main.wj` + modules), built with
-`wj build <dir> --no-cargo` and checked with `rustc main.rs`; then the multipass fix lands test-first.
+Gate: `cargo test --release --test project_gates` runs over the projects in `tests/project_corpus/`. Each project gets a
+golden of the generated Rust, rustc on the generated crate, and a check that the compiled output matches the
+hand-computed expectation and the interpreter. Failures are ratcheted in `tests/golden/project_rejects.txt`.
+
+Method, per pass: disable it, then compare four things:
+- the project gate;
+- the golden corpus;
+- the 465 multi-file tests of the `all` binary (names matching `multipass|cross_crate|cross_module|cross_file|bare_pass|returned|library|dogfood`);
+- the 18 unit tests of the module.
+
+| Pass | With it disabled | Decision |
+|---|---|---|
+| `restore_owned_returned_formals` | nothing changed (same 14 failures, all already failing on the merged head; unit tests pass) | deleted. `bare_pass_hint_should_skip` and OWN-RETURNED already keep returned params owned. It also wrote back under the bare name |
+| `restore_owned_string_formals_stored_in_payload` | nothing changed | deleted |
+| `restore_owned_formals_for_producer_only_call_sites` (and its producer-only scan) | nothing changed | deleted (-345 lines together with the previous row) |
+| `restore_owned_field_forward_formals` | projects unchanged (incl. `field_forward_owned`, `field_forward_into_owned_struct`, `let_mut_rebind_consume`); the known failure `dogfood_engine_get_delegation_passes_borrowed_key` passes; only its 2 unit tests fail, and both start from a hand-made MutBorrowed formal | deleted with those 2 tests; the test leaves `.config/known-test-failures.txt` |
+| `restore_pub_owned_non_copy_api_formals`, `restore_owned_formals_forwarded_to_owned_callees` | disabled together with the field-forward restore: `bug_p3781_cross_module_aging_borrows_wrong_vec_test` fails, and the known failure `dogfood_engine_get_delegation_passes_borrowed_key` passes | keep for now. The solver must express the p3781 behaviour (move the `Vec`s, borrow the demoted strs) before these can go |
+
+`bare_pass_vec_reader` stays listed. The defining module emits `pub fn total(xs: Vec<int>)` owned (D-OWN-PUB), while
+the bare-pass demotion makes the caller pass `&xs`. Deciding D-OWN-PUB (C7) comes first. Deleting the promote pass alone
+would turn this into E0382 (see the single-file `pub fn` shape above).

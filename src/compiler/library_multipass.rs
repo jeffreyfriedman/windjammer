@@ -1112,10 +1112,6 @@ pub(crate) fn build_library_multipass(
     {
         let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
         let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-        crate::compiler::multipass_bare_pass_demotion::restore_owned_field_forward_formals(
-            reg,
-            &program_refs,
-        );
         crate::compiler::multipass_bare_pass_demotion::restore_pub_owned_non_copy_api_formals(
             reg,
             &program_refs,
