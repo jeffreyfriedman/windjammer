@@ -260,10 +260,10 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(s) = self
                 .global_signature_registry
                 .as_ref()
-                .and_then(|g| g.find_signature_ending_with(simple).cloned())
+                .and_then(|g| g.find_unique_signature_ending_with(simple).cloned())
                 .or_else(|| {
                     self.signature_registry
-                        .find_signature_ending_with(simple)
+                        .find_unique_signature_ending_with(simple)
                         .cloned()
                 })
             {
@@ -289,7 +289,7 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(s);
         }
         if let Some(g) = self.global_signature_registry.as_ref() {
-            if let Some(s) = g.find_signature_ending_with(simple).cloned() {
+            if let Some(s) = g.find_unique_signature_ending_with(simple).cloned() {
                 return Some(s);
             }
             if let Some(s) = from_reg(g, callee_name)
@@ -5188,7 +5188,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .flat_map(|key| {
                         let mut out = vec![g.get_signature(key), g.lookup_method(key)];
                         if !skip_bare_homonym && !import_alias_resolved {
-                            out.push(g.find_signature_ending_with(simple));
+                            out.push(g.find_unique_signature_ending_with(simple));
                         }
                         out
                     })
@@ -5637,10 +5637,10 @@ impl<'ast> CodeGenerator<'ast> {
                     .and_then(|g| g.get_signature(simple)),
                 self.global_signature_registry
                     .as_ref()
-                    .and_then(|g| g.find_signature_ending_with(simple)),
+                    .and_then(|g| g.find_unique_signature_ending_with(simple)),
                 registry.get_signature(callee_name),
                 registry.get_signature(simple),
-                registry.find_signature_ending_with(simple),
+                registry.find_unique_signature_ending_with(simple),
             ]
         };
         for challenger in text_challengers {
@@ -6913,14 +6913,14 @@ impl<'ast> CodeGenerator<'ast> {
         let homonym_candidate = if type_qualified {
             None
         } else {
-            registry.find_signature_ending_with(simple)
+            registry.find_unique_signature_ending_with(simple)
         };
         let global_homonym = if type_qualified {
             None
         } else {
             self.global_signature_registry
                 .as_ref()
-                .and_then(|g| g.find_signature_ending_with(simple))
+                .and_then(|g| g.find_unique_signature_ending_with(simple))
         };
         let method_resolved = callee_name.rsplit_once("::").and_then(|(rt, method)| {
             self.resolve_method_function_signature(rt, method, arg_index + 1)
@@ -9187,12 +9187,12 @@ impl<'ast> CodeGenerator<'ast> {
         let sig = registry
             .get_signature(callee_name)
             .or_else(|| registry.lookup_method(callee_name))
-            .or_else(|| registry.find_signature_ending_with(simple))
+            .or_else(|| registry.find_unique_signature_ending_with(simple))
             .or_else(|| {
                 self.global_signature_registry.as_ref().and_then(|g| {
                     g.get_signature(callee_name)
                         .or_else(|| g.lookup_method(callee_name))
-                        .or_else(|| g.find_signature_ending_with(simple))
+                        .or_else(|| g.find_unique_signature_ending_with(simple))
                 })
             });
         let Some(sig) = sig else {
