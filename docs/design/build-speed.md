@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 97f86dd45e86
+---
 # Build speed
 
 Compiled Windjammer builds are fast when the dependency work is done once and shared. This note records
