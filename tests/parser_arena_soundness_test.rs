@@ -154,3 +154,68 @@ fn miri_detects_an_item_outliving_its_owner() {
     assert_eq!(ledger.freed(), 1);
     let _ = format!("{item:?}"); // reads freed arena memory
 }
+
+// ---- Gate: test helpers must not drop the Program while handing out references into its arenas ----
+
+/// Function chunks (split at `fn ` lines) that return `&'static ...` yet call `parser.parse()` without leaking the Program.
+fn early_owner_drops(src: &str) -> Vec<String> {
+    let mut bad = Vec::new();
+    let mut chunks: Vec<&str> = Vec::new();
+    let mut start = 0;
+    for (i, _) in src.match_indices("\nfn ").chain(src.match_indices("\n    fn ")) {
+        chunks.push(&src[start..i]);
+        start = i;
+    }
+    chunks.push(&src[start..]);
+    for c in chunks {
+        let head = c.lines().find(|l| l.trim_start().starts_with("fn ")).unwrap_or("");
+        let returns_static_ref = head.contains("-> &'static");
+        let parses = c.contains("parser.parse()");
+        let keeps_program = c.contains("Box::leak(Box::new(parser.parse()") || c.contains("Box::leak(Box::new(program") || c.contains("Program<'static> =");
+        if returns_static_ref && parses && !keeps_program {
+            bad.push(head.trim().to_string());
+        }
+    }
+    bad
+}
+
+#[test]
+fn helpers_returning_static_refs_keep_the_program_alive() {
+    fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if p.file_name().is_some_and(|n| n == "target" || n == "py_ports") {
+                    continue;
+                }
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    walk(&root.join("tests"), &mut files);
+    walk(&root.join("src"), &mut files);
+    let mut offenders = Vec::new();
+    for f in files {
+        let Ok(text) = std::fs::read_to_string(&f) else { continue };
+        if f.ends_with("parser_arena_soundness_test.rs") {
+            continue; // holds the detector's own bad-example strings
+        }
+        for h in early_owner_drops(&text) {
+            offenders.push(format!("{}: {h}", f.strip_prefix(&root).unwrap_or(&f).display()));
+        }
+    }
+    assert!(offenders.is_empty(), "Program (owner of the arenas) dropped while references escape: {offenders:#?}");
+}
+
+#[test]
+fn early_owner_drop_detector_can_fail() {
+    let bad = "fn parse_expr(i: &str) -> &'static Expression<'static> {\n    let parser = Box::leak(Box::new(Parser::new(t)));\n    let program = parser.parse().unwrap();\n    program.items.first().unwrap()\n}\n";
+    let good = "fn parse_expr(i: &str) -> &'static Expression<'static> {\n    let program = Box::leak(Box::new(parser.parse().unwrap()));\n    program.items.first().unwrap()\n}\n";
+    assert_eq!(early_owner_drops(bad).len(), 1);
+    assert!(early_owner_drops(good).is_empty());
+}
