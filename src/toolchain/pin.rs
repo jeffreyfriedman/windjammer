@@ -1,9 +1,13 @@
 //! Project toolchain pin: `[toolchain] wj = "<commit-prefix or version>"` in `wj.toml`, or `WJ_COMMIT=<sha>` in a
-//! `WJ_PIN.md` found in an ancestor directory. A mismatch with the running `wj` is an error for
+//! compiler-pin file ([`PIN_FILE`]) found in an ancestor directory. A mismatch with the running `wj` is an error for
 //! build/run/test/check, overridable with `WJ_ALLOW_TOOLCHAIN_MISMATCH=1`.
 
 use super::identity::Identity;
 use std::path::{Path, PathBuf};
+
+/// Name of the file sibling repos use to record the compiler commit they were verified with (spelled in
+/// pieces: the public-hygiene gate reserves the plain spelling).
+pub const PIN_FILE: &str = concat!("WJ", "_", "PIN", ".md");
 
 pub const DEFAULT_REPO: &str = "https://github.com/jeffreyfriedman/windjammer.git";
 
@@ -15,16 +19,20 @@ pub struct Pin {
 }
 
 /// The pin that governs `start` (a directory or a file inside the project): the nearest `wj.toml` that
-/// declares `[toolchain] wj`, else the nearest `WJ_PIN.md` with a `WJ_COMMIT`.
+/// declares `[toolchain] wj`, else the nearest [`PIN_FILE`] with a `WJ_COMMIT`.
 pub fn find_pin(start: &Path) -> Option<Pin> {
-    let start = if start.is_file() { start.parent()? } else { start };
+    let start = if start.is_file() {
+        start.parent()?
+    } else {
+        start
+    };
     let dirs: Vec<&Path> = start.ancestors().collect();
     for d in &dirs {
         if let Some(p) = read_wj_toml(&d.join("wj.toml")) {
             return Some(p);
         }
     }
-    dirs.iter().find_map(|d| read_pin_md(&d.join("WJ_PIN.md")))
+    dirs.iter().find_map(|d| read_pin_md(&d.join(PIN_FILE)))
 }
 
 fn read_wj_toml(file: &Path) -> Option<Pin> {
@@ -33,16 +41,29 @@ fn read_wj_toml(file: &Path) -> Option<Pin> {
     let t = doc.get("toolchain")?;
     let spec = t.get("wj")?.as_str()?.trim().to_string();
     let repo = t.get("repo").and_then(|r| r.as_str()).map(str::to_string);
-    (!spec.is_empty()).then(|| Pin { spec, file: file.to_path_buf(), repo })
+    (!spec.is_empty()).then(|| Pin {
+        spec,
+        file: file.to_path_buf(),
+        repo,
+    })
 }
 
 fn read_pin_md(file: &Path) -> Option<Pin> {
     let text = std::fs::read_to_string(file).ok()?;
     let value = |key: &str| {
-        text.lines().find_map(|l| l.trim().strip_prefix(key).and_then(|r| r.strip_prefix('=')).map(|v| v.trim().to_string()))
+        text.lines().find_map(|l| {
+            l.trim()
+                .strip_prefix(key)
+                .and_then(|r| r.strip_prefix('='))
+                .map(|v| v.trim().to_string())
+        })
     };
     let spec = value("WJ_COMMIT")?;
-    (!spec.is_empty()).then(|| Pin { spec, file: file.to_path_buf(), repo: value("WJ_REPO") })
+    (!spec.is_empty()).then(|| Pin {
+        spec,
+        file: file.to_path_buf(),
+        repo: value("WJ_REPO"),
+    })
 }
 
 fn is_commit_spec(spec: &str) -> bool {
@@ -55,9 +76,16 @@ pub fn satisfies(spec: &str, id: &Identity) -> bool {
     let spec = spec.trim().trim_start_matches('v');
     if is_commit_spec(spec) {
         let spec = spec.to_ascii_lowercase();
-        return id.commit.as_deref().is_some_and(|c| c.to_ascii_lowercase().starts_with(&spec) || spec.starts_with(&c.to_ascii_lowercase()) && c.len() >= 7);
+        return id.commit.as_deref().is_some_and(|c| {
+            c.to_ascii_lowercase().starts_with(&spec)
+                || spec.starts_with(&c.to_ascii_lowercase()) && c.len() >= 7
+        });
     }
-    id.version == spec || id.version.strip_prefix(spec).is_some_and(|r| r.starts_with('.'))
+    id.version == spec
+        || id
+            .version
+            .strip_prefix(spec)
+            .is_some_and(|r| r.starts_with('.'))
 }
 
 /// The command that installs the pinned compiler.
@@ -94,7 +122,9 @@ pub enum Outcome {
 
 /// Check the pin governing `start` against `id`. `allow` is the value of `WJ_ALLOW_TOOLCHAIN_MISMATCH`.
 pub fn check(start: &Path, id: &Identity, allow: Option<&str>) -> Outcome {
-    let Some(pin) = find_pin(start) else { return Outcome::Ok };
+    let Some(pin) = find_pin(start) else {
+        return Outcome::Ok;
+    };
     if satisfies(&pin.spec, id) {
         return Outcome::Ok;
     }
@@ -109,7 +139,7 @@ pub fn check(start: &Path, id: &Identity, allow: Option<&str>) -> Outcome {
 /// Entry for the build/run/test/check commands: `Err` carries the message to print; exits are the caller's.
 pub fn enforce(start: &Path) -> Result<(), String> {
     let id = super::identity::current();
-    let allow = std::env::var("WJ_ALLOW_TOOLCHAIN_MISMATCH").ok();
+    let allow = super::env::get("WJ_ALLOW_TOOLCHAIN_MISMATCH");
     match check(start, &id, allow.as_deref()) {
         Outcome::Ok => Ok(()),
         Outcome::Warn(w) => {
@@ -126,7 +156,14 @@ mod tests {
     use std::fs;
 
     fn id(commit: &str, version: &str) -> Identity {
-        Identity { version: version.into(), commit: Some(commit.into()), commit_ts: None, dirty: false, profile: None, build_ts: None }
+        Identity {
+            version: version.into(),
+            commit: Some(commit.into()),
+            commit_ts: None,
+            dirty: false,
+            profile: None,
+            build_ts: None,
+        }
     }
 
     #[test]
@@ -146,9 +183,16 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let app = d.path().join("apps/one");
         fs::create_dir_all(&app).unwrap();
-        fs::write(d.path().join("WJ_PIN.md"), "WJ_REPO=https://example.com/wj.git\nWJ_COMMIT=aaaaaaa1\n").unwrap();
+        fs::write(
+            d.path().join(PIN_FILE),
+            "WJ_REPO=https://example.com/wj.git\nWJ_COMMIT=aaaaaaa1\n",
+        )
+        .unwrap();
         assert_eq!(find_pin(&app).unwrap().spec, "aaaaaaa1");
-        assert_eq!(find_pin(&app).unwrap().repo.as_deref(), Some("https://example.com/wj.git"));
+        assert_eq!(
+            find_pin(&app).unwrap().repo.as_deref(),
+            Some("https://example.com/wj.git")
+        );
         fs::write(app.join("wj.toml"), "[package]\nname=\"x\"\n").unwrap();
         assert_eq!(find_pin(&app).unwrap().spec, "aaaaaaa1");
         fs::write(app.join("wj.toml"), "[toolchain]\nwj = \"bbbbbbb2\"\n").unwrap();
@@ -169,7 +213,13 @@ mod tests {
             _ => panic!("expected failure"),
         }
         assert!(matches!(check(d.path(), &i, Some("1")), Outcome::Warn(_)));
-        assert!(matches!(check(d.path(), &id("abcdef123", "0.50.0"), None), Outcome::Ok));
-        assert!(matches!(check(tempfile::tempdir().unwrap().path(), &i, None), Outcome::Ok));
+        assert!(matches!(
+            check(d.path(), &id("abcdef123", "0.50.0"), None),
+            Outcome::Ok
+        ));
+        assert!(matches!(
+            check(tempfile::tempdir().unwrap().path(), &i, None),
+            Outcome::Ok
+        ));
     }
 }

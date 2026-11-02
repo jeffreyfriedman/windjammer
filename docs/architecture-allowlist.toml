@@ -40,6 +40,7 @@
 "src/cargo_cache/mod.rs" = 9
 "src/cli/code_mode.rs" = 3
 "src/cli/self_install.rs" = 3
+"src/toolchain/env.rs" = 1
 "src/compiler_config.rs" = 1
 "src/debug_env.rs" = 2
 "src/error_statistics.rs" = 1

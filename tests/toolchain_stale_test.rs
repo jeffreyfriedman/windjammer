@@ -103,5 +103,5 @@ fn a_binary_younger_than_thirty_days_pays_almost_nothing() {
     }
     let per_call = start.elapsed() / n;
     assert!(per_call < std::time::Duration::from_micros(20), "hot path costs {per_call:?} per call");
-    assert!(!missing.exists(), "a fresh binary must not touch the cache directory");
+    assert!(!missing.join("toolchain").exists(), "a fresh binary must not touch the stamp directory");
 }

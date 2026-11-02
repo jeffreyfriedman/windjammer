@@ -34,7 +34,13 @@ pub fn iso_date(ts: i64) -> String {
 /// `YYYY-MM-DDTHH:MM:SSZ` (UTC).
 pub fn iso_datetime(ts: i64) -> String {
     let s = ts.rem_euclid(86400);
-    format!("{}T{:02}:{:02}:{:02}Z", iso_date(ts), s / 3600, s % 3600 / 60, s % 60)
+    format!(
+        "{}T{:02}:{:02}:{:02}Z",
+        iso_date(ts),
+        s / 3600,
+        s % 3600 / 60,
+        s % 60
+    )
 }
 
 /// `YYYYMMDDTHHMMSSZ`, for file names.
@@ -56,7 +62,7 @@ pub fn parse_iso_date(s: &str) -> Option<i64> {
 
 /// The clock. `WJ_TOOLCHAIN_NOW` (unix seconds) overrides it so tests can age a binary without waiting.
 pub fn now_ts() -> i64 {
-    if let Some(t) = std::env::var("WJ_TOOLCHAIN_NOW").ok().and_then(|v| v.parse().ok()) {
+    if let Some(t) = super::env::get("WJ_TOOLCHAIN_NOW").and_then(|v| v.parse().ok()) {
         return t;
     }
     std::time::SystemTime::now()

@@ -48,8 +48,14 @@ impl Identity {
 
     /// `wj --version` text: `wj 0.50.0 (commit 2b6db230c4a1 2026-11-02, clean, release, built 2026-11-02T10:11:12Z)`.
     pub fn version_line(&self) -> String {
-        let date = self.commit_ts.map(iso_date).unwrap_or_else(|| "unknown".into());
-        let built = self.build_ts.map(iso_datetime).unwrap_or_else(|| "unknown".into());
+        let date = self
+            .commit_ts
+            .map(iso_date)
+            .unwrap_or_else(|| "unknown".into());
+        let built = self
+            .build_ts
+            .map(iso_datetime)
+            .unwrap_or_else(|| "unknown".into());
         format!(
             "wj {} (commit {} {}, {}, {}, built {})",
             self.version,
@@ -88,8 +94,18 @@ pub fn parse_version_line(text: &str) -> Option<Identity> {
     if version.is_empty() || !version.starts_with(|c: char| c.is_ascii_digit()) {
         return None;
     }
-    let mut id = Identity { version: version.to_string(), commit: None, commit_ts: None, dirty: false, profile: None, build_ts: None };
-    let Some(inner) = detail.and_then(|d| d.strip_prefix('(')).and_then(|d| d.strip_suffix(')')) else {
+    let mut id = Identity {
+        version: version.to_string(),
+        commit: None,
+        commit_ts: None,
+        dirty: false,
+        profile: None,
+        build_ts: None,
+    };
+    let Some(inner) = detail
+        .and_then(|d| d.strip_prefix('('))
+        .and_then(|d| d.strip_suffix(')'))
+    else {
         return Some(id);
     };
     for (i, part) in inner.split(", ").enumerate() {

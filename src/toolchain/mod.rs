@@ -2,6 +2,7 @@
 //! See MODULE.md.
 
 pub mod doctor;
+pub mod env;
 pub mod identity;
 pub mod install;
 pub mod pin;

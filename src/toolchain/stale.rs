@@ -26,11 +26,17 @@ pub fn assess(binary_ts: i64, now: i64, newest_in_checkout: Option<i64>) -> Opti
     match newest_in_checkout {
         Some(newest) => {
             let days = (newest - binary_ts) / DAY;
-            (days > BEHIND_CHECKOUT_DAYS).then_some(Staleness { days, vs_checkout: true })
+            (days > BEHIND_CHECKOUT_DAYS).then_some(Staleness {
+                days,
+                vs_checkout: true,
+            })
         }
         None => {
             let days = (now - binary_ts) / DAY;
-            (days > STANDALONE_DAYS).then_some(Staleness { days, vs_checkout: false })
+            (days > STANDALONE_DAYS).then_some(Staleness {
+                days,
+                vs_checkout: false,
+            })
         }
     }
 }
@@ -41,9 +47,18 @@ pub fn may_be_stale(binary_ts: i64, now: i64) -> bool {
     now - binary_ts > BEHIND_CHECKOUT_DAYS * DAY
 }
 
-pub fn warning_text(binary_commit: &str, binary_ts: i64, s: &Staleness, checkout: Option<&Path>) -> String {
+pub fn warning_text(
+    binary_commit: &str,
+    binary_ts: i64,
+    s: &Staleness,
+    checkout: Option<&Path>,
+) -> String {
     let against = match (s.vs_checkout, checkout) {
-        (true, Some(c)) => format!("{} days older than the newest commit in {}", s.days, c.display()),
+        (true, Some(c)) => format!(
+            "{} days older than the newest commit in {}",
+            s.days,
+            c.display()
+        ),
         _ => format!("{} days old", s.days),
     };
     format!(
@@ -61,7 +76,9 @@ pub fn warning_text(binary_commit: &str, binary_ts: i64, s: &Staleness, checkout
 pub fn enclosing_checkout(start: &Path) -> Option<PathBuf> {
     start.ancestors().find_map(|d| {
         let cargo = std::fs::read_to_string(d.join("Cargo.toml")).ok()?;
-        let named = cargo.lines().any(|l| l.trim().replace(' ', "") == "name=\"windjammer\"");
+        let named = cargo
+            .lines()
+            .any(|l| l.trim().replace(' ', "") == "name=\"windjammer\"");
         (named && d.join(".git").exists()).then(|| d.to_path_buf())
     })
 }
@@ -78,7 +95,9 @@ fn git_dir(checkout: &Path) -> Option<PathBuf> {
 
 /// Changes whenever the checkout's HEAD moves (commit, checkout, pull).
 fn fingerprint(checkout: &Path) -> String {
-    let Some(g) = git_dir(checkout) else { return String::new() };
+    let Some(g) = git_dir(checkout) else {
+        return String::new();
+    };
     let stamp = |rel: &str| {
         std::fs::metadata(g.join(rel))
             .and_then(|m| m.modified())
@@ -125,12 +144,17 @@ impl Stamp {
     }
 
     pub fn render(&self) -> String {
-        format!("warned_day={}\nfingerprint={}\nnewest={}\n", self.warned_day, self.fingerprint, self.newest)
+        format!(
+            "warned_day={}\nfingerprint={}\nnewest={}\n",
+            self.warned_day, self.fingerprint, self.newest
+        )
     }
 }
 
 pub fn stamp_path() -> PathBuf {
-    crate::cargo_cache::cache_root().join("toolchain").join("stale-warning.stamp")
+    crate::cargo_cache::cache_root()
+        .join("toolchain")
+        .join("stale-warning.stamp")
 }
 
 /// Print the once-per-day stale warning if due. Never fails; never slows a fresh binary.
@@ -140,8 +164,10 @@ pub fn warn_if_stale() {
 
 /// `warn_if_stale` with the identity and clock supplied (the hot-path gate times this).
 pub fn warn_with(id: &super::identity::Identity, now: i64) {
-    let (Some(ts), Some(commit)) = (id.commit_ts, id.commit.as_deref()) else { return };
-    if !may_be_stale(ts, now) || std::env::var_os("WJ_NO_STALE_WARN").is_some_and(|v| v != "0" && !v.is_empty()) {
+    let (Some(ts), Some(commit)) = (id.commit_ts, id.commit.as_deref()) else {
+        return;
+    };
+    if !may_be_stale(ts, now) || super::env::flag("WJ_NO_STALE_WARN") {
         return;
     }
     let path = stamp_path();
@@ -151,10 +177,11 @@ pub fn warn_with(id: &super::identity::Identity, now: i64) {
         return;
     }
     let cwd = std::env::current_dir().ok();
-    let checkout = cwd
-        .as_deref()
-        .and_then(enclosing_checkout)
-        .or_else(|| std::env::current_exe().ok().and_then(|e| enclosing_checkout(&e)));
+    let checkout = cwd.as_deref().and_then(enclosing_checkout).or_else(|| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|e| enclosing_checkout(&e))
+    });
     let newest = checkout.as_deref().and_then(|c| {
         let fp = fingerprint(c);
         if stamp.fingerprint != fp || stamp.newest == 0 {
@@ -201,7 +228,11 @@ mod tests {
 
     #[test]
     fn stamp_round_trips() {
-        let s = Stamp { warned_day: 20_000, fingerprint: "1.2:3.4".into(), newest: 99 };
+        let s = Stamp {
+            warned_day: 20_000,
+            fingerprint: "1.2:3.4".into(),
+            newest: 99,
+        };
         assert_eq!(Stamp::parse(&s.render()), s);
     }
 
