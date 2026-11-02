@@ -104,7 +104,7 @@
 "type_inference->metadata src/type_inference/int_inference/mod.rs" = 1
 
 [get_signature_calls]
-"outside_signature_registry" = 429
+"outside_signature_registry" = 427
 
 [get_signature_calls_by_file]
 "src/analyzer/borrow_analysis.rs" = 2
@@ -151,7 +151,7 @@
 "src/compiler/compilation_pipeline.rs" = 8
 "src/compiler/declaration_stub_registry.rs" = 3
 "src/compiler/library_multipass.rs" = 6
-"src/compiler/multipass_bare_pass_demotion.rs" = 16
+"src/compiler/multipass_bare_pass_demotion.rs" = 14
 "src/ir/constraint_gen.rs" = 1
 "src/ir/effects.rs" = 3
 "src/ir/signature_bridge.rs" = 2
@@ -179,7 +179,7 @@
 "src/codegen/rust/statement_generation.rs" = 2520
 "src/codegen/rust/stdlib_method_traits.rs" = 2437
 "src/codegen/rust/string_utilities.rs" = 2044
-"src/compiler/multipass_bare_pass_demotion.rs" = 4575
+"src/compiler/multipass_bare_pass_demotion.rs" = 4230
 "src/stdlib_scanner.rs" = 2156
 
 [long_functions]
@@ -233,7 +233,7 @@
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
 "src/compiler/compilation_pipeline.rs::build_project_with_config" = 348
 "src/compiler/library_copy_registry.rs::collect_global_enum_variant_types_for_library" = 359
-"src/compiler/library_multipass.rs::build_library_multipass" = 1413
+"src/compiler/library_multipass.rs::build_library_multipass" = 1405
 "src/file_compilation_pipeline.rs::compile_file_impl" = 401
 "src/interpreter/builtins/option.rs::register" = 313
 "src/interpreter/builtins/seq.rs::register_vec" = 360
