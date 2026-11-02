@@ -53,7 +53,12 @@ unchanged.
 | `int_compared_with_len_and_indexed` | `int` loop variable in `c >= 0 && c < out.len()` then `out[c]`: generated `c >= 0_usize` (E0308); `wj-table` `right_align` |
 | (not reduced) | `-1` as the tail of an `int` function that returns a loop index: generated `-1_usize` (E0600); `wj-toml`, `wj-compress`, `wj-timefmt` |
 
-Fixing the compiler turns those 263 ledger lines stale at once; delete them with the fix.
+**Fixed** on `wt/c4-regress`: the numeric solver no longer publishes a width for a class it cannot decide (two exact
+widths met, a negated literal in an unsigned class, a loop binding or a field read or a `len()` receiver whose type the
+walk cannot see), and a local bound to a call or a module function (`let parts = strings.split(..)`) takes that
+callee's declared type. The 263 ledger lines are deleted, the compiled baseline for the nine targets is re-recorded
+(all pass), the three shapes are golden-corpus programs (`tests/inference_corpus/usize_*.wj`), and
+`scripts/ecosystem_width_gate.wj` runs the nine targets compiled before merge.
 
 ## Tooling notes
 

@@ -1,0 +1,67 @@
+// Compiled ecosystem sweep for the targets the usize-class merge broke (ADR-0028 regression,
+// docs/spec/convergence-burndown.md). The golden corpus did not cover them; this gate does.
+// Usage: wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read --caps off scripts/ecosystem_width_gate.wj <wj-binary> <ecosystem-root> <logdir>
+// Runs the ecosystem's own scripts/health_sweep.wj in compiled mode over every target and exits 1
+// when any target does not pass.
+use std::process
+use std::env
+use std::strings
+
+fn targets() -> Vec<string> {
+    [
+        "packages/wj-compress",
+        "packages/wj-table",
+        "packages/wj-timefmt",
+        "packages/wj-toml",
+        "packages/wj-uuid",
+        "apps/wj-auth-api",
+        "apps/wj-chat",
+        "apps/wj-notes-api",
+        "apps/wj-proxy",
+    ]
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() < 4 {
+        println("usage: ecosystem_width_gate.wj <wj-binary> <ecosystem-root> <logdir>")
+        process.exit(2)
+    }
+    let wj = args[1]
+    let root = args[2]
+    let logdir = args[3]
+    // The ecosystem pins a released wj; this gate deliberately tests the candidate binary.
+    let mut cmd = "cd '" + root + "' && WJ_ALLOW_TOOLCHAIN_MISMATCH=1 '" + wj + "' run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read --caps off scripts/health_sweep.wj '" + wj + "' '" + logdir + "' compiled"
+    for t in targets() {
+        cmd = cmd + " '" + t + "'"
+    }
+    let out = match process.run_with_output("sh", ["-c", cmd]) {
+        Ok(o) => o.stdout,
+        Err(e) => {
+            println("ERR running the sweep: ${e}")
+            process.exit(2)
+            ""
+        },
+    }
+    let mut failed = 0
+    let mut rows = 0
+    for line in strings.split_lines(out) {
+        if strings.contains(line, "\tcompiled\t") {
+            rows = rows + 1
+            println(line)
+            if !strings.contains(line, "\tPASS\t") {
+                failed = failed + 1
+            }
+        }
+    }
+    // A sweep that reports fewer rows than targets is a broken gate, not a green one.
+    if rows != targets().len() {
+        println("gate: expected ${targets().len()} rows, got ${rows}")
+        process.exit(1)
+    }
+    if failed > 0 {
+        println("gate: ${failed} of ${rows} targets fail compiled")
+        process.exit(1)
+    }
+    println("gate: ${rows} of ${rows} targets pass compiled")
+}

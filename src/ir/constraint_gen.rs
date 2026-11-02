@@ -16,7 +16,7 @@
 
 use crate::analyzer::{AnalyzedFunction, FunctionSignature, OwnershipMode, SignatureRegistry};
 #[path = "constraint_gen/numeric.rs"]
-mod numeric;
+pub(crate) mod numeric;
 use numeric::{emit_numeric_class_constraint, is_index_source_method, is_int_literal_tree, literal_rule, literal_to_base_type};
 
 use crate::ir::constraints::{Constraint, ConstraintOrigin, ConstraintSet, ConstraintVar};
@@ -92,6 +92,8 @@ pub struct FunctionConstraints {
     pub single_binding_locals: Vec<String>,
     /// Every binding of a local, each with its own variable (lexical scoping).
     pub binding_vars: Vec<(String, ConstraintVar)>,
+    /// Values whose width the walk does not model (see `numeric::Unmodelled`).
+    pub unmodelled: numeric::Unmodelled,
     /// NUM-USIZE index sources (`len()`, `count()`, by the call's source position) and their vars.
     pub index_sources: Vec<((usize, usize), ConstraintVar)>,
     /// NUM-USIZE index uses (`v[i]` operands).
@@ -133,6 +135,8 @@ struct AstConstraintWalker<'a, 'ast> {
     scopes: Vec<HashMap<String, ConstraintVar>>,
     /// Every binding (name, its own var), in walk order.
     binding_vars: Vec<(String, ConstraintVar)>,
+    /// Negated integer literals and loop bindings whose element type is not modelled.
+    numeric_unmodelled: numeric::Unmodelled,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -326,6 +330,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             bind_counts: HashMap::new(),
             scopes: vec![HashMap::new()],
             binding_vars: Vec::new(),
+            numeric_unmodelled: Default::default(),
         }
     }
 
@@ -819,7 +824,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
                 } else {
                     self.walk_expression(iterable);
-                    self.bind_pattern(pattern);
+                    let loop_var = self.bind_pattern(pattern);
+                    self.type_loop_element(loop_var, iterable);
                 }
                 self.walk_statements(body);
                 self.scopes.pop();
@@ -970,6 +976,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         // Constant folding prints `-1` as one literal at the `-`: key the width there too.
                         if let (Expression::Literal { value: Literal::Int(_), .. }, Some(l)) = (&**operand, expr.location()) {
                             self.literal_vars.push(((l.line, l.column), inner));
+                            self.numeric_unmodelled.negated_literals.push(inner);
                         }
                         self.cs.add_because(Constraint::TypeEquals(result, inner), tagged("TY-UNIFY"));
                         self.cs.add_because(Constraint::IsNumeric(inner), tagged("NUM-MIXED"));
@@ -1028,24 +1035,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Expression::MethodCall { object, arguments, method, .. } => self.walk_method_call(expr, object, method, arguments),
 
-            Expression::FieldAccess { object, .. } => {
-                self.emit_read_field_ref(object, expr);
-                let obj_var = self.walk_expression(object);
-                let field_var = self.cs.fresh_var();
-                let _ = obj_var;
-                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
-                if let Some(ty) = crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields) {
-                    let base = parser_type_to_base_type(&ty);
-                    if base != BaseType::Inferred {
-                        self.cs.add_because(
-                            Constraint::TypeIs(field_var, base.clone()),
-                            origin("NUM-FIELD-DECLARED", "a field read has the field's declared type", &expr.location()),
-                        );
-                        emit_numeric_class_constraint(&mut self.cs, field_var, &base);
-                    }
-                }
-                field_var
-            }
+            Expression::FieldAccess { object, .. } => self.walk_field_access(object, expr),
 
             Expression::StructLiteral { fields, .. } => {
                 let result = self.cs.fresh_var();
@@ -1492,6 +1482,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             taint_constraints: self.taint_constraints,
             single_binding_locals: self.bind_counts.iter().filter(|(_, c)| **c == 1).map(|(n, _)| n.clone()).collect(),
             binding_vars: self.binding_vars,
+            unmodelled: self.numeric_unmodelled,
             literal_vars: self.literal_vars,
             index_sources: self.index_sources,
             index_uses: self.index_uses,
