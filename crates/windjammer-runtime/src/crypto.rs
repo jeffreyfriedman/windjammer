@@ -2,8 +2,10 @@
 //!
 //! Windjammer's `std::crypto` module maps to these functions.
 
+use hmac::{Hmac, Mac};
 use sha1::{Digest as Sha1Digest, Sha1};
 use sha2::{Digest as Sha2Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 /// SHA-256 hash
 pub fn sha256_bytes(data: &[u8]) -> String {
@@ -30,6 +32,37 @@ pub fn sha256_hex(data: impl AsRef<str>) -> String {
 /// SHA-1 digest bytes (Windjammer `std::crypto::sha1_bytes`, UUID v5).
 pub fn sha1_bytes(data: &[u8]) -> Vec<u8> {
     <Sha1 as Sha1Digest>::digest(data).to_vec()
+}
+
+/// HMAC-SHA-256 tag of `data` under `key` (RFC 2104 / RFC 4231), raw bytes.
+/// Any key length is accepted (long keys are hashed, short keys padded, per the RFC).
+pub fn hmac_sha256_bytes(key: &[u8], data: &[u8]) -> Vec<u8> {
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts keys of any length");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
+
+/// HMAC-SHA-256 of string `data` under string `key` as lowercase hex (Windjammer `std::crypto::hmac_sha256`).
+pub fn hmac_sha256(key: impl AsRef<str>, data: impl AsRef<str>) -> String {
+    hex::encode(hmac_sha256_bytes(key.as_ref().as_bytes(), data.as_ref().as_bytes()))
+}
+
+/// True when `expected_hex` (case-insensitive hex) is the HMAC-SHA-256 of `data` under `key`.
+/// The tag comparison is constant-time; malformed or wrong-length hex is simply `false`.
+pub fn verify_hmac_sha256(key: impl AsRef<str>, data: impl AsRef<str>, expected_hex: impl AsRef<str>) -> bool {
+    let Ok(expected) = hex::decode(expected_hex.as_ref()) else {
+        return false;
+    };
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key.as_ref().as_bytes()).expect("HMAC accepts keys of any length");
+    mac.update(data.as_ref().as_bytes());
+    mac.verify_slice(&expected).is_ok()
+}
+
+/// Constant-time string equality (Windjammer `std::crypto::constant_time_eq`): the comparison time
+/// depends only on the lengths, never on where the first difference is. Use it for tokens and signatures.
+pub fn constant_time_eq(a: impl AsRef<str>, b: impl AsRef<str>) -> bool {
+    let (a, b) = (a.as_ref().as_bytes(), b.as_ref().as_bytes());
+    a.len() == b.len() && bool::from(a.ct_eq(b))
 }
 
 /// Hash password with bcrypt
@@ -182,5 +215,59 @@ mod tests {
         let encoded = base64_encode(data);
         let decoded = base64_decode(&encoded).unwrap();
         assert_eq!(decoded, data);
+    }
+
+    /// RFC 4231 section 4 test cases (HMAC-SHA-256), the independent oracle for `hmac_sha256_bytes`.
+    #[test]
+    fn hmac_sha256_rfc4231_vectors() {
+        let long_key = [0xaau8; 131];
+        let cases: Vec<(Vec<u8>, Vec<u8>, &str)> = vec![
+            (vec![0x0b; 20], b"Hi There".to_vec(), "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"),
+            (b"Jefe".to_vec(), b"what do ya want for nothing?".to_vec(), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"),
+            (vec![0xaa; 20], vec![0xdd; 50], "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe"),
+            ((1u8..=25).collect(), vec![0xcd; 50], "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b"),
+            (long_key.to_vec(), b"Test Using Larger Than Block-Size Key - Hash Key First".to_vec(), "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"),
+            (
+                long_key.to_vec(),
+                b"This is a test using a larger than block-size key and a larger than block-size data. The key needs to be hashed before being used by the HMAC algorithm.".to_vec(),
+                "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2",
+            ),
+        ];
+        for (i, (key, data, want)) in cases.iter().enumerate() {
+            assert_eq!(hex(&hmac_sha256_bytes(key, data)), *want, "RFC 4231 case {i}");
+        }
+    }
+
+    #[test]
+    fn hmac_sha256_string_forms_agree_with_bytes() {
+        let want = "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843";
+        assert_eq!(hmac_sha256("Jefe", "what do ya want for nothing?"), want);
+        assert!(verify_hmac_sha256("Jefe", "what do ya want for nothing?", want));
+        assert!(verify_hmac_sha256("Jefe", "what do ya want for nothing?", &want.to_uppercase()));
+    }
+
+    #[test]
+    fn verify_hmac_sha256_rejects_wrong_input() {
+        let good = hmac_sha256("k", "m");
+        assert!(verify_hmac_sha256("k", "m", &good));
+        assert!(!verify_hmac_sha256("k", "m2", &good), "different message");
+        assert!(!verify_hmac_sha256("k2", "m", &good), "different key");
+        let mut flipped = good.clone().into_bytes();
+        flipped[0] = if flipped[0] == b'0' { b'1' } else { b'0' };
+        assert!(!verify_hmac_sha256("k", "m", &String::from_utf8(flipped).unwrap()), "one flipped digit");
+        assert!(!verify_hmac_sha256("k", "m", &good[..good.len() - 2]), "truncated tag");
+        assert!(!verify_hmac_sha256("k", "m", ""), "empty tag");
+        assert!(!verify_hmac_sha256("k", "m", "zz"), "not hex");
+        assert!(!verify_hmac_sha256("k", "m", &format!("{good}00")), "extended tag");
+    }
+
+    #[test]
+    fn constant_time_eq_compares_content_and_length() {
+        assert!(constant_time_eq("abc", "abc"));
+        assert!(constant_time_eq("", ""));
+        assert!(!constant_time_eq("abc", "abd"));
+        assert!(!constant_time_eq("abc", "abcd"));
+        assert!(!constant_time_eq("abcd", "abc"));
+        assert!(!constant_time_eq("", "a"));
     }
 }
