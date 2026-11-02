@@ -3,6 +3,6 @@ error[W0003]: explicit .iter() call
   |
 4 |     for x in v.iter() {
   |                ^^^^
-  = help: use direct iteration: `for x in collection`
+  = help: write `for x in items` instead of `for x in items.iter()`
   = note: Windjammer supports direct iteration
   = explain: wj explain W0003

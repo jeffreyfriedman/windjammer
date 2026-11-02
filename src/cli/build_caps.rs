@@ -30,12 +30,12 @@ pub fn prepare_for(path: &Path, library: bool, flavor: Flavor) -> Result<Option<
     let Ok(inputs) = parse_app_inputs(path) else { return Ok(None) }; // not a checkable project: the build reports why
     let a = analyze_project(path, inputs, false);
     let durable = crate::ir::effect_facts::durable::analyze(&a.resolved, &a.facts);
-    if !durable.functions.is_empty() {
-        // Journaling needs the step wrapper in every backend; until the compiled runtimes have it, a build that silently
-        // dropped the journal would lose progress on a crash, so it stops instead (ADR-0021 E4).
+    if !durable.compiled_blockers.is_empty() {
+        // Compiled builds journal free functions over numbers, bool, char, string, lists, options, results and tuples of those
+        // (ADR-0021 E4b). Anything else would fail in rustc with a message about a trait; say what and why here.
         bail!(
-            "`durable fn` ({}) runs only in the interpreter in this release: compiled backends do not journal steps yet, and a build without the journal would lose progress on a crash\n  = help: run it with `wj run --interpret`, or remove `durable`",
-            durable.functions.join(", ")
+            "a compiled build cannot journal yet: {}\n  = help: run it with `wj run --interpret`, or keep the durable function and its steps to the types listed in ADR-0021 (E4b)",
+            durable.compiled_blockers.join("; ")
         );
     }
     let uses_mcp = a.facts.fns.values().any(|f| f.effects.keys().any(|e| e.kind.name().starts_with("mcp.")));

@@ -129,3 +129,6 @@ reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
 # Lints configuration
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }
+
+[dev-dependencies]
+tempfile = "3"

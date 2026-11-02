@@ -120,7 +120,7 @@
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2159
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
-"src/codegen/rust/statement_generation.rs" = 2520
+"src/codegen/rust/statement_generation.rs" = 2517
 "src/codegen/rust/stdlib_method_traits.rs" = 2437
 "src/codegen/rust/string_utilities.rs" = 2044
 "src/compiler/multipass_bare_pass_demotion.rs" = 4674
@@ -146,7 +146,7 @@
 "src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 754
 "src/codegen/rust/call_expression_generation/trait_call_generation.rs::generate_call_on_field_access" = 704
 "src/codegen/rust/call_signature_resolution.rs::effective_param_ownership" = 314
-"src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 378
+"src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 380
 "src/codegen/rust/data_structure_generation.rs::generate_tuple" = 317
 "src/codegen/rust/expression_generation.rs::generate_expression_immut" = 454
 "src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 649

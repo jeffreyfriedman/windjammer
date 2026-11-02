@@ -310,11 +310,11 @@ fn durable_fn_without_failure_behaves_like_a_plain_fn() {
 }
 
 #[test]
-fn compiled_builds_refuse_a_durable_fn_by_name() {
-    let d = tmp_with("durable fn job() -> int { 1 }\nfn main() { println(\"${job()}\") }\n");
+fn compiled_builds_refuse_what_they_cannot_journal_by_name() {
+    let d = tmp_with("struct Job { n: int }\ndurable fn job(j: Job) -> int { j.n }\nfn main() { println(\"${job(Job { n: 1 })}\") }\n");
     let o = wj(d.path(), &["build", "main.wj", "-o", "out"], &[]);
     assert_ne!(o.code, 0, "{o:?}");
-    assert!(format!("{}{}", o.stdout, o.stderr).contains("durable fn") && format!("{}{}", o.stdout, o.stderr).contains("interpreter"), "{o:?}");
+    assert!(format!("{}{}", o.stdout, o.stderr).contains("cannot journal yet") && format!("{}{}", o.stdout, o.stderr).contains("wj run --interpret"), "{o:?}");
 }
 
 /// Documents the at-least-once window: a crash after performing a step but before journaling it runs the step again.

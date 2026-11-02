@@ -1,10 +1,11 @@
 // Overhead of the capability gate (ADR-0021 gates: interpreter overhead <= 5% on general programs).
 //
-//   wj run scripts/wj/bench_effects_overhead.wj [--wj PATH] [--runs N] [--max-load L] [--json OUT] [--mode caps|record]
+//   wj run scripts/wj/bench_effects_overhead.wj [--wj PATH] [--runs N] [--max-load L] [--json OUT] [--mode caps|record|replay]
 //
 // `--mode caps` (default) compares WJ_CAPS=off with enforce. `--mode record` compares a plain run with `--record LOG`
 // (ADR-0021 E3 gate: record overhead <= 2x on the sink-dense program, <= +3% on the non-sink one; the log is written to a
-// temporary file).
+// temporary file). `--mode replay` compares a plain run with `--replay LOG` of a log recorded once per workload
+// (no effect is performed on replay).
 //
 // Arms are interleaved (off, on, on, off, ...) and measured in child CPU time (user + sys), median of N runs; both
 // arms must print identical output. The run REFUSES to produce a verdict when the 1-minute load average exceeds
@@ -39,7 +40,18 @@ struct Run {
 fn run_once(wj: string, prog: string, arm: string, mode: string) -> Run {
     let mut argv: Vec<string> = Vec::new()
     let mut log = ""
-    if mode == "record" {
+    if mode == "replay" {
+        log = "/tmp/wj-bench-" + prog.replace("/", "_") + ".replay.wjlog"
+        if !fs.exists(log) {
+            let rec: Vec<string> = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog, "--record", log]
+            let _ = timed("env", rec)
+        }
+        argv = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog]
+        if arm == "replay" {
+            argv.push("--replay")
+            argv.push(log)
+        }
+    } else if mode == "record" {
         log = "/tmp/wj-bench-" + prog.replace("/", "_") + ".wjlog"
         argv = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog]
         if arm == "record" {
@@ -74,15 +86,15 @@ fn main() {
     let max_load: f64 = (long_flag_value_or(args, "max-load", "20.0")).parse::<f64>() ?? 20.0
     let json_out = long_flag_value(args, "json")
     let mode = long_flag_value_or(args, "mode", "caps")
-    if mode != "caps" && mode != "record" {
-        eprintln("--mode must be caps or record")
+    if mode != "caps" && mode != "record" && mode != "replay" {
+        eprintln("--mode must be caps, record or replay")
         process.exit(2)
     }
     let load = load_avg()
     let names = ["non-sink (HashMap/Rc builtins, 400k iterations)", "sink-dense (fs::exists + random + time, 30k iterations)"]
     let progs = ["bench/effects/nonsink.wj", "bench/effects/sink.wj"]
     let base = if mode == "caps" { "off" } else { "plain" }
-    let test = if mode == "caps" { "enforce" } else { "record" }
+    let test = if mode == "caps" { "enforce" } else { mode }
     let mut results = array()
     let mut lines: Vec<string> = Vec::new()
     let mut w = 0

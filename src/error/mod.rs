@@ -9,6 +9,7 @@ pub mod suggestions;
 #[cfg(feature = "cli")]
 pub use suggestions::suggest_fix;
 
+pub mod runtime_text;
 pub mod span_check;
 
 use std::fmt;

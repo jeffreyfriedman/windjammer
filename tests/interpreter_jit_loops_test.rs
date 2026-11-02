@@ -97,7 +97,7 @@ fn cond_leaf(r: &mut Rng) -> String {
 fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
     let late = iters - 1 - r.below(iters / 4);
     let k = loop {
-        let k = r.below(27);
+        let k = r.below(32);
         let ok = match k {
             19 => !inner,
             21 => depth < 2 && !inner,
@@ -127,7 +127,7 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
         15 => format!("ps[(i + 1) % 4].n = {} % 997", int_expr(r, 1)),
         16 => format!("if {} {{\n{}\n}} else {{\n{}\n}}", cond(r), stmt(r, depth + 1, iters, inner), stmt(r, depth + 1, iters, inner)),
         // planted edges, late enough that the loop is in machine code
-        17 => planted(r.below(6), late),
+        17 => planted(r.below(8), late),
         // a literal-typed value stored into the `i32` local keeps `i32` only while it fits (`retag`)
         22 => format!("a = i * {}", r.pick(&["3", "3000000", "-1000000"])),
         23 => "a = a + 1".into(),
@@ -136,6 +136,12 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
         25 => format!("if i % {} == 0 {{ println(\"p ${{b}} ${{x}}\") }}", 97 + r.below(200)),
         26 => format!("let w = h(a as int)\nb = (b + w) % 1000003"),
         18 => format!("let t = {}\nb = (b + t) % 1000003", int_expr(r, 2)),
+        // a struct local and small methods on it, which machine code inlines
+        27 => format!("g = g.add(V2 {{ x: i % {}, y: b % 7 }})", 2 + r.below(12)),
+        28 => "b = (b + g.dot(V2 { x: 1, y: i % 3 })) % 1000003".into(),
+        29 => "let t = V2 { x: a as int, y: i }\nb = (b + t.twice().dot(g)) % 1000003".into(),
+        30 => r.pick(&["g = g.wrap()", "g.x = g.x % 1000 + 1", "b = (b + g.norm()) % 1000003", "g.y -= i % 5"]).into(),
+        31 => "b = (b + g.add(g).div(1 + i % 4)) % 1000003".into(),
         19 => format!("if {} {{ continue }}", cond_leaf(r)),
         20 => format!("if i == {late} {{ break }}"),
         21 if r.below(2) == 0 => format!(
@@ -153,7 +159,7 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
 }
 
 /// An edge reached at a late iteration (`late`), when the loop runs as machine code: a zero divisor,
-/// an index past the end (read and write), `usize` underflow, `i32` and `u8` overflow.
+/// an index past the end (read and write), `usize` underflow, `i32`, `u8` and `int` overflow.
 fn planted(kind: u64, late: u64) -> String {
     match kind {
         0 => format!("if i == {late} {{ b = b / (i - {late}) }}"),
@@ -162,6 +168,10 @@ fn planted(kind: u64, late: u64) -> String {
         3 => format!("if i == {late} {{ a = a * 100000 * 100000 }}"),
         4 => format!("if i == {late} {{ u = u + 255 }}"),
         5 => format!("if i == {late} {{ v[{late} % {LEN} + {LEN}] = 1 }}"),
+        // a zero divisor inside a method machine code inlines (its frame is in the backtrace)
+        6 => format!("if i == {late} {{ b = g.div(i - {late}) }}"),
+        // an `int` overflow inside an inlined method (nothing else plants one: the random mix rarely does)
+        7 => format!("if i == {late} {{ b = V2 {{ x: b + 4611686018427387904, y: 1 }}.dot(V2 {{ x: 2, y: 0 }}) }}"),
         // a panic inside a function a closure-run statement calls (its frame is in the backtrace)
         _ => format!("if i == {late} {{ b = h(-1) }}"),
     }
@@ -185,11 +195,11 @@ fn program(seed: u64) -> String {
     }
     // every third program has one edge of each kind in turn, so each kind is exercised
     if seed % 3 == 0 {
-        body += &planted((seed / 3) % 7, iters - 1 - r.below(iters / 4));
+        body += &planted((seed / 3) % 9, iters - 1 - r.below(iters / 4));
         body.push('\n');
     }
     format!(
-        "struct P {{\n    x: f64,\n    n: int,\n}}\n\nfn h(x: int) -> int {{\n    if x < 0 {{ return 1000 / (x + 1) }}\n    x % 1000 + 1\n}}\n\nfn main() {{
+        "struct P {{\n    x: f64,\n    n: int,\n}}\n\nfn h(x: int) -> int {{\n    if x < 0 {{ return 1000 / (x + 1) }}\n    x % 1000 + 1\n}}\n\nstruct V2 {{\n    x: int,\n    y: int,\n}}\n\nimpl V2 {{\n    fn add(self, o: V2) -> V2 {{ V2 {{ x: self.x + o.x, y: self.y + o.y }} }}\n    fn dot(self, o: V2) -> int {{ self.x * o.x + self.y * o.y }}\n    fn twice(self) -> V2 {{ self.add(self) }}\n    fn wrap(self) -> V2 {{\n        let m = 1000\n        V2 {{ x: self.x % m, y: self.y % m }}\n    }}\n    fn div(self, d: int) -> int {{ self.x / d }}\n    fn norm(self) -> int {{ if self.x < 0 {{ -self.x }} else {{ self.x }} }}\n}}\n\nfn main() {{
     let mut v: Vec<int> = Vec::new()
     let mut fs: Vec<f64> = Vec::new()
     let mut bs: Vec<bool> = Vec::new()
@@ -214,11 +224,12 @@ fn program(seed: u64) -> String {
     let mut y = {y0}
     let mut f = false
     let mut n = 0
+    let mut g = V2 {{ x: 1, y: 2 }}
 {head}
         n += 1
 {body}    }}
     println(\"${{a}} ${{b}} ${{c}} ${{u}} ${{x}} ${{y}} ${{f}} ${{n}}\")
-    println(\"${{v[0]}} ${{v[{last}]}} ${{fs[1]}} ${{bs[2]}} ${{ps[0].x}} ${{ps[3].n}}\")
+    println(\"${{v[0]}} ${{v[{last}]}} ${{fs[1]}} ${{bs[2]}} ${{ps[0].x}} ${{ps[3].n}} ${{g.x}} ${{g.y}}\")
 }}
 ",
         m = 1 + r.below(50),
@@ -293,6 +304,7 @@ fn generated_loops_enter_machine_code() {
     let tmp = tempfile::TempDir::new().unwrap();
     let mut compiled = 0;
     let n = 40;
+    let mut inlined = 0;
     for seed in 1..=n {
         let p = tmp.path().join(format!("cov_{seed}.wj"));
         std::fs::write(&p, program(seed)).unwrap();
@@ -303,8 +315,12 @@ fn generated_loops_enter_machine_code() {
         if err.lines().any(|l| l.starts_with("[jit] loop") && l.ends_with(&format!("cov_{seed}.wj:{line}: compiled"))) {
             compiled += 1;
         }
+        if err.lines().any(|l| l.ends_with(&format!("cov_{seed}.wj:{line}: inlines method calls"))) {
+            inlined += 1;
+        }
     }
     assert!(compiled * 10 >= n * 7, "only {compiled} of {n} generated programs ran a loop in machine code");
+    assert!(inlined * 4 >= n, "only {inlined} of {n} generated loops inlined a method call");
 }
 
 /// Mutation gate (debug builds): each check left out of the machine code makes some program differ.
@@ -317,5 +333,20 @@ fn every_machine_code_check_is_load_bearing() {
         let configs: &[(&str, &[&str], &[(&str, &str)])] = &[("mutant", &[], &env)];
         let diffs = differences(tmp.path(), 1..=60, configs, &mut Vec::new());
         assert!(!diffs.is_empty(), "mutant `{m}` survived 60 generated programs");
+    }
+}
+
+/// Mutation gate (debug builds) on the corpus programs written for checks the generator does not reach:
+/// the box the first write after a struct `let` makes for its closures (`box`).
+#[test]
+#[cfg(debug_assertions)]
+fn every_corpus_check_is_load_bearing() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/engine_parity");
+    for (m, file) in [("box", "jit_loop_inline.wj")] {
+        let p = root.join(file);
+        let base = run(&p, "walker", &[], &[]);
+        assert_eq!(run(&p, "resolved", &[], &[("WJ_JIT_LOOP_HOT", "0")]), base, "{file} differs without a mutant");
+        let o = run(&p, "resolved", &[], &[("WJ_JIT_LOOP_HOT", "0"), ("WJ_JIT_MUTANT", m)]);
+        assert_ne!(o, base, "mutant `{m}` survived {file}");
     }
 }

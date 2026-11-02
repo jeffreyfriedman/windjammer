@@ -1,0 +1,21 @@
+use std::fs
+fn lookup(key: string) -> Option<string> {
+    match fs::read_to_string("kv-${key}.txt") {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    }
+}
+fn store(key: string, value: string) -> bool {
+    fs::write("kv-${key}.txt", value).is_ok()
+}
+durable fn run() -> string {
+    store("a", "alpha")
+    println("stored a")
+    let first = lookup("a")
+    let second = lookup("b")
+    println("looked up")
+    store("b", "beta")
+    let third = lookup("b")
+    "${first.unwrap_or("-")} ${second.unwrap_or("-")} ${third.unwrap_or("-")}"
+}
+fn main() { println("RESULT ${run()}") }

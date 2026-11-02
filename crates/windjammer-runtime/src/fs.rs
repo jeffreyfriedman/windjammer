@@ -27,6 +27,69 @@ pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(),
     std::fs::write(path, contents).map_err(|e| e.to_string())
 }
 
+/// Write bytes to a file
+pub fn write_bytes<P: AsRef<Path>>(path: P, contents: &[u8]) -> Result<(), String> {
+    write(path, contents)
+}
+
+/// The absolute, symlink-free form of a path
+pub fn canonicalize<P: AsRef<Path>>(path: P) -> Result<String, String> {
+    crate::caps::fs_read(&path);
+    std::fs::canonicalize(path).map(|p| p.to_string_lossy().to_string()).map_err(|e| e.to_string())
+}
+
+/// Change the working directory (changes what every relative path means, so it is an environment write)
+pub fn set_current_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::env_write("cwd");
+    std::env::set_current_dir(path).map_err(|e| e.to_string())
+}
+
+/// What `fs::metadata` knows about a path
+#[derive(Debug, Clone)]
+pub struct Metadata {
+    len: u64,
+    file: bool,
+    dir: bool,
+    readonly: bool,
+}
+
+impl Metadata {
+    pub fn size(&self) -> u64 {
+        self.len
+    }
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    pub fn is_file(&self) -> bool {
+        self.file
+    }
+    pub fn is_dir(&self) -> bool {
+        self.dir
+    }
+    pub fn is_readonly(&self) -> bool {
+        self.readonly
+    }
+}
+
+/// Size and kind of a file or directory
+pub fn metadata<P: AsRef<Path>>(path: P) -> Result<Metadata, String> {
+    crate::caps::fs_read(&path);
+    std::fs::metadata(path)
+        .map(|m| Metadata { len: m.len(), file: m.is_file(), dir: m.is_dir(), readonly: m.permissions().readonly() })
+        .map_err(|e| e.to_string())
+}
+
+/// Append to a file, creating it when missing (accepts bytes or strings)
+pub fn append<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(), String> {
+    use std::io::Write;
+    crate::caps::fs_write(&path);
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).map_err(|e| e.to_string())?;
+    f.write_all(contents.as_ref()).map_err(|e| e.to_string())
+}
+
 /// Write string to file (helper for common case)
 pub fn write_string<P: AsRef<Path>>(path: P, contents: &str) -> Result<(), String> {
     crate::caps::fs_write(&path);
@@ -147,6 +210,27 @@ pub fn read_dir<P: AsRef<Path>>(path: P) -> Result<Vec<DirEntry>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_append_creates_then_extends() {
+        let temp = std::env::temp_dir().join(format!("windjammer_append_{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&temp);
+        append(&temp, "a\n").unwrap();
+        append(&temp, "b\n").unwrap();
+        assert_eq!(read_to_string(&temp).unwrap(), "a\nb\n");
+        remove_file(&temp).unwrap();
+    }
+
+    #[test]
+    fn test_metadata_canonicalize_and_bytes() {
+        let temp = std::env::temp_dir().join(format!("windjammer_meta_{}.bin", std::process::id()));
+        write_bytes(&temp, &[1, 2, 3]).unwrap();
+        let m = metadata(&temp).unwrap();
+        assert!(m.len() == 3 && m.is_file() && !m.is_dir());
+        assert!(canonicalize(&temp).unwrap().ends_with(temp.file_name().unwrap().to_str().unwrap()));
+        assert!(metadata(temp.with_extension("missing")).is_err());
+        remove_file(&temp).unwrap();
+    }
 
     #[test]
     fn test_read_write() {
