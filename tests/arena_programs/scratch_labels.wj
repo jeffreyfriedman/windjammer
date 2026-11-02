@@ -19,7 +19,7 @@ fn main() {
         }
         total = total + parts.len()
         let mut line = ""
-        for p in parts.iter() {
+        for p in parts {
             if line.len() > 0 {
                 line = "${line},"
             }
