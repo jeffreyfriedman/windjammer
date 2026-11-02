@@ -97,7 +97,7 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     // Compile first with machine-readable output, so a rustc error reaches the user as a Windjammer
     // diagnostic on the `.wj` source (code, hint, location) and never as raw Rust compiler text.
     let _ = crate::cargo_cache::reclaim();
-    if let Some(code) = compile_or_report(output_dir, release)? {
+    if let Some(code) = compile_or_report(output_dir, release, path)? {
         return Ok(code);
     }
     let mut cmd = Command::new("cargo");
@@ -133,11 +133,19 @@ fn build_quietly(path: &Path, output_dir: &Path, target: crate::CompilationTarge
         .arg("--output")
         .arg(output_dir)
         .arg("--no-cargo")
+        // Line maps let rustc errors land on the right `.wj` line (diagnostics::rustc_map).
+        .arg("--source-maps")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
         .output()?;
     use std::io::Write;
-    std::io::stderr().write_all(&status.stdout)?;
+    // Progress only: the "run cargo build manually" hints do not apply to `wj run`.
+    let progress: String = String::from_utf8_lossy(&status.stdout)
+        .lines()
+        .filter(|l| !l.contains("cargo build"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    std::io::stderr().write_all(progress.as_bytes())?;
     if !status.status.success() {
         bail!("build failed");
     }
@@ -169,7 +177,7 @@ fn build_windjammer_dependencies(path: &Path) -> Result<()> {
 }
 
 /// `cargo build` the generated crate; on failure print translated diagnostics and return exit status 1.
-fn compile_or_report(output_dir: &Path, release: bool) -> Result<Option<i32>> {
+fn compile_or_report(output_dir: &Path, release: bool, source: &Path) -> Result<Option<i32>> {
     let mut build = Command::new("cargo");
     build.args(["build", "--quiet", "--message-format=json"]).current_dir(output_dir);
     if release {
@@ -181,7 +189,7 @@ fn compile_or_report(output_dir: &Path, release: bool) -> Result<Option<i32>> {
         return Ok(None);
     }
     let text = format!("{}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
-    let diags = crate::cli::build_json::map_cargo_failure(output_dir, &text);
+    let diags = crate::cli::build_json::map_cargo_failure_in(output_dir, &text, Some(if source.is_dir() { source } else { source.parent().unwrap_or(Path::new(".")) }));
     let only_unparsed = diags.len() == 1 && diags[0].message.contains("could not be parsed");
     for d in &diags {
         eprint!("{}", crate::diagnostics::render::render(d, &|f| std::fs::read_to_string(f).ok()));

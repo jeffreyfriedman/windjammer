@@ -173,6 +173,14 @@ name = "diag_hints_suite"
 path = "tests/diag_hints_suite.rs"
 
 [[test]]
+name = "diag_requests_e2e"
+path = "tests/diag_requests_e2e.rs"
+
+[[test]]
+name = "diag_schema_suite"
+path = "tests/diag_schema_suite.rs"
+
+[[test]]
 name = "diag_hints_corpus"
 path = "tests/diag_hints_corpus.rs"
 
