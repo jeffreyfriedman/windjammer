@@ -138,8 +138,9 @@ digraph deps {
   "cargo_integration" -> "error_mapper" [label="1"];
   "cargo_integration" -> "source_map" [label="1"];
   "cargo_integration" -> "test_runner" [label="1"];
+  "cargo_toml" -> "cargo_cache" [label="1"];
   "cargo_toml" -> "compiler" [label="1"];
-  "cargo_toml" -> "compiler_config" [label="4"];
+  "cargo_toml" -> "compiler_config" [label="5"];
   "cargo_toml" -> "config" [label="7"];
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="2"];
@@ -161,7 +162,7 @@ digraph deps {
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="19"];
-  "cli" -> "cargo_toml" [label="2"];
+  "cli" -> "cargo_toml" [label="4"];
   "cli" -> "check" [label="10"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="3"];
