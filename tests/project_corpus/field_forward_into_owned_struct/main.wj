@@ -1,0 +1,10 @@
+// A formal whose fields are moved into another call (restore_owned_field_forward_formals): the body
+// moves `reply.body`, so `reply` must be owned; the caller reuses nothing. Expected by hand.
+// expect: 404:missing 200:ok
+mod web
+
+fn main() {
+    let a = web::Reply { status: 404, body: "missing" }
+    let b = web::Reply { status: 200, body: "ok" }
+    println("${web::render(a)} ${web::render(b)}")
+}

@@ -1,0 +1,17 @@
+pub struct Reply {
+    pub status: int,
+    pub body: string,
+}
+
+pub struct Wire {
+    pub text: string,
+}
+
+pub fn wire(status: int, body: string) -> Wire {
+    Wire { text: "${status}:${body}" }
+}
+
+pub fn render(reply: Reply) -> string {
+    let w = wire(reply.status, reply.body)
+    w.text
+}
