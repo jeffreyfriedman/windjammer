@@ -1,0 +1,1 @@
+git init -q && git add -A && git -c user.email=a@b.c -c user.name=n commit -q -m init && $WJ run $ALLOW $SCRIPTS/check_orphan_tests.wj ; rc=$?; rm -rf .git; exit $rc

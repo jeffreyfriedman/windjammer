@@ -249,6 +249,21 @@ fn register_misc(r: &mut Registry) {
         None => Err(semantic("mime::from_path is not registered")),
     });
 
+    // the program shares this process's stdout, stderr and stdin (a test runner whose progress should be seen as it
+    // happens); the result is its exit status (`-1` when a signal ended it)
+    r.func("process::run_inherit", |it, a| {
+        let args: Vec<String> = it
+            .to_items(arg(&a, 1, "run_inherit")?)?
+            .iter()
+            .filter_map(|v| if let Value::Str(x) = v { Some((**x).clone()) } else { None })
+            .collect();
+        it.flush();
+        Ok(match std::process::Command::new(arg_str(&a, 0, "run_inherit")?.as_str()).args(&args).status() {
+            Ok(st) => Value::ok(Value::Int(st.code().unwrap_or(-1) as i128, IntTy::I32)),
+            Err(e) => Value::err(s(&e.to_string())),
+        })
+    });
+
     r.func("process::run_with_output", |it, a| {
         let args: Vec<String> = it
             .to_items(arg(&a, 1, "run_with_output")?)?

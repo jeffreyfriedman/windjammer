@@ -1,0 +1,27 @@
+op_int_annotated_string      1
+op_string_annotated_int      1
+op_unknown_method            1
+op_let_int_gets_string       1
+op_let_string_gets_int       1
+op_let_bool_gets_int         1
+op_undefined_variable        1
+op_drop_argument             1
+op_extra_argument            1
+op_argument_wrong_type       1
+op_return_wrong_type         1
+op_unknown_field             1
+op_undefined_function        1
+total 13
+a_unicode__argument_wrong_type.wj
+a_unicode__drop_argument.wj
+a_unicode__extra_argument.wj
+a_unicode__int_annotated_string.wj
+a_unicode__let_int_gets_string.wj
+a_unicode__let_string_gets_int.wj
+a_unicode__return_wrong_type.wj
+a_unicode__string_annotated_int.wj
+a_unicode__undefined_function.wj
+a_unicode__undefined_variable.wj
+a_unicode__unknown_method.wj
+b_plain__let_bool_gets_int.wj
+d_methods__unknown_field.wj

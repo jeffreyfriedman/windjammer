@@ -21,17 +21,19 @@ sys.exit(p.returncode)
 '''
 
 
-def install(bin_dir, real_wj, log_path, src_path):
+def install(bin_dir, real_wj, log_path, src_path, name="wj"):
     os.makedirs(bin_dir, exist_ok=True)
-    p = os.path.join(bin_dir, "wj")
+    p = os.path.join(bin_dir, name)
     with open(p, "w") as f:
         f.write(SHIM % {"real": real_wj, "log": log_path, "src": src_path})
     os.chmod(p, os.stat(p).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return p
 
 
-def classify(argv):
-    """-> (verb, mode). mode in interpret|compiled|default|n/a."""
+def classify(argv, tool="wj"):
+    """-> (verb, mode). mode in interpret|compiled|default|n/a; native toolchains are verb/mode "native"."""
+    if tool != "wj":
+        return "native", "native"
     args = [a for a in argv if not a.startswith("-")]
     verb = args[0] if args else ""
     if "--interpret" in argv:
@@ -47,16 +49,16 @@ def classify(argv):
     return verb, mode
 
 
-VERIFY_VERBS = ("check", "run", "test", "build")
+VERIFY_VERBS = ("check", "run", "test", "build", "native")
 
 
-def read_log(path):
+def read_log(path, tool="wj"):
     if not os.path.exists(path):
         return []
     out = []
     for ln in open(path):
         if ln.strip():
             e = json.loads(ln)
-            e["verb"], e["mode"] = classify(e["argv"])
+            e["verb"], e["mode"] = classify(e["argv"], tool)
             out.append(e)
     return out

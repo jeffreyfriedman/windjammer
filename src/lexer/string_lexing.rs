@@ -43,6 +43,33 @@ impl Lexer {
         false
     }
 
+    /// At `escaped` (the character after a backslash): `u{` + 1 to 6 hex digits + `}` names a Unicode scalar value.
+    /// Consumes the escape and returns the character when well formed; otherwise consumes nothing.
+    fn read_numeric_escape(&mut self, escaped: char) -> Option<char> {
+        if escaped != 'u' || self.peek(1) != Some('{') {
+            return None;
+        }
+        let mut offset = 2;
+        let mut value: u32 = 0;
+        let mut seen = 0;
+        while seen < 6 {
+            match self.peek(offset).and_then(|c| c.to_digit(16)) {
+                Some(d) => value = value * 16 + d,
+                None => break,
+            }
+            offset += 1;
+            seen += 1;
+        }
+        if seen == 0 || self.peek(offset) != Some('}') {
+            return None;
+        }
+        let c = char::from_u32(value)?;
+        for _ in 0..=offset {
+            self.advance();
+        }
+        Some(c)
+    }
+
     pub(in crate::lexer) fn read_string(&mut self) -> Token {
         self.advance(); // Skip opening quote
         let mut parts = Vec::new();
@@ -58,10 +85,17 @@ impl Lexer {
             } else if ch == '\\' {
                 self.advance();
                 if let Some(escaped) = self.current_char {
+                    // `\u{H..}` names a character by code point; anything malformed keeps the old meaning
+                    // (the escaped character itself)
+                    if let Some(c) = self.read_numeric_escape(escaped) {
+                        current_literal.push(c);
+                        continue;
+                    }
                     let unescaped = match escaped {
                         'n' => '\n',
                         't' => '\t',
                         'r' => '\r',
+                        '0' => '\0',
                         '\\' => '\\',
                         '"' => '"',
                         '`' => '`',
@@ -228,17 +262,22 @@ impl Lexer {
                 // Handle escape sequences
                 self.advance();
                 if let Some(escaped) = self.current_char {
-                    let unescaped = match escaped {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '\\' => '\\',
-                        '\'' => '\'',
-                        '0' => '\0',
-                        _ => escaped,
-                    };
-                    self.advance();
-                    unescaped
+                    if let Some(c) = self.read_numeric_escape(escaped) {
+                        c
+                    } else {
+                        let unescaped = match escaped {
+                            'n' => '\n',
+                            't' => '\t',
+                            'r' => '\r',
+                            '\\' => '\\',
+                            '\'' => '\'',
+                            '"' => '"',
+                            '0' => '\0',
+                            _ => escaped,
+                        };
+                        self.advance();
+                        unescaped
+                    }
                 } else {
                     '\0'
                 }

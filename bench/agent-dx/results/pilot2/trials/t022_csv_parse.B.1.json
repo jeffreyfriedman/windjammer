@@ -1,0 +1,64 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn parse_line(line: string) -> Vec<string> {\n    let chars: Vec<char> = line.chars().collect()\n    let n = chars.len()\n    let mut fields: Vec<string> = []\n    let mut cur: string = \"\"\n    let mut in_q = false\n    let mut i: int = 0\n    while i < n {\n        let c = chars[i]\n        if in_q {\n            if c == '\"' {\n                if i + 1 < n && chars[i + 1] == '\"' {\n                    cur.push('\"')\n                    i += 1\n                } else {\n                    in_q = false\n                }\n            } else {\n                cur.push(c)\n            }\n        } else if c == '\"' {\n            in_q = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur.push(c)\n        }\n        i += 1\n    }\n    fields.push(cur)\n    fields\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let fields = parse_line(line)\n        let mut parts: Vec<string> = []\n        for f in fields {\n            parts.push(\"[${f}]\")\n        }\n        println(\"${parts.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn parse_line(line: string) -> Vec<string> {\n    let chars: Vec<char> = line.chars().collect()\n    let n = chars.len()\n    let mut fields: Vec<string> = []\n    let mut cur: string = \"\"\n    let mut in_q = false\n    let mut i: int = 0\n    while i < n {\n        let c = chars[i]\n        if in_q {\n            if c == '\"' {\n                if i + 1 < n && chars[i + 1] == '\"' {\n                    cur.push('\"')\n                    i += 1\n                } else {\n                    in_q = false\n                }\n            } else {\n                cur.push(c)\n            }\n        } else if c == '\"' {\n            in_q = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur.push(c)\n        }\n        i += 1\n    }\n    fields.push(cur)\n    fields\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let fields = parse_line(line)\n        let mut parts: Vec<string> = []\n        for f in fields {\n            parts.push(\"[${f}]\")\n        }\n        println(\"${parts.len()}: ${parts.join(\"|\")}\")\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 16.621,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mode_violations": 0,
+ "other_seconds": 17.45,
+ "pass_final": true,
+ "recorded_at": "2026-10-26T13:42:21",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 12.351,
+ "tool_wait_seconds": 16.62,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 12.351,
+  "cost_usd": 0.0242406,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It compiles with `wj run --compiled`, and the output matched the expected output for both examples.\n\nI ran one combined input covering both examples, including the empty line and the `,` line. I didn't test other inputs, such as a trailing `\\r` on lines or a quoted field that is empty (`\"\"`).\n\nThe parser reads each line character by character and tracks whether i",
+  "subtype": "success",
+  "tokens_in": 29589,
+  "tokens_out": 989,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 46.42
+}

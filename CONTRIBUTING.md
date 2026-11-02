@@ -88,7 +88,7 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 ## 🧪 Testing
 
 - **Run all tests**: `cargo test --release --test all` (never `--all-features`; it disables many test files)
-- **Check no test file is orphaned**: `scripts/check-orphan-tests.sh`
+- **Check no test file is orphaned**: `scripts/wj/check_orphan_tests.wj`
 - **Run specific test**: `cargo test --release --test all -- test_name`
 - **Run with output**: `cargo test --release --test all -- test_name -- --nocapture`
 - **Run benchmarks**: `cargo bench`
@@ -119,7 +119,7 @@ Always add tests for new features and bug fixes.
 
 3. **Test thoroughly**
    - Run tests: `cargo test --release --test all` (never `--all-features`)
-   - Run `scripts/check-orphan-tests.sh` and, if you added modules, `scripts/update-architecture-baselines.sh`
+   - Run `scripts/wj/check_orphan_tests.wj` and, if you added modules, `scripts/update-architecture-baselines.sh`
    - Run clippy: `cargo clippy -- -D warnings`
    - Format code: `cargo fmt --all`
 

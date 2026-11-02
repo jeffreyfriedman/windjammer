@@ -165,7 +165,7 @@ fn to_json(it: &mut Interpreter, v: &Value) -> R<Ser> {
         Value::Float(f, _) => serde_json::Number::from_f64(*f).map(|n| J::Num(n.to_string())).unwrap_or(J::Null),
         Value::Char(c) => J::Str(c.to_string()),
         Value::Str(t) => J::Str((**t).clone()),
-        Value::Vec(xs) | Value::Tuple(xs) => J::Arr(xs.iter().map(|x| to_json(it, x)).collect::<R<Vec<_>>>()?),
+        Value::Vec(_) | Value::Tuple(_) => J::Arr(v.items().iter().map(|x| to_json(it, x)).collect::<R<Vec<_>>>()?),
         Value::Set(m) => J::Arr(m.keys().map(|k| to_json(it, &k.0)).collect::<R<Vec<_>>>()?),
         Value::Map(m) => {
             let mut o = Vec::new();

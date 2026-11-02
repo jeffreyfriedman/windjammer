@@ -1,0 +1,75 @@
+// Render benchmarks/rust_parity/results.json (from run.py) as a markdown table on stdout.
+//   wj run scripts/wj/rust_parity_report.wj benchmarks/rust_parity/results.json
+use std::env
+use std::fs
+use std::process
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::members
+use wj_json_doc::as_f64
+use wj_json_doc::as_i64
+use wj_table::fixed
+use wj_table::new
+use wj_table::add_row
+use wj_table::right_align
+use wj_table::markdown
+
+fn num(doc: Json, key: string) -> f64 {
+    match get(doc, key) {
+        Some(v) => as_f64(v) ?? 0.0,
+        None => 0.0,
+    }
+}
+
+fn count(doc: Json, key: string) -> i64 {
+    match get(doc, key) {
+        Some(v) => as_i64(v) ?? 0,
+        None => 0,
+    }
+}
+
+fn sub(doc: Json, key: string) -> Json {
+    get(doc, key) ?? wj_json_doc::object()
+}
+
+fn main() {
+    let args = env.args()
+    if args.len() < 2 {
+        println("usage: rust_parity_report.wj RESULTS.json")
+        process.exit(2)
+    }
+    let text = match fs.read_to_string(args[1]) {
+        Ok(t) => t,
+        Err(e) => {
+            println("cannot read ${args[1]}: ${e}")
+            process.exit(1)
+            ""
+        },
+    }
+    let d = match parse(text) {
+        Ok(d) => d,
+        Err(e) => {
+            println("${args[1]}: ${e}")
+            process.exit(1)
+            wj_json_doc::object()
+        },
+    }
+    println("Runs per binary: ${count(d, "runs")}. Times are seconds; `cpu` = user+sys of the child.\n")
+    let headers = ["kernel", "variant", "wall median", "wall min..max", "wall stdev", "cpu median", "size KB", "allocs", "alloc MB", "clone", "to_string", "as", "format!"]
+    let mut t = right_align(new(headers), [2, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    for k in members(sub(d, "kernels")) {
+        for v in ["baseline", "optimized", "idiomatic"] {
+            let r = sub(k.value, v)
+            let w = sub(r, "wall")
+            let c = sub(r, "cpu")
+            let s = sub(r, "source")
+            let h = sub(r, "heap")
+            let size_kb = (count(r, "binary_bytes") as f64) / 1024.0
+            let alloc_mb = (count(h, "bytes") as f64) / 1000000.0
+            t = add_row(t, [k.key, v, fixed(num(w, "median"), 3), fixed(num(w, "min"), 3) + ".." + fixed(num(w, "max"), 3),
+                fixed(num(w, "stdev"), 3), fixed(num(c, "median"), 3), fixed(size_kb, 0), "${count(h, "allocs")}",
+                fixed(alloc_mb, 1), "${count(s, "clone")}", "${count(s, "to_string")}", "${count(s, "as_cast")}", "${count(s, "format")}"])
+        }
+    }
+    println(markdown(t))
+}

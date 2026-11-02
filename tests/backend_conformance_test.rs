@@ -77,7 +77,7 @@ fn reference_vectors_are_derived_from_models() {
     probe.announce();
     let programs = program::discover(&root());
     let drift = oracle::verify_vectors(&programs, &probe);
-    assert!(drift.is_empty(), "committed vectors differ from their reference models (run tests/conformance_programs/regen_vectors.py):\n{}", drift.join("\n"));
+    assert!(drift.is_empty(), "committed vectors differ from their reference models (run scripts/wj/regen_conformance_vectors.wj):\n{}", drift.join("\n"));
 }
 
 #[test]

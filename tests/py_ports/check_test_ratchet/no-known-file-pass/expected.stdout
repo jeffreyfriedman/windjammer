@@ -1,0 +1,7 @@
+⚠️  No known-failures file at .config/known-test-failures.txt — running tests normally
+fake cargo args: test --release --test all
+running 3 tests
+test a::one ... ok
+test a::two ... ok
+
+test result: ok. 3 passed

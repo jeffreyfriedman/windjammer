@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/private/tmp/wj-port-gate-66478-regen_conformance_vectors-failing-model/tests/conformance_programs/regen_vectors.py", line 17, in <module>
+    res = subprocess.run([sys.executable, "-I", str(ref), str(seed)], capture_output=True, text=True, check=True)
+  File "/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['/opt/homebrew/opt/python@3.13/bin/python3.13', '-I', '/private/tmp/wj-port-gate-66478-regen_conformance_vectors-failing-model/tests/conformance_programs/40_c.ref.py', '1']' returned non-zero exit status 3.

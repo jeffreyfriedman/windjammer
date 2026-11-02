@@ -1,0 +1,8 @@
+ERROR: 3 test file(s) are not reached by any runner:
+  tests/deep/basename_only.wj
+  tests/deep/path_ref.wj
+  tests/sub/helper.rs
+
+Fix: wire the file (top-level tests/*.rs, a '// consumes: <glob>' line in a tests/*.rs
+runner, or a reference from a runner), delete it, or add '<glob> | <reason>' to tests/ORPHAN_ALLOWLIST.txt
+(allow-list is for fixtures/helpers only).

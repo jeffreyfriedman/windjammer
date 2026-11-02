@@ -1,0 +1,1 @@
+PATH="$W/bin:$PATH" $WJ run $ALLOW $SCRIPTS/check_test_ratchet.wj --release --test all -- specific_test
