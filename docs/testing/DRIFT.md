@@ -9,7 +9,7 @@ wj run scripts/wj/drift_gate.wj --fast               # selftest + differential c
 wj run scripts/wj/drift_gate.wj --compiled live      # re-run the compiled side now instead of the recorded baseline
 ```
 
-`scripts/merge_gate.sh` runs it as its last step. Exit status 1 on any divergence. `WJ` (or `--wj`) names the
+`scripts/merge_gate.sh` runs it as its last fast step (compiled side from the recorded baseline) and, with `--full`, again with `--compiled live`. Exit status 1 on any divergence. `WJ` (or `--wj`) names the
 binary (default `target/release/wj`); `WJ_CARGO_WRAPPER` prefixes cargo and compiled runs (a build-slot gate on a
 shared machine).
 

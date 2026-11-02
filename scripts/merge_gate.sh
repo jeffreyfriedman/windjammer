@@ -53,6 +53,7 @@ WJ="${WJ:-target/release/wj}"
 step "orphan tests" "$WJ" run scripts/wj/check_orphan_tests.wj
 step "drift gate (walker == resolved == compiled; shrink-only ledger)" "$WJ" run scripts/wj/drift_gate.wj --wj "$WJ"
 if [ $full = 1 ]; then
+  step "drift gate, compiled side re-run now (the default step compares with the recorded baseline)" "$WJ" run scripts/wj/drift_gate.wj --wj "$WJ" --fast --compiled live
   step "backend conformance" t backend_conformance_test::
   step "whole suite (ratchet: only new failures)" "$WJ" run scripts/wj/check_test_ratchet.wj --release --test all
 fi
