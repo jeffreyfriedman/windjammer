@@ -681,3 +681,151 @@ fn main() {
     let rs = fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
     assert!(rs.contains("fn check(db: &Store)"), "a Copy field read made the parameter owned:\n{rs}");
 }
+
+// ------------------------------------------------------------------ ecosystem sweep findings
+
+/// Two packages: a call into a dependency whose formal is read-only (`&Vec<String>` in its signature) borrows the
+/// argument, even though the dependency was compiled separately.
+#[test]
+fn call_into_dependency_borrows_a_read_only_vec_formal() {
+    let dir = write_project(&[
+        ("dep/wj.toml", "[package]\nname = \"origin-rules\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[lib]\n"),
+        (
+            "dep/src/lib.wj",
+            "pub fn is_listed(origin: string, allowed: Vec<string>) -> bool {\n    let mut i = 0\n    while i < allowed.len() {\n        let entry = allowed[i]\n        if entry == \"*\" {\n            return true\n        }\n        if entry == origin {\n            return true\n        }\n        i = i + 1\n    }\n    false\n}\n\npub fn allow_origin(origin: string, allowed: Vec<string>) -> Option<string> {\n    if !is_listed(origin, allowed) {\n        return None\n    }\n    let mut j = 0\n    while j < allowed.len() {\n        if allowed[j] == \"*\" {\n            return Some(\"*\")\n        }\n        j = j + 1\n    }\n    Some(origin)\n}\n",
+        ),
+        (
+            "app/wj.toml",
+            "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\norigin_rules = { path = \"../dep/build\" }\n\n[lib]\n",
+        ),
+        (
+            "app/src/lib.wj",
+            "use origin_rules::allow_origin\n\npub fn cors_allow(origin: string, allowed: Vec<string>) -> Option<string> {\n    allow_origin(origin, allowed)\n}\n",
+        ),
+    ]);
+    let dep = Command::new(WJ).args(["build", "./src", "--library"]).current_dir(dir.path().join("dep")).output().unwrap();
+    assert!(dep.status.success(), "dependency build failed:\n{}", String::from_utf8_lossy(&dep.stderr));
+    let dep_rs = fs::read_to_string(dir.path().join("dep/build/lib.rs")).unwrap();
+    assert!(dep_rs.contains("allowed: &Vec<String>"), "the dependency's formal is not borrowed:\n{dep_rs}");
+    let app = Command::new(WJ).args(["build", "./src", "--library", "--no-cargo"]).current_dir(dir.path().join("app")).output().unwrap();
+    assert!(app.status.success(), "app build failed:\n{}", String::from_utf8_lossy(&app.stderr));
+    let app_rs = fs::read_to_string(dir.path().join("app/build/lib.rs")).unwrap();
+    assert!(app_rs.contains("allow_origin(origin, &allowed)"), "owned Vec passed to a borrowed formal:\n{app_rs}");
+}
+
+/// The `int` argument of the blocking sleep reaches the runtime (compiled, then run).
+#[test]
+fn blocking_sleep_accepts_an_int_argument() {
+    let dir = write_project(&[(
+        "m.wj",
+        "use std::async::sleep_ms_blocking\n\npub fn pause_ms(ms: int) {\n    if ms <= 0 {\n        return\n    }\n    sleep_ms_blocking(ms)\n}\n\nfn main() {\n    pause_ms(1)\n    pause_ms(0 - 5)\n    println(\"ok\")\n}\n",
+    )]);
+    let o = Command::new(WJ).args(["run", "--compiled", "m.wj"]).current_dir(dir.path()).output().unwrap();
+    assert!(o.status.success(), "compiled run failed:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(String::from_utf8_lossy(&o.stdout).trim_end().ends_with("ok"));
+}
+
+/// Numeric solver (C4): `out.push(i + 1)` where `i` is bounded by `lines.len()` and `out` is returned as
+/// `Vec<int>` keeps the index arithmetic `int`.
+#[test]
+fn usize_index_pushed_into_int_vec_is_converted() {
+    type_checks(
+        r#"pub fn matching_lines(lines: Vec<string>, needle: string) -> Vec<int> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < lines.len() {
+        if lines[i] == needle {
+            out.push(i + 1)
+        }
+        i = i + 1
+    }
+    out
+}
+"#,
+    );
+}
+
+/// An `Option` field of an owned parameter matched inside a loop is borrowed, so the payload is not moved on
+/// the first iteration.
+#[test]
+fn option_field_matched_inside_loops_is_borrowed() {
+    project_type_checks(&[
+        (
+            "src/search.wj",
+            r#"pub struct Opts {
+    pub invert: bool,
+}
+
+pub struct Command {
+    pub paths: Vec<string>,
+    pub options: Opts,
+    pub replace: Option<string>,
+}
+
+fn lines_of(path: string, cmd: Command) -> Result<Vec<string>, string> {
+    let mut out = Vec::new()
+    out.push(path)
+    Ok(out)
+}
+
+fn score(invert: bool, opts: Opts) -> Result<Vec<int>, string> {
+    let mut out = Vec::new()
+    out.push(1)
+    Ok(out)
+}
+
+pub fn run(cmd: Command) -> Result<(string, int), string> {
+    let mut total = 0
+    for root in cmd.paths {
+        let files = match lines_of(root, cmd) {
+            Ok(list) => list,
+            Err(e) => return Err(e),
+        }
+        for path in files {
+            match cmd.replace {
+                Some(replacement) => {
+                    total = total + replacement.len() + path.len()
+                },
+                None => {
+                    let hits = match score(false, cmd.options) {
+                        Ok(h) => h,
+                        Err(e) => return Err(e),
+                    }
+                    total = total + hits.len()
+                },
+            }
+        }
+    }
+    Ok(("", total))
+}
+"#,
+        ),
+        ("src/mod.wj", "pub mod search\n"),
+    ]);
+}
+
+/// String-literal arms of a `match` bound by an unannotated `let` are owned `String`s (the binding is ascribed
+/// `String`), also when the function does not return a string.
+#[test]
+fn match_string_literal_arms_into_unannotated_let_are_owned() {
+    type_checks(
+        r#"pub enum Level {
+    Low,
+    High,
+}
+
+fn pick() -> Level {
+    Level::High
+}
+
+fn main() {
+    let e = pick()
+    let m = match e {
+        Level::Low => "Low",
+        Level::High => "High",
+    }
+    println("level ${m}")
+}
+"#,
+    );
+}

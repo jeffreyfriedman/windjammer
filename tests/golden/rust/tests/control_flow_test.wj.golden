@@ -52,10 +52,10 @@ fn test_for_loop() {
 fn test_match_statement() {
     let x = 2_i32;
     let result: String = match x {
-        1 => "one",
-        2 => "two",
-        3 => "three",
-        _ => "other",
+        1 => String::from("one"),
+        2 => String::from("two"),
+        3 => String::from("three"),
+        _ => String::from("other"),
     };
     assert!(result == "two");
 }
@@ -65,9 +65,9 @@ fn test_match_statement() {
 fn test_match_with_default() {
     let x = 99_i32;
     let result: String = match x {
-        1 => "one",
-        2 => "two",
-        _ => "other",
+        1 => String::from("one"),
+        2 => String::from("two"),
+        _ => String::from("other"),
     };
     assert!(result == "other");
 }
