@@ -12,7 +12,7 @@
 //! no decorators, not generic/async/extern, not recursive, whose body is `let`s and a tail
 //! expression machine code lowers.
 
-use super::kinds::Shape;
+use super::kinds::{mutant, Shape};
 use super::lower::{Bind, Lo, StructSpill, Val, E, NO_SLOT};
 use crate::interpreter::engine::FuncDef;
 use crate::parser::{Expression, Pattern, Statement, Type};
@@ -44,6 +44,20 @@ pub(super) enum Out {
 
 /// Nested inlined calls at most.
 const MAX_INLINE: usize = 4;
+
+impl VStruct {
+    /// Does the next write of the local make its slot's box (a `let` in the loop not yet written)?
+    pub(super) fn fresh(&self) -> bool {
+        self.fresh
+    }
+    pub(super) fn slot(&self) -> usize {
+        self.slot
+    }
+    /// A write made the box: later ones fill it.
+    pub(super) fn boxed(&mut self) {
+        self.fresh = false;
+    }
+}
 
 impl Lo<'_, '_> {
     /// A struct local the loop is entered with: its fields come in the spill buffer.
@@ -169,7 +183,8 @@ impl Lo<'_, '_> {
 
     /// `recv.method(args)` with a user method machine code can inline.
     pub(super) fn inline_call(&mut self, object: E, method: &str, args: &'static [(Option<String>, E)]) -> Option<Out> {
-        if self.frames.len() >= MAX_INLINE || !self.struct_valued(object) {
+        // same-name types in different modules: the method table is keyed by bare name
+        if self.frames.len() >= MAX_INLINE || (!self.it.dup_types.is_empty() && !mutant(self.it, "dupe")) || !self.struct_valued(object) {
             return None;
         }
         let recv = self.vexpr(object)?;
@@ -262,7 +277,8 @@ impl Lo<'_, '_> {
     /// `x = e` where `x` is a struct local: the same struct type, field by field.
     pub(super) fn assign_struct(&mut self, sid: usize, value: E) -> Option<()> {
         let v = self.vexpr(value)?;
-        if *v.name != *self.vstructs[sid].name || v.fields.len() != self.vstructs[sid].fields.len() {
+        let same = |s: &VStruct| *v.name == *s.name && v.fields.len() == s.fields.len() && v.fields.iter().zip(&s.fields).all(|((a, _), (b, _))| a == b);
+        if !same(&self.vstructs[sid]) {
             return None;
         }
         let ids: Vec<usize> = self.vstructs[sid].fields.iter().map(|(_, id)| *id).collect();

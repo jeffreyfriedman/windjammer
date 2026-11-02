@@ -382,8 +382,24 @@ impl Lo<'_, '_> {
             return None; // inside an inlined call: the whole caller statement is the unit of resumption
         }
         let (spills, structs) = self.in_scope();
-        if structs.iter().any(|sp| sp.fresh && self.reg.kind(sp.slot) == Some(crate::interpreter::resolved::osr::SlotKind::Boxed)) {
-            return None;
+        // A boxed struct `let` gets its box from the first write after the binding (an exit's or a
+        // closure-run statement's); later writes in the iteration fill that box. This is exact in the
+        // `let`'s own block, which is straight-line; a statement in a nested block while the box is still
+        // to be made would leave the points after the block not knowing whether it was.
+        let depth = self.scopes.len() - 1;
+        let mut boxing = Vec::new();
+        for (d, scope) in self.scopes.iter().enumerate() {
+            for (_, bind) in scope {
+                if let Bind::Struct(sid) = bind {
+                    let s = &self.vstructs[*sid];
+                    if s.fresh() && self.reg.kind(s.slot()) == Some(crate::interpreter::resolved::osr::SlotKind::Boxed) {
+                        if d != depth {
+                            return None;
+                        }
+                        boxing.push(*sid);
+                    }
+                }
+            }
         }
         // a loop `let` that is a walker slot gets a fresh one per binding: only its own closures can
         if spills.iter().any(|sp| sp.fresh && sp.slot != NO_SLOT && self.reg.kind(sp.slot) == Some(crate::interpreter::resolved::osr::SlotKind::Boxed)) {
@@ -395,6 +411,9 @@ impl Lo<'_, '_> {
             self.b.ins().store(MemFlags::trusted(), x, self.buf, (sp.buf * 8) as i32);
         }
         self.stmts.push(StmtRun { stmt: s, spills: spills.clone(), structs });
+        for sid in boxing.into_iter().filter(|_| !super::kinds::mutant(self.it, "box")) {
+            self.vstructs[sid].boxed();
+        }
         let k = self.b.ins().iconst(types::I64, (self.stmts.len() - 1) as i64);
         let buf = self.buf;
         let status = self.call("run_stmt", rt::run_stmt as *const () as usize, &[buf, k], false, false);
