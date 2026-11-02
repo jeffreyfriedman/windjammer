@@ -266,7 +266,7 @@ wall time, not immune).
      projects x 6 random dependency edits (arity, visibility, rename, syntax error, f32+f64 for analysis-phase WJ0027,
      unresolved call, comment, revert), checking the entry file and the directory: 288 comparisons of diagnostics, success
      and the `wj run` gate decision (`require_clean`, lints on and off) between cached (first and repeat) and uncached runs,
-     288 repeat hits, 163 failing states, 71 with analysis-phase findings; (c) 300 real programs (`examples/verified`,
+     288 repeat hits, 163 failing states, 71 with analysis-phase findings; (c) the real programs (`examples/verified`,
      `tests/check_negative/mutants`) x 2 random line edits: 600 comparisons, 600 repeat hits, 324 failing; (d) the memo is
      live (a planted entry for an unchanged file shows up, and disappears when the file changes); (e) a new `.wj.meta`
      sidecar is a miss.
@@ -277,7 +277,7 @@ wall time, not immune).
      generator was strengthened), (d) fails.
    - Found, not fixed (resolver, not this rung): `wj check` on a directory where several files define the same top-level
      function names reports some diagnostics at a nondeterministic file (six fresh runs over 12 `check_negative` mutants
-     put WJ0013 at six different files). The first draft of (c) grouped 12 programs per project and tripped on it, which is
+     put WJ0013 at six different files). The first draft of (c) grouped a dozen programs per project and tripped on it, which is
      why (c) checks one program per project.
 
 ### What is left
@@ -345,10 +345,10 @@ Gates: `tests/interpreter_jit_loops_test.rs` generates programs (hot loops over 
 `Vec<int>`/`Vec<f64>`/`Vec<bool>` elements, fields of a `Vec` of structs, NaN/infinity/`-0.0`, nested `while`/`for`,
 `break`/`continue`, planted late overflows, out-of-bounds reads and writes, zero divisors, `usize` underflow) and runs each
 under the walker, the resolved engine with every loop entering machine code at its first iteration (`WJ_JIT_LOOP_HOT=0`), the
-default threshold and `--no-jit`: 150 generated programs, no difference (calls, `println` and a panic inside a callee included since closure-run statements landed). A coverage test requires at least 70% of the generated main loops to run as machine
+default threshold and `--no-jit`: the generated programs, no difference (calls, `println` and a panic inside a callee included since closure-run statements landed). A coverage test requires at least 70% of the generated main loops to run as machine
 code. In debug builds `WJ_JIT_MUTANT` leaves one check out (overflow, narrow-width range, zero divisor, bounds, NaN `!=`,
 literal retag); the mutation gate requires each to make some generated program differ: all six caught (debug build). The engine parity corpus
-(697 programs) shows no difference with the default threshold and with every loop entering machine code at its first
+(the whole conformance corpus) shows no difference with the default threshold and with every loop entering machine code at its first
 iteration; `tests/engine_parity/jit_loop_*.wj` add hand-written cases (widths, floats, exits, bounds, overflow, division,
 speculation, structs, `for`).
 
@@ -396,7 +396,7 @@ the loop body. First experiment: `structs` with `add`/`dot` inlined by hand in C
 - Merged head (`interp-speed3` + `interp-startup`): effect replay/simulation/escape suites, interpreter suites and the engine
   parity corpus pass (the parity test now also runs every corpus program with every loop entering machine code at its first
   iteration, `WJ_JIT_LOOP_HOT=0`). `std_interpreter_agreement_test` fails on `caps::*` names another stream added to the runtime.
-- Check caches and effect diagnostics: `tests/check_cache/effects.rs` (part of `check_cache_differential_test`) runs every
+- Check caches and effect diagnostics: `tests/common/check_cache/effects.rs` (part of `check_cache_differential_test`) runs every
   non-xfail WJ004x spec example as a project cached and uncached, and edits the grant and a dependency so WJ0040/WJ0042 change
   for an unchanged file; cached and uncached agree in every state.
 - Debug mutation gate re-run on the merged head: all six mutants caught, once NaN and literal-retag edges were planted in fixed

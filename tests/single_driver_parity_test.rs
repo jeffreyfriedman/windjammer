@@ -15,7 +15,7 @@ use clap::CommandFactory;
 use std::collections::BTreeSet;
 
 /// Legacy subcommands `wj` does not have yet: `name` -> owner/plan.
-const LEGACY_ONLY: &[(&str, &str)] = &[("eject", "wt/eject restores `wj eject` (src/ejector.rs)")];
+const LEGACY_ONLY: &[(&str, &str)] = &[];
 
 fn subcommands(cmd: &clap::Command) -> BTreeSet<String> {
     cmd.get_subcommands().filter(|s| !s.is_hide_set()).map(|s| s.get_name().to_string()).collect()

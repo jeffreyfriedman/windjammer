@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
-const EJECT_AVAILABLE: bool = false;
+const EJECT_AVAILABLE: bool = true;
 
 fn has_eject() -> bool {
     Command::new(WJ).args(["eject", "--help"]).output().map(|o| o.status.success()).unwrap_or(false)

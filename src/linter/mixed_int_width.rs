@@ -191,6 +191,6 @@ mod tests {
     fn same_width_and_untyped_values_are_fine() {
         assert!(run("fn f(a: int, b: i64) -> int {\n    let c = a * 2\n    a + b + c\n}\n").is_empty());
         assert!(run("fn f(a: i32, b: i32) -> i32 {\n    a + b\n}\n").is_empty());
-        assert!(run("fn f(a: i32, b: int) -> int {\n    int(a) + b\n}\n").is_empty());
+        assert!(run("fn f(a: i32, b: int) -> int {\n    (a as int) + b\n}\n").is_empty());
     }
 }

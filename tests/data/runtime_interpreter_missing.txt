@@ -1,8 +1,6 @@
 # windjammer-runtime public free fns and consts (as `module::name`) with no interpreter builtin. Ratchet: only shrinks.
 # Regenerate: WJ_UPDATE_STD_GATE=1 cargo test --test all std_interpreter_agreement
-async::block_on
 async::sleep
-async::spawn
 cli::arg
 cli::flag
 cli::new
@@ -52,7 +50,6 @@ db::open
 db::open_postgres
 db::open_sqlite
 env::current_exe
-env::vars
 http::parse_query_string
 http::post_json
 io::buf_reader
