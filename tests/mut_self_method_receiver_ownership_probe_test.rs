@@ -38,7 +38,7 @@ pub fn bump(mut c: Counter) {
     let mut lexer = Lexer::new(source);
     let tokens = lexer.tokenize_with_locations();
     let parser = Box::leak(Box::new(Parser::new(tokens)));
-    let program = parser.parse().expect("parse");
+    let program = Box::leak(Box::new(parser.parse().expect("parse")));
     let mut analyzer = Analyzer::new();
     let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
 

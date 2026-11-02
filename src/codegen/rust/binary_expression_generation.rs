@@ -1521,7 +1521,7 @@ pub fn set_parent(old_parent: i64) {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
@@ -1556,7 +1556,7 @@ pub fn pause_ms(ms: int) {
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();

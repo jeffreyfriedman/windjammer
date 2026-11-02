@@ -6,7 +6,7 @@ last_verified: 3406ef05bb35
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** [ADR-0021](0021-effects-and-capabilities.md) (the effects and capabilities mechanism this level applies to); RFCs [WJ-SEC-01..04](../proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md); `src/ir/effects.rs`, `src/ir/taint.rs`, `src/ir/capability_lock.rs`, `src/ir/capability_profiles.rs`, `src/output_generation.rs`, `src/diagnostics/`, `src/config.rs`
+- **Related:** [ADR-0021](0021-effects-and-capabilities.md) (the effects and capabilities mechanism this level applies to); RFCs [WJ-SEC-01..04](../proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md); `src/ir/effects.rs`, `src/ir/taint.rs`, `src/ir/capability_profiles.rs`, `src/output_generation.rs`, `src/diagnostics/`, `src/config.rs`
 
 ## Context
 Four security RFCs are "Draft" but CHANGELOG 0.50.0 lists them as added. What is actually enforced:
@@ -16,7 +16,7 @@ Four security RFCs are "Draft" but CHANGELOG 0.50.0 lists them as added. What is
 - **Taint (SEC-02):** `TaintSolver` runs by default and produces error-severity diagnostics, but the only consumer of
   `taint_errors` outside the pipeline is `src/diagnostics/`. No build-failing path was found, so the CHANGELOG line
   "compile-time errors for unsanitized data" is not true for the normal `wj build`.
-- **Lock file (SEC-03):** `src/ir/capability_lock.rs` defines the format; nothing outside `src/ir/mod.rs` references it. No `.wj-capabilities.lock` is read or written by the CLI.
+- **Lock file (SEC-03):** The lock-file module was removed with the legacy capability code; the lock file is not yet implemented. No `.wj-capabilities.lock` is read or written by the CLI.
 - **Profiles (SEC-04):** `capability_profiles.rs` has five built-in profiles; not wired to anything.
 - Unknown external calls (for example Rust crates through `extern`) have no effect classification, so a call can bypass effect checking.
 

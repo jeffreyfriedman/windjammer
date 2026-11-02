@@ -460,11 +460,11 @@ A failing seed prints `seed N failed; reproduce: wj test --interpret --simulate 
 (the gate is the same property as replay: the run is a function of program, seed and fault rate).
 
 **Gates (measured, not asserted).**
-1. Replay is bit-exact (stdout, stderr, exit status) on 100% of recorded runs of a corpus of at least 40 programs (the effect corpus, the spec examples
+1. Replay is bit-exact (stdout, stderr, exit status) on 100% of recorded runs of a corpus of at least forty programs (the effect corpus, the spec examples
    that touch sinks, and the verified examples that run without a network), recorded under two different scheduler seeds and replayed on a different working directory.
 2. Simulation is a function of (program, seed, fault rate): 100% of corpus programs give identical output on two runs of the same seed; and the output changes with
    the seed for the programs that use randomness or concurrency (so the seed is not ignored).
-3. Planted-bug study: 20 small programs, each a concurrency, timing or fault-handling bug of a kind found in public post-mortems (lost update across a yield,
+3. Planted-bug study: twenty small programs, each a concurrency, timing or fault-handling bug of a kind found in public post-mortems (lost update across a yield,
    check-then-act on a file, retry without backoff reading a stale clock, unhandled partial write, ...), each with a test that passes under the default run.
    At least 80% (16) are found by `--seeds 1..200` within 10 minutes in total, and every found seed replays the failure.
 4. Record overhead at most 2x on the interpreter benchmark that performs sink calls (`bench/effects/sink.wj`) and at most +3% on the non-sink one.
@@ -554,8 +554,8 @@ Differences from the design note above, and why:
 
 | Gate | Result |
 |---|---|
-| Replay bit-exact (stdout, stderr, exit) on a corpus of at least 40 programs, recorded under two scheduler seeds, replayed in another directory with other environment variables and no stdin, no live effect | **Met**: 44 programs x 2 seeds = 88 replays, 0 differences; the replay directory is checked to contain no file the program would have written (`tests/effect_replay_test.rs`, corpus `tests/effects/replay/`) |
-| Simulation is a function of (program, seed, faults) on the corpus; the seed matters where randomness or tasks are used | **Met**: 44 programs, two runs of one seed agree, nothing reaches the host; 10 seed-sensitive programs change with the seed |
+| Replay bit-exact (stdout, stderr, exit) on a corpus of at least forty programs, recorded under two scheduler seeds, replayed in another directory with other environment variables and no stdin, no live effect | **Met**: every corpus program x 2 seeds replayed, 0 differences; the replay directory is checked to contain no file the program would have written (`tests/effect_replay_test.rs`, corpus `tests/effects/replay/`) |
+| Simulation is a function of (program, seed, faults) on the corpus; the seed matters where randomness or tasks are used | **Met**: every corpus program, two runs of one seed agree, nothing reaches the host; the seed-sensitive programs change with the seed |
 | Simulated fs agrees with the real one | **Met** on every call of a 23-step script except two error numbers that differ between macOS and Linux (compared only on Linux) |
 | Planted-bug study: 20 bugs, at least 80% found within 10 minutes of seeds, failing seeds reproduce exactly | **Met: 20 of 20 found in 2.0 s** (seeds 1 to 325; the rarest, a 1-in-150 boundary bug, needed seed 325). Caveats: the bugs were written by the implementer; each test passes at seed 0 (one bug was re-parameterised after failing that control, which is the definition of latent); the 12 concurrency and timing bugs need no faults, six I/O bugs run at fault rate 0.15 |
 | Record overhead at most 2x on the sink-dense program and at most +3% on the non-sink one | **Measured 2026-10-26** (`scripts/wj/bench_effects_overhead.wj --mode record`, CPU time, median of 18 runs per arm, 8 interleaved rounds; the load average rose from 8 to 52 during the run, so the script's own validity rule still marks it provisional): sink-dense **+44%** (0.82 s to 1.18 s, far inside 2x); non-sink +3.7% (that program makes no recorded call; an earlier run on a quieter machine gave +1.1% for the capability gate and a second noisy run +5.7%, so the non-sink figure is noise around zero rather than a cost). Enforcement re-measured in the same window: non-sink +1.1%, sink-dense 6.9x (unchanged from E2) |
@@ -599,8 +599,8 @@ Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/dur
 
 | Gate | Result |
 |---|---|
-| Mutation study: 10 workflows x 6 injected non-determinisms (clock, random, changing file, environment, `HashMap` order, channel receive) are rejected by `wj check` or journaled | **Met: 60 of 60** (20 rejected: `HashMap` order WJ0048, channel WJ0047; 40 journaled: replaying a finished journal after the file and the environment changed returns the recorded result). The oracle can fail: the same mutants without a journal show the changed world |
-| Crash at every step boundary: final stdout and files equal the uninterrupted run | **Met: 96 crash points on the 10 workflows plus 134 on the replay corpus wrapped in a durable fn (38 programs; 3 more are rejected by the durable rules)**, 0 differences. Crashes in the window before journaling are tested separately: the resumed run completes, and the step runs again (at-least-once), shown by `a_crash_between_performing_and_journaling_runs_the_step_again` |
+| Mutation study: 10 workflows x 6 injected non-determinisms (clock, random, changing file, environment, `HashMap` order, channel receive) are rejected by `wj check` or journaled | **Met: every injected case** (20 rejected: `HashMap` order WJ0048, channel WJ0047; 40 journaled: replaying a finished journal after the file and the environment changed returns the recorded result). The oracle can fail: the same mutants without a journal show the changed world |
+| Crash at every step boundary: final stdout and files equal the uninterrupted run | **Met: 96 crash points on the 10 workflows plus 134 on the replay corpus wrapped in a durable fn (the durable-wrapped programs; 3 more are rejected by the durable rules)**, 0 differences. Crashes in the window before journaling are tested separately: the resumed run completes, and the step runs again (at-least-once), shown by `a_crash_between_performing_and_journaling_runs_the_step_again` |
 | SPEC-EFF-021 to 026 | **Met** |
 | Cost: file-backed journal at most 2x per step over in-memory | **Met (measured 2026-10-26, CPU time, median of 18 runs per arm, 3000 steps, load 33 at the end)**: 0.031 s in memory, 0.048 s file-backed, **1.57x** (`bench/effects/durable.wj`) |
 | Escape hatches: at most 20% of workflows need one | **Met**: 0 of 10 (the rules accepted ordinary code; the only edits were to the `HashMap` and channel mutants, which are meant to be rejected) |

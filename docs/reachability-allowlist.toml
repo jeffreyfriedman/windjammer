@@ -4,7 +4,6 @@
 
 [dead_files]
 "src/cli_commands.rs" = "legacy `windjammer` binary dispatch (WP13)"
-"src/ejector.rs" = "only the legacy `windjammer eject` reaches it; wt/eject restores `wj eject`"
 "src/error_handling.rs" = "legacy `windjammer lint` path (WP13); `wj lint` uses src/cli/lint.rs"
 "src/main.rs" = "legacy `windjammer` binary (WP13: single driver; retire after `wj` covers eject)"
 

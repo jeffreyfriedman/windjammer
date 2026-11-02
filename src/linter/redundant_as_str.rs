@@ -98,6 +98,6 @@ mod tests {
     fn non_ascii_source_does_not_split_a_character() {
         let src = "let s = \"é\"\nlet t = x.as_str()\n//日本\nlet u = y.as_str()\n";
         assert_eq!(find(src).len(), 2);
-        assert_eq!(fix(src), "let s = \"é\"\nlet t = x\n// 日本\nlet u = y\n");
+        assert_eq!(fix(src), "let s = \"é\"\nlet t = x\n//日本\nlet u = y\n");
     }
 }

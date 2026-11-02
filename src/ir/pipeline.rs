@@ -588,7 +588,7 @@ mod tests {
         // Leak the parser so its arena allocators keep AST nodes alive
         // (required because constraint_gen now walks the AST body)
         let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
-        let program = parser.parse().expect("parse");
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         (analyzed, registry)

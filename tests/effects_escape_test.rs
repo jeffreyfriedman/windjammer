@@ -377,7 +377,7 @@ fn warn_mode_lets_the_call_through_and_says_so() {
         let tokens = lexer.tokenize_with_locations();
         let parser: &'static mut windjammer::parser::Parser =
             Box::leak(Box::new(windjammer::parser::Parser::new_with_source(tokens, "w.wj".into(), program.clone())));
-        let prog = parser.parse().unwrap();
+        let prog = Box::leak(Box::new(parser.parse().unwrap()));
         let mut it = Interpreter::new_capturing();
         it.set_caps(Some(CapGate::new(windjammer::ir::effect_facts::Grant::local_profile(&root), CapMode::Warn)));
         match it.run_checked(&prog) {
