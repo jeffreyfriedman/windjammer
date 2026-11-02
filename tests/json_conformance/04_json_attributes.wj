@@ -1,0 +1,43 @@
+// Typed JSON (ADR-0027): `@json(rename = ..)` names a field on the wire; `@json(allow_unknown)` skips undeclared fields.
+// expect: enc {"userName":"ada","id":1}
+// expect: ok ada 1
+// expect: $: missing field `userName` at line 1 column 8
+// expect: $.user_name: unknown field `user_name`, expected `userName` or `id` at line 1 column 12
+// expect: ok 5
+use std::json
+
+struct Account {
+    @json(rename = "userName")
+    user_name: string,
+    id: int,
+}
+
+@json(allow_unknown)
+struct Reply {
+    status: int,
+}
+
+fn account(text: string) {
+    let r: Result<Account, string> = json.parse_string(text)
+    match r {
+        Ok(a) => println("ok ${a.user_name} ${a.id}"),
+        Err(e) => println(e),
+    }
+}
+
+fn main() {
+    let a = Account { user_name: "ada", id: 1 }
+    let text = match json.to_string(a) {
+        Ok(s) => s,
+        Err(e) => e,
+    }
+    println("enc ${text}")
+    account(text)
+    account("{\"id\":1}")
+    account("{\"user_name\":\"x\"}")
+    let r: Result<Reply, string> = json.parse_string("{\"status\":5,\"extra\":{\"deep\":[1,2]},\"more\":null}")
+    match r {
+        Ok(x) => println("ok ${x.status}"),
+        Err(e) => println(e),
+    }
+}

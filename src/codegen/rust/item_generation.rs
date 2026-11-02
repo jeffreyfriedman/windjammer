@@ -62,6 +62,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     pub(super) fn generate_struct(&mut self, s: &StructDecl) -> String {
         let mut output = String::new();
+        let mut derives_deserialize = false;
 
         // Track which fields have type usize (for auto-casting in comparisons)
         let mut usize_fields = std::collections::HashSet::new();
@@ -96,6 +97,10 @@ impl<'ast> CodeGenerator<'ast> {
         let decorator_reg = crate::decorator_registry::DecoratorRegistry::new();
         for decorator in &s.decorators {
             if decorator_reg.should_skip_for_backend(&decorator.name, self.target) {
+                continue;
+            }
+            // `@json(...)` is Windjammer's surface; its Rust form is chosen below (ADR-0027).
+            if decorator.name == "json" {
                 continue;
             }
 
@@ -141,6 +146,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if !traits.is_empty() {
                     output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+                    derives_deserialize |= traits.iter().any(|t| t == "Deserialize");
 
                     // Track if this struct has PartialEq for enum derive inference
                     if traits.iter().any(|t| t == "PartialEq") {
@@ -161,6 +167,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     let merged = CodeGenerator::merge_standard_derive_traits(traits, inferred);
                     output.push_str(&format!("#[derive({})]\n", merged.join(", ")));
+                    derives_deserialize |= merged.iter().any(|t| t == "Deserialize");
 
                     if merged.contains(&"Copy".to_string()) {
                         self.copy_types_registry.insert(s.name.clone());
@@ -200,6 +207,7 @@ impl<'ast> CodeGenerator<'ast> {
             let inferred_traits = self.infer_derivable_traits(s);
             if !inferred_traits.is_empty() {
                 output.push_str(&format!("#[derive({})]\n", inferred_traits.join(", ")));
+                derives_deserialize |= inferred_traits.iter().any(|t| t == "Deserialize");
 
                 // TDD FIX: Register this struct as Copy if it was inferred
                 // This allows other structs to know this type is Copy when checking their fields
@@ -213,6 +221,10 @@ impl<'ast> CodeGenerator<'ast> {
         // field ordering matches declaration order. Without this, Rust may
         // reorder fields for optimization, corrupting GPU uniform buffers
         // and any code that depends on memory layout (to_bytes, FFI, etc.).
+        // ADR-0027: decoding JSON (and TOML/YAML) rejects fields the struct does not declare.
+        if derives_deserialize && s.tuple_fields.is_none() && !s.fields.is_empty() && !json_allows_unknown(&s.decorators) {
+            output.push_str("#[serde(deny_unknown_fields)]\n");
+        }
         output.push_str("#[repr(C)]\n");
 
         // Add struct declaration with type parameters
@@ -259,7 +271,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             // Generate decorators for the field (convert to Rust attributes)
-            for decorator in &field.decorators {
+            if derives_deserialize {
+                if let Some(wire) = json_rename(&field.decorators) {
+                    output.push_str(&format!("    #[serde(rename = {:?})]\n", wire));
+                }
+            }
+            for decorator in field.decorators.iter().filter(|d| d.name != "json") {
                 // Handle @arg decorator specially - it's a clap field attribute
                 if decorator.name == "arg" {
                     output.push_str("    #[arg(");
@@ -478,6 +495,10 @@ impl<'ast> CodeGenerator<'ast> {
         if all_variants_copy {
             traits.push("Copy".to_string());
             self.copy_types_registry.insert(e.name.clone());
+        }
+        if self.enum_is_serde_derivable(e) {
+            traits.push("Serialize".to_string());
+            traits.push("Deserialize".to_string());
         }
         self.drop_hand_implemented_traits(&e.name, &mut traits);
         if !traits.is_empty() {

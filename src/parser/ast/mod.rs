@@ -9,6 +9,7 @@ pub mod core;
 
 // Domain modules (extracted - independent, no circular deps)
 pub mod builders;
+pub mod json_attrs;
 pub mod literals;
 pub mod operators;
 pub mod ownership;
@@ -17,6 +18,7 @@ pub mod types;
 
 // Re-export from domain modules
 pub use builders::*;
+pub use json_attrs::{json_allows_unknown, json_rename};
 pub use literals::*;
 pub use operators::*;
 pub use ownership::*;

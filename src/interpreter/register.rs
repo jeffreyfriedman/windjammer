@@ -121,10 +121,27 @@ impl Interpreter {
                         decl.fields.iter().map(|f| (f.name.as_str(), f.field_type.clone())).collect()
                     };
                     let rc_fields = fields.iter().map(|(n, _)| Rc::from(*n)).collect();
+                    let wire: Vec<&'static str> = if tuple {
+                        fields.iter().map(|(n, _)| *n).collect()
+                    } else {
+                        decl.fields
+                            .iter()
+                            .map(|f| crate::parser::json_rename(&f.decorators).map_or(f.name.as_str(), |w| &*Box::leak(w.into_boxed_str())))
+                            .collect()
+                    };
+                    let allow_unknown = crate::parser::json_allows_unknown(&decl.decorators);
                     let key = self.declared_type_key(module, &decl.name);
                     self.structs.insert(
                         key.clone(),
-                        StructDef { fields: fields.into(), rc_name: Rc::from(key.as_str()), rc_fields, tuple, copy: has_copy_derive(decl) },
+                        StructDef {
+                            fields: fields.into(),
+                            rc_name: Rc::from(key.as_str()),
+                            rc_fields,
+                            tuple,
+                            copy: has_copy_derive(decl),
+                            wire: wire.into(),
+                            allow_unknown,
+                        },
                     );
                 }
                 Item::Enum { decl, .. } => {

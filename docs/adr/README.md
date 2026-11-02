@@ -36,6 +36,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0024](0024-hot-reload.md) | `wj run --watch` and hot reload of function bodies | Proposed |
 | [0025](0025-arenas.md) | Arenas as a user capability | Proposed |
 | [0026](0026-rust-crate-dependencies.md) | First-class Rust crate dependencies (wj.toml, signature surfaces, effects) | Proposed |
+| [0027](0027-typed-json-derive.md) | Typed JSON for structs and enums (one data model, two engines) | Proposed |
 <!-- wj:end -->
 
 ## Template

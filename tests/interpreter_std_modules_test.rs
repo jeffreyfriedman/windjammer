@@ -110,7 +110,7 @@ print('{"name":"bolt","qty":7,"tags":["a","b"],"note":null}')
 print('"Plain"')
 print('{"Sized":3}')
 print("nut 3 1 n")
-print("missing field `qty`")
+print("$: missing field `qty` at line 1 column 14")
 "##,
     );
 }
