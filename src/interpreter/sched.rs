@@ -12,7 +12,8 @@
 //!
 //! `sleep` and timeouts use a virtual clock: when every task is blocked the clock jumps to the
 //! earliest deadline, so programs that sleep do not make the interpreter slow, and the order of
-//! sleep-ordered events is exact. If nothing can run and nothing is waiting on the clock the program
+//! sleep-ordered events is exact. A live `wj run` (`real_sleep`) also waits for each jump in real time, so a
+//! program waiting on the outside world sees it move; the virtual clock still orders the events. If nothing can run and nothing is waiting on the clock the program
 //! has deadlocked, which is reported as an error (real Rust would hang).
 //!
 //! The interpreter is not `Send`; handing `*mut Interpreter` between the task threads is sound
@@ -115,6 +116,12 @@ pub(crate) struct Sched {
     fatal: Option<RuntimeError>,
     /// Fixed wall clock, no real time (see `builtins/time.rs`).
     pub deterministic: bool,
+    /// A live `wj run` (not deterministic, simulated, recorded or replayed): when the clock jumps because every
+    /// task waits on time, the jump is also waited for in real time, so a program polling the outside world
+    /// (a lock directory, a child process) sees it change. Elsewhere sleep stays virtual and returns at once.
+    pub real_sleep: bool,
+    /// Real nanoseconds spent in those waits; `mono_ns` takes them out of the real part so a sleep counts once.
+    pub slept_ns: u64,
     /// Tasks started inside each open `scope { }` (innermost last).
     pub scopes: Vec<Vec<usize>>,
 }
@@ -130,6 +137,8 @@ impl Sched {
             baton: Arc::new(Baton { current: Mutex::new(0), cv: Condvar::new() }),
             fatal: None,
             deterministic: false,
+            real_sleep: false,
+            slept_ns: 0,
             scopes: Vec::new(),
         }
     }
@@ -204,7 +213,14 @@ impl Sched {
                 .filter(|d| *d > self.clock)
                 .min();
             match next {
-                Some(d) => self.clock = d,
+                Some(d) => {
+                    if self.real_sleep && !self.deterministic {
+                        let t = std::time::Instant::now();
+                        std::thread::sleep(std::time::Duration::from_nanos(d - self.clock));
+                        self.slept_ns += t.elapsed().as_nanos() as u64;
+                    }
+                    self.clock = d;
+                }
                 None => return None,
             }
         }

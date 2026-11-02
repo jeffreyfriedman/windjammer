@@ -147,8 +147,69 @@ fn generate_embedded_assets() {
     .expect("write embedded assets table");
 }
 
+/// Run `git <args>` in the manifest dir; `None` when git or the repository is unavailable.
+fn git_output(args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(args)
+        .current_dir(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()))
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Toolchain identity (`wj --version`, `wj doctor`): commit hash, commit date, dirty flag, profile, build date.
+/// Commit date (not wall-clock time) is the only time value that may reach generated output; the wall-clock
+/// build date is read by `toolchain::identity` for `--version` alone (gate: tests/toolchain_identity_test.rs).
+/// The build date is kept in OUT_DIR so it only changes when the commit or dirty flag does: an edit to a
+/// test file reruns this script without forcing the library to recompile.
+fn emit_toolchain_identity() {
+    use std::fs;
+    use std::path::Path;
+    for rel in ["HEAD", "index", "packed-refs"] {
+        if let Some(p) = git_output(&["rev-parse", "--git-path", rel]) {
+            println!("cargo:rerun-if-changed={p}");
+        }
+    }
+    if let Some(r) = git_output(&["symbolic-ref", "-q", "HEAD"]) {
+        if let Some(p) = git_output(&["rev-parse", "--git-path", &r]) {
+            println!("cargo:rerun-if-changed={p}");
+        }
+    }
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=std");
+    let hash = git_output(&["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".into());
+    let commit_ts: i64 = git_output(&["log", "-1", "--format=%ct"]).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let dirty = git_output(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into());
+    let key = format!("{hash} {dirty} {profile}");
+    let stamp = Path::new(&std::env::var("OUT_DIR").unwrap_or_else(|_| "target".into())).join("toolchain_identity.stamp");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let build_ts: i64 = match fs::read_to_string(&stamp).ok().and_then(|s| {
+        let (k, t) = s.split_once('\n')?;
+        (k == key).then(|| t.trim().parse().ok()).flatten()
+    }) {
+        Some(t) => t,
+        None => {
+            let _ = fs::write(&stamp, format!("{key}\n{now}\n"));
+            now
+        }
+    };
+    println!("cargo:rustc-env=WJ_GIT_HASH={hash}");
+    println!("cargo:rustc-env=WJ_GIT_TS={commit_ts}");
+    println!("cargo:rustc-env=WJ_GIT_DIRTY={dirty}");
+    println!("cargo:rustc-env=WJ_BUILD_PROFILE={profile}");
+    println!("cargo:rustc-env=WJ_BUILD_TS={build_ts}");
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    emit_toolchain_identity();
     generate_embedded_assets();
     println!("cargo:rerun-if-changed=tests");
     println!("cargo:rerun-if-changed=build_support");

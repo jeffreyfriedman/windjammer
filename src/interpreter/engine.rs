@@ -354,6 +354,11 @@ impl Interpreter {
         self.sched.deterministic = on;
     }
 
+    /// Wait out sleeps in real time (a live `wj run`; see `Sched::real_sleep`).
+    pub fn set_real_sleep(&mut self, on: bool) {
+        self.sched.real_sleep = on;
+    }
+
     pub fn set_http_mode(&mut self, mode: super::builtins::std_http::HttpMode) {
         self.http = mode;
     }
