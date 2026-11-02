@@ -35,6 +35,7 @@ pub mod node;
 pub mod numeric_bridge;
 pub mod numeric_defaults;
 pub mod pipeline;
+pub mod expr_static_type;
 pub mod receiver_type;
 pub mod safety_type;
 pub mod shadow;

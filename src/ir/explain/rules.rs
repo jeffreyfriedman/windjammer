@@ -68,6 +68,7 @@ pub const RULES: &[Rule] = rules![
     ("CLOS-MUT-CAPTURE", Closure, "A closure that mutates a captured variable makes it mutable"),
     ("FIELD-OWNED", Field, "Struct fields own their values"),
     ("NUM-DECLARED", Number, "A declared numeric type is exact"),
+    ("NUM-FIELD-DECLARED", Number, "A read of a struct field has the field's declared type, in any module"),
     ("NUM-LITERAL-SUFFIX", Number, "A literal suffix is exact"),
     ("NUM-PROPAGATE", Number, "An unsuffixed literal takes the type its uses require"),
     ("NUM-DEFAULT-INT", Number, "An unconstrained integer is `int` (i64)"),
