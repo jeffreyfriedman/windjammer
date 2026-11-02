@@ -556,6 +556,15 @@ fn check_with_cargo(
 
 /// Load and merge all source maps from the output directory
 pub(crate) fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
+    load_source_maps_with(output_dir, true)
+}
+
+/// Same as [`load_source_maps`] without the progress lines (for callers that print diagnostics).
+pub(crate) fn load_source_maps_quiet(output_dir: &Path) -> Result<crate::source_map::SourceMap> {
+    load_source_maps_with(output_dir, false)
+}
+
+fn load_source_maps_with(output_dir: &Path, verbose: bool) -> Result<crate::source_map::SourceMap> {
     use std::fs;
 
     let mut merged_map = crate::source_map::SourceMap::new();
@@ -600,7 +609,8 @@ pub(crate) fn load_source_maps(output_dir: &Path) -> Result<crate::source_map::S
         }
     }
 
-    if map_count == 0 {
+    if !verbose {
+    } else if map_count == 0 {
         eprintln!(
             "{} No source maps found. Error locations may be inaccurate.",
             "Warning:".yellow().bold()

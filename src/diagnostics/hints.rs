@@ -105,16 +105,11 @@ pub fn mismatch(expected: &str, found: &str) -> Option<Hint> {
             );
         }
     }
-    if is_int(e) && f == "usize" {
+    if (is_int(e) && f == "usize") || (e == "usize" && is_int(f)) {
+        let to = if e == "usize" { "uint" } else { "int" };
         return hint(
-            format!("`len()`, `count()` and indices are `uint`: convert with `as {}`, e.g. `v.len() as {}`", cast_name(e), cast_name(e)),
-            wrap(&format!("convert with `as {}`", cast_name(e)), "", &format!(" as {}", cast_name(e))),
-        );
-    }
-    if e == "usize" && is_int(f) {
-        return hint(
-            "this place needs a `uint` (a length or index): convert with `as uint`".into(),
-            wrap("convert with `as uint`", "", " as uint"),
+            "`len()`, `count()` and indices are `usize` when compiled but `int` is 64-bit: convert with `as int` (for example `let n: int = v.len() as int`), or compare `i < v.len() as int`; the other way round, write `as uint`".into(),
+            wrap(&format!("convert with `as {to}`"), "", &format!(" as {to}")),
         );
     }
     if is_float(e) && is_int(f) {
@@ -136,8 +131,11 @@ pub fn mismatch(expected: &str, found: &str) -> Option<Hint> {
             wrap(&format!("convert with `as {n}`"), "", &format!(" as {n}")),
         );
     }
-    if e == "&str" && f == "char" || e == "String" && f == "char" {
-        return hint("a `char` is not a `string`: use `c.to_string()`".into(), wrap("add `.to_string()`", "", ".to_string()"));
+    if matches!(e, "String" | "&str") && f == "char" || e == "char" && matches!(f, "String" | "&str") {
+        return hint(
+            "`char` and `string` are different types: use `c.to_string()` to make a string from a character, or `s.chars()` to walk a string".into(),
+            if f == "char" { wrap("add `.to_string()`", "", ".to_string()") } else { None },
+        );
     }
     if (is_signed_or_float(e) || e == "bool") && (f == "String" || f == "&str") {
         return hint(format!("a `string` is not a `{}`: parse it with `s.parse::<{}>()`", wj(e), wj(e)), None);
@@ -147,7 +145,7 @@ pub fn mismatch(expected: &str, found: &str) -> Option<Hint> {
     }
     if e == "()" {
         return hint(
-            format!("this branch produces a `{}` but the surrounding `if` or function expects no value: add an `else` branch, write `return value`, or declare `-> {}` on the function", wj(f), wj(f)),
+            format!("a block's value is its last expression: an `if` without `else` has no value, so add an `else` branch or end the branch with a statement (the `{}` here is dropped); or write `return value`", wj(f)),
             None,
         );
     }
@@ -164,6 +162,18 @@ fn wj(t: &str) -> String {
     crate::type_classification::rust_type_to_windjammer(t).to_string()
 }
 
+/// `Vec<String>` -> `Vec<string>` for messages.
+fn wj_collection(t: &str) -> String {
+    t.replace("String", "string")
+}
+
+/// Message for the collect element error: ``cannot collect `&str` items into `Vec<string>` ``.
+pub fn collect_message(msg: &str) -> Option<String> {
+    let built = between(msg, "a value of type `", "`")?;
+    let from = strip_lifetimes(between(msg, "elements of type `", "`")?);
+    Some(format!("cannot collect `{from}` items into `{}`", wj_collection(built)))
+}
+
 /// Hint for `a value of type V cannot be built from an iterator over elements of type X`.
 pub fn collect_elements(msg: &str) -> Option<Hint> {
     let built = between(msg, "a value of type `", "`")?;
@@ -172,7 +182,7 @@ pub fn collect_elements(msg: &str) -> Option<Hint> {
     let got = strip_lifetimes(from);
     let (help, insert) = match (want, got.as_str()) {
         ("String", "&str") | ("String", "&&str") => (
-            "convert each element before collecting: `.map(|s| s.to_string())` before `.collect()`".to_string(),
+            "the iterator yields borrowed text: add `.map(|s| s.to_string())` before `.collect()`".to_string(),
             ".map(|s| s.to_string())".to_string(),
         ),
         (w, g) if g.strip_prefix('&') == Some(w) => (

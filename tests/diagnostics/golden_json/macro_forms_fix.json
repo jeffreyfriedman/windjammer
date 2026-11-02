@@ -1,0 +1,105 @@
+{
+  "command": "check",
+  "diagnostics": [
+    {
+      "category": "lint",
+      "code": "W0008",
+      "docs": {
+        "explain": "wj explain W0008",
+        "url": "https://windjammer.dev/errors/W0008"
+      },
+      "fixes": [
+        {
+          "applicability": "machine_applicable",
+          "description": "replace `println!(\"hi {}\", 1)` with `println(\"hi ${1}\")`",
+          "edits": [
+            {
+              "byte_end": 36,
+              "byte_start": 16,
+              "col_end": 25,
+              "col_start": 5,
+              "file": "macro_forms_fix.wj",
+              "line_end": 2,
+              "line_start": 2,
+              "replacement": "println(\"hi ${1}\")"
+            }
+          ]
+        }
+      ],
+      "help": [
+        "replace `println!(\"hi {}\", 1)` with `println(\"hi ${1}\")`"
+      ],
+      "maturity": "proven",
+      "message": "`println!` with a `{}` format string is deprecated: use `println` with `${..}` interpolation",
+      "notes": [
+        "ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release"
+      ],
+      "origin": "lint",
+      "primary_span": {
+        "byte_end": 36,
+        "byte_start": 16,
+        "col_end": 25,
+        "col_start": 5,
+        "file": "macro_forms_fix.wj",
+        "line_end": 2,
+        "line_start": 2
+      },
+      "severity": "warning"
+    },
+    {
+      "category": "lint",
+      "code": "W0007",
+      "docs": {
+        "explain": "wj explain W0007",
+        "url": "https://windjammer.dev/errors/W0007"
+      },
+      "fixes": [
+        {
+          "applicability": "machine_applicable",
+          "description": "replace `vec![1, 2]` with `[1, 2]`",
+          "edits": [
+            {
+              "byte_end": 59,
+              "byte_start": 49,
+              "col_end": 23,
+              "col_start": 13,
+              "file": "macro_forms_fix.wj",
+              "line_end": 3,
+              "line_start": 3,
+              "replacement": "[1, 2]"
+            }
+          ]
+        }
+      ],
+      "help": [
+        "replace `vec![1, 2]` with `[1, 2]`"
+      ],
+      "maturity": "proven",
+      "message": "`vec!` is deprecated: use the list literal `[..]`",
+      "notes": [
+        "ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release"
+      ],
+      "origin": "lint",
+      "primary_span": {
+        "byte_end": 59,
+        "byte_start": 49,
+        "col_end": 23,
+        "col_start": 13,
+        "file": "macro_forms_fix.wj",
+        "line_end": 3,
+        "line_start": 3
+      },
+      "severity": "warning"
+    }
+  ],
+  "schema_version": 2,
+  "success": true,
+  "summary": {
+    "elapsed_ms": 0,
+    "errors": 0,
+    "files_cached": 0,
+    "files_checked": 0,
+    "warnings": 2
+  },
+  "windjammer_version": "VERSION"
+}
