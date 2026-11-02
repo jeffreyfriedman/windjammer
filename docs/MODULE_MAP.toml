@@ -71,7 +71,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "Cargo.toml generation"
 module_md = "src/cargo_toml/MODULE.md"
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "rust_integration_tests", "source_map", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "stdlib_surface", "doctest"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "cargo_cache", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "rust_integration_tests", "source_map", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "stdlib_surface", "doctest"]
 known_violations = []
 
 [modules.cli]

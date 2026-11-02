@@ -461,3 +461,7 @@ opt-level = 3
 [[test]]
 name = "build_speed_gate"
 path = "tests/build_speed_gate.rs"
+
+[[test]]
+name = "build_output_golden"
+path = "tests/build_output_golden.rs"

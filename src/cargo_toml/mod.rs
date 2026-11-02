@@ -5,6 +5,7 @@
 
 pub(crate) mod dependency_management;
 mod feature_management;
+pub(crate) mod runtime_features;
 mod toml_generation;
 
 use crate::CompilationTarget;
