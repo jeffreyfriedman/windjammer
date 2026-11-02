@@ -294,8 +294,10 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     {
         // SAFETY: `buf` has `nbuf` slots, every struct field index is one of them.
         let all = unsafe { std::slice::from_raw_parts_mut(buf, plan.nbuf.max(1)) };
+        // test-only mutant `box`: the first write after a struct `let` fills the previous binding's box
+        let reuse = mutant(it, "box");
         for sp in &st.structs {
-            super::osr::write(it, b + sp.slot, reg.kind(sp.slot), super::osr::make_struct(sp, all), sp.fresh);
+            super::osr::write(it, b + sp.slot, reg.kind(sp.slot), super::osr::make_struct(sp, all), sp.fresh && !reuse);
         }
     }
     it.mark(crate::interpreter::resolved::osr::loc(st.stmt));
