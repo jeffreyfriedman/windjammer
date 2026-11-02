@@ -216,6 +216,17 @@ pub(crate) fn local_struct_field_table(
     let mut fields = std::collections::HashMap::new();
     let mut paths = std::collections::HashMap::new();
     declaration_stub_registry::merge_struct_fields_from_items(&program.items, &[], &mut fields, &mut paths);
+    // Tuple-variant payloads (`Val::Int(i64)`) are positional fields of `Val::Int` (NUM-FIELD-DECLARED).
+    for item in &program.items {
+        if let crate::parser::Item::Enum { decl, .. } = item {
+            for v in &decl.variants {
+                if let crate::parser::EnumVariantData::Tuple(tys) = &v.data {
+                    let payload = tys.iter().enumerate().map(|(i, t)| (i.to_string(), t.clone())).collect();
+                    fields.insert(format!("{}::{}", decl.name, v.name), payload);
+                }
+            }
+        }
+    }
     fields
 }
 

@@ -936,6 +936,10 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(ret) = &self.current_function_return_type else {
             return;
         };
+        // The solver fixed this value's width (a returned value's class is the return type's).
+        if self.solver_operand_width(expr).is_some() {
+            return;
+        }
         // Peel Result/Option so `-> Result<i32, E>` still narrows returned ints.
         let to = match Self::peel_option_result_payload(ret) {
             Type::Int32 => IntType::I32,
@@ -1024,7 +1028,7 @@ impl<'ast> CodeGenerator<'ast> {
         expr_str: &mut String,
         expr: &Expression<'ast>,
     ) {
-        if !self.in_expression_context {
+        if !self.in_expression_context || self.solver_operand_width(expr).is_some() {
             return;
         }
         let Some(ni) = &self.numeric_inference else {

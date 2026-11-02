@@ -80,7 +80,7 @@ fn test_qualified_match(color: Color) -> i32 {
 fn test_semicolons() -> i32 {
     let x = 10_i32;
     let y = 20_i32;
-    (x + y) as i32
+    x + y
 }
 
 #[inline]

@@ -90,6 +90,8 @@ pub struct FunctionConstraints {
     pub index_sources: Vec<((usize, usize), ConstraintVar)>,
     /// NUM-USIZE index uses (`v[i]` operands).
     pub index_uses: Vec<ConstraintVar>,
+    /// `v.push(x)`: (the argument's conversion key, the argument's var, the receiver's var).
+    pub element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -113,6 +115,7 @@ struct AstConstraintWalker<'a, 'ast> {
     literal_vars: Vec<((usize, usize), ConstraintVar)>,
     index_sources: Vec<((usize, usize), ConstraintVar)>,
     index_uses: Vec<ConstraintVar>,
+    element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
     /// Declared types of annotated locals (`let q: VecDeque<int> = ...`), for receiver classification.
     local_decl_types: HashMap<String, BaseType>,
     /// Names bound by `for v in a..b`.
@@ -306,6 +309,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             literal_vars: Vec::new(),
             index_sources: Vec::new(),
             index_uses: Vec::new(),
+            element_stores: Vec::new(),
             local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: HashMap::new(),
@@ -557,6 +561,29 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         crate::ir::receiver_type::infer_receiver_type_name(object, &self.analyzed.decl, fields)
     }
 
+    /// NUM-FIELD-DECLARED: the arguments of a tuple-variant constructor (`Val::Int(-1)`) have the
+    /// variant's declared payload types.
+    fn emit_variant_payload_types(
+        &mut self,
+        callee: &str,
+        arg_vars: &[ConstraintVar],
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+    ) {
+        let Some(payload) = self.struct_field_types.and_then(|f| f.get(callee)) else { return };
+        for (i, (&v, (_, a))) in arg_vars.iter().zip(arguments.iter()).enumerate() {
+            let Some(ty) = payload.get(&i.to_string()) else { continue };
+            let base = parser_type_to_base_type(ty);
+            if base == BaseType::Inferred {
+                continue;
+            }
+            self.cs.add_because(
+                Constraint::TypeIs(v, base.clone()),
+                origin("NUM-FIELD-DECLARED", format!("payload {} of `{}` is declared {:?}", i, callee, base), &a.location()),
+            );
+            emit_numeric_class_constraint(&mut self.cs, v, &base);
+        }
+    }
+
     /// Some registered method of this name (a user `len(self) -> int`) returns another type: an
     /// unresolved receiver may be that type, so the call is not known to be an index source.
     fn has_non_usize_homonym(&self, method: &str) -> bool {
@@ -573,7 +600,28 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         if !matches!(method, "get" | "get_mut" | "remove" | "swap" | "truncate" | "split_off" | "swap_remove") {
             return false;
         }
-        let declared = match object {
+        match self.receiver_declared_base(object) {
+            Some(BaseType::Vec(_) | BaseType::Array(..)) => true,
+            Some(BaseType::Custom(n)) => crate::type_classification::type_name_leaf(&n) == "VecDeque",
+            _ => false,
+        }
+    }
+
+    /// The receiver is a declared std collection or string (its `len()` is Rust's `usize`).
+    fn receiver_is_std_collection(&self, object: &Expression<'ast>) -> bool {
+        match self.receiver_declared_base(object) {
+            Some(BaseType::Vec(_) | BaseType::Array(..) | BaseType::HashMap(..) | BaseType::String) => true,
+            Some(BaseType::Custom(n)) => matches!(
+                crate::type_classification::type_name_leaf(&n),
+                "VecDeque" | "HashSet" | "BTreeMap" | "BTreeSet" | "HashMap"
+            ),
+            _ => false,
+        }
+    }
+
+    /// Declared type of a receiver: a parameter, an annotated local (or a local bound to one), a field.
+    fn receiver_declared_base(&self, object: &Expression<'ast>) -> Option<BaseType> {
+        match object {
             Expression::Identifier { name, .. } => self.local_decl_types.get(name).cloned().or_else(|| {
                 self.analyzed
                     .decl
@@ -587,11 +635,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 crate::ir::expr_static_type::declared_type_of(other, &self.analyzed.decl, fields)
                     .map(|t| parser_type_to_base_type(&t))
             }
-        };
-        match declared {
-            Some(BaseType::Vec(_) | BaseType::Array(..)) => true,
-            Some(BaseType::Custom(n)) => crate::type_classification::type_name_leaf(&n) == "VecDeque",
-            _ => false,
         }
     }
 
@@ -687,6 +730,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ..
             } => {
                 let val_var = self.walk_expression(value);
+                if let (Pattern::Identifier(n) | Pattern::MutBinding(n), None) = (pattern, type_) {
+                    if let Some(b) = self.receiver_declared_base(value) {
+                        self.local_decl_types.insert(n.clone(), b);
+                    }
+                }
                 let bound_var = self.bind_pattern(pattern);
                 self.cs.add_because(Constraint::TypeEquals(bound_var, val_var), tagged("TY-UNIFY"));
                 if matches!(pattern, Pattern::Identifier(_) | Pattern::MutBinding(_)) {
@@ -915,6 +963,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let l = self.walk_expression(left);
                 let r = self.walk_expression(right);
                 let result = self.cs.fresh_var();
+                // Constant folding prints `8 + 4 + 16` as one literal at the expression's position.
+                if is_arithmetic_op(op) && is_int_literal_tree(left) && is_int_literal_tree(right) {
+                    if let Some(loc) = expr.location() {
+                        self.literal_vars.push(((loc.line, loc.column), l));
+                    }
+                }
 
                 if is_comparison_op(op) {
                     // Comparisons: operands should be same type, result is bool
@@ -953,6 +1007,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         self.cs.add_because(Constraint::TypeIs(result, BaseType::Bool), tagged("TY-BOOL"));
                     }
                     crate::parser::ast::operators::UnaryOp::Neg => {
+                        // Constant folding prints `-1` as one literal at the `-`: key the width there too.
+                        if let (Expression::Literal { value: Literal::Int(_), .. }, Some(l)) = (&**operand, expr.location()) {
+                            self.literal_vars.push(((l.line, l.column), inner));
+                        }
                         self.cs.add_because(Constraint::TypeEquals(result, inner), tagged("TY-UNIFY"));
                         self.cs.add_because(Constraint::IsNumeric(inner), tagged("NUM-MIXED"));
                     }
@@ -982,6 +1040,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
                 if let Some(callee_name) = Self::extract_callee_name(function) {
                     self.call_targets.push(callee_name.clone());
+                    self.emit_variant_payload_types(&callee_name, &arg_vars, arguments);
 
                     if let Some(sig) = self
                         .resolve_free_callee_signature(&callee_name, arguments.len())
@@ -1081,6 +1140,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 // NUM-USIZE (ADR-0028): `v.get(i)`, `q.remove(i)` on a std sequence take an index; a
                 // same-named signature of another type (a homonym) must not type the argument.
                 let seq_index = self.std_sequence_index_method(object, method);
+                if method == "push" && arguments.len() == 1 {
+                    if let Some(key) = crate::ir::numeric_facts::conversion_key(arguments[0].1) {
+                        self.element_stores.push((key, arg_vars[0], obj_var));
+                    }
+                }
                 if seq_index {
                     for (&v, (_, a)) in arg_vars.iter().zip(arguments.iter()) {
                         self.index_uses.push(v);
@@ -1100,11 +1164,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 // NUM-USIZE (ADR-0028): a length or count (no user signature, or a std one returning
                 // `usize`) is an index source: soft `usize`, so a declared width in its class wins and
                 // the source is converted at the site.
-                let declared_ret = sig.as_ref().and_then(|s| s.return_type.as_ref()).map(parser_type_to_base_type);
+                let declared_ret = sig
+                    .as_ref()
+                    .filter(|_| !self.receiver_is_std_collection(object))
+                    .and_then(|s| s.return_type.as_ref())
+                    .map(parser_type_to_base_type);
                 let index_source = arguments.is_empty()
                     && is_index_source_method(method)
                     && matches!(declared_ret, None | Some(BaseType::Usize))
-                    && (sig.is_some() || !self.has_non_usize_homonym(method));
+                    && (self.receiver_is_std_collection(object) || sig.is_some() || !self.has_non_usize_homonym(method));
                 self.emit_call_result_type_constraints(
                     result,
                     sig.as_ref().filter(|_| !seq_index && !index_source),
@@ -1315,6 +1383,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 // A block's value is its tail (or the tails of its `if`/`match` branches): whatever
                 // the block's value is used for is required of each of them (`let c = if p { a } else { b }`).
                 for t in tails {
+                    self.cs.add_because(Constraint::TypeEquals(t, result), tagged("TY-UNIFY"));
                     self.cs.add_because(
                         Constraint::UsedAs(t, result),
                         origin("OWN-LATTICE", "value of a block or branch flows to the block's result", &None),
@@ -1602,6 +1671,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             literal_vars: self.literal_vars,
             index_sources: self.index_sources,
             index_uses: self.index_uses,
+            element_stores: self.element_stores,
             execution_constraints: self.execution_constraints,
         }
     }
@@ -1690,6 +1760,18 @@ fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, bas
             cs.add_because(Constraint::IsNumeric(var), tagged("NUM-CLASS"));
         }
         _ => {}
+    }
+}
+
+/// An integer literal, or arithmetic / negation over integer literals (what constant folding folds).
+fn is_int_literal_tree(e: &Expression<'_>) -> bool {
+    match e {
+        Expression::Literal { value: Literal::Int(_), .. } => true,
+        Expression::Unary { op: crate::parser::ast::operators::UnaryOp::Neg, operand, .. } => is_int_literal_tree(operand),
+        Expression::Binary { left, op, right, .. } => {
+            is_arithmetic_op(op) && is_int_literal_tree(left) && is_int_literal_tree(right)
+        }
+        _ => false,
     }
 }
 

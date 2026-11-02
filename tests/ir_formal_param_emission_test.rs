@@ -65,6 +65,7 @@ fn wrap(name: string) -> Holder {
         solver_i64_locals: Default::default(),
         solver_local_widths: Default::default(),
         index_source_widths: Default::default(),
+        usize_conversions: Default::default(),
         last_uses: Default::default(),
         module_path: Vec::new(),
         returned_fields: Default::default(),

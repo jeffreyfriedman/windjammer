@@ -128,9 +128,14 @@ pub struct IrFunction {
     /// (any integer width, `usize` included), never the numeric default.
     pub solver_local_widths: std::collections::BTreeMap<String, crate::ir::safety_type::BaseType>,
 
-    /// Semantic fact NUM-USIZE (ADR-0028): `len()`-like index sources (by the call's source position)
-    /// whose class stayed `usize`, so the emitted call needs no conversion.
+    /// Semantic fact NUM-USIZE (ADR-0028): the width of each `len()`-like index source (by the call's
+    /// source position). `usize` needs nothing; another width is converted at the call (NUM-USIZE-TO-INT).
     pub index_source_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
+
+    /// Semantic fact NUM-USIZE-TO-INT (ADR-0028): `usize` values stored where another integer width is
+    /// required (`out.push(i + 1)` into `Vec<int>`), converted at the expression (by
+    /// `numeric_facts::conversion_key`).
+    pub usize_conversions: std::collections::BTreeMap<crate::ir::numeric_facts::ConversionKey, crate::ir::safety_type::BaseType>,
 
     /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
     /// the binding is never read again on any path.
@@ -378,6 +383,7 @@ impl IrFunction {
             solver_i64_locals: std::collections::BTreeSet::new(),
             solver_local_widths: std::collections::BTreeMap::new(),
             index_source_widths: std::collections::BTreeMap::new(),
+            usize_conversions: std::collections::BTreeMap::new(),
             last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),
             returned_fields: crate::ir::clone_facts::returned_param_fields(
                 &params,

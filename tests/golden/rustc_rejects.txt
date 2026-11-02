@@ -8,7 +8,6 @@ examples/verified/algo_state_machine.wj | error[E0308]: mismatched types
 examples/verified/algo_word_frequency.wj | error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&String, i64)`
 examples/verified/basics_arithmetic.wj | error[E0689]: can't call method `pow` on ambiguous numeric type `{integer}`
 examples/verified/basics_main_exit_code.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-examples/verified/enum_methods.wj | error[E0308]: arguments to this enum variant are incorrect
 examples/verified/generics_function.wj | error[E0599]: no method named `clone` found for type parameter `T` in the current scope
 examples/verified/hashset_basics.wj | error[E0308]: mismatched types
 examples/verified/iter_any_all_count.wj | error[E0308]: mismatched types
@@ -47,7 +46,6 @@ tests/conformance/stdlib/async_runtime.wj | error[E0433]: cannot find module or 
 tests/conformance/stdlib/closures_and_iteration.wj | error[E0308]: mismatched types
 tests/conformance/stdlib/json_operations.wj | error[E0432]: unresolved import `serde`
 tests/conformance/stdlib/subprocess_echo.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/conformance/types/enums_and_matching.wj | error[E0308]: mismatched types
 tests/consistency_improvements.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/control_flow_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/extern_fn_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope

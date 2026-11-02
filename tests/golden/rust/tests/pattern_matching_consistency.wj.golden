@@ -38,7 +38,7 @@ fn test_param_simple(x: i32) -> i32 {
 fn test_let_patterns() -> i32 {
     let (x, y) = (10_i32, 20_i32);
     let _ = 100;
-    (x + y) as i32
+    x + y
 }
 
 #[inline]

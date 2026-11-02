@@ -19,11 +19,11 @@ fn takes(n: i64) -> i64 {
 
 #[inline]
 fn f(v: &Vec<i64>) -> i64 {
-    let idx: i64 = v.len() as i64;
+    let idx: i64 = (v.len() as i64);
     let b = Box { n: v.len() as i64 };
-    let t = takes(v.len() as i64);
+    let t = takes((v.len() as i64));
     let mut m: i64 = 0_i64;
-    m = v.len() as i64;
+    m = (v.len() as i64);
     idx + b.n + t + m
 }
 

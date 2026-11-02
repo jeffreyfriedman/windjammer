@@ -14,6 +14,26 @@ use crate::ir::safety_type::BaseType;
 use crate::ir::solver::{is_integer_type, SolverResult};
 use std::collections::HashSet;
 
+/// Where a NUM-USIZE-TO-INT conversion goes: the expression's source position and its kind (a
+/// binary expression and the token after it can share a position).
+pub type ConversionKey = (usize, usize, u8);
+
+/// Key of an expression that may carry a conversion (`None` without a position).
+pub fn conversion_key(e: &crate::parser::Expression<'_>) -> Option<ConversionKey> {
+    use crate::parser::Expression as E;
+    let kind = match e {
+        E::Identifier { .. } => 1,
+        E::Binary { .. } => 2,
+        E::MethodCall { .. } => 3,
+        E::Call { .. } => 4,
+        E::Index { .. } => 5,
+        E::FieldAccess { .. } => 6,
+        _ => 0,
+    };
+    let l = e.location()?;
+    Some((l.line, l.column, kind))
+}
+
 struct View<'a> {
     result: &'a SolverResult,
     held: HashSet<u32>,
@@ -41,9 +61,8 @@ impl View<'_> {
 /// Classes whose widths stay with the legacy deciders for now (see module docs).
 fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> HashSet<u32> {
     let view = View { result, held: HashSet::new() };
-    let index_vars = fc.index_sources.iter().map(|(_, v)| *v).chain(fc.index_uses.iter().copied());
     let mut held = HashSet::new();
-    for v in index_vars {
+    for &v in &fc.index_uses {
         if view.int_type(v) != Some(BaseType::Usize) {
             held.extend(view.class(v));
         }
@@ -74,9 +93,20 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
             ir_fn.solver_local_widths.insert(name.clone(), base);
         }
     }
+    // NUM-USIZE-TO-INT: an index source in a class of another width is converted where it is produced.
     for (key, var) in &fc.index_sources {
-        if view.published(*var) == Some(BaseType::Usize) {
-            ir_fn.index_source_widths.insert(*key, BaseType::Usize);
+        if let Some(w) = view.published(*var) {
+            ir_fn.index_source_widths.insert(*key, w);
+        }
+    }
+    // ... and a `usize` value pushed into a `Vec` of another integer width is converted at the argument.
+    for (key, arg, obj) in &fc.element_stores {
+        let elem = match result.types.get(obj.0 as usize) {
+            Some(Some(BaseType::Vec(e))) => (**e).clone(),
+            _ => continue,
+        };
+        if view.published(*arg) == Some(BaseType::Usize) && is_integer_type(&elem) && elem != BaseType::Usize {
+            ir_fn.usize_conversions.insert(*key, elem);
         }
     }
 }
@@ -105,12 +135,28 @@ mod tests {
         assert_eq!(f.index_source_widths.len(), 1);
     }
 
-    /// A class whose `len()` meets a declared `int` needs a conversion: nothing is published yet.
+    /// NUM-USIZE-TO-INT: a `len()` that meets a declared `int` is converted at the call; its class is int.
     #[test]
-    fn class_needing_a_conversion_is_held() {
+    fn len_meeting_an_int_is_converted_at_the_call() {
         let f = facts("pub fn f(v: Vec<string>, n: int) -> int {\n    let mut t = v.len() + n\n    t = t + 1\n    t\n}\n", "f");
-        assert!(f.solver_local_widths.get("t").is_none(), "{:?} {:?} {:?}", f.solver_local_widths, f.literal_widths, f.index_source_widths);
+        assert_eq!(f.solver_local_widths.get("t"), Some(&BaseType::I64));
+        assert_eq!(f.index_source_widths.values().collect::<Vec<_>>(), vec![&BaseType::I64]);
+    }
+
+    /// An index use in a class of another width needs a conversion at the index: held.
+    #[test]
+    fn index_use_of_an_int_class_is_held() {
+        let f = facts("pub fn f(v: Vec<string>, n: int) -> string {\n    let k = n + 1\n    v[k]\n}\n", "f");
+        assert!(f.solver_local_widths.get("k").is_none(), "{:?}", f.solver_local_widths);
         assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
+    }
+
+    /// A `usize` counter pushed into a returned `Vec<int>` is converted at the argument.
+    #[test]
+    fn usize_counter_pushed_into_int_vec_is_converted() {
+        let f = facts("pub fn f(lines: Vec<string>) -> Vec<int> {\n    let mut out = Vec::new()\n    let mut i = 0\n    while i < lines.len() {\n        out.push(i + 1)\n        i = i + 1\n    }\n    out\n}\n", "f");
+        assert_eq!(f.solver_local_widths.get("i"), Some(&BaseType::Usize));
+        assert_eq!(f.usize_conversions.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?}", f.usize_conversions);
     }
 
     /// A shadowed local cannot be named by a fact, so its class is held.
