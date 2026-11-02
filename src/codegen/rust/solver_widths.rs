@@ -38,6 +38,49 @@ pub(crate) fn int_width_as_type(base: &BaseType) -> Option<Type> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// NUM-USIZE-TO-INT: print the conversions the solver placed on this expression — an index source
+    /// of another width (`(v.len() as i64)`) or a `usize` value stored into a wider slot.
+    pub(in crate::codegen::rust) fn apply_solver_conversion(&self, expr: &Expression<'ast>, emitted: String) -> String {
+        let Some(f) = self.current_ir_function.as_ref() else { return emitted };
+        let target = match expr {
+            Expression::MethodCall { arguments, .. } if arguments.is_empty() => crate::ir::numeric_defaults::literal_key(expr)
+                .and_then(|k| f.index_source_widths.get(&k))
+                .filter(|w| **w != BaseType::Usize),
+            _ => None,
+        }
+        .or_else(|| crate::ir::numeric_facts::conversion_key(expr).and_then(|k| f.usize_conversions.get(&k)));
+        match target.and_then(rust_int_name) {
+            Some(t) if !emitted.ends_with(&format!(" as {t})")) => {
+                // `as` binds tighter than any binary operator: `(i + 1) as i64`, not `i + 1 as i64`.
+                if matches!(expr, Expression::Binary { .. } | Expression::Unary { .. }) {
+                    format!("(({emitted}) as {t})")
+                } else {
+                    format!("({emitted} as {t})")
+                }
+            }
+            _ => emitted,
+        }
+    }
+
+    /// Integer width of a block tail: a tail is unified with its block's (or the function's) value, so
+    /// when the solver fixed its width there is nothing to cast; otherwise the legacy W5 casts to the
+    /// function's `int`/`i32` return width apply.
+    pub(in crate::codegen::rust) fn cast_tail_to_return_int_width(&self, expr_str: &mut String, expr: &Expression<'ast>) {
+        if self.solver_operand_width(expr).is_some() {
+            return;
+        }
+        let target = match &self.current_function_return_type {
+            Some(Type::Int) => Some("int"),
+            Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+            Some(Type::Int32) => Some("i32"),
+            Some(Type::Custom(name)) if name == "i32" => Some("i32"),
+            _ => None,
+        };
+        self.maybe_cast_usize_to_int_target(expr_str, expr, target);
+        self.maybe_cast_to_function_return_int_width(expr_str, expr);
+        crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(expr_str);
+    }
+
     /// Width the solver fixed for an integer literal (NUM-LITERAL-WIDTH, any width).
     pub(in crate::codegen::rust) fn solver_literal_width(&self, lit: &Expression<'ast>) -> Option<&BaseType> {
         let f = self.current_ir_function.as_ref()?;

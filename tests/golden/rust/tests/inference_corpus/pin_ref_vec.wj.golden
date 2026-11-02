@@ -1,6 +1,6 @@
 #[inline]
 fn count(v: &&[i64]) -> i64 {
-    v.len() as i64
+    (v.len() as i64)
 }
 
 fn main() {

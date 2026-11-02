@@ -116,8 +116,8 @@ fn test_nested_patterns() {
 
 #[inline]
 fn test_enum_methods() {
-    let c = Shape::Circle(10_i32);
-    let s = Shape::Square(5_i32);
+    let c = Shape::Circle(10_i64);
+    let s = Shape::Square(5_i64);
     println!("[enum_method] Circle: area={}", c.precise_area());
     println!("[enum_method] Square: area={}", s.precise_area());
 }
