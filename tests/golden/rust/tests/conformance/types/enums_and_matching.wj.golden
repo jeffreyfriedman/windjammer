@@ -126,9 +126,9 @@ fn test_enum_methods() {
 fn test_match_expression() {
     for x in [5, 0, -3] {
         let label: String = match x {
-            n if n > 0_i32 => "positive",
-            0 => "zero",
-            _ => "negative",
+            n if n > 0_i32 => String::from("positive"),
+            0 => String::from("zero"),
+            _ => String::from("negative"),
         };
         println!("[enum_match_expr] {}", label);
     }

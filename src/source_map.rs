@@ -249,7 +249,13 @@ impl SourceMap {
             });
         }
 
-        None
+        // No mapping within reach: the closest preceding mapped line of the same Rust file is the
+        // enclosing statement or item; the raw Rust line number means nothing in the Windjammer file.
+        self.mappings_vec
+            .iter()
+            .filter(|m| m.rust_file == rust_location.file && m.rust_line <= rust_location.line)
+            .max_by_key(|m| m.rust_line)
+            .map(|m| Location { file: m.wj_file.clone(), line: m.wj_line, column: m.wj_column })
     }
 }
 
@@ -357,5 +363,20 @@ mod tests {
 
         let lib_mappings = source_map.mappings_for_rust_file(Path::new("output/lib.rs"));
         assert_eq!(lib_mappings.len(), 1);
+    }
+
+    #[test]
+    fn unmapped_line_maps_to_the_closest_preceding_mapped_line() {
+        let mut m = SourceMap::new();
+        m.add_mapping("out/m.rs", 15, 1, "m.wj", 12, 1);
+        m.add_mapping("out/m.rs", 30, 1, "m.wj", 40, 1);
+        let at = |line| {
+            m.map_rust_to_windjammer(&Location { file: PathBuf::from("out/m.rs"), line, column: 23 })
+                .map(|l| l.line)
+        };
+        assert_eq!(at(15), Some(12));
+        assert_eq!(at(24), Some(12), "beyond the fuzzy window the enclosing item, not the raw Rust line");
+        assert_eq!(at(31), Some(40));
+        assert_eq!(at(3), None, "nothing precedes line 3");
     }
 }
