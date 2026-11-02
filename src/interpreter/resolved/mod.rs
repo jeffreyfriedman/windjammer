@@ -21,6 +21,7 @@ mod island;
 #[cfg(feature = "jit")]
 pub(crate) mod jit;
 mod literal;
+mod mapfast;
 mod matching;
 mod method;
 pub(crate) mod osr;

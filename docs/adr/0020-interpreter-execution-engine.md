@@ -455,6 +455,33 @@ unpacked walker. The first version passed with a planted bug, a `reverse` that w
 almost every write unpacks for good. The packed program now repacks before each step and reads results element by element,
 and the planted bug makes 19 of 80 programs differ.
 
+### Round 6 (Nov 2): maps without the call path (stopped at its kill line)
+Profile of `hashmap` (macOS `sample`, release): allocation was about 30% of the loop, spread over the argument vector,
+the reference `&k` makes, the `Option` built for each `get` and `insert` result, the generic pattern matcher, and the
+receiver's take/write-back for `insert`. `resolved/mapfast.rs` (110 lines, plus 55 in `matching.rs`):
+- `match m.get(k) { Some(v) => .., None => .. }` (also `&k`, `Some(_)`, `_`, either order, no guards) on a map local looks
+  the key up in place and runs the arm.
+- A statement `m.insert(k, x)` whose value is unused writes into the local's map, directly or through its box, made unique
+  first. Programs with `Drop` types are excluded.
+- Both do exactly what the builtins do: references stripped from keys and values, `Key` equality. Anything else (a `Vec`
+  receiver, a box in use, a guard) takes the generic call. User methods never replace a map's builtin methods
+  (`find_user_method` considers structs and enums only), so none is checked for.
+
+Two traps surfaced along the way. `std/collections.wj` declares `HashMap::get` as a typing stub, so a guard against user
+methods named `get` switched the fast path off for every program importing collections. And a bare `None` pattern parses
+as an identifier, which the walker matches as the unit variant. Both were found by profiling: the gates passed while the
+fast path did not run, because a fallback is always correct. Parity: `map_get_match.wj` covers hits and misses, arm
+orders, key forms, string keys with struct values, a `Vec` receiver, inserts into a map another binding shares, an insert
+whose value is used, and a panic in an arm. Debug mutants `mapget` (`Some(_)` stops matching) and `mapins` (a shared map
+written without the copy) are caught.
+
+`scripts/interp_compare.sh --runs 5`, load 20 at start and 31 at end (`bench/interp/compare.json`), resolved / Node:
+`hashmap` 2.27x (3.88x before; the 3M-iteration variant is 1.65 to 0.90 s), `structs` 0.57x, `fib30` 0.76x, `loop5m`
+0.84x, `sieve` 1.47x, `closures` 2.00x, `nbody` 2.20x, `strings` 2.47x. The kill criterion (`hashmap` within 2x Node, or
+the fast path over 300 lines) is not met, so the rung stops here. What remains per hit is the arm binding's box (the walker
+binds arm names to boxed locals) and the `let c = match ..` value path. The next lever is unboxed arm bindings for arms
+whose bodies take no reference to the binding.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to
