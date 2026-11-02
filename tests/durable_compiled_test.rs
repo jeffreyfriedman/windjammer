@@ -46,6 +46,7 @@ const SAMPLES: [&str; 5] = ["c1_ledger.wj", "c2_pipeline.wj", "c3_counter.wj", "
 fn a_durable_fn_is_lowered_to_a_journaled_run_with_wrapped_steps() {
     let (o, rs) = emitted(&sample("c2_pipeline.wj"));
     assert!(o.status.success(), "{}", text(&o));
+    assert!(!rs.contains("#[durable]"), "the marker is not a Rust attribute: {rs}");
     assert_eq!(rs.matches("windjammer_runtime::durable::run(").count(), 1, "{rs}");
     assert!(rs.contains(r#"windjammer_runtime::durable::run("run", vec![windjammer_runtime::durable::to_json(&seed)]"#), "{rs}");
     // three stages and three prints are steps; the plain `main` and the helper `stage` carry none
