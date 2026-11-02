@@ -2,7 +2,7 @@
 //! gates stay green when a fast path silently stops being taken (a guard that also matches a standard
 //! library stub, a pattern that parses differently than expected...). This gate asserts each one fires
 //! on the programs it was built for: `WJ_JIT_DEBUG` makes `wj run` report how often each was taken
-//! (`[fast] inline N mapget N mapins N packed N`), and each count must be non-zero.
+//! (`[fast] inline N mapget N mapins N packed N unboxed N`), and each count must be non-zero.
 //!
 //! In debug builds `WJ_JIT_MUTANT=nofast-<path>` switches one path off; the self-test shows the
 //! gate then fails for that path while the program's output stays the walker's.
@@ -15,10 +15,10 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 /// (program, the fast paths it must take).
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
-    ("bench/interp/hashmap.wj", &["mapget", "mapins"]),
+    ("bench/interp/hashmap.wj", &["mapget", "mapins", "unboxed"]),
     ("bench/interp/sieve.wj", &["packed"]),
     ("tests/engine_parity/jit_loop_inline.wj", &["inline"]),
-    ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins"]),
+    ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins", "unboxed"]),
     ("tests/engine_parity/packed_vecs.wj", &["packed"]),
 ];
 
