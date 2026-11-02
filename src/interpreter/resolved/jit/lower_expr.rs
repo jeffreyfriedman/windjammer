@@ -63,7 +63,7 @@ impl Lo<'_, '_> {
             Expression::Literal { value, .. } => self.literal(value)?,
             Expression::Identifier { name, .. } => match self.lookup(name)?.clone() {
                 Bind::Var(id) => Val::of(self.b.use_var(self.vars[id].var), self.vars[id].ty),
-                Bind::Handle(..) => return None,
+                Bind::Handle(..) | Bind::Struct(_) => return None,
             },
             Expression::Binary { left, op: op @ (BinaryOp::And | BinaryOp::Or), right, .. } => self.logic(*op, left, right)?,
             Expression::Binary { left, op, right, .. } => {
@@ -75,9 +75,16 @@ impl Lo<'_, '_> {
                 let v = self.expr(expr)?;
                 self.cast(v, type_)?
             }
+            Expression::FieldAccess { object, field, .. } if self.struct_valued(object) => self.struct_field(object, field)?,
             Expression::Index { .. } | Expression::FieldAccess { .. } => {
                 let t = self.target(e)?;
                 self.load(&t)?
+            }
+            Expression::MethodCall { object, method, type_args: None, arguments, .. } if self.struct_valued(object) => {
+                match self.inline_call(object, method, arguments)? {
+                    super::lower_struct::Out::Scalar(v) => v,
+                    super::lower_struct::Out::Struct(_) => return None,
+                }
             }
             Expression::MethodCall { object, method, type_args: None, arguments, .. } if arguments.is_empty() => self.method(object, method)?,
             _ => return None,
@@ -552,9 +559,22 @@ impl Lo<'_, '_> {
     /// `target = value` / `target op= value` (the walker evaluates the value first).
     pub(super) fn assign(&mut self, target: E, value: E, op: Option<CompoundOp>) -> Option<()> {
         let bop = op.map(compound_to_binary);
+        if let (Expression::Identifier { name, .. }, None) = (target, op) {
+            if let Some(Bind::Struct(sid)) = self.lookup(name).cloned() {
+                return self.assign_struct(sid, value);
+            }
+        }
         let rhs = self.expr(value)?;
-        if let Expression::Identifier { name, .. } = target {
-            let Bind::Var(id) = self.lookup(name)?.clone() else { return None };
+        let field = self.struct_target(target);
+        if let (Expression::Identifier { .. }, _) | (_, Some(_)) = (target, field) {
+            let id = match (target, field) {
+                (_, Some(id)) => id,
+                (Expression::Identifier { name, .. }, None) => match self.lookup(name)?.clone() {
+                    Bind::Var(id) => id,
+                    _ => return None,
+                },
+                _ => return None,
+            };
             let cur = Val::of(self.b.use_var(self.vars[id].var), self.vars[id].ty);
             let new = match bop {
                 None => self.retag(cur.ty, rhs)?,

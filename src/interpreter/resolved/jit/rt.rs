@@ -286,6 +286,13 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
         let v = value(unsafe { *at(sp.buf) }, sp.ty);
         super::osr::write(it, b + sp.slot, reg.kind(sp.slot), v, false);
     }
+    {
+        // SAFETY: `buf` has `nbuf` slots, every struct field index is one of them.
+        let all = unsafe { std::slice::from_raw_parts_mut(buf, plan.nbuf.max(1)) };
+        for sp in &st.structs {
+            super::osr::write(it, b + sp.slot, reg.kind(sp.slot), super::osr::make_struct(sp, all), false);
+        }
+    }
     it.mark(crate::interpreter::resolved::osr::loc(st.stmt));
     let r = match reg.code(st.stmt) {
         Some(code) => code(it, b),
@@ -299,6 +306,12 @@ pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
         match super::osr::read(it, b + sp.slot, reg.kind(sp.slot)).and_then(|v| bits(&v, sp.ty)) {
             Some(x) => unsafe { *at(sp.buf) = x },
             None => return 1,
+        }
+    }
+    let all = unsafe { std::slice::from_raw_parts_mut(buf, plan.nbuf.max(1)) };
+    for sp in &st.structs {
+        if super::osr::load_struct(it, b + sp.slot, reg.kind(sp.slot), sp, all).is_none() {
+            return 1;
         }
     }
     0

@@ -23,6 +23,7 @@ use std::rc::Rc;
 
 mod lower;
 mod lower_expr;
+mod lower_struct;
 pub(crate) mod osr;
 mod rt;
 mod kinds;
