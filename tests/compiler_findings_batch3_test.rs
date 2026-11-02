@@ -549,3 +549,72 @@ fn main() {
 "#,
     );
 }
+
+/// A list literal assigned to a `Vec` field is a `Vec`, like one in a struct-literal initialiser.
+#[test]
+fn list_literal_assigned_to_vec_field_is_a_vec() {
+    type_checks(
+        r#"pub struct Facts {
+    pub accounts: Vec<string>,
+    pub count: int,
+}
+
+fn main() {
+    let mut f = Facts { accounts: [], count: 0 }
+    f.accounts = ["1000", "2150"]
+    println(f.accounts.len())
+}
+"#,
+    );
+}
+
+/// Numeric solver (C4), P0: an untyped `int` accumulator over a field of a struct defined in another module
+/// is `i64` (the field type), never narrowed to `i32` (silent truncation of sums).
+#[test]
+fn untyped_accumulator_over_cross_module_field_is_not_narrowed() {
+    let dir = write_project(&[
+        (
+            "src/model.wj",
+            "pub struct Line {\n    pub account: string,\n    pub amount_cents: int,\n}\n\npub struct Draft {\n    pub lines: Vec<Line>,\n}\n",
+        ),
+        (
+            "src/check.wj",
+            "use crate::model::Draft\n\npub fn validate(draft: Draft) -> Result<Draft, string> {\n    let mut total = 0\n    for idx in 0..draft.lines.len() {\n        total = total + draft.lines[idx].amount_cents\n    }\n    if total != 0 {\n        return Err(\"must balance\")\n    }\n    Ok(draft)\n}\n",
+        ),
+        ("src/mod.wj", "pub mod model\npub mod check\n"),
+    ]);
+    let o = Command::new(WJ)
+        .arg("build")
+        .arg(dir.path().join("src/mod.wj"))
+        .arg("--output")
+        .arg(dir.path().join("gen"))
+        .args(["--library", "--no-cargo", "--module-file"])
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "wj build failed:\n{}", String::from_utf8_lossy(&o.stderr));
+    let rs = fs::read_to_string(dir.path().join("gen/check.rs")).unwrap();
+    assert!(!rs.contains("i32"), "the accumulator was narrowed to i32:\n{rs}");
+}
+
+/// Numeric solver (C4): untyped integer literals and locals next to an `int` function take `int`, not `i32`.
+#[test]
+fn untyped_literal_next_to_int_call_is_int() {
+    type_checks(
+        r#"fn pick(seed: int, n: int) -> int {
+    seed % n
+}
+
+fn main() {
+    let seed = 12345
+    let n_lines = 1 + pick(seed, 6)
+    let mut total = 0
+    let mut i = 0
+    while i < n_lines {
+        total = total + i
+        i = i + 1
+    }
+    println(total)
+}
+"#,
+    );
+}
