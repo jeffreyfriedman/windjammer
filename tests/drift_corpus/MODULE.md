@@ -15,6 +15,8 @@ than the interpreter's authors, run under the tree walker, the resolved engine a
 - `eco/` snapshot (edit nothing in it; refresh it, see below)
 - `PROVENANCE`: source repository, commit, how it was taken
 - `compiled_baseline.tsv`, `known_divergences.txt`
+- `repros/`: minimal programs of the ledgered divergences (also run as cases; fixing one turns its ledger line stale)
+- `engine_probe/`: a one-test project on which the two engines differ by design; `drift_selftest.wj` requires them to differ, so the corpus can never compare an engine with itself
 
 ## Invariants
 - The snapshot is byte-identical to `git archive <commit> packages apps` restricted to `wj.toml`, `src/`, `tests/`, `migrations/`, except the comment scrub recorded in PROVENANCE (public hygiene: no internal ticket ids).
