@@ -25,6 +25,9 @@ pub(crate) enum Class {
     Vec(Elem),
     /// A struct (possibly behind references): its type and the scalar fields it had.
     Struct(Shape),
+    /// A struct held directly by the local (no reference) whose fields are all scalars: machine code
+    /// keeps it as one variable per field (`lower_struct.rs`).
+    Value(Shape),
     Opaque,
 }
 
@@ -40,6 +43,7 @@ pub(crate) enum Elem {
 pub(crate) struct Shape {
     pub(crate) name: Rc<str>,
     pub(crate) fields: Vec<(Rc<str>, Option<Ty>)>,
+    pub(crate) copy: bool,
 }
 
 impl Shape {
@@ -149,7 +153,18 @@ pub(crate) fn int_value(x: i64, t: IntTy) -> i128 {
 
 fn shape(v: &Value) -> Option<Shape> {
     match v {
-        Value::Struct(s) => Some(Shape { name: s.name.clone(), fields: s.fields.iter().map(|(n, v)| (n.clone(), ty_of(v))).collect() }),
+        Value::Struct(s) => Some(Shape { name: s.name.clone(), fields: s.fields.iter().map(|(n, v)| (n.clone(), ty_of(v))).collect(), copy: s.copy }),
+        _ => None,
+    }
+}
+
+/// A struct held directly, all of whose fields are scalars (and no destructor identity).
+pub(crate) fn value_class(v: &Value) -> Option<Class> {
+    match v {
+        Value::Struct(s) if s.uid == 0 => {
+            let sh = shape(v)?;
+            sh.fields.iter().all(|(_, t)| t.is_some()).then_some(Class::Value(sh))
+        }
         _ => None,
     }
 }

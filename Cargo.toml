@@ -169,6 +169,16 @@ path = "tests/diagnostics_suite.rs"
 name = "all"
 path = "tests/all.rs"
 
+# Resolved engine vs the walker on every corpus program: cargo test --release --test engine_parity
+[[test]]
+name = "engine_parity"
+path = "tests/interpreter_engine_parity_test.rs"
+
+# Packed vectors vs unpacked ones through every writing builtin: cargo test --release --test packed_vec
+[[test]]
+name = "packed_vec"
+path = "tests/interpreter_packed_vec_test.rs"
+
 # Machine-code loops vs the tree walker (ADR-0020 round 3) also run standalone:
 #   cargo test --release --test jit_loops
 [[test]]
