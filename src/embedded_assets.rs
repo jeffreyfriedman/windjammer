@@ -43,10 +43,23 @@ impl Asset {
     }
 }
 
-/// Cache root: the OS temp dir (never the cwd or the build checkout). Core code reads no
-/// env vars; if the dir is unwritable, [`materialize`] falls back to a private per-process dir.
+static ROOT_PROVIDER: std::sync::OnceLock<fn() -> PathBuf> = std::sync::OnceLock::new();
+
+/// Let the driver choose a persistent cache root (the `wj` binary passes `cargo_cache::cache_root`).
+/// The embedded runtime then lives next to its compiled artifacts and survives OS temp-dir purges,
+/// which would otherwise force a full runtime rebuild. Core code reads no env vars itself.
+pub fn set_cache_root_provider(provider: fn() -> PathBuf) {
+    let _ = ROOT_PROVIDER.set(provider);
+}
+
+/// Cache root: the driver-provided persistent root when registered, else the OS temp dir (never
+/// the cwd or the build checkout). If the dir is unwritable, [`materialize`] falls back to a
+/// private per-process dir.
 fn cache_root() -> PathBuf {
-    std::env::temp_dir().join("wj-embedded")
+    match ROOT_PROVIDER.get() {
+        Some(p) => p().join("embedded"),
+        None => std::env::temp_dir().join("wj-embedded"),
+    }
 }
 
 /// The runtime crate's manifest inherits `version`/`authors`/`license` from the compiler

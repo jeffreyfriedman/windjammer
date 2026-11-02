@@ -312,6 +312,9 @@ pub fn run(cli: Cli) -> Result<()> {
             CacheCommand::Prune { aggressive } => {
                 windjammer::cli::cache::execute_prune(aggressive)?;
             }
+            CacheCommand::Warm => {
+                windjammer::cli::cache::execute_warm()?;
+            }
             CacheCommand::Setup => {
                 windjammer::cli::cache::execute_setup()?;
             }

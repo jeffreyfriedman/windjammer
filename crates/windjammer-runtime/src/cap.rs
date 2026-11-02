@@ -8,8 +8,13 @@
 use crate::caps;
 use crate::caps_core::grant::{Denial, Grant};
 use crate::caps_core::kind::EffectKind;
+#[cfg(feature = "net")]
 use crate::http::Response;
-use crate::{env, fs, http, process, random, time};
+use crate::{env, fs, process, random};
+#[cfg(feature = "net")]
+use crate::http;
+#[cfg(feature = "datetime")]
+use crate::time;
 use std::path::Path;
 
 fn fault(d: Denial) -> ! {
@@ -52,6 +57,7 @@ pub struct Env(Grant);
 #[derive(Clone, Debug)]
 pub struct Process(Grant);
 #[derive(Clone, Debug)]
+#[cfg_attr(not(feature = "datetime"), allow(dead_code))]
 pub struct Clock(Grant);
 #[derive(Clone, Debug)]
 pub struct Rng(Grant);
@@ -83,6 +89,10 @@ impl Net {
     pub fn only(&self, hosts: Vec<String>) -> Net {
         Net(narrow(&self.0, EffectKind::NetConnect, &hosts))
     }
+}
+
+#[cfg(feature = "net")]
+impl Net {
     pub fn get(&self, url: &str) -> Result<Response, String> {
         through(&self.0, EffectKind::NetConnect, Some(url), || http::get(url))
     }
@@ -171,6 +181,7 @@ impl Process {
     }
 }
 
+#[cfg(feature = "datetime")]
 impl Clock {
     pub fn now_millis(&self) -> i64 {
         through(&self.0, EffectKind::Time, None, time::now_millis)

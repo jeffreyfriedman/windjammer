@@ -74,6 +74,52 @@ whole shared tree on the measuring machine is 5.7 GiB including other projects, 
 (`WJ_CACHE_MAX_GIB`). Per-source run directories hold a few KiB each.
 
 
+## Round 2: feature-gated runtime, persistent unpack, more gates
+
+The first compiled build on a machine used to compile the whole runtime (181 CPU seconds, 1.1 GiB) because
+tokio, axum, reqwest, clap, regex and the crypto crates were unconditional. They are now cargo features of
+`windjammer-runtime` (`net`, `async`, `cli`, `crypto`, `datetime`, `jwt`, `regex`, `parallel`, `yaml`,
+`compress`, `csv`, `log`, `db`; `default` still enables everything, so every other consumer is unchanged).
+
+* The generated `Cargo.toml` enables only the groups the generated Rust names. The module-to-feature map is
+  read from the runtime's own `src/lib.rs` (`#[cfg(feature = "net")] pub mod http;`), so the runtime is the
+  single source of truth (`src/cargo_toml/runtime_features.rs`). Anything the scanner cannot classify (a
+  glob import, an unknown module) enables `full`: a miss costs compile time, never correctness.
+* `wj test`, the host bridge and the test helpers keep the previous full set.
+* The embedded runtime is unpacked into the wj cache root (`<cache>/embedded/...`) instead of the OS temp
+  directory, so an OS temp purge cannot invalidate the compiled runtime. Disk cost: about 1 MiB.
+* `wj cache warm` builds a trivial program once so the first real build is already warm.
+* Concurrent `wj run --compiled` of one source serialize the transpile step with a file lock.
+
+| scenario (small program, no network code) | wall s | CPU s | cache on disk | load |
+|---|---|---|---|---|
+| first build on a machine, before | 287 | 181 | 1.1 GiB | 28 |
+| first build on a machine, after | 17 | 34.6 | 132 MiB | 50 |
+| second build into a new output dir, after | 0.8 | 0.37 | shared | 50 |
+
+Programs that use a gated module pay for exactly that module: a program using `std::time` enables
+`datetime` (chrono) and nothing else; one using `http` enables `net`.
+
+### Further gates
+
+* `tests/build_speed_gate.rs`: first-build CPU budget on an empty cache, concurrent compiled runs, and an
+  ignored mutation check: with the shared target tree disabled (`WJ_USE_LOCAL_TARGET=1`, the old behaviour)
+  the warm-build budget is exceeded, so the budget gate has teeth.
+* `tests/build_output_golden.rs`: generated Rust for the verified examples hashes to the recorded values
+  (`tests/golden/build_output_hashes.tsv`); a sampled subset runs every commit, the whole corpus with
+  `--ignored`. Re-record after an intended codegen change with `WJ_RECORD_GOLDEN=1`.
+* Runtime feature selection has unit tests against the real runtime `lib.rs` (a no-network program gets no
+  heavy group, `http` gets `net`, unknown usage gets `full`).
+
+### Finding: compiler output depends on neighbouring builds
+
+While recording the golden hashes, the generated Rust for the same example differed depending on which
+other examples had been built before it from the same project root: the compiler keeps `.wj-cache`
+metadata under the project root and a neighbour's metadata changed how `println("{:?}", x)` was generated
+(macro form versus a `println(&_temp)` call). The golden test therefore builds each example alone in a
+private directory. The underlying behaviour belongs to the compiler's metadata cache, not this work. It also
+made the 169-example record run take 5 to 15 minutes instead of 13 seconds.
+
 ## Gates
 
 * `tests/build_speed_gate.rs`: CPU budgets for warm `wj run --compiled` and warm `wj build` into a fresh
@@ -87,6 +133,5 @@ whole shared tree on the measuring machine is 5.7 GiB including other projects, 
 
 ## Roadmap
 
-* Ship a pre-built runtime artifact with release binaries so even the first build on a machine is warm.
-* Feature-trim `windjammer-runtime` so programs that use no server or async APIs skip tokio and axum.
+* Ship a pre-built runtime artifact with release binaries so even the first build on a machine is warm (`wj cache warm` is the on-demand version today).
 * Use `--offline` when the lockfile is satisfied and all dependencies are vendored or path-based.

@@ -18,6 +18,7 @@ use clap::Parser;
 use wj_cli_args::Cli;
 
 fn main() -> anyhow::Result<()> {
+    windjammer::embedded_assets::set_cache_root_provider(windjammer::cargo_cache::cache_root);
     let cli = Cli::parse();
     wj_cli_cmds::run(cli)
 }
