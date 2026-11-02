@@ -309,17 +309,7 @@ fn register_vec(r: &mut Registry) {
         Ok(Value::vec(out))
     });
 
-    r.mutating(Kind::Vec, "push", |it, v, a| {
-        let x = arg(&a, 0, "push")?;
-        if it.fast_off("packed") {
-            vec_mut(v).push(x);
-            return Ok(Value::Unit);
-        }
-        let body = body_mut(v);
-        body.push_value(x);
-        it.fast.packed += body.packed().is_some() as u64;
-        Ok(Value::Unit)
-    });
+    r.mutating(Kind::Vec, "push", vec_push);
     r.mutating(Kind::Vec, "push_back", |_, v, a| {
         vec_mut(v).push(arg(&a, 0, "push_back")?);
         Ok(Value::Unit)
@@ -548,4 +538,17 @@ fn register_vec(r: &mut Registry) {
         let n = vec_of(&p.read()?).len();
         Ok(if n > 0 { Value::some(Value::Ref(Box::new(p.proj(Proj::Index(n - 1))))) } else { Value::none() })
     });
+}
+
+/// `v.push(x)`: packed while the elements keep one scalar type (counted for the fast-path gate).
+fn vec_push(it: &mut Interpreter, v: &mut Value, a: Vec<Value>) -> R {
+    let x = arg(&a, 0, "push")?;
+    if it.fast_off("packed") {
+        vec_mut(v).push(x);
+        return Ok(Value::Unit);
+    }
+    let body = body_mut(v);
+    body.push_value(x);
+    it.fast.packed += body.packed().is_some() as u64;
+    Ok(Value::Unit)
 }
