@@ -6,6 +6,8 @@ pub struct Translated {
     pub code: &'static str,
     pub message: String,
     pub help: Option<String>,
+    /// A mechanical edit, when the hint is one (located in the `.wj` text by `rustc_map`).
+    pub fix: Option<super::hints::FixHint>,
 }
 
 /// Replace Rust type spellings inside backticks with Windjammer ones (`i32` -> `int`).
@@ -34,12 +36,33 @@ fn between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
     Some(&rest[..rest.find(end)?])
 }
 
+fn ownership_word(t: &str) -> &'static str {
+    if t.starts_with('&') { "a borrowed" } else { "an owned" }
+}
+
+/// `(lhs, rhs)` of operator messages: "cannot add `rhs` to `lhs`", "cannot subtract `rhs` from `lhs`",
+/// "cannot multiply `lhs` by `rhs`", "can't compare `lhs` with `rhs`" (also the `-assign` forms).
+fn operator_operands(msg: &str) -> Option<(String, String)> {
+    let first = between(msg, "`", "`")?;
+    let rest = &msg[msg.find('`')? + first.len() + 2..];
+    let second = between(rest, "`", "`")?;
+    let (a, b) = (first.to_string(), second.to_string());
+    if msg.starts_with("cannot add") || msg.starts_with("cannot subtract") {
+        Some((b, a))
+    } else if msg.starts_with("cannot multiply") || msg.starts_with("cannot divide") || msg.starts_with("can't compare") || msg.starts_with("cannot mod") {
+        Some((a, b))
+    } else {
+        None
+    }
+}
+
 /// `rust_code` is the rustc error code if any; `label` the primary span label.
 pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Translated {
     let t = |code, message: String, help: Option<&str>| Translated {
         code,
         message,
         help: help.map(str::to_string),
+        fix: None,
     };
     let name = between(msg, "`", "`").unwrap_or("value");
     match rust_code {
@@ -65,13 +88,22 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
         ),
         Some("E0308") => {
             let ctx = label.unwrap_or(msg);
+            let generic = "change the value or the declared type, or convert explicitly (`as`, `.to_string()`, `.parse()`)";
             match (between(ctx, "expected `", "`"), between(ctx, "found `", "`")) {
-                (Some(e), Some(f)) => t(
-                    "WJ0003",
-                    format!("mismatched types: expected `{}`, found `{}`", wjify(&format!("`{e}`")).trim_matches('`'), wjify(&format!("`{f}`")).trim_matches('`')),
-                    Some("change the value or the declared type"),
-                ),
-                _ => t("WJ0003", "mismatched types".to_string(), Some("change the value or the declared type")),
+                (Some(e), Some(f)) => {
+                    let (we, wf) = (wjify(&format!("`{e}`")), wjify(&format!("`{f}`")));
+                    let (we, wf) = (we.trim_matches('`').to_string(), wf.trim_matches('`').to_string());
+                    let message = if we == wf {
+                        format!("mismatched types: expected {} `{we}`, found {} `{wf}`", ownership_word(e), ownership_word(f))
+                    } else {
+                        format!("mismatched types: expected `{we}`, found `{wf}`")
+                    };
+                    match super::hints::mismatch(e, f) {
+                        Some(h) => Translated { code: h.code, message, help: Some(h.help), fix: h.fix },
+                        None => t("WJ0003", message, Some(generic)),
+                    }
+                }
+                _ => t("WJ0003", "mismatched types".to_string(), Some(generic)),
             }
         }
         Some("E0384") => t(
@@ -123,15 +155,59 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
             format!("non-exhaustive match: {} not covered", between(msg, "patterns: ", " not covered").unwrap_or("some cases")),
             Some("add the missing arms or a final `_` arm"),
         ),
+        Some("E0277") if msg.contains("cannot be built from an iterator") => match super::hints::collect_elements(msg) {
+            Some(h) => Translated {
+                code: h.code,
+                message: wjify(&format!(
+                    "the collected elements have the wrong type: `{}` cannot be built from elements of type `{}`",
+                    between(msg, "a value of type `", "`").unwrap_or("collection"),
+                    between(msg, "elements of type `", "`").unwrap_or("?"),
+                )),
+                help: Some(h.help),
+                fix: h.fix,
+            },
+            None => t("WJ0029", wjify(msg), Some("convert each element with `.map(..)` before `.collect()`")),
+        },
+        Some("E0277") if operator_operands(msg).is_some() => {
+            let (lhs, rhs) = operator_operands(msg).unwrap();
+            let help = super::hints::mismatch(&lhs, &rhs)
+                .map(|h| h.help)
+                .unwrap_or_else(|| "convert one operand so both sides have the same type".to_string());
+            t(
+                "WJ0020",
+                wjify(&format!("operator cannot combine `{lhs}` and `{rhs}`")),
+                Some(&help),
+            )
+        }
+        Some("E0277") if msg.contains("doesn't implement") || msg.contains("`Display`") || msg.contains("`Debug`") => t(
+            "WJ0032",
+            wjify(&format!("this type has no text form: {msg}")),
+            Some("print its fields instead, or implement `Display` for the type"),
+        ),
         Some("E0277") => t(
             "WJ0017",
             wjify(&format!("trait bound not satisfied: {}", msg.replace("the trait bound ", "").replace("is not satisfied", ""))).trim().to_string(),
             Some("implement the trait for the type, or use a type that has it"),
         ),
-        Some("E0369") | Some("E0600") | Some("E0604") | Some("E0606") => t(
+        Some("E0614") => t(
+            "WJ0031",
+            format!("`{}` is not a reference, so it cannot be dereferenced", wjify(&format!("`{name}`")).trim_matches('`')),
+            Some("remove the `*`: Windjammer dereferences automatically, so write the value directly"),
+        ),
+        Some("E0782") => t(
+            "WJ0034",
+            "a trait cannot be used as a plain type".to_string(),
+            Some("make the function generic over the trait (`fn f<T: Shape>(x: T)`), or store a `Box<dyn Shape>`"),
+        ),
+        Some("E0606") | Some("E0604") => t(
             "WJ0020",
             wjify(msg),
-            Some("convert the operands to a common type first"),
+            Some("this cast is not allowed: convert in two steps (for example `x as int as float`), or parse/format the value instead"),
+        ),
+        Some("E0369") | Some("E0368") | Some("E0600") => t(
+            "WJ0020",
+            wjify(msg),
+            Some("this operator does not apply to that type: convert the operands to a common numeric type first"),
         ),
         Some("E0046") | Some("E0407") => t(
             "WJ0018",

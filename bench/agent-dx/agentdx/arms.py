@@ -12,7 +12,9 @@ import os
 from . import tasks as T
 from .paths import ROOT
 
-PACK_PATH = os.path.normpath(os.path.join(ROOT, "..", "..", "docs", "agent", "WINDJAMMER_FOR_AGENTS.md"))
+_DOCS = os.path.normpath(os.path.join(ROOT, "..", "..", "docs", "agent"))
+PACK_PATH = os.path.join(_DOCS, "WINDJAMMER_FOR_AGENTS.md")          # the default 2 KB sheet (arm S and its ablations)
+FULL_PACK_PATH = os.path.join(_DOCS, "WINDJAMMER_REFERENCE.md")      # the pack that arms A, B, C(no), D used in pilots 1-3
 
 LOOP_TEXT = {
     "interpreted-first": (
@@ -53,6 +55,14 @@ ARMS = {
     "E": {"name": "tiny-pack+mcp", "loop": "compiled-first", "pack_file": "tiny_E.md", "mcp": True, "lang": "wj", "bash": "core"},
     "F": {"name": "tiny-pack+wj-docs", "loop": "compiled-first", "pack_file": "tiny_F.md", "bash": "core+docs", "lang": "wj"},
     "T": {"name": "tiny-pack-only", "loop": "compiled-first", "pack_file": "tiny_T.md", "bash": "core", "lang": "wj"},
+    # tip ablation (agentdx/ablate.py): S = default sheet, Sx = sheet minus one tip group; same loop and tools as F (Sf drops the docs tools)
+    "S": {"name": "sheet", "loop": "compiled-first", "pack_file": "ablation/sheet_full.md", "bash": "core+docs", "lang": "wj"},
+    "Sa": {"name": "sheet-minus-strings", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_strings.md", "bash": "core+docs", "lang": "wj"},
+    "Sb": {"name": "sheet-minus-ownership", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_ownership.md", "bash": "core+docs", "lang": "wj"},
+    "Sc": {"name": "sheet-minus-input", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_input.md", "bash": "core+docs", "lang": "wj"},
+    "Sd": {"name": "sheet-minus-len", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_len.md", "bash": "core+docs", "lang": "wj"},
+    "Se": {"name": "sheet-minus-printing", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_printing.md", "bash": "core+docs", "lang": "wj"},
+    "Sf": {"name": "sheet-minus-tools", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_tools.md", "bash": "core", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
     "R": {"name": "rust", "loop": "native-rust", "pack": False, "lang": "rust"},
@@ -107,7 +117,7 @@ def pack_path(arm):
     a = ARMS[arm]
     if a.get("pack_file"):
         return os.path.join(PACKS_DIR, a["pack_file"])
-    return PACK_PATH if a.get("pack") else None
+    return FULL_PACK_PATH if a.get("pack") else None
 
 
 def all_mcp_tools():

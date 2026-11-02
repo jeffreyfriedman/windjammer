@@ -493,12 +493,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         self.set_assignment_int_target_from_compound_target(target);
-        // ADR-0014: a list literal assigned to a place is a growable list unless the place is a fixed array.
-        let prev_list = self.array_literal_as_list;
-        self.array_literal_as_list = matches!(value, Expression::Array { .. })
-            && !matches!(tgt_ty, Some(Type::Array(..)));
-        let mut value_str = self.generate_expression(value);
-        self.array_literal_as_list = prev_list;
+        let mut value_str = self.generate_with_list_context(value, tgt_ty.as_ref());
         self.assignment_float_target_type = prev_assign_ty;
         self.assignment_int_target_type = prev_assign_int;
         if matches!(value, Expression::Literal { value: Literal::String(_), .. })

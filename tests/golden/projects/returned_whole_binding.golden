@@ -1,0 +1,38 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod rows;
+
+// Re-export public items
+pub use rows::*;
+// ==== main.rs ====
+mod rows;
+fn main() {
+    let r = rows::Row { cols: vec!["a".to_string(), "b".to_string()] };
+    let (r2, s) = rows::tag(r, String::from("x"));
+    println!("{} {}", s, r2.cols.len());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod rows;
+
+// Re-export public items
+pub use rows::*;
+// ==== rows.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Row {
+    pub cols: Vec<String>,
+}
+
+#[inline]
+pub fn tag(row: Row, name: String) -> (Row, String) {
+    (row, name)
+}
+

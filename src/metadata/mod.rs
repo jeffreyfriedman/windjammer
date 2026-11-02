@@ -546,7 +546,10 @@ pub fn collect_analyzed_module_metadata(
         match item {
             Item::Function { decl, .. } => {
                 let module_recv = (!module_name.is_empty()).then_some(module_name);
-                let sig = registry.get_signature(&decl.name).or_else(|| {
+                // Identity first (C3): the bare key belongs to whichever homonym registered last.
+                let qualified = format!("{}::{}", module_name, decl.name);
+                let own = registry.get_signature(&qualified).or_else(|| registry.get_signature(&decl.name));
+                let sig = own.or_else(|| {
                     crate::analyzer::stdlib_method_traits::lookup_method_signature(
                         &decl.name,
                         module_recv,
@@ -554,11 +557,7 @@ pub fn collect_analyzed_module_metadata(
                     )
                 });
                 if let Some(sig) = sig {
-                    let key = if registry.get_signature(&decl.name).is_some() {
-                        decl.name.clone()
-                    } else {
-                        format!("{}::{}", module_name, decl.name)
-                    };
+                    let key = if own.is_some() { decl.name.clone() } else { qualified };
                     let mut meta_sig = metadata_function_sig_from_analyzer(sig, false, None);
                     stamp_trait_method_flag(registry, &key, &mut meta_sig);
                     meta.functions.insert(key, meta_sig);

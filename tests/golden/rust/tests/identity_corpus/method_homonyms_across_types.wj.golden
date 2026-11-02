@@ -1,0 +1,35 @@
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+
+struct Stack {
+    items: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+
+struct Log {
+    lines: Vec<String>,
+}
+
+impl Stack {
+#[inline]
+pub fn put(&mut self, s: String) {
+        self.items.push(s);
+}
+}
+
+impl Log {
+#[inline]
+pub fn put(&self, s: &str) -> i64 {
+        s.len() as i64
+}
+}
+
+fn main() {
+    let mut st = Stack { items: Vec::new() };
+    let lg = Log { lines: Vec::new() };
+    let w: String = String::from("hello");
+    let n = lg.put(&w);
+    st.put(w.to_string());
+    println!("{} {} {}", n, st.items.len(), lg.lines.len());
+}
+

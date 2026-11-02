@@ -1,0 +1,47 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod store;
+
+// Re-export public items
+pub use store::*;
+// ==== main.rs ====
+mod store;
+fn main() {
+    let s = store::Session { prepared: Vec::new() };
+    let s = store::parse(s, String::from("a"));
+    let s = store::parse(s, String::from("b"));
+    println!("{} {}", s.prepared.len(), s.prepared[1].name);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod store;
+
+// Re-export public items
+pub use store::*;
+// ==== store.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Prep {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Session {
+    pub prepared: Vec<Prep>,
+}
+
+#[inline]
+pub fn parse(session: Session, name: String) -> Session {
+    let mut s = session;
+    s.prepared.push(Prep { name });
+    s
+}
+

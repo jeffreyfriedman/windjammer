@@ -1,0 +1,11 @@
+// A `string` formal stored in a pushed struct literal (restore_owned_string_formals_stored_in_payload).
+// Expected by hand: two prepared statements, the second named "b".
+// expect: 2 b
+mod store
+
+fn main() {
+    let s = store::Session { prepared: Vec::new() }
+    let s = store::parse(s, "a")
+    let s = store::parse(s, "b")
+    println("${s.prepared.len()} ${s.prepared[1].name}")
+}

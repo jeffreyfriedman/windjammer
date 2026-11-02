@@ -1,0 +1,240 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "Sa",
+ "arm_name": "sheet-minus-strings",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut acc: HashMap<string, int> = HashMap::new()\n    let mut names: Vec<string> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|x| x.to_string()).collect()\n        if p.len() == 0 { continue }\n        let cmd = p[0].clone()\n        if cmd == \"balance\" {\n            let n = p[1].clone()\n            if acc.contains_key(n) {\n                println(\"${acc[n]}\")\n            } else {\n                println(\"error: unknown account ${n}\")\n            }\n        } else if cmd == \"open\" {\n            let n = p[1].clone()\n            let a: int = p[2].parse::<int>().unwrap_or(-1)\n            if a < 0 {\n                println(\"error: invalid amount\")\n            } else if acc.contains_key(n) {\n                println(\"error: duplicate account\")\n            } else {\n                acc.insert(n.clone(), a)\n                names.push(n)\n                println(\"ok\")\n            }\n        } else if cmd == \"deposit\" || cmd == \"withdraw\" {\n            let n = p[1].clone()\n            let a: int = p[2].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(n) {\n                println(\"error: unknown account ${n}\")\n            } else {\n                let b = acc[n]\n                if cmd == \"deposit\" {\n                    acc.insert(n, b + a)\n                    println(\"ok\")\n                } else if b < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(n, b - a)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" {\n            let f = p[1].clone()\n            let t = p[2].clone()\n            let a: int = p[3].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(f) {\n                println(\"error: unknown account ${f}\")\n            } else if !acc.contains_key(t) {\n                println(\"error: unknown account ${t}\")\n            } else if f == t {\n                println(\"error: same account\")\n            } else {\n                let fb = acc[f]\n                let tb = acc[t]\n                if fb < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(f, fb - a)\n                    acc.insert(t, tb + a)\n                    println(\"ok\")\n                }\n            }\n        }\n    }\n    names.sort()\n    for n in names {\n        println(\"${n} ${acc[n]}\")\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut acc: HashMap<string, int> = HashMap::new()\n    let mut names: Vec<string> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|x| x.to_string()).collect()\n        if p.len() == 0 { continue }\n        let cmd = p[0].clone()\n        if cmd == \"balance\" {\n            let n = p[1].clone()\n            if acc.contains_key(n) {\n                println(\"${acc[n]}\")\n            } else {\n                println(\"error: unknown account ${n}\")\n            }\n        } else if cmd == \"open\" {\n            let n = p[1].clone()\n            let a: int = p[2].parse::<int>().unwrap_or(-1)\n            if a < 0 {\n                println(\"error: invalid amount\")\n            } else if acc.contains_key(n) {\n                println(\"error: duplicate account\")\n            } else {\n                acc.insert(n.clone(), a)\n                names.push(n)\n                println(\"ok\")\n            }\n        } else if cmd == \"deposit\" || cmd == \"withdraw\" {\n            let n = p[1].clone()\n            let a: int = p[2].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(n) {\n                println(\"error: unknown account ${n}\")\n            } else {\n                let b = acc[n]\n                if cmd == \"deposit\" {\n                    acc.insert(n, b + a)\n                    println(\"ok\")\n                } else if b < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(n, b - a)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" {\n            let f = p[1].clone()\n            let t = p[2].clone()\n            let a: int = p[3].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(f) {\n                println(\"error: unknown account ${f}\")\n            } else if !acc.contains_key(t) {\n                println(\"error: unknown account ${t}\")\n            } else if f == t {\n                println(\"error: same account\")\n            } else {\n                let fb = acc[f]\n                let tb = acc[t]\n                if fb < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(f, fb - a)\n                    acc.insert(t, tb + a)\n                    println(\"ok\")\n                }\n            }\n        }\n    }\n    names.sort()\n    for n in names {\n        println(\"${n} ${acc[n]}\")\n    }\n}\n",
+ "first_turn_input": 8303,
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 7.166,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 5.119,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 183.44,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 4.505,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 11,
+ "other_seconds": 0.0,
+ "pack_bytes": 1369,
+ "pack_file": "sheet_minus_strings.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-02T02:40:51",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 39.724,
+ "tool_result_tokens_est": 1201,
+ "tool_wait_seconds": 200.23,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6673,
+   "cache_write": 1628,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8303,
+   "output": 4,
+   "result_chars": 936,
+   "turn": 1
+  },
+  {
+   "cache_read": 8301,
+   "cache_write": 1722,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 10025,
+   "output": 21,
+   "result_chars": 87,
+   "turn": 2
+  },
+  {
+   "cache_read": 10023,
+   "cache_write": 203,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10228,
+   "output": 17,
+   "result_chars": 294,
+   "turn": 3
+  },
+  {
+   "cache_read": 10226,
+   "cache_write": 230,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 10458,
+   "output": 16,
+   "result_chars": 87,
+   "turn": 4
+  },
+  {
+   "cache_read": 10456,
+   "cache_write": 203,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10661,
+   "output": 3,
+   "result_chars": 2,
+   "turn": 5
+  },
+  {
+   "cache_read": 10659,
+   "cache_write": 170,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 10831,
+   "output": 53,
+   "result_chars": 87,
+   "turn": 6
+  },
+  {
+   "cache_read": 10829,
+   "cache_write": 244,
+   "calls": [
+    "Monitor"
+   ],
+   "fresh": 2,
+   "input_total": 11075,
+   "output": 21,
+   "result_chars": 140,
+   "turn": 7
+  },
+  {
+   "cache_read": 11073,
+   "cache_write": 344,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11419,
+   "output": 16,
+   "result_chars": 1723,
+   "turn": 8
+  },
+  {
+   "cache_read": 11417,
+   "cache_write": 876,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12295,
+   "output": 16,
+   "result_chars": 727,
+   "turn": 9
+  },
+  {
+   "cache_read": 12293,
+   "cache_write": 448,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12743,
+   "output": 62,
+   "result_chars": 120,
+   "turn": 10
+  },
+  {
+   "cache_read": 12741,
+   "cache_write": 298,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13041,
+   "output": 197,
+   "result_chars": 0,
+   "turn": 11
+  },
+  {
+   "cache_read": 13039,
+   "cache_write": 706,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13747,
+   "output": 4,
+   "result_chars": 0,
+   "turn": 12
+  }
+ ],
+ "usage": {
+  "api_seconds": 39.724,
+  "cost_usd": 0.070799,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "The background build and run from earlier has finished with exit code 0. It doesn't change anything: I had already checked `main.wj` with a foreground compiled run, and the output was correct. The task is done.",
+  "subtype": "success",
+  "tokens_in": 13747,
+  "tokens_out": 63,
+  "turns": 1
+ },
+ "verify_calls": 4,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 205.92
+}

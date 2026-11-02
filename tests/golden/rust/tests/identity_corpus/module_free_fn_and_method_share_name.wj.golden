@@ -1,0 +1,25 @@
+mod store {
+    #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Bag {
+    pub items: Vec<i64>,
+}    impl Bag {
+#[inline]
+pub fn put(&mut self, x: i64) {
+            self.items.push(x);
+}
+}    #[inline]
+pub fn put(xs: Vec<i64>) -> i64 {
+        xs.len() as i64
+}    #[inline]
+pub fn fill() -> i64 {
+        let mut b = Bag { items: Vec::new() };
+        b.put(4_i64);
+        b.put(5_i64);
+        put(b.items.clone())
+}}
+
+fn main() {
+    println!("{}", store::fill());
+}
+

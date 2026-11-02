@@ -94,8 +94,12 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     }
     build_quietly(path, output_dir, target)?;
 
-    // Run with cargo (shared target dir outside the temp project)
+    // Compile first with machine-readable output, so a rustc error reaches the user as a Windjammer
+    // diagnostic on the `.wj` source (code, hint, location) and never as raw Rust compiler text.
     let _ = crate::cargo_cache::reclaim();
+    if let Some(code) = compile_or_report(output_dir, release)? {
+        return Ok(code);
+    }
     let mut cmd = Command::new("cargo");
     cmd.args(["run", "--quiet"]).current_dir(output_dir);
     if release {
@@ -162,4 +166,29 @@ fn build_windjammer_dependencies(path: &Path) -> Result<()> {
         build_quietly(&src, &gen, crate::CompilationTarget::Rust)?;
     }
     Ok(())
+}
+
+/// `cargo build` the generated crate; on failure print translated diagnostics and return exit status 1.
+fn compile_or_report(output_dir: &Path, release: bool) -> Result<Option<i32>> {
+    let mut build = Command::new("cargo");
+    build.args(["build", "--quiet", "--message-format=json"]).current_dir(output_dir);
+    if release {
+        build.arg("--release");
+    }
+    crate::cargo_cache::configure_cargo_command(&mut build, crate::cargo_cache::TargetKind::Shared);
+    let out = build.output()?;
+    if out.status.success() {
+        return Ok(None);
+    }
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
+    let diags = crate::cli::build_json::map_cargo_failure(output_dir, &text);
+    let only_unparsed = diags.len() == 1 && diags[0].message.contains("could not be parsed");
+    for d in &diags {
+        eprint!("{}", crate::diagnostics::render::render(d, &|f| std::fs::read_to_string(f).ok()));
+    }
+    if only_unparsed {
+        // Not a compile error (for example a dependency could not be fetched): cargo's own text is the diagnostic.
+        eprintln!("{}", String::from_utf8_lossy(&out.stderr));
+    }
+    Ok(Some(1))
 }

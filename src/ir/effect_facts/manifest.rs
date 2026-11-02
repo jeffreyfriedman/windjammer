@@ -209,6 +209,33 @@ mod tests {
     }
 
     #[test]
+    fn broad_patterns_and_near_misses_never_reach_protected_files() {
+        let protected = ["wj.toml", "x.wj-capabilities.lock", "src/main.wj", "WJ.TOML", "SRC/Main.WJ"];
+        for broad in ["./*", "./**", "./src/*", "./src/**", "./**/*", "./out/**/*"] {
+            let mut g = Grant::sandbox(&root());
+            g.allow(EffectKind::FsWrite, broad);
+            for p in protected {
+                assert!(g.check(&EffectKind::FsWrite, Some(p)).is_err(), "`{broad}` must not cover {p}");
+            }
+        }
+        // a pattern that spells another protected suffix does not grant this one
+        for (pat, p) in [("./*.wj", "wj.toml"), ("./*.wj", "x.wj-capabilities.lock"), ("./*.lock", "x.wj-capabilities.lock"), ("./**/wj.toml", "src/main.wj"), ("./*.toml", "wj.toml")] {
+            let mut g = Grant::sandbox(&root());
+            g.allow(EffectKind::FsWrite, pat);
+            assert!(g.check(&EffectKind::FsWrite, Some(p)).is_err(), "`{pat}` must not cover {p}");
+        }
+        // spelled: the suffix in the last segment
+        let mut lock = Grant::sandbox(&root());
+        lock.allow(EffectKind::FsWrite, "./out/*.wj-capabilities.lock");
+        assert!(lock.check(&EffectKind::FsWrite, Some("out/a.wj-capabilities.lock")).is_ok());
+        assert!(lock.check(&EffectKind::FsWrite, Some("out/wj.toml")).is_err());
+        // reading is never restricted by the protection
+        let mut r = Grant::sandbox(&root());
+        r.allow(EffectKind::FsRead, "./**");
+        assert!(r.check(&EffectKind::FsRead, Some("wj.toml")).is_ok());
+    }
+
+    #[test]
     fn local_profile_is_the_project_directory() {
         let g = Grant::local_profile(&root());
         assert!(g.check(&EffectKind::FsWrite, Some("out/x.txt")).is_ok());

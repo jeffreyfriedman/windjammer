@@ -1,0 +1,1 @@
+# Known front-end error kinds without a hint. May only shrink.

@@ -421,8 +421,8 @@ those mutations to go through `KMap` first); method inlining in machine-code loo
 - `recv.m(args)` on such a value inlines the user method when it has `self` first, a return type, no decorators or type
   parameters, is not async or extern, mutates neither `self` nor a parameter, and its body is `let`s plus a tail expression
   machine code lowers. Nesting stops at four. The callee sees only its own names. Arguments are evaluated in the caller's
-  scope, and the parameters and result are coerced as the call would coerce them. Same-name types in different modules turn
-  inlining off: the method table is keyed by bare name.
+  scope, and the parameters and result are coerced as the call would coerce them. A struct value carries its declared type key,
+  the key its methods are registered under, so same-name types in different modules inline their own methods.
 - Failure semantics are unchanged. Anything that fails inside an inlined body leaves machine code at the caller's statement,
   and the closure engine then runs the real call, so panics and backtraces come from it (`V2::div` in the backtrace of
   `jit_loop_inline.wj`). The depth check is the exception: a unit that inlines enters only with 1 MiB of interpreter stack
@@ -436,11 +436,13 @@ Checks:
 - New engine-parity programs: `jit_loop_inline.wj` covers nested and struct-returning calls, `let`s in the callee, `i32`/`u8`
   results, a method the inliner refuses, a closure capturing a loop's struct `let` (read before and after machine code changes
   a field, and after the loop), and a zero divisor inside an inlined method. `same_name_types.wj` gains live-in structs of
-  same-name types.
-- The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a planted zero
-  divisor inside an inlined method. Its coverage test requires a quarter of the generated loops to inline.
-- Debug mutants `box` (the box made again at every write) and `dupe` (inlining on with same-name types) must each change
-  their corpus program's output (`every_inlining_check_is_load_bearing`, debug builds).
+  same-name types whose methods inline.
+- The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a zero divisor and an
+  `int` overflow planted inside inlined methods. Its coverage test requires a quarter of the generated loops to inline.
+- Debug mutation gates on the final source: the six machine-code mutants (`overflow`, `range`, `divzero`, `bounds`, `nan`,
+  `retag`) against 60 generated programs, and `box` (the first write after a struct `let` fills the previous binding's
+  box) against `jit_loop_inline.wj`, are each caught. `overflow` had stopped being caught once the generator changed, since
+  only the random mix had ever overflowed `int`; an `int` overflow is now planted.
 
 Kill criterion (`structs` within 2x Node, inliner under 1.5k lines): met. `scripts/interp_compare.sh --runs 5`, starting at
 load 39 and ending at 96 (`bench/interp/compare.json`), resolved / Node: `structs` 0.60x (8.05x the run before, at load
@@ -452,6 +454,62 @@ unpacked and drives both through every builtin that writes, comparing walker, re
 unpacked walker. The first version passed with a planted bug, a `reverse` that wrote the read cache without unpacking, because
 almost every write unpacks for good. The packed program now repacks before each step and reads results element by element,
 and the planted bug makes 19 of 80 programs differ.
+
+### Round 6 (Nov 2): maps without the call path (stopped at its kill line)
+Profile of `hashmap` (macOS `sample`, release): allocation was about 30% of the loop, spread over the argument vector,
+the reference `&k` makes, the `Option` built for each `get` and `insert` result, the generic pattern matcher, and the
+receiver's take/write-back for `insert`. `resolved/mapfast.rs` (110 lines, plus 55 in `matching.rs`):
+- `match m.get(k) { Some(v) => .., None => .. }` (also `&k`, `Some(_)`, `_`, either order, no guards) on a map local looks
+  the key up in place and runs the arm.
+- A statement `m.insert(k, x)` whose value is unused writes into the local's map, directly or through its box, made unique
+  first. Programs with `Drop` types are excluded.
+- Both do exactly what the builtins do: references stripped from keys and values, `Key` equality. Anything else (a `Vec`
+  receiver, a box in use, a guard) takes the generic call. User methods never replace a map's builtin methods
+  (`find_user_method` considers structs and enums only), so none is checked for.
+
+Two traps surfaced along the way. `std/collections.wj` declares `HashMap::get` as a typing stub, so a guard against user
+methods named `get` switched the fast path off for every program importing collections. And a bare `None` pattern parses
+as an identifier, which the walker matches as the unit variant. Both were found by profiling: the gates passed while the
+fast path did not run, because a fallback is always correct. Parity: `map_get_match.wj` covers hits and misses, arm
+orders, key forms, string keys with struct values, a `Vec` receiver, inserts into a map another binding shares, an insert
+whose value is used, and a panic in an arm. Debug mutants `mapget` (`Some(_)` stops matching) and `mapins` (a shared map
+written without the copy) are caught.
+
+`scripts/interp_compare.sh --runs 5`, load 20 at start and 31 at end (`bench/interp/compare.json`), resolved / Node:
+`hashmap` 2.27x (3.88x before; the 3M-iteration variant is 1.65 to 0.90 s), `structs` 0.57x, `fib30` 0.76x, `loop5m`
+0.84x, `sieve` 1.47x, `closures` 2.00x, `nbody` 2.20x, `strings` 2.47x. The kill criterion (`hashmap` within 2x Node, or
+the fast path over 300 lines) is not met, so the rung stops here. What remains per hit is the arm binding's box (the walker
+binds arm names to boxed locals) and the `let c = match ..` value path. The next lever is unboxed arm bindings for arms
+whose bodies take no reference to the binding.
+
+### Round 7 (Nov 2): a gate that fast paths fire; unboxed bindings; strings
+- Firing gate. Every fast path falls back to a correct generic path, so parity gates stay green when one silently stops
+  being taken (round 6 found two such cases by profiling). The interpreter counts each path, and `WJ_JIT_DEBUG` reports the
+  counts at exit (`[fast] inline N mapget N mapins N packed N unboxed N fmt N pushstr N`). `--test fast_paths` asserts each
+  is non-zero on the benchmark kernels and corpus programs written for it. In debug builds `WJ_JIT_MUTANT=nofast-<path>`
+  switches one path off, and the self-test shows the gate then fails for that path while the program still prints what
+  the walker prints.
+- Unboxed arm bindings. An arm of an in-place `match m.get(k)` whose body only reads its binding (no call, closure,
+  reference or place write, and the binding never assigned) binds the value itself rather than a box. The compile fixpoint
+  still boxes it if the body needs one. It fires on every lookup hit. The 3M-iteration hashmap variant moved little (0.90 to
+  0.87 s), while the comparison script's ratio went from 2.27x to 1.96x across runs at different loads.
+- Strings. A `format` template made only of bare `{}` placeholders (every interpolated string) is split into literal
+  pieces at compile time. At run time every argument is evaluated first, as `format_args` does, and their displays are
+  joined with the pieces. A statement `s.push_str(x)` on a local string appends in place. `strings` halved (the
+  2M-iteration variant went from 0.71 to 0.37 s). `str_fast.wj` covers escaped and lone braces, a user `Display` that runs
+  after all the arguments, a shared string, a captured string, a char argument and a panic.
+- Closures, profiled and not changed. Per call: a walker `Scope` saved and restored, a `Box<Place>` for each captured
+  variable, and generic `Value` arithmetic in the bodies; the comparison of captured names is a small part. A pointer-first
+  comparison of names gave no measurable change and was dropped. The lever is a closure call without the scope swap and
+  with typed parameters for closures whose bodies need neither.
+- Found while writing the corpus (both engines agree, so parity is unaffected): a panic inside an interpolated expression
+  reports an empty file name and an implausible column (`at :3:8680022:`).
+
+`scripts/interp_compare.sh --runs 5`, load 50 at start and 59 at end (`bench/interp/compare.json`), resolved / Node:
+`structs` 0.69x, `fib30` 0.77x, `loop5m` 0.99x, `sieve` 1.78x, `strings` 1.82x (2.47x before), `hashmap` 1.96x (2.27x
+before; 1.97x in a separate run at load 46), `nbody` 2.22x, `closures` 2.64x (2.00x in the previous run; its code is
+unchanged, so the difference is load). The round 6 kill criterion, `hashmap` within 2x Node, is met in both runs, though
+narrowly.
 
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that

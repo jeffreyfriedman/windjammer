@@ -1,0 +1,34 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct Counter {
+    n: i64,
+}
+
+
+
+
+
+
+
+
+
+impl Counter {
+#[inline]
+pub fn label(&self, tag: &str) -> String {
+        format!("{}{}", tag, self.n)
+}
+}
+
+#[inline]
+fn label(tags: Vec<String>) -> Vec<String> {
+    tags
+}
+
+fn main() {
+    let c = Counter { n: 4_i64 };
+    let t: String = String::from("x");
+    let a = c.label(&t);
+    let b: Vec<String> = label(vec![a.clone()]);
+    println!("{} {} {}", a, b.len(), t);
+}
+

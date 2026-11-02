@@ -1,7 +1,7 @@
 """Cost estimate and hard budget gate for live agent runs."""
 import threading
 
-PILOT_MAX_TRIALS = 240  # absolute ceiling; raising it is a code change on purpose (60 for pilot 1; 240 = 7 arms x 10 tasks x 3 trials, owner-approved 2026-10-26, with headroom)
+PILOT_MAX_TRIALS = 300  # absolute ceiling; raising it is a code change on purpose (60 for pilot 1; 240 = 7 arms x 10 tasks x 3 trials, owner-approved 2026-10-26; 300 = tip ablation, 7 arms x 10 tasks x 4 trials, 2026-11)
 
 # USD per million tokens. Assumed Sonnet-class list pricing; the live per-trial cost comes from the
 # Claude Code JSON (`total_cost_usd`), and the guard projects from observed cost once trials complete.

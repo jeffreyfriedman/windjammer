@@ -175,13 +175,45 @@ fn doc_block_checker_detects_a_wrong_expectation() {
     assert!(check_block(&clean_bad).is_some(), "a `bad` block that is actually fine must fail");
 }
 
+/// The default agent sheet is a ratchet: lower this number when the sheet shrinks, never raise it without a measurement
+/// (bench/agent-dx pilot 3: a 1.5 KB sheet matched the 15 KB pack at a third fewer input tokens).
+const SHEET_BUDGET_BYTES: usize = 2_048;
+/// The full reference behind the sheet (searchable with `wj docs`): about 6k tokens at 3.2 chars/token.
+const REFERENCE_BUDGET_BYTES: usize = 19_200;
+
 #[test]
-fn context_pack_fits_its_token_budget() {
+fn default_sheet_fits_its_ratchet_and_points_at_the_tools() {
     let text = fs::read_to_string(docs_dir().join("WINDJAMMER_FOR_AGENTS.md")).unwrap();
-    // 6k tokens at a conservative 3.2 chars/token for code-heavy text.
-    assert!(text.len() <= 19_200, "WINDJAMMER_FOR_AGENTS.md is {} bytes; budget is 19200 (~6k tokens)", text.len());
+    assert!(text.len() <= SHEET_BUDGET_BYTES, "WINDJAMMER_FOR_AGENTS.md is {} bytes; ratchet is {}", text.len(), SHEET_BUDGET_BYTES);
+    for needle in ["wj docs", "wj explain", "wj build", "wj check", "as int", "/dev/stdin", "${x:?}"] {
+        assert!(text.contains(needle), "default sheet must mention `{}`", needle);
+    }
+    assert!(!extract(&text, "sheet").is_empty(), "the sheet carries an executed example");
+}
+
+#[test]
+fn default_sheet_has_no_benchmark_task_hints() {
+    // Guardrail from docs/design/agent-preference.md: the sheet teaches the language, never the benchmark.
+    let sheet = fs::read_to_string(docs_dir().join("WINDJAMMER_FOR_AGENTS.md")).unwrap().to_lowercase();
+    let reference = fs::read_to_string(docs_dir().join("WINDJAMMER_REFERENCE.md")).unwrap().to_lowercase();
+    let tasks = Path::new(env!("CARGO_MANIFEST_DIR")).join("bench/agent-dx/tasks");
+    for e in fs::read_dir(tasks).unwrap().flatten() {
+        let id = e.file_name().to_string_lossy().to_lowercase();
+        let meta = fs::read_to_string(e.path().join("task.json")).unwrap_or_default();
+        let title = meta.split("\"title\"").nth(1).and_then(|t| t.split('"').nth(1)).unwrap_or("").to_lowercase();
+        for (name, doc) in [("sheet", &sheet), ("reference", &reference)] {
+            assert!(!doc.contains(&id), "{} mentions benchmark task id {}", name, id);
+            assert!(title.len() < 8 || !doc.contains(&title), "{} mentions benchmark task title `{}`", name, title);
+        }
+    }
+}
+
+#[test]
+fn full_reference_keeps_its_budget_and_core_material() {
+    let text = fs::read_to_string(docs_dir().join("WINDJAMMER_REFERENCE.md")).unwrap();
+    assert!(text.len() <= REFERENCE_BUDGET_BYTES, "WINDJAMMER_REFERENCE.md is {} bytes; budget is {}", text.len(), REFERENCE_BUDGET_BYTES);
     for needle in ["wj check --json", "wj run --interpret", "wj test --interpret", "wj build", "ADR-0014", "ADR-0015"] {
-        assert!(text.contains(needle), "context pack must mention `{}`", needle);
+        assert!(text.contains(needle), "reference must mention `{}`", needle);
     }
 }
 
@@ -208,6 +240,7 @@ fn wj_docs_answers_queries_offline() {
     assert!(run(&["sort_by_key"]).contains("sort_by_key"));
     assert!(run(&["pipe"]).to_lowercase().contains("pipe"));
     assert!(run(&["unwrap"]).contains("unwrap_or"), "agents searching unwrap must be pointed at alternatives");
+    assert!(run(&["compiled", "path", "gaps"]).contains("WINDJAMMER_REFERENCE"), "the full reference must stay reachable through `wj docs`");
     assert!(run(&["zzzz-no-such-thing"]).contains("no matches"));
     let json = run(&["--json", "fold"]);
     let v: serde_json::Value = serde_json::from_str(&json).unwrap();

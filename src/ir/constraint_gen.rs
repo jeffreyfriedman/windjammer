@@ -469,24 +469,23 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// C3 lexical scope: inside `mod m`, a bare free call `f` is `m::f` when `m` defines it.
+    fn resolve_free_callee_signature(&self, name: &str, arg_count: usize) -> Option<&FunctionSignature> {
+        let scoped = self.registry.and_then(|r| r.scoped_key(&self.analyzed.module_path, name));
+        self.resolve_callee_signature(scoped.as_deref().unwrap_or(name), arg_count)
+    }
+
     fn resolve_callee_signature(
         &self,
         name: &str,
         arg_count: usize,
-        has_receiver: bool,
     ) -> Option<&FunctionSignature> {
         let registry = self.registry?;
+        // C3: homonym methods with no unique candidate stay unresolved (no first-match guess).
         registry
             .get_signature(name)
             .or_else(|| registry.lookup_method(name))
             .or_else(|| registry.find_signature_by_name_and_arg_count(name, arg_count))
-            .or_else(|| {
-                if has_receiver {
-                    registry.find_signature_ending_with(name)
-                } else {
-                    None
-                }
-            })
     }
 
     /// Resolve or create a constraint var for a variable name.
@@ -903,7 +902,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.call_targets.push(callee_name.clone());
 
                     if let Some(sig) = self
-                        .resolve_callee_signature(&callee_name, arguments.len(), false)
+                        .resolve_free_callee_signature(&callee_name, arguments.len())
                         .cloned()
                     {
                         self.emit_call_site_constraints(&sig, &arg_vars);
@@ -964,7 +963,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.call_targets.push(qualified.clone());
 
                 let sig = self
-                    .resolve_callee_signature(&qualified, arguments.len(), true)
+                    .resolve_callee_signature(&qualified, arguments.len())
                     .or_else(|| {
                         // Runtime-std `json::to_string` must not fall back to the first
                         // `*::to_string` method-index hit (often MutBorrowed self).
@@ -973,7 +972,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         ) {
                             None
                         } else {
-                            self.resolve_callee_signature(method, arguments.len(), true)
+                            self.resolve_callee_signature(method, arguments.len())
                         }
                     })
                     .cloned();

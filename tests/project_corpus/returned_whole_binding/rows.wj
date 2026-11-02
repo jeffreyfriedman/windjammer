@@ -1,0 +1,7 @@
+pub struct Row {
+    pub cols: Vec<string>,
+}
+
+pub fn tag(row: Row, name: string) -> (Row, string) {
+    (row, name)
+}

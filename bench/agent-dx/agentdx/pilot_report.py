@@ -86,7 +86,7 @@ def build_report(trials, n_boot=2000, prev=None):
         md.append(f"| {c} | " + " | ".join(str(cats[a][c]) for a in arms) + " |")
     div = [t for t in trials if t["divergence"]["diverged"]]
     md += ["", "## Interpreter vs compiled divergence", "",
-           f"{len(div)} of {len(trials)} trials had an interpreted hidden-oracle result different from the compiled one "
+           f"{len(div)}/{len(trials)} trials had an interpreted hidden-oracle result different from the compiled one "
            f"({sum(t['divergence']['silent'] for t in trials)} silent: interpreter green, compiled red)."]
     for t in div[:10]:
         md.append(f"- {t['task']} arm {t['arm']} trial {t['trial']}: interp={t['divergence']['interp_pass']} compiled={t['divergence']['compiled_pass']}")
@@ -146,7 +146,7 @@ def build_report(trials, n_boot=2000, prev=None):
             schema = (e["first_turn_input"] - t_["first_turn_input"]) - (e["pack_tokens"] - t_["pack_tokens"])
             js["mcp_schema_tokens"] = schema
             md += ["", f"MCP tool-schema tokens (3 exposed tools): about {schema:.0f} per turn-1 context."]
-    ctrl = "B"
+    ctrl = "B" if "B" in arms else "S"
     if ctrl in arms and len(arms) > 1:
         md += ["", f"## Paired differences versus control {ctrl} (task-clustered 95% CI)", "",
                "| metric | " + " | ".join(f"{a} - {ctrl}" for a in arms if a != ctrl) + " |", "|---|" + "---|" * (len(arms) - 1)]

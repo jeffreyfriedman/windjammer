@@ -1,0 +1,25 @@
+mod a {
+    #[inline]
+pub fn keep(xs: Vec<i64>) -> Vec<i64> {
+        xs
+}    #[inline]
+pub fn twice(xs: Vec<i64>) -> i64 {
+        let k: Vec<i64> = keep(xs);
+        k.len() as i64 * 2_i64
+}}
+
+mod b {
+    #[inline]
+pub fn keep(xs: Vec<i64>) -> i64 {
+        xs.len() as i64
+}    #[inline]
+pub fn twice(xs: Vec<i64>) -> i64 {
+        keep(xs.clone()) + keep(xs.clone())
+}}
+
+fn main() {
+    let p = a::twice(vec![1_i64, 2_i64, 3_i64]);
+    let q = b::twice(vec![4_i64, 5_i64, 6_i64]);
+    println!("{} {}", p, q);
+}
+

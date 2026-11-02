@@ -1,0 +1,26 @@
+// Two modules define a struct `Item` with different fields and a constructor `make` each.
+// Expected by hand: 7 + 1, the text length 3.
+// expect: 8 3
+mod a {
+    pub struct Item {
+        pub n: int,
+    }
+    pub fn make(n: int) -> Item {
+        Item { n: n + 1 }
+    }
+}
+
+mod b {
+    pub struct Item {
+        pub s: string,
+    }
+    pub fn make(s: string) -> Item {
+        Item { s: s }
+    }
+}
+
+fn main() {
+    let x = a::make(7)
+    let y = b::make("abc")
+    println("${x.n} ${y.s.len()}")
+}
