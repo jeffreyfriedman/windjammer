@@ -31,6 +31,9 @@ pub(crate) struct CompiledClosure {
     /// body only reads is a plain slot (no walker slot per call); it takes plain values only.
     boxed: Vec<usize>,
     body: Code,
+    /// The closure value whose environment last matched `env_names`. A weak reference keeps its allocation
+    /// (never its environment) alive, so no other closure can appear at that address and pass unchecked.
+    checked: std::cell::RefCell<std::rc::Weak<Callable>>,
 }
 
 /// `|x|`, `|x: T|`, `|&x|`, `|mut x|`: the bound name (`None`: a tuple pattern, the walker's).
@@ -75,6 +78,7 @@ fn compile(it: &mut Interpreter, params: &'static [String], body: E, env: &[(&'s
         free: free.iter().enumerate().map(|(i, n)| (env.iter().rposition(|(m, _)| m == n).expect("free name is in the environment"), i)).collect(),
         boxed,
         body: body_code,
+        checked: std::cell::RefCell::new(std::rc::Weak::new()),
     })
 }
 
@@ -94,8 +98,14 @@ impl Interpreter {
                 cc
             }
         }?;
-        if cc.env_names.len() != env.len() || cc.env_names.iter().zip(env.iter()).any(|(a, (b, _))| a != b) {
-            return None; // another environment shape: the walker
+        // the environment shape is checked once per closure value (its environment never changes shape)
+        if std::ptr::eq(cc.checked.borrow().as_ptr(), Rc::as_ptr(c)) && !self.fast_off("closureenv") {
+            self.fast.closureenv += 1;
+        } else {
+            if cc.env_names.len() != env.len() || cc.env_names.iter().zip(env.iter()).any(|(a, (b, _))| a != b) {
+                return None; // another environment shape: the walker
+            }
+            *cc.checked.borrow_mut() = Rc::downgrade(c);
         }
         if let Err(e) = self.depth_check() {
             return Some(Err(e));
@@ -115,10 +125,20 @@ impl Interpreter {
                 self.rstack[base + s] = if cc.boxed.contains(s) { super::island::boxed(a) } else { a };
             }
         }
-        let mut scope = Scope::new(*module);
-        scope.self_ty = self_ty.clone();
-        let saved = std::mem::replace(&mut self.scope, scope);
-        self.frames.push(saved);
+        // the walker's fresh scope for the body; when the caller's scope is already exactly that (compiled
+        // code runs in an empty scope of its module), the body runs in it: islands install their own and
+        // nothing compiled leaves a variable, mark or defer behind
+        let s = &self.scope;
+        let same = s.module == *module && s.self_ty == *self_ty && s.ret_ty.is_none() && s.vars.is_empty() && s.marks.is_empty() && s.defers.is_empty() && s.tparams.is_empty();
+        let swap = !same || self.fast_off("closurescope");
+        if swap {
+            let mut scope = Scope::new(*module);
+            scope.self_ty = self_ty.clone();
+            let saved = std::mem::replace(&mut self.scope, scope);
+            self.frames.push(saved);
+        } else {
+            self.fast.closurescope += 1;
+        }
         self.depth += 1;
         let r = match (cc.body)(self, base) {
             Err(Ctl::Return(v)) => Ok(v),
@@ -134,7 +154,9 @@ impl Interpreter {
         }
         self.rstack.truncate(base);
         self.depth -= 1;
-        self.scope = self.frames.pop().expect("frame stack");
+        if swap {
+            self.scope = self.frames.pop().expect("frame stack");
+        }
         Some(r)
     }
 }

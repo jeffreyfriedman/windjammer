@@ -534,6 +534,12 @@ pub(crate) struct FastHits {
     pub(crate) fmt: u64,
     /// `s.push_str(x)` statements appended in place.
     pub(crate) pushstr: u64,
+    /// Compiled closure calls whose environment shape was already checked for this closure value.
+    pub(crate) closureenv: u64,
+    /// Compiled closure calls that ran in the caller's scope (it was already the one they would install).
+    pub(crate) closurescope: u64,
+    /// Machine-code element reads and writes done straight on a packed vector.
+    pub(crate) packedidx: u64,
 }
 
 impl Interpreter {
