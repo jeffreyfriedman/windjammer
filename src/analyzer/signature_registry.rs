@@ -1124,8 +1124,9 @@ impl SignatureRegistry {
     /// This is the canonical lookup most call sites should use instead of
     /// `get_signature(m).or_else(|| find_signature_ending_with(m))`.
     pub fn lookup_method(&self, name: &str) -> Option<&FunctionSignature> {
+        // Homonyms (`a::show` vs `b::show`, `Vec::insert` vs `HashMap::insert`) are ambiguous: no guess.
         self.get_signature(name)
-            .or_else(|| self.find_signature_ending_with(name))
+            .or_else(|| self.find_unique_signature_ending_with(name))
     }
 
     /// Fallback lookup: find a signature whose key ends with `::name`.
@@ -1284,19 +1285,10 @@ impl SignatureRegistry {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        // Module-qualified and crate-qualified aliases of one function are distinct keys with the same
-        // signature; only genuinely different homonyms (`a::show` vs `b::show`) are ambiguous.
-        if let Some((_, first)) = local.first() {
-            let same = |a: &FunctionSignature, b: &FunctionSignature| {
-                a.name == b.name
-                    && a.has_self_receiver == b.has_self_receiver
-                    && a.param_ownership == b.param_ownership
-                    && format!("{:?}", a.param_types) == format!("{:?}", b.param_types)
-                    && format!("{:?}", a.return_type) == format!("{:?}", b.return_type)
-            };
-            if local.iter().all(|(_, s)| same(first, s)) {
-                return Some(first);
-            }
+        if local.len() == 1 {
+            return Some(local[0].1);
+        }
+        if !local.is_empty() {
             return None;
         }
         self.global_fallback
