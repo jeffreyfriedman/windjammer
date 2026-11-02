@@ -88,9 +88,33 @@ fn sha512_bytes(data: Vec<u8>) -> Vec<u8> {
     vec![]
 }
 
-// HMAC (coming in future version)
-// fn hmac_sha256(key: string, data: string) -> string
-// fn verify_hmac_sha256(key: string, data: string, expected: string) -> bool
+// HMAC-SHA-256 (RFC 2104; RFC 4231 test vectors). Pure computation: no capability needed.
+
+/// HMAC-SHA-256 of `data` under `key`, as lowercase hex. Any key length is accepted.
+fn hmac_sha256(key: string, data: string) -> string {
+    // Implementation wraps: hmac::Hmac::<Sha256>::new_from_slice(key) + finalize + hex::encode
+    ""
+}
+
+/// HMAC-SHA-256 over raw bytes; returns the 32-byte tag.
+fn hmac_sha256_bytes(key: Vec<u8>, data: Vec<u8>) -> Vec<u8> {
+    // Implementation wraps: hmac::Hmac::<Sha256> over &[u8]
+    vec![]
+}
+
+/// True when `expected_hex` (hex, any case) is the HMAC-SHA-256 of `data` under `key`.
+/// The comparison is constant-time; malformed or wrong-length hex is `false`.
+fn verify_hmac_sha256(key: string, data: string, expected_hex: string) -> bool {
+    // Implementation wraps: hmac::Mac::verify_slice (constant-time)
+    false
+}
+
+/// Constant-time string equality: time depends on the lengths only, never on where the strings
+/// first differ. Use it to compare tokens, signatures and other secrets.
+fn constant_time_eq(a: string, b: string) -> bool {
+    // Implementation wraps: subtle::ConstantTimeEq
+    false
+}
 
 // Random Bytes (for cryptographic use)
 // fn random_bytes(len: int) -> Vec<u8>
