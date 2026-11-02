@@ -506,6 +506,19 @@ pub struct Router {
     inner: AxumRouter,
 }
 
+/// Run a user handler on the blocking pool. Handlers are synchronous Windjammer code and may call
+/// `std::db` (which drives its own runtime with `block_on`), so they must not run on a tokio worker
+/// thread. A panicking handler becomes a 500 response.
+async fn run_handler_blocking<F>(f: F) -> ServerResponse
+where
+    F: FnOnce() -> ServerResponse + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(response) => response,
+        Err(_) => ServerResponse::internal_error("handler panicked".to_string()),
+    }
+}
+
 impl Router {
     /// Create a new router
     pub fn new() -> Self {
@@ -527,7 +540,7 @@ impl Router {
                     let handler = handler.clone();
                     async move {
                         let request = extract_request(req).await;
-                        handler(request)
+                        run_handler_blocking(move || handler(request)).await
                     }
                 }),
             ),
@@ -547,7 +560,7 @@ impl Router {
                     let handler = handler.clone();
                     async move {
                         let request = extract_request(req).await;
-                        handler(request)
+                        run_handler_blocking(move || handler(request)).await
                     }
                 }),
             ),
@@ -567,7 +580,7 @@ impl Router {
                     let handler = handler.clone();
                     async move {
                         let request = extract_request(req).await;
-                        handler(request)
+                        run_handler_blocking(move || handler(request)).await
                     }
                 }),
             ),
@@ -587,7 +600,7 @@ impl Router {
                     let handler = handler.clone();
                     async move {
                         let request = extract_request(req).await;
-                        handler(request)
+                        run_handler_blocking(move || handler(request)).await
                     }
                 }),
             ),
@@ -607,7 +620,7 @@ impl Router {
                     let handler = handler.clone();
                     async move {
                         let request = extract_request(req).await;
-                        handler(request)
+                        run_handler_blocking(move || handler(request)).await
                     }
                 }),
             ),
@@ -781,7 +794,7 @@ where
                     headers,
                     body,
                 };
-                let response = handler(wj_req);
+                let response = run_handler_blocking(move || handler(wj_req)).await;
                 response.into_response()
             }
         });

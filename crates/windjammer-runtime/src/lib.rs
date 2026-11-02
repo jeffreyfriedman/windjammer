@@ -36,6 +36,8 @@ pub mod config;
 pub mod csv_mod;
 #[cfg(feature = "db")]
 pub mod db;
+#[cfg(feature = "db")]
+pub mod db_pg_decode;
 pub mod doc_test;
 pub mod encoding;
 pub mod enumerable;
