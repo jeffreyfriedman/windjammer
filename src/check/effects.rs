@@ -11,7 +11,7 @@ use crate::ir::effect_facts::violations::{self, Finding};
 use crate::ir::effect_facts::analysis::EffectFacts;
 use crate::ir::effect_facts::durable;
 use crate::ir::effect_facts::lock::LOCK_FILE;
-use crate::ir::effect_facts::{analyze, CapLock, PackageGrants};
+use crate::ir::effect_facts::{analyze_with, CapLock, PackageGrants};
 use crate::resolve::{self, ParsedFile};
 use crate::source_map::Location;
 use std::collections::HashMap;
@@ -94,8 +94,23 @@ pub fn analyze_project<'a>(root: &Path, mut inputs: Vec<ParsedFile<'a>>, force_d
         }
     }
     let resolved = resolve::resolve_program(&inputs);
-    let facts = analyze(&resolved);
+    let facts = analyze_with(&resolved, &crate_effects(&dir));
     Analysis { resolved, facts, dep_names, dep_revs, grants, policy, manifest_dir: dir, lock, manifest_errors }
+}
+
+/// What calls into the project's Rust crate dependencies perform (ADR-0026): the surface's declarations, else `ffi(<crate>)`.
+fn crate_effects(manifest_dir: &Path) -> crate::ir::effect_facts::CrateEffects {
+    let crates = crate::package::rust_surface::load(manifest_dir);
+    let mut out = crate::ir::effect_facts::CrateEffects::default();
+    for n in &crates.names {
+        out.add_crate(n);
+    }
+    for s in &crates.surfaces {
+        for f in &s.fns {
+            out.declare(&s.crate_name, &f.name, crate::ir::effect_facts::analysis::declared_effects(f));
+        }
+    }
+    out
 }
 
 /// Parse the application's `.wj` files under `path` (a file or a project directory) for the effect pass.
@@ -149,6 +164,7 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
         }
     };
     let last = |s: &str| s.rsplit("::").next().unwrap_or(s).to_string();
+    let rust_crates = crate::package::rust_surface::load(&a.manifest_dir).names;
     for f in violations::check(r, facts, &a.grants, &a.dep_names) {
         match f {
             Finding::NotGranted { package, function, effect, denial, entry, sink, site } => {
@@ -193,11 +209,21 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 out.push(d.with_note(format!("reached through: {}", via.join(" -> "))).with_help(format!("add `{effect}` to @uses(..), or remove the call")));
             }
             Finding::UndeclaredExtern { function, callee, site } => {
-                let mut d = Diagnostic::error("WJ0044", format!("extern `{callee}` has no declared effects (called from `{function}`)"));
-                if let Some(sp) = span_for(&site, &callee) {
-                    d = d.at(sp.with_label("extern call"));
+                // a Rust crate call is granted per crate (ADR-0026); an `extern fn` per function
+                let head = callee.split("::").next().unwrap_or(&callee);
+                let krate = callee.contains("::") && rust_crates.iter().any(|n| n == head);
+                let what = if krate { format!("call into Rust crate `{head}` (`{callee}`)") } else { format!("extern `{callee}`") };
+                let mut d = Diagnostic::error("WJ0044", format!("{what} has no declared effects (called from `{function}`)"));
+                let last = callee.rsplit("::").next().unwrap_or(&callee);
+                if let Some(sp) = span_for(&site, &callee).or_else(|| span_for(&site, last)) {
+                    d = d.at(sp.with_label(if krate { "crate call" } else { "extern call" }));
                 }
-                out.push(d.with_help(format!("add `ffi = [\"{callee}\"]` under [capabilities] in wj.toml, or declare what the extern does with `@uses(..)` / `@pure`")));
+                let help = if krate {
+                    format!("add `ffi = [\"{head}\"]` under [capabilities] in wj.toml, or declare what `{last}` does in rust/{head}.wji with `@uses(..)` / `@pure`")
+                } else {
+                    format!("add `ffi = [\"{callee}\"]` under [capabilities] in wj.toml, or declare what the extern does with `@uses(..)` / `@pure`")
+                };
+                out.push(d.with_help(help));
             }
         }
     }
