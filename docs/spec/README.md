@@ -18,7 +18,9 @@ Two audiences, one source:
 | Intrinsic list, stdlib index complete | `intrinsic_registry_is_documented`, `stdlib_index_lists_every_std_module` |
 | Known divergences cannot rot | examples marked `// xfail: Q-NNN` must fail; a pass fails the run |
 
-```wj run scripts/wj/spec_check.wj            # IDs, tests, matrix freshness (fast, no build)
+<!-- ignore: spec_check.wj is run by tests/spec_conformance_test.rs and CI; these lines show its options -->
+```bash,ignore
+wj run scripts/wj/spec_check.wj            # IDs, tests, matrix freshness (fast, no build)
 wj run scripts/wj/spec_check.wj --write    # regenerate CONFORMANCE_MATRIX.md
 wj run scripts/wj/spec_check.wj --run      # + cargo test --release --test spec_conformance, docs_truth spec_grammar
 ```

@@ -8,6 +8,11 @@ glob = "docs/archive/**"
 reason = "historical documents, kept as written"
 
 [[exclude]]
+check = "all"
+glob = "tests/py_ports/**"
+reason = "recorded replay fixtures: copies of other repositories' documents and deliberately broken inputs, compared byte for byte by their own gate"
+
+[[exclude]]
 check = "claims"
 glob = "CHANGELOG.md"
 reason = "release notes record numbers as of their release"
