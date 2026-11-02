@@ -182,6 +182,11 @@ path = "tests/all.rs"
 name = "engine_parity"
 path = "tests/interpreter_engine_parity_test.rs"
 
+# Each interpreter fast path fires on its programs: cargo test --release --test fast_paths
+[[test]]
+name = "fast_paths"
+path = "tests/interpreter_fast_paths_test.rs"
+
 # Packed vectors vs unpacked ones through every writing builtin: cargo test --release --test packed_vec
 [[test]]
 name = "packed_vec"

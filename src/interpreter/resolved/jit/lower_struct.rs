@@ -185,7 +185,7 @@ impl Lo<'_, '_> {
     pub(super) fn inline_call(&mut self, object: E, method: &str, args: &'static [(Option<String>, E)]) -> Option<Out> {
         // the receiver's name is its declared type key, the key methods are registered under, so
         // same-name types in different modules find their own methods
-        if self.frames.len() >= MAX_INLINE || !self.struct_valued(object) {
+        if self.frames.len() >= MAX_INLINE || self.it.fast_off("inline") || !self.struct_valued(object) {
             return None;
         }
         let recv = self.vexpr(object)?;

@@ -309,8 +309,15 @@ fn register_vec(r: &mut Registry) {
         Ok(Value::vec(out))
     });
 
-    r.mutating(Kind::Vec, "push", |_, v, a| {
-        body_mut(v).push_value(arg(&a, 0, "push")?);
+    r.mutating(Kind::Vec, "push", |it, v, a| {
+        let x = arg(&a, 0, "push")?;
+        if it.fast_off("packed") {
+            vec_mut(v).push(x);
+            return Ok(Value::Unit);
+        }
+        let body = body_mut(v);
+        body.push_value(x);
+        it.fast.packed += body.packed().is_some() as u64;
         Ok(Value::Unit)
     });
     r.mutating(Kind::Vec, "push_back", |_, v, a| {

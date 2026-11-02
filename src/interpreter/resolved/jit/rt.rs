@@ -231,18 +231,31 @@ pub(crate) unsafe extern "C" fn field_set(c: *mut Ctx, slot: i64, fp: i64, fl: i
 
 /// `v.push(x)`.
 pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) -> i64 {
-    unsafe {
+    // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
+    let off = unsafe { (*(*c).it).fast_off("packed") };
+    let mut packed = false;
+    let r = unsafe {
         with_slot(c, slot, |v| {
             let x = value(x, from_code(xt)?);
             poke(v, |v| match v {
                 Value::Vec(xs) => {
-                    Rc::make_mut(xs).push_value(x);
+                    let body = Rc::make_mut(xs);
+                    if off {
+                        body.push(x);
+                    } else {
+                        body.push_value(x);
+                        packed = body.packed().is_some();
+                    }
                     Some(0)
                 }
                 _ => None,
             })
         })
+    };
+    if packed {
+        unsafe { (*(*c).it).fast.packed += 1 };
     }
+    r
 }
 
 /// `v.len()` of a `Vec`.
