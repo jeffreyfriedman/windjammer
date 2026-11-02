@@ -64,6 +64,7 @@ pub mod compiler_database;
 pub mod decorator_registry;
 pub mod ejector;
 pub mod error_mapper;
+pub mod toolchain; // identity, pin, stale warning, doctor, install-dev
 pub mod test_utils;
 pub mod type_classification;
 pub mod type_display;

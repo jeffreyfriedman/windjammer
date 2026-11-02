@@ -3,8 +3,96 @@
 use crate::wj_cli_args::{CacheCommand, Cli, Commands, McpCommand};
 use anyhow::Result;
 
+/// Directory whose pin governs a build/run/test/check invocation.
+fn pin_start(cmd: &Commands) -> Option<std::path::PathBuf> {
+    let cwd = || std::env::current_dir().unwrap_or_default();
+    let abs = |p: &std::path::Path| if p.is_absolute() { p.to_path_buf() } else { cwd().join(p) };
+    match cmd {
+        Commands::Build { path, .. } => Some(abs(path)),
+        Commands::Run { path_and_args, .. } => Some(path_and_args.first().map(|p| abs(std::path::Path::new(p))).unwrap_or_else(cwd)),
+        Commands::Test { path, .. } | Commands::Check { path, .. } => Some(path.as_deref().map(abs).unwrap_or_else(cwd)),
+        _ => None,
+    }
+}
+
+fn run_toolchain(cmd: &Commands) {
+    use windjammer::toolchain;
+    if let Some(start) = pin_start(cmd) {
+        if let Err(msg) = toolchain::pin::enforce(&start) {
+            eprintln!("{msg}");
+            std::process::exit(1);
+        }
+    }
+    if !matches!(cmd, Commands::Doctor { .. } | Commands::Version { .. } | Commands::InstallDev { .. }) {
+        toolchain::stale::warn_if_stale();
+    }
+}
+
+fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
+    use windjammer::toolchain::doctor;
+    let path = std::env::var("PATH").unwrap_or_default();
+    if expect_head {
+        match doctor::expect_head(&path) {
+            Ok(m) => println!("{m}"),
+            Err(m) => {
+                eprintln!("wj doctor --expect-head: {m}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
+    let report = doctor::collect(&path);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&doctor::render_json(&report))?);
+    } else {
+        print!("{}", doctor::render_text(&report));
+    }
+    if !report.problems.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+fn cmd_install_dev(to: Option<std::path::PathBuf>, from: Option<std::path::PathBuf>, force: bool, dry_run: bool) -> Result<()> {
+    use windjammer::toolchain::install;
+    let src = match from {
+        Some(f) => f,
+        None => std::env::current_exe()?,
+    };
+    let dest = match to {
+        Some(t) => t,
+        None => install::default_dest().map_err(|e| anyhow::anyhow!(e))?,
+    };
+    match install::install(&src, &dest, force, dry_run) {
+        Ok(i) if i.already_current => println!("{} already holds this build ({})", i.dest.display(), i.identity.version_line()),
+        Ok(i) => {
+            let verb = if dry_run { "would install" } else { "installed" };
+            println!("{verb} {} to {}", i.identity.version_line(), i.dest.display());
+            if let Some(b) = i.backup {
+                println!("{} {}", if dry_run { "would back up the previous binary to" } else { "previous binary kept at" }, b.display());
+            }
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
+    Ok(())
+}
+
 pub fn run(cli: Cli) -> Result<()> {
+    run_toolchain(&cli.command);
     match cli.command {
+        Commands::Version { json } => {
+            let id = windjammer::toolchain::identity::current();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&id.to_json())?);
+            } else {
+                println!("{}", id.version_line());
+            }
+        }
+        Commands::Doctor { json, expect_head } => cmd_doctor(json, expect_head)?,
+        Commands::InstallDev { to, from, force, dry_run } => cmd_install_dev(to, from, force, dry_run)?,
         Commands::New { name, template } => {
             windjammer::cli::new::handle_new_command(&name, &template)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
