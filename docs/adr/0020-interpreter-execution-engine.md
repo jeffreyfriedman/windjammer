@@ -421,8 +421,8 @@ those mutations to go through `KMap` first); method inlining in machine-code loo
 - `recv.m(args)` on such a value inlines the user method when it has `self` first, a return type, no decorators or type
   parameters, is not async or extern, mutates neither `self` nor a parameter, and its body is `let`s plus a tail expression
   machine code lowers. Nesting stops at four. The callee sees only its own names. Arguments are evaluated in the caller's
-  scope, and the parameters and result are coerced as the call would coerce them. Same-name types in different modules turn
-  inlining off: the method table is keyed by bare name.
+  scope, and the parameters and result are coerced as the call would coerce them. A struct value carries its declared type key,
+  the key its methods are registered under, so same-name types in different modules inline their own methods.
 - Failure semantics are unchanged. Anything that fails inside an inlined body leaves machine code at the caller's statement,
   and the closure engine then runs the real call, so panics and backtraces come from it (`V2::div` in the backtrace of
   `jit_loop_inline.wj`). The depth check is the exception: a unit that inlines enters only with 1 MiB of interpreter stack
@@ -436,11 +436,13 @@ Checks:
 - New engine-parity programs: `jit_loop_inline.wj` covers nested and struct-returning calls, `let`s in the callee, `i32`/`u8`
   results, a method the inliner refuses, a closure capturing a loop's struct `let` (read before and after machine code changes
   a field, and after the loop), and a zero divisor inside an inlined method. `same_name_types.wj` gains live-in structs of
-  same-name types.
-- The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a planted zero
-  divisor inside an inlined method. Its coverage test requires a quarter of the generated loops to inline.
-- Debug mutants `box` (the box made again at every write) and `dupe` (inlining on with same-name types) must each change
-  their corpus program's output (`every_inlining_check_is_load_bearing`, debug builds).
+  same-name types whose methods inline.
+- The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a zero divisor and an
+  `int` overflow planted inside inlined methods. Its coverage test requires a quarter of the generated loops to inline.
+- Debug mutation gates on the final source: the six machine-code mutants (`overflow`, `range`, `divzero`, `bounds`, `nan`,
+  `retag`) against 60 generated programs, and `box` (the first write after a struct `let` fills the previous binding's
+  box) against `jit_loop_inline.wj`, are each caught. `overflow` had stopped being caught once the generator changed, since
+  only the random mix had ever overflowed `int`; an `int` overflow is now planted.
 
 Kill criterion (`structs` within 2x Node, inliner under 1.5k lines): met. `scripts/interp_compare.sh --runs 5`, starting at
 load 39 and ending at 96 (`bench/interp/compare.json`), resolved / Node: `structs` 0.60x (8.05x the run before, at load
