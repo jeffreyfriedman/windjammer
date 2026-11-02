@@ -30,7 +30,7 @@ fn run_toolchain(cmd: &Commands) {
 
 fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
     use windjammer::toolchain::doctor;
-    let path = std::env::var("PATH").unwrap_or_default();
+    let path = windjammer::toolchain::env::get("PATH").unwrap_or_default();
     if expect_head {
         match doctor::expect_head(&path) {
             Ok(m) => println!("{m}"),
@@ -80,19 +80,26 @@ fn cmd_install_dev(to: Option<std::path::PathBuf>, from: Option<std::path::PathB
     Ok(())
 }
 
-pub fn run(cli: Cli) -> Result<()> {
-    run_toolchain(&cli.command);
-    match cli.command {
+/// Toolchain commands, plus the pin and staleness checks that precede every command. `Some` when handled.
+fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
+    run_toolchain(cmd);
+    match cmd {
         Commands::Version { json } => {
             let id = windjammer::toolchain::identity::current();
-            if json {
-                println!("{}", serde_json::to_string_pretty(&id.to_json())?);
-            } else {
-                println!("{}", id.version_line());
-            }
+            Some(if *json { serde_json::to_string_pretty(&id.to_json()).map(|j| println!("{j}")).map_err(Into::into) } else { Ok(println!("{}", id.version_line())) })
         }
-        Commands::Doctor { json, expect_head } => cmd_doctor(json, expect_head)?,
-        Commands::InstallDev { to, from, force, dry_run } => cmd_install_dev(to, from, force, dry_run)?,
+        Commands::Doctor { json, expect_head } => Some(cmd_doctor(*json, *expect_head)),
+        Commands::InstallDev { to, from, force, dry_run } => Some(cmd_install_dev(to.clone(), from.clone(), *force, *dry_run)),
+        Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run)),
+        _ => None,
+    }
+}
+
+pub fn run(cli: Cli) -> Result<()> {
+    if let Some(done) = toolchain_pre(&cli.command) {
+        return done;
+    }
+    match cli.command {
         Commands::New { name, template } => {
             windjammer::cli::new::handle_new_command(&name, &template)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -397,9 +404,7 @@ pub fn run(cli: Cli) -> Result<()> {
             CacheCommand::Warm => windjammer::cli::cache::execute_warm()?,
             CacheCommand::Setup => windjammer::cli::cache::execute_setup()?,
         },
-        Commands::SelfInstall { dry_run } => {
-            windjammer::cli::self_install::execute(dry_run)?;
-        }
+        Commands::Version { .. } | Commands::Doctor { .. } | Commands::InstallDev { .. } | Commands::SelfInstall { .. } => {}
         Commands::Plugin(plugin_args) => {
             if plugin_args.is_empty() {
                 anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");

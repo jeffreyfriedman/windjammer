@@ -77,7 +77,9 @@ pub fn probe(bin: &Path) -> Result<Identity, String> {
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
-            Ok(None) if std::time::Instant::now() < deadline => std::thread::sleep(std::time::Duration::from_millis(5)),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(5))
+            }
             Ok(None) => {
                 let _ = child.kill();
                 return Err("`--version` timed out".into());
@@ -89,17 +91,34 @@ pub fn probe(bin: &Path) -> Result<Identity, String> {
     if let Some(mut so) = child.stdout.take() {
         let _ = so.read_to_string(&mut text);
     }
-    identity::parse_version_line(&text).ok_or_else(|| format!("unrecognised `--version` output: {:?}", text.lines().next().unwrap_or("")))
+    identity::parse_version_line(&text).ok_or_else(|| {
+        format!(
+            "unrecognised `--version` output: {:?}",
+            text.lines().next().unwrap_or("")
+        )
+    })
 }
 
 fn mtime_of(p: &Path) -> Option<i64> {
-    std::fs::metadata(p).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64)
+    std::fs::metadata(p)
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs() as i64)
 }
 
 pub fn cache_state(now: i64) -> CacheState {
-    let dir = crate::cargo_cache::cache_root().join("cargo-target").join("shared");
+    let dir = crate::cargo_cache::cache_root()
+        .join("cargo-target")
+        .join("shared");
     if !dir.is_dir() {
-        return CacheState { dir, exists: false, age_days: None };
+        return CacheState {
+            dir,
+            exists: false,
+            age_days: None,
+        };
     }
     let newest = std::fs::read_dir(&dir)
         .into_iter()
@@ -108,7 +127,11 @@ pub fn cache_state(now: i64) -> CacheState {
         .filter_map(|e| mtime_of(&e.path()))
         .chain(mtime_of(&dir))
         .max();
-    CacheState { dir, exists: true, age_days: newest.map(|t| (now - t) / DAY) }
+    CacheState {
+        dir,
+        exists: true,
+        age_days: newest.map(|t| (now - t) / DAY),
+    }
 }
 
 // ---- diagnosis (pure) ----
@@ -132,8 +155,15 @@ pub struct Inputs<'a> {
 /// The command that installs a fresh `wj`.
 pub fn refresh_command(i: &Inputs) -> String {
     if let Some(c) = i.checkout {
-        format!("cd {} && cargo build --release --bin wj && target/release/wj install-dev", c.display())
-    } else if i.current.commit_ts.is_some_and(|t| stale::assess(t, now_ts(), None).is_none()) {
+        format!(
+            "cd {} && cargo build --release --bin wj && target/release/wj install-dev",
+            c.display()
+        )
+    } else if i
+        .current
+        .commit_ts
+        .is_some_and(|t| stale::assess(t, now_ts(), None).is_none())
+    {
         format!("{} install-dev", i.current_exe.display())
     } else {
         format!("cargo install --git {DEFAULT_REPO} --bin wj --locked --force")
@@ -144,7 +174,11 @@ pub fn diagnose(i: &Inputs) -> Vec<Problem> {
     let mut problems = Vec::new();
     let refresh = refresh_command(i);
     if i.binaries.is_empty() {
-        problems.push(Problem { kind: "missing", message: "no `wj` found on PATH".into(), fix: vec![refresh.clone()] });
+        problems.push(Problem {
+            kind: "missing",
+            message: "no `wj` found on PATH".into(),
+            fix: vec![refresh.clone()],
+        });
     }
     for b in i.binaries {
         match (&b.identity, &b.error) {
@@ -155,12 +189,20 @@ pub fn diagnose(i: &Inputs) -> Vec<Problem> {
             }),
             (Some(id), _) if id.commit.is_none() => problems.push(Problem {
                 kind: "stale",
-                message: format!("{} (wj {}) predates build identity stamping, so its age cannot be known", b.resolved.display(), id.version),
+                message: format!(
+                    "{} (wj {}) predates build identity stamping, so its age cannot be known",
+                    b.resolved.display(),
+                    id.version
+                ),
                 fix: vec![refresh.clone()],
             }),
             (Some(id), _) => {
                 if let (Some(s), Some(ts)) = (&b.stale, id.commit_ts) {
-                    let against = if s.vs_checkout { "the newest commit in the enclosing checkout" } else { "today" };
+                    let against = if s.vs_checkout {
+                        "the newest commit in the enclosing checkout"
+                    } else {
+                        "today"
+                    };
                     problems.push(Problem {
                         kind: "stale",
                         message: format!(
@@ -179,11 +221,27 @@ pub fn diagnose(i: &Inputs) -> Vec<Problem> {
     }
     let known: Vec<&Binary> = i.binaries.iter().filter(|b| b.identity.is_some()).collect();
     if let Some(first) = known.first() {
-        let differing: Vec<&&Binary> =
-            known.iter().skip(1).filter(|b| !same_commit(b.identity.as_ref().unwrap(), first.identity.as_ref().unwrap())).collect();
+        let differing: Vec<&&Binary> = known
+            .iter()
+            .skip(1)
+            .filter(|b| {
+                !same_commit(
+                    b.identity.as_ref().unwrap(),
+                    first.identity.as_ref().unwrap(),
+                )
+            })
+            .collect();
         if !differing.is_empty() {
-            let mut fix = vec![format!("{} install-dev --to {}", i.current_exe.display(), first.found.display())];
-            fix.extend(differing.iter().map(|b| format!("rm {}", b.found.display())));
+            let mut fix = vec![format!(
+                "{} install-dev --to {}",
+                i.current_exe.display(),
+                first.found.display()
+            )];
+            fix.extend(
+                differing
+                    .iter()
+                    .map(|b| format!("rm {}", b.found.display())),
+            );
             problems.push(Problem {
                 kind: "duplicate",
                 message: format!(
@@ -191,12 +249,24 @@ pub fn diagnose(i: &Inputs) -> Vec<Problem> {
                     differing.len() + 1,
                     first.found.display(),
                     first.identity.as_ref().unwrap().short(),
-                    differing.iter().map(|b| format!("{} ({})", b.found.display(), b.identity.as_ref().unwrap().short())).collect::<Vec<_>>().join(", ")
+                    differing
+                        .iter()
+                        .map(|b| format!(
+                            "{} ({})",
+                            b.found.display(),
+                            b.identity.as_ref().unwrap().short()
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 fix,
             });
         }
-        let cur_is_newer = i.current.commit_ts.zip(first.identity.as_ref().unwrap().commit_ts).is_some_and(|(c, f)| c > f);
+        let cur_is_newer = i
+            .current
+            .commit_ts
+            .zip(first.identity.as_ref().unwrap().commit_ts)
+            .is_some_and(|(c, f)| c > f);
         if cur_is_newer && !same_commit(i.current, first.identity.as_ref().unwrap()) {
             problems.push(Problem {
                 kind: "shadowed",
@@ -212,13 +282,20 @@ pub fn diagnose(i: &Inputs) -> Vec<Problem> {
     if !i.cache.exists {
         problems.push(Problem {
             kind: "cache",
-            message: format!("shared runtime cache is missing ({})", i.cache.dir.display()),
+            message: format!(
+                "shared runtime cache is missing ({})",
+                i.cache.dir.display()
+            ),
             fix: vec!["wj cache setup".into(), "wj cache warm".into()],
         });
     } else if i.cache.age_days.is_some_and(|d| d > CACHE_OLD_DAYS) {
         problems.push(Problem {
             kind: "cache",
-            message: format!("shared runtime cache is {} days old ({})", i.cache.age_days.unwrap(), i.cache.dir.display()),
+            message: format!(
+                "shared runtime cache is {} days old ({})",
+                i.cache.age_days.unwrap(),
+                i.cache.dir.display()
+            ),
             fix: vec!["wj cache prune".into(), "wj cache warm".into()],
         });
     }
@@ -243,18 +320,47 @@ pub fn collect(path_env: &str) -> Report {
                 Ok(id) => (Some(id), None),
                 Err(e) => (None, Some(e)),
             };
-            let stale = identity.as_ref().and_then(|id| id.commit_ts).and_then(|ts| stale::assess(ts, now, newest));
+            let stale = identity
+                .as_ref()
+                .and_then(|id| id.commit_ts)
+                .and_then(|ts| stale::assess(ts, now, newest));
             let mtime = mtime_of(&resolved);
-            Binary { found, resolved, identity, error, mtime, stale }
+            Binary {
+                found,
+                resolved,
+                identity,
+                error,
+                mtime,
+                stale,
+            }
         })
         .collect();
     let cache = cache_state(now);
-    let problems = diagnose(&Inputs { binaries: &binaries, current: &current, current_exe: &current_exe, checkout: checkout.as_deref(), cache: &cache });
-    Report { current, current_exe, checkout, binaries, cache, problems }
+    let problems = diagnose(&Inputs {
+        binaries: &binaries,
+        current: &current,
+        current_exe: &current_exe,
+        checkout: checkout.as_deref(),
+        cache: &cache,
+    });
+    Report {
+        current,
+        current_exe,
+        checkout,
+        binaries,
+        cache,
+        problems,
+    }
 }
 
 fn newest_in_checkout(c: &Path) -> Option<i64> {
-    let out = std::process::Command::new("git").arg("-C").arg(c).args(["log", "-1", "--format=%ct", "--all"]).stderr(std::process::Stdio::null()).output().ok()?;
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(c)
+        .args(["log", "-1", "--format=%ct", "--all"])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
@@ -264,13 +370,28 @@ fn newest_in_checkout(c: &Path) -> Option<i64> {
 pub fn expect_head(path_env: &str) -> Result<String, String> {
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let checkout = stale::enclosing_checkout(&cwd).ok_or("not inside a windjammer checkout")?;
-    let out = std::process::Command::new("git").arg("-C").arg(&checkout).args(["rev-parse", "HEAD"]).output().map_err(|e| e.to_string())?;
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&checkout)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
     let head = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let (found, resolved) = find_on_path(path_env).into_iter().next().ok_or("no `wj` on PATH")?;
+    let (found, resolved) = find_on_path(path_env)
+        .into_iter()
+        .next()
+        .ok_or("no `wj` on PATH")?;
     let id = probe(&resolved)?;
-    let commit = id.commit.clone().ok_or_else(|| format!("{} predates build identity stamping", found.display()))?;
+    let commit = id
+        .commit
+        .clone()
+        .ok_or_else(|| format!("{} predates build identity stamping", found.display()))?;
     if head.starts_with(&commit) {
-        Ok(format!("{} is built from HEAD {}", found.display(), &head[..12]))
+        Ok(format!(
+            "{} is built from HEAD {}",
+            found.display(),
+            &head[..12]
+        ))
     } else {
         Err(format!(
             "{} is built from {} but HEAD is {}.\n  fix: cd {} && cargo build --release --bin wj && target/release/wj install-dev",
@@ -286,7 +407,11 @@ pub fn expect_head(path_env: &str) -> Result<String, String> {
 
 pub fn render_text(r: &Report) -> String {
     let mut s = String::new();
-    s.push_str(&format!("running: {}\n  {}\n", r.current_exe.display(), r.current.version_line()));
+    s.push_str(&format!(
+        "running: {}\n  {}\n",
+        r.current_exe.display(),
+        r.current.version_line()
+    ));
     if let Some(c) = &r.checkout {
         s.push_str(&format!("compiler checkout: {}\n", c.display()));
     }
@@ -295,12 +420,24 @@ pub fn render_text(r: &Report) -> String {
         s.push_str("  (none)\n");
     }
     for (n, b) in r.binaries.iter().enumerate() {
-        let link = if b.found != b.resolved { format!(" -> {}", b.resolved.display()) } else { String::new() };
+        let link = if b.found != b.resolved {
+            format!(" -> {}", b.resolved.display())
+        } else {
+            String::new()
+        };
         let (ver, commit) = match &b.identity {
-            Some(id) => (id.version.clone(), format!("{}{}", id.short(), if id.dirty { "+dirty" } else { "" })),
+            Some(id) => (
+                id.version.clone(),
+                format!("{}{}", id.short(), if id.dirty { "+dirty" } else { "" }),
+            ),
             None => ("?".into(), "?".into()),
         };
-        let date = b.identity.as_ref().and_then(|i| i.commit_ts).map(iso_date).unwrap_or_else(|| "unknown".into());
+        let date = b
+            .identity
+            .as_ref()
+            .and_then(|i| i.commit_ts)
+            .map(iso_date)
+            .unwrap_or_else(|| "unknown".into());
         let mtime = b.mtime.map(iso_datetime).unwrap_or_else(|| "?".into());
         s.push_str(&format!(
             "  {}. {}{}\n     version {ver}  commit {commit} ({date})  mtime {mtime}{}\n",

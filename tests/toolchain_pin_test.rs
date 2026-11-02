@@ -1,4 +1,4 @@
-//! Gates: a project pin (`[toolchain] wj` in wj.toml, or `WJ_COMMIT` in an ancestor WJ_PIN.md) that the running
+//! Gates: a project pin (`[toolchain] wj` in wj.toml, or `WJ_COMMIT` in the ancestor compiler-pin file) that the running
 //! `wj` does not satisfy stops build/run/test/check with the exact install command; the override warns.
 
 use std::fs;
@@ -82,7 +82,7 @@ fn matching_pins_pass_silently_by_commit_prefix_and_by_version() {
 #[test]
 fn wj_pin_md_in_an_ancestor_is_honoured_and_wj_toml_overrides_it() {
     let root = tempfile::tempdir().unwrap();
-    fs::write(root.path().join("WJ_PIN.md"), "# pin\n\n```\nWJ_REPO=https://example.com/wj.git\nWJ_COMMIT=1111111111111111111111111111111111111111\n```\n").unwrap();
+    fs::write(root.path().join(windjammer::toolchain::pin::PIN_FILE), "# pin\n\n```\nWJ_REPO=https://example.com/wj.git\nWJ_COMMIT=1111111111111111111111111111111111111111\n```\n").unwrap();
     let app = root.path().join("apps").join("one");
     fs::create_dir_all(&app).unwrap();
     fs::write(app.join("main.wj"), "fn main() {\n    println(\"hi\")\n}\n").unwrap();

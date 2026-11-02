@@ -4,7 +4,7 @@
 Knowing which `wj` you are running and whether it is the right one: build identity, project pins, age warnings, `wj doctor`, `wj install-dev`.
 
 ## Inputs/Outputs
-In: `build.rs` identity (`WJ_GIT_*`, `WJ_BUILD_*`), `wj.toml` / `WJ_PIN.md`, `PATH`, the clock. Out: version text and JSON, pin errors, a once-per-day stderr warning, a doctor report, an atomically installed binary.
+In: `build.rs` identity (`WJ_GIT_*`, `WJ_BUILD_*`), `wj.toml` and the compiler-pin file of the enclosing repo (`pin::PIN_FILE`), `PATH`, the clock. Out: version text and JSON, pin errors, a once-per-day stderr warning, a doctor report, an atomically installed binary.
 
 ## Invariants
 - The commit date is the only time that may reach generated output; the wall-clock build date is read in `identity.rs` only and printed by `--version` (gate: tests/toolchain_identity_test.rs).
