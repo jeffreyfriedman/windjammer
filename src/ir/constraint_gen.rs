@@ -665,7 +665,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         self.scopes.pop();
     }
 
-    /// A fresh variable for a new binding of `name` in the innermost scope.
+    /// [`Self::walk_block_value`] in its own lexical scope.
+    fn walk_scoped_block_value(&mut self, stmts: &[&'ast Statement<'ast>]) -> Vec<ConstraintVar> {
+        self.scopes.push(HashMap::new());
+        let out = self.walk_block_value(stmts);
+        self.scopes.pop();
+        out
+    }
+
+        /// A fresh variable for a new binding of `name` in the innermost scope.
     fn bind_name(&mut self, name: &str) -> ConstraintVar {
         *self.bind_counts.entry(name.to_string()).or_insert(0) += 1;
         let v = self.cs.fresh_var();
@@ -1196,9 +1204,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::Block { statements, .. } => {
-                self.scopes.push(HashMap::new());
-                let tails = self.walk_block_value(statements);
-                self.scopes.pop();
+                let tails = self.walk_scoped_block_value(statements);
                 let result = self.cs.fresh_var();
                 // A block's value is its tail (or the tails of its `if`/`match` branches): whatever
                 // the block's value is used for is required of each of them (`let c = if p { a } else { b }`).
@@ -1226,13 +1232,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::If { condition, then_block, else_block, .. } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
-                self.scopes.push(HashMap::new());
-                let mut out = self.walk_block_value(then_block);
-                self.scopes.pop();
+                let mut out = self.walk_scoped_block_value(then_block);
                 if let Some(else_stmts) = else_block {
-                    self.scopes.push(HashMap::new());
-                    out.extend(self.walk_block_value(else_stmts));
-                    self.scopes.pop();
+                    out.extend(self.walk_scoped_block_value(else_stmts));
                 }
                 out
             }
