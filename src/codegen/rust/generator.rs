@@ -381,6 +381,8 @@ pub struct CodeGenerator<'ast> {
     /// Used by generate_use to add `self::` prefix for `pub use` re-exports
     /// of items from inline sibling modules (Rust requires `self::` for these).
     pub(crate) inline_module_names: std::collections::HashSet<String>,
+    /// Inline modules containing the function being generated (its `AnalyzedFunction::module_path`, C3).
+    pub(crate) current_module_path: Vec<String>,
     /// Methods whose self receiver was upgraded from Borrowed to MutBorrowed
     /// during codegen (body-modification analysis). Used to update registry
     /// before writing metadata so cross-file builds see correct ownership.
@@ -547,6 +549,14 @@ impl<'ast> CodeGenerator<'ast> {
                 return std::borrow::Cow::Owned(key);
             }
             return std::borrow::Cow::Borrowed(callee_name);
+        }
+        // Lexical scope (C3): inside `mod m`, bare `f` is `m::f` when `m` defines it.
+        let scoped = self.signature_registry.scoped_key(&self.current_module_path, callee_name);
+        if let Some(q) = scoped.or_else(|| {
+            let g = self.global_signature_registry.as_ref()?;
+            g.scoped_key(&self.current_module_path, callee_name)
+        }) {
+            return std::borrow::Cow::Owned(q);
         }
         if let Some(q) = self.import_fn_alias_map.get(callee_name) {
             return std::borrow::Cow::Owned(q.clone());
@@ -794,6 +804,7 @@ impl<'ast> CodeGenerator<'ast> {
             extern_function_names: extern_fn_names,
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
+            current_module_path: Vec::new(),
             self_receiver_upgrades: std::collections::HashMap::new(),
             ir_cutover: IrCutoverConfig::production(),
             config: crate::compiler_config::CompilerConfig::default(),
@@ -1344,11 +1355,11 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .map(|t| format!("{t}::{func_name}"))
             .unwrap_or_else(|| func_name.to_string());
-        self.current_ir_function = self
-            .ir_module_functions
-            .iter()
-            .find(|f| f.name == qualified || f.name == func_name)
-            .cloned();
+        // Identity first (same module path, C3), so `b::take` never reads `a::take`'s IR.
+        let named = |f: &&crate::ir::node::IrFunction| f.name == qualified || f.name == func_name;
+        let fns = &self.ir_module_functions;
+        let own = fns.iter().filter(named).find(|f| f.module_path == self.current_module_path);
+        self.current_ir_function = own.or_else(|| fns.iter().find(named)).cloned();
     }
 
     /// Get parameter ownership, preferring IR data when cutover is enabled.
@@ -2349,7 +2360,7 @@ impl<'ast> CodeGenerator<'ast> {
         match item {
             Item::Function { decl, .. } => {
                 // Find the analyzed version
-                if let Some(analyzed_func) = analyzed.iter().find(|f| f.decl.name == decl.name) {
+                if let Some(analyzed_func) = analyzed.iter().find(|f| f.is_analysis_of(decl)) {
                     self.generate_function(analyzed_func)
                 } else {
                     // Shouldn't happen, but generate basic signature
@@ -2854,27 +2865,6 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             false
         }
-    }
-
-    /// Check if a binding needs `.clone()` per auto-clone analysis and apply it.
-    ///
-    /// Returns the (possibly cloned) expression string. Skips the clone when:
-    /// - The binding is already cloned (ends with `.clone()`)
-    /// - The binding's type implements `Copy`
-    ///
-    /// This consolidates the identical check previously duplicated in
-    /// `regular_call_arguments`, `function_call_generation`, and other
-    /// argument-generation paths.
-    /// Forward-ref guard: params that keep owned formals but borrow at self/sibling calls.
-    pub(crate) fn should_borrow_forward_ref_param_at_call(
-        &self,
-        param_name: &str,
-        receiver: &Expression<'ast>,
-    ) -> bool {
-        self.in_if_condition
-            && self.current_fn_forward_ref_if_params.contains(param_name)
-            && !self.emitted_rust_ref_formals.contains(param_name)
-            && crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(receiver)
     }
 
     pub(crate) fn caller_keeps_owned_outer_formal(&self, param_name: &str) -> bool {

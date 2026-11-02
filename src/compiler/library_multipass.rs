@@ -163,7 +163,7 @@ fn resolve_converged_local_signature<'a>(
             return Some(sig);
         }
     }
-    registry.find_signature_ending_with(name)
+    registry.find_unique_signature_ending_with(name)
 }
 
 /// TDD FIX: Build library with global multi-pass analysis

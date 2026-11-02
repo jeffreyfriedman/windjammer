@@ -94,6 +94,25 @@ pub struct AnalyzedFunction<'ast> {
     pub cache_locality: CacheLocalityAnalysis,
     /// Legacy: str_ref optimization params. Superseded by IR solver when `IrCutoverConfig.str_ref` is true.
     pub str_ref_optimizable_params: HashSet<String>,
+    /// Inline modules that contain the definition (`["geo", "area"]`; empty at file level). With the name
+    /// (and the impl type for methods) this is the resolver's identity (`geo::area::f`, C3).
+    pub module_path: Vec<String>,
+}
+
+impl<'ast> AnalyzedFunction<'ast> {
+    /// True when this is the analysis of `decl` itself, not of a same-name definition elsewhere
+    /// (another module or impl). Bodies are arena references shared with the AST, so they identify
+    /// the definition; body-less declarations fall back to the signature.
+    pub fn is_analysis_of(&self, decl: &FunctionDecl<'ast>) -> bool {
+        if self.decl.name != decl.name || self.decl.body.len() != decl.body.len() {
+            return false;
+        }
+        if decl.body.is_empty() {
+            return self.decl.parameters.len() == decl.parameters.len()
+                && self.decl.parent_type == decl.parent_type;
+        }
+        self.decl.body.iter().zip(&decl.body).all(|(a, b)| std::ptr::eq(*a, *b))
+    }
 }
 
 /// PHASE 5: Assignment operation that can be optimized to compound operator

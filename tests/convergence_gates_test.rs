@@ -19,6 +19,7 @@
 //! consumes: tests/conformance/*/*.wj
 //! consumes: tests/inference_corpus/*.wj
 //! consumes: tests/auto_clone/*.wj
+//! consumes: tests/identity_corpus/*.wj
 //! consumes: tests/*.wj
 //! consumes: tests/golden/rust/**
 
@@ -39,6 +40,7 @@ const CORPUS_DIRS: &[&str] = &[
     "tests/conformance/values",
     "tests/inference_corpus",
     "tests/auto_clone",
+    "tests/identity_corpus",
     "tests",
 ];
 

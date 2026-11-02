@@ -21,8 +21,7 @@ mod b {
 }
 
 fn main() {
-    let xs = [1, 2, 3]
-    let p = a::twice(xs)
-    let q = b::twice(xs)
+    let p = a::twice([1, 2, 3])
+    let q = b::twice([4, 5, 6])
     println("${p} ${q}")
 }

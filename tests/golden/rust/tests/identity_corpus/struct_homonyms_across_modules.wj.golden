@@ -1,0 +1,34 @@
+mod a {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Item {
+    pub n: i64,
+}
+impl Item {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.n.to_ne_bytes());
+        __bytes
+    }
+}
+    #[inline]
+pub fn make(n: i64) -> Item {
+        Item { n: n + 1_i64 }
+}}
+
+mod b {
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Item {
+    pub s: String,
+}    #[inline]
+pub fn make(s: String) -> Item {
+        Item { s }
+}}
+
+fn main() {
+    let x = a::make(7_i64);
+    let y = b::make(String::from("abc"));
+    println!("{} {}", x.n, y.s.len());
+}
+

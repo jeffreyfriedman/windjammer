@@ -117,6 +117,9 @@ pub struct IrFunction {
     /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
     /// the binding is never read again on any path.
     pub last_uses: std::collections::BTreeSet<usize>,
+
+    /// Inline modules containing the definition (`AnalyzedFunction::module_path`): with `name`, its identity (C3).
+    pub module_path: Vec<String>,
 }
 
 impl IrFunction {
@@ -345,6 +348,7 @@ impl IrFunction {
             local_types: HashMap::new(),
             body: Vec::new(),
             ownership_trail: std::collections::BTreeMap::new(),
+            module_path: analyzed.module_path.clone(),
             default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
             last_uses: crate::ir::liveness::last_uses(
                 &analyzed

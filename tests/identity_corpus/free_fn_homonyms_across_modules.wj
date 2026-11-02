@@ -14,8 +14,8 @@ mod b {
 }
 
 fn main() {
-    let xs = [1, 2, 3]
-    let n = b::take(xs)
-    let ys = a::take(xs)
+    // Separate lists: reusing one binding after a `pub` read-only formal hits D-OWN-PUB (see c3-inventory.md).
+    let n = b::take([1, 2, 3])
+    let ys = a::take([4, 5, 6])
     println("${n} ${ys.len()}")
 }

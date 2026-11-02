@@ -1,0 +1,18 @@
+mod a {
+    #[inline]
+pub fn take(items: Vec<i64>) -> Vec<i64> {
+        items
+}}
+
+mod b {
+    #[inline]
+pub fn take(items: Vec<i64>) -> i64 {
+        items.len() as i64
+}}
+
+fn main() {
+    let n = b::take(vec![1_i64, 2_i64, 3_i64]);
+    let ys: Vec<i64> = a::take(vec![4_i64, 5_i64, 6_i64]);
+    println!("{} {}", n, ys.len());
+}
+

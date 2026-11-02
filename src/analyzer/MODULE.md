@@ -10,6 +10,7 @@ In: `parser::Program` (+ global/external `SignatureRegistry`). Out: `Vec<Analyze
 - Analysis is read-only over the AST; results live in `AnalyzedFunction`/`SignatureRegistry`, never in the AST.
 - Multi-pass compilation re-runs the analyzer with `new_with_copy_structs` and global signatures; results must be deterministic.
 - `signature_registry.rs` is the only place that should look signatures up by name (`get_signature(&str)` is ratcheted).
+- Identity (C3, docs/spec/c3-inventory.md): an inline-module item is registered under its module-qualified path (`a::take`, `a::Counter::new`) as well as the legacy bare key; `AnalyzedFunction::module_path` and `is_analysis_of` (shared arena body) identify a definition. A bare call inside `mod m` resolves to `m::f` first (`SignatureRegistry::scoped_key`). Suffix searches never pick the first of several homonyms.
 
 ## Owns
 Parameter ownership inference (`parameter_analysis`, `borrow_analysis`, `passthrough_inference`), self receiver inference (`self_*`), mutation detection, signature registry, type/trait collection, optimization detectors (`optimization_detectors/`), usage tracking (`usage_tracking/`), the `std::arena` escape check and feature gate (`arena_escape.rs`, WJ0160/WJ0161, ADR-0025; also run by the interpreter loader).
