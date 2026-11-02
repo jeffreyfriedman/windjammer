@@ -225,7 +225,7 @@ digraph deps {
   "codegen" -> "ir" [label="378"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="661"];
+  "codegen" -> "parser" [label="663"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="1"];
   "codegen" -> "source_map" [label="9"];

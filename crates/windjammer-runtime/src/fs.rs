@@ -27,6 +27,62 @@ pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(),
     std::fs::write(path, contents).map_err(|e| e.to_string())
 }
 
+/// Write bytes to a file (Windjammer `std::fs::write_bytes`).
+pub fn write_bytes<P: AsRef<Path>>(path: P, contents: &[u8]) -> Result<(), String> {
+    write(path, contents)
+}
+
+/// The canonical, absolute form of a path (symlinks resolved); the path must exist.
+pub fn canonicalize<P: AsRef<Path>>(path: P) -> Result<String, String> {
+    crate::caps::fs_read(&path);
+    std::fs::canonicalize(path)
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// Change the process's working directory. It changes how every relative path resolves, so it is an
+/// environment write (resource `cwd`), not a file access.
+pub fn set_current_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::env_write("cwd");
+    std::env::set_current_dir(path).map_err(|e| e.to_string())
+}
+
+/// File metadata (Windjammer `std::fs::metadata`).
+#[derive(Debug, Clone)]
+pub struct Metadata {
+    len: u64,
+    file: bool,
+    dir: bool,
+    readonly: bool,
+}
+
+impl Metadata {
+    /// Size in bytes (`int`).
+    pub fn size(&self) -> i64 {
+        self.len as i64
+    }
+    pub fn len(&self) -> u64 {
+        self.len
+    }
+    pub fn is_file(&self) -> bool {
+        self.file
+    }
+    pub fn is_dir(&self) -> bool {
+        self.dir
+    }
+    pub fn is_readonly(&self) -> bool {
+        self.readonly
+    }
+}
+
+/// Metadata of a file or directory.
+pub fn metadata<P: AsRef<Path>>(path: P) -> Result<Metadata, String> {
+    crate::caps::fs_read(&path);
+    std::fs::metadata(path)
+        .map(|m| Metadata { len: m.len(), file: m.is_file(), dir: m.is_dir(), readonly: m.permissions().readonly() })
+        .map_err(|e| e.to_string())
+}
+
 /// Write string to file (helper for common case)
 pub fn write_string<P: AsRef<Path>>(path: P, contents: &str) -> Result<(), String> {
     crate::caps::fs_write(&path);
@@ -171,5 +227,21 @@ mod tests {
         assert!(!is_dir(&temp));
 
         remove_file(&temp).unwrap();
+    }
+
+    #[test]
+    fn write_bytes_metadata_canonicalize() {
+        let dir = std::env::temp_dir().join(format!("wj_fs_gap_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("data.bin");
+        write_bytes(&file, &[1, 2, 3]).unwrap();
+        let m = metadata(&file).unwrap();
+        assert_eq!((m.len(), m.size(), m.is_file(), m.is_dir()), (3, 3, true, false));
+        assert!(metadata(&dir).unwrap().is_dir());
+        assert!(metadata(dir.join("missing")).is_err());
+        let canon = canonicalize(dir.join("..").join(dir.file_name().unwrap()).join("data.bin")).unwrap();
+        assert!(canon.ends_with("data.bin") && !canon.contains(".."));
+        assert!(canonicalize(dir.join("missing")).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -32,6 +32,22 @@ pub fn remove_var(key: &str) {
     std::env::remove_var(key);
 }
 
+/// Set an environment variable (Windjammer `std::env::set`).
+pub fn set(key: &str, value: &str) {
+    set_var(key, value);
+}
+
+/// Remove an environment variable (Windjammer `std::env::remove`).
+pub fn remove(key: &str) {
+    remove_var(key);
+}
+
+/// The user's home directory (`$HOME`), if set.
+pub fn home_dir() -> Option<String> {
+    crate::caps::env_read("HOME");
+    std::env::var("HOME").ok()
+}
+
 /// Get all environment variables
 pub fn vars() -> Vec<(String, String)> {
     crate::caps::env_read_all();
@@ -79,5 +95,14 @@ mod tests {
     fn test_args() {
         let args = args();
         assert!(!args.is_empty());
+    }
+
+    #[test]
+    fn set_remove_and_home_dir() {
+        set("WINDJAMMER_TEST_SET_REMOVE", "v");
+        assert_eq!(var("WINDJAMMER_TEST_SET_REMOVE").as_deref(), Ok("v"));
+        remove("WINDJAMMER_TEST_SET_REMOVE");
+        assert!(var("WINDJAMMER_TEST_SET_REMOVE").is_err());
+        assert_eq!(home_dir(), std::env::var("HOME").ok());
     }
 }
