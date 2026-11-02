@@ -4586,6 +4586,7 @@ dependencies = [
  "sha1",
  "sha2",
  "sqlx",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml",
