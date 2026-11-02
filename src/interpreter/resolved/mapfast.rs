@@ -25,9 +25,13 @@ pub(super) struct MapGet {
 impl MapGet {
     /// `Ok(None)`: the receiver is not a map (the generic call decides).
     pub(super) fn run(&self, it: &mut Interpreter, b: usize) -> R<Option<Option<Value>>> {
+        if it.fast_off("mapget") {
+            return Ok(None);
+        }
         let m = (self.map)(it, b)?;
         let Value::Map(km) = &m else { return Ok(None) };
         let k = strip_refs((self.key)(it, b)?)?;
+        it.fast.mapget += 1;
         Ok(Some(km.get(&Key(k)).cloned()))
     }
 }
@@ -92,9 +96,10 @@ pub(super) fn insert_stmt(cx: &mut Cx, s: S) -> Option<Code> {
     let (kc, xc) = (expr(cx, k)?.code(), expr(cx, x)?.code());
     Some(Box::new(move |it, b| {
         // another receiver (a `Vec`'s `insert(i, x)`...), or a box in use: the generic call
-        if !local_map(&mut it.rstack[b + slot], |_| ()) {
+        if it.fast_off("mapins") || !local_map(&mut it.rstack[b + slot], |_| ()) {
             return generic(it, b);
         }
+        it.fast.mapins += 1;
         let k = strip_refs(kc(it, b)?)?;
         let x = strip_refs(xc(it, b)?)?;
         // test-only mutant (debug builds): a map another binding shares is not written (no copy)
