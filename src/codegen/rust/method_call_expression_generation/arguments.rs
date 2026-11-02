@@ -482,12 +482,7 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                     };
                     let qualified_callee =
-                        crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                            receiver_for_ir.as_deref(),
-                            object,
-                            method,
-                            |name| self.is_imported_runtime_std_module(name),
-                        );
+                        self.qualified_method_key(receiver_for_ir.as_deref(), object, method);
                     if let Some(mut coerced) = self.apply_ir_call_site_coercion(
                         &self.signature_registry,
                         &qualified_callee,
@@ -936,12 +931,7 @@ impl<'ast> CodeGenerator<'ast> {
                 || wrapper_key_sig.is_some()
             {
                 let qualified =
-                    crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                        receiver_rt,
-                        object,
-                        method,
-                        |name| self.is_imported_runtime_std_module(name),
-                    );
+                    self.qualified_method_key(receiver_rt, object, method);
                 let sig_for_key = method_signature
                     .clone()
                     .or(wrapper_key_sig)
