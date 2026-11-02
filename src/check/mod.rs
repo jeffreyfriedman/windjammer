@@ -12,6 +12,7 @@ mod fix;
 mod front;
 pub mod locate;
 mod project;
+mod rust_calls;
 mod semantic;
 pub mod watch;
 
@@ -48,11 +49,11 @@ pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     for p in &paths {
         sources.push((p.display().to_string(), std::fs::read_to_string(p)?));
     }
-    // inputs that change what the effect pass reports: the manifest, the lock file and dependency sources
+    // inputs that change what the effect pass reports: the manifest, the lock file and dependency sources, Rust crate surfaces (ADR-0026)
     let mut keyed = sources.clone();
     if let Some(manifest) = effects::manifest_path(path) {
         let dir = manifest.parent().unwrap_or(path).to_path_buf();
-        for extra in [manifest.clone(), dir.join(crate::ir::effect_facts::lock::LOCK_FILE)].into_iter().chain(dep_sources::input_paths(&dir)) {
+        for extra in [manifest.clone(), dir.join(crate::ir::effect_facts::lock::LOCK_FILE)].into_iter().chain(dep_sources::input_paths(&dir)).chain(crate::package::rust_surface::surface_files(&dir)) {
             if let Ok(t) = std::fs::read_to_string(&extra) {
                 keyed.push((extra.display().to_string(), t));
             }
@@ -79,6 +80,30 @@ pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
         report,
         sources: sources.into_iter().collect(),
     })
+}
+
+/// ADR-0026: errors in calls into Rust crates that have a signature surface (and in the surfaces themselves),
+/// what `wj build` stops on before generating code. Cheap when the project has no surface (no file is read).
+pub fn rust_crate_calls(path: &Path) -> Result<Checked> {
+    let crates = effects::manifest_path(path)
+        .and_then(|m| m.parent().map(crate::package::rust_surface::load))
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    let mut sources: Vec<(String, String)> = Vec::new();
+    if !crates.surfaces.is_empty() {
+        for p in files::collect(path)? {
+            sources.push((p.display().to_string(), std::fs::read_to_string(&p)?));
+        }
+        let mut sink = Vec::new();
+        let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+        let refs: Vec<&front::Parsed> = parsed.iter().collect();
+        let idx = semantic::Index::build(&refs.iter().map(|p| &p.program).collect::<Vec<_>>());
+        rust_calls::run(&crates, &idx, &refs, &mut out);
+    }
+    for s in &crates.surfaces {
+        sources.push((s.path.display().to_string(), s.text.clone()));
+    }
+    Ok(Checked { report: Report::new("check", finish(out)), sources: sources.into_iter().collect() })
 }
 
 /// Check in-memory sources (used by tests and the LSP).
