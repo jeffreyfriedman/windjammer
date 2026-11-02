@@ -146,7 +146,7 @@ def build_report(trials, n_boot=2000, prev=None):
             schema = (e["first_turn_input"] - t_["first_turn_input"]) - (e["pack_tokens"] - t_["pack_tokens"])
             js["mcp_schema_tokens"] = schema
             md += ["", f"MCP tool-schema tokens (3 exposed tools): about {schema:.0f} per turn-1 context."]
-    ctrl = "B"
+    ctrl = "B" if "B" in arms else "S"
     if ctrl in arms and len(arms) > 1:
         md += ["", f"## Paired differences versus control {ctrl} (task-clustered 95% CI)", "",
                "| metric | " + " | ".join(f"{a} - {ctrl}" for a in arms if a != ctrl) + " |", "|---|" + "---|" * (len(arms) - 1)]
