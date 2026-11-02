@@ -452,7 +452,7 @@ impl Interpreter {
         loc.map(|l| Span {
             file: l.file.to_string_lossy().to_string(),
             line: l.line,
-            column: l.column,
+            column: l.display_column(),
         })
     }
 

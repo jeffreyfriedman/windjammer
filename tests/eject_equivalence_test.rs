@@ -36,6 +36,12 @@ fn rs_files(dir: &Path, out: &mut Vec<(String, String)>) {
     out.sort();
 }
 
+/// Every Rust file the build emits must appear in the ejected project under the same file name, code-identical.
+/// A build that emitted nothing proves nothing, so it is never "the same".
+pub fn ejected_contains_build(build: &[(String, String)], eject: &[(String, String)]) -> bool {
+    !build.is_empty() && build.iter().all(|(n, c)| eject.iter().any(|(m, d)| m == n && d == c))
+}
+
 #[test]
 fn eject_state_matches_the_recorded_state() {
     assert_eq!(has_eject(), EJECT_AVAILABLE, "`wj eject` availability changed: set EJECT_AVAILABLE in {} (and enable the comparison)", file!());
@@ -54,16 +60,14 @@ fn eject_output_equals_build_output() {
         let t = tempfile::TempDir::new().unwrap();
         let (b, e) = (t.path().join("build"), t.path().join("eject"));
         let bo = Command::new(WJ).args(["build", "--no-cargo", "--no-lint", "-o"]).arg(&b).arg(f).output().unwrap();
-        let eo = Command::new(WJ).arg("eject").arg(f).arg(&e).output().unwrap();
+        let eo = Command::new(WJ).arg("eject").arg(f).arg("-o").arg(&e).output().unwrap();
         if !bo.status.success() {
             continue;
         }
         let (mut bs, mut es) = (Vec::new(), Vec::new());
         rs_files(&b, &mut bs);
         rs_files(&e, &mut es);
-        // Every Rust file the build emits must appear, code-identical, in the ejected project.
-        let same = bs.iter().all(|(_, c)| es.iter().any(|(_, d)| d == c));
-        if !eo.status.success() || !same {
+        if !eo.status.success() || !ejected_contains_build(&bs, &es) {
             diffs.push(f.file_name().unwrap().to_string_lossy().into_owned());
         }
     }
@@ -74,4 +78,40 @@ fn eject_output_equals_build_output() {
 fn selftest_code_only_ignores_comments_but_not_code() {
     assert_eq!(code_only("// Ejected from x.wj\nfn main() {\n\n    f(); // call\n}\n"), code_only("fn main() {\n    f();\n}"));
     assert_ne!(code_only("fn main() { f(); }"), code_only("fn main() { g(); }"));
+}
+
+fn pair(n: &str, c: &str) -> (String, String) {
+    (n.to_string(), code_only(c))
+}
+
+/// Mutation checks: the comparison must reject an ejected project that differs from the build in any way that matters.
+#[test]
+fn selftest_comparison_rejects_mutated_eject_output() {
+    let build = vec![pair("main.rs", "fn main() {\n    f();\n}\n")];
+    assert!(ejected_contains_build(&build, &[pair("main.rs", "// Ejected\nfn main() {\n    f();\n}\n")]), "comments are allowed");
+    assert!(!ejected_contains_build(&build, &[pair("main.rs", "fn main() {\n    g();\n}\n")]), "changed code must be caught");
+    assert!(!ejected_contains_build(&build, &[pair("other.rs", "fn main() {\n    f();\n}\n")]), "renamed file must be caught");
+    assert!(!ejected_contains_build(&build, &[]), "missing file must be caught");
+    assert!(!ejected_contains_build(&[], &[pair("main.rs", "fn main() {}")]), "an empty build is vacuous");
+}
+
+/// The same mutation applied to a real ejected project: change one token of its Rust and the gate must notice.
+#[test]
+fn mutated_real_eject_is_detected() {
+    let f = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/verified/algo_bubble_sort.wj");
+    let t = tempfile::TempDir::new().unwrap();
+    let (b, e) = (t.path().join("build"), t.path().join("eject"));
+    assert!(Command::new(WJ).args(["build", "--no-cargo", "--no-lint", "-o"]).arg(&b).arg(&f).output().unwrap().status.success());
+    assert!(Command::new(WJ).arg("eject").arg(&f).arg("-o").arg(&e).output().unwrap().status.success());
+    let (mut bs, mut es) = (Vec::new(), Vec::new());
+    rs_files(&b, &mut bs);
+    rs_files(&e, &mut es);
+    assert!(ejected_contains_build(&bs, &es));
+    let target = bs[0].0.clone();
+    for (n, c) in es.iter_mut() {
+        if *n == target {
+            *c = c.replacen("fn ", "fn z_", 1);
+        }
+    }
+    assert!(!ejected_contains_build(&bs, &es), "a mutated ejected file must differ from the build");
 }
