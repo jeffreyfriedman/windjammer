@@ -1,0 +1,22 @@
+// CLONE-BORROWED-TO-OWNED (C6): a returned non-Copy field of a borrowed receiver or parameter is
+// cloned exactly there (the IR fact); a Copy field and a field of an owned value are not.
+struct Quest { title: string, level: int }
+
+impl Quest {
+    fn name(self) -> string { self.title }
+    fn level(self) -> int { self.level }
+    fn label(self, loud: bool) -> string {
+        if loud { return self.title }
+        "quiet"
+    }
+}
+
+fn title_of(q: Quest) -> string { q.title }
+
+fn main() {
+    let q = Quest { title: "find", level: 2 }
+    println(q.name())
+    println("${q.level()}")
+    println(q.label(true))
+    println(title_of(q))
+}

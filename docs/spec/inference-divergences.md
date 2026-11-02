@@ -187,6 +187,8 @@ differential harness; belongs to the interpreter stream. The two closure corpus 
 ### D-OWN-STAGES Parameter mode changed between pipeline stages
 The analyzer, solver, IR and emitted modes are not all equal (see D-OWNERS-OWN).
 ### D-CLONE-OUTSIDE-SOLVER Emitted clone with no solver clone constraint
-See D-CLONE-OWNERS.
+See D-CLONE-OWNERS. Clones written in the source (`self.items.clone()`) are the programmer's decision and are not
+counted (`ir::liveness::user_clones`, 2026-10-26). Per-site solver facts that count as constraints: CLONE-ANALYZER
+and, for returned fields of a borrowed parameter or `self`, CLONE-BORROWED-TO-OWNED (`IrFunction::clone_sites`).
 ### D-WIDTH-OWNERS Solver width differs from emitted width
 See D-NUM-OWNERS.
