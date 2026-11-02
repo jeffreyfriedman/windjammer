@@ -21,7 +21,10 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
         if p.is_dir() {
-            if name == "target" || name.starts_with('.') || name == "node_modules" {
+            if name == "target" || name.starts_with('.') || name == "node_modules"
+                || (name == "tree" && p.components().any(|c| c.as_os_str() == "py_ports"))
+            {
+                // recorded replay fixtures (tests/py_ports/*/*/tree) hold copies and deliberately broken inputs
                 continue;
             }
             walk(&p, out);
