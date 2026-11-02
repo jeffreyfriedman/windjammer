@@ -196,9 +196,6 @@ fn promote_callees_from_bare_pass_callers_inner(
     // stay owned moves — `&mut HttpReply` cannot move `reply.body`.
     restore_owned_field_forward_formals(registry, programs);
     restore_owned_string_formals_stored_in_payload(registry, programs);
-    // Undo bare-pass MutBorrowed when the callee returns the whole binding (identity /
-    // chain helpers like `col_string(row, name) -> (Row, string)`).
-    restore_owned_returned_formals(registry, programs);
     restore_pub_owned_non_copy_api_formals_with_cache(registry, programs, &cache);
     restore_owned_formals_for_producer_only_call_sites(registry, programs);
     // wrappers that forward bare into owned FFI/`Vec` formals must
@@ -2797,102 +2794,6 @@ fn expr_returns_whole_binding(param_name: &str, expr: &Expression) -> bool {
     }
 }
 
-/// Restore owned Custom formals demoted by bare-pass when the body returns the whole param.
-pub fn restore_owned_returned_formals(registry: &mut SignatureRegistry, programs: &[&Program]) {
-    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
-    for key in keys {
-        let Some(sig) = registry.get_signature(&key).cloned() else {
-            continue;
-        };
-        let n = sig.param_ownership.len();
-        let mut changed = false;
-        let mut new_sig = sig.clone();
-        for idx in 0..n {
-            if new_sig
-                .emitted_rust_ref_params
-                .as_ref()
-                .and_then(|flags| flags.get(idx))
-                .copied()
-                == Some(true)
-            {
-                continue;
-            }
-            if !matches!(
-                new_sig.param_ownership.get(idx),
-                Some(OwnershipMode::MutBorrowed | OwnershipMode::Borrowed)
-            ) {
-                continue;
-            }
-            let formal_ty = new_sig
-                .formal_param_types
-                .get(idx)
-                .or_else(|| new_sig.param_types.get(idx));
-            let Some(formal_ty) = formal_ty else {
-                continue;
-            };
-            let wj_string_formal = new_sig
-                .formal_param_types
-                .get(idx)
-                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
-                || new_sig
-                    .param_types
-                    .get(idx)
-                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
-            let demoted_str_formal = new_sig
-                .param_types
-                .get(idx)
-                .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t));
-            let owned_ty = if wj_string_formal || demoted_str_formal {
-                Type::String
-            } else {
-                let bare = match formal_ty {
-                    Type::Custom(name) => name.clone(),
-                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                        match inner.as_ref() {
-                            Type::Custom(name) => name.clone(),
-                            _ => continue,
-                        }
-                    }
-                    _ => continue,
-                };
-                if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
-                    continue;
-                }
-                Type::Custom(bare)
-            };
-            let Some((param_name, body)) = find_function_body_for_registry_key(programs, &key, idx)
-            else {
-                continue;
-            };
-            if !param_whole_binding_returned(body, param_name)
-                && !param_moved_into_let_binding(body, param_name)
-            {
-                continue;
-            }
-            new_sig.param_ownership[idx] = OwnershipMode::Owned;
-            if new_sig.param_types.len() > idx {
-                new_sig.param_types[idx] = owned_ty.clone();
-            }
-            if new_sig.formal_param_types.len() > idx {
-                new_sig.formal_param_types[idx] = owned_ty;
-            }
-            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
-                if flags.len() > idx {
-                    flags[idx] = false;
-                }
-            }
-            changed = true;
-        }
-        if changed {
-            registry.signatures.insert(key.clone(), new_sig.clone());
-            if let Some(bare) = key.rsplit("::").next() {
-                if bare != key.as_str() && registry.signatures.contains_key(bare) {
-                    registry.signatures.insert(bare.to_string(), new_sig);
-                }
-            }
-        }
-    }
-}
 /// Owned `string`/`Vec` formals on builders that return a Custom type store payload — keep
 /// owned even when callers pass bare bindings (HTTP `ServerResponse::json(body: string)`).
 fn callee_owned_text_builder_stores_payload(sig: &FunctionSignature, param_idx: usize) -> bool {
