@@ -401,6 +401,8 @@ pub struct CodeGenerator<'ast> {
     /// MOVE-LAST-USE fact (`ir::liveness::last_moves`) for the function being emitted.
     pub(crate) last_use_nodes: std::collections::BTreeSet<usize>,
     /// CLONE-USE-AFTER-MOVE fact (`ir::liveness::read_after`) and the statement being emitted.
+    /// CLONE-BORROWED-TO-OWNED fact (`IrFunction::returned_fields` / `clone_sites`).
+    pub(crate) returned_fields: (std::collections::BTreeMap<usize, String>, std::collections::BTreeMap<usize, String>),
     pub(crate) read_after: (std::collections::BTreeMap<usize, std::collections::BTreeSet<String>>, Vec<usize>),
     /// Full IR module (all functions), set when cutover is active. Functions are looked up
     /// by name when codegen begins processing each AnalyzedFunction.
@@ -774,6 +776,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_ir_function: None,
             last_use_nodes: std::collections::BTreeSet::new(),
             read_after: Default::default(),
+            returned_fields: Default::default(),
             ir_module_functions: Vec::new(),
             ir_module: None,
             boundary_signature_errors: std::cell::RefCell::new(Vec::new()),
