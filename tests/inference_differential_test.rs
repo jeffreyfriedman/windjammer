@@ -639,6 +639,12 @@ fn corpus_unsuffixed_literal_follows_typed_operand_in_nested_arithmetic() {
 }
 
 #[test]
+fn corpus_len_into_declared_int() {
+    // Expected output: 12 (3 + 3 + 3 + 3).
+    corpus_check("len_into_declared_int");
+}
+
+#[test]
 fn corpus_for_range_loop_var_width() {
     corpus_check("for_range_loop_var_width");
 }
