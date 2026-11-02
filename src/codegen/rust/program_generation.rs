@@ -742,38 +742,7 @@ impl<'ast> CodeGenerator<'ast> {
             body.push('\n');
         }
 
-        // Identify functions that belong to impl blocks / traits so they are not generated twice
-        // as free functions. Identity is (name, body address, extern): matching on the bare name
-        // silently dropped every free function that shared a name with any method.
-        let fn_identity = |name: &str, body: &[&Statement<'_>], is_extern: bool| {
-            (
-                name.to_string(),
-                body.first()
-                    .map_or(0usize, |stmt| *stmt as *const _ as usize),
-                is_extern,
-            )
-        };
-        let mut impl_method_ids = std::collections::HashSet::new();
-        for item in &program.items {
-            if let Item::Impl {
-                block: impl_block, ..
-            } = item
-            {
-                for func in &impl_block.functions {
-                    impl_method_ids.insert(fn_identity(&func.name, &func.body, func.is_extern));
-                }
-            }
-            // Also collect trait method declarations / default bodies
-            if let Item::Trait { decl, .. } = item {
-                for method in &decl.methods {
-                    impl_method_ids.insert(fn_identity(
-                        &method.name,
-                        method.body.as_deref().unwrap_or(&[]),
-                        false,
-                    ));
-                }
-            }
-        }
+        let impl_method_ids = impl_method_identities(program);
         let is_impl_method =
             |af: &AnalyzedFunction<'_>| impl_method_ids.contains(&fn_identity(&af.decl.name, &af.decl.body, af.decl.is_extern));
 
@@ -1012,7 +981,9 @@ impl<'ast> CodeGenerator<'ast> {
         let mut top_level_funcs: Vec<_> = analyzed
             .iter()
             .filter(|af| {
-                !is_impl_method(af) && !self.idiom.inline_mod_fn_names.contains(&af.decl.name)
+                // Inline-module functions are emitted inside their module (identity, not name: a
+                // top-level `take` and `a::take` are different functions).
+                !is_impl_method(af) && af.module_path.is_empty()
                     && !af.decl.is_extern
                     && !(self.is_module && af.decl.name == "main")
             })
@@ -1543,4 +1514,36 @@ pub fn missing_auth() {}
             Some("http::json_cors_error")
         );
     }
+}
+
+/// Identity of a function for "is this a method?" checks: (name, body address, extern). Matching on
+/// the bare name silently dropped every free function that shared a name with any method.
+fn fn_identity(name: &str, body: &[&Statement<'_>], is_extern: bool) -> (String, usize, bool) {
+    (name.to_string(), body.first().map_or(0usize, |stmt| *stmt as *const _ as usize), is_extern)
+}
+
+/// Functions that belong to impl blocks / traits (also those of inline modules), so they are not
+/// generated a second time as free functions.
+fn impl_method_identities(program: &Program<'_>) -> std::collections::HashSet<(String, usize, bool)> {
+    let mut ids = std::collections::HashSet::new();
+    let nested = program.items.iter().filter_map(|i| match i {
+        Item::Mod { name, items, .. } => Some(crate::analyzer::nested_mod_items::flatten_with_paths(name, items)),
+        _ => None,
+    });
+    for item in program.items.iter().chain(nested.flatten().map(|(_, it)| it)) {
+        match item {
+            Item::Impl { block, .. } => {
+                for func in &block.functions {
+                    ids.insert(fn_identity(&func.name, &func.body, func.is_extern));
+                }
+            }
+            Item::Trait { decl, .. } => {
+                for method in &decl.methods {
+                    ids.insert(fn_identity(&method.name, method.body.as_deref().unwrap_or(&[]), false));
+                }
+            }
+            _ => {}
+        }
+    }
+    ids
 }

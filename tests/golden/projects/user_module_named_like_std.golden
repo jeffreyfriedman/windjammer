@@ -1,0 +1,51 @@
+// ==== http.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Reply {
+    pub status: i64,
+    pub body: String,
+}
+
+#[inline]
+pub fn to_response(reply: Reply) -> String {
+    base_response(reply.status, &reply.body)
+}
+
+#[inline]
+pub fn base_response(status: i64, body: &str) -> String {
+    format!("{}:{}", status, body)
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod http;
+
+// Re-export public items
+pub use http::*;
+// ==== main.rs ====
+use windjammer_runtime::http;
+use windjammer_runtime::http::HttpMethod;
+use windjammer_runtime::http::Response;
+use windjammer_runtime::http::Request;
+use windjammer_runtime::http::ServerResponse;
+use windjammer_runtime::http::Router;
+use windjammer_runtime::http::ServerRequest;
+use windjammer_runtime::http::Server;
+mod http;
+fn main() {
+    let reply = http::Reply { status: 200_i64, body: String::from("ok") };
+    windjammer_runtime::io::println(&format!("{}", http::to_response(reply)));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod http;
+
+// Re-export public items
+pub use http::*;

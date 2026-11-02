@@ -1,0 +1,12 @@
+// Two files define `enum Shape` with different payload types. Variant literals must take their own
+// enum's payload type (identity: C3; literal width: C4). Expected by hand: 2.0 * 2.0, 2 * 3, 3 * 3.
+// expect: 4 6 9
+mod a
+mod b
+
+fn main() {
+    let x = a::area(a::Shape::Circle(2.0))
+    let y = b::area(b::Shape::Circle(2))
+    let z = b::area(b::Shape::Square(3))
+    println("${x} ${y} ${z}")
+}

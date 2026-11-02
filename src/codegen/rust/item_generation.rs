@@ -40,6 +40,10 @@ impl<'ast> CodeGenerator<'ast> {
         if af.decl.name != func.name {
             return false;
         }
+        if !func.body.is_empty() {
+            // Identity, not name (C3): `a::Counter::new` vs `b::Counter::new`.
+            return af.is_analysis_of(func) && af.decl.impl_trait == *impl_trait;
+        }
         if af.decl.parent_type != func.parent_type {
             return false;
         }

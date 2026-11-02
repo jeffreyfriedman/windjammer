@@ -164,7 +164,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 })
                                 .or_else(|| {
                                     self.signature_registry
-                                        .find_signature_ending_with(&format!("::{method}"))
+                                        .find_unique_signature_ending_with(&format!("::{method}"))
                                 })
                         } else {
                             None

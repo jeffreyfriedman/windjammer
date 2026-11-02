@@ -1,0 +1,10 @@
+// A helper returns its whole parameter with a value (restore_owned_returned_formals, `col_string(row, ..)
+// -> (Row, string)`); the caller keeps the returned row. Expected by hand: the name, 2 columns.
+// expect: x 2
+mod rows
+
+fn main() {
+    let r = rows::Row { cols: ["a", "b"] }
+    let (r2, s) = rows::tag(r, "x")
+    println("${s} ${r2.cols.len()}")
+}

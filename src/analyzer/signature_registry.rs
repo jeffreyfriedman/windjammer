@@ -824,6 +824,20 @@ impl SignatureRegistry {
             .and_then(|g| g.get_signature(name))
     }
 
+    /// Lexical scope (C3): inside module `m`, a bare `f` is `m::f` when `m` defines it. Returns that
+    /// module-qualified key when it is registered on this layer or the fallback chain.
+    pub fn scoped_key(&self, module_path: &[String], name: &str) -> Option<String> {
+        if module_path.is_empty() || name.contains("::") {
+            return None;
+        }
+        let key = format!("{}::{name}", module_path.join("::"));
+        self.has_key_in_chain(&key).then_some(key)
+    }
+
+    fn has_key_in_chain(&self, key: &str) -> bool {
+        self.signatures.contains_key(key) || self.global_fallback.as_ref().is_some_and(|g| g.has_key_in_chain(key))
+    }
+
     /// Check if a key exists in this registry's own `signatures` map (not the
     /// fallback chain).  Used by codegen to distinguish locally-registered
     /// signatures from those inherited through `global_fallback`.
@@ -1383,33 +1397,6 @@ impl SignatureRegistry {
 
     fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
         crate::codegen::rust::call_signature_resolution::effective_user_arg_count(sig)
-    }
-
-    /// Resolve a delegation wrapper's callee when the body is a single `receiver.method(args…)` call.
-    ///
-    /// Skips the caller's own qualified name (e.g. `TxnManager::get`) and returns another
-    /// `{Type}::{method}` with matching user arg count (e.g. `MemoryEngine::get`).
-    pub fn find_delegation_callee(
-        &self,
-        caller_qualified: &str,
-        method: &str,
-        arg_count: usize,
-    ) -> Option<&FunctionSignature> {
-        if let Some(keys) = self.method_index.get(method) {
-            for key in keys {
-                if key == caller_qualified {
-                    continue;
-                }
-                if let Some(sig) = self.signatures.get(key) {
-                    if Self::sig_user_arg_count(sig) == arg_count {
-                        return Some(sig);
-                    }
-                }
-            }
-        }
-        self.global_fallback
-            .as_ref()
-            .and_then(|g| g.find_delegation_callee(caller_qualified, method, arg_count))
     }
 
     /// Resolve `TypeName::method` for call-site borrow coercion when homonyms exist.

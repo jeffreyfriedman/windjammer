@@ -1,0 +1,26 @@
+// Inside one module a free function and a method share the name `put`: the method call binds to
+// the method (it mutates the bag), the bare call to the free function (it only reads). By hand: 2.
+// expect: 2
+mod store {
+    pub struct Bag {
+        pub items: Vec<int>,
+    }
+    impl Bag {
+        pub fn put(self, x: int) {
+            self.items.push(x)
+        }
+    }
+    pub fn put(xs: Vec<int>) -> int {
+        xs.len() as int
+    }
+    pub fn fill() -> int {
+        let mut b = Bag { items: Vec::new() }
+        b.put(4)
+        b.put(5)
+        put(b.items)
+    }
+}
+
+fn main() {
+    println("${store::fill()}")
+}

@@ -163,7 +163,7 @@ fn resolve_converged_local_signature<'a>(
             return Some(sig);
         }
     }
-    registry.find_signature_ending_with(name)
+    registry.find_unique_signature_ending_with(name)
 }
 
 /// TDD FIX: Build library with global multi-pass analysis
@@ -1027,26 +1027,6 @@ pub(crate) fn build_library_multipass(
     }
 
     // Diagnostic: dump registry state for key methods before codegen.
-    if crate::debug_env::enabled("WJ_REGISTRY_TRACE") {
-        for key in &[
-            "DialogueTree::get_node",
-            "dialogue_tree::DialogueTree::get_node",
-            "get_node",
-            "SystemScheduler::register",
-            "SceneManager::is_registered",
-            "QuestManager::is_quest_active",
-            "QuestManager::update_objective_progress",
-            "draw::draw_text",
-            "draw_text",
-        ] {
-            if let Some(sig) = final_global_registry.get_signature(key) {
-                eprintln!(
-                    "[REGISTRY-TRACE] key={} param_types={:?} param_ownership={:?} has_self={}",
-                    key, sig.param_types, sig.param_ownership, sig.has_self_receiver
-                );
-            }
-        }
-    }
 
     // Bare-pass demotion / field-forward restore must run before IR lowering so
     // call-site constraints see the final ownership (e.g. owned HttpReply, not &mut).
@@ -1067,10 +1047,6 @@ pub(crate) fn build_library_multipass(
             &global_copy_structs,
         );
         crate::compiler::multipass_bare_pass_demotion::restore_pub_owned_non_copy_api_formals(
-            reg,
-            &program_refs,
-        );
-        crate::compiler::multipass_bare_pass_demotion::restore_owned_formals_for_producer_only_call_sites(
             reg,
             &program_refs,
         );
@@ -1136,15 +1112,7 @@ pub(crate) fn build_library_multipass(
     {
         let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
         let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-        crate::compiler::multipass_bare_pass_demotion::restore_owned_field_forward_formals(
-            reg,
-            &program_refs,
-        );
         crate::compiler::multipass_bare_pass_demotion::restore_pub_owned_non_copy_api_formals(
-            reg,
-            &program_refs,
-        );
-        crate::compiler::multipass_bare_pass_demotion::restore_owned_formals_for_producer_only_call_sites(
             reg,
             &program_refs,
         );
@@ -1306,9 +1274,12 @@ pub(crate) fn build_library_multipass(
             let mut full_registry = crate::analyzer::SignatureRegistry::layered(
                 std::sync::Arc::clone(&final_global_registry),
             );
+            // C3: this file's own definitions take its own analysis; "beats" rules compare versions of
+            // one function and must not let a same-name function of another file win.
+            let own_defs = own_definition_keys(program);
             for (name, sig) in analysis.registry.signatures.iter() {
                 if converged_qualified_keys.contains(name) { continue; }
-                if let Some(existing) = full_registry.get_signature(name) {
+                if let Some(existing) = full_registry.get_signature(name).filter(|_| !own_defs.contains(name)) {
                     if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
                         existing, sig,
                     ) || crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
@@ -1329,6 +1300,7 @@ pub(crate) fn build_library_multipass(
                 &mut full_registry,
                 final_global_registry.as_ref(),
             );
+            keep_own_definitions(&mut full_registry, &analysis.registry, &own_defs);
             crate::metadata::merge_external_crate_metadata_with_aliases(
                 external_paths,
                 &mut full_registry,
@@ -1791,5 +1763,43 @@ mod bin_main_tests {
         assert!(out.starts_with("#![allow(x)]\n#[allow(unused_imports)]\nuse app::*;\n"), "{out}");
         assert!(out.contains("use app::greet;") && out.contains("app::util::f();"), "{out}");
         assert_eq!(bin_main_against_lib(&out, "app"), out, "idempotent");
+    }
+}
+
+/// Registry keys of the functions `program` itself defines: free functions by name, methods as `Type::method`.
+fn own_definition_keys(program: &crate::parser::Program<'_>) -> std::collections::HashSet<String> {
+    use crate::parser::ast::core::Item;
+    let mut keys = std::collections::HashSet::new();
+    for item in &program.items {
+        match item {
+            Item::Function { decl, .. } => {
+                keys.insert(decl.name.clone());
+            }
+            Item::Impl { block, .. } => {
+                let ty = block.type_name.split('<').next().unwrap_or(&block.type_name);
+                keys.extend(block.functions.iter().map(|f| format!("{ty}::{}", f.name)));
+            }
+            _ => {}
+        }
+    }
+    keys
+}
+
+/// After global promotions, a key this file defines must still describe *this* file's function: a
+/// global entry with a different declared shape (formal types or return type) belongs to a same-name
+/// function of another file (C3 identity), so the file's own analysis is restored for it.
+fn keep_own_definitions(
+    local: &mut SignatureRegistry,
+    own_analysis: &SignatureRegistry,
+    own_defs: &std::collections::HashSet<String>,
+) {
+    for name in own_defs {
+        let Some(own) = own_analysis.signatures.get(name) else { continue };
+        let foreign = local.get_signature(name).is_some_and(|cur| {
+            cur.formal_param_types != own.formal_param_types || cur.return_type != own.return_type
+        });
+        if foreign {
+            local.signatures.insert(name.clone(), own.clone());
+        }
     }
 }

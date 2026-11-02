@@ -1,0 +1,31 @@
+// Two types define `put` with different receiver and parameter modes (one stores, one reads).
+// Expected by hand: "hello".len() = 5, one stored item, empty log.
+// expect: 5 1 0
+struct Stack {
+    items: Vec<string>,
+}
+
+struct Log {
+    lines: Vec<string>,
+}
+
+impl Stack {
+    pub fn put(self, s: string) {
+        self.items.push(s)
+    }
+}
+
+impl Log {
+    pub fn put(self, s: string) -> int {
+        s.len() as int
+    }
+}
+
+fn main() {
+    let mut st = Stack { items: Vec::new() }
+    let lg = Log { lines: Vec::new() }
+    let w = "hello"
+    let n = lg.put(w)
+    st.put(w)
+    println("${n} ${st.items.len()} ${lg.lines.len()}")
+}

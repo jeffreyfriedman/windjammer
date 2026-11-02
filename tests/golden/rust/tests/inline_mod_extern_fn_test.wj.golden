@@ -14,6 +14,6 @@ extern "C" {
 #[test]
 
 pub fn test_function() {
-    (unsafe { ffi::my_extern_function(42) });
+    (unsafe { ffi::my_extern_function(42_i64) });
 }
 
