@@ -1,0 +1,136 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "F",
+ "arm_name": "tiny-pack+wj-docs",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut acc: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0].clone()\n        if cmd == \"open\" {\n            let amt: int = p[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if acc.contains_key(p[1].as_str()) {\n                println(\"error: duplicate account\")\n            } else {\n                acc.insert(p[1].clone(), amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" {\n            if acc.contains_key(p[1].as_str()) {\n                println(\"${acc[p[1].as_str()]}\")\n            } else {\n                println(\"error: unknown account ${p[1]}\")\n            }\n        } else if cmd == \"deposit\" || cmd == \"withdraw\" {\n            let amt: int = p[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(p[1].as_str()) {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                let cur: int = acc[p[1].as_str()]\n                if cmd == \"deposit\" {\n                    acc.insert(p[1].clone(), cur + amt)\n                    println(\"ok\")\n                } else if cur < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(p[1].clone(), cur - amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" {\n            let amt: int = p[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(p[1].as_str()) {\n                println(\"error: unknown account ${p[1]}\")\n            } else if !acc.contains_key(p[2].as_str()) {\n                println(\"error: unknown account ${p[2]}\")\n            } else if p[1] == p[2] {\n                println(\"error: same account\")\n            } else {\n                let a: int = acc[p[1].as_str()]\n                let b: int = acc[p[2].as_str()]\n                if a < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(p[1].clone(), a - amt)\n                    acc.insert(p[2].clone(), b + amt)\n                    println(\"ok\")\n                }\n            }\n        }\n    }\n    let mut keys: Vec<string> = []\n    for k in acc.keys() {\n        keys.push(k.clone())\n    }\n    keys.sort()\n    for k in keys {\n        println(\"${k} ${acc[k.as_str()]}\")\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut acc: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0].clone()\n        if cmd == \"open\" {\n            let amt: int = p[2].parse::<int>().unwrap_or(0)\n            if amt < 0 {\n                println(\"error: invalid amount\")\n            } else if acc.contains_key(p[1].as_str()) {\n                println(\"error: duplicate account\")\n            } else {\n                acc.insert(p[1].clone(), amt)\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" {\n            if acc.contains_key(p[1].as_str()) {\n                println(\"${acc[p[1].as_str()]}\")\n            } else {\n                println(\"error: unknown account ${p[1]}\")\n            }\n        } else if cmd == \"deposit\" || cmd == \"withdraw\" {\n            let amt: int = p[2].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(p[1].as_str()) {\n                println(\"error: unknown account ${p[1]}\")\n            } else {\n                let cur: int = acc[p[1].as_str()]\n                if cmd == \"deposit\" {\n                    acc.insert(p[1].clone(), cur + amt)\n                    println(\"ok\")\n                } else if cur < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(p[1].clone(), cur - amt)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" {\n            let amt: int = p[3].parse::<int>().unwrap_or(0)\n            if amt <= 0 {\n                println(\"error: invalid amount\")\n            } else if !acc.contains_key(p[1].as_str()) {\n                println(\"error: unknown account ${p[1]}\")\n            } else if !acc.contains_key(p[2].as_str()) {\n                println(\"error: unknown account ${p[2]}\")\n            } else if p[1] == p[2] {\n                println(\"error: same account\")\n            } else {\n                let a: int = acc[p[1].as_str()]\n                let b: int = acc[p[2].as_str()]\n                if a < amt {\n                    println(\"error: insufficient funds\")\n                } else {\n                    acc.insert(p[1].clone(), a - amt)\n                    acc.insert(p[2].clone(), b + amt)\n                    println(\"ok\")\n                }\n            }\n        }\n    }\n    let mut keys: Vec<string> = []\n    for k in acc.keys() {\n        keys.push(k.clone())\n    }\n    keys.sort()\n    for k in keys {\n        println(\"${k} ${acc[k.as_str()]}\")\n    }\n}\n",
+ "first_turn_input": 8327,
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 21.553,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 25.651,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 4,
+ "other_seconds": 15.92,
+ "pack_bytes": 1485,
+ "pack_file": "tiny_F.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T20:52:50",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 14.553,
+ "tool_result_tokens_est": 793,
+ "tool_wait_seconds": 47.2,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6699,
+   "cache_write": 1626,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8327,
+   "output": 8,
+   "result_chars": 1875,
+   "turn": 1
+  },
+  {
+   "cache_read": 8325,
+   "cache_write": 2250,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10577,
+   "output": 16,
+   "result_chars": 727,
+   "turn": 2
+  },
+  {
+   "cache_read": 10575,
+   "cache_write": 418,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10995,
+   "output": 37,
+   "result_chars": 174,
+   "turn": 3
+  },
+  {
+   "cache_read": 10993,
+   "cache_write": 273,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 11268,
+   "output": 203,
+   "result_chars": 0,
+   "turn": 4
+  }
+ ],
+ "usage": {
+  "api_seconds": 14.553,
+  "cost_usd": 0.040843199999999996,
+  "denied_commands": [
+   "printf 'open a 100\\nopen b 0\\ntransfer a b 30\\nbalance a\\nwithdraw b 50\\ndeposit b 5\\ntransfer a a 1\\ndeposit z 5\\n' | wj run --compiled main.wj 2>&1 | grep -v -e warning -e '^  ' -e '^$' | head -30"
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "I wrote `main.wj`, and it compiles with `wj build` and runs correctly on the input I tried.\n\nI ran it on Example 1's commands plus two extra lines, `transfer a a 1` and `deposit z 5`. The output matched Example 1 and gave `error: same account` and `error: unknown account z` for the extra lines. I didn't run Example 2 or test the duplicate-account and invalid-amount errors.\n\nThe build prints warnin",
+  "subtype": "success",
+  "tokens_in": 41167,
+  "tokens_out": 1890,
+  "turns": 5
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 77.67
+}

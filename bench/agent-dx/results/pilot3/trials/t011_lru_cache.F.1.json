@@ -1,0 +1,104 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "F",
+ "arm_name": "tiny-pack+wj-docs",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap: int = 0\n    let mut first = true\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let mut i: int = 0\n            while i < ks.len() as int {\n                if ks[i as usize] == k {\n                    ks.remove(i as usize)\n                    vs.remove(i as usize)\n                } else {\n                    i += 1\n                }\n            }\n            ks.push(k)\n            vs.push(v)\n            if ks.len() as int > cap {\n                let e = ks[0]\n                ks.remove(0)\n                vs.remove(0)\n                println(\"evict ${e}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let mut found = -1\n            let mut i: int = 0\n            while i < ks.len() as int {\n                if ks[i as usize] == k {\n                    found = i\n                }\n                i += 1\n            }\n            if found < 0 {\n                println(\"-1\")\n            } else {\n                let v = vs[found as usize]\n                ks.remove(found as usize)\n                vs.remove(found as usize)\n                ks.push(k)\n                vs.push(v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut i: int = ks.len() as int - 1\n                while i >= 0 {\n                    if out != \"\" {\n                        out = out + \" \"\n                    }\n                    out = out + \"${ks[i as usize]}\"\n                    i -= 1\n                }\n                println(out)\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap: int = 0\n    let mut first = true\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let mut i: int = 0\n            while i < ks.len() as int {\n                if ks[i as usize] == k {\n                    ks.remove(i as usize)\n                    vs.remove(i as usize)\n                } else {\n                    i += 1\n                }\n            }\n            ks.push(k)\n            vs.push(v)\n            if ks.len() as int > cap {\n                let e = ks[0]\n                ks.remove(0)\n                vs.remove(0)\n                println(\"evict ${e}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let mut found = -1\n            let mut i: int = 0\n            while i < ks.len() as int {\n                if ks[i as usize] == k {\n                    found = i\n                }\n                i += 1\n            }\n            if found < 0 {\n                println(\"-1\")\n            } else {\n                let v = vs[found as usize]\n                ks.remove(found as usize)\n                vs.remove(found as usize)\n                ks.push(k)\n                vs.push(v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut i: int = ks.len() as int - 1\n                while i >= 0 {\n                    if out != \"\" {\n                        out = out + \" \"\n                    }\n                    out = out + \"${ks[i as usize]}\"\n                    i -= 1\n                }\n                println(out)\n            }\n        }\n    }\n}\n",
+ "first_turn_input": 8151,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 32.819,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 25.83,
+ "pack_bytes": 1485,
+ "pack_file": "tiny_F.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T21:24:10",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 10.974,
+ "tool_result_tokens_est": 257,
+ "tool_wait_seconds": 32.82,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7802,
+   "cache_write": 347,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8151,
+   "output": 3,
+   "result_chars": 899,
+   "turn": 1
+  },
+  {
+   "cache_read": 8149,
+   "cache_write": 1621,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9772,
+   "output": 162,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 10.974,
+  "cost_usd": 0.0217951,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache in `main.wj`. It compiles with `wj run --compiled`, and Example 1 printed the expected output. I did not run Example 2 or any other inputs.\n\nThe cache is two parallel lists of keys and values, ordered from least to most recently used, and every lookup is a linear scan. That is fine for a capacity of at most 50.\n\nThe build also printed a warning about an unused import (`windja",
+  "subtype": "success",
+  "tokens_in": 17923,
+  "tokens_out": 1232,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 69.62
+}

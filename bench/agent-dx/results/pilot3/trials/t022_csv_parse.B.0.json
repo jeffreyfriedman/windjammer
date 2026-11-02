@@ -1,0 +1,104 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn parse(line: string) -> string {\n    let chars: Vec<char> = line.chars().collect()\n    let n: int = chars.len() as int\n    let mut fields: Vec<string> = []\n    let mut cur: string = \"\"\n    let mut inq = false\n    let mut i: int = 0\n    while i < n {\n        let c = chars[i]\n        if inq {\n            if c == '\"' {\n                if i + 1 < n && chars[i + 1] == '\"' {\n                    cur = cur + \"\\\"\"\n                    i += 1\n                } else {\n                    inq = false\n                }\n            } else {\n                cur = cur + c.to_string()\n            }\n        } else if c == '\"' {\n            inq = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur = cur + c.to_string()\n        }\n        i += 1\n    }\n    fields.push(cur)\n    let cnt: int = fields.len() as int\n    let parts: Vec<string> = fields.map(|f| \"[${f}]\").collect()\n    \"${cnt}: ${parts.join(\"|\")}\"\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        println(parse(line))\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn parse(line: string) -> string {\n    let chars: Vec<char> = line.chars().collect()\n    let n: int = chars.len() as int\n    let mut fields: Vec<string> = []\n    let mut cur: string = \"\"\n    let mut inq = false\n    let mut i: int = 0\n    while i < n {\n        let c = chars[i]\n        if inq {\n            if c == '\"' {\n                if i + 1 < n && chars[i + 1] == '\"' {\n                    cur = cur + \"\\\"\"\n                    i += 1\n                } else {\n                    inq = false\n                }\n            } else {\n                cur = cur + c.to_string()\n            }\n        } else if c == '\"' {\n            inq = true\n        } else if c == ',' {\n            fields.push(cur)\n            cur = \"\"\n        } else {\n            cur = cur + c.to_string()\n        }\n        i += 1\n    }\n    fields.push(cur)\n    let cnt: int = fields.len() as int\n    let parts: Vec<string> = fields.map(|f| \"[${f}]\").collect()\n    \"${cnt}: ${parts.join(\"|\")}\"\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        println(parse(line))\n    }\n}\n",
+ "first_turn_input": 14471,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 24.511,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 18.99,
+ "pack_bytes": 16523,
+ "pack_file": "WINDJAMMER_FOR_AGENTS.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T21:01:24",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 9.344,
+ "tool_result_tokens_est": 377,
+ "tool_wait_seconds": 24.51,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 13041,
+   "cache_write": 1428,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14471,
+   "output": 4,
+   "result_chars": 1318,
+   "turn": 1
+  },
+  {
+   "cache_read": 14469,
+   "cache_write": 1661,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 16132,
+   "output": 205,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 9.344,
+  "cost_usd": 0.026365,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the CSV parser to `main.wj`. It compiled with `wj build` and ran correctly through `wj run --compiled`.\n\nI fed it the two examples' lines combined into one input, including the empty line and the `,` line, and the output matched the expected lines for both. I didn't test other inputs, such as lines with a trailing `\\r` (Windows line endings), which the program doesn't strip.\n\nThe parser st",
+  "subtype": "success",
+  "tokens_in": 30603,
+  "tokens_out": 1125,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 52.85
+}

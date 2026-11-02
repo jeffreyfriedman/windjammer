@@ -1,0 +1,316 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "F",
+ "arm_name": "tiny-pack+wj-docs",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error[E0308]: mismatched types\n  --> main.rs:42:23\n   |\n42 |           if a.1 != b.1 {\nerror[E0308]: mismatched types\n  --> main.rs:44:16\n   |\n44 |           } else {\nFor more information about this error, try `rustc --explain E0308`.\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors; 3 warnings emitted\nerror: could not compile `ws` (bin \"ws\") due to 2 previous errors; 3 warnings emitted",
+  "error[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:22:56\n   |\n22 |                     let _ = counts.insert(cur.clone(), *n + 1_i64);\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:29:40\n   |\n29 |             let _ = counts.insert(cur, *n + 1_i64);\nerror[E0308]: mismatched types\n  --> main.rs:37:23\n   |\n37 |           if a.1 != b.1 {\nerror[E0308]: mismatched types\n  --> main.rs:39:16\n   |\n39 |           } else {"
+ ],
+ "diagnostic_categories": {
+  "other": 2,
+  "type-mismatch": 2
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k: int = 0\n    let mut words: Vec<string> = []\n    let mut first = true\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        let mut cur = \"\"\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else {\n                if cur.len() > 0 {\n                    words.push(cur)\n                    cur = \"\"\n                }\n            }\n        }\n        if cur.len() > 0 {\n            words.push(cur)\n        }\n    }\n    words.sort()\n    let mut items: Vec<(string, int)> = []\n    let mut i: int = 0\n    let n: int = words.len() as int\n    while i < n {\n        let mut j = i\n        while j < n && words[j] == words[i] {\n            j += 1\n        }\n        items.push((words[i], j - i))\n        i = j\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            return b.1.cmp(a.1)\n        }\n        return a.0.cmp(b.0)\n    })\n    let mut shown: int = 0\n    for it in items {\n        if shown >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        shown += 1\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k: int = 0\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let mut first = true\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        let mut cur = \"\"\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else {\n                if cur.len() > 0 {\n                    let n = counts.get(cur).unwrap_or(0)\n                    counts.insert(cur, n + 1)\n                    cur = \"\"\n                }\n            }\n        }\n        if cur.len() > 0 {\n            let n = counts.get(cur).unwrap_or(0)\n            counts.insert(cur, n + 1)\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for (w, c) in counts {\n        items.push((w, c))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i: int = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_turn_input": 8053,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 26.952,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 12.747,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 101,
+   "mode": "compiled",
+   "secs": 15.962,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 20.233,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 256.602,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 23.108,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 17,
+ "other_seconds": 0.0,
+ "pack_bytes": 1485,
+ "pack_file": "tiny_F.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T22:09:56",
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 53.962,
+ "tool_result_tokens_est": 2468,
+ "tool_wait_seconds": 355.6,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 7705,
+   "cache_write": 346,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8053,
+   "output": 17,
+   "result_chars": 1235,
+   "turn": 1
+  },
+  {
+   "cache_read": 8051,
+   "cache_write": 1391,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9444,
+   "output": 6,
+   "result_chars": 750,
+   "turn": 2
+  },
+  {
+   "cache_read": 9442,
+   "cache_write": 459,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9903,
+   "output": 16,
+   "result_chars": 287,
+   "turn": 3
+  },
+  {
+   "cache_read": 9901,
+   "cache_write": 224,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 10127,
+   "output": 16,
+   "result_chars": 87,
+   "turn": 4
+  },
+  {
+   "cache_read": 10125,
+   "cache_write": 202,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10329,
+   "output": 17,
+   "result_chars": 316,
+   "turn": 5
+  },
+  {
+   "cache_read": 10327,
+   "cache_write": 326,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10655,
+   "output": 58,
+   "result_chars": 186,
+   "turn": 6
+  },
+  {
+   "cache_read": 10653,
+   "cache_write": 853,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11508,
+   "output": 7,
+   "result_chars": 320,
+   "turn": 7
+  },
+  {
+   "cache_read": 11506,
+   "cache_write": 424,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11932,
+   "output": 17,
+   "result_chars": 1241,
+   "turn": 8
+  },
+  {
+   "cache_read": 11930,
+   "cache_write": 611,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12543,
+   "output": 16,
+   "result_chars": 1548,
+   "turn": 9
+  },
+  {
+   "cache_read": 12541,
+   "cache_write": 834,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13377,
+   "output": 3,
+   "result_chars": 727,
+   "turn": 10
+  },
+  {
+   "cache_read": 13375,
+   "cache_write": 1193,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14570,
+   "output": 5,
+   "result_chars": 490,
+   "turn": 11
+  },
+  {
+   "cache_read": 14568,
+   "cache_write": 1098,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 15668,
+   "output": 16,
+   "result_chars": 537,
+   "turn": 12
+  },
+  {
+   "cache_read": 15666,
+   "cache_write": 943,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 16611,
+   "output": 6,
+   "result_chars": 490,
+   "turn": 13
+  },
+  {
+   "cache_read": 16609,
+   "cache_write": 712,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 17323,
+   "output": 16,
+   "result_chars": 425,
+   "turn": 14
+  },
+  {
+   "cache_read": 17321,
+   "cache_write": 887,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 18210,
+   "output": 174,
+   "result_chars": 0,
+   "turn": 15
+  },
+  {
+   "cache_read": 18208,
+   "cache_write": 661,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 18871,
+   "output": 2,
+   "result_chars": 0,
+   "turn": 16
+  }
+ ],
+ "usage": {
+  "api_seconds": 53.962,
+  "cost_usd": 0.11219280000000002,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "That's the notification for my first, slow build attempt, which finished after I'd already moved on. It doesn't change anything: the working `main.wj` is the later version, and it passed Example 1. I haven't run Example 2.",
+  "subtype": "success",
+  "tokens_in": 18871,
+  "tokens_out": 71,
+  "turns": 1
+ },
+ "verify_calls": 6,
+ "verify_calls_to_green": 6,
+ "wall_seconds": 343.2
+}
