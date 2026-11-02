@@ -189,7 +189,7 @@ impl<'ast> RustLeakageLinter<'ast> {
         let suggestion = if param_name == "self" {
             format!("write `self` instead of `{hint}self`")
         } else {
-            format!("write `{param_name}` instead of `{hint} {param_name}`")
+            format!("write `{param_name}` instead of `{hint}{}{param_name}`", if hint == "&" { "" } else { " " })
         };
 
         let note = if param_name == "self" {

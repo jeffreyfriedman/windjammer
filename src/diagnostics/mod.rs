@@ -11,7 +11,7 @@ pub mod hints;
 pub mod model;
 pub mod render;
 pub mod rustc_map;
-pub mod runtime_text;
+pub use crate::error::runtime_text;
 pub mod rustc_text;
 pub mod source;
 

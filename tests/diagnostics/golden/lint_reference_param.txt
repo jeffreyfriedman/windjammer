@@ -3,6 +3,6 @@ error[W0001]: explicit ownership annotation
   |
 2 | fn total(items: &Vec<int>) -> int {
   |                 ^
-  = help: use inferred ownership: `items`
+  = help: write `items` instead of `&items`
   = note: Windjammer infers borrowing automatically
   = explain: wj explain W0001
