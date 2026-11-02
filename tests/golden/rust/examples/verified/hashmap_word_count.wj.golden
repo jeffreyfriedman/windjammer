@@ -7,6 +7,6 @@ fn main() {
     }
     println!("the {}", counts["the"]);
     println!("cat {}", counts["cat"]);
-    println!("sat {}", counts.get("sat").copied().unwrap_or(1));
+    println!("sat {}", counts.get("sat").copied().unwrap_or(1_i64));
 }
 
