@@ -61,6 +61,19 @@ pub(crate) struct Exit {
     /// Left after a closure-run statement (`Plan::stmts`): the slots already hold the variables
     /// (nothing is written back) and the path names the statement after it.
     pub(crate) after: bool,
+    /// Struct locals held as their fields (`lower_struct.rs`), rebuilt into their slots.
+    pub(crate) structs: Vec<StructSpill>,
+}
+
+/// A struct local machine code keeps as one variable per field: written back as a struct value.
+#[derive(Clone)]
+pub(crate) struct StructSpill {
+    pub(crate) slot: usize,
+    pub(crate) fresh: bool,
+    pub(crate) name: std::rc::Rc<str>,
+    pub(crate) copy: bool,
+    /// (field name, spill buffer index, type), in declaration order.
+    pub(crate) fields: Vec<(std::rc::Rc<str>, usize, Ty)>,
 }
 
 /// A statement outside the machine-code subset run by its closure code from inside machine code:
@@ -68,6 +81,7 @@ pub(crate) struct Exit {
 pub(crate) struct StmtRun {
     pub(crate) stmt: S,
     pub(crate) spills: Vec<Spill>,
+    pub(crate) structs: Vec<StructSpill>,
 }
 
 /// A variable an exit writes back: its spill buffer index, slot and type; `fresh` for a `let` of the
@@ -83,6 +97,10 @@ pub(crate) struct Spill {
 pub(crate) struct Plan {
     /// Scalars read from their slots at entry: (spill buffer index, slot, type).
     pub(crate) live: Vec<(usize, usize, Ty)>,
+    /// Struct locals read field by field at entry (their field spill indexes and types).
+    pub(crate) live_structs: Vec<StructSpill>,
+    /// The unit inlines method calls (entry checks the stack has room for the frames they stand for).
+    pub(crate) inlines: bool,
     /// A `for` unit: the spill buffer index of its counter (the end follows it), filled at entry.
     pub(crate) counter: Option<usize>,
     pub(crate) exits: Vec<Exit>,
@@ -94,6 +112,8 @@ pub(crate) struct Plan {
 pub(super) enum Bind {
     Var(usize),
     Handle(usize, Class),
+    /// A struct local held as its fields (`Lo::vstructs`).
+    Struct(usize),
 }
 
 pub(super) struct Var {
@@ -123,10 +143,14 @@ pub(super) struct Lo<'a, 'i> {
     pub(super) it: &'i mut Interpreter,
     reg: &'i Reg,
     pub(super) ctx: V,
-    buf: V,
+    pub(super) buf: V,
     pub(super) ptr: CTy,
     scopes: Vec<Vec<(&'static str, Bind)>>,
     pub(super) vars: Vec<Var>,
+    pub(super) vstructs: Vec<super::lower_struct::VStruct>,
+    /// Scope index where each inlined call's names begin (a callee sees only its own).
+    pub(super) frames: Vec<usize>,
+    pub(super) inlines: bool,
     path: Path,
     exits: Vec<Exit>,
     /// The exit block of each statement being lowered (innermost last), created on first use.
@@ -197,6 +221,9 @@ pub(crate) fn lower(
         why: None,
         loops: Vec::new(),
         stmts: Vec::new(),
+        vstructs: Vec::new(),
+        frames: Vec::new(),
+        inlines: false,
         open_joins: 0,
         unit_label: match stmt {
             Statement::While { label, .. } | Statement::For { label, .. } => label.as_deref(),
@@ -204,6 +231,7 @@ pub(crate) fn lower(
         },
     };
     let mut live = Vec::new();
+    let mut live_structs = Vec::new();
     for (name, slot, class) in refs {
         if *slot == NO_SLOT {
             continue; // a `for` unit's counter type
@@ -216,6 +244,11 @@ pub(crate) fn lower(
                 lo.b.def_var(lo.vars[id].var, x);
                 live.push((id, *slot, *t));
                 Bind::Var(id)
+            }
+            Class::Value(shape) => {
+                let sid = lo.entry_struct(*slot, shape).ok_or("a struct field without a scalar type")?;
+                live_structs.push(lo.struct_spill(sid));
+                Bind::Struct(sid)
             }
             c => Bind::Handle(*slot, c.clone()),
         };
@@ -242,15 +275,33 @@ pub(crate) fn lower(
     }
     lo.b.seal_all_blocks();
     lo.b.finalize();
-    Ok(Plan { live, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts })
+    Ok(Plan { live, live_structs, inlines: lo.inlines, counter, nbuf: lo.vars.len(), exits: lo.exits, stmts: lo.stmts })
 }
 
 impl Lo<'_, '_> {
     pub(super) fn lookup(&self, name: &str) -> Option<&Bind> {
-        self.scopes.iter().rev().flat_map(|s| s.iter().rev()).find(|(n, _)| *n == name).map(|(_, b)| b)
+        let base = self.frames.last().copied().unwrap_or(0);
+        self.scopes[base..].iter().rev().flat_map(|s| s.iter().rev()).find(|(n, _)| *n == name).map(|(_, b)| b)
     }
 
-    fn new_var(&mut self, slot: usize, ty: Ty, fresh: bool) -> usize {
+    /// Bind `name` in the innermost scope.
+    pub(super) fn bind(&mut self, name: &'static str, b: Bind) {
+        self.scopes.last_mut().expect("scope").push((name, b));
+    }
+
+    pub(super) fn push_scope(&mut self) {
+        self.scopes.push(Vec::new());
+    }
+
+    pub(super) fn pop_scope(&mut self) {
+        self.scopes.pop();
+    }
+
+    pub(super) fn scope_count(&self) -> usize {
+        self.scopes.len()
+    }
+
+    pub(super) fn new_var(&mut self, slot: usize, ty: Ty, fresh: bool) -> usize {
         let var = self.b.declare_var(cty(ty));
         self.vars.push(Var { var, slot, ty, fresh });
         self.vars.len() - 1
@@ -291,22 +342,35 @@ impl Lo<'_, '_> {
         }
     }
 
-    fn in_scope(&self) -> Vec<Spill> {
-        let mut spills = Vec::new();
-        for scope in &self.scopes {
+    /// The loop's own variables in scope (not those of a call being inlined), and its struct locals
+    /// (their field variables are among the spills, slotless).
+    fn in_scope(&self) -> (Vec<Spill>, Vec<StructSpill>) {
+        let (mut spills, mut structs) = (Vec::new(), Vec::new());
+        let top = self.frames.first().copied().unwrap_or(self.scopes.len());
+        for scope in &self.scopes[..top] {
             for (_, bind) in scope {
-                if let Bind::Var(id) = bind {
-                    let v = &self.vars[*id];
-                    spills.push(Spill { buf: *id, slot: v.slot, ty: v.ty, fresh: v.fresh });
+                match bind {
+                    Bind::Var(id) => {
+                        let v = &self.vars[*id];
+                        spills.push(Spill { buf: *id, slot: v.slot, ty: v.ty, fresh: v.fresh });
+                    }
+                    Bind::Struct(sid) => {
+                        let sp = self.struct_spill(*sid);
+                        for (_, b, t) in &sp.fields {
+                            spills.push(Spill { buf: *b, slot: NO_SLOT, ty: *t, fresh: true });
+                        }
+                        structs.push(sp);
+                    }
+                    Bind::Handle(..) => {}
                 }
             }
         }
-        spills
+        (spills, structs)
     }
 
     fn new_exit(&mut self, planned: bool) -> usize {
-        let spills = self.in_scope();
-        self.exits.push(Exit { path: self.path.clone(), spills, planned, after: false });
+        let (spills, structs) = self.in_scope();
+        self.exits.push(Exit { path: self.path.clone(), spills, planned, after: false, structs });
         self.exits.len() - 1
     }
 
@@ -314,7 +378,13 @@ impl Lo<'_, '_> {
     /// to their slots), call, reload them. A statement that raised (an error, `return`, `break`...)
     /// or left a variable with another type leaves machine code after it.
     fn run_stmt(&mut self, s: S) -> Option<()> {
-        let spills = self.in_scope();
+        if !self.frames.is_empty() {
+            return None; // inside an inlined call: the whole caller statement is the unit of resumption
+        }
+        let (spills, structs) = self.in_scope();
+        if structs.iter().any(|sp| sp.fresh && self.reg.kind(sp.slot) == Some(crate::interpreter::resolved::osr::SlotKind::Boxed)) {
+            return None;
+        }
         // a loop `let` that is a walker slot gets a fresh one per binding: only its own closures can
         if spills.iter().any(|sp| sp.fresh && sp.slot != NO_SLOT && self.reg.kind(sp.slot) == Some(crate::interpreter::resolved::osr::SlotKind::Boxed)) {
             return None;
@@ -324,14 +394,14 @@ impl Lo<'_, '_> {
             let x = self.to_bits(x, sp.ty);
             self.b.ins().store(MemFlags::trusted(), x, self.buf, (sp.buf * 8) as i32);
         }
-        self.stmts.push(StmtRun { stmt: s, spills: spills.clone() });
+        self.stmts.push(StmtRun { stmt: s, spills: spills.clone(), structs });
         let k = self.b.ins().iconst(types::I64, (self.stmts.len() - 1) as i64);
         let buf = self.buf;
         let status = self.call("run_stmt", rt::run_stmt as *const () as usize, &[buf, k], false, false);
         // after the statement: an exit that resumes at the next one
         let mut path = self.path.clone();
         path.last_mut()?.idx += 1;
-        self.exits.push(Exit { path, spills: Vec::new(), planned: true, after: true });
+        self.exits.push(Exit { path, spills: Vec::new(), planned: true, after: true, structs: Vec::new() });
         let id = self.exits.len() - 1;
         let (ex, cont) = (self.b.create_block(), self.b.create_block());
         self.b.ins().brif(status, ex, &[], cont, &[]);
@@ -554,6 +624,10 @@ impl Lo<'_, '_> {
             Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_, value, else_block: None, .. } => {
                 let slot = self.reg.let_slot(s)?;
                 self.reg.kind(slot)?;
+                if type_.is_none() && self.struct_valued(value) {
+                    self.let_struct(n.as_str(), value, slot)?;
+                    return Some(false);
+                }
                 let mut v = self.expr(value)?;
                 if let Some(t) = type_ {
                     if matches!(value, Expression::Call { .. } | Expression::MethodCall { .. }) {
