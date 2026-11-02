@@ -54,6 +54,9 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
         cx.enter();
         let mut names = Vec::new();
         island::pattern_names(&arm.pattern, &mut names);
+        // a bare `None` or unit-variant name is a value pattern to the walker, never a binding: no slot,
+        // so the body's `None` (or variant) is the variant, not an unbound local
+        names.retain(|n| !value_pattern(cx.it, &arm.pattern, n));
         // a map lookup's arm that only reads its binding keeps it unboxed (unless the body still
         // needs a box, which the compile fixpoint then gives it)
         let unboxed = opt_arms && !cx.it.fast_off("unboxed") && reads_only(arm.body, &names);
@@ -205,4 +208,31 @@ fn stmt_reads_only(s: &Statement<'static>, names: &[&str]) -> bool {
         }
         _ => false,
     }
+}
+
+/// Is `n` named in `p` only as an identifier pattern the walker matches as a value (`match_pattern`:
+/// `None` or a known enum variant name), so the arm binds nothing by that name?
+fn value_pattern(it: &Interpreter, p: &'static Pattern<'static>, n: &str) -> bool {
+    if n != "None" && !it.is_known_variant_name(n) {
+        return false;
+    }
+    fn binds(p: &Pattern<'static>, n: &str) -> bool {
+        use crate::parser::EnumPatternBinding as B;
+        match p {
+            // identifier-like patterns with this name are the value patterns themselves
+            Pattern::Identifier(_) | Pattern::MutBinding(_) | Pattern::Ref(_) => false,
+            Pattern::RefMut(m) => m == n,
+            Pattern::Tuple(ps) => ps.iter().any(|q| binds(q, n)),
+            Pattern::Or(ps) => ps.first().is_some_and(|q| binds(q, n)),
+            Pattern::Reference(q) => binds(q, n),
+            Pattern::EnumVariant(_, b) => match b {
+                B::Single(m) => m == n,
+                B::Tuple(ps) => ps.iter().any(|q| binds(q, n)),
+                B::Struct(fs, _) => fs.iter().any(|(_, q)| binds(q, n)),
+                _ => false,
+            },
+            Pattern::Wildcard | Pattern::Literal(_) | Pattern::Range { .. } => false,
+        }
+    }
+    !binds(p, n)
 }
