@@ -1,0 +1,41 @@
+// ==== codec.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn encode(n: i64) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new();
+    for i in 0_i64..n {
+        out.push(i);
+    }
+    out
+}
+
+#[inline]
+pub fn frame_len(buf: Vec<i64>) -> i64 {
+    buf.len() as i64
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod codec;
+
+// Re-export public items
+pub use codec::*;
+// ==== main.rs ====
+mod codec;
+fn main() {
+    let a = codec::frame_len(codec::encode(3_i64));
+    let b = codec::frame_len(codec::encode(5_i64));
+    println!("{} {}", a, b);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod codec;
+
+// Re-export public items
+pub use codec::*;

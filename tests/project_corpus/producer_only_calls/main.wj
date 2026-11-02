@@ -1,0 +1,10 @@
+// Every call passes a fresh producer into a `Vec` formal that only reads its length
+// (restore_owned_formals_for_producer_only_call_sites). Expected by hand: 3 elements, 5 elements.
+// expect: 3 5
+mod codec
+
+fn main() {
+    let a = codec::frame_len(codec::encode(3))
+    let b = codec::frame_len(codec::encode(5))
+    println("${a} ${b}")
+}

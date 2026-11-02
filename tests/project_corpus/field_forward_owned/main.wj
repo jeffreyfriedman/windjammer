@@ -1,0 +1,9 @@
+// A formal that only forwards its fields into another function (restore_owned_field_forward_formals):
+// moving `reply.body` needs an owned `reply`. Expected by hand.
+// expect: 200:ok
+mod web
+
+fn main() {
+    let reply = web::Reply { status: 200, body: "ok" }
+    println(web::to_response(reply))
+}

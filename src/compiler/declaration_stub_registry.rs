@@ -140,7 +140,35 @@ pub fn collect_per_file_declaration_stubs(
     }
 }
 
-/// Merge per-file contributions in source order (deterministic last-wins for float sig keys).
+/// Function parameter/return types for the numeric collectors, keyed by identity (C3): every function under
+/// its module-qualified path, and under its bare name only while no other file defines a different
+/// function of that name (a homonym is ambiguous: no entry, never the last writer).
+fn merge_function_return_types(
+    global: &mut HashMap<String, (Vec<crate::parser::ast::types::Type>, Option<crate::parser::ast::types::Type>)>,
+    ambiguous: &mut std::collections::HashSet<String>,
+    contrib: &DeclarationStubContribution,
+) {
+    for (name, sig) in &contrib.float_signatures {
+        if !contrib.module_path.is_empty() && !name.contains("::") {
+            global.insert(format!("{}::{name}", contrib.module_path), sig.clone());
+        }
+        if ambiguous.contains(name) {
+            continue;
+        }
+        match global.get(name) {
+            Some(old) if old != sig => {
+                global.remove(name);
+                ambiguous.insert(name.clone());
+            }
+            _ => {
+                global.insert(name.clone(), sig.clone());
+            }
+        }
+    }
+}
+
+/// Merge per-file contributions in source order (function return types keyed by identity, see
+/// `merge_function_return_types`).
 #[allow(clippy::too_many_arguments)]
 pub fn merge_declaration_stub_contributions(
     global_registry: &mut SignatureRegistry,
@@ -158,11 +186,12 @@ pub fn merge_declaration_stub_contributions(
     parsed_programs: &[Program<'_>],
     source_indices: &[usize],
 ) {
+    let mut ambiguous_names = std::collections::HashSet::new();
     for (merge_idx, (file, contrib)) in ordered.iter().enumerate() {
         let program = &parsed_programs[source_indices[merge_idx]];
         crate::metadata::merge_file_skeleton_into_crate(crate_metadata, file, program);
 
-        global_float_signatures.extend(contrib.float_signatures.clone());
+        merge_function_return_types(global_float_signatures, &mut ambiguous_names, contrib);
         for (k, v) in &contrib.struct_fields {
             global_struct_fields.insert(k.clone(), v.clone());
         }
@@ -246,7 +275,7 @@ impl Counter {
     }
 
     #[test]
-    fn test_merge_order_preserves_last_wins_for_float_sigs() {
+    fn test_homonym_return_types_are_keyed_by_module_not_last_writer() {
         let src = std::path::PathBuf::from("/proj/src");
         let a_file = src.join("a.wj");
         let b_file = src.join("b.wj");
@@ -272,11 +301,11 @@ impl Counter {
             &[0, 1],
         );
 
-        let (_, ret) = float_sigs.get("foo").expect("foo sig");
-        assert!(
-            matches!(ret, Some(t) if format!("{:?}", t).contains("i32")),
-            "second file should win for duplicate foo name"
-        );
+        // C3: each definition under its module path; the ambiguous bare name has no entry.
+        let ret = |k: &str| format!("{:?}", float_sigs.get(k).expect(k).1);
+        assert!(ret("a::foo").contains("f32"), "a::foo keeps its own return type");
+        assert!(ret("b::foo").contains("i32"), "b::foo keeps its own return type");
+        assert!(!float_sigs.contains_key("foo"), "a homonym bare name must not pick the last writer");
     }
 
     #[test]

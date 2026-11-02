@@ -1,0 +1,12 @@
+pub struct Reply {
+    pub status: int,
+    pub body: string,
+}
+
+pub fn base_response(status: int, body: string) -> string {
+    "${status}:${body}"
+}
+
+pub fn to_response(reply: Reply) -> string {
+    base_response(reply.status, reply.body)
+}
