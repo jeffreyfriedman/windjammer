@@ -74,6 +74,13 @@ fn cargo_diagnostics(output_dir: &Path) -> Vec<Diagnostic> {
         String::from_utf8_lossy(&out.stderr),
         String::from_utf8_lossy(&out.stdout)
     );
+    map_cargo_failure(output_dir, &text)
+}
+
+/// Translate the text of a failed `cargo build --message-format=json` into Windjammer diagnostics
+/// (never raw rustc text: untranslatable errors become WJ0099).
+pub(crate) fn map_cargo_failure(output_dir: &Path, text: &str) -> Vec<Diagnostic> {
+    let text = text.to_string();
     let maps = super::build::load_source_maps(output_dir).unwrap_or_else(|_| crate::source_map::SourceMap::new());
     let mapped = crate::error_mapper::ErrorMapper::new(maps).map_rustc_output(&text);
     let mut cache = SourceCache::default();

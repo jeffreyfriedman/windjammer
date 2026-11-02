@@ -1,0 +1,1 @@
+# Known uncovered failure kinds. May only shrink: add a hint, then delete the line.
