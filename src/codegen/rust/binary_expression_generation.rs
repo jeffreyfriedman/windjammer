@@ -353,12 +353,9 @@ impl<'ast> CodeGenerator<'ast> {
                         })
             )
         };
-        // ADR-0028: both operands have one solver width: nothing to decide, no cast to place.
-        let solver_agreed = (is_comparison || is_arithmetic || is_bitwise)
-            && self.solver_operand_width(left).is_some_and(|l| self.solver_operand_width(right) == Some(l));
+        let solver_agreed = (is_comparison || is_arithmetic || is_bitwise) && self.solver_agrees(left, right);
         let mut left_is_usize = !solver_agreed && (self.expression_produces_usize(left) || ident_in_usize_vars(left));
-        let mut right_is_usize = !solver_agreed
-            && (self.expression_produces_usize(right) || ident_in_usize_vars(right));
+        let mut right_is_usize = !solver_agreed && (self.expression_produces_usize(right) || ident_in_usize_vars(right));
         let signed_zero_sentinel = if is_comparison && !solver_agreed {
             if Self::expr_is_int_zero_literal(right) {
                 self.signed_peer_for_zero_sentinel(left)
@@ -372,8 +369,7 @@ impl<'ast> CodeGenerator<'ast> {
         };
         // i32 local/field vs i32 field (`d < self.max_depth`) must not
         // inherit function-wide usize from `as usize` indexing / `.len()`.
-        let signed_i32_field_compare = is_comparison
-            && !solver_agreed
+        let signed_i32_field_compare = is_comparison && !solver_agreed
             && signed_zero_sentinel.is_none()
             && self.signed_peer_for_zero_sentinel(left).is_some()
             && self.signed_peer_for_zero_sentinel(right).is_some();
