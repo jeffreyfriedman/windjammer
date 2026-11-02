@@ -90,6 +90,8 @@ pub struct FunctionConstraints {
     pub literal_vars: Vec<((usize, usize), ConstraintVar)>,
     /// Locals bound by exactly one pattern in the body (safe to publish by name).
     pub single_binding_locals: Vec<String>,
+    /// Every binding of a local, each with its own variable (lexical scoping).
+    pub binding_vars: Vec<(String, ConstraintVar)>,
     /// NUM-USIZE index sources (`len()`, `count()`, by the call's source position) and their vars.
     pub index_sources: Vec<((usize, usize), ConstraintVar)>,
     /// NUM-USIZE index uses (`v[i]` operands).
@@ -126,6 +128,11 @@ struct AstConstraintWalker<'a, 'ast> {
     range_loop_vars: std::collections::HashSet<String>,
     /// How many times each name is bound by a pattern (shadowed names are not published as local facts).
     bind_counts: HashMap<String, u32>,
+    /// Lexical scopes, innermost last: each `let`/`for`/pattern binding gets its own variable, so a
+    /// name rebound in a later scope (`for j in ..` then `let mut j = ..`) is a different class.
+    scopes: Vec<HashMap<String, ConstraintVar>>,
+    /// Every binding (name, its own var), in walk order.
+    binding_vars: Vec<(String, ConstraintVar)>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -317,6 +324,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: HashMap::new(),
+            scopes: vec![HashMap::new()],
+            binding_vars: Vec::new(),
         }
     }
 
@@ -522,6 +531,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Resolve or create a constraint var for a variable name.
     fn resolve_var(&mut self, name: &str) -> ConstraintVar {
+        if let Some(&v) = self.scopes.iter().rev().find_map(|s| s.get(name)) {
+            return v;
+        }
         if let Some(&v) = self.param_vars.get(name) {
             return v;
         }
@@ -646,13 +658,31 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Walk a nested block in its own lexical scope.
+    fn walk_scoped(&mut self, stmts: &[&'ast Statement<'ast>]) {
+        self.scopes.push(HashMap::new());
+        self.walk_statements(stmts);
+        self.scopes.pop();
+    }
+
+    /// A fresh variable for a new binding of `name` in the innermost scope.
+    fn bind_name(&mut self, name: &str) -> ConstraintVar {
+        *self.bind_counts.entry(name.to_string()).or_insert(0) += 1;
+        let v = self.cs.fresh_var();
+        if let Some(top) = self.scopes.last_mut() {
+            top.insert(name.to_string(), v);
+        }
+        self.local_vars.insert(name.to_string(), v);
+        self.binding_vars.push((name.to_string(), v));
+        v
+    }
+
     fn walk_statement(&mut self, stmt: &Statement<'ast>) {
         match stmt {
             Statement::Let {
                 pattern,
                 type_,
                 value,
-                mutable,
                 else_block,
                 ..
             } => {
@@ -678,13 +708,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     if base != BaseType::Inferred {
                         self.cs.add_because(Constraint::TypeIs(bound_var, base.clone()), tagged("NUM-DECLARED"));
                         emit_numeric_class_constraint(&mut self.cs, bound_var, &base);
-                    }
-                }
-                if *mutable {
-                    // Mutable local — solver may need to track mutability
-                    // for now, just ensure the var is in locals
-                    if let Pattern::Identifier(name) = pattern {
-                        self.local_vars.entry(name.clone()).or_insert(bound_var);
                     }
                 }
                 if let Some(else_stmts) = else_block {
@@ -750,9 +773,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
-                self.walk_statements(then_block);
+                self.walk_scoped(then_block);
                 if let Some(else_stmts) = else_block {
-                    self.walk_statements(else_stmts);
+                    self.walk_scoped(else_stmts);
                 }
             }
 
@@ -773,6 +796,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 body,
                 ..
             } => {
+                self.scopes.push(HashMap::new());
                 if let Expression::Range { start, end, .. } = iterable {
                     // `for i in a..b`: the loop variable has the bounds' integer type (NUM-MIXED), so a
                     // literal compared with `i` inside the body takes that width.
@@ -790,10 +814,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.bind_pattern(pattern);
                 }
                 self.walk_statements(body);
+                self.scopes.pop();
             }
 
             Statement::Loop { body, .. } => {
-                self.walk_statements(body);
+                self.walk_scoped(body);
             }
 
             Statement::While {
@@ -801,11 +826,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
-                self.walk_statements(body);
+                self.walk_scoped(body);
             }
 
             Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.walk_statements(body);
+                self.walk_scoped(body);
             }
 
             Statement::Defer { statement, .. } => {
@@ -1171,7 +1196,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::Block { statements, .. } => {
+                self.scopes.push(HashMap::new());
                 let tails = self.walk_block_value(statements);
+                self.scopes.pop();
                 let result = self.cs.fresh_var();
                 // A block's value is its tail (or the tails of its `if`/`match` branches): whatever
                 // the block's value is used for is required of each of them (`let c = if p { a } else { b }`).
@@ -1199,9 +1226,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::If { condition, then_block, else_block, .. } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
+                self.scopes.push(HashMap::new());
                 let mut out = self.walk_block_value(then_block);
+                self.scopes.pop();
                 if let Some(else_stmts) = else_block {
+                    self.scopes.push(HashMap::new());
                     out.extend(self.walk_block_value(else_stmts));
+                    self.scopes.pop();
                 }
                 out
             }
@@ -1227,10 +1258,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// Bind a pattern to a constraint var (handles identifier, tuple, etc).
     fn bind_pattern(&mut self, pattern: &Pattern<'ast>) -> ConstraintVar {
         match pattern {
-            Pattern::Identifier(name) | Pattern::MutBinding(name) => {
-                *self.bind_counts.entry(name.clone()).or_insert(0) += 1;
-                self.resolve_var(name)
-            }
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => self.bind_name(name),
             Pattern::Tuple(pats) => {
                 let var = self.cs.fresh_var();
                 for p in pats {
@@ -1461,6 +1489,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             call_targets: self.call_targets,
             taint_constraints: self.taint_constraints,
             single_binding_locals: self.bind_counts.iter().filter(|(_, c)| **c == 1).map(|(n, _)| n.clone()).collect(),
+            binding_vars: self.binding_vars,
             literal_vars: self.literal_vars,
             index_sources: self.index_sources,
             index_uses: self.index_uses,
