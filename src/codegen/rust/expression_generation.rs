@@ -846,6 +846,7 @@ impl<'ast> CodeGenerator<'ast> {
         let expr_to_generate = folded_expr.as_ref().unwrap_or(expr);
 
         let result = self.generate_expression_impl(expr_to_generate);
+        let result = self.apply_solver_conversion(expr, result);
         let result = self.wrap_durable_step(expr, result);
         self.exit_recursion();
         result
@@ -967,6 +968,12 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(|k| f.default_int_literals.contains(&k))
                 }) {
                     return format!("{}_i64", i);
+                }
+                // NUM-LITERAL-WIDTH: the solver fixed this literal's width from its uses.
+                if let Some(suffix) =
+                    self.solver_literal_width(expr).and_then(crate::codegen::rust::solver_widths::rust_int_name)
+                {
+                    return format!("{}_{}", i, suffix);
                 }
                 use crate::type_inference::IntType;
                 // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer

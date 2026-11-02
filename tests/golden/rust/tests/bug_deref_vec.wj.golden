@@ -1,6 +1,6 @@
 #[inline]
 fn find_in_vec(items: &Vec<String>, target: &str) -> bool {
-    let mut i: usize = 0_usize;
+    let mut i = 0_usize;
     while i < items.len() {
         if items[i] == target {
             return true;

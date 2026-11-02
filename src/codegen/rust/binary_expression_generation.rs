@@ -353,10 +353,10 @@ impl<'ast> CodeGenerator<'ast> {
                         })
             )
         };
-        let mut left_is_usize = self.expression_produces_usize(left) || ident_in_usize_vars(left);
-        let mut right_is_usize =
-            self.expression_produces_usize(right) || ident_in_usize_vars(right);
-        let signed_zero_sentinel = if is_comparison {
+        let solver_agreed = (is_comparison || is_arithmetic || is_bitwise) && self.solver_agrees(left, right);
+        let mut left_is_usize = !solver_agreed && (self.expression_produces_usize(left) || ident_in_usize_vars(left));
+        let mut right_is_usize = !solver_agreed && (self.expression_produces_usize(right) || ident_in_usize_vars(right));
+        let signed_zero_sentinel = if is_comparison && !solver_agreed {
             if Self::expr_is_int_zero_literal(right) {
                 self.signed_peer_for_zero_sentinel(left)
             } else if Self::expr_is_int_zero_literal(left) {
@@ -369,7 +369,7 @@ impl<'ast> CodeGenerator<'ast> {
         };
         // i32 local/field vs i32 field (`d < self.max_depth`) must not
         // inherit function-wide usize from `as usize` indexing / `.len()`.
-        let signed_i32_field_compare = is_comparison
+        let signed_i32_field_compare = is_comparison && !solver_agreed
             && signed_zero_sentinel.is_none()
             && self.signed_peer_for_zero_sentinel(left).is_some()
             && self.signed_peer_for_zero_sentinel(right).is_some();
@@ -451,7 +451,7 @@ impl<'ast> CodeGenerator<'ast> {
         });
         if let Some(ref t) = signed_zero_sentinel {
             self.assignment_int_target_type = Some(t.clone());
-        } else if is_comparison || is_arithmetic || is_bitwise {
+        } else if !solver_agreed && (is_comparison || is_arithmetic || is_bitwise) {
             let peer_int_type = |this: &Self, expr: &Expression<'ast>| -> Option<Type> {
                 this.peer_type_for_int_literal_operand(expr).or_else(|| {
                     this.infer_expression_type(expr).filter(|t| {
@@ -569,8 +569,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Signed i32 must NOT go this path — negatives wrap on `as usize`. Prefer
         // casting `.len()` to `i32` via `expression_narrow_signed_width_for_len_compare`
         // (P3.338 / `test_len_compared_to_i32_variable`).
-        let mut skip_mixed_int_promotion = false;
-        if is_comparison {
+        let mut skip_mixed_int_promotion = solver_agreed;
+        if is_comparison && !solver_agreed {
             let narrow_unsigned = |expr: &Expression<'ast>| {
                 self.infer_expression_type(expr).is_some_and(|t| {
                     matches!(t, Type::Uint)
@@ -1022,7 +1022,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Mixed `usize` + `i32` in `+` / `-` (dogfooding: voxel grid coordinates).
-        if is_arithmetic && matches!(op, BinaryOp::Add | BinaryOp::Sub) {
+        if !solver_agreed && is_arithmetic && matches!(op, BinaryOp::Add | BinaryOp::Sub) {
             self.promote_usize_i32_mixed_add_sub(left, right, &mut left_str, &mut right_str);
         }
 
