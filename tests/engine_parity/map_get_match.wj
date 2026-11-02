@@ -64,7 +64,20 @@ fn main() {
         }
         q += 1
     }
-    println("${m.len()} ${hits} ${misses} ${lit} ${px} ${miss} ${s}")
+    // an arm that captures its binding in a closure keeps it boxed
+    let mut caught = 0
+    let mut z = 0
+    while z < 50 {
+        caught += match m.get(&z) {
+            Some(v) => {
+                let f = || *v * 2
+                f()
+            }
+            None => 0,
+        }
+        z += 1
+    }
+    println("${m.len()} ${hits} ${misses} ${lit} ${px} ${miss} ${s} ${caught}")
     // inserts into a map another binding shares (the copy keeps its entries), by reference and
     // literal keys, a replaced value, an insert whose value is the block's (the generic call)
     let snapshot = m

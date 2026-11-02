@@ -512,13 +512,16 @@ impl Interpreter {
 }
 
 /// Counts of the fast paths taken in a run: machine-code loops compiled with inlined method calls,
-/// in-place `match m.get(k)` and `m.insert(k, x)`, and `push`es that kept a vector packed.
+/// in-place `match m.get(k)` and `m.insert(k, x)`, `push`es that kept a vector packed, and the
+/// unboxed arm bindings of in-place lookups.
 #[derive(Default, Debug, Clone, Copy)]
 pub(crate) struct FastHits {
     pub(crate) inline: u64,
     pub(crate) mapget: u64,
     pub(crate) mapins: u64,
     pub(crate) packed: u64,
+    /// Arm bindings of in-place map lookups kept unboxed.
+    pub(crate) unboxed: u64,
 }
 
 impl Interpreter {
