@@ -18,10 +18,13 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let Some(loc) = location else { return code };
         let file = std::fs::canonicalize(&loc.file).unwrap_or_else(|_| loc.file.clone()).to_string_lossy().to_string();
-        if !self.config.durable_steps.contains(&(file, loc.line, loc.column)) {
+        let key = (file, loc.line, loc.column);
+        if !self.config.durable_steps.contains(&key) {
             return code;
         }
-        format!("windjammer_runtime::durable::step({:?}, || {})", step_callee(expr), code)
+        // a step that only reads is journaled lazily (flushed before the next write outside the process)
+        let step = if self.config.durable_read_steps.contains(&key) { "step_read" } else { "step" };
+        format!("windjammer_runtime::durable::{step}({:?}, || {})", step_callee(expr), code)
     }
 
     /// The body of a `durable fn` run as a journaled function.
