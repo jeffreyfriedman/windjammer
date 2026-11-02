@@ -185,6 +185,9 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);
         }
+        // a live run waits out its sleeps; reproducible runs (deterministic time, simulation, record and replay,
+        // which must stay byte-identical) keep them virtual (ADR-0021, "Sleep in live runs")
+        it.set_real_sleep(!opts.deterministic_time && opts.simulate.is_none() && opts.record.is_none() && opts.replay.is_none());
         if let Err(m) = setup_code_mode(&mut it, &opts) {
             eprintln!("error: {m}");
             return RunOutcome::Exited(1);

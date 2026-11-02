@@ -26,6 +26,12 @@ step() {
 t() { cargo test --release --test all -q -- "$@"; }
 
 step "build (release binaries)" cargo build --release --bins -q
+# The build under test is the toolchain for every later step (interpreted scripts, `wj` in tests): putting it first
+# on PATH is the explicit marker, and the next step proves PATH's `wj` is built from this checkout's HEAD, so a
+# stale `wj` installed months ago can never stand in for it.
+WJ_BIN_DIR="${CARGO_TARGET_DIR:-$PWD/target}/release"
+export PATH="$WJ_BIN_DIR:$PATH"
+step "toolchain freshness (first wj on PATH is built from HEAD)" "$WJ_BIN_DIR/wj" doctor --expect-head
 step "library builds without default features (plugins depend on it this way)" cargo check --release --lib --no-default-features --features cli -q
 step "rustfmt" cargo fmt --all -- --check
 step "test binary" cargo test --release --test all --no-run -q
