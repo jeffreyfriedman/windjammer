@@ -9,3 +9,5 @@ mod visit;
 
 pub use checker::{check_file, FileInput};
 pub use index::{is_std_name, Index};
+pub(crate) use mismatch::check_literal;
+pub(crate) use visit::{walk_block, walk_expr, Visitor};

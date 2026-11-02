@@ -15,6 +15,8 @@ In: a `.wj` file or project directory. Out: `Checked { report, sources }` in the
 - `ambient.rs`: the numeric inference reads `.wj.meta` sidecars relative to the working directory; their digest is part of both keys, and a walk over budget disables caching for that run.
 - `--fix` applies only machine-applicable fixes and refuses results that no longer parse.
 
+- `rust_calls.rs` (ADR-0026): calls into a Rust crate with a surface are checked against it (`WJ0050` undeclared or malformed surface, `WJ0013` arity, `WJ0003` literal kind); `rust_crate_calls` is the subset `wj build` stops on. Surface files are inputs of the result cache.
+
 ## Owns
 Check orchestration, effect findings (`effects.rs`: WJ0040-WJ0048 from `ir::effect_facts`, `durable_sites.rs`: journaled step positions for the interpreter, `wj.toml [capabilities]`/`[policy]`, per-dependency grants via `dep_sources.rs`), file discovery, source locating (`locate.rs`), semantic checks (`semantic/`), result caches (`cache.rs`, `file_cache.rs`, `ambient.rs`), watch loop, fix application.
 

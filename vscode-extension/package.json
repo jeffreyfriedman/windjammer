@@ -38,7 +38,8 @@
           "wj"
         ],
         "extensions": [
-          ".wj"
+          ".wj",
+          ".wji"
         ],
         "configuration": "./language-configuration.json"
       }
