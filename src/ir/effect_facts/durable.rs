@@ -19,7 +19,7 @@ use crate::parser::ast::operators::UnaryOp;
 use crate::parser::ast::types::Type;
 use crate::resolve::{CallKind, CallResolution, DefId, ExprKey, Reason, Res, ResolvedProgram};
 use crate::source_map::Location;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -209,7 +209,7 @@ fn expr_mutates(name: &str, e: &Expression<'_>) -> bool {
 struct Pass<'p, 'a> {
     r: &'p ResolvedProgram<'a>,
     facts: &'p EffectFacts,
-    calls: &'p HashMap<ExprKey, &'p CallResolution>,
+    calls: &'p BTreeMap<ExprKey, &'p CallResolution>,
     out: &'p mut DurableFacts,
     function: String,
     /// Variables of the durable body (parameters and lets).
@@ -464,7 +464,7 @@ fn hash_of_value(e: &Expression<'_>) -> Option<&'static str> {
 
 pub fn analyze(r: &ResolvedProgram<'_>, facts: &EffectFacts) -> DurableFacts {
     let mut out = DurableFacts::default();
-    let calls: HashMap<ExprKey, &CallResolution> = r.calls.iter().map(|c| (c.key, c)).collect();
+    let calls: BTreeMap<ExprKey, &CallResolution> = r.calls.iter().map(|c| (c.key, c)).collect();
     let mut ids: Vec<DefId> = r.collected.decls.iter().filter(|(_, d)| is_durable(d)).map(|(id, _)| *id).collect();
     ids.sort();
     for id in ids {
