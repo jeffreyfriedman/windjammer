@@ -290,6 +290,9 @@ fn main() {
         let r = run_program(o, p, "resolved")
         let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else if o.compiled == "live" { run_program(o, p, "compiled") } else { lookup(baseline, p) }
         out = out + row(p, w.token, r.token, c.token)
+        // a program that does not run under the walker agrees with itself in every mode: it is a broken case
+        let ran = strings.starts_with(w.token, "exit0:")
+        out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") { "runs" } else { "broken" }, "runs")
         if o.compiled == "live" {
             recorded = recorded + "${p}\t${c.token}\t\n"
         }
@@ -310,6 +313,17 @@ fn main() {
         let _ = sh("rm -rf ${SCRATCH}")
     }
     if o.record && o.compiled == "live" {
+        if o.only != "" {
+            // a partial run replaces only its own rows
+            let mut kept = ""
+            for line in strings.split_lines(fs.read_to_string(BASELINE).unwrap_or("")) {
+                let id = strings.split(line, "\t")[0]
+                if id != "" && !strings.contains(id, o.only) {
+                    kept = kept + line + "\n"
+                }
+            }
+            recorded = kept + recorded
+        }
         let _ = fs.write(BASELINE, recorded)
         println("  recorded ${BASELINE}")
     }
