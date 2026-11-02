@@ -13,7 +13,8 @@ Windjammer is a high-level language that compiles to Rust with inferred ownershi
 - [Keywords](reference/keywords.md), [standard library](reference/stdlib.md), [error codes](reference/errors.md), [CLI](reference/cli.md).
 
 ## I am an AI agent (or I configure one)
-- [Windjammer for agents](agent/WINDJAMMER_FOR_AGENTS.md): the check, run and test loop; every example is executed in CI.
+- [Windjammer for agents](agent/WINDJAMMER_FOR_AGENTS.md): the 2 KB sheet; every example is executed in CI.
+- [Windjammer reference for agents](agent/WINDJAMMER_REFERENCE.md): the full guide (loop, idioms, pitfalls), searchable with `wj docs <terms>`.
 - [llms.txt](../llms.txt) (index) and [llms-full.txt](../llms-full.txt) (everything inline), generated.
 - MCP server: [crates/windjammer-mcp](../crates/windjammer-mcp/README.md). JSON diagnostics: `wj check --json`.
 - Benchmark: [bench/agent-dx](../bench/agent-dx/README.md).

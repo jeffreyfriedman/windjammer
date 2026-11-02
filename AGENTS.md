@@ -1,6 +1,6 @@
 # Agent instructions
 
-**Writing Windjammer code (not working on the compiler)?** Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md); the machine-readable index is [llms.txt](llms.txt) and the inline version is [llms-full.txt](llms-full.txt). The rest of this file is for changing this repository.
+**Writing Windjammer code (not working on the compiler)?** Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md) (a 2 KB sheet; the full reference is [WINDJAMMER_REFERENCE.md](docs/agent/WINDJAMMER_REFERENCE.md), searchable with `wj docs <terms>`); the machine-readable index is [llms.txt](llms.txt) and the inline version is [llms-full.txt](llms-full.txt). The rest of this file is for changing this repository.
 
 Orientation: [docs/README.md](docs/README.md) (index), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), per-module `MODULE.md`
 files under `src/` (one module's context should be enough to work on it), [docs/known-gaps.md](docs/known-gaps.md).

@@ -6,7 +6,7 @@ description: Write, check, run, test and build Windjammer (.wj) code. Use when a
 # Windjammer skill
 
 Windjammer is a Rust-family language with inferred ownership that transpiles to Rust. Do not write Rust syntax.
-Read `docs/agent/WINDJAMMER_FOR_AGENTS.md` (or `wj docs idioms`) once per session; it is the context pack.
+Read `docs/agent/WINDJAMMER_FOR_AGENTS.md` (the 2 KB sheet) once per session; the full material is `docs/agent/WINDJAMMER_REFERENCE.md`, reachable with `wj docs <terms>`.
 
 ## The loop (always in this order)
 
@@ -43,5 +43,4 @@ Read `docs/agent/WINDJAMMER_FOR_AGENTS.md` (or `wj docs idioms`) once per sessio
 
 ## MCP
 
-If the `windjammer-mcp` server is configured, prefer its tools: `check_code`, `run_code`, `test_code`,
-`format_code`, `explain_error`, `docs_search` (same behaviour as the CLI commands above).
+The `windjammer-mcp` server is optional and suits IDE integrations. For agent loops, `wj docs` and `wj explain` in the shell are the lightest way to look things up.
