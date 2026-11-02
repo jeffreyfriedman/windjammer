@@ -58,6 +58,8 @@ pub fn width_label(b: &BaseType) -> Option<String> {
         BaseType::U32 => "u32".into(),
         BaseType::U64 => "u64".into(),
         BaseType::U128 => "u128".into(),
+        BaseType::Usize => "usize".into(),
+        BaseType::Isize => "isize".into(),
         BaseType::F32 => "f32".into(),
         BaseType::F64 => "f64".into(),
         other => format!("{:?}", other),

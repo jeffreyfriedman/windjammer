@@ -1029,6 +1029,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.emit_call_site_constraints(sig, &arg_vars);
                 }
                 self.emit_call_result_type_constraints(result, sig.as_ref(), Some(method.as_str()));
+                // NUM-USIZE (ADR-0028): a length or count with no user signature is an index source.
+                if arguments.is_empty()
+                    && is_index_source_method(method)
+                    && sig.as_ref().is_none_or(|s| s.return_type.is_none())
+                {
+                    self.cs.add_because(
+                        Constraint::PrefersUsize(result),
+                        origin("NUM-USIZE", format!("`.{}()` is a length: an index class unless a width is declared", method), &expr.location()),
+                    );
+                }
 
                 let callee_effects = crate::ir::effects::effects_for_runtime_callee(&qualified);
                 if !callee_effects.is_empty() {
@@ -1114,10 +1124,22 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Expression::Index { object, index, .. } => {
                 let obj_var = self.walk_expression(object);
-                let idx_var = self.walk_expression(index);
                 let _ = obj_var;
-                // Index is typically integer
+                // NUM-USIZE (ADR-0028): an index (or a slice bound) is an index use.
+                let idx_var = match index {
+                    Expression::Range { start, end, .. } => {
+                        let s = self.walk_expression(start);
+                        let e = self.walk_expression(end);
+                        self.cs.add_because(Constraint::TypeEquals(s, e), tagged("TY-UNIFY"));
+                        s
+                    }
+                    other => self.walk_expression(other),
+                };
                 self.cs.add_because(Constraint::IsNumeric(idx_var), tagged("NUM-INDEX"));
+                self.cs.add_because(
+                    Constraint::PrefersUsize(idx_var),
+                    origin("NUM-USIZE", "an index: an index class unless a width is declared", &index.location()),
+                );
                 let result = self.cs.fresh_var();
                 result
             }
@@ -1566,8 +1588,8 @@ fn literal_to_base_type(lit: &Literal) -> BaseType {
             "u32" => BaseType::U32,
             "u64" => BaseType::U64,
             "u128" => BaseType::U128,
-            "usize" => BaseType::U64,
-            "isize" => BaseType::I64,
+            "usize" => BaseType::Usize,
+            "isize" => BaseType::Isize,
             _ => BaseType::I32,
         },
         Literal::Float(_) => BaseType::F64,
@@ -1589,7 +1611,9 @@ fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, bas
         | BaseType::U16
         | BaseType::U32
         | BaseType::U64
-        | BaseType::U128 => {
+        | BaseType::U128
+        | BaseType::Usize
+        | BaseType::Isize => {
             cs.add_because(Constraint::IsInteger(var), tagged("NUM-CLASS"));
             cs.add_because(Constraint::IsNumeric(var), tagged("NUM-CLASS"));
         }
@@ -1599,6 +1623,11 @@ fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, bas
         }
         _ => {}
     }
+}
+
+/// Zero-argument methods whose Rust result is `usize` on std receivers (ADR-0028 index sources).
+fn is_index_source_method(method: &str) -> bool {
+    matches!(method, "len" | "count" | "capacity")
 }
 
 fn is_arithmetic_op(op: &BinaryOp) -> bool {
@@ -1656,6 +1685,29 @@ mod tests {
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
         analyzed
+    }
+
+    fn solved_local(source: &str, fn_name: &str, local: &str) -> Option<BaseType> {
+        let analyzed = analyze_source(source);
+        let af = analyzed.iter().find(|f| f.decl.name == fn_name).unwrap();
+        let fc = generate_constraints(af, None);
+        let r = crate::ir::solver::Solver::new(&fc.constraints).solve(&fc.constraints);
+        let v = fc.var_map.locals[local];
+        r.types[v.0 as usize].clone()
+    }
+
+    /// ADR-0028: a counter bounded by `len()` and used as an index is `usize`; the same counter
+    /// stored into a declared `int` is `int`.
+    #[test]
+    fn counter_bounded_by_len_is_usize_unless_it_meets_an_int() {
+        let usize_src = "pub fn f(v: Vec<string>) -> bool {\n    let mut i = 0\n    while i < v.len() {\n        i = i + 1\n    }\n    true\n}\n";
+        assert_eq!(solved_local(usize_src, "f", "i"), Some(BaseType::Usize));
+        let int_src = "pub fn f(v: Vec<string>) -> bool {\n    let mut i = 0\n    while i < v.len() {\n        let k: int = i\n        i = i + 1\n    }\n    true\n}\n";
+        assert_eq!(solved_local(int_src, "f", "i"), Some(BaseType::I64));
+        let index_src = "pub fn f(v: Vec<string>) -> string {\n    let j = 2\n    v[j]\n}\n";
+        assert_eq!(solved_local(index_src, "f", "j"), Some(BaseType::Usize));
+        let plain_src = "pub fn f() -> bool {\n    let mut i = 0\n    while i < 10 {\n        i = i + 1\n    }\n    true\n}\n";
+        assert_eq!(solved_local(plain_src, "f", "i"), Some(BaseType::I64));
     }
 
     #[test]
