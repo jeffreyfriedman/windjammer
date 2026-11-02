@@ -7,9 +7,11 @@ pub mod codes;
 mod codes_errors;
 mod codes_lints;
 pub mod convert;
+pub mod hints;
 pub mod model;
 pub mod render;
 pub mod rustc_map;
+pub mod runtime_text;
 pub mod rustc_text;
 pub mod source;
 
