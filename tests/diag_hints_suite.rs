@@ -20,7 +20,7 @@ fn rustc_json(rs: &str) -> String {
     let out = std::process::Command::new("rustc")
         .args(["--edition", "2021", "--error-format=json", "--emit=metadata", "--crate-type=bin", "-A", "warnings", "-o"])
         .arg(dir.join("out.rmeta"))
-        .arg(&f)
+        .arg("main.rs")
         .current_dir(&dir)
         .output()
         .expect("rustc is required for this suite");
