@@ -5,6 +5,12 @@ use std::path::{Path, PathBuf};
 
 /// The positions of the journaled steps of the program rooted at `entry` (empty when it has no `durable fn`).
 pub fn discover(entry: &Path) -> Result<Vec<(PathBuf, usize, usize)>, String> {
+    discover_split(entry).map(|(all, _)| all)
+}
+
+/// The step positions, and among them the ones whose call only reads (a compiled build journals those lazily).
+#[allow(clippy::type_complexity)]
+pub fn discover_split(entry: &Path) -> Result<(Vec<(PathBuf, usize, usize)>, Vec<(PathBuf, usize, usize)>), String> {
     use super::effects::{analyze_project, parse_app_inputs};
     let target = match super::effects::manifest_path(entry) {
         // a relative `wj.toml` has the empty path as its parent: that is the working directory, not a missing path
@@ -18,12 +24,12 @@ pub fn discover(entry: &Path) -> Result<Vec<(PathBuf, usize, usize)>, String> {
     let files = super::files::collect(&target).map_err(|e| e.to_string())?;
     let mentions = files.iter().any(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains("durable fn")));
     if !mentions {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let inputs = parse_app_inputs(&target).map_err(|e| e.to_string())?;
     let a = analyze_project(&target, inputs, false);
     let d = crate::ir::effect_facts::durable::analyze(&a.resolved, &a.facts);
-    Ok(d.step_sites.into_iter().collect())
+    Ok((d.step_sites.into_iter().collect(), d.read_sites.into_iter().collect()))
 }
 
 

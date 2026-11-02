@@ -42,6 +42,8 @@ pub struct CompilerConfig {
     /// Source positions (canonical file, line, column) of the calls that are journaled steps of a `durable fn` (ADR-0021 E4b):
     /// the code generator wraps each in `windjammer_runtime::durable::step`.
     pub durable_steps: std::collections::HashSet<(String, usize, usize)>,
+    /// The durable steps that only read; the generated code journals them lazily.
+    pub durable_read_steps: std::collections::HashSet<(String, usize, usize)>,
     /// Gate self-test only (`WJ_LIVENESS_MUTATION=always-move`): a deliberately wrong liveness
     /// fact that marks every read a last use, so the convergence gates can prove they catch it.
     pub liveness_mutation_always_move: bool,
@@ -64,6 +66,7 @@ impl Default for CompilerConfig {
             auto_arena: false,
             capability_install: None,
             durable_steps: Default::default(),
+            durable_read_steps: Default::default(),
             liveness_mutation_always_move: false,
         }
     }
@@ -102,6 +105,7 @@ impl CompilerConfig {
             auto_arena: on("WJ_AUTO_ARENA"),
             capability_install: None,
             durable_steps: Default::default(),
+            durable_read_steps: Default::default(),
             liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
         }
     }
@@ -118,6 +122,11 @@ impl CompilerConfig {
 
     pub fn with_shadow_validate_strict(mut self, on: bool) -> Self {
         self.shadow_validate_strict = on;
+        self
+    }
+
+    pub fn with_durable_read_steps(mut self, steps: impl IntoIterator<Item = (std::path::PathBuf, usize, usize)>) -> Self {
+        self.durable_read_steps = steps.into_iter().map(|(f, l, c)| (std::fs::canonicalize(&f).unwrap_or(f).to_string_lossy().to_string(), l, c)).collect();
         self
     }
 
