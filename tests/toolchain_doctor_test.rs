@@ -170,10 +170,22 @@ fn expect_head_accepts_only_a_wj_built_from_the_checkout_head() {
     fake(good.path(), &line(&head[..12], ts()));
     fake(bad.path(), &line("aaaaaaaaaaaa", ts()));
     let e = Env { cache: tempfile::tempdir().unwrap(), work: co };
-    let o = doctor(&e, &[good.path(), bad.path()], None, &["--expect-head"]);
+    let sys = [Path::new("/usr/bin"), Path::new("/bin")]; // git
+    let o = doctor(&e, &[good.path(), bad.path(), sys[0], sys[1]], None, &["--expect-head"]);
     assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
-    let o = doctor(&e, &[bad.path(), good.path()], None, &["--expect-head"]);
+    let o = doctor(&e, &[bad.path(), good.path(), sys[0], sys[1]], None, &["--expect-head"]);
     assert_eq!(o.status.code(), Some(1));
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("HEAD") && err.contains("install-dev"), "{err}");
+}
+
+/// The merge gate must prove, right after building, that the first `wj` on PATH is the fresh build.
+#[test]
+fn merge_gate_checks_toolchain_freshness_right_after_the_build() {
+    let gate = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/merge_gate.sh")).unwrap();
+    let build = gate.find("step \"build (release binaries)\"").expect("build step");
+    let path = gate.find("export PATH=\"$WJ_BIN_DIR:$PATH\"").expect("the build under test goes first on PATH");
+    let fresh = gate.find("doctor --expect-head").expect("freshness step");
+    let next = gate.find("step \"library builds without default features").unwrap();
+    assert!(build < path && path < fresh && fresh < next, "order: build, PATH, freshness, everything else");
 }
