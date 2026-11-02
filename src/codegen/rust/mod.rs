@@ -90,6 +90,7 @@ pub mod self_analysis;
 pub mod signature_promotion;
 pub mod simd_transform;
 pub mod list_literal_context;
+pub mod method_receiver_resolution;
 pub mod statement_generation;
 pub mod struct_field_coercion;
 pub mod statement_mut_binding_scan;
