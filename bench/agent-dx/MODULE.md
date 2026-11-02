@@ -38,6 +38,8 @@ Python and TypeScript, using identical tasks and one language-neutral oracle. No
 | `metrics.py` | pass@1, pass within k iterations, unbiased pass@k estimator, iterations-to-green, first-error-to-fix distance, categories, tokens, wall time. |
 | `replay.py` | Deterministic replay of recorded transcripts (re-grade, or metrics-only with no toolchains). |
 | `report.py` | Markdown + JSON report. |
+| `packs/` | Tiny context packs for the pack-size experiment: `tiny_base.md` (shared), `tiny_E.md` (+MCP instruction), `tiny_F.md` (+`wj docs`/`wj explain` instruction), `tiny_T.md` (base only). |
+| `stream.py` | Parses `stream-json` output into a per-turn token log and call/result summaries. |
 | `arms.py` | Loop-mode arms (A interpreted-first, B compiled-first, C no-pack): prompt, tool policy, `claude -p` argv. |
 | `shim.py` | `wj` shim on the agent PATH; logs each invocation (verb, mode, exit, seconds, output, source) outside the sandbox. |
 | `budget.py` | Cost estimate, `BudgetGuard` (dollar budget, trial counter, `PILOT_MAX_TRIALS = 60` ceiling). |

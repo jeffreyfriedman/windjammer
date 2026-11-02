@@ -1,0 +1,156 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "B",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn find(keys: Vec<int>, k: int) -> int {\n    let mut r: int = -1\n    let mut i: int = 0\n    for x in keys {\n        if x == k {\n            r = i\n        }\n        i += 1\n    }\n    r\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap: int = 1\n    let mut first = true\n    let mut keys: Vec<int> = []\n    let mut vals: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let idx = find(keys.clone(), k)\n            if idx >= 0 {\n                keys.remove(idx)\n                vals.remove(idx)\n            }\n            keys.push(k)\n            vals.push(v)\n            let n: int = keys.len() as int\n            if n > cap {\n                let ev = keys[0]\n                keys.remove(0)\n                vals.remove(0)\n                println(\"evict ${ev}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let idx = find(keys.clone(), k)\n            if idx < 0 {\n                println(\"-1\")\n            } else {\n                let v = vals[idx]\n                keys.remove(idx)\n                vals.remove(idx)\n                keys.push(k)\n                vals.push(v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out: Vec<string> = []\n                let mut i: int = keys.len() as int - 1\n                while i >= 0 {\n                    out.push(\"${keys[i]}\")\n                    i -= 1\n                }\n                println(out.join(\" \"))\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn find(keys: Vec<int>, k: int) -> int {\n    let mut r: int = -1\n    let mut i: int = 0\n    for x in keys {\n        if x == k {\n            r = i\n        }\n        i += 1\n    }\n    r\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap: int = 1\n    let mut first = true\n    let mut keys: Vec<int> = []\n    let mut vals: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            continue\n        }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let idx = find(keys.clone(), k)\n            if idx >= 0 {\n                keys.remove(idx)\n                vals.remove(idx)\n            }\n            keys.push(k)\n            vals.push(v)\n            let n: int = keys.len() as int\n            if n > cap {\n                let ev = keys[0]\n                keys.remove(0)\n                vals.remove(0)\n                println(\"evict ${ev}\")\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let idx = find(keys.clone(), k)\n            if idx < 0 {\n                println(\"-1\")\n            } else {\n                let v = vals[idx]\n                keys.remove(idx)\n                vals.remove(idx)\n                keys.push(k)\n                vals.push(v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out: Vec<string> = []\n                let mut i: int = keys.len() as int - 1\n                while i >= 0 {\n                    out.push(\"${keys[i]}\")\n                    i -= 1\n                }\n                println(out.join(\" \"))\n            }\n        }\n    }\n}\n",
+ "first_turn_input": 14493,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 37.437,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 32.897,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 16.358,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 302.746,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 4,
+ "other_seconds": 0.0,
+ "pack_bytes": 16523,
+ "pack_file": "WINDJAMMER_FOR_AGENTS.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-01T20:30:46",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 22.416,
+ "tool_result_tokens_est": 708,
+ "tool_wait_seconds": 389.44,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 5157,
+   "cache_write": 9334,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14493,
+   "output": 3,
+   "result_chars": 1602,
+   "turn": 1
+  },
+  {
+   "cache_read": 14491,
+   "cache_write": 1954,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 16447,
+   "output": 8,
+   "result_chars": 737,
+   "turn": 2
+  },
+  {
+   "cache_read": 16445,
+   "cache_write": 596,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 17043,
+   "output": 8,
+   "result_chars": 140,
+   "turn": 3
+  },
+  {
+   "cache_read": 17041,
+   "cache_write": 361,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 17404,
+   "output": 245,
+   "result_chars": 0,
+   "turn": 4
+  },
+  {
+   "cache_read": 17402,
+   "cache_write": 719,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 18123,
+   "output": 4,
+   "result_chars": 0,
+   "turn": 5
+  }
+ ],
+ "usage": {
+  "api_seconds": 22.416,
+  "cost_usd": 0.0782496,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "The background build I started earlier finished with exit code 0, so `wj build main.wj` compiles. Nothing changes from my last message. `main.wj` is done, and Example 1 passes when built and run with `wj run --compiled`.\n\nI still haven't run Example 2 or other inputs, and I don't know what caused the odd `1: [...]` lines in the first run.",
+  "subtype": "success",
+  "tokens_in": 18123,
+  "tokens_out": 119,
+  "turns": 1
+ },
+ "verify_calls": 4,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 409.17
+}

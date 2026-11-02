@@ -151,3 +151,38 @@ Pooling the rerun sample (about 50 trials per arm for A, B, D): A 0.44 pass, 0.5
 - **Timing.** Per call: `wj run --interpret` median 0.1 s, `wj run --compiled` 20 s (p90 48 s), `wj build` 167 s (p90 423 s) under load. The final
   `wj build` of arm D averages 375 s of the 454 s wall. `wj build` does not share the cache that `wj run --compiled` uses; this is the top performance
   fix for compiled-last loops.
+
+## Third pilot (Nov 2026): can tools replace the pack?
+
+Arms, all with the compiled-first loop paragraph of arm B and the same sandbox: **B** full pack (control, 15.6 KB, about 6.4k tokens measured),
+**E** tiny pack (`bench/agent-dx/packs/tiny_E.md`, 1.5 KB) plus the windjammer-mcp server exposing `docs_search`, `check_code`, `explain_error`
+(the other 20 tools are disallowed by name), **F** the same tiny pack plus `wj docs` / `wj explain` in the shell, **T** the tiny pack alone (no docs or explain
+commands). 10 tasks x 4 arms x 3 trials = 120 trials, $5.21. Results and per-turn token logs: `bench/agent-dx/results/pilot3/`. The machine was loaded
+(averages 20-30), so wall seconds are noisy; tokens, turns and pass rates are not.
+
+| arm | pass@1 | turns | tokens in | cost | first-turn input | tool calls |
+|---|---|---|---|---|---|---|
+| B full pack | 0.97 [0.87, 1.00] | 3.8 | 44.3k | $0.048 | 14.5k | 0 docs |
+| E tiny + MCP | 0.97 [0.87, 1.00] | 5.4 | 40.3k | $0.043 | 8.7k | 13 MCP calls in 7 of 30 trials |
+| F tiny + wj docs | 0.90 [0.77, 1.00] | 4.1 | 29.4k | $0.040 | 8.2k | 4 docs calls in 2 trials |
+| T tiny alone | 0.87 [0.70, 1.00] | 4.2 | 29.0k | $0.043 | 8.1k | none |
+
+Paired differences versus B (task-clustered 95% CI): pass@1 E 0.00 [-0.13, 0.13], F -0.07 [-0.23, 0.10], T -0.10 [-0.27, 0.03]; tokens in E -4.0k [-21.9k, 11.7k],
+F -14.9k [-30.7k, -1.3k], T -15.3k [-29.3k, -4.2k]; cost differences are all within noise (about -$0.005 to -$0.008).
+
+- **The full pack costs about 6.4k tokens per turn-1 context and, with the compiler at this head, buys little.** A 1.3-1.5 KB sheet reaches the same pass
+  rate within the interval width (N is 30 per arm, so differences under about 0.15 are not detectable). Token savings (about 15k per trial, 34%) are
+  significant for F and T; cost savings are small ($0.005 per trial) because cached input is cheap.
+- **Agents rarely use the tools.** MCP: 13 calls in 7 of 30 E trials (8 `docs_search`, `check_code`; no `explain_error`), at about 500 tokens of tool schema per context for three
+  tools. Shell docs: 4 calls in 2 of 30 F trials. Tool results were about 1k tokens per trial, so the tools are cheap, but E needed 1.6 more turns than B on average
+  [-0.5, 3.9] and no more passes: MCP does not pay for its schema here. `wj docs` in the shell is free of schema cost and is the better default for the tiny pack.
+- **Attribution.** First-turn input is 14.5k (B) against 8.1-8.7k for the tiny arms; the difference is the pack (6.4k) plus the MCP schema (about 0.5k). The
+  remaining 8k is the Claude Code system prompt, built-in tool definitions and the task prompt, which no Windjammer change can shrink.
+- **Which pack content could move into diagnostics.** The arms share the same tips, so this experiment shows which messages agents still hit, not which tip is
+  needed; a tip-ablation arm is the next step. Diagnostic signals by trials (of 30): `String`/`&str` mismatches B 5, E 4, F 2, T 7; iterator `collect` element type B 2,
+  E 2, F 2, T 5; Rust-leakage lint codes B 1, E 4, F 0, T 1; `usize`/`i32` width B 0, E 1, F 0, T 2; missing methods B 1, F 1. Candidates, in order: (1) string/`&str` and `collect` type
+  errors should carry the Windjammer-level fix in the message (T, the arm without docs, hit them most); (2) lint messages (W000x) already say what to write, so the
+  pack's "never `&`, `.iter()`, `.unwrap()`" line can shrink to a pointer; (3) the `len() as int` tip was needed in 3 of 120 trials once and can move into the
+  mismatched-types diagnostic; (4) the stdin recipe is a pure recipe with no diagnostic (no error ever fires), so it must stay in the pack.
+- **Recommendation.** Ship the 1.5 KB sheet as the default pack (about -6k tokens per turn-1 context), keep the full pack as `wj docs` content, point the sheet at
+  `wj docs`/`wj explain` rather than MCP, and treat MCP as an IDE integration, not a token saver. Re-run with a tip-ablation arm and 5 trials per cell before cutting further.
