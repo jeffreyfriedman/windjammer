@@ -1044,6 +1044,17 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let obj_var = self.walk_expression(object);
                 let field_var = self.cs.fresh_var();
                 let _ = obj_var;
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                if let Some(ty) = crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields) {
+                    let base = parser_type_to_base_type(&ty);
+                    if base != BaseType::Inferred {
+                        self.cs.add_because(
+                            Constraint::TypeIs(field_var, base.clone()),
+                            origin("NUM-FIELD-DECLARED", "a field read has the field's declared type", &expr.location()),
+                        );
+                        emit_numeric_class_constraint(&mut self.cs, field_var, &base);
+                    }
+                }
                 field_var
             }
 
