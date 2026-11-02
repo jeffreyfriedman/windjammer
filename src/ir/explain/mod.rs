@@ -39,7 +39,8 @@ pub fn explain_source(source: &str, file: &str, opts: &ExplainOptions) -> Result
     let (analyzed, registry, _) = analyzer
         .analyze_program(&program)
         .map_err(|e| format!("analysis error: {e}"))?;
-    let module = IrPipeline::new().lower_to_ir(&analyzed, &registry, None);
+    let fields = crate::compiler::local_struct_field_table(&program);
+    let module = IrPipeline::new().lower_to_ir(&analyzed, &registry, Some(&fields));
 
     let emitted_file = opts.emitted_rust.as_deref().and_then(emitted::parse_emitted);
     let mut notes = Vec::new();

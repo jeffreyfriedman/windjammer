@@ -2,7 +2,7 @@ use windjammer_runtime::test::*;
 #[test]
 
 pub fn test_asi_before_paren() -> i64 {
-    let a = 5;
+    let a = 5_i64;
     (a + 1_i64) * 2_i64
 }
 

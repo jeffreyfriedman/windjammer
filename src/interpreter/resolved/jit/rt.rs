@@ -149,16 +149,28 @@ fn store(slot: &mut Value, x: i64, t: i64) -> Option<i64> {
 pub(crate) unsafe extern "C" fn index_get(c: *mut Ctx, slot: i64, i: i64, it: i64, want: i64) -> i64 {
     // SAFETY: as in `with_slot`.
     let off_by_one = unsafe { mutant(&*(*c).it, "bounds") };
-    unsafe {
+    let direct_off = unsafe { (*(*c).it).fast_off("packedidx") };
+    let mut direct = false;
+    let r = unsafe {
         with_slot(c, slot, |v| {
             let (k, want) = (index(i, it)?, from_code(want)?);
             peek(v, |v| match v {
                 Value::Vec(xs) if off_by_one => bits(&xs.get_value(k).or_else(|| xs.get_value(xs.len().checked_sub(1)?))?, want),
-                Value::Vec(xs) => bits(&xs.get_value(k)?, want),
+                Value::Vec(xs) => match packed_get(xs, k, want).filter(|_| !direct_off) {
+                    Some(r) => {
+                        direct = true;
+                        r
+                    }
+                    None => bits(&xs.get_value(k)?, want),
+                },
                 _ => None,
             })
         })
+    };
+    if direct {
+        unsafe { (*(*c).it).fast.packedidx += 1 };
     }
+    r
 }
 
 /// `v[i].f`.
@@ -186,20 +198,35 @@ pub(crate) unsafe extern "C" fn field_get(c: *mut Ctx, slot: i64, fp: i64, fl: i
 
 /// `v[i] = x`.
 pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i64, x: i64, xt: i64) -> i64 {
-    unsafe {
+    // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
+    let direct_off = unsafe { (*(*c).it).fast_off("packedidx") };
+    let mut direct = false;
+    let r = unsafe {
         with_slot(c, slot, |v| {
             let k = index(i, it)?;
+            let t = from_code(xt)?;
             poke(v, |v| match v {
-                Value::Vec(xs) if k < xs.len() => {
+                Value::Vec(xs) => {
+                    if !direct_off && packed_set(xs, k, x, t) {
+                        direct = true;
+                        return Some(0);
+                    }
+                    if k >= xs.len() {
+                        return None;
+                    }
                     // the walker's `retag` against the old element, then a plain replacement
-                    let new = retag(xs.get_value(k)?, value(x, from_code(xt)?));
+                    let new = retag(xs.get_value(k)?, value(x, t));
                     Rc::make_mut(xs).set_value(k, new);
                     Some(0)
                 }
                 _ => None,
             })
         })
+    };
+    if direct {
+        unsafe { (*(*c).it).fast.packedidx += 1 };
     }
+    r
 }
 
 /// `v[i].f = x`.
@@ -343,4 +370,39 @@ pub(crate) extern "C" fn fmod(a: f64, b: f64) -> f64 {
 
 pub(crate) extern "C" fn round(x: f64) -> f64 {
     x.round()
+}
+
+/// `v[k]` read straight from a packed body holding exactly type `want` (`Some(None)`: out of bounds,
+/// which fails as the element read does); `None`: not packed with that type, the element path decides.
+/// The packing holds what `bits` would make of the element.
+fn packed_get(xs: &crate::interpreter::vecbody::VecBody, k: usize, want: Ty) -> Option<Option<i64>> {
+    use crate::interpreter::vecbody::Packed;
+    Some(match (xs.packed()?, want) {
+        (Packed::Bool(v), Ty::Bool) => v.get(k).map(|b| *b as i64),
+        (Packed::Int(v, t), Ty::Int(w)) if *t == w => v.get(k).copied(),
+        (Packed::Float(v, t), Ty::Flt(w)) if *t == w => v.get(k).map(|f| f.to_bits() as i64),
+        _ => return None,
+    })
+}
+
+/// `v[k] = x` written straight into a packed body when `x` (bits at type `xt`) has exactly the packing's
+/// type: then the walker's `retag` keeps `x` as it is and the plain replacement packs it. `false`: the
+/// element path decides (another type, a literal width to retag, an unpacked body).
+fn packed_set(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, k: usize, x: i64, xt: Ty) -> bool {
+    use crate::interpreter::vecbody::{Packed, VecBody};
+    let fits = matches!((xs.packed(), xt), (Some(Packed::Bool(_)), Ty::Bool))
+        || matches!((xs.packed(), xt), (Some(Packed::Int(_, t)), Ty::Int(w)) if *t == w)
+        || matches!((xs.packed(), xt), (Some(Packed::Float(_, t)), Ty::Flt(w)) if *t == w);
+    if !fits || k >= xs.len() {
+        return false;
+    }
+    let VecBody::Packed(p, cache) = Rc::make_mut(xs) else { return false };
+    match (p, xt) {
+        (Packed::Bool(v), _) => v[k] = x != 0,
+        (Packed::Int(v, _), Ty::Int(t)) => v[k] = int_value(x, t) as i64,
+        (Packed::Float(v, _), _) => v[k] = f64::from_bits(x as u64),
+        _ => return false,
+    }
+    cache.take();
+    true
 }

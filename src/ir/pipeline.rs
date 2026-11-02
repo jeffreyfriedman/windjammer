@@ -222,7 +222,7 @@ impl IrPipeline {
             taint_constraints_forwarded.extend(fc.taint_constraints.iter().cloned());
 
             // Forward execution constraints from async/spawn call sites.
-            execution_constraints_forwarded.extend(fc.execution_constraints.into_iter());
+            execution_constraints_forwarded.extend(fc.execution_constraints.iter().cloned());
 
             let solver = Solver::new(&fc.constraints);
             let result = solver.solve(&fc.constraints);
@@ -238,21 +238,9 @@ impl IrPipeline {
 
             // Write solver results back to IrFunction param SafetyTypes
             if let Some(ir_fn) = functions.get_mut(i) {
-                for (param_name, &var) in &fc.var_map.params {
-                    if let Some(st) = ir_fn.param_types.get_mut(param_name) {
-                        let root_idx = var.0 as usize; // results are indexed by variable
-                        if let Some(Some(ref base)) = result.types.get(root_idx) {
-                            if *base != BaseType::Inferred {
-                                st.base = base.clone();
-                            }
-                        }
-                        if let Some(Some(ref own)) = result.ownership.get(root_idx) {
-                            if *own != OwnedType::Inferred {
-                                st.ownership = own.clone();
-                            }
-                        }
-                    }
-                }
+                write_back_param_types(&fc, &result, ir_fn);
+
+                crate::ir::numeric_facts::publish(&fc, &result, ir_fn);
 
                 ir_fn.record_ownership_stage("solver");
 
@@ -721,5 +709,26 @@ pub fn display(name: string) {}
         assert_eq!(violations.len(), 1);
         assert!(violations[0].message.contains("fetch_data"));
         assert!(violations[0].message.contains("net_egress"));
+    }
+}
+
+/// Solver results onto the IR function's parameter `SafetyType`s (results are indexed by variable).
+fn write_back_param_types(
+    fc: &crate::ir::constraint_gen::FunctionConstraints,
+    result: &crate::ir::solver::SolverResult,
+    ir_fn: &mut IrFunction,
+) {
+    for (param_name, &var) in &fc.var_map.params {
+        let Some(st) = ir_fn.param_types.get_mut(param_name) else { continue };
+        if let Some(Some(base)) = result.types.get(var.0 as usize) {
+            if *base != BaseType::Inferred {
+                st.base = base.clone();
+            }
+        }
+        if let Some(Some(own)) = result.ownership.get(var.0 as usize) {
+            if *own != OwnedType::Inferred {
+                st.ownership = own.clone();
+            }
+        }
     }
 }

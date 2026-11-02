@@ -648,6 +648,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = old_ctx;
                 self.coerce_string_literals_to_owned = old_coerce_lit;
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                self.convert_usize_into_declared_int(&mut value_str, value, t);
 
                 // Convert string literals OR identifiers to String when target is String
                 if is_string_type && value_str != "String::new()" {
@@ -719,117 +720,6 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
-                } else if mutable && !self.solver_pins_int_literal_init(value) && Self::mut_let_rhs_is_return_width_counter(value) {
-                    // later `x = u32` assign beats return-width i64 for untyped counters.
-                    let later_peer = var_name
-                        .and_then(|vn| self.mut_int_local_peer_width_from_later_assigns(vn));
-                    // `-> u32` / later u32 peer wins over `.len()` usize marking.
-                    // `.len()` while-counters win over `-> i32` / later i32 peer.
-                    let prefer_usize_over_i32 = var_name
-                        .is_some_and(|vn| self.usize_variables.contains(vn))
-                        && !matches!(later_peer.as_ref(), Some(Type::Uint))
-                        && !self.function_returns_u32_for_loop_scan();
-                    // `while i < count` (u32) must win over later `i = i + 1`
-                    // inferred as i32 and over `-> Histogram` / `-> f32` i32-coord ascription
-                    // (`let mut i: i32 = 0_u32`).
-                    let while_u32_peer = var_name.is_some_and(|n| {
-                        self.let_binding_int_width_from_later_while_compare(n)
-                            .is_some_and(|t| {
-                                matches!(t, Type::Uint)
-                                    || matches!(t, Type::Custom(ref w) if w == "u32")
-                            })
-                    });
-                    // P3.549: `while i < len - 1` / `while i < 512` after `len as i32` must
-                    // emit `let mut i: i32 = 0` — while-compare peer was previously u32-only.
-                    let while_i32_peer = var_name.is_some_and(|n| {
-                        !crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
-                            && self
-                                .let_binding_int_width_from_later_while_compare(n)
-                                .is_some_and(|t| {
-                                    matches!(t, Type::Int32)
-                                        || matches!(t, Type::Custom(ref w) if w == "i32")
-                                })
-                    });
-                    if matches!(later_peer.as_ref(), Some(Type::Uint)) || while_u32_peer {
-                        output.push_str(": u32");
-                        if let Some(vn) = var_name {
-                            self.local_var_types.insert(vn.to_string(), Type::Uint);
-                            self.codegen_i32_binding_names.remove(vn);
-                        }
-                    } else if prefer_usize_over_i32 {
-                        output.push_str(": usize");
-                        if let Some(vn) = var_name {
-                            self.local_var_types
-                                .insert(vn.to_string(), Type::Custom("usize".into()));
-                        }
-                    } else if matches!(later_peer.as_ref(), Some(Type::Int))
-                        || matches!(
-                            later_peer.as_ref(),
-                            Some(Type::Custom(n)) if n == "int" || n == "i64"
-                        )
-                    {
-                        // P3.538: later `prev = m.version` (i64) beats `-1` i32 sentinel.
-                        if let Some(vn) = var_name {
-                            self.local_var_types.insert(vn.to_string(), Type::Int);
-                            self.codegen_i32_binding_names.remove(vn);
-                        }
-                    } else if matches!(later_peer.as_ref(), Some(Type::Int32)) || while_i32_peer {
-                        output.push_str(": i32");
-                        if let Some(vn) = var_name {
-                            self.local_var_types.insert(vn.to_string(), Type::Int32);
-                            self.codegen_i32_binding_names.insert(vn.to_string());
-                        }
-                    } else if let Some(ret_ty) = &self.current_function_return_type {
-                        match Self::peel_option_result_payload(ret_ty) {
-                            Type::Int32 => {
-                                // `.len()` while-counters already in `usize_variables`
-                                // must stay usize — do not stamp `: i32` from `-> i32` return.
-                                if var_name.is_some_and(|vn| self.usize_variables.contains(vn)) {
-                                    output.push_str(": usize");
-                                    if let Some(vn) = var_name {
-                                        self.local_var_types
-                                            .insert(vn.to_string(), Type::Custom("usize".into()));
-                                    }
-                                } else {
-                                    output.push_str(": i32");
-                                    if let Some(vn) = var_name {
-                                        self.local_var_types.insert(vn.to_string(), Type::Int32);
-                                        self.codegen_i32_binding_names.insert(vn.to_string());
-                                    }
-                                }
-                            }
-                            Type::Uint => {
-                                output.push_str(": u32");
-                                if let Some(vn) = var_name {
-                                    self.local_var_types.insert(vn.to_string(), Type::Uint);
-                                }
-                            }
-                            Type::Custom(n) if matches!(n.as_str(), "u32" | "i32") => {
-                                // `-> i32` often arrives as Custom("i32"); prefer
-                                // usize for `.len()` while-counters. `-> u32` stays u32.
-                                if n == "i32"
-                                    && var_name.is_some_and(|vn| self.usize_variables.contains(vn))
-                                {
-                                    output.push_str(": usize");
-                                    if let Some(vn) = var_name {
-                                        self.local_var_types
-                                            .insert(vn.to_string(), Type::Custom("usize".into()));
-                                    }
-                                } else {
-                                    output.push_str(": ");
-                                    output.push_str(n);
-                                    if let Some(vn) = var_name {
-                                        self.local_var_types
-                                            .insert(vn.to_string(), Type::Custom(n.clone()));
-                                        if n == "i32" {
-                                            self.codegen_i32_binding_names.insert(vn.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -861,7 +751,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.local_var_types.get(vn),
                         Some(Type::Reference(_) | Type::MutableReference(_))
                     );
-                    if !rhs_is_ref && !self.solver_pins_int_literal_init(value) {
+                    if !rhs_is_ref && !self.solver_pins_int_literal_init_for(var_name, value) {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
                             // `Vec<u64>` / `&Vec<u64>` is a collection formal. The integer
                             // suffix peer is the element; the binding stays `Vec<…>`.
@@ -880,7 +770,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                if mutable && !self.solver_pins_int_literal_init(value) && Self::mut_let_rhs_is_return_width_counter(value) {
+                if mutable && !self.solver_pins_int_literal_init_for(var_name, value) && Self::mut_let_rhs_is_return_width_counter(value) {
                     // later u32 assign peer beats return i64 for `let mut x = 0`.
                     // P3.538: later `prev = m.version` (WJ int) beats i32 coord sentinel.
                     if let Some(vn) = var_name {
@@ -979,8 +869,10 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                if self.assignment_int_target_type.is_none() && self.solver_pins_int_literal_init(value) { self.stamp_solver_int_binding(var_name, value); }
-                if self.assignment_int_target_type.is_none() && self.function_prefers_i32_coord_locals() {
+                if self.assignment_int_target_type.is_none() && self.solver_pins_int_literal_init_for(var_name, value) { self.stamp_solver_int_binding(var_name, value); }
+                // NUM-LOCAL-WIDTH (ADR-0028): a width the solver fixed for this local beats every paint above.
+                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
+                if self.assignment_int_target_type.is_none() && solver_local_width.is_none() && self.function_prefers_i32_coord_locals() {
                     // negative int literal inits stay WJ `int` (i64), even in i32 builders.
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
                         self.assignment_int_target_type = Some(Type::Int);
@@ -1061,6 +953,10 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                         self.assignment_int_target_type = Some(peer);
                     }
+                }
+
+                if let (Some(vn), Some(w)) = (var_name, solver_local_width.as_ref()) {
+                    self.stamp_solver_local_width(vn, w);
                 }
 
                 // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
@@ -1200,6 +1096,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_float_target_type = prev_assign_float;
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                self.convert_usize_into_declared_int(&mut value_str, value, t);
                 let is_string_type = matches!(t, Type::String)
                     || matches!(t, Type::Custom(name) if name == "String" || name == "string");
 
@@ -1614,6 +1511,20 @@ impl<'ast> CodeGenerator<'ast> {
     /// True when `value` is a bare integer literal (optionally negated) whose class the semantic
     /// layer resolved to `int`: the numeric solver says i64 (a typed `int` field, parameter or
     /// declared local is in its class) or NUM-DEFAULT-INT proves nothing constrains it.
+    /// NUM-LOCAL-I64: the solver fixed this (singly bound) local to `int` from a use, so the init takes
+    /// that width whatever its shape.
+    pub(super) fn solver_pins_int_literal_init_for(&self, var_name: Option<&str>, value: &Expression<'ast>) -> bool {
+        let fixed_local = var_name.is_some_and(|n| {
+            self.current_ir_function.as_ref().is_some_and(|f| f.solver_i64_locals.contains(n))
+        });
+        let literal_init = matches!(
+            value,
+            Expression::Literal { value: Literal::Int(_), .. }
+                | Expression::Unary { op: crate::parser::UnaryOp::Neg, .. }
+        );
+        (fixed_local && literal_init) || self.solver_pins_int_literal_init(value)
+    }
+
     pub(super) fn solver_pins_int_literal_init(&self, value: &Expression<'ast>) -> bool {
         // `vec![1, 2, 3]` / `[1, 2, 3]`: the elements share one class; ask about the first.
         let value = match value {
@@ -1647,6 +1558,23 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// NUM-LOCAL-WIDTH: record the solver's width as the binding's type for every later reader.
+    fn stamp_solver_local_width(&mut self, name: &str, w: &crate::ir::safety_type::BaseType) {
+        let Some(ty) = crate::codegen::rust::solver_widths::int_width_as_type(w) else { return };
+        self.assignment_int_target_type = Some(ty.clone());
+        self.local_var_types.insert(name.to_string(), ty);
+        if matches!(w, crate::ir::safety_type::BaseType::I32) {
+            self.codegen_i32_binding_names.insert(name.to_string());
+        } else {
+            self.codegen_i32_binding_names.remove(name);
+        }
+        if matches!(w, crate::ir::safety_type::BaseType::Usize) {
+            self.usize_variables.insert(name.to_string());
+        } else {
+            self.usize_variables.remove(name);
+        }
+    }
+
     /// The solver resolved this literal init to `int`: the peer scans are width heuristics and must
     /// not override it (C4, D-WIDTH-OWNERS). A scalar binding *is* an `int`; for a collection
     /// literal only its elements are.

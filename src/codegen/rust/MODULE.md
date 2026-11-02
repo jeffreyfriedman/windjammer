@@ -11,6 +11,7 @@ In: `Program` + analyzer output + registry. Out: a Rust source string.
 - Functions over 300 lines are allow-listed and may not grow.
 - New code must not add ownership/clone/width decisions here; put them in the IR solvers.
 - Definitions are found by identity, never by name (C3): an item inside an inline module takes its analysis by `AnalyzedFunction::is_analysis_of`, its IR function by name plus `module_path`, and refreshes only its module-qualified registry key (`current_module_path`).
+- Integer widths are converging on the numeric solver (C4, ADR-0028): `solver_widths.rs` is the only reader of the solver's width facts (`literal_widths`, `solver_local_widths`, `index_source_widths`, `usize_conversions`); literal suffixes, let widths, binary operands the solver agrees on and NUM-USIZE-TO-INT conversions come from it, and the legacy width deciders (binary peer logic, let paints, branch/return casts) run only where it answers `None`.
 - Clone insertion is converging on the semantic layer (convergence plan C6): `move_at_last_use.rs` publishes the liveness fact (`ir::liveness`) to every reuse-clone query, so the last use of an owned binding always moves; "is it read again?" questions go to `read_after_current_statement` (the same fact), never to a statement scan.
 
 ## Owns

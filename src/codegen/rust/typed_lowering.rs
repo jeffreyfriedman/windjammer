@@ -146,6 +146,8 @@ fn coercion_kind_to_arg(kind: CoercionKind) -> ArgCoercion {
                 BaseType::I64 => "i64",
                 BaseType::U32 => "u32",
                 BaseType::U64 => "u64",
+                BaseType::Usize => "usize",
+                BaseType::Isize => "isize",
                 _ => "f64",
             };
             ArgCoercion::CastNumeric(cast.to_string())
