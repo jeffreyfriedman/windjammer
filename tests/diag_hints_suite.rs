@@ -68,7 +68,8 @@ fn owned_string_where_borrowed_needed() {
     let d = first("fn show(s: &str) {}\nfn main() { let a = String::new(); show(a); }\n");
     assert_eq!(d.code, "WJ0003");
     let t = all_text(&d);
-    assert!(t.contains("`&x`"), "{t}");
+    assert!(t.contains("borrows for you"), "{t}");
+    assert!(!t.contains("`&x`"), "{t}");
 }
 
 #[test]
@@ -236,5 +237,41 @@ fn every_code_has_an_explain_entry_with_a_fix() {
     }
     for rc in ["E0308", "E0614", "E0277", "E0382", "E0599", "E0368", "E0606", "E0782", "E0369", "E0433", "E0425", "E0432", "E0384", "E0596", "E0507"] {
         assert!(codes::explain(rc).is_some(), "rustc {rc} has no Windjammer explain entry");
+    }
+}
+
+// ---------- a hint must never lead the agent into another diagnostic ----------
+
+/// Apply each Expr fix the hint table can produce to a clean program and require that `wj check`
+/// reports nothing (in particular no lint such as W0004/W0006/W0012 contradicting the advice).
+#[test]
+fn applying_a_hint_fix_introduces_no_new_diagnostic() {
+    use windjammer::diagnostics::hints::{mismatch, FixAnchor};
+    let pairs = [
+        ("String", "&str"), ("i64", "usize"), ("usize", "i64"), ("Option<i64>", "i64"), ("f32", "f64"),
+        ("f64", "i64"), ("i64", "f64"), ("i32", "i64"), ("String", "char"), ("String", "i64"),
+    ];
+    for (e, f) in pairs {
+        let Some(h) = mismatch(e, f) else { panic!("no hint for {e}/{f}") };
+        let Some(fix) = h.fix else { continue };
+        let FixAnchor::Expr { prefix, suffix } = fix.anchor else { continue };
+        let src = format!("fn take(v: int) {{\n    println(\"${{v}}\")\n}}\nfn main() {{\n    let x = 3\n    take({prefix}x{suffix})\n}}\n");
+        let before = lint_diags(&src.replace(&format!("{prefix}x{suffix}"), "x"));
+        let after = lint_diags(&src);
+        let new: Vec<_> = after.iter().filter(|d| !before.iter().any(|b| b.code == d.code)).collect();
+        assert!(new.is_empty(), "{e}/{f}: fix `{prefix}x{suffix}` introduces {:?}", new.iter().map(|d| (&d.code, &d.message)).collect::<Vec<_>>());
+    }
+}
+
+/// Macro-form messages carry the exact replacement and a code.
+#[test]
+fn macro_forms_say_what_to_write() {
+    let d = lint_diags("fn main() {\n    println!(\"hi\")\n    let v = vec![1, 2]\n    println(\"${v.len()}\")\n}\n");
+    let macros: Vec<_> = d.iter().filter(|d| d.code == "W0007").collect();
+    assert!(macros.len() >= 2, "{d:?}");
+    for m in macros {
+        let t = all_text(m);
+        assert!(t.contains("replace `") || t.contains("use "), "{t}");
+        assert!(m.fixes.iter().any(|f| !f.edits.is_empty()), "no machine fix: {t}");
     }
 }

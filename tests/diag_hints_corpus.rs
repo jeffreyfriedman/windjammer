@@ -99,6 +99,12 @@ fn judge(b: &Block) -> (bool, bool) {
         let generic = t.help.as_deref().is_some_and(|h| h.starts_with("change the value or the declared type"));
         return (t.code != "WJ0099" && t.help.is_some(), !generic);
     }
+    // A registered lint/error code in the header: its help text is part of the registry (explain gate).
+    if let Some(code) = b.msg.rfind('[').and_then(|i| b.msg[i + 1..].strip_suffix(']')) {
+        if windjammer::diagnostics::codes::lookup(code).is_some_and(|c| !c.fix.is_empty()) {
+            return (true, true);
+        }
+    }
     if b.text.contains("help:") || b.text.contains("tip:") || b.text.contains("suggestion:") {
         return (true, true);
     }
