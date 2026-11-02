@@ -101,3 +101,21 @@ fn harness_reports_a_wrong_expectation() {
     assert_eq!(got, "enc {\"x\":1}\n");
     assert_ne!(got, expected(&fs::read_to_string(&f).unwrap()));
 }
+
+/// ADR-0027: encoding and decoding are pure. A `@pure` function may call them; the control (`println` under
+/// `@pure`) proves the check is live.
+#[test]
+fn typed_json_is_pure() {
+    let d = tempfile::TempDir::new().unwrap();
+    let check = |body: &str| {
+        let f = d.path().join("p.wj");
+        let src = format!("use std::json\n\nstruct P {{ x: int }}\n\n@pure\nfn f(text: string) -> Result<P, string> {{\n{body}\n}}\n\nfn main() {{\n    match f(\"{{\\\"x\\\":1}}\") {{\n        Ok(p) => println(\"${{p.x}}\"),\n        Err(e) => println(e),\n    }}\n}}\n");
+        fs::write(&f, src).unwrap();
+        let o = Command::new(WJ).arg("check").arg(&f).output().unwrap();
+        String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr)
+    };
+    let pure = check("    let p: P = json.parse_string(text)?\n    let back = json.to_string(p)?\n    json.parse_string(back)");
+    assert!(pure.contains("0 error(s)"), "{pure}");
+    let noisy = check("    println(text)\n    json.parse_string(text)");
+    assert!(noisy.contains("WJ0042"), "the @pure check must reject console output:\n{noisy}");
+}

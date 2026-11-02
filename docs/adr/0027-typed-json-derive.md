@@ -86,7 +86,7 @@ Option C, with this contract:
 | Floats | Shortest round-trip text (`1.0`, `1e20`); NaN and infinities encode as `null`. |
 | Errors | `string` with a fixed grammar: `<path>: <message> at line <L> column <C>`, where `<path>` is a JSONPath (`$`, `$.home.city`, `$.tags[2]`, `$["odd key"]`) and `<message>` is serde's text. A missing field reports the object that lacks it (`$.home: missing field \`city\``); an unknown field reports itself (`$.extra: unknown field \`extra\`, expected \`city\` or \`zip\``); a type error reports the value (`$.tags[1]: invalid type: integer \`2\`, expected a string`). Syntax errors and trailing characters use the same grammar. A typed `json.Error { path, line, column, message }` is rung 2. |
 | Engines | Interpreted and compiled must produce identical bytes and identical error strings. The oracle is one corpus (`tests/json_conformance/*.wj`, `// expect:` lines) run through both engines; the expected encodings are also checked as wire format against Python's `json` module (golden files), which is not the behavioural oracle. |
-| Effects | Pure: no capability required, no effect reported. |
+| Effects | Pure: no capability required, no effect reported; a `@pure` function may encode and decode (`typed_json_is_pure` in `tests/json_conformance_test.rs`). |
 
 ### Compiled path changes
 

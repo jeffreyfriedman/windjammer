@@ -163,6 +163,36 @@ fn main() {
 `Result` and `Option` do not implement Display: print with `${x:?}` or `match` first. Custom error types are plain
 enums (see `wj docs error enum`).
 
+## JSON into and out of your own types
+
+Any struct or enum converts with no glue: `json.to_string(v)`, `json.to_string_pretty(v)`, `json.parse_string::<T>(text)`.
+Unknown fields are rejected; errors name the JSONPath, line and column, identically interpreted and compiled.
+
+```windjammer
+// expect: {"userName":"ada","tags":["a"],"nick":null}
+// expect: $.tags[0]: invalid type: integer `1`, expected a string at line 1 column 25
+use std::json
+
+struct User {
+    @json(rename = "userName")
+    name: string,
+    tags: Vec<string>,
+    nick: Option<string>,
+}
+
+fn main() {
+    println(json.to_string(User { name: "ada", tags: ["a"], nick: None }).unwrap_or(""))
+    let r: Result<User, string> = json.parse_string("{\"userName\":\"x\",\"tags\":[1]}")
+    match r {
+        Ok(u) => println(u.name),
+        Err(e) => println(e),
+    }
+}
+```
+
+A missing `Option` field is `None`; `@json(allow_unknown)` on a struct accepts extra fields. Enums use
+`"Variant"` / `{"Variant": payload}`.
+
 ## Collections and iteration
 
 `let v = [1, 2, 3]` is a growable `Vec`. Iterate directly: `for x in v`, `for (i, x) in v.enumerate()`. Adapter
