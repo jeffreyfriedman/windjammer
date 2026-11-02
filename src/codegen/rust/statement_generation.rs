@@ -1536,7 +1536,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ""
             }
         } else {
-            ""
+            self.owned_param_option_in_loop_prefix(value)
         }
     }
 

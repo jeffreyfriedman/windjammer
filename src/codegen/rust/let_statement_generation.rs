@@ -1069,7 +1069,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // This is safe because String auto-borrows to &str when needed.
                 let prev_owned_ctx = self.in_owned_value_context;
                 self.in_owned_value_context |= self.expression_yields_static_str(value);
-                let mut value_str = self.generate_expression(value);
+                let mut value_str = self.generate_untyped_let_value(value);
                 self.in_owned_value_context = prev_owned_ctx;
                 self.assignment_int_target_type = prev_assign_int;
                 if u32_return_scan_counter && value_str.ends_with("_usize") {
@@ -1192,7 +1192,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Auto-convert &str to String if type is String
-                let mut value_str = self.generate_expression(value);
+                let mut value_str = self.generate_untyped_let_value(value);
 
                 self.collect_target_type = prev_collect_target;
                 self.suppress_collection_turbofish = prev_suppress_turbo;
@@ -1263,7 +1263,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // WINDJAMMER PHILOSOPHY: Auto-convert mutable string variables
                 // When a mutable variable is initialized with a string literal,
                 // it should be a String (not &str) because &str can't be mutated
-                let mut value_str = self.generate_expression(value);
+                let mut value_str = self.generate_untyped_let_value(value);
                 self.apply_vec_index_let_rhs_fixup(var_name, value, None, &mut value_str);
                 if mutable
                     && matches!(
