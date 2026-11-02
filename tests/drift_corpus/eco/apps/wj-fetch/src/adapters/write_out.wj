@@ -1,0 +1,6 @@
+use std::fs
+
+/// Write fetch body to `path` (adapter boundary).
+pub fn write_body(path: string, body: string) -> Result<(), string> {
+    fs.write(path, body)
+}

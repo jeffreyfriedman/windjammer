@@ -1,0 +1,163 @@
+use std::regex
+
+/// True when `pattern` matches somewhere in `text`.
+pub fn is_match(pattern: string, text: string) -> Result<bool, string> {
+    regex.is_match(pattern, text)
+}
+
+/// First match substring, or None.
+pub fn find(pattern: string, text: string) -> Result<Option<string>, string> {
+    regex.find(pattern, text)
+}
+
+/// All non-overlapping match substrings.
+pub fn find_all(pattern: string, text: string) -> Result<Vec<string>, string> {
+    regex.find_all(pattern, text)
+}
+
+/// Replace the first match.
+pub fn replace(pattern: string, text: string, replacement: string) -> Result<string, string> {
+    regex.replace(pattern, text, replacement)
+}
+
+/// Replace every match.
+pub fn replace_all(pattern: string, text: string, replacement: string) -> Result<string, string> {
+    regex.replace_all(pattern, text, replacement)
+}
+
+/// Split `text` on matches of `pattern`.
+pub fn split(pattern: string, text: string) -> Result<Vec<string>, string> {
+    regex.split(pattern, text)
+}
+
+/// Escape regex metacharacters for a literal search.
+pub fn escape(text: string) -> string {
+    regex.escape(text)
+}
+
+/// Number of non-overlapping matches of `pattern` in `text`.
+pub fn match_count(pattern: string, text: string) -> Result<int, string> {
+    match find_all(pattern, text) {
+        Ok(hits) => Ok(hits.len()),
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `pattern` matches at least once in `text`.
+pub fn has_matches(pattern: string, text: string) -> Result<bool, string> {
+    match match_count(pattern, text) {
+        Ok(n) => Ok(n > 0),
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(1)` when `pattern` matches at least once, otherwise `Err`.
+pub fn require_matches(pattern: string, text: string) -> Result<int, string> {
+    match has_matches(pattern, text) {
+        Ok(yes) => {
+            if yes {
+                return Ok(1)
+            }
+            Err("expected matches")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `pattern` matches zero times in `text`.
+pub fn none_match(pattern: string, text: string) -> Result<bool, string> {
+    match match_count(pattern, text) {
+        Ok(n) => Ok(n == 0),
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `pattern` compiles (probed via `is_match` against empty text).
+pub fn is_valid_pattern(pattern: string) -> bool {
+    match is_match(pattern, "") {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+/// First match substring, or `default` when missing / invalid pattern.
+pub fn find_or(pattern: string, text: string, default: string) -> string {
+    match find(pattern, text) {
+        Ok(opt) => {
+            match opt {
+                Some(v) => v,
+                None => default,
+            }
+        },
+        Err(_) => default,
+    }
+}
+
+/// True when `pattern` has at least `n` non-overlapping matches in `text`.
+pub fn at_least_n_matches(pattern: string, text: string, n: int) -> Result<bool, string> {
+    match match_count(pattern, text) {
+        Ok(count) => Ok(count >= n),
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(n)` when `pattern` has at least `n` matches, otherwise `Err`.
+pub fn require_at_least(pattern: string, text: string, n: int) -> Result<int, string> {
+    match at_least_n_matches(pattern, text, n) {
+        Ok(yes) => {
+            if yes {
+                return Ok(n)
+            }
+            Err("expected at least")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// First match substring, or `Err` when missing / invalid pattern.
+pub fn require_match(pattern: string, text: string) -> Result<string, string> {
+    match find(pattern, text) {
+        Ok(opt) => {
+            match opt {
+                Some(v) => Ok(v),
+                None => Err("no match"),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `pattern` has exactly `n` non-overlapping matches in `text`.
+pub fn exactly_n_matches(pattern: string, text: string, n: int) -> Result<bool, string> {
+    match match_count(pattern, text) {
+        Ok(count) => Ok(count == n),
+        Err(e) => Err(e),
+    }
+}
+
+/// Match count when `pattern` has exactly `n` matches.
+pub fn require_exact_count(pattern: string, text: string, n: int) -> Result<int, string> {
+    match exactly_n_matches(pattern, text, n) {
+        Ok(yes) => {
+            if yes {
+                Ok(n)
+            } else {
+                Err("expected exact matches")
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(0)` when `pattern` matches nothing in `text`.
+pub fn require_none(pattern: string, text: string) -> Result<int, string> {
+    match none_match(pattern, text) {
+        Ok(yes) => {
+            if yes {
+                return Ok(0)
+            }
+            Err("expected no matches")
+        },
+        Err(e) => Err(e),
+    }
+}

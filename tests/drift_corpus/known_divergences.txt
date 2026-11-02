@@ -1,0 +1,4 @@
+# Known divergences between the tree walker, the resolved engine and the compiled backend.
+# Shrink-only: a line is `case-id | walker=A resolved=B compiled=C | reason (finding in docs/drift/findings.md)`.
+# The drift gate fails on a divergence not listed here, on a listed one whose shape changed, and on a listed one
+# that no longer diverges (delete the line when you fix it). New lines need DRIFT_ALLOW_GROWTH=1 and a finding.

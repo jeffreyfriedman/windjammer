@@ -1,0 +1,38 @@
+use std::strings
+
+/// Join absolute upstream base with an incoming request path.
+pub fn join_upstream_url(upstream: string, path: string) -> Result<string, string> {
+    let up = own(upstream)
+    if strings.len(up) == 0 {
+        return Err("upstream base URL is required")
+    }
+    let base = trim_trailing_slashes(up)
+    let suffix = normalize_path(path)
+    if suffix == "/" {
+        return Ok("${base}/")
+    }
+    Ok("${base}${suffix}")
+}
+
+fn trim_trailing_slashes(text: string) -> string {
+    let mut out = text
+    while strings.len(out) > 0 && strings.ends_with(out, "/") {
+        out = strings.substring(out, 0, strings.len(out) - 1)
+    }
+    out
+}
+
+fn normalize_path(path: string) -> string {
+    let p = own(path)
+    if strings.len(p) == 0 {
+        return "/"
+    }
+    if strings.starts_with(p, "/") {
+        return p
+    }
+    "/${p}"
+}
+
+fn own(value: string) -> string {
+    value
+}

@@ -1,0 +1,296 @@
+use crate::domain::Taskflow
+use crate::domain::Config
+use crate::domain::default_config
+use crate::domain::Reply
+
+fn app() -> Taskflow {
+    let mut config = default_config()
+    config.jwt_secret = "test-secret-test-secret-test-secret"
+    config.rate_limit = 1000
+    Taskflow::new(config)
+}
+
+// Issue a request as `token` ("" = anonymous) at time `now`.
+fn call(app: Taskflow, method: string, path: string, token: string, body: string) -> Reply {
+    app.handle(method, path, token, "client-1", 1000, body)
+}
+
+fn register(app: Taskflow, name: string) -> Reply {
+    call(app, "POST", "/api/v1/auth/register", "", "{\"username\":\"${name}\",\"email\":\"${name}@example.com\",\"password\":\"pass-${name}-123\"}")
+}
+
+fn login_token(app: Taskflow, name: string) -> string {
+    let reply = call(app, "POST", "/api/v1/auth/login", "", "{\"username\":\"${name}\",\"password\":\"pass-${name}-123\"}")
+    assert_eq(reply.status, 200)
+    // {"token":"<jwt>","expires_in":N}: the jwt is the fourth quote-delimited field
+    let fields: Vec<string> = reply.body.split("\"").collect()
+    fields[3]
+}
+
+fn signed_in(app: Taskflow, name: string) -> string {
+    assert_eq(register(app, name).status, 201)
+    login_token(app, name)
+}
+
+@test
+fn test_health_is_open() {
+    let reply = call(app(), "GET", "/health", "", "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "ok")
+}
+
+@test
+fn test_unknown_route_and_method() {
+    assert_eq(call(app(), "GET", "/nope", "", "").status, 404)
+    assert_eq(call(app(), "TRACE", "/health", "", "").status, 405)
+}
+
+@test
+fn test_register_never_returns_the_password_hash() {
+    let reply = register(app(), "ann")
+    assert_eq(reply.status, 201)
+    assert_str_contains(reply.body, "\"username\":\"ann\"")
+    assert(!reply.body.contains("hash"), "no hash in response")
+    assert(!reply.body.contains("pass-ann"), "no password in response")
+}
+
+@test
+fn test_register_validation_errors() {
+    let mut a = app()
+    let short = call(a, "POST", "/api/v1/auth/register", "", "{\"username\":\"x\",\"email\":\"x@example.com\",\"password\":\"pass-x-123\"}")
+    assert_eq(short.status, 422)
+    let bad_email = call(a, "POST", "/api/v1/auth/register", "", "{\"username\":\"xavier\",\"email\":\"nope\",\"password\":\"pass-x-123\"}")
+    assert_eq(bad_email.status, 422)
+    let weak = call(a, "POST", "/api/v1/auth/register", "", "{\"username\":\"xavier\",\"email\":\"x@example.com\",\"password\":\"abc\"}")
+    assert_eq(weak.status, 422)
+    let junk = call(a, "POST", "/api/v1/auth/register", "", "not json")
+    assert_eq(junk.status, 400)
+}
+
+@test
+fn test_duplicate_registration_conflicts() {
+    let mut a = app()
+    assert_eq(register(a, "ann").status, 201)
+    assert_eq(register(a, "ann").status, 409)
+}
+
+@test
+fn test_login_rejects_wrong_password_and_unknown_user() {
+    let mut a = app()
+    register(a, "ann")
+    let wrong = call(a, "POST", "/api/v1/auth/login", "", "{\"username\":\"ann\",\"password\":\"nope-nope-nope\"}")
+    assert_eq(wrong.status, 401)
+    let unknown = call(a, "POST", "/api/v1/auth/login", "", "{\"username\":\"zed\",\"password\":\"nope-nope-nope\"}")
+    assert_eq(unknown.status, 401)
+    assert_eq(wrong.body, unknown.body)
+}
+
+@test
+fn test_me_requires_a_valid_bearer_token() {
+    let mut a = app()
+    let token = signed_in(a, "ann")
+    let ok = call(a, "GET", "/api/v1/auth/me", "Bearer ${token}", "")
+    assert_eq(ok.status, 200)
+    assert_str_contains(ok.body, "\"username\":\"ann\"")
+    assert_eq(call(a, "GET", "/api/v1/auth/me", "", "").status, 401)
+    assert_eq(call(a, "GET", "/api/v1/auth/me", "Bearer garbage", "").status, 401)
+    assert_eq(call(a, "GET", "/api/v1/auth/me", "Bearer ${token}x", "").status, 401)
+}
+
+@test
+fn test_protected_routes_need_authentication() {
+    let mut a = app()
+    assert_eq(call(a, "GET", "/api/v1/projects", "", "").status, 401)
+    assert_eq(call(a, "POST", "/api/v1/projects", "", "{\"name\":\"P\"}").status, 401)
+    assert_eq(call(a, "GET", "/api/v1/tasks/1", "", "").status, 401)
+}
+
+@test
+fn test_project_lifecycle() {
+    let mut a = app()
+    let tok = "Bearer ${signed_in(a, "ann")}"
+    let created = call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"Alpha\",\"description\":\"first\"}")
+    assert_eq(created.status, 201)
+    assert_str_contains(created.body, "\"name\":\"Alpha\"")
+    let listed = call(a, "GET", "/api/v1/projects", tok, "")
+    assert_eq(listed.status, 200)
+    assert_str_contains(listed.body, "Alpha")
+    assert_eq(call(a, "GET", "/api/v1/projects/1", tok, "").status, 200)
+    assert_eq(call(a, "GET", "/api/v1/projects/99", tok, "").status, 404)
+    assert_eq(call(a, "GET", "/api/v1/projects/abc", tok, "").status, 404)
+    assert_eq(call(a, "DELETE", "/api/v1/projects/1", tok, "").status, 204)
+    assert_eq(call(a, "GET", "/api/v1/projects/1", tok, "").status, 404)
+}
+
+@test
+fn test_project_name_is_validated() {
+    let mut a = app()
+    let tok = "Bearer ${signed_in(a, "ann")}"
+    assert_eq(call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"\"}").status, 422)
+}
+
+@test
+fn test_non_members_cannot_see_a_project() {
+    let mut a = app()
+    let ann = "Bearer ${signed_in(a, "ann")}"
+    let bob = "Bearer ${signed_in(a, "bob")}"
+    call(a, "POST", "/api/v1/projects", ann, "{\"name\":\"Alpha\"}")
+    assert_eq(call(a, "GET", "/api/v1/projects/1", bob, "").status, 403)
+    assert_eq(call(a, "GET", "/api/v1/projects/1/tasks", bob, "").status, 403)
+    assert_eq(call(a, "DELETE", "/api/v1/projects/1", bob, "").status, 403)
+    let bobs = call(a, "GET", "/api/v1/projects", bob, "")
+    assert(!bobs.body.contains("Alpha"), "bob does not see ann's project")
+}
+
+@test
+fn test_roles_gate_task_writes_and_project_admin() {
+    let mut a = app()
+    let ann = "Bearer ${signed_in(a, "ann")}"
+    let bob = "Bearer ${signed_in(a, "bob")}"
+    let cat = "Bearer ${signed_in(a, "cat")}"
+    call(a, "POST", "/api/v1/projects", ann, "{\"name\":\"Alpha\"}")
+    // owner adds bob as member and cat as viewer
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":2,\"role\":\"member\"}").status, 200)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":3,\"role\":\"viewer\"}").status, 200)
+    // members write tasks, viewers only read
+    assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", bob, "{\"title\":\"From bob\"}").status, 201)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", cat, "{\"title\":\"From cat\"}").status, 403)
+    assert_eq(call(a, "GET", "/api/v1/projects/1/tasks", cat, "").status, 200)
+    assert_eq(call(a, "PATCH", "/api/v1/tasks/1", cat, "{\"status\":\"done\"}").status, 403)
+    // only owners/admins manage members or delete the project
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", bob, "{\"user_id\":3,\"role\":\"member\"}").status, 403)
+    assert_eq(call(a, "DELETE", "/api/v1/projects/1", bob, "").status, 403)
+    assert_eq(call(a, "DELETE", "/api/v1/projects/1", ann, "").status, 204)
+}
+
+@test
+fn test_member_role_must_be_known_and_user_must_exist() {
+    let mut a = app()
+    let ann = "Bearer ${signed_in(a, "ann")}"
+    call(a, "POST", "/api/v1/projects", ann, "{\"name\":\"Alpha\"}")
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":1,\"role\":\"king\"}").status, 422)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":42,\"role\":\"member\"}").status, 404)
+}
+
+@test
+fn test_task_lifecycle_and_defaults() {
+    let mut a = app()
+    let tok = "Bearer ${signed_in(a, "ann")}"
+    call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"Alpha\"}")
+    let created = call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"Write docs\"}")
+    assert_eq(created.status, 201)
+    assert_str_contains(created.body, "\"status\":\"todo\"")
+    assert_str_contains(created.body, "\"priority\":\"medium\"")
+    let patched = call(a, "PATCH", "/api/v1/tasks/1", tok, "{\"status\":\"in_progress\",\"priority\":\"high\"}")
+    assert_eq(patched.status, 200)
+    assert_str_contains(patched.body, "\"status\":\"in_progress\"")
+    assert_str_contains(patched.body, "\"title\":\"Write docs\"")
+    assert_eq(call(a, "GET", "/api/v1/tasks/1", tok, "").status, 200)
+    assert_eq(call(a, "DELETE", "/api/v1/tasks/1", tok, "").status, 204)
+    assert_eq(call(a, "GET", "/api/v1/tasks/1", tok, "").status, 404)
+}
+
+@test
+fn test_task_validation() {
+    let mut a = app()
+    let tok = "Bearer ${signed_in(a, "ann")}"
+    call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"Alpha\"}")
+    assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"\"}").status, 422)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"ok\",\"priority\":\"urgent\"}").status, 422)
+    call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"ok\"}")
+    assert_eq(call(a, "PATCH", "/api/v1/tasks/1", tok, "{\"status\":\"finished\"}").status, 422)
+    assert_eq(call(a, "POST", "/api/v1/projects/9/tasks", tok, "{\"title\":\"ok\"}").status, 404)
+}
+
+@test
+fn test_list_filters_by_query_string() {
+    let mut a = app()
+    let tok = "Bearer ${signed_in(a, "ann")}"
+    call(a, "POST", "/api/v1/projects", tok, "{\"name\":\"Alpha\"}")
+    call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"Fix crash\",\"priority\":\"high\"}")
+    call(a, "POST", "/api/v1/projects/1/tasks", tok, "{\"title\":\"Write docs\"}")
+    call(a, "PATCH", "/api/v1/tasks/2", tok, "{\"status\":\"done\"}")
+    let high = call(a, "GET", "/api/v1/projects/1/tasks?priority=high", tok, "")
+    assert_str_contains(high.body, "Fix crash")
+    assert(!high.body.contains("Write docs"), "priority filter")
+    let done = call(a, "GET", "/api/v1/projects/1/tasks?status=done", tok, "")
+    assert_str_contains(done.body, "Write docs")
+    assert(!done.body.contains("Fix crash"), "status filter")
+    let found = call(a, "GET", "/api/v1/projects/1/tasks?q=CRASH", tok, "")
+    assert_str_contains(found.body, "Fix crash")
+}
+
+@test
+fn test_assignment_requires_a_project_member() {
+    let mut a = app()
+    let ann = "Bearer ${signed_in(a, "ann")}"
+    signed_in(a, "bob")
+    call(a, "POST", "/api/v1/projects", ann, "{\"name\":\"Alpha\"}")
+    call(a, "POST", "/api/v1/projects/1/tasks", ann, "{\"title\":\"T\"}")
+    assert_eq(call(a, "POST", "/api/v1/tasks/1/assign", ann, "{\"user_id\":2}").status, 422)
+    call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":2,\"role\":\"member\"}")
+    let ok = call(a, "POST", "/api/v1/tasks/1/assign", ann, "{\"user_id\":2}")
+    assert_eq(ok.status, 200)
+    assert_str_contains(ok.body, "\"assigned_to\":2")
+}
+
+@test
+fn test_rate_limit_returns_429_with_retry_after() {
+    let mut config = default_config()
+    config.jwt_secret = "test-secret-test-secret-test-secret"
+    config.rate_limit = 3
+    config.rate_window_ms = 60000
+    let mut a = Taskflow::new(config)
+    assert_eq(a.handle("GET", "/health", "", "k1", 1000, "").status, 200)
+    assert_eq(a.handle("GET", "/health", "", "k1", 1001, "").status, 200)
+    assert_eq(a.handle("GET", "/health", "", "k1", 1002, "").status, 200)
+    let limited = a.handle("GET", "/health", "", "k1", 1003, "")
+    assert_eq(limited.status, 429)
+    assert_str_contains(limited.headers, "Retry-After")
+    // other clients are unaffected, and the window resets
+    assert_eq(a.handle("GET", "/health", "", "k2", 1004, "").status, 200)
+    assert_eq(a.handle("GET", "/health", "", "k1", 61001, "").status, 200)
+}
+
+// Acceptance: a small team works through a project from sign-up to clean-up.
+@test
+fn test_acceptance_team_workflow() {
+    let mut a = app()
+    let ann = "Bearer ${signed_in(a, "ann")}"
+    let bob = "Bearer ${signed_in(a, "bob")}"
+    let cat = "Bearer ${signed_in(a, "cat")}"
+
+    // ann starts a project and brings bob (member) and cat (viewer) in
+    assert_eq(call(a, "POST", "/api/v1/projects", ann, "{\"name\":\"Launch\",\"description\":\"v1\"}").status, 201)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":2,\"role\":\"member\"}").status, 200)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/members", ann, "{\"user_id\":3,\"role\":\"viewer\"}").status, 200)
+
+    // everyone sees the project, outsiders do not
+    assert_str_contains(call(a, "GET", "/api/v1/projects", bob, "").body, "Launch")
+    assert_str_contains(call(a, "GET", "/api/v1/projects", cat, "").body, "Launch")
+
+    // bob files and works tasks, ann assigns one to him
+    assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", bob, "{\"title\":\"Write release notes\",\"priority\":\"low\"}").status, 201)
+    assert_eq(call(a, "POST", "/api/v1/projects/1/tasks", bob, "{\"title\":\"Fix login crash\",\"priority\":\"critical\"}").status, 201)
+    assert_eq(call(a, "POST", "/api/v1/tasks/2/assign", ann, "{\"user_id\":2}").status, 200)
+    assert_eq(call(a, "PATCH", "/api/v1/tasks/2", bob, "{\"status\":\"in_progress\"}").status, 200)
+
+    // cat can read and filter but not change anything
+    let urgent = call(a, "GET", "/api/v1/projects/1/tasks?priority=critical&status=in_progress&assigned_to=2", cat, "")
+    assert_eq(urgent.status, 200)
+    assert_str_contains(urgent.body, "Fix login crash")
+    assert(!urgent.body.contains("release notes"), "filters combine with AND")
+    assert_eq(call(a, "PATCH", "/api/v1/tasks/2", cat, "{\"status\":\"done\"}").status, 403)
+
+    // finishing work, then ann removes one task and the whole project
+    assert_eq(call(a, "PATCH", "/api/v1/tasks/2", bob, "{\"status\":\"done\"}").status, 200)
+    let done = call(a, "GET", "/api/v1/projects/1/tasks?status=done", ann, "")
+    assert_str_contains(done.body, "Fix login crash")
+    assert_eq(call(a, "DELETE", "/api/v1/tasks/1", bob, "").status, 204)
+    assert_eq(call(a, "DELETE", "/api/v1/projects/1", ann, "").status, 204)
+
+    // nothing of the project survives, for anyone
+    assert_eq(call(a, "GET", "/api/v1/projects/1", bob, "").status, 404)
+    assert_eq(call(a, "GET", "/api/v1/tasks/2", bob, "").status, 404)
+    assert(!call(a, "GET", "/api/v1/projects", cat, "").body.contains("Launch"), "membership removed with the project")
+}

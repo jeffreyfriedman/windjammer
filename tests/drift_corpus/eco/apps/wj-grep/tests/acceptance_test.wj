@@ -1,0 +1,101 @@
+// End-to-end cases against a real directory tree under the system temp dir.
+use std::fs
+use std::time
+use crate::adapters::parse_args
+use crate::adapters::run
+
+fn argv(items: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    out.push("wj-grep")
+    for item in items {
+        out.push(item)
+    }
+    out
+}
+
+// Layout: src/a.txt, src/deep/b.txt, target/c.txt (gitignored dir), notes.log (gitignored glob), .git/config (hidden).
+fn fixture(name: string) -> string {
+    let root = "/tmp/wj-grep-acceptance-${time.utc_now().timestamp_millis()}-${name}"
+    fs.create_dir_all("${root}/src/deep").unwrap()
+    fs.create_dir_all("${root}/target").unwrap()
+    fs.create_dir_all("${root}/.git").unwrap()
+    fs.write("${root}/.gitignore", "target/\n*.log\n").unwrap()
+    fs.write("${root}/src/a.txt", "alpha\nneedle one\nomega\n").unwrap()
+    fs.write("${root}/src/deep/b.txt", "NEEDLE two\nnothing\n").unwrap()
+    fs.write("${root}/target/c.txt", "needle ignored\n").unwrap()
+    fs.write("${root}/notes.log", "needle log\n").unwrap()
+    fs.write("${root}/.git/config", "needle hidden\n").unwrap()
+    root
+}
+
+fn search(args: Vec<string>) -> (string, int) {
+    let cmd = parse_args(argv(args)).unwrap()
+    run(cmd).unwrap()
+}
+
+@test
+fn test_search_skips_ignored_and_hidden_files() {
+    let root = fixture("skip")
+    let result = search(["--ignore-case", "needle", root.clone()])
+    fs.remove_dir_all(root.clone()).unwrap()
+    assert_eq(result.1, 2)
+    assert_eq(result.0, "${root}/src/a.txt:2:needle one\n${root}/src/deep/b.txt:1:NEEDLE two")
+}
+
+@test
+fn test_case_sensitive_by_default() {
+    let root = fixture("case")
+    let result = search(["needle", root.clone()])
+    fs.remove_dir_all(root.clone()).unwrap()
+    assert_eq(result.1, 1)
+    assert_eq(result.0, "${root}/src/a.txt:2:needle one")
+}
+
+@test
+fn test_no_ignore_and_hidden_search_everything() {
+    let root = fixture("all")
+    let result = search(["--ignore-case", "--no-ignore", "--hidden", "--count", "needle", root.clone()])
+    fs.remove_dir_all(root.clone()).unwrap()
+    assert_eq(result.1, 5)
+}
+
+@test
+fn test_context_and_line_numbers_from_files() {
+    let root = fixture("ctx")
+    let result = search(["--context=1", "needle", "${root}/src/a.txt"])
+    fs.remove_dir_all(root.clone()).unwrap()
+    assert_eq(result.0, "${root}/src/a.txt-1-alpha\n${root}/src/a.txt:2:needle one\n${root}/src/a.txt-3-omega")
+}
+
+@test
+fn test_replace_previews_then_writes() {
+    let root = fixture("replace")
+    let target = "${root}/src/a.txt"
+    let preview = search(["--replace=pin", "needle", root.clone()])
+    assert_eq(preview.1, 1)
+    assert_eq(fs.read_to_string(target.clone()).unwrap(), "alpha\nneedle one\nomega\n")
+    let written = search(["--replace=pin", "--write", "needle", root.clone()])
+    assert_eq(written.1, 1)
+    assert_eq(fs.read_to_string(target.clone()).unwrap(), "alpha\npin one\nomega\n")
+    let after = search(["needle", root.clone()])
+    fs.remove_dir_all(root).unwrap()
+    assert_eq(after.1, 0)
+}
+
+@test
+fn test_no_match_reports_zero_and_empty_output() {
+    let root = fixture("none")
+    let result = search(["zzz-not-there", root.clone()])
+    fs.remove_dir_all(root).unwrap()
+    assert_eq(result.1, 0)
+    assert_eq(result.0, "")
+}
+
+@test
+fn test_invalid_regex_is_an_error_from_run() {
+    let root = fixture("badre")
+    let cmd = parse_args(argv(["(unclosed", root.clone()])).unwrap()
+    let outcome = run(cmd)
+    fs.remove_dir_all(root).unwrap()
+    assert(outcome.is_err(), "invalid pattern must be an error")
+}

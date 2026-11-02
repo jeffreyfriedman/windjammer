@@ -1,0 +1,23 @@
+use std::fs
+use std::process
+
+use crate::adapters::run_transcript
+use crate::domain::default_chat_config
+
+fn main() {
+    let mut config = default_chat_config()
+    config.jwt_secret = std::env::var("CHAT_JWT_SECRET").unwrap_or("")
+    if config.jwt_secret == "" {
+        eprintln("wj-chat: set CHAT_JWT_SECRET")
+        process.exit(2)
+    }
+    let script = match fs.read_to_string("/dev/stdin") {
+        Ok(text) => text,
+        Err(e) => {
+            eprintln("wj-chat: cannot read stdin: ${e}")
+            process.exit(1)
+            return
+        },
+    }
+    println("${run_transcript(config, script)}")
+}

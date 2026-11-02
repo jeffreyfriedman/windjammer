@@ -1,0 +1,16 @@
+[package]
+name = "wj-webhook"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_event = { path = "../../packages/wj-event/build" }
+wj_cors = { path = "../../packages/wj-cors/build" }
+wj_headers = { path = "../../packages/wj-headers/build" }
+wj_validate = { path = "../../packages/wj-validate/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

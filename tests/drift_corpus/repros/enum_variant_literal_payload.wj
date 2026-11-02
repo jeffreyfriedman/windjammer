@@ -1,0 +1,18 @@
+// A literal as the payload of a tuple variant whose field is `int`, built in a `let`: the compiled
+// backend types it i32.
+enum Tag {
+    A,
+    B(int),
+}
+
+fn text(t: Tag) -> string {
+    match t {
+        Tag::A => "A",
+        Tag::B(n) => "B${n}",
+    }
+}
+
+fn main() {
+    let t = Tag::B(4)
+    println(text(t))
+}

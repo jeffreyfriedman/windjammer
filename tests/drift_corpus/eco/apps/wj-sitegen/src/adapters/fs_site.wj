@@ -1,0 +1,152 @@
+use crate::domain::generate_page
+use crate::domain::GeneratedPage
+use crate::domain::relative_path_from_root
+use crate::domain::render_feeds
+use crate::domain::render_robots
+use crate::domain::FeedEntry
+use crate::domain::SitegenConfig
+use std::fs
+use std::strings
+
+/// Recursively read `*.md` under `src_dir` and render HTML pages.
+pub fn load_pages(src_dir: string) -> Result<Vec<GeneratedPage>, string> {
+    match collect_md_files(src_dir) {
+        Ok(paths) => {
+            let mut pages = Vec::new()
+            for path in paths {
+                let relative = relative_path_from_root(path, src_dir)
+                match fs.read_to_string(path) {
+                    Ok(markdown) => {
+                        pages.push(generate_page(relative, markdown))
+                    },
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok(pages)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Write HTML pages plus optional sitemap/RSS when `config.base_url` is set.
+pub fn write_site(out_dir: string, config: SitegenConfig, pages: Vec<GeneratedPage>) -> Result<int, string> {
+    match fs.create_dir_all(out_dir) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    let mut feed_entries = Vec::new()
+    let mut written = 0
+    for page in pages {
+        feed_entries.push(FeedEntry {
+            path: page.filename,
+            title: page.title,
+            html: page.html,
+        })
+    }
+    let mut idx = 0
+    while idx < feed_entries.len() {
+        let entry = feed_entries[idx]
+        let dest = join_path(out_dir, entry.path)
+        let parent = parent_dir(dest)
+        if strings.len(parent) > 0 {
+            match fs.create_dir_all(parent) {
+                Ok(_) => {},
+                Err(e) => return Err(e),
+            }
+        }
+        match fs.write(dest, entry.html) {
+            Ok(_) => {
+                written = written + 1
+            },
+            Err(e) => return Err(e),
+        }
+        idx = idx + 1
+    }
+    if config.base_url.len() == 0 {
+        return Ok(written)
+    }
+    match render_feeds(config.base_url, config.site_title, feed_entries) {
+        Ok(feeds) => {
+            let sitemap = feeds.0
+            let rss = feeds.1
+            match render_robots(config.base_url) {
+                Ok(robots) => {
+                    match fs.write(join_path(out_dir, "sitemap.xml"), sitemap) {
+                        Ok(_) => {},
+                        Err(e) => return Err(e),
+                    }
+                    match fs.write(join_path(out_dir, "feed.xml"), rss) {
+                        Ok(_) => {},
+                        Err(e) => return Err(e),
+                    }
+                    match fs.write(join_path(out_dir, "robots.txt"), robots) {
+                        Ok(_) => Ok(written + 3),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn generate_site(src_dir: string, out_dir: string) -> Result<int, string> {
+    generate_site_with_config(src_dir, out_dir, SitegenConfig::defaults())
+}
+
+pub fn generate_site_with_config(src_dir: string, out_dir: string, config: SitegenConfig) -> Result<int, string> {
+    match load_pages(src_dir) {
+        Ok(pages) => write_site(out_dir, config, pages),
+        Err(e) => Err(e),
+    }
+}
+
+fn collect_md_files(dir: string) -> Result<Vec<string>, string> {
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            let mut out = Vec::new()
+            for entry in entries {
+                let path = entry.path()
+                if entry.is_dir() {
+                    match collect_md_files(path) {
+                        Ok(nested) => {
+                            for p in nested {
+                                out.push(p)
+                            }
+                        },
+                        Err(e) => return Err(e),
+                    }
+                } else if entry.is_file() {
+                    if strings.ends_with(path, ".md") {
+                        out.push(path)
+                    }
+                }
+            }
+            Ok(out)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn join_path(left: string, right: string) -> string {
+    if strings.starts_with(right, "/") {
+        return right
+    }
+    if strings.ends_with(left, "/") {
+        return "${left}${right}"
+    }
+    "${left}/${right}"
+}
+
+fn parent_dir(path: string) -> string {
+    let mut idx = strings.len(path) - 1
+    while idx > 0 {
+        let ch = strings.substring(path, idx, idx + 1)
+        if ch == "/" {
+            return strings.substring(path, 0, idx)
+        }
+        idx = idx - 1
+    }
+    ""
+}

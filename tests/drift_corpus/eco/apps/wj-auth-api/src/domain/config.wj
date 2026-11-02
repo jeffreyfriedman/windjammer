@@ -1,0 +1,502 @@
+use std::collections::HashMap
+use std::env
+use std::strings
+use wj_config::from_toml
+use wj_config::merge
+use wj_dotenv::parse as parse_dotenv
+use wj_duration::parse_ms
+use wj_log::parse_level
+
+pub struct AuthConfig {
+    pub jwt_secret: string,
+    pub jwt_ttl_secs: int,
+    pub tenant_slug: string,
+    pub allowed_origins: Vec<string>,
+    pub rate_limit: int,
+    pub window_ms: int,
+    pub max_username_len: int,
+    pub min_password_len: int,
+    pub max_password_len: int,
+    pub log_level: string,
+}
+
+impl AuthConfig {
+    pub fn defaults() -> AuthConfig {
+        let mut allowed = Vec::new()
+        allowed.push("*")
+        AuthConfig {
+            jwt_secret: "dev-secret",
+            jwt_ttl_secs: 3600,
+            tenant_slug: "default",
+            allowed_origins: allowed,
+            rate_limit: 0,
+            window_ms: 60_000,
+            max_username_len: 64,
+            min_password_len: 8,
+            max_password_len: 128,
+            log_level: "info",
+        }
+    }
+}
+
+pub fn config_from_env() -> AuthConfig {
+    AuthConfig {
+        jwt_secret: jwt_secret_from_env(),
+        jwt_ttl_secs: jwt_ttl_from_env(),
+        tenant_slug: tenant_slug_from_env(),
+        allowed_origins: cors_origins_from_env(),
+        rate_limit: rate_limit_from_env(),
+        window_ms: window_ms_from_env(),
+        max_username_len: max_username_len_from_env(),
+        min_password_len: min_password_len_from_env(),
+        max_password_len: max_password_len_from_env(),
+        log_level: log_level_from_env(),
+    }
+}
+
+/// Defaults < TOML text. Flat keys (`jwt_secret`) or `[jwt]` section keys (`jwt.secret`).
+/// Section keys win when present (they are never in defaults).
+pub fn config_from_toml(text: string) -> AuthConfig {
+    auth_config_from_map(merge(default_string_map(), from_toml(text)))
+}
+
+/// Defaults < dotenv text (`JWT_SECRET=…`). Dogfoods `wj-dotenv` + `wj-config::merge`.
+pub fn config_from_dotenv(text: string) -> AuthConfig {
+    auth_config_from_map(merge(default_string_map(), dotenv_to_config_map(parse_dotenv(text))))
+}
+
+pub fn port_from_env() -> int {
+    match env.get("PORT") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(port) => port,
+                None => 8091,
+            }
+        },
+        None => 8091,
+    }
+}
+
+fn default_string_map() -> HashMap<string, string> {
+    let mut defaults = HashMap::new()
+    defaults.insert("jwt_secret", "dev-secret")
+    defaults.insert("jwt_ttl_secs", "3600")
+    defaults.insert("tenant_slug", "default")
+    defaults.insert("cors_origin", "*")
+    defaults.insert("rate_limit", "0")
+    defaults.insert("window_ms", "60000")
+    defaults.insert("max_username_len", "64")
+    defaults.insert("min_password_len", "8")
+    defaults.insert("max_password_len", "128")
+    defaults.insert("log_level", "info")
+    defaults
+}
+
+/// Map process-style dotenv keys onto the flat config keys used by `auth_config_from_map`.
+fn dotenv_to_config_map(raw: HashMap<string, string>) -> HashMap<string, string> {
+    let mut out = HashMap::new()
+    for (key, value) in raw {
+        let mapped = map_dotenv_key(key)
+        if strings.len(mapped) > 0 {
+            out.insert(mapped, value)
+        }
+    }
+    out
+}
+
+fn map_dotenv_key(key: string) -> string {
+    if key == "JWT_SECRET" || key == "jwt_secret" {
+        return "jwt_secret"
+    }
+    if key == "JWT_TTL_SECS" || key == "jwt_ttl_secs" {
+        return "jwt_ttl_secs"
+    }
+    if key == "JWT_TTL" || key == "jwt_ttl" {
+        return "jwt_ttl"
+    }
+    if key == "TENANT_SLUG" || key == "tenant_slug" {
+        return "tenant_slug"
+    }
+    if key == "CORS_ORIGIN" || key == "cors_origin" {
+        return "cors_origin"
+    }
+    if key == "RATE_LIMIT" || key == "rate_limit" {
+        return "rate_limit"
+    }
+    if key == "WINDOW_MS" || key == "window_ms" {
+        return "window_ms"
+    }
+    if key == "WINDOW" || key == "window" {
+        return "window"
+    }
+    if key == "MAX_USERNAME_LEN" || key == "max_username_len" {
+        return "max_username_len"
+    }
+    if key == "MIN_PASSWORD_LEN" || key == "min_password_len" {
+        return "min_password_len"
+    }
+    if key == "MAX_PASSWORD_LEN" || key == "max_password_len" {
+        return "max_password_len"
+    }
+    if key == "LOG_LEVEL" || key == "log_level" {
+        return "log_level"
+    }
+    ""
+}
+
+fn auth_config_from_map(map: HashMap<string, string>) -> AuthConfig {
+    let jwt_secret = match map.get("jwt.secret") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("jwt_secret") {
+                Some(v) => "${v}",
+                None => "dev-secret",
+            }
+        },
+    }
+    let ttl_text = match map.get("jwt.ttl") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("jwt.ttl_secs") {
+                Some(v) => "${v}",
+                None => {
+                    match map.get("jwt_ttl") {
+                        Some(v) => "${v}",
+                        None => {
+                            match map.get("jwt_ttl_secs") {
+                                Some(v) => "${v}",
+                                None => "3600",
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+    let jwt_ttl_secs = match parse_ttl_secs(ttl_text) {
+        Some(n) => n,
+        None => 3600,
+    }
+    let cors = match map.get("cors_origin") {
+        Some(v) => "${v}",
+        None => "*",
+    }
+    let rate_text = match map.get("rate_limit") {
+        Some(v) => "${v}",
+        None => "0",
+    }
+    let rate_limit = match digits_to_int_allow_zero(rate_text) {
+        Some(n) => n,
+        None => 0,
+    }
+    let window_text = match map.get("window") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("window_ms") {
+                Some(v) => "${v}",
+                None => "60000",
+            }
+        },
+    }
+    let window_ms = match parse_window_ms(window_text) {
+        Some(n) => n,
+        None => 60_000,
+    }
+    let max_username_len = match map.get("max_username_len") {
+        Some(v) => {
+            match digits_to_int("${v}") {
+                Some(n) => n,
+                None => 64,
+            }
+        },
+        None => 64,
+    }
+    let min_password_len = match map.get("min_password_len") {
+        Some(v) => {
+            match digits_to_int("${v}") {
+                Some(n) => n,
+                None => 8,
+            }
+        },
+        None => 8,
+    }
+    let max_password_len = match map.get("max_password_len") {
+        Some(v) => {
+            match digits_to_int("${v}") {
+                Some(n) => n,
+                None => 128,
+            }
+        },
+        None => 128,
+    }
+    let tenant_slug = match map.get("jwt.tenant") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("tenant_slug") {
+                Some(v) => "${v}",
+                None => "default",
+            }
+        },
+    }
+    let log_level = match map.get("log_level") {
+        Some(v) => normalize_log_level("${v}"),
+        None => "info",
+    }
+    AuthConfig {
+        jwt_secret: jwt_secret,
+        jwt_ttl_secs: jwt_ttl_secs,
+        tenant_slug: tenant_slug,
+        allowed_origins: origins_from_value(cors),
+        rate_limit: rate_limit,
+        window_ms: window_ms,
+        max_username_len: max_username_len,
+        min_password_len: min_password_len,
+        max_password_len: max_password_len,
+        log_level: log_level,
+    }
+}
+
+/// Owned-string digit parse (avoids demoted `&str` + `.clone()` on HashMap get bindings).
+fn digits_to_int(text: string) -> Option<int> {
+    match digits_to_int_allow_zero(text) {
+        Some(n) => {
+            if n < 1 {
+                return None
+            }
+            Some(n)
+        },
+        None => None,
+    }
+}
+
+fn digits_to_int_allow_zero(text: string) -> Option<int> {
+    if strings.len(text) == 0 {
+        return None
+    }
+    let mut total: int = 0
+    for ch in strings.chars(text) {
+        match char_to_digit(ch) {
+            Some(digit) => {
+                total = total * 10 + digit
+            },
+            None => return None,
+        }
+    }
+    Some(total)
+}
+
+fn origins_from_value(value: string) -> Vec<string> {
+    let trimmed = strings.trim(value)
+    if strings.len(trimmed) == 0 {
+        return default_origins()
+    }
+    let mut out = Vec::new()
+    out.push(trimmed)
+    out
+}
+
+fn jwt_secret_from_env() -> string {
+    match env.get("JWT_SECRET") {
+        Some(value) => value,
+        None => "dev-secret",
+    }
+}
+
+fn jwt_ttl_from_env() -> int {
+    match env.get("JWT_TTL") {
+        Some(value) => {
+            match parse_ttl_secs(value) {
+                Some(n) => n,
+                None => 3600,
+            }
+        },
+        None => {
+            match env.get("JWT_TTL_SECS") {
+                Some(value) => {
+                    match parse_ttl_secs(value) {
+                        Some(n) => n,
+                        None => 3600,
+                    }
+                },
+                None => 3600,
+            }
+        },
+    }
+}
+
+fn tenant_slug_from_env() -> string {
+    match env.get("TENANT_SLUG") {
+        Some(value) => {
+            let trimmed = strings.trim(value)
+            if strings.len(trimmed) == 0 {
+                return "default"
+            }
+            trimmed
+        },
+        None => "default",
+    }
+}
+
+fn cors_origins_from_env() -> Vec<string> {
+    match env.get("CORS_ORIGIN") {
+        Some(value) => origins_from_value(value),
+        None => default_origins(),
+    }
+}
+
+fn rate_limit_from_env() -> int {
+    match env.get("RATE_LIMIT") {
+        Some(value) => {
+            match digits_to_int_allow_zero(value) {
+                Some(n) => n,
+                None => 0,
+            }
+        },
+        None => 0,
+    }
+}
+
+fn window_ms_from_env() -> int {
+    match env.get("WINDOW") {
+        Some(value) => {
+            match parse_window_ms(value) {
+                Some(n) => n,
+                None => 60_000,
+            }
+        },
+        None => {
+            match env.get("WINDOW_MS") {
+                Some(value) => {
+                    match parse_window_ms(value) {
+                        Some(n) => n,
+                        None => 60_000,
+                    }
+                },
+                None => 60_000,
+            }
+        },
+    }
+}
+
+/// Seconds from bare digits or duration (`1h`, `30m`). Digits are seconds.
+fn parse_ttl_secs(text: string) -> Option<int> {
+    let text = own_cfg(text)
+    match digits_to_int(text) {
+        Some(n) => Some(n),
+        None => {
+            match duration_ms(text) {
+                Some(ms) => {
+                    let secs = ms / 1000
+                    if secs < 1 {
+                        return None
+                    }
+                    Some(secs)
+                },
+                None => None,
+            }
+        },
+    }
+}
+
+/// Milliseconds from bare digits or duration (`2m`, `500ms`). Digits are ms.
+fn parse_window_ms(text: string) -> Option<int> {
+    let text = own_cfg(text)
+    match digits_to_int(text) {
+        Some(n) => Some(n),
+        None => duration_ms(text),
+    }
+}
+
+fn duration_ms(text: string) -> Option<int> {
+    let text = own_cfg(text)
+    match parse_ms(text) {
+        Ok(ms) => {
+            if ms < 1 {
+                return None
+            }
+            Some(ms)
+        },
+        Err(_) => None,
+    }
+}
+
+fn own_cfg(value: string) -> string {
+    value
+}
+
+fn max_username_len_from_env() -> int {
+    match env.get("MAX_USERNAME_LEN") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 64,
+            }
+        },
+        None => 64,
+    }
+}
+
+fn min_password_len_from_env() -> int {
+    match env.get("MIN_PASSWORD_LEN") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 8,
+            }
+        },
+        None => 8,
+    }
+}
+
+fn max_password_len_from_env() -> int {
+    match env.get("MAX_PASSWORD_LEN") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 128,
+            }
+        },
+        None => 128,
+    }
+}
+
+fn log_level_from_env() -> string {
+    match env.get("LOG_LEVEL") {
+        Some(value) => normalize_log_level(value),
+        None => "info",
+    }
+}
+
+/// Accept known levels via `wj-log::parse_level`; unknown values fall back to `info`.
+fn normalize_log_level(text: string) -> string {
+    let owned = own_cfg(strings.trim(text))
+    let probe = "${owned}"
+    match parse_level(probe) {
+        Some(_) => strings.to_lower(owned),
+        None => "info",
+    }
+}
+
+fn default_origins() -> Vec<string> {
+    let mut out = Vec::new()
+    out.push("*")
+    out
+}
+
+fn parse_positive_int(text: string) -> Option<int> {
+    digits_to_int(text)
+}
+
+fn char_to_digit(ch: char) -> Option<int> {
+    if ch == '0' { return Some(0) }
+    if ch == '1' { return Some(1) }
+    if ch == '2' { return Some(2) }
+    if ch == '3' { return Some(3) }
+    if ch == '4' { return Some(4) }
+    if ch == '5' { return Some(5) }
+    if ch == '6' { return Some(6) }
+    if ch == '7' { return Some(7) }
+    if ch == '8' { return Some(8) }
+    if ch == '9' { return Some(9) }
+    None
+}

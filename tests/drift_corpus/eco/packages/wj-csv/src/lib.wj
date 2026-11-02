@@ -1,0 +1,167 @@
+use std::csv
+
+/// Parse CSV text into rows (RFC-style quoting via runtime `std::csv`).
+pub fn parse(text: string) -> Result<Vec<Vec<string>>, string> {
+    csv.parse(text)
+}
+
+/// First row is headers; remaining rows are data.
+pub fn parse_with_headers(text: string) -> Result<(Vec<string>, Vec<Vec<string>>), string> {
+    match csv.parse(text) {
+        Ok(rows) => {
+            if rows.len() == 0 {
+                return Err("empty csv")
+            }
+            let headers = rows[0]
+            let mut data = Vec::new()
+            let mut i = 1
+            while i < rows.len() {
+                data.push(rows[i])
+                i = i + 1
+            }
+            Ok((headers, data))
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Serialize rows to CSV text via runtime `std::csv`.
+pub fn write(rows: Vec<Vec<string>>) -> Result<string, string> {
+    csv.write(rows)
+}
+
+/// Number of rows in a parsed table.
+pub fn row_count(rows: Vec<Vec<string>>) -> int {
+    rows.len()
+}
+
+/// Column count from the first row (0 when empty).
+pub fn column_count(rows: Vec<Vec<string>>) -> int {
+    if rows.len() == 0 {
+        return 0
+    }
+    rows[0].len()
+}
+
+/// True when the table has no rows.
+pub fn is_empty(rows: Vec<Vec<string>>) -> bool {
+    row_count(rows) == 0
+}
+
+/// `Ok(0)` when the table has no rows.
+pub fn require_empty(rows: Vec<Vec<string>>) -> Result<int, string> {
+    if is_empty(rows) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// Cell at `(row, col)`, or `None` when out of bounds.
+pub fn get_cell(rows: Vec<Vec<string>>, row: int, col: int) -> Option<string> {
+    if row < 0 {
+        return None
+    }
+    if col < 0 {
+        return None
+    }
+    if row >= rows.len() {
+        return None
+    }
+    let line = rows[row]
+    if col >= line.len() {
+        return None
+    }
+    Some(line[col])
+}
+
+/// True when `headers` contains `name` exactly.
+pub fn has_column(headers: Vec<string>, name: string) -> bool {
+    let mut i = 0
+    while i < headers.len() {
+        if headers[i] == name {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Index of `name` in `headers`, or `None` when missing.
+pub fn column_index(headers: Vec<string>, name: string) -> Option<int> {
+    let mut i = 0
+    while i < headers.len() {
+        if headers[i] == name {
+            return Some(i)
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// Index of `name` in `headers`, or `Err` naming the missing column.
+pub fn require_column(headers: Vec<string>, name: string) -> Result<int, string> {
+    match column_index(headers, name) {
+        Some(i) => Ok(i),
+        None => Err("missing column: ${name}"),
+    }
+}
+
+/// Row at `index`, or `None` when out of bounds.
+pub fn get_row(rows: Vec<Vec<string>>, index: int) -> Option<Vec<string>> {
+    if index < 0 {
+        return None
+    }
+    if index >= rows.len() {
+        return None
+    }
+    Some(rows[index])
+}
+
+/// Row at `index`, or `Err` naming the missing index.
+pub fn require_row(rows: Vec<Vec<string>>, index: int) -> Result<Vec<string>, string> {
+    match get_row(rows, index) {
+        Some(row) => Ok(row),
+        None => Err("missing row: ${index}"),
+    }
+}
+
+/// Cell at `(row, col)`, or `default` when out of bounds.
+pub fn cell_or(rows: Vec<Vec<string>>, row: int, col: int, default: string) -> string {
+    match get_cell(rows, row, col) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// Last row, or None when the table is empty.
+pub fn last_row(rows: Vec<Vec<string>>) -> Option<Vec<string>> {
+    let n = row_count(rows)
+    if n == 0 {
+        return None
+    }
+    get_row(rows, n - 1)
+}
+
+/// True when every row has the same number of columns (empty tables count).
+pub fn is_rectangular(rows: Vec<Vec<string>>) -> bool {
+    if rows.len() == 0 {
+        return true
+    }
+    let width = rows[0].len()
+    let mut i = 0
+    while i < rows.len() {
+        if rows[i].len() != width {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+/// Cell at `(row, col)`, or `Err` when it is out of bounds.
+pub fn require_cell(rows: Vec<Vec<string>>, row: int, col: int) -> Result<string, string> {
+    match get_cell(rows, row, col) {
+        Some(v) => Ok(v),
+        None => Err("expected cell"),
+    }
+}

@@ -1,0 +1,139 @@
+use crate::domain::parse_command
+use crate::domain::SchedulerConfig
+
+fn argv(parts: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    out.push("wj-scheduler")
+    let mut i = 0
+    while i < parts.len() {
+        out.push(parts[i])
+        i = i + 1
+    }
+    out
+}
+
+fn test_parse_check_command() {
+    let mut parts = Vec::new()
+    parts.push("check")
+    parts.push("@hourly")
+    parts.push("--at")
+    parts.push("2026-01-01T09:00")
+    let cfg = SchedulerConfig::defaults()
+    match parse_command(argv(parts), cfg) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "check")
+            assert_eq(cmd.expr, "@hourly")
+            assert_eq(cmd.at, "2026-01-01T09:00")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_next_command_with_max() {
+    let mut parts = Vec::new()
+    parts.push("next")
+    parts.push("*/5 * * * *")
+    parts.push("--from")
+    parts.push("2026-01-01T12:00")
+    parts.push("--max")
+    parts.push("30")
+    let cfg = SchedulerConfig::defaults()
+    match parse_command(argv(parts), cfg) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "next")
+            assert_eq(cmd.expr, "*/5 * * * *")
+            assert_eq(cmd.at, "2026-01-01T12:00")
+            assert_eq(cmd.max_minutes, 30)
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_next_uses_default_max() {
+    let mut parts = Vec::new()
+    parts.push("next")
+    parts.push("@daily")
+    parts.push("--from")
+    parts.push("2026-01-01T00:00")
+    let cfg = SchedulerConfig::defaults()
+    match parse_command(argv(parts), cfg) {
+        Ok(cmd) => assert_eq(cmd.max_minutes, 1440),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_explain_command() {
+    let mut parts = Vec::new()
+    parts.push("explain")
+    parts.push("@weekly")
+    let cfg = SchedulerConfig::defaults()
+    match parse_command(argv(parts), cfg) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "explain")
+            assert_eq(cmd.expr, "@weekly")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_rejects_unknown_verb() {
+    let mut parts = Vec::new()
+    parts.push("run")
+    parts.push("@hourly")
+    let cfg = SchedulerConfig::defaults()
+    assert(parse_command(argv(parts), cfg).is_err(), "unknown verb")
+}
+
+fn test_parse_check_requires_at() {
+    let mut parts = Vec::new()
+    parts.push("check")
+    parts.push("@hourly")
+    let cfg = SchedulerConfig::defaults()
+    assert(parse_command(argv(parts), cfg).is_err(), "missing --at")
+}
+
+fn test_parse_list_command() {
+    let mut parts = Vec::new()
+    parts.push("list")
+    parts.push("./jobs.cron")
+    let cfg = SchedulerConfig::defaults()
+    match parse_command(argv(parts), cfg) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "list")
+            assert_eq(cmd.path, "./jobs.cron")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_due_command() {
+    let mut parts = Vec::new()
+    parts.push("due")
+    parts.push("./jobs.cron")
+    parts.push("--at")
+    parts.push("2026-01-01T09:00")
+    let cfg = SchedulerConfig::defaults()
+    match parse_command(argv(parts), cfg) {
+        Ok(cmd) => {
+            assert_eq(cmd.kind, "due")
+            assert_eq(cmd.path, "./jobs.cron")
+            assert_eq(cmd.at, "2026-01-01T09:00")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_due_requires_at() {
+    let mut parts = Vec::new()
+    parts.push("due")
+    parts.push("./jobs.cron")
+    let cfg = SchedulerConfig::defaults()
+    assert(parse_command(argv(parts), cfg).is_err(), "missing --at")
+}
+
+fn test_parse_list_requires_path() {
+    let mut parts = Vec::new()
+    parts.push("list")
+    let cfg = SchedulerConfig::defaults()
+    assert(parse_command(argv(parts), cfg).is_err(), "missing path")
+}

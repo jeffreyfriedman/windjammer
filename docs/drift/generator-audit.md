@@ -1,0 +1,51 @@
+# Differential generator audit: value positions
+
+Audit date 2026-11-02 against `next/v0.50.0`. Question: which *kinds of values in which positions* do the
+differential corpora and generators exercise? The bare-`None` arm bug (`match m.get(k) { Some(v) => Some(v),
+None => None }` evaluated to `()` on a miss in the resolved engine) passed the parity corpus because every
+`None` arm there produced a literal, never the value `None`.
+
+## What exists
+
+| Source | Programs | Value kinds it produces |
+|---|---|---|
+| `tests/interpreter_jit_loops_test.rs`, `interpreter_jit_differential_test.rs` (generated) | seeded | integers of every width, `f64`, `bool`, `Vec` elements, struct fields; loop control (`break`/`continue`/nested), overflow, zero divisors, out-of-bounds. No Option, Result, enum, String, closure or map value anywhere. |
+| `tests/interpreter_packed_vec_test.rs` (generated) | seeded | packed vs boxed vectors of scalars |
+| `tests/interpreter_corpus` (74 files, seeded) | hand-written | 2 of them mention `Some`/`None`; none has an `=> None` arm |
+| `tests/conformance_programs` + `examples/verified` (370 files) | hand-written | `=> None` arm in 1 file, `Err(e) => Err(e)` in none, `return Some/None/Ok/Err` in 37, `break <value>` in 14, labelled loops in 1 |
+| `tests/engine_parity` (34 files before this change) | hand-written | `map_get_match`, `option_arm_values`, `match_arms`, `condvar_guard_match` only |
+
+## Gaps (before)
+
+| Value position | Covered? |
+|---|---|
+| Option as an arm result (`None => None`, `Some(v) => Some(v)`) | one program (added with the fix) |
+| Result as an arm result, `Err(e) => Err(e)` | none |
+| user enum (unit, tuple, struct variant) as arm result / return / struct field / Vec element | partly (`13_enum_unit_match`, `14_enum_data_match`), never with bare variant names as patterns in value position except the fix's program |
+| nested matches (match as arm result, as `let` initialiser, as call argument, inside a binary expression, `Option<Option<_>>`) | none |
+| lookup misses (map get/remove, `first`/`last`/`pop` on empty, `find`/`position` without a match, string `find`, parse errors) used as values | only the fix's program (map get) |
+| shadowing (parameter, loop variable, match binding, retyping) | `33_shadow_and_blocks`, `77_shadowing_blocks` (scalar) |
+| early `return` of Option/Result/enum values from inside nested loops | partly (`return Some/None` in 37 programs, none nested in `while` inside `for`) |
+| captures of Option/enum/Vec values by closures; closures returning Option; closures in a Vec | `16`, `17`, `63`, `174` (scalar captures only) |
+| Option-typed struct fields read, rewritten and matched in loops | none |
+
+## Cases added (`tests/engine_parity/vp_*.wj`)
+
+Each program prints its results with `println` only, runs under the walker, the resolved engine and the compiled
+backend (`scripts/wj/drift_corpus.wj`), and also under the existing `interpreter_engine_parity_test` (walker vs
+resolved, with and without eager machine-code loops) because it lives in `tests/engine_parity`.
+
+| Program | Positions |
+|---|---|
+| `vp_result_values` | `Ok`/`Err` as arm results, `Err(e) => Err(e)`, `?` inside loops, `return Err` from `while`, Results in a `Vec` and a struct field |
+| `vp_enum_values` | unit/tuple/struct variants as arm results, returns from `for`, struct fields, `Vec` elements, closure captures, bare variant names as patterns |
+| `vp_nested_matches` | match as arm result, as `let` initialiser, as an operand of `+`, as a call argument; `Option<Option<Option<_>>>`; tuple scrutinees |
+| `vp_collection_misses` | map `get`/`remove`/`contains_key` misses, `first`/`last`/`pop` on empty, `find`/`position` misses, string `find`, `parse` failures, `and_then`/`map`/`unwrap_or` on them, lookups in a loop |
+| `vp_shadowing` | parameter, loop variable (nested), match binding, retyping, block value, closure parameter |
+| `vp_loop_exits` | `return` of enum/Option/Result from nested `while`/`for`/`loop`, labelled `break`/`continue`, `break <value>` |
+| `vp_closure_captures` | captured `Option`/enum/`Vec`, closures returning Option, closures in a `Vec`, closures returned from functions, a captured name shadowed later |
+| `vp_option_fields` | Option fields read in methods, rewritten each iteration, matched inside loops, `ok_or`, `map` |
+
+Not generated: a generator of value-position programs is the next rung (a grammar over the cross product of
+value kind x position, with the walker as oracle for the resolved engine and rustc for both). The hand-written
+set is the seed corpus for it.

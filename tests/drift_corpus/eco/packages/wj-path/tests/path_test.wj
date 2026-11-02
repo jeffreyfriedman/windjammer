@@ -1,0 +1,166 @@
+use crate::basename
+use crate::change_extension
+use crate::dirname
+use crate::ensure_leading_slash
+use crate::ensure_trailing_slash
+use crate::extname
+use crate::has_leading_slash
+use crate::has_trailing_slash
+use crate::is_absolute
+use crate::is_dot
+use crate::is_dot_dot
+use crate::is_root
+use crate::join_path
+use crate::normalize
+use crate::require_hidden
+use crate::require_root
+use crate::require_stem
+use crate::stem
+use crate::without_extension
+use crate::without_trailing_slash
+use std::strings
+
+@test
+fn test_join_simple() {
+    assert_eq(join_path("/tmp", "a"), "/tmp/a")
+}
+
+@test
+fn test_join_trailing_slash() {
+    assert_eq(join_path("/tmp/", "a"), "/tmp/a")
+}
+
+@test
+fn test_join_absolute_second() {
+    assert_eq(join_path("/tmp", "/etc"), "/etc")
+}
+
+@test
+fn test_normalize_dotdot() {
+    assert_eq(normalize("/a/b/../c"), "/a/c")
+}
+
+@test
+fn test_normalize_dot() {
+    assert_eq(normalize("/a/./b"), "/a/b")
+}
+
+@test
+fn test_basename() {
+    assert_eq(basename("/tmp/foo.txt"), "foo.txt")
+}
+
+@test
+fn test_dirname() {
+    assert_eq(dirname("/tmp/foo.txt"), "/tmp")
+}
+
+@test
+fn test_dirname_root() {
+    assert_eq(dirname("/"), "/")
+}
+
+@test
+fn test_extname() {
+    assert_eq(extname("foo.txt"), ".txt")
+}
+
+@test
+fn test_extname_none() {
+    assert_eq(extname("Makefile"), "")
+}
+
+@test
+fn test_is_absolute() {
+    assert(is_absolute("/usr/bin"), "unix absolute")
+    assert(!is_absolute("rel/path"), "relative")
+    assert(!is_absolute(""), "empty")
+}
+
+@test
+fn test_stem() {
+    assert_eq(stem("/tmp/foo.txt"), "foo")
+    assert_eq(stem("Makefile"), "Makefile")
+    assert_eq(stem("archive.tar.gz"), "archive.tar")
+}
+
+@test
+fn test_change_extension() {
+    assert_eq(change_extension("foo.txt", ".md"), "foo.md")
+    assert_eq(change_extension("Makefile", ".txt"), "Makefile.txt")
+    assert_eq(change_extension("/tmp/a.tar.gz", ".zip"), "/tmp/a.tar.zip")
+}
+
+@test
+fn test_ensure_leading_slash() {
+    assert_eq(ensure_leading_slash("api/v1"), "/api/v1")
+    assert_eq(ensure_leading_slash("/api/v1"), "/api/v1")
+    assert_eq(ensure_leading_slash(""), "/")
+}
+
+@test
+fn test_without_extension_and_trailing_slash() {
+    assert_eq(without_extension("/tmp/foo.txt"), "/tmp/foo")
+    assert_eq(without_extension("Makefile"), "Makefile")
+    assert_eq(ensure_trailing_slash("/api/v1"), "/api/v1/")
+    assert_eq(ensure_trailing_slash("/api/v1/"), "/api/v1/")
+    assert_eq(ensure_trailing_slash(""), "/")
+}
+
+@test
+fn test_without_trailing_slash_and_is_root() {
+    assert_eq(without_trailing_slash("/api/v1/"), "/api/v1")
+    assert_eq(without_trailing_slash("/api/v1"), "/api/v1")
+    assert_eq(without_trailing_slash("/"), "/")
+    assert_eq(without_trailing_slash(""), "")
+    assert(is_root("/"), "slash root")
+    assert(is_root(""), "empty as root")
+    assert(!is_root("/api"), "not root")
+    assert(!is_root("/api/"), "trailing not root")
+}
+
+@test
+fn test_empty_trailing_and_dot_predicates() {
+    assert(has_trailing_slash("/api/"), "trailing")
+    assert(!has_trailing_slash("/api"), "no trailing")
+    assert(!has_trailing_slash(""), "empty no trailing")
+    assert(is_dot("."), "dot")
+    assert(!is_dot(".."), "parent not dot")
+    assert(!is_dot("./x"), "path not dot")
+}
+
+@test
+fn test_require_stem() {
+    match require_stem("readme.md") {
+        Ok(name) => assert_eq(name, "readme"),
+        Err(_) => assert(false, "stem"),
+    }
+    match require_stem(".") {
+        Ok(_) => assert(false, "dot must Err"),
+        Err(msg) => assert(strings.contains(msg, "stem"), "mentions stem"),
+    }
+}
+
+@test
+fn test_require_hidden() {
+    match require_hidden(".env") {
+        Ok(path) => assert_eq(path, ".env"),
+        Err(_) => assert(false, "dotfile"),
+    }
+    match require_hidden("readme.md") {
+        Ok(_) => assert(false, "visible must Err"),
+        Err(msg) => assert(strings.contains(msg, "hidden"), "mentions hidden"),
+    }
+}
+
+@test
+fn test_require_root() {
+    match require_root("/") {
+        Ok(path) => assert(is_root(path), "root"),
+        Err(_) => assert(false, "slash root"),
+    }
+    match require_root("a") {
+        Ok(_) => assert(false, "relative must Err"),
+        Err(msg) => assert(strings.contains(msg, "root"), "mentions root"),
+    }
+}

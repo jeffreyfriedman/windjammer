@@ -1,0 +1,460 @@
+use std::collections::HashMap
+use std::strings
+
+/// Parse a TOML config subset into flat `key` / `section.key` → string values.
+///
+/// Supported: `#` comments, `[section]` headers, dotted left-hand keys,
+/// `key = value` with quoted strings, bare strings, ints, bools, single-line
+/// arrays (compact JSON), and single-line inline tables (flattened to dotted keys).
+/// Not supported: multiline strings, nested inline tables, multi-line arrays.
+pub fn parse(text: string) -> HashMap<string, string> {
+    let mut map = HashMap::new()
+    let mut section = empty_string()
+    let lines = strings.split_lines(text)
+    for line in lines {
+        let trimmed = strip_comment(strings.trim(line))
+        if strings.len(trimmed) == 0 {
+            continue
+        }
+        if is_section_header(trimmed) {
+            section = parse_section_name(trimmed)
+            continue
+        }
+        match parse_assignment(trimmed) {
+            Some(pair) => {
+                let entries = expand_entries(pair.0, pair.1)
+                for entry in entries {
+                    let full_key = qualify_key(section, entry.0)
+                    map.insert(full_key, entry.1)
+                }
+            },
+            None => {},
+        }
+    }
+    map
+}
+
+/// Value for `key` (dotted section keys allowed), or None.
+pub fn get(text: string, key: string) -> Option<string> {
+    let map = parse(text)
+    match map.get(key) {
+        Some(v) => Some(v),
+        None => None,
+    }
+}
+
+/// Value for `key`, or `default` when missing.
+pub fn get_or(text: string, key: string, default: string) -> string {
+    match get(text, key) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// True when `key` is present after parse.
+pub fn has(text: string, key: string) -> bool {
+    match get(text, key) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Number of keys after parse.
+pub fn key_count(text: string) -> int {
+    let map = parse(text)
+    let mut n = 0
+    for (_k, _v) in map {
+        n = n + 1
+    }
+    n
+}
+
+/// True when parse yields no keys.
+pub fn is_empty(text: string) -> bool {
+    key_count(text) == 0
+}
+
+/// True when parse yields at least one key.
+pub fn has_keys(text: string) -> bool {
+    !is_empty(text)
+}
+
+/// First key from map iteration order (stable for single-key docs).
+pub fn first_key(text: string) -> Option<string> {
+    let ks = keys(text)
+    if ks.len() == 0 {
+        return None
+    }
+    Some(ks[0])
+}
+
+/// The first key, or `Err` when the document is empty.
+pub fn require_first_key(text: string) -> Result<string, string> {
+    match first_key(text) {
+        Some(k) => Ok(k),
+        None => Err("expected first"),
+    }
+}
+
+/// Last key from map iteration order.
+pub fn last_key(text: string) -> Option<string> {
+    let ks = keys(text)
+    if ks.len() == 0 {
+        return None
+    }
+    Some(ks[ks.len() - 1])
+}
+
+/// The last key, or `Err` when the document is empty.
+pub fn require_last_key(text: string) -> Result<string, string> {
+    match last_key(text) {
+        Some(k) => Ok(k),
+        None => Err("expected last"),
+    }
+}
+
+/// Number of values after parse (same as `key_count` for flat maps).
+pub fn value_count(text: string) -> int {
+    key_count(text)
+}
+
+/// `Ok(n)` when the document has exactly `n` values, otherwise `Err`.
+pub fn require_values(text: string, n: int) -> Result<int, string> {
+    if value_count(text) == n {
+        return Ok(n)
+    }
+    Err("expected values")
+}
+
+/// True when parse yields exactly one key.
+pub fn is_singleton(text: string) -> bool {
+    key_count(text) == 1
+}
+
+/// The sole key when the document has exactly one, otherwise `Err`.
+pub fn require_singleton(text: string) -> Result<string, string> {
+    if !is_singleton(text) {
+        return Err("expected singleton")
+    }
+    match first_key(text) {
+        Some(key) => Ok(key),
+        None => Err("expected singleton"),
+    }
+}
+
+/// Key count when the document has keys, otherwise `Err`.
+pub fn require_keys(text: string) -> Result<int, string> {
+    if !has_keys(text) {
+        return Err("expected keys")
+    }
+    Ok(key_count(text))
+}
+
+/// All keys after parse (order is map iteration order).
+pub fn keys(text: string) -> Vec<string> {
+    let map = parse(text)
+    let mut out = Vec::new()
+    for (k, _v) in map {
+        out.push(k)
+    }
+    out
+}
+
+/// All values after parse (order is map iteration order).
+pub fn values(text: string) -> Vec<string> {
+    let map = parse(text)
+    let mut out = Vec::new()
+    for (_k, v) in map {
+        out.push(v)
+    }
+    out
+}
+
+/// Value for `key`, or `Err` naming the missing key.
+pub fn require(text: string, key: string) -> Result<string, string> {
+    match get(text, key) {
+        Some(v) => Ok(v),
+        None => Err("missing toml key: ${key}"),
+    }
+}
+
+/// `Ok(0)` when the document has no keys.
+pub fn require_empty(text: string) -> Result<int, string> {
+    if is_empty(text) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// Non-empty value for `key`. Blank and missing keys are errors.
+pub fn require_nonblank(text: string, key: string) -> Result<string, string> {
+    match get(text, key) {
+        Some(v) => {
+            if strings.len(strings.trim(v)) == 0 {
+                Err("blank toml value: ${key}")
+            } else {
+                Ok(v)
+            }
+        },
+        None => Err("missing toml key: ${key}"),
+    }
+}
+
+/// Merge `overlay` onto `base`; overlay keys win. Returns flat TOML text.
+pub fn merge(base: string, overlay: string) -> string {
+    let mut map = parse(base)
+    let over = parse(overlay)
+    for (key, value) in over {
+        map.insert(key, value)
+    }
+    let mut out = ""
+    for (key, value) in map {
+        out = "${out}${key} = \"${value}\"\n"
+    }
+    out
+}
+
+fn empty_string() -> string {
+    ""
+}
+
+fn strip_comment(line: string) -> string {
+    if strings.len(line) == 0 {
+        return line
+    }
+    if strings.starts_with(line, "#") {
+        return empty_string()
+    }
+    let mut in_quote = false
+    let mut i = 0
+    let n = strings.len(line)
+    while i < n {
+        let ch = strings.substring(line, i, i + 1)
+        if ch == "\"" {
+            in_quote = !in_quote
+        } else {
+            if !in_quote {
+                if ch == "#" {
+                    return strings.trim(strings.substring(line, 0, i))
+                }
+            }
+        }
+        i = i + 1
+    }
+    line
+}
+
+fn is_section_header(line: string) -> bool {
+    if !strings.starts_with(line, "[") {
+        return false
+    }
+    strings.ends_with(line, "]")
+}
+
+fn parse_section_name(line: string) -> string {
+    let inner = strings.substring(line, 1, strings.len(line) - 1)
+    strings.trim(inner)
+}
+
+fn qualify_key(section: string, key: string) -> string {
+    if strings.len(section) == 0 {
+        return key
+    }
+    "${section}.${key}"
+}
+
+fn parse_assignment(line: string) -> Option<(string, string)> {
+    let eq = find_unquoted(line, "=")
+    if eq < 0 {
+        return None
+    }
+    let key = strings.trim(strings.substring(line, 0, eq))
+    let raw = strings.trim(strings.substring(line, eq + 1, strings.len(line)))
+    if strings.len(key) == 0 {
+        return None
+    }
+    Some((key, raw))
+}
+
+fn expand_entries(key: string, raw: string) -> Vec<(string, string)> {
+    if is_inline_table(raw) {
+        return expand_inline_table(key, raw)
+    }
+    let mut out = Vec::new()
+    out.push((key, normalize_value(raw)))
+    out
+}
+
+fn is_inline_table(raw: string) -> bool {
+    if strings.len(raw) >= 2 {
+        if strings.starts_with(raw, "{") {
+            if strings.ends_with(raw, "}") {
+                return true
+            }
+        }
+    }
+    false
+}
+
+fn expand_inline_table(prefix: string, raw: string) -> Vec<(string, string)> {
+    let inner = strings.trim(strings.substring(raw, 1, strings.len(raw) - 1))
+    let mut out = Vec::new()
+    if strings.len(inner) == 0 {
+        return out
+    }
+    let parts = split_on_commas(inner)
+    for part in parts {
+        let t = strings.trim(part)
+        if strings.len(t) == 0 {
+            continue
+        }
+        match parse_assignment(t) {
+            Some(pair) => {
+                let child = pair.0
+                let child_key = "${prefix}.${child}"
+                let nested = expand_entries(child_key, pair.1)
+                for entry in nested {
+                    out.push(entry)
+                }
+            },
+            None => {},
+        }
+    }
+    out
+}
+
+fn find_unquoted(text: string, needle: string) -> int {
+    let mut in_quote = false
+    let mut i = 0
+    let n = strings.len(text)
+    while i < n {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == "\"" {
+            in_quote = !in_quote
+        } else {
+            if !in_quote {
+                if ch == needle {
+                    return i
+                }
+            }
+        }
+        i = i + 1
+    }
+    -1
+}
+
+fn normalize_value(raw: string) -> string {
+    if is_array_value(raw) {
+        return array_to_json(raw)
+    }
+    unquote_scalar(raw)
+}
+
+fn is_array_value(raw: string) -> bool {
+    if strings.len(raw) >= 2 {
+        if strings.starts_with(raw, "[") {
+            if strings.ends_with(raw, "]") {
+                return true
+            }
+        }
+    }
+    false
+}
+
+fn array_to_json(raw: string) -> string {
+    let inner = strings.substring(raw, 1, strings.len(raw) - 1)
+    let trimmed = strings.trim(inner)
+    if strings.len(trimmed) == 0 {
+        return "[]"
+    }
+    let elems = split_on_commas(trimmed)
+    let mut json_elems = Vec::new()
+    for elem in elems {
+        let t = strings.trim(elem)
+        if strings.len(t) > 0 {
+            json_elems.push(array_elem_to_json(t))
+        }
+    }
+    let body = strings.join(json_elems, ",")
+    "[${body}]"
+}
+
+fn array_elem_to_json(elem: string) -> string {
+    if strings.len(elem) >= 2 {
+        if strings.starts_with(elem, "\"") {
+            if strings.ends_with(elem, "\"") {
+                let inner = strings.substring(elem, 1, strings.len(elem) - 1)
+                return "\"${inner}\""
+            }
+        }
+    }
+    if elem == "true" {
+        return "true"
+    }
+    if elem == "false" {
+        return "false"
+    }
+    if is_integer_literal(elem) {
+        return elem
+    }
+    "\"${elem}\""
+}
+
+fn is_integer_literal(text: string) -> bool {
+    if strings.len(text) == 0 {
+        return false
+    }
+    let mut i = 0
+    if strings.starts_with(text, "-") {
+        if strings.len(text) == 1 {
+            return false
+        }
+        i = 1
+    }
+    while i < strings.len(text) {
+        if !is_digit(strings.substring(text, i, i + 1)) {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+fn is_digit(ch: string) -> bool {
+    ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
+}
+
+fn split_on_commas(text: string) -> Vec<string> {
+    let mut parts = Vec::new()
+    let mut start = 0
+    let mut in_quote = false
+    let mut i = 0
+    let n = strings.len(text)
+    while i < n {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == "\"" {
+            in_quote = !in_quote
+        } else {
+            if !in_quote {
+                if ch == "," {
+                    parts.push(strings.substring(text, start, i))
+                    start = i + 1
+                }
+            }
+        }
+        i = i + 1
+    }
+    parts.push(strings.substring(text, start, n))
+    parts
+}
+
+fn unquote_scalar(raw: string) -> string {
+    if strings.len(raw) >= 2 {
+        if strings.starts_with(raw, "\"") {
+            if strings.ends_with(raw, "\"") {
+                return strings.substring(raw, 1, strings.len(raw) - 1)
+            }
+        }
+    }
+    raw
+}

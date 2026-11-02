@@ -1,0 +1,95 @@
+use crate::adapters::parse_args
+use crate::adapters::Command
+
+fn argv(items: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    out.push("wj-grep")
+    for item in items {
+        out.push(item)
+    }
+    out
+}
+
+@test
+fn test_parse_pattern_and_paths() {
+    match parse_args(argv(["needle", "src", "docs"])) {
+        Ok(cmd) => {
+            assert_eq(cmd.options.pattern, "needle")
+            assert_eq(cmd.paths.len(), 2)
+            assert_eq(cmd.paths[0], "src")
+            assert_eq(cmd.paths[1], "docs")
+        },
+        Err(e) => assert(false, "parse failed: ${e}"),
+    }
+}
+
+@test
+fn test_parse_defaults_to_current_directory() {
+    match parse_args(argv(["needle"])) {
+        Ok(cmd) => {
+            assert_eq(cmd.paths.len(), 1)
+            assert_eq(cmd.paths[0], ".")
+        },
+        Err(e) => assert(false, "parse failed: ${e}"),
+    }
+}
+
+@test
+fn test_parse_flags() {
+    match parse_args(argv(["--ignore-case", "--word", "--fixed", "--invert", "--count", "--no-line-number", "--no-ignore", "--hidden", "--context=2", "--max-count=5", "needle"])) {
+        Ok(cmd) => {
+            assert(cmd.options.ignore_case, "ignore-case")
+            assert(cmd.options.word, "word")
+            assert(cmd.options.fixed, "fixed")
+            assert(cmd.options.invert, "invert")
+            assert(cmd.count_only, "count")
+            assert(!cmd.line_numbers, "no-line-number")
+            assert(!cmd.respect_ignore, "no-ignore")
+            assert(cmd.include_hidden, "hidden")
+            assert_eq(cmd.options.before, 2)
+            assert_eq(cmd.options.after, 2)
+            assert_eq(cmd.options.max_count, 5)
+            assert_eq(cmd.options.pattern, "needle")
+        },
+        Err(e) => assert(false, "parse failed: ${e}"),
+    }
+}
+
+@test
+fn test_parse_before_after_override_context() {
+    match parse_args(argv(["--context=3", "--after=1", "needle"])) {
+        Ok(cmd) => {
+            assert_eq(cmd.options.before, 3)
+            assert_eq(cmd.options.after, 1)
+        },
+        Err(e) => assert(false, "parse failed: ${e}"),
+    }
+}
+
+@test
+fn test_parse_replace_and_write() {
+    match parse_args(argv(["--replace=new", "--write", "old", "src"])) {
+        Ok(cmd) => {
+            assert(cmd.replace.is_some(), "replace present")
+            assert_eq(cmd.replace.unwrap(), "new")
+            assert(cmd.write, "write")
+        },
+        Err(e) => assert(false, "parse failed: ${e}"),
+    }
+}
+
+@test
+fn test_missing_pattern_is_a_usage_error() {
+    match parse_args(argv(["--ignore-case"])) {
+        Ok(_) => assert(false, "expected usage error"),
+        Err(e) => assert_str_contains(e, "usage"),
+    }
+}
+
+@test
+fn test_non_numeric_context_is_an_error() {
+    match parse_args(argv(["--context=abc", "needle"])) {
+        Ok(_) => assert(false, "expected error"),
+        Err(e) => assert_str_contains(e, "context"),
+    }
+}

@@ -1,0 +1,198 @@
+// TDD: multipart Content-Type + body → ordered field pairs (week-one upload dogfood).
+
+use crate::domain::field_count
+use crate::domain::field_get
+use crate::domain::field_get_or
+use crate::domain::has_blank_value
+use crate::domain::has_field
+use crate::domain::parse_form_fields
+use crate::domain::require_blank
+use crate::domain::require_empty
+use crate::domain::require_first
+use crate::domain::require_last
+use crate::domain::require_value
+use crate::domain::require_fields
+use crate::domain::require_field
+use std::strings
+
+fn test_parse_json_rejected() {
+    match parse_form_fields("application/json", "{}") {
+        Ok(_) => assert(false, "json must fail"),
+        Err(e) => assert(strings.contains(e, "multipart"), "mentions multipart"),
+    }
+}
+
+fn test_parse_text_fields() {
+    let boundary = "----bound"
+    let ct = "multipart/form-data; boundary=${boundary}"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nHello\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"body\"\r\n\r\nWorld\r\n--${boundary}--"
+    match parse_form_fields(ct, body) {
+        Ok(fields) => {
+            assert_eq(fields.len(), 2)
+            match field_get(fields, "title") {
+                Some(v) => assert_eq(v, "Hello"),
+                None => assert(false, "title"),
+            }
+            match field_get(fields, "body") {
+                Some(v) => assert_eq(v, "World"),
+                None => assert(false, "body"),
+            }
+        },
+        Err(e) => assert(false, "parse: ${e}"),
+    }
+}
+
+fn test_parse_file_part_included() {
+    let boundary = "----file"
+    let ct = "multipart/form-data; boundary=${boundary}"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"a.txt\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n--${boundary}--"
+    match parse_form_fields(ct, body) {
+        Ok(fields) => {
+            match field_get(fields, "upload") {
+                Some(v) => assert_eq(v, "hi"),
+                None => assert(false, "upload"),
+            }
+        },
+        Err(e) => assert(false, "file: ${e}"),
+    }
+}
+
+fn sample_fields() -> Vec<(string, string)> {
+    let boundary = "----samp"
+    let ct = "multipart/form-data; boundary=${boundary}"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nHello\r\n--${boundary}\r\nContent-Disposition: form-data; name=\"body\"\r\n\r\nWorld\r\n--${boundary}--"
+    match parse_form_fields(ct, body) {
+        Ok(fields) => fields,
+        Err(_) => Vec::new(),
+    }
+}
+
+fn test_field_helpers() {
+    assert_eq(field_count(sample_fields()), 2)
+    assert(has_field(sample_fields(), "title"), "has title")
+    assert(!has_field(sample_fields(), "missing"), "no missing")
+    assert_eq(field_get_or(sample_fields(), "title", "x"), "Hello")
+    assert_eq(field_get_or(sample_fields(), "missing", "x"), "x")
+    match require_field(sample_fields(), "body") {
+        Ok(v) => assert_eq(v, "World"),
+        Err(_) => assert(false, "require body"),
+    }
+    match require_field(sample_fields(), "missing") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "missing"), "mentions field"),
+    }
+}
+
+fn test_is_empty_and_first_last_field() {
+    use crate::domain::first_field_name
+    use crate::domain::is_empty_fields
+    use crate::domain::last_field_name
+    let empty: Vec<(string, string)> = Vec::new()
+    assert(is_empty_fields(empty), "empty")
+    assert(!is_empty_fields(sample_fields()), "sample not empty")
+    match first_field_name(sample_fields()) {
+        Some(n) => assert_eq(n, "title"),
+        None => assert(false, "first"),
+    }
+    match last_field_name(sample_fields()) {
+        Some(n) => assert_eq(n, "body"),
+        None => assert(false, "last"),
+    }
+    match first_field_name(empty) {
+        Some(_) => assert(false, "empty first"),
+        None => assert(true, "ok"),
+    }
+}
+
+fn test_has_value() {
+    use crate::domain::has_value
+    assert(has_value(sample_fields(), "Hello"), "Hello present")
+    assert(has_value(sample_fields(), "World"), "World present")
+    assert(!has_value(sample_fields(), "missing"), "no missing value")
+}
+
+fn test_require_fields_and_has_blank_value() {
+    let empty: Vec<(string, string)> = Vec::new()
+    match require_fields(empty) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "fields"), "mentions fields"),
+    }
+    match require_fields(sample_fields()) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "sample fields"),
+    }
+    assert(!has_blank_value(sample_fields()), "sample filled")
+    let boundary = "----blank"
+    let ct = "multipart/form-data; boundary=${boundary}"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\n\r\n--${boundary}--"
+    match parse_form_fields(ct, body) {
+        Ok(fields) => assert(has_blank_value(fields), "blank note"),
+        Err(e) => assert(false, "blank parse: ${e}"),
+    }
+}
+
+fn test_require_blank() {
+    match require_blank(sample_fields()) {
+        Ok(_) => assert(false, "filled must Err"),
+        Err(msg) => assert(strings.contains(msg, "blank"), "mentions blank"),
+    }
+    let boundary = "----blankreq"
+    let ct = "multipart/form-data; boundary=${boundary}"
+    let body = "--${boundary}\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\n\r\n--${boundary}--"
+    match parse_form_fields(ct, body) {
+        Ok(fields) => {
+            match require_blank(fields) {
+                Ok(n) => assert(n > 0, "blank count"),
+                Err(_) => assert(false, "blank fields"),
+            }
+        }
+        Err(e) => assert(false, "blank parse: ${e}"),
+    }
+}
+
+fn test_require_empty() {
+    let empty: Vec<(string, string)> = Vec::new()
+    match require_empty(empty) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty fields"),
+    }
+    match require_empty(sample_fields()) {
+        Ok(_) => assert(false, "sample must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+}
+
+fn test_require_first() {
+    match require_first(sample_fields()) {
+        Ok(name) => assert_eq(name, "title"),
+        Err(_) => assert(false, "first field"),
+    }
+    let empty: Vec<(string, string)> = Vec::new()
+    match require_first(empty) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}
+
+fn test_require_last() {
+    match require_last(sample_fields()) {
+        Ok(name) => assert_eq(name, "body"),
+        Err(_) => assert(false, "last field"),
+    }
+    let empty: Vec<(string, string)> = Vec::new()
+    match require_last(empty) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "last"), "mentions last"),
+    }
+}
+
+fn test_require_value() {
+    match require_value(sample_fields(), "Hello") {
+        Ok(v) => assert_eq(v, "Hello"),
+        Err(_) => assert(false, "Hello present"),
+    }
+    match require_value(sample_fields(), "missing") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "value"), "mentions value"),
+    }
+}

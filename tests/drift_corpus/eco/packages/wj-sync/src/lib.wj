@@ -1,0 +1,90 @@
+// wj-sync — idiomatic Windjammer concurrency (Go-style sync + CSP channels).
+// Public surface: Channel, Shared, Pending, Pool — never Arc/Mutex/async/spawn.
+// Generics-first (2026-09-16 design); int instantiations are type aliases (`SharedInt`, `IntReceiver`, ...).
+
+pub mod channel
+pub mod shared
+pub mod coord
+pub mod pipeline
+pub mod pending
+pub mod pool
+
+pub use channel::BoundedSender
+pub use channel::Receiver
+pub use channel::Sender
+pub use channel::bounded
+pub use channel::bounded_int
+pub use channel::clone_sender
+pub use channel::close
+pub use channel::recv
+pub use channel::recv_int
+pub use channel::send
+pub use channel::send_bounded
+pub use channel::send_int
+pub use channel::try_recv
+pub use channel::try_recv_int
+pub use channel::try_send_bounded
+pub use channel::unbounded
+pub use channel::unbounded_int
+pub use channel::BoundedIntSender
+pub use channel::IntReceiver
+pub use channel::IntSender
+
+pub use shared::Counter
+pub use shared::Shared
+pub use shared::SharedInt
+pub use shared::SharedMap
+pub use shared::SharedMapSI
+pub use shared::counter_add
+pub use shared::counter_get
+pub use shared::counter_inc
+pub use shared::counter_new
+pub use shared::shared_int
+pub use shared::shared_int_add
+pub use shared::shared_int_get
+pub use shared::shared_map_get
+pub use shared::shared_map_has
+pub use shared::shared_map_insert
+pub use shared::shared_map_len
+pub use shared::shared_map_new
+pub use shared::shared_map_new_kv
+pub use shared::shared_map_require
+pub use shared::shared_new
+pub use shared::shared_set
+
+pub use coord::Barrier
+pub use coord::Latch
+pub use coord::Once
+pub use coord::barrier_new
+pub use coord::barrier_wait
+pub use coord::barrier_waiting
+pub use coord::latch_count
+pub use coord::latch_countdown
+pub use coord::latch_is_open
+pub use coord::latch_new
+pub use coord::once_call
+pub use coord::once_new
+pub use coord::require_idle
+
+pub use pipeline::channel_sum_range
+pub use pipeline::drain_int_until_sentinel
+pub use pipeline::send_int_range_with_sentinel
+
+pub use pending::Pending
+pub use pending::PendingInt
+pub use pending::PendingShared
+pub use pending::parallel_add
+pub use pending::parallel_int
+pub use pending::parallel_shared_add
+pub use pending::task_int
+pub use pending::wait
+pub use pending::wait_int
+pub use pending::wait_shared
+
+pub use pool::Pool
+pub use pool::pool_is_alive
+pub use pool::pool_new
+pub use pool::pool_run_double
+pub use pool::pool_shared_inbox_sum
+pub use pool::pool_shutdown
+pub use pool::pool_sum_double

@@ -1,0 +1,75 @@
+use crate::quote
+use crate::capture
+use crate::sh
+use crate::sh_in
+use crate::timed
+use crate::parse_load
+use crate::parse_loads
+use crate::git_toplevel
+
+fn test_quote_survives_the_shell() {
+    let tricky = "it's a \"test\" $HOME"
+    match sh("echo " + quote(tricky)) {
+        Ok(o) => assert_eq(o.stdout, tricky + "\n"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_capture_reports_status_and_streams() {
+    match sh("echo out; echo err 1>&2; exit 3") {
+        Ok(o) => {
+            assert_eq(o.status, 3)
+            assert_eq(o.stdout, "out\n")
+            assert_eq(o.stderr, "err\n")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_missing_program_is_an_error() {
+    match capture("definitely-not-a-program-xyz", []) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, ""),
+    }
+}
+
+fn test_sh_in_changes_directory() {
+    match sh_in("/tmp", "pwd -P") {
+        Ok(o) => assert(o.stdout.contains("tmp"), o.stdout),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_timed_measures_cpu_and_keeps_program_stderr() {
+    match timed("sh", ["-c", "echo hi; echo warn 1>&2"]) {
+        Ok(t) => {
+            assert_eq(t.output.stdout, "hi\n")
+            assert_eq(t.output.stderr, "warn\n")
+            assert(t.user >= 0.0, "user")
+            assert(t.sys >= 0.0, "sys")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_load_handles_macos_and_linux() {
+    assert_eq(parse_load("11:28  up 11:35, 3 users, load averages: 47.80 66.78 63.22"), 47.8)
+    assert_eq(parse_load("10:00:00 up 3 days, 2 users,  load average: 0.52, 0.58, 0.59"), 0.52)
+    assert_eq(parse_load("no figures here"), 0.0)
+}
+
+fn test_git_toplevel_of_a_non_repo_is_an_error() {
+    match git_toplevel("/tmp") {
+        Ok(_) => assert(true, ""),
+        Err(e) => assert(e.len() > 0, "message"),
+    }
+}
+
+fn test_parse_loads_returns_all_three() {
+    let xs = parse_loads("up 1 day, load averages: 1.5 2.5 3.5")
+    assert_eq(xs.len(), 3)
+    assert_eq(xs[2], 3.5)
+    let ys = parse_loads("load average: 0.52, 0.58, 0.59")
+    assert_eq(ys[1], 0.58)
+    assert_eq(parse_loads("nothing")[0], 0.0)
+}

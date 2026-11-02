@@ -1,0 +1,284 @@
+use std::collections::HashMap
+use std::strings
+
+/// Parsed `Set-Cookie` attributes (subset used by most apps).
+pub struct SetCookie {
+    pub name: string,
+    pub value: string,
+    pub path: string,
+    pub http_only: bool,
+    pub secure: bool,
+    pub same_site: string,
+}
+
+/// Parse a `Cookie` request header (`name=value; name2=value2`).
+pub fn parse_cookie_header(header: string) -> Result<HashMap<string, string>, string> {
+    let mut map = HashMap::new()
+    let trimmed = strings.trim(header)
+    if strings.len(trimmed) == 0 {
+        return Ok(map)
+    }
+    let parts = strings.split(trimmed, ";")
+    for part in parts {
+        let piece = strings.trim(part)
+        if strings.len(piece) == 0 {
+            continue
+        }
+        match split_pair(piece) {
+            Ok(pair) => {
+                let _prev = map.insert(pair.0, pair.1)
+            },
+            Err(e) => {
+                return Err(e)
+            },
+        }
+    }
+    Ok(map)
+}
+
+/// Look up a cookie value by name from a parsed Cookie header map.
+pub fn get_cookie(map: HashMap<string, string>, name: string) -> Option<string> {
+    match map.get(name) {
+        Some(value) => Some(value),
+        None => None,
+    }
+}
+
+/// True when `name` is present in the parsed Cookie header map.
+pub fn has_cookie(map: HashMap<string, string>, name: string) -> bool {
+    match map.get(name) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Number of cookies in a parsed Cookie header map.
+pub fn cookie_count(map: HashMap<string, string>) -> int {
+    let mut n = 0
+    for (_k, _v) in map {
+        n = n + 1
+    }
+    n
+}
+
+/// True when the parsed Cookie header map has no entries.
+pub fn is_empty(map: HashMap<string, string>) -> bool {
+    cookie_count(map) == 0
+}
+
+/// `Ok(0)` when the cookie map has no entries, otherwise `Err`.
+pub fn require_empty(map: HashMap<string, string>) -> Result<int, string> {
+    if is_empty(map) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// Cookie names present in a parsed Cookie header map (HashMap iteration order).
+pub fn cookie_names(map: HashMap<string, string>) -> Vec<string> {
+    let mut names = Vec::new()
+    for (k, _v) in map {
+        names.push(k)
+    }
+    names
+}
+
+/// True when `Set-Cookie` has the Secure attribute.
+pub fn is_secure(cookie: SetCookie) -> bool {
+    cookie.secure
+}
+
+/// True when `Set-Cookie` has the HttpOnly attribute.
+pub fn is_http_only(cookie: SetCookie) -> bool {
+    cookie.http_only
+}
+
+pub fn cookie_name(cookie: SetCookie) -> string {
+    cookie.name
+}
+
+pub fn cookie_value(cookie: SetCookie) -> string {
+    cookie.value
+}
+
+pub fn cookie_path(cookie: SetCookie) -> string {
+    cookie.path
+}
+
+/// SameSite attribute text (`""`, `Lax`, `Strict`, or `None`).
+pub fn same_site_of(cookie: SetCookie) -> string {
+    cookie.same_site
+}
+
+/// True when SameSite is None.
+pub fn is_none_same_site(cookie: SetCookie) -> bool {
+    same_site_of(cookie) == "None"
+}
+
+/// `Ok(cookie)` when SameSite is None, otherwise `Err`.
+pub fn require_none(cookie: SetCookie) -> Result<SetCookie, string> {
+    if is_none_same_site(cookie) {
+        return Ok(cookie)
+    }
+    Err("expected none")
+}
+
+/// Copy of `cookie` with `same_site` replaced.
+pub fn with_same_site(cookie: SetCookie, same_site: string) -> SetCookie {
+    SetCookie {
+        name: cookie.name,
+        value: cookie.value,
+        path: cookie.path,
+        http_only: cookie.http_only,
+        secure: cookie.secure,
+        same_site: same_site,
+    }
+}
+
+/// Look up a cookie value by name, or `default` when missing.
+pub fn get_cookie_or(map: HashMap<string, string>, name: string, default: string) -> string {
+    match get_cookie(map, name) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// Look up a cookie by name, or `Err` naming the missing cookie.
+pub fn require_cookie(map: HashMap<string, string>, name: string) -> Result<string, string> {
+    match get_cookie(map, name) {
+        Some(v) => Ok(v),
+        None => Err("missing cookie: ${name}"),
+    }
+}
+
+/// `Set-Cookie` header that clears `name` (`Max-Age=0`, `Path=/`).
+pub fn delete_cookie_header(name: string) -> string {
+    "${name}=; Path=/; Max-Age=0"
+}
+
+/// Secure session cookie defaults (`Path=/`, HttpOnly, Secure, SameSite=Lax).
+pub fn session_cookie(name: string, value: string) -> SetCookie {
+    SetCookie {
+        name: name,
+        value: value,
+        path: "/",
+        http_only: true,
+        secure: true,
+        same_site: "Lax",
+    }
+}
+
+/// Serialize cookies as a `Cookie` request header.
+pub fn format_cookie_header(map: HashMap<string, string>) -> string {
+    let mut out = ""
+    let mut first = true
+    for (key, value) in map {
+        if first {
+            out = "${key}=${value}"
+            first = false
+        } else {
+            out = "${out}; ${key}=${value}"
+        }
+    }
+    out
+}
+
+/// Parse a single `Set-Cookie` response header.
+pub fn parse_set_cookie(header: string) -> Result<SetCookie, string> {
+    let trimmed = strings.trim(header)
+    if strings.len(trimmed) == 0 {
+        return Err("empty Set-Cookie")
+    }
+    let parts = strings.split(trimmed, ";")
+    if parts.len() == 0 {
+        return Err("empty Set-Cookie")
+    }
+    let first = strings.trim(parts[0])
+    match split_pair(first) {
+        Ok(nv) => {
+            let mut cookie = SetCookie {
+                name: nv.0,
+                value: nv.1,
+                path: "",
+                http_only: false,
+                secure: false,
+                same_site: "",
+            }
+            let mut i = 1
+            while i < parts.len() {
+                let attr = strings.trim(parts[i])
+                i = i + 1
+                if strings.len(attr) == 0 {
+                    continue
+                }
+                let lower = strings.to_lower(attr)
+                if lower == "httponly" {
+                    cookie.http_only = true
+                } else if lower == "secure" {
+                    cookie.secure = true
+                } else if strings.starts_with(lower, "path=") {
+                    match split_pair(attr) {
+                        Ok(p) => {
+                            cookie.path = p.1
+                        },
+                        Err(_) => {},
+                    }
+                } else if strings.starts_with(lower, "samesite=") {
+                    match split_pair(attr) {
+                        Ok(p) => {
+                            cookie.same_site = p.1
+                        },
+                        Err(_) => {},
+                    }
+                }
+            }
+            Ok(cookie)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Serialize a `Set-Cookie` header (name/value plus known attributes).
+pub fn format_set_cookie(cookie: SetCookie) -> string {
+    let mut out = "${cookie.name}=${cookie.value}"
+    if strings.len(cookie.path) > 0 {
+        out = "${out}; Path=${cookie.path}"
+    }
+    if cookie.http_only {
+        out = "${out}; HttpOnly"
+    }
+    if cookie.secure {
+        out = "${out}; Secure"
+    }
+    if strings.len(cookie.same_site) > 0 {
+        out = "${out}; SameSite=${cookie.same_site}"
+    }
+    out
+}
+
+fn split_pair(text: string) -> Result<(string, string), string> {
+    let eq = find_char(text, "=")
+    match eq {
+        Some(idx) => {
+            let name = strings.trim(strings.substring(text, 0, idx))
+            let value = strings.trim(strings.substring(text, idx + 1, strings.len(text)))
+            if strings.len(name) == 0 {
+                return Err("empty cookie name")
+            }
+            Ok((name, value))
+        },
+        None => Err("expected name=value"),
+    }
+}
+
+fn find_char(text: string, needle: string) -> Option<int> {
+    let mut i = 0
+    while i < strings.len(text) {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == needle {
+            return Some(i)
+        }
+        i = i + 1
+    }
+    None
+}

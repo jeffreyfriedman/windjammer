@@ -1,0 +1,13 @@
+[package]
+name = "wj-pipeline"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_sync = { path = "../../packages/wj-sync/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

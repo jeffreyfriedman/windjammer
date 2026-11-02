@@ -1,0 +1,9 @@
+// A match over a local Option<int> variable: the binding `b` is i64 but the literal in `b + 1` is
+// typed i32 by the compiled backend.fn main() {
+    let x: Option<int> = Some(5)
+    let y = match x {
+        Some(b) => Some(b + 1),
+        None => None,
+    }
+    println("${y.is_some()}")
+}

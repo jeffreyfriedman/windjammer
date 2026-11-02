@@ -1,0 +1,426 @@
+use std::json
+use std::crypto
+use std::strings
+use std::http::HttpMethod
+
+use wj_cors::allow_origin
+use wj_cors::preflight
+use wj_headers::defaults
+use wj_headers::format_headers
+use wj_validate::require_max_len
+use wj_validate::require_nonempty
+
+use wj_event::drain as take_event_queue
+use wj_event::emit
+use wj_event::new_bus
+use wj_event::subscribe
+use wj_event::Event
+
+use crate::domain::config::WebhookConfig
+use crate::domain::bus_event::BusEventBody
+
+pub struct HttpReply {
+    pub status: u16,
+    pub body: string,
+    pub allow_origin: string,
+    pub extra_headers: string,
+}
+
+pub struct WebhookEvent {
+    pub event: string,
+    pub id: string,
+}
+
+struct ErrorBody {
+    error: string,
+}
+
+struct OkBody {
+    ok: bool,
+}
+
+struct ReceivedBody {
+    received: bool,
+    event: string,
+    id: string,
+}
+
+pub struct WebhookApp {
+    config: WebhookConfig,
+    events: Vec<WebhookEvent>,
+    bus_queue: Vec<BusEventBody>,
+}
+
+/// HMAC-SHA-256 of `body` under `secret`, lowercase hex: the `X-Webhook-Signature` value.
+pub fn signature_for(secret: string, body: string) -> string {
+    crypto.hmac_sha256(secret, body)
+}
+
+impl WebhookApp {
+    pub fn new(secret: string) -> WebhookApp {
+        WebhookApp::new_with_config(WebhookConfig {
+            secret: secret,
+            allowed_origins: Vec::new(),
+            max_event_len: 128,
+            max_id_len: 128,
+        })
+    }
+
+    pub fn new_with_config(config: WebhookConfig) -> WebhookApp {
+        WebhookApp {
+            config: config,
+            events: Vec::new(),
+            bus_queue: Vec::new(),
+        }
+    }
+
+    pub fn handle(
+        self,
+        method: string,
+        path: string,
+        origin: string,
+        token: string,
+        signature: string,
+        body: string,
+    ) -> HttpReply {
+        let parsed = match parse_method(method) {
+            Some(value) => value,
+            None => return json_error(405, "method not allowed"),
+        }
+        self.handle_method(parsed, path, origin, token, signature, body)
+    }
+
+    fn handle_method(
+        self,
+        method: HttpMethod,
+        path: string,
+        origin: string,
+        token: string,
+        signature: string,
+        body: string,
+    ) -> HttpReply {
+        let path = own(path)
+        let origin = own(origin)
+        let token = own(token)
+        let signature = own(signature)
+        let body = own(body)
+        let allowed = self.config.allowed_origins
+        match method {
+            HttpMethod::OPTIONS => {
+                return with_transport(self.handle_options(origin, allowed), origin, allowed)
+            },
+            _ => {},
+        }
+        let reply = self.dispatch(method, path, token, signature, body)
+        with_transport(reply, origin, allowed)
+    }
+
+    fn handle_options(self, origin: string, allowed: Vec<string>) -> HttpReply {
+        let methods = "GET,POST,OPTIONS"
+        let headers = "Content-Type,X-Webhook-Token,X-Webhook-Signature"
+        match cors_preflight(origin, allowed, methods, headers) {
+            Some(headers) => HttpReply {
+                status: 204,
+                body: "",
+                allow_origin: headers.allow_origin,
+                extra_headers: "",
+            },
+            None => json_error(403, "origin not allowed"),
+        }
+    }
+
+    fn dispatch(
+        self,
+        method: HttpMethod,
+        path: string,
+        token: string,
+        signature: string,
+        body: string,
+    ) -> HttpReply {
+        if path == "/health" || path == "/health/" {
+            match method {
+                HttpMethod::GET => json_ok(),
+                _ => json_error(404, "not found"),
+            }
+        } else if path == "/events" || path == "/events/" {
+            match method {
+                HttpMethod::GET => self.list_events(),
+                _ => json_error(404, "not found"),
+            }
+        } else if path == "/bus/drain" || path == "/bus/drain/" {
+            match method {
+                HttpMethod::GET => self.drain_bus(),
+                _ => json_error(404, "not found"),
+            }
+        } else if path == "/webhook" || path == "/webhook/" {
+            match method {
+                HttpMethod::POST => self.receive(token, signature, body),
+                _ => json_error(404, "not found"),
+            }
+        } else {
+            json_error(404, "not found")
+        }
+    }
+
+    fn authorized(self, token: string, signature: string, body: string) -> bool {
+        if token.len() > 0 && crypto.constant_time_eq(token, self.config.secret) {
+            return true
+        }
+        if signature.len() > 0 {
+            return crypto.verify_hmac_sha256(self.config.secret, body, signature)
+        }
+        false
+    }
+
+    fn receive(self, token: string, signature: string, body: string) -> HttpReply {
+        if !self.authorized(token, signature, body) {
+            return json_error(401, "unauthorized")
+        }
+        let parsed: WebhookEvent = match json.parse_string(body) {
+            Ok(value) => value,
+            Err(_) => return json_error(400, "invalid json"),
+        }
+        let event_name = match self.validate_event(parsed.event) {
+            Ok(value) => value,
+            Err(msg) => return json_error(400, msg),
+        }
+        let event_id = match self.validate_id(parsed.id) {
+            Ok(value) => value,
+            Err(msg) => return json_error(400, msg),
+        }
+        self.events.push(WebhookEvent {
+            event: "${event_name}",
+            id: "${event_id}",
+        })
+        let queued = queue_via_event_bus(event_name, body)
+        self.bus_queue = append_bus_events(self.bus_queue, queued)
+        let payload = ReceivedBody {
+            received: true,
+            event: event_name,
+            id: event_id,
+        }
+        match json.to_string(payload) {
+            Ok(text) => HttpReply {
+                status: 200,
+                body: text,
+                allow_origin: "",
+                extra_headers: "",
+            },
+            Err(_) => json_error(500, "serialization failed"),
+        }
+    }
+
+    fn validate_event(self, value: string) -> Result<string, string> {
+        let trimmed = match validate_nonempty("event", value) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+        validate_max_len("event", trimmed, self.config.max_event_len)
+    }
+
+    fn validate_id(self, value: string) -> Result<string, string> {
+        let trimmed = match validate_nonempty("id", value) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+        validate_max_len("id", trimmed, self.config.max_id_len)
+    }
+
+    fn list_events(self) -> HttpReply {
+        match json.to_string(self.events) {
+            Ok(text) => HttpReply {
+                status: 200,
+                body: text,
+                allow_origin: "",
+                extra_headers: "",
+            },
+            Err(_) => json_error(500, "serialization failed"),
+        }
+    }
+
+    fn drain_bus(self) -> HttpReply {
+        let body_items = self.bus_queue
+        self.bus_queue = Vec::new()
+        match json.to_string(body_items) {
+            Ok(text) => HttpReply {
+                status: 200,
+                body: text,
+                allow_origin: "",
+                extra_headers: "",
+            },
+            Err(_) => json_error(500, "serialization failed"),
+        }
+    }
+}
+
+fn json_ok() -> HttpReply {
+    let payload = OkBody { ok: true }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: 200,
+            body: text,
+            allow_origin: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: 200,
+            body: "{\"ok\":true}",
+            allow_origin: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn json_error(status: u16, message: string) -> HttpReply {
+    let payload = ErrorBody { error: message }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: status,
+            body: text,
+            allow_origin: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: status,
+            body: "{\"error\":\"unknown\"}",
+            allow_origin: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn cors_preflight(
+    origin: string,
+    allowed: Vec<string>,
+    methods: string,
+    headers: string,
+) -> Option<wj_cors::CorsHeaders> {
+    let origin = own(origin)
+    let methods = own(methods)
+    let headers = own(headers)
+    preflight(origin, allowed, methods, headers)
+}
+
+fn cors_allow(origin: string, allowed: Vec<string>) -> Option<string> {
+    let origin = own(origin)
+    allow_origin(origin, allowed)
+}
+
+fn with_transport(reply: HttpReply, origin: string, allowed: Vec<string>) -> HttpReply {
+    let with_cors = apply_cors(reply, origin, allowed)
+    apply_security(with_cors)
+}
+
+fn apply_cors(reply: HttpReply, origin: string, allowed: Vec<string>) -> HttpReply {
+    if strings.len(origin) == 0 {
+        return reply
+    }
+    match cors_allow(origin, allowed) {
+        Some(ao) => HttpReply {
+            status: reply.status,
+            body: reply.body,
+            allow_origin: ao,
+            extra_headers: reply.extra_headers,
+        },
+        None => reply,
+    }
+}
+
+fn apply_security(reply: HttpReply) -> HttpReply {
+    let security = security_header_block()
+    let merged = merge_header_blocks(reply.extra_headers, security)
+    HttpReply {
+        status: reply.status,
+        body: reply.body,
+        allow_origin: reply.allow_origin,
+        extra_headers: merged,
+    }
+}
+
+fn security_header_block() -> string {
+    format_headers(defaults())
+}
+
+fn merge_header_blocks(left: string, right: string) -> string {
+    if strings.len(left) == 0 {
+        return right
+    }
+    if strings.len(right) == 0 {
+        return left
+    }
+    "${left}\n${right}"
+}
+
+fn validate_nonempty(field: string, value: string) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_nonempty(field, value)
+}
+
+fn validate_max_len(field: string, value: string, max: int) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_max_len(field, value, max)
+}
+
+fn own(value: string) -> string {
+    value
+}
+
+fn parse_method(label: string) -> Option<HttpMethod> {
+    if label == "GET" {
+        return Some(HttpMethod::GET)
+    }
+    if label == "POST" {
+        return Some(HttpMethod::POST)
+    }
+    if label == "PUT" {
+        return Some(HttpMethod::PUT)
+    }
+    if label == "DELETE" {
+        return Some(HttpMethod::DELETE)
+    }
+    if label == "PATCH" {
+        return Some(HttpMethod::PATCH)
+    }
+    if label == "HEAD" {
+        return Some(HttpMethod::HEAD)
+    }
+    if label == "OPTIONS" {
+        return Some(HttpMethod::OPTIONS)
+    }
+    None
+}
+
+fn queue_via_event_bus(name: string, payload: string) -> Vec<BusEventBody> {
+    let listener_id = "webhook"
+    let pattern = "*"
+    let bus = subscribe(new_bus(), listener_id, pattern)
+    let bus = emit(bus, own(name), own(payload))
+    let drained = take_event_queue(bus)
+    events_to_bus_bodies(drained.1)
+}
+
+fn events_to_bus_bodies(events: Vec<Event>) -> Vec<BusEventBody> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < events.len() {
+        let item = events[i]
+        out.push(BusEventBody {
+            name: item.name,
+            payload: item.payload,
+        })
+        i = i + 1
+    }
+    out
+}
+
+fn append_bus_events(queue: Vec<BusEventBody>, items: Vec<BusEventBody>) -> Vec<BusEventBody> {
+    let mut out = queue
+    let mut i = 0
+    while i < items.len() {
+        out.push(items[i])
+        i = i + 1
+    }
+    out
+}

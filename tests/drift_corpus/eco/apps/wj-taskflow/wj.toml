@@ -1,0 +1,19 @@
+[package]
+name = "wj-taskflow"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_router = { path = "../../packages/wj-router/build" }
+wj_jwt = { path = "../../packages/wj-jwt/build" }
+wj_hash = { path = "../../packages/wj-hash/build" }
+wj_rate_limit = { path = "../../packages/wj-rate-limit/build" }
+wj_validate = { path = "../../packages/wj-validate/build" }
+wj_migrate = { path = "../../packages/wj-migrate/build" }
+wj_querystring = { path = "../../packages/wj-querystring/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

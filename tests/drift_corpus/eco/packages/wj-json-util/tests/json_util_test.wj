@@ -1,0 +1,226 @@
+use crate::pretty
+use crate::compact
+use crate::is_arrayish
+use crate::is_empty_array
+use crate::is_empty_json
+use crate::is_empty_object
+use crate::require_valid
+use crate::is_nullish
+use crate::is_objectish
+use crate::is_valid
+use crate::path_get
+use crate::path_get_or
+use crate::path_get_str
+use crate::path_exists
+use crate::path_require
+use crate::path_set
+use crate::merge
+use crate::parse_nonneg_int
+use std::strings
+
+fn test_pretty_indents_valid_json() {
+    let out = pretty("{\"a\":1}")
+    assert_str_contains(out, "\n")
+    assert_str_contains(out, "\"a\"")
+}
+
+fn test_pretty_returns_raw_when_invalid() {
+    assert_eq(pretty("not-json"), "not-json")
+}
+
+fn test_path_get_nested_object_key() {
+    match path_get("{\"user\":{\"name\":\"Ada\"}}", "user.name") {
+        Some(v) => assert_eq(v, "\"Ada\""),
+        None => assert(false, "expected user.name"),
+    }
+}
+
+fn test_path_get_array_index_including_zero() {
+    match path_get("{\"nums\":[10,20]}", "nums.0") {
+        Some(v) => assert_eq(v, "10"),
+        None => assert(false, "expected nums.0"),
+    }
+    match path_get("{\"nums\":[10,20]}", "nums.1") {
+        Some(v) => assert_eq(v, "20"),
+        None => assert(false, "expected nums.1"),
+    }
+}
+
+fn test_path_get_missing_returns_none() {
+    match path_get("{\"a\":1}", "b.c") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+fn test_path_get_str_unwraps_string_leaf() {
+    match path_get_str("{\"user\":{\"name\":\"Ada\"}}", "user.name") {
+        Some(v) => assert_eq(v, "Ada"),
+        None => assert(false, "expected Ada"),
+    }
+}
+
+fn test_path_get_str_none_for_non_string() {
+    match path_get_str("{\"n\":1}", "n") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+fn test_merge_overlays_object_keys_shallow() {
+    match merge("{\"a\":1,\"b\":2}", "{\"b\":9,\"c\":3}") {
+        Ok(out) => {
+            assert_str_contains(out, "\"a\":1")
+            assert_str_contains(out, "\"b\":9")
+            assert_str_contains(out, "\"c\":3")
+        },
+        Err(_) => assert(false, "merge shallow failed"),
+    }
+}
+
+fn test_merge_deep_merges_nested_objects() {
+    match merge("{\"user\":{\"name\":\"Ada\",\"age\":1}}", "{\"user\":{\"age\":2}}") {
+        Ok(out) => {
+            assert_str_contains(out, "\"name\":\"Ada\"")
+            assert_str_contains(out, "\"age\":2")
+        },
+        Err(_) => assert(false, "merge deep failed"),
+    }
+}
+
+fn test_merge_errors_when_not_objects() {
+    match merge("[1]", "{\"a\":1}") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+}
+
+fn test_path_set_updates_existing_leaf() {
+    match path_set("{\"a\":1,\"b\":2}", "b", "9") {
+        Ok(out) => {
+            assert_str_contains(out, "\"a\":1")
+            assert_str_contains(out, "\"b\":9")
+        },
+        Err(_) => assert(false, "path_set existing leaf"),
+    }
+}
+
+fn test_path_set_creates_nested_objects() {
+    match path_set("{}", "user.name", "\"Ada\"") {
+        Ok(out) => {
+            match path_get_str(out, "user.name") {
+                Some(v) => assert_eq(v, "Ada"),
+                None => assert(false, "expected nested Ada"),
+            }
+        },
+        Err(_) => assert(false, "path_set nested create"),
+    }
+}
+
+fn test_path_set_errors_on_invalid_document() {
+    match path_set("not-json", "a", "1") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+}
+
+fn test_path_set_errors_on_empty_path() {
+    match path_set("{\"a\":1}", "", "2") {
+        Ok(_) => assert(false, "expected Err for empty path"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+}
+
+fn test_parse_nonneg_int_allows_zero() {
+    match parse_nonneg_int("0") {
+        Some(n) => assert_eq(n, 0),
+        None => assert(false, "0"),
+    }
+    match parse_nonneg_int("12") {
+        Some(n) => assert_eq(n, 12),
+        None => assert(false, "12"),
+    }
+    match parse_nonneg_int("01") {
+        Some(_) => assert(false, "leading zero rejected"),
+        None => {},
+    }
+    match parse_nonneg_int("x") {
+        Some(_) => assert(false, "letter"),
+        None => {},
+    }
+}
+
+fn test_is_valid() {
+    assert(is_valid("{\"a\":1}"), "object")
+    assert(is_valid("[1,2]"), "array")
+    assert(is_valid("true"), "bool")
+    assert(!is_valid("not-json"), "garbage")
+    assert(!is_valid(""), "empty")
+}
+
+fn test_compact_minifies() {
+    let out = compact("{\n  \"a\": 1\n}")
+    assert(!strings.contains(out, "\n"), "no newlines")
+    assert_str_contains(out, "\"a\"")
+}
+
+fn test_path_exists() {
+    assert(path_exists("{\"user\":{\"name\":\"Ada\"}}", "user.name"), "nested")
+    assert(path_exists("{\"nums\":[10]}", "nums.0"), "index")
+    assert(!path_exists("{\"a\":1}", "b"), "missing")
+    assert(!path_exists("not-json", "a"), "invalid doc")
+}
+
+fn test_path_get_or() {
+    assert_eq(path_get_or("{\"a\":1}", "a", "0"), "1")
+    assert_eq(path_get_or("{\"a\":1}", "b", "0"), "0")
+}
+
+fn test_is_objectish_and_arrayish() {
+    assert(is_objectish("{\"a\":1}"), "object")
+    assert(!is_objectish("[1]"), "array not object")
+    assert(is_arrayish("[1,2]"), "array")
+    assert(!is_arrayish("{\"a\":1}"), "object not array")
+    assert(!is_objectish("not-json"), "garbage")
+    assert(!is_arrayish(""), "empty")
+}
+
+fn test_path_require() {
+    match path_require("{\"a\":1}", "a") {
+        Ok(v) => assert_eq(v, "1"),
+        Err(_) => assert(false, "path a"),
+    }
+    match path_require("{\"a\":1}", "b") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "b"), "mentions path"),
+    }
+}
+
+fn test_nullish_empty_object_and_array() {
+    assert(is_nullish("null"), "null")
+    assert(is_nullish(" null "), "trim")
+    assert(!is_nullish("{\"a\":1}"), "object")
+    assert(is_empty_object("{}"), "empty obj")
+    assert(is_empty_object("  {}  "), "trim obj")
+    assert(!is_empty_object("{\"a\":1}"), "nonempty obj")
+    assert(is_empty_array("[]"), "empty arr")
+    assert(!is_empty_array("[1]"), "nonempty arr")
+    assert(!is_empty_object("[]"), "arr not obj")
+}
+
+fn test_require_valid_and_is_empty_json() {
+    match require_valid("{\"a\":1}") {
+        Ok(text) => assert(is_valid(text), "accepted"),
+        Err(_) => assert(false, "valid"),
+    }
+    match require_valid("nope") {
+        Ok(_) => assert(false, "invalid must Err"),
+        Err(msg) => assert(strings.contains(msg, "json"), "mentions json"),
+    }
+    assert(is_empty_json("{}"), "obj")
+    assert(is_empty_json("[]"), "arr")
+    assert(is_empty_json("  {}  "), "trim")
+    assert(!is_empty_json("{\"a\":1}"), "nonempty")
+    assert(!is_empty_json("null"), "null")
+    assert(!is_empty_json("nope"), "garbage")
+}

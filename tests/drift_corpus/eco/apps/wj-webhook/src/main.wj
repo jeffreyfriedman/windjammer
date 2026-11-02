@@ -1,0 +1,15 @@
+// Composition root — env config + HTTP adapter + webhook domain.
+
+use crate::adapters::serve
+use crate::domain::config_from_env
+use crate::domain::port_from_env
+
+fn main() {
+    let config = config_from_env()
+    let port = port_from_env()
+    println("wj-webhook listening on http://0.0.0.0:${port}")
+    match serve(port, config) {
+        Ok(_) => {},
+        Err(err) => println("wj-webhook error: ${err}"),
+    }
+}

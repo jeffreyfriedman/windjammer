@@ -1,0 +1,153 @@
+// Shared mutable state — Windjammer `Shared`, not Arc/Mutex in the public API.
+// Generics-first: Shared<T> / SharedMap<K,V>; int aliases after the structs.
+
+use std::collections::HashMap
+use std::sync::atomic::{AtomicI64, Ordering}
+use std::sync::{Arc, Mutex}
+
+/// Thread-safe shared cell.
+pub struct Shared<T> {
+    inner: Arc<Mutex<T>>,
+}
+
+/// Shared concurrent map.
+pub struct SharedMap<K, V> {
+    inner: Arc<Mutex<HashMap<K, V>>>,
+}
+
+pub type SharedInt = Shared<int>
+pub type SharedMapSI = SharedMap<string, int>
+
+/// Create a shared value.
+pub fn shared_new<T>(value: T) -> Shared<T> {
+    Shared {
+        inner: Arc::new(Mutex::new(value)),
+    }
+}
+
+/// Replace the shared value; returns the same handle.
+pub fn shared_set<T>(s: Shared<T>, value: T) -> Shared<T> {
+    match s.inner.lock() {
+        Ok(mut g) => {
+            *g = value
+        }
+        Err(_) => {}
+    }
+    s
+}
+
+/// Create a shared int with initial value.
+pub fn shared_int(n: int) -> SharedInt {
+    shared_new(n)
+}
+
+/// Add `delta` to the shared int; returns the same handle.
+pub fn shared_int_add(s: SharedInt, delta: int) -> SharedInt {
+    match s.inner.lock() {
+        Ok(mut g) => {
+            *g = *g + delta
+        }
+        Err(_) => {}
+    }
+    s
+}
+
+/// Read the current int value.
+pub fn shared_int_get(s: SharedInt) -> int {
+    match s.inner.lock() {
+        Ok(g) => *g,
+        Err(_) => 0,
+    }
+}
+
+/// Monotonic counter — Arc<AtomicI64> (Clone handle; hot path borrows).
+pub struct Counter {
+    inner: Arc<AtomicI64>,
+}
+
+/// Create a counter with initial value.
+pub fn counter_new(n: int) -> Counter {
+    Counter {
+        inner: Arc::new(AtomicI64::new(n)),
+    }
+}
+
+/// Increment by 1 (hot path: borrow Counter, no handle churn).
+pub fn counter_inc(c: Counter) {
+    c.inner.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Add `delta` (hot path: borrow Counter).
+pub fn counter_add(c: Counter, delta: int) {
+    c.inner.fetch_add(delta, Ordering::Relaxed)
+}
+
+/// Read the current value.
+pub fn counter_get(c: Counter) -> int {
+    c.inner.load(Ordering::Relaxed)
+}
+
+pub fn shared_map_new_kv<K, V>() -> SharedMap<K, V> {
+    SharedMap {
+        inner: Arc::new(Mutex::new(HashMap::new())),
+    }
+}
+
+pub fn shared_map_new() -> SharedMapSI {
+    shared_map_new_kv()
+}
+
+pub fn shared_map_insert(
+    m: SharedMapSI,
+    key: string,
+    value: int,
+) -> SharedMapSI {
+    match m.inner.lock() {
+        Ok(mut g) => {
+            g.insert(key, value)
+        }
+        Err(_) => {}
+    }
+    m
+}
+
+pub fn shared_map_len(m: SharedMapSI) -> int {
+    match m.inner.lock() {
+        Ok(g) => g.len() as int,
+        Err(_) => 0,
+    }
+}
+
+/// Lookup key; returns (map, present, value).
+pub fn shared_map_get(
+    m: SharedMapSI,
+    key: string,
+) -> (SharedMapSI, bool, int) {
+    let result = match m.inner.lock() {
+        Ok(g) => {
+            match g.get(key) {
+                Some(v) => (true, *v),
+                None => (false, 0),
+            }
+        }
+        Err(_) => (false, 0),
+    }
+    (m, result.0, result.1)
+}
+
+/// True when key is present.
+pub fn shared_map_has(m: SharedMapSI, key: string) -> bool {
+    match m.inner.lock() {
+        Ok(g) => g.contains_key(key),
+        Err(_) => false,
+    }
+}
+
+/// Value for `key`, or `Err` when it is absent.
+pub fn shared_map_require(m: SharedMapSI, key: string) -> Result<int, string> {
+    let got = shared_map_get(m, key)
+    if got.1 {
+        return Ok(got.2)
+    }
+    Err("expected key")
+}

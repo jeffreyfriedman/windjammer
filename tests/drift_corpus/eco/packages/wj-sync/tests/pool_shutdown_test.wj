@@ -1,0 +1,21 @@
+use crate::pool_new
+use crate::pool_shutdown
+use crate::pool_is_alive
+use crate::pool_sum_double
+
+@test
+fn test_pool_shutdown_marks_dead() {
+    let pool = pool_new(2)
+    let checked = pool_is_alive(pool)
+    assert(checked.1, "starts alive")
+    let pool2 = pool_shutdown(checked.0)
+    let checked2 = pool_is_alive(pool2)
+    assert(!checked2.1, "shutdown clears alive")
+}
+
+@test
+fn test_pool_sum_still_works_before_shutdown() {
+    let out = pool_sum_double(2, 10)
+    assert_eq(out.0, 10)
+    assert_eq(out.1, 90)
+}

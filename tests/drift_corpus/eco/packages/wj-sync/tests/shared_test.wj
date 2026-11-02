@@ -1,0 +1,25 @@
+use crate::Shared
+use crate::shared_int
+use crate::shared_int_add
+use crate::shared_int_get
+
+@test
+fn test_shared_int_get_initial() {
+    let s = shared_int(10)
+    assert_eq(shared_int_get(s), 10)
+}
+
+@test
+fn test_shared_int_add() {
+    let s = shared_int(1)
+    let s2 = shared_int_add(s, 4)
+    assert_eq(shared_int_get(s2), 5)
+}
+
+@test
+fn test_shared_int_add_twice() {
+    let s = shared_int(0)
+    let s1 = shared_int_add(s, 3)
+    let s2 = shared_int_add(s1, 7)
+    assert_eq(shared_int_get(s2), 10)
+}

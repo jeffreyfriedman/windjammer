@@ -1,0 +1,357 @@
+use crate::merge
+use crate::overlay_matching
+use crate::resolve
+use crate::resolve_toml
+use crate::resolve_yaml
+use crate::from_toml
+use crate::from_yaml
+use crate::get
+use crate::get_or
+use crate::has
+use crate::has_entries
+use crate::has_keys
+use crate::is_blank
+use crate::is_empty
+use crate::require_empty
+use crate::require_entries
+use crate::require_value
+use crate::require_blank
+use crate::require_keys
+use crate::key_count
+use crate::keys
+use crate::require
+use crate::values
+use std::collections::HashMap
+use std::strings
+
+fn test_merge_overlay_wins_on_shared_keys() {
+    let mut defaults = HashMap::new()
+    defaults.insert("HOST", "localhost")
+    defaults.insert("PORT", "8080")
+    let mut file = HashMap::new()
+    file.insert("PORT", "3000")
+    file.insert("DEBUG", "true")
+    let cfg = merge(defaults, file)
+    assert_eq(cfg.len(), 3)
+    match cfg.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST from defaults"),
+    }
+}
+
+fn test_merge_overlay_port_and_debug() {
+    let mut defaults = HashMap::new()
+    defaults.insert("HOST", "localhost")
+    defaults.insert("PORT", "8080")
+    let mut file = HashMap::new()
+    file.insert("PORT", "3000")
+    file.insert("DEBUG", "true")
+    let cfg = merge(defaults, file)
+    match cfg.get("PORT") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "PORT from file"),
+    }
+    match cfg.get("DEBUG") {
+        Some(v) => assert_eq(v, "true"),
+        None => assert(false, "DEBUG from file"),
+    }
+}
+
+fn test_overlay_matching_overrides_existing_keys_only() {
+    let mut map = HashMap::new()
+    map.insert("PORT", "8080")
+    map.insert("HOST", "localhost")
+    let mut env_map = HashMap::new()
+    env_map.insert("PORT", "9090")
+    env_map.insert("UNRELATED", "nope")
+    let cfg = overlay_matching(map, env_map)
+    match cfg.get("PORT") {
+        Some(v) => assert_eq(v, "9090"),
+        None => assert(false, "PORT from env overlay"),
+    }
+    match cfg.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST unchanged"),
+    }
+    assert(cfg.get("UNRELATED").is_none(), "unknown env key stays out")
+}
+
+fn test_overlay_matching_empty_env_keeps_file() {
+    let mut map = HashMap::new()
+    map.insert("PORT", "8080")
+    let env_map = HashMap::new()
+    let cfg = overlay_matching(map, env_map)
+    match cfg.get("PORT") {
+        Some(v) => assert_eq(v, "8080"),
+        None => assert(false, "PORT unchanged"),
+    }
+}
+
+fn test_resolve_file_then_env_over_defaults() {
+    let mut defaults = HashMap::new()
+    defaults.insert("HOST", "localhost")
+    defaults.insert("PORT", "8080")
+    defaults.insert("LOG", "info")
+    let mut file = HashMap::new()
+    file.insert("PORT", "3000")
+    let mut env_map = HashMap::new()
+    env_map.insert("LOG", "debug")
+    env_map.insert("IGNORED", "x")
+    let cfg = resolve(defaults, file, env_map)
+    match cfg.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST defaults"),
+    }
+    match cfg.get("PORT") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "PORT file"),
+    }
+    match cfg.get("LOG") {
+        Some(v) => assert_eq(v, "debug"),
+        None => assert(false, "LOG env"),
+    }
+    assert(cfg.get("IGNORED").is_none(), "env must not add unknown keys")
+}
+
+fn test_from_toml_flattens_sections() {
+    let text = "HOST = \"localhost\"\n[server]\nPORT = 3000\n"
+    let file = from_toml(text)
+    match file.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST top-level"),
+    }
+    match file.get("server.PORT") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "server.PORT section"),
+    }
+}
+
+fn test_from_yaml_flattens_nested() {
+    let text = "HOST: localhost\nserver:\n  PORT: 3000\n"
+    let file = from_yaml(text)
+    match file.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST from yaml"),
+    }
+    match file.get("server.PORT") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "server.PORT from yaml"),
+    }
+}
+
+fn test_resolve_toml_defaults_file_env() {
+    let mut defaults = HashMap::new()
+    defaults.insert("HOST", "localhost")
+    defaults.insert("server.PORT", "8080")
+    defaults.insert("LOG", "info")
+    let text = "server.PORT = 3000\nDEBUG = true\n"
+    let mut env_map = HashMap::new()
+    env_map.insert("LOG", "debug")
+    env_map.insert("IGNORED", "x")
+    let cfg = resolve_toml(defaults, text, env_map)
+    match cfg.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST defaults"),
+    }
+    match cfg.get("server.PORT") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "PORT from toml"),
+    }
+    match cfg.get("LOG") {
+        Some(v) => assert_eq(v, "debug"),
+        None => assert(false, "LOG env"),
+    }
+    match cfg.get("DEBUG") {
+        Some(v) => assert_eq(v, "true"),
+        None => assert(false, "DEBUG from toml merge"),
+    }
+    assert(cfg.get("IGNORED").is_none(), "env must not invent keys")
+}
+
+fn test_resolve_yaml_defaults_file_env() {
+    let mut defaults = HashMap::new()
+    defaults.insert("HOST", "localhost")
+    defaults.insert("PORT", "8080")
+    let text = "PORT: 3000\nDEBUG: true\n"
+    let env_map = HashMap::new()
+    let cfg = resolve_yaml(defaults, text, env_map)
+    match cfg.get("HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST defaults"),
+    }
+    match cfg.get("PORT") {
+        Some(v) => assert_eq(v, "3000"),
+        None => assert(false, "PORT from yaml"),
+    }
+    match cfg.get("DEBUG") {
+        Some(v) => assert_eq(v, "true"),
+        None => assert(false, "DEBUG from yaml"),
+    }
+}
+
+fn test_get_or_and_has() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    assert_eq(get_or(map, "HOST", "127.0.0.1"), "localhost")
+    let mut again = HashMap::new()
+    again.insert("HOST", "localhost")
+    assert_eq(get_or(again, "PORT", "8080"), "8080")
+    let mut has_map = HashMap::new()
+    has_map.insert("HOST", "localhost")
+    assert(has(has_map, "HOST"), "HOST")
+    let mut miss = HashMap::new()
+    miss.insert("HOST", "localhost")
+    assert(!has(miss, "PORT"), "PORT missing")
+}
+
+fn test_key_count() {
+    let mut map = HashMap::new()
+    map.insert("A", "1")
+    map.insert("B", "2")
+    assert_eq(key_count(map), 2)
+    let empty = HashMap::new()
+    assert_eq(key_count(empty), 0)
+}
+
+fn test_get_require_is_empty() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    match get(map, "HOST") {
+        Some(v) => assert_eq(v, "localhost"),
+        None => assert(false, "HOST"),
+    }
+    let mut miss = HashMap::new()
+    miss.insert("HOST", "localhost")
+    match get(miss, "PORT") {
+        Some(_) => assert(false, "missing"),
+        None => {},
+    }
+    let mut req = HashMap::new()
+    req.insert("HOST", "localhost")
+    match require(req, "HOST") {
+        Ok(v) => assert_eq(v, "localhost"),
+        Err(_) => assert(false, "require ok"),
+    }
+    let mut bad = HashMap::new()
+    bad.insert("HOST", "localhost")
+    match require(bad, "PORT") {
+        Ok(_) => assert(false, "require err"),
+        Err(msg) => assert(strings.contains(msg, "PORT"), "mentions key"),
+    }
+    assert(is_empty(HashMap::new()), "empty")
+    let mut nonempty = HashMap::new()
+    nonempty.insert("A", "1")
+    assert(!is_empty(nonempty), "nonempty")
+}
+
+fn test_keys_and_values() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    map.insert("PORT", "8080")
+    let ks = keys(map)
+    assert_eq(ks.len(), 2)
+    let mut again = HashMap::new()
+    again.insert("HOST", "localhost")
+    again.insert("PORT", "8080")
+    let vals = values(again)
+    assert_eq(vals.len(), 2)
+}
+
+@test
+fn test_has_keys_and_has_entries() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    map.insert("PORT", "8080")
+    let mut needed = Vec::new()
+    needed.push("HOST")
+    needed.push("PORT")
+    assert(has_keys(map, needed), "both present")
+    let mut missing = Vec::new()
+    missing.push("HOST")
+    missing.push("DEBUG")
+    assert(!has_keys(map, missing), "DEBUG absent")
+    assert(has_entries(map), "nonempty")
+    assert(!has_entries(HashMap::new()), "empty")
+}
+
+@test
+fn test_is_blank_and_require_entries() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    map.insert("EMPTY", "")
+    assert(is_blank(map, "EMPTY"), "empty value")
+    assert(is_blank(map, "MISSING"), "missing")
+    assert(!is_blank(map, "HOST"), "present")
+    match require_entries(map) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "entries"),
+    }
+    match require_entries(HashMap::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "entries"), "mentions entries"),
+    }
+}
+
+@test
+fn test_require_value() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    map.insert("EMPTY", "")
+    match require_value(map, "HOST") {
+        Ok(v) => assert_eq(v, "localhost"),
+        Err(_) => assert(false, "present"),
+    }
+    match require_value(map, "EMPTY") {
+        Ok(_) => assert(false, "blank must Err"),
+        Err(msg) => assert(strings.contains(msg, "value"), "mentions value"),
+    }
+}
+
+@test
+fn test_require_blank() {
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    map.insert("EMPTY", "")
+    match require_blank(map, "EMPTY") {
+        Ok(key) => assert_eq(key, "EMPTY"),
+        Err(_) => assert(false, "blank key"),
+    }
+    match require_blank(map, "HOST") {
+        Ok(_) => assert(false, "present must Err"),
+        Err(msg) => assert(strings.contains(msg, "blank"), "mentions blank"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    match require_empty(HashMap::new()) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty map"),
+    }
+    let mut map = HashMap::new()
+    map.insert("HOST", "localhost")
+    match require_empty(map) {
+        Ok(_) => assert(false, "entries must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+}
+
+@test
+fn test_require_keys() {
+    let mut present = HashMap::new()
+    present.insert("HOST", "localhost")
+    let mut needed = Vec::new()
+    needed.push("HOST")
+    match require_keys(present, needed) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "host present"),
+    }
+    let mut present2 = HashMap::new()
+    present2.insert("HOST", "localhost")
+    let mut missing = Vec::new()
+    missing.push("PORT")
+    match require_keys(present2, missing) {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "keys"), "mentions keys"),
+    }
+}

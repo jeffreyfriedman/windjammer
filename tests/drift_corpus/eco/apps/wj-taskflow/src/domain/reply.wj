@@ -1,0 +1,37 @@
+use std::json
+use crate::domain::inputs::ErrorBody
+
+pub struct Reply {
+    pub status: int,
+    pub body: string,
+    /// Extra response headers, one `Name: value` per line.
+    pub headers: string,
+}
+
+pub fn reply(status: int, body: string) -> Reply {
+    Reply {
+        status: status,
+        body: body,
+        headers: "",
+    }
+}
+
+pub fn no_content() -> Reply {
+    reply(204, "")
+}
+
+pub fn error_reply(status: int, message: string) -> Reply {
+    let body = ErrorBody { error: message }
+    match json.to_string(body) {
+        Ok(text) => reply(status, text),
+        Err(_) => reply(500, "{\"error\":\"serialization failed\"}"),
+    }
+}
+
+/// Wrap a serialization result: `Ok(text)` -> `status` reply, failure -> 500.
+pub fn from_json(status: int, serialized: Result<string, string>) -> Reply {
+    match serialized {
+        Ok(text) => reply(status, text),
+        Err(_) => error_reply(500, "serialization failed"),
+    }
+}

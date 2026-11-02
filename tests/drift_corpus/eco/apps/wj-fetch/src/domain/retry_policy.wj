@@ -1,0 +1,68 @@
+use wj_retry::Backoff
+use wj_retry::delay_ms
+use wj_retry::should_retry
+
+pub fn default_backoff() -> Backoff {
+    Backoff {
+        initial_ms: 100,
+        multiplier: 2,
+        max_ms: 2_000,
+    }
+}
+
+pub fn retryable_status(status: u16) -> bool {
+    let code = copy_u16(status)
+    if code == 429 {
+        return true
+    }
+    if code == 502 {
+        return true
+    }
+    if code == 503 {
+        return true
+    }
+    if code == 504 {
+        return true
+    }
+    false
+}
+
+pub fn should_attempt(attempt: int, max_attempts: int) -> bool {
+    should_retry(attempt, max_attempts)
+}
+
+pub fn backoff_delay(backoff: Backoff, attempt: int) -> int {
+    delay_ms(copy_backoff(backoff), attempt)
+}
+
+pub fn pause_ms_for_attempt(attempt: int) -> int {
+    backoff_delay(default_backoff(), attempt)
+}
+
+/// Status when another fetch attempt should be made.
+pub fn require_retry(status: u16, attempt: int, max_attempts: int) -> Result<u16, string> {
+    if should_retry_fetch(status, attempt, max_attempts) {
+        Ok(status)
+    } else {
+        Err("expected retry")
+    }
+}
+
+pub fn should_retry_fetch(status: u16, attempt: int, max_attempts: int) -> bool {
+    if !retryable_status(status) {
+        return false
+    }
+    should_attempt(attempt + 1, max_attempts)
+}
+
+fn copy_backoff(backoff: Backoff) -> Backoff {
+    Backoff {
+        initial_ms: backoff.initial_ms,
+        multiplier: backoff.multiplier,
+        max_ms: backoff.max_ms,
+    }
+}
+
+fn copy_u16(value: u16) -> u16 {
+    value
+}

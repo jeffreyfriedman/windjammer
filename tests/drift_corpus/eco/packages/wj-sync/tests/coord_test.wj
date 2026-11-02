@@ -1,0 +1,46 @@
+use crate::Shared
+use crate::barrier_new
+use crate::barrier_wait
+use crate::barrier_waiting
+use crate::latch_count
+use crate::latch_countdown
+use crate::latch_is_open
+use crate::latch_new
+use crate::once_call
+use crate::once_new
+use crate::require_idle
+use crate::shared_int
+use crate::shared_int_add
+use crate::shared_int_get
+use std::strings
+
+@test
+fn test_once_runs_once() {
+    let o = once_new()
+    let c = shared_int(0)
+    let r1 = once_call(o, c)
+    let o2 = r1.0
+    let c2 = r1.1
+    let r2 = once_call(o2, c2)
+    assert_eq(shared_int_get(r2.1), 1)
+}
+
+@test
+fn test_latch_opens_after_countdown() {
+    let latch = latch_new(2)
+    assert(!latch_is_open(latch), "starts closed")
+    let latch = latch_countdown(latch)
+    assert(!latch_is_open(latch), "still closed after 1")
+    assert_eq(latch_count(latch), 1)
+    let latch = latch_countdown(latch)
+    assert(latch_is_open(latch), "open after 2")
+    assert_eq(latch_count(latch), 0)
+}
+
+@test
+fn test_barrier_one_party() {
+    let b = barrier_new(1)
+    let b2 = barrier_wait(b)
+    let b3 = barrier_wait(b2)
+    assert_eq(barrier_waiting(b3), 0)
+}

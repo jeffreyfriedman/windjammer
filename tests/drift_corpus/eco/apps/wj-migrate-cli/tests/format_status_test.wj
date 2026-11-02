@@ -1,0 +1,123 @@
+use crate::domain::format_status_result
+use crate::domain::has_pending
+use crate::domain::require_first_pending
+use crate::domain::require_last_applied
+use crate::domain::require_only_pending
+use crate::domain::version_count
+use std::strings
+
+fn sample_pending() -> Vec<int> {
+    let mut pending = Vec::new()
+    pending.push(1)
+    pending.push(2)
+    pending
+}
+
+fn sample_applied() -> Vec<int> {
+    let mut applied = Vec::new()
+    applied.push(1)
+    applied.push(2)
+    applied
+}
+
+fn test_format_status_result_none_applied_all_pending() {
+    let msg = format_status_result(Vec::new(), sample_pending())
+    assert_str_contains(msg, "applied: (none)")
+    assert_str_contains(msg, "pending:")
+    assert_str_contains(msg, "1")
+    assert_str_contains(msg, "2")
+}
+
+fn test_format_status_result_all_applied() {
+    let msg = format_status_result(sample_applied(), Vec::new())
+    assert_str_contains(msg, "pending: (none)")
+    assert_str_contains(msg, "1")
+}
+
+fn test_status_version_helpers() {
+    assert_eq(version_count(sample_pending()), 2)
+    assert(has_pending(sample_pending()), "has pending")
+    assert(!has_pending(Vec::new()), "no pending")
+}
+
+fn test_first_pending_last_applied_total() {
+    use crate::domain::first_pending
+    use crate::domain::last_applied
+    use crate::domain::total_versions
+    match first_pending(sample_pending()) {
+        Some(v) => assert_eq(v, 1),
+        None => assert(false, "first pending"),
+    }
+    match first_pending(Vec::new()) {
+        Some(_) => assert(false, "empty pending"),
+        None => assert(true, "ok"),
+    }
+    match last_applied(sample_applied()) {
+        Some(v) => assert_eq(v, 2),
+        None => assert(false, "last applied"),
+    }
+    match last_applied(Vec::new()) {
+        Some(_) => assert(false, "empty applied"),
+        None => assert(true, "ok"),
+    }
+    assert_eq(total_versions(sample_applied(), sample_pending()), 4)
+    assert_eq(total_versions(Vec::new(), Vec::new()), 0)
+}
+
+fn test_only_pending_and_require_pending() {
+    use crate::domain::only_pending
+    use crate::domain::require_pending
+    match require_pending(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "pending"), "mentions pending"),
+    }
+    match require_pending(sample_pending()) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two pending"),
+    }
+    let mut one = Vec::new()
+    one.push(7)
+    match only_pending(one) {
+        Some(v) => assert_eq(v, 7),
+        None => assert(false, "one pending"),
+    }
+    match only_pending(sample_pending()) {
+        Some(_) => assert(false, "two pending is not only"),
+        None => {},
+    }
+}
+
+fn test_require_only_pending() {
+    let mut one = Vec::new()
+    one.push(7)
+    match require_only_pending(one) {
+        Ok(v) => assert_eq(v, 7),
+        Err(_) => assert(false, "one pending"),
+    }
+    match require_only_pending(sample_pending()) {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "one"), "mentions one"),
+    }
+}
+
+fn test_require_last_applied() {
+    match require_last_applied(sample_applied()) {
+        Ok(v) => assert_eq(v, 2),
+        Err(_) => assert(false, "last applied"),
+    }
+    match require_last_applied(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "last"), "mentions last"),
+    }
+}
+
+fn test_require_first_pending() {
+    match require_first_pending(sample_pending()) {
+        Ok(v) => assert_eq(v, 1),
+        Err(_) => assert(false, "first pending"),
+    }
+    match require_first_pending(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}

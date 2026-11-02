@@ -1,0 +1,246 @@
+use std::collections::HashMap
+use std::strings
+
+use wj_validate::require_max_len
+use wj_validate::require_nonempty
+
+pub struct Todo {
+    pub id: int,
+    pub title: string,
+    pub done: bool,
+}
+
+pub struct TodoStore {
+    next_id: int,
+    items: HashMap<int, Todo>,
+}
+
+impl TodoStore {
+    pub fn new() -> TodoStore {
+        TodoStore {
+            next_id: 1,
+            items: HashMap::new(),
+        }
+    }
+
+    pub fn from_todos(todos: Vec<Todo>) -> TodoStore {
+        let mut items = HashMap::new()
+        let mut max_id = 0
+        for todo in todos {
+            if todo.id > max_id {
+                max_id = todo.id
+            }
+            let _ = items.insert(todo.id, todo)
+        }
+        TodoStore {
+            next_id: max_id + 1,
+            items: items,
+        }
+    }
+
+    pub fn add(self, title: string, max_title_len: int) -> Result<(TodoStore, Todo), string> {
+        match validate_title(title, max_title_len) {
+            Ok(trimmed) => self.add_validated(trimmed),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn add_validated(self, title: string) -> Result<(TodoStore, Todo), string> {
+        let id = self.next_id
+        let mut items = self.items
+        let created = Todo {
+            id: id,
+            title: title,
+            done: false,
+        }
+        let _ = items.insert(id, created)
+        Ok((
+            TodoStore {
+                next_id: id + 1,
+                items: items,
+            },
+            Todo {
+                id: id,
+                title: title,
+                done: false,
+            },
+        ))
+    }
+
+    pub fn into_todos(self) -> Vec<Todo> {
+        let mut out = Vec::new()
+        for (_id, item) in self.items {
+            out.push(item)
+        }
+        out
+    }
+
+    pub fn rename(self, id: int, title: string, max_title_len: int) -> Result<(TodoStore, Todo), string> {
+        match validate_title(title, max_title_len) {
+            Ok(trimmed) => {
+                let mut items = HashMap::new()
+                let mut found = false
+                let mut out_id = 0
+                let mut out_title = ""
+                let mut out_done = false
+                for (k, v) in self.items {
+                    if k == id {
+                        found = true
+                        out_id = v.id
+                        out_title = "${trimmed}"
+                        out_done = v.done
+                        let _ = items.insert(k, Todo {
+                            id: out_id,
+                            title: "${out_title}",
+                            done: out_done,
+                        })
+                    } else {
+                        let _ = items.insert(k, v)
+                    }
+                }
+                if !found {
+                    return Err("todo not found")
+                }
+                Ok((
+                    TodoStore {
+                        next_id: self.next_id,
+                        items: items,
+                    },
+                    Todo {
+                        id: out_id,
+                        title: out_title,
+                        done: out_done,
+                    },
+                ))
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn complete(self, id: int) -> Result<(TodoStore, Todo), string> {
+        let mut items = HashMap::new()
+        let mut found = false
+        let mut out_id = 0
+        let mut out_title = ""
+        for (k, v) in self.items {
+            if k == id {
+                found = true
+                out_id = v.id
+                out_title = v.title
+                let _ = items.insert(k, Todo {
+                    id: out_id,
+                    title: "${out_title}",
+                    done: true,
+                })
+            } else {
+                let _ = items.insert(k, v)
+            }
+        }
+        if !found {
+            return Err("todo not found")
+        }
+        Ok((
+            TodoStore {
+                next_id: self.next_id,
+                items: items,
+            },
+            Todo {
+                id: out_id,
+                title: out_title,
+                done: true,
+            },
+        ))
+    }
+
+    pub fn remove(self, id: int) -> Result<TodoStore, string> {
+        let mut items = HashMap::new()
+        let mut found = false
+        for (k, v) in self.items {
+            if k == id {
+                found = true
+            } else {
+                let _ = items.insert(k, v)
+            }
+        }
+        if !found {
+            return Err("todo not found")
+        }
+        Ok(TodoStore {
+            next_id: self.next_id,
+            items: items,
+        })
+    }
+
+    /// Remove every todo and reset id assignment to 1.
+    pub fn clear_all(self) -> TodoStore {
+        TodoStore {
+            next_id: 1,
+            items: HashMap::new(),
+        }
+    }
+
+    /// Merge imported todos by id (overwrites existing ids); returns store and count merged.
+    pub fn merge_from(self, imported: Vec<Todo>) -> (TodoStore, int) {
+        let mut items = self.items
+        let mut next_id = self.next_id
+        let mut merged = 0
+        for todo in imported {
+            if todo.id >= next_id {
+                next_id = todo.id + 1
+            }
+            let _ = items.insert(todo.id, todo)
+            merged = merged + 1
+        }
+        (
+            TodoStore {
+                next_id: next_id,
+                items: items,
+            },
+            merged,
+        )
+    }
+
+    /// Remove completed todos; returns updated store and count removed.
+    pub fn clear_done(self) -> (TodoStore, int) {
+        let mut items = HashMap::new()
+        let mut removed = 0
+        for (k, v) in self.items {
+            if v.done {
+                removed = removed + 1
+            } else {
+                let _ = items.insert(k, v)
+            }
+        }
+        (
+            TodoStore {
+                next_id: self.next_id,
+                items: items,
+            },
+            removed,
+        )
+    }
+}
+
+fn validate_title(title: string, max_title_len: int) -> Result<string, string> {
+    let title = own(title)
+    match validate_nonempty("title", title) {
+        Ok(trimmed) => validate_max_len("title", trimmed, max_title_len),
+        Err(e) => Err(e),
+    }
+}
+
+fn validate_nonempty(field: string, value: string) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_nonempty(field, value)
+}
+
+fn validate_max_len(field: string, value: string, max: int) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_max_len(field, value, max)
+}
+
+fn own(value: string) -> string {
+    value
+}

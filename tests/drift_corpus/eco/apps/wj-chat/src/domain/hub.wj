@@ -1,0 +1,353 @@
+use std::collections::HashMap
+use std::json
+use wj_jwt::verify
+use wj_rate_limit::WindowBucket
+use wj_rate_limit::check_key
+use wj_rate_limit::fixed_window
+
+use crate::domain::config::ChatConfig
+use crate::domain::frames::Delivery
+use crate::domain::frames::HistoryItem
+use crate::domain::frames::InFrame
+use crate::domain::frames::OutFrame
+use crate::domain::frames::blank_frame
+
+@derive(Clone)
+struct Conn {
+    id: int,
+    user: string,
+    rooms: Vec<string>,
+    last_seen_ms: int,
+}
+
+@derive(Clone)
+struct Stored {
+    room: string,
+    from: string,
+    text: string,
+    ts: int,
+}
+
+/// Transport-independent chat core: feed it connection events and client frames, it returns the frames to send.
+/// A socket adapter owns the connections and the clock; the hub owns rooms, presence, history and rate limits.
+pub struct Hub {
+    config: ChatConfig,
+    conns: HashMap<int, Conn>,
+    history: Vec<Stored>,
+    buckets: HashMap<string, WindowBucket>,
+    next_conn: int,
+}
+
+fn encode(frame: OutFrame) -> string {
+    match json.to_string(frame) {
+        Ok(text) => text,
+        Err(_) => "{\"kind\":\"error\",\"text\":\"encode failed\"}",
+    }
+}
+
+fn error_to(conn: int, message: string) -> Vec<Delivery> {
+    let mut frame = blank_frame("error")
+    frame.text = message
+    single(conn, frame)
+}
+
+fn single(conn: int, frame: OutFrame) -> Vec<Delivery> {
+    let mut out = Vec::new()
+    out.push(Delivery { conn: conn, text: encode(frame) })
+    out
+}
+
+impl Hub {
+    pub fn new(config: ChatConfig) -> Hub {
+        Hub {
+            config: config,
+            conns: HashMap::new(),
+            history: Vec::new(),
+            buckets: HashMap::new(),
+            next_conn: 1,
+        }
+    }
+
+    /// Register a new (unauthenticated) connection opened at `now_ms`.
+    pub fn connect(self, now_ms: int) -> int {
+        let id = self.next_conn
+        self.next_conn = self.next_conn + 1
+        self.conns.insert(id, Conn { id: id, user: "", rooms: Vec::new(), last_seen_ms: now_ms })
+        id
+    }
+
+    pub fn has_connection(self, conn: int) -> bool {
+        self.conns.contains_key(conn)
+    }
+
+    /// Remove a connection (closed, or reported by `expired`); returns presence updates for its rooms.
+    pub fn disconnect(self, conn: int) -> Vec<Delivery> {
+        let mut out = Vec::new()
+        let existing = match self.conns.get(conn) {
+            Some(c) => c.clone(),
+            None => return out,
+        }
+        self.conns.remove(conn)
+        for room in existing.rooms {
+            for d in self.presence(room) {
+                out.push(d)
+            }
+        }
+        out
+    }
+
+    /// Connections whose last frame is older than the idle timeout.
+    pub fn expired(self, now_ms: int) -> Vec<int> {
+        let mut ids = Vec::new()
+        for (id, c) in self.conns {
+            if now_ms - c.last_seen_ms > self.config.idle_timeout_ms {
+                ids.push(id)
+            }
+        }
+        ids.sort()
+        ids
+    }
+
+    /// Handle one text frame from `conn` received at `now_ms`.
+    pub fn receive(self, conn: int, text: string, now_ms: int) -> Vec<Delivery> {
+        let mut me = match self.conns.get(conn) {
+            Some(c) => c.clone(),
+            None => return Vec::new(),
+        }
+        me.last_seen_ms = now_ms
+        self.conns.insert(conn, me.clone())
+        let frame: InFrame = match json.parse_string(text) {
+            Ok(f) => f,
+            Err(_) => return error_to(conn, "invalid frame"),
+        }
+        if frame.kind == "pong" {
+            return Vec::new()
+        }
+        if frame.kind == "auth" {
+            return self.authenticate(conn, frame.token.unwrap_or(""))
+        }
+        if me.user == "" {
+            return error_to(conn, "authenticate first")
+        }
+        if !self.allow(me.user.clone(), now_ms) {
+            return error_to(conn, "rate limit exceeded")
+        }
+        let room = frame.room.clone().unwrap_or("")
+        if frame.kind == "join" {
+            return self.join(me, room)
+        }
+        if frame.kind == "leave" {
+            return self.leave(me, room)
+        }
+        if frame.kind == "say" {
+            return self.say(me, room, frame.text.unwrap_or(""), now_ms)
+        }
+        if frame.kind == "dm" {
+            return self.direct(me, frame.to.unwrap_or(""), frame.text.unwrap_or(""))
+        }
+        if frame.kind == "history" {
+            return self.replay(me, room, frame.limit.unwrap_or(50))
+        }
+        error_to(conn, "unknown frame kind")
+    }
+
+    fn allow(self, user: string, now_ms: int) -> bool {
+        let limit = fixed_window(self.config.rate_limit, self.config.rate_window_ms)
+        let checked = check_key(limit, self.buckets, user, now_ms)
+        self.buckets = checked.0
+        checked.1.allowed
+    }
+
+    fn authenticate(self, conn: int, token: string) -> Vec<Delivery> {
+        let claims = match verify(token, self.config.jwt_secret) {
+            Ok(c) => c,
+            Err(_) => return error_to(conn, "invalid token"),
+        }
+        let mut out = Vec::new()
+        // One live session per user: a new sign-in replaces the old connection.
+        for (id, other) in self.conns.clone() {
+            if other.user == claims.sub && id != conn {
+                for d in error_to(id, "signed in elsewhere") {
+                    out.push(d)
+                }
+                for d in self.disconnect(id) {
+                    out.push(d)
+                }
+            }
+        }
+        let mut me = match self.conns.get(conn) {
+            Some(c) => c.clone(),
+            None => return out,
+        }
+        me.user = claims.sub
+        self.conns.insert(conn, me)
+        for d in single(conn, blank_frame("ok")) {
+            out.push(d)
+        }
+        out
+    }
+
+    // Members of `room` in connection-id order, so deliveries are reproducible.
+    fn members(self, room: string) -> Vec<Conn> {
+        let mut ids = Vec::new()
+        for (id, _c) in self.conns.clone() {
+            ids.push(id)
+        }
+        ids.sort()
+        let mut out = Vec::new()
+        for id in ids {
+            match self.conns.get(id) {
+                Some(c) => {
+                    if c.rooms.contains(room) {
+                        out.push(c.clone())
+                    }
+                },
+                None => {},
+            }
+        }
+        out
+    }
+
+    fn presence(self, room: string) -> Vec<Delivery> {
+        let members = self.members(room)
+        let mut users = Vec::new()
+        for m in members {
+            users.push(m.user.clone())
+        }
+        users.sort()
+        let mut out = Vec::new()
+        for m in members {
+            let mut frame = blank_frame("presence")
+            frame.room = room
+            frame.users = users.clone()
+            out.push(Delivery { conn: m.id, text: encode(frame) })
+        }
+        out
+    }
+
+    fn join(self, me: Conn, room: string) -> Vec<Delivery> {
+        if room == "" {
+            return error_to(me.id, "room required")
+        }
+        let mut updated = me.clone()
+        if !updated.rooms.contains(room) {
+            updated.rooms.push(room.clone())
+        }
+        self.conns.insert(me.id, updated)
+        self.presence(room)
+    }
+
+    fn leave(self, me: Conn, room: string) -> Vec<Delivery> {
+        let mut updated = me.clone()
+        let mut kept = Vec::new()
+        for r in me.rooms {
+            if r != room {
+                kept.push(r.clone())
+            }
+        }
+        updated.rooms = kept
+        self.conns.insert(me.id, updated)
+        let mut out = self.presence(room)
+        for d in single(me.id, blank_frame("ok")) {
+            out.push(d)
+        }
+        out
+    }
+
+    fn say(self, me: Conn, room: string, text: string, now_ms: int) -> Vec<Delivery> {
+        if !me.rooms.contains(room) {
+            return error_to(me.id, "not in room")
+        }
+        match self.check_text(text.clone()) {
+            Ok(_) => {},
+            Err(e) => return error_to(me.id, e),
+        }
+        self.history.push(Stored { room: room.clone(), from: me.user.clone(), text: text.clone(), ts: now_ms })
+        self.trim_history()
+        let mut out = Vec::new()
+        for m in self.members(room.clone()) {
+            let mut frame = blank_frame("message")
+            frame.room = room.clone()
+            frame.from = me.user.clone()
+            frame.text = text.clone()
+            out.push(Delivery { conn: m.id, text: encode(frame) })
+        }
+        out
+    }
+
+    fn check_text(self, text: string) -> Result<(), string> {
+        if text == "" {
+            return Err("text required")
+        }
+        if text.len() > self.config.max_text {
+            return Err("text too long")
+        }
+        Ok(())
+    }
+
+    fn trim_history(self) {
+        if self.history.len() <= self.config.history_cap {
+            return
+        }
+        let drop_count = self.history.len() - self.config.history_cap
+        let mut kept = Vec::new()
+        let mut skipped = 0
+        for s in self.history {
+            if skipped < drop_count {
+                skipped = skipped + 1
+            } else {
+                kept.push(s.clone())
+            }
+        }
+        self.history = kept
+    }
+
+    fn direct(self, me: Conn, to: string, text: string) -> Vec<Delivery> {
+        match self.check_text(text.clone()) {
+            Ok(_) => {},
+            Err(e) => return error_to(me.id, e),
+        }
+        let mut target = 0
+        for (id, c) in self.conns {
+            if c.user == to {
+                target = id
+            }
+        }
+        if target == 0 {
+            return error_to(me.id, "user offline")
+        }
+        let mut frame = blank_frame("dm")
+        frame.from = me.user.clone()
+        frame.text = text
+        let mut out = single(target, frame)
+        for d in single(me.id, blank_frame("ok")) {
+            out.push(d)
+        }
+        out
+    }
+
+    fn replay(self, me: Conn, room: string, limit: int) -> Vec<Delivery> {
+        if !me.rooms.contains(room) {
+            return error_to(me.id, "not in room")
+        }
+        let mut in_room = Vec::new()
+        for s in self.history {
+            if s.room == room {
+                in_room.push(s.clone())
+            }
+        }
+        let skip = if in_room.len() > limit { in_room.len() - limit } else { 0 }
+        let mut items = Vec::new()
+        let mut seen = 0
+        for s in in_room {
+            if seen >= skip {
+                items.push(HistoryItem { from: s.from.clone(), text: s.text.clone(), ts: s.ts })
+            }
+            seen = seen + 1
+        }
+        let mut frame = blank_frame("history")
+        frame.room = room
+        frame.items = items
+        single(me.id, frame)
+    }
+}

@@ -1,0 +1,29 @@
+use crate::domain::encode_line
+use crate::domain::decode_line
+use crate::domain::Todo
+
+@test
+fn test_roundtrip_line() {
+    let t = Todo {
+        id: 7,
+        title: "ship it",
+        done: true,
+    }
+    let line = encode_line(t)
+    match decode_line(line) {
+        Ok(parsed) => {
+            assert_eq(parsed.id, 7)
+            assert_eq(parsed.title, "ship it")
+            assert(parsed.done, "done")
+        },
+        Err(_) => assert(false, "decode"),
+    }
+}
+
+@test
+fn test_decode_rejects_garbage() {
+    match decode_line("not-a-todo") {
+        Ok(_) => assert(false, "should fail"),
+        Err(_) => assert(true, "ok"),
+    }
+}

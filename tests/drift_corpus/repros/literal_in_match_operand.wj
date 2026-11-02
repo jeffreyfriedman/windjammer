@@ -1,0 +1,10 @@
+// An unannotated literal inside `Some(..)` in the scrutinee of a match that is the operand of `+`
+// is typed i32 by the compiled backend; the parameter is Option<int> (i64).
+fn inner(x: Option<int>) -> Option<int> {
+    x
+}
+
+fn main() {
+    let total = (match inner(Some(7)) { Some(v) => v, None => 0 }) + 1
+    println("${total}")
+}

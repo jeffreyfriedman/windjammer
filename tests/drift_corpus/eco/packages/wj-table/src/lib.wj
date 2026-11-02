@@ -1,0 +1,162 @@
+use std::strings
+
+/// A table of text cells with per-column alignment. Build with `new`, `right_align`, `add_row`; render with
+/// `markdown` or `plain`.
+pub struct Table {
+    pub headers: Vec<string>,
+    pub right: Vec<bool>,
+    pub rows: Vec<Vec<string>>,
+}
+
+pub fn new(headers: Vec<string>) -> Table {
+    let mut right = Vec::new()
+    for _h in headers {
+        right.push(false)
+    }
+    Table { headers: headers, right: right, rows: Vec::new() }
+}
+
+/// Right-align the given columns (0-based): numbers read better that way.
+pub fn right_align(t: Table, columns: Vec<int>) -> Table {
+    let mut right = t.right
+    for c in columns {
+        if c >= 0 && c < right.len() {
+            right[c] = true
+        }
+    }
+    Table { headers: t.headers, right: right, rows: t.rows }
+}
+
+pub fn add_row(t: Table, row: Vec<string>) -> Table {
+    let mut rows = t.rows
+    rows.push(row)
+    Table { headers: t.headers, right: t.right, rows: rows }
+}
+
+/// `text` padded with spaces on the left to `width` characters.
+pub fn pad_left(text: string, width: int) -> string {
+    let n = char_len(text) as int
+    if n >= width {
+        return text
+    }
+    repeat_text(" ", width - n) + text
+}
+
+/// `text` padded with spaces on the right to `width` characters.
+pub fn pad_right(text: string, width: int) -> string {
+    let n = char_len(text) as int
+    if n >= width {
+        return text
+    }
+    text + repeat_text(" ", width - n)
+}
+
+/// Fixed-point text with `decimals` digits (0 to 8), like Python's `f"{x:.3f}"`.
+pub fn fixed(x: f64, decimals: int) -> string {
+    if decimals <= 0 {
+        return "${x:.0}"
+    }
+    if decimals == 1 {
+        return "${x:.1}"
+    }
+    if decimals == 2 {
+        return "${x:.2}"
+    }
+    if decimals == 3 {
+        return "${x:.3}"
+    }
+    if decimals == 4 {
+        return "${x:.4}"
+    }
+    if decimals == 5 {
+        return "${x:.5}"
+    }
+    if decimals == 6 {
+        return "${x:.6}"
+    }
+    if decimals == 7 {
+        return "${x:.7}"
+    }
+    "${x:.8}"
+}
+
+/// Signed fixed-point text (`+1.5`, `-0.2`), like Python's `f"{x:+.1f}"`.
+pub fn signed(x: f64, decimals: int) -> string {
+    let body = fixed(x, decimals)
+    if body.starts_with("-") {
+        return body
+    }
+    "+" + body
+}
+
+/// A GitHub-flavoured markdown table: `| a | b |`, then `|---|---:|` (right-aligned columns end in `:`).
+pub fn markdown(t: Table) -> string {
+    let mut lines = Vec::new()
+    lines.push("| " + t.headers.join(" | ") + " |")
+    let mut seps = Vec::new()
+    let mut i = 0
+    while i < t.headers.len() {
+        seps.push(if t.right[i] { "---:" } else { "---" })
+        i = i + 1
+    }
+    lines.push("|" + seps.join("|") + "|")
+    for row in t.rows {
+        lines.push("| " + row.join(" | ") + " |")
+    }
+    lines.join("\n")
+}
+
+fn widths(t: Table) -> Vec<int> {
+    let mut w = Vec::new()
+    for h in t.headers {
+        w.push(char_len(h) as int)
+    }
+    for row in t.rows {
+        let mut i = 0
+        while i < row.len() && i < w.len() {
+            let n = char_len(row[i]) as int
+            if n > w[i] {
+                w[i] = n
+            }
+            i = i + 1
+        }
+    }
+    w
+}
+
+fn plain_line(cells: Vec<string>, w: Vec<int>, right: Vec<bool>, gap: string) -> string {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < w.len() {
+        let cell = if i < cells.len() { cells[i] } else { "" }
+        out.push(if right[i] { pad_left(cell, w[i]) } else { pad_right(cell, w[i]) })
+        i = i + 1
+    }
+    out.join(gap)
+}
+
+/// Aligned plain text: a header line, then the rows, columns separated by `gap` (trailing spaces trimmed).
+pub fn plain(t: Table, gap: string) -> string {
+    let w = widths(t)
+    let mut lines = Vec::new()
+    lines.push(strings.trim_end(plain_line(t.headers, w, t.right, gap)))
+    for row in t.rows {
+        lines.push(strings.trim_end(plain_line(row, w, t.right, gap)))
+    }
+    lines.join("\n")
+}
+
+fn char_len(text: string) -> usize {
+    text.chars().count()
+}
+
+/// `piece` repeated `n` times (empty for `n <= 0`).
+pub fn repeat_text(piece: string, n: int) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < n {
+        out = out + piece
+        i = i + 1
+    }
+    out
+}

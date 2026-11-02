@@ -1,0 +1,181 @@
+use std::collections::HashMap
+
+use wj_inflect::slugify
+use wj_timefmt::format_rfc3339
+use wj_timefmt::from_epoch_secs
+use wj_uuid::v7
+use wj_validate::require_max_len
+use wj_validate::require_nonempty
+
+use crate::domain::note::Note
+
+pub struct NoteStore {
+    next_id: int,
+    notes: HashMap<int, Note>,
+}
+
+impl NoteStore {
+    pub fn new() -> NoteStore {
+        NoteStore {
+            next_id: 1,
+            notes: HashMap::new(),
+        }
+    }
+
+    pub fn create(
+        self,
+        title: string,
+        body: string,
+        max_title: int,
+        max_body: int,
+        now_ms: int,
+    ) -> Result<Note, string> {
+        let fields = match validate_note_fields(title, body, max_title, max_body) {
+            Ok(value) => value,
+            Err(err) => return Err(err),
+        }
+        let uid = match new_note_uid() {
+            Ok(value) => value,
+            Err(err) => return Err(err),
+        }
+        let created_at = timestamp_from_ms(now_ms)
+        let slug = title_slug(fields.0)
+        let id = self.next_id
+        self.next_id = self.next_id + 1
+        let note = Note {
+            id: id,
+            uid: uid,
+            slug: slug,
+            created_at: created_at,
+            title: fields.0,
+            body: fields.1,
+        }
+        self.notes.insert(id, note)
+        match lookup_note(self.notes, id) {
+            Some(stored) => Ok(stored),
+            None => Err("create failed"),
+        }
+    }
+
+    pub fn get(self, id: int) -> Option<Note> {
+        lookup_note(self.notes, id)
+    }
+
+    pub fn list(self) -> Vec<Note> {
+        let mut result = Vec::new()
+        for (_id, note) in self.notes {
+            result.push(note)
+        }
+        result
+    }
+
+    pub fn update(self, id: int, title: string, body: string, max_title: int, max_body: int) -> Result<Note, string> {
+        let fields = match validate_note_fields(title, body, max_title, max_body) {
+            Ok(value) => value,
+            Err(err) => return Err(err),
+        }
+        match lookup_note(self.notes, id) {
+            Some(existing) => {
+                let slug = title_slug(fields.0)
+                let note = Note {
+                    id: id,
+                    uid: existing.uid,
+                    slug: slug,
+                    created_at: existing.created_at,
+                    title: fields.0,
+                    body: fields.1,
+                }
+                self.notes.insert(id, note)
+                match lookup_note(self.notes, id) {
+                    Some(stored) => Ok(stored),
+                    None => Err("update failed"),
+                }
+            },
+            None => Err("note not found"),
+        }
+    }
+
+    pub fn delete(self, id: int) -> Result<(), string> {
+        match lookup_note(self.notes, id) {
+            None => return Err("note not found"),
+            Some(_) => {},
+        }
+        let mut kept = HashMap::new()
+        for (note_id, note) in self.notes {
+            if note_id == id {
+                continue
+            }
+            kept.insert(note_id, note)
+        }
+        self.notes = kept
+        Ok(())
+    }
+}
+
+fn new_note_uid() -> Result<string, string> {
+    v7()
+}
+
+fn title_slug(title: string) -> string {
+    let title = own(title)
+    slugify(title)
+}
+
+fn timestamp_from_ms(now_ms: int) -> string {
+    let secs = if now_ms < 0 { 0 } else { now_ms / 1000 }
+    format_rfc3339(from_epoch_secs(secs))
+}
+
+fn validate_note_fields(
+    title: string,
+    body: string,
+    max_title: int,
+    max_body: int,
+) -> Result<(string, string), string> {
+    let title = match validate_nonempty("title", title) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    }
+    let title = match validate_max_len("title", title, max_title) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    }
+    let body = match validate_nonempty("body", body) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    }
+    let body = match validate_max_len("body", body, max_body) {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    }
+    Ok((title, body))
+}
+
+fn validate_nonempty(field: string, value: string) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_nonempty(field, value)
+}
+
+fn validate_max_len(field: string, value: string, max: int) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_max_len(field, value, max)
+}
+
+fn lookup_note(notes: HashMap<int, Note>, id: int) -> Option<Note> {
+    for (note_id, note) in notes {
+        if note_id == id {
+            return Some(note)
+        }
+    }
+    None
+}
+
+pub fn fetch_note(store: NoteStore, id: int) -> Option<Note> {
+    lookup_note(store.notes, id)
+}
+
+fn own(value: string) -> string {
+    value
+}

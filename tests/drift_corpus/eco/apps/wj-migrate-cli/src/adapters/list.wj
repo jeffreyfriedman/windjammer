@@ -1,0 +1,19 @@
+use wj_migrate::db_apply::discover_migrations
+
+use crate::domain::MigrationLine
+
+pub fn run_list(dir: string) -> Result<Vec<MigrationLine>, string> {
+    match discover_migrations(dir) {
+        Ok(items) => {
+            let mut lines = Vec::new()
+            for m in items {
+                lines.push(MigrationLine {
+                    version: m.version,
+                    name: m.name,
+                })
+            }
+            Ok(lines)
+        },
+        Err(e) => Err(e),
+    }
+}
