@@ -11,7 +11,14 @@ untouched.
 
 ## Width deciders (lowers D-WIDTH-OWNERS)
 
-Solver facts available today: `default_int_literals` (NUM-DEFAULT-INT), `literal_widths` (NUM-LITERAL-WIDTH, literals
+**Update (ADR-0028, branch wt/c4-usize).** The solver now has a `usize` class (NUM-USIZE: `len()`/`count()`/indexing and
+std sequence index arguments) and publishes `literal_widths` for every width, `solver_local_widths`, `index_source_widths`
+and `usize_conversions` (NUM-USIZE-TO-INT) from `ir/numeric_facts.rs`; codegen reads them through
+`codegen/rust/solver_widths.rs`, and W3 (binary peer logic), W5 (block-tail casts) and W6 (let paints) are gated behind
+them. Classes with an index *use* of another width or a shadowed local are still held for the legacy path: shadowed
+names share one constraint variable (scoping is the next solver gap).
+
+Solver facts available before ADR-0028: `default_int_literals` (NUM-DEFAULT-INT), `literal_widths` (NUM-LITERAL-WIDTH, literals
 beside a `for a..b` variable only), range loop variable typing (TY-UNIFY), solver int local pins used by
 `solver_pins_int_literal_init` / `stamp_solver_int_binding`, `usize -> int` conversion at declared-int stores.
 Missing facts that block most deletions: solver models for `len()`/`count()` (usize), indexing (usize), `as` casts,
@@ -67,6 +74,10 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C4 cross-module field widths (P0) | 72e..cb634d32b | 0 | ~130 | 0 |
 | C4 delete return-width counter ascription | this branch | 112 | 1 | 0 |
 | explain: compare types, not spellings | this branch | 1 | 14 | 191 -> 81 (measurement fix, see below) |
+| restore homonym-safe lookups (cherry-pick artifact) | 759d64583 | 4 | 4 | 69 -> 65 (measured with step 1) |
+| ADR-0028 step 1: usize class (NUM-USIZE) | 49bce0147 | 0 | ~120 | 81 -> 69 |
+| ADR-0028 step 2: width facts read by codegen | 911b99fe8 | ~20 | ~300 | 65 -> 60; narrowing casts 14 -> 12 |
+| ADR-0028 step 3: NUM-USIZE-TO-INT, variant payloads, tail-cast helper | aa0bbcebe | 50 | ~150 | 60 -> 58; narrowing casts 12 -> 11; rustc rejects 93 -> 91 |
 
 ### Why the width-deletion step did not move D-WIDTH-OWNERS (kill criterion, 2026-11-02)
 

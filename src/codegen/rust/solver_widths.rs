@@ -92,6 +92,12 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_ir_function.as_ref()?.solver_local_widths.get(name)
     }
 
+    /// ADR-0028: both operands of a binary operator have one solver width, so there is nothing to
+    /// decide and no cast to place (the W3 peer/promotion deciders are skipped).
+    pub(in crate::codegen::rust) fn solver_agrees(&self, left: &Expression<'ast>, right: &Expression<'ast>) -> bool {
+        self.solver_operand_width(left).is_some_and(|l| self.solver_operand_width(right) == Some(l))
+    }
+
     /// Width of an integer operand as the solver fixed it, when every part of it has a fact:
     /// literals, published locals, `len()`-like index sources that stay `usize`, casts, and
     /// arithmetic over operands of one width. `None` hands the decision to the legacy path.
