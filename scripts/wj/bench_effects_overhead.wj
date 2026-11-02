@@ -43,21 +43,24 @@ fn run_once(wj: string, prog: string, arm: string, mode: string) -> Run {
     if mode == "replay" {
         log = "/tmp/wj-bench-" + prog.replace("/", "_") + ".replay.wjlog"
         if !fs.exists(log) {
-            let rec: Vec<string> = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog, "--record", log]
+            let rec: Vec<string> = ["WJ_CAPS=enforce", wj, "run", "--interpret", "--record", log, prog]
             let _ = timed("env", rec)
         }
-        argv = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog]
+        // flags go before the program: what follows the program file is the program's own arguments
+        argv = ["WJ_CAPS=enforce", wj, "run", "--interpret"]
         if arm == "replay" {
             argv.push("--replay")
             argv.push(log)
         }
+        argv.push(prog)
     } else if mode == "record" {
         log = "/tmp/wj-bench-" + prog.replace("/", "_") + ".wjlog"
-        argv = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog]
+        argv = ["WJ_CAPS=enforce", wj, "run", "--interpret"]
         if arm == "record" {
             argv.push("--record")
             argv.push(log)
         }
+        argv.push(prog)
     } else {
         argv = ["WJ_CAPS=" + arm, wj, "run", "--interpret", "--deterministic-time", prog]
     }
@@ -94,7 +97,7 @@ fn main() {
     let names = ["non-sink (HashMap/Rc builtins, 400k iterations)", "sink-dense (fs::exists + random + time, 30k iterations)"]
     let progs = ["bench/effects/nonsink.wj", "bench/effects/sink.wj"]
     let base = if mode == "caps" { "off" } else { "plain" }
-    let test = if mode == "caps" { "enforce" } else { mode }
+    let test = if mode == "caps" { "enforce" } else if mode == "record" { "record" } else { "replay" }
     let mut results = array()
     let mut lines: Vec<string> = Vec::new()
     let mut w = 0
@@ -121,7 +124,7 @@ fn main() {
             r = r + 1
         }
         if outs.len() != 1 {
-            eprintln("${names[w]}: the arms printed different output: ${outs}")
+            eprintln("${names[w]}: the arms printed different output: ${outs.join(" | ")}")
             process.exit(1)
         }
         let mb = median(base_t)
