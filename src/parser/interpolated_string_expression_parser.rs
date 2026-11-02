@@ -63,13 +63,14 @@ impl Parser {
                         let mut tok_with_loc = tok_with_loc;
                         tok_with_loc.line = outer_line;
                         tok_with_loc.column +=
-                            1_000_000 + (outer_key * 64 + part_index.min(63)) * 10_000;
+                            crate::source_map::INTERP_COLUMN_BASE
+                            + (outer_key * 64 + part_index.min(63)) * crate::source_map::INTERP_KEY_STRIDE;
                         expr_tokens.push(tok_with_loc);
                     }
 
                     // Nodes are located at the token that follows them; without a trailing token the
                     // last expression of the part would have no location (and no numeric identity).
-                    let end_column = expr_tokens.last().map_or(1_000_000, |t| t.column + 1);
+                    let end_column = expr_tokens.last().map_or(crate::source_map::INTERP_COLUMN_BASE, |t| t.column + 1);
                     let end_pos = expr_lexer.position();
                     expr_tokens.push(crate::lexer::TokenWithLocation {
                         token: crate::lexer::Token::Eof,
@@ -85,6 +86,7 @@ impl Parser {
                     });
                     // Allocate into this parser's arena bundle so the nodes are sealed into the same Program.
                     let mut expr_parser = Parser::new_sharing_arenas(expr_tokens, self);
+                    expr_parser.filename = self.filename.clone();
                     // ADR-0018: named arguments inside `${..}` resolve like anywhere else.
                     expr_parser.call_table = self.call_table.clone();
                     if self.span_log.borrow().is_some() {

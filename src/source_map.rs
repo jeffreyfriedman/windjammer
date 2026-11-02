@@ -10,6 +10,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Expressions inside `${..}` are lexed on their own and keyed (numeric inference, the span log) by a column that no
+/// source line reaches: `INTERP_COLUMN_BASE + (string key * 64 + part) * INTERP_KEY_STRIDE + the real column`.
+pub const INTERP_COLUMN_BASE: usize = 1_000_000;
+pub const INTERP_KEY_STRIDE: usize = 10_000;
+
+/// The column a user reads in the source for a (possibly interpolation-keyed) column.
+pub fn display_column(column: usize) -> usize {
+    if column >= INTERP_COLUMN_BASE {
+        (column - INTERP_COLUMN_BASE) % INTERP_KEY_STRIDE
+    } else {
+        column
+    }
+}
+
 /// Location in a Windjammer source file
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Location {
@@ -19,6 +33,13 @@ pub struct Location {
     pub line: usize,
     /// Column number (1-indexed)  
     pub column: usize,
+}
+
+impl Location {
+    /// Column for messages: the real source column even inside an interpolated expression.
+    pub fn display_column(&self) -> usize {
+        display_column(self.column)
+    }
 }
 
 /// A mapping from a location in generated Rust code to original Windjammer source
