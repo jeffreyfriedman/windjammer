@@ -65,6 +65,7 @@ pub mod stdlib_surface; // ADR-0018 declarative std surface tables
 pub mod syntax_highlighter;
 pub mod test_module_gate;
 pub mod test_runner; // Test framework and execution
+pub mod toolchain; // identity, pin, stale warning, doctor, install-dev
 pub mod test_utils; // Syntax highlighting for error snippets
 pub mod type_classification;
 pub mod type_display;

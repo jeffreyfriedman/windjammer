@@ -1,0 +1,42 @@
+{
+  "command": "check",
+  "diagnostics": [
+    {
+      "category": "lint",
+      "code": "W0002",
+      "docs": {
+        "explain": "wj explain W0002",
+        "url": "https://windjammer.dev/errors/W0002"
+      },
+      "help": [
+        "write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`"
+      ],
+      "maturity": "proven",
+      "message": "explicit .unwrap() call",
+      "notes": [
+        "`.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead"
+      ],
+      "origin": "lint",
+      "primary_span": {
+        "byte_end": 68,
+        "byte_start": 62,
+        "col_end": 24,
+        "col_start": 18,
+        "file": "unwrap_lint.wj",
+        "line_end": 3,
+        "line_start": 3
+      },
+      "severity": "error"
+    }
+  ],
+  "schema_version": 2,
+  "success": false,
+  "summary": {
+    "elapsed_ms": 0,
+    "errors": 1,
+    "files_cached": 0,
+    "files_checked": 0,
+    "warnings": 0
+  },
+  "windjammer_version": "VERSION"
+}

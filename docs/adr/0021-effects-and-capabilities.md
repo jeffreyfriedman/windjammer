@@ -607,6 +607,22 @@ Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/dur
 
 Findings from building it: (1) resumption needs the random stream and the virtual clock restored per step, not per process: a resumed run that simply skipped steps drew different numbers than an uninterrupted one; the per-step re-seeding and the journaled clock fix that (the first crash-everywhere run failed on exactly this for the clock, and on `Instant` not being journalable). (2) The compiled engine called durable functions without going through the interpreter's call entry, so the hook sits at the walker's entry and durable functions are excluded from compilation. (3) A suspected hole turned out not to exist: calls inside string interpolation are parsed into the `format` node and the resolver does visit them (checked against `wj explain-effects` and `wj check`). What was wrong was the position: nodes of a `${..}` part carried no file name, so diagnostics said `at :4`. The parser now gives them the file, and `tests/resolve_positions_test.rs` pins the claim for every expression and statement position (SPEC-EFF-049).
 
+### Sleep in live runs (2026-11-02, approved by the project owner)
+`sleep` (`async::sleep_ms_blocking`, `thread::sleep`, timeouts) is a scheduler operation on the virtual clock: when every
+task waits on time the clock jumps to the earliest deadline, and `Instant::elapsed()` adds the virtual clock to the real
+time elapsed. That keeps reproducible runs fast and exact. In a live `wj run`, though, a program that waits for the outside
+world (a lock directory another process removes, a child process, a file another tool writes) saw nothing change: the
+sleep returned at once and a polling loop spun. A build-slot gate written in Windjammer showed it.
+
+Decision: a live `wj run` (no `--deterministic-time`, `--simulate`, `--record` or `--replay`) also waits out each jump of
+the clock in real time (`Sched::real_sleep`). The real time spent waiting is taken out of the real part of the monotonic
+clock, so `elapsed()` counts a sleep once. The virtual clock still orders sleep-ordered events, so interleavings are as
+before. Everywhere a run must be reproducible sleep stays virtual and returns at once: deterministic time, simulation,
+record and replay (whose logs stay byte-identical: no clock reading or event changes), and `wj test`, which runs its tests
+on an interpreter of its own. Gate: `--test sleep` times the child process from outside: a live run waits for its sleeps
+and reports them once in `elapsed()`; the reproducible modes and `wj test` do not wait; `--test effect_replay` keeps the
+record/replay corpus identical.
+
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).
 - Escape suite: at least 150 cases by E5, 0 escapes (CI gate).

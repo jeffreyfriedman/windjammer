@@ -43,8 +43,10 @@ impl Asset {
     }
 }
 
-/// Cache root: the OS temp dir (never the cwd or the build checkout). Core code reads no
-/// env vars; if the dir is unwritable, [`materialize`] falls back to a private per-process dir.
+/// Default cache root: the OS temp dir (never the cwd or the build checkout). Drivers that want a
+/// persistent root (the compiled runtime lives next to its build artifacts and must survive OS temp
+/// purges) call [`materialize_in`]. If the dir is unwritable, materializing falls back to a private
+/// per-process dir.
 fn cache_root() -> PathBuf {
     std::env::temp_dir().join("wj-embedded")
 }
@@ -113,7 +115,12 @@ fn content_hash(table: &[(&str, &[u8])]) -> u64 {
 /// Materialize `asset` and return its directory. Idempotent and safe under concurrent
 /// `wj` processes (write to a private temp sibling, then rename into place).
 pub fn materialize(asset: Asset) -> std::io::Result<PathBuf> {
-    let dir = cache_root().join(cache_dir_name(asset.slug(), env!("CARGO_PKG_VERSION"), asset.hash()));
+    materialize_in(asset, &cache_root())
+}
+
+/// [`materialize`] under an explicit cache root.
+pub fn materialize_in(asset: Asset, root: &Path) -> std::io::Result<PathBuf> {
+    let dir = root.join(cache_dir_name(asset.slug(), env!("CARGO_PKG_VERSION"), asset.hash()));
     if dir.join(".complete").is_file() {
         return Ok(dir);
     }

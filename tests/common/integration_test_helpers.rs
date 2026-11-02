@@ -282,13 +282,9 @@ fn path_to_toml_string(path: &Path) -> String {
 fn write_verify_cargo_toml(build_dir: &Path, runtime_features: &[String]) -> io::Result<()> {
     let runtime = windjammer_runtime_path_for_integration_tests();
     let runtime_display = path_to_toml_string(&runtime.canonicalize().unwrap_or(runtime));
-    let features_toml = if runtime_features.is_empty() {
-        String::new()
-    } else {
-        let quoted: Vec<String> = runtime_features
-            .iter()
-            .map(|f| format!("\"{}\"", f.replace('"', "")))
-            .collect();
+    let features_toml = {
+        let mut quoted: Vec<String> = vec!["\"full\"".to_string()];
+        quoted.extend(runtime_features.iter().map(|f| format!("\"{}\"", f.replace('"', ""))));
         format!(", features = [{}]", quoted.join(", "))
     };
     let cargo = format!(

@@ -1,0 +1,58 @@
+{
+  "command": "check",
+  "diagnostics": [
+    {
+      "category": "type",
+      "code": "WJ0003",
+      "docs": {
+        "explain": "wj explain WJ0003",
+        "url": "https://windjammer.dev/errors/WJ0003"
+      },
+      "fixes": [
+        {
+          "applicability": "maybe_incorrect",
+          "description": "quote the number to make it a string",
+          "edits": [
+            {
+              "byte_end": 34,
+              "byte_start": 32,
+              "col_end": 23,
+              "col_start": 21,
+              "file": "literal_mismatch_fix.wj",
+              "line_end": 2,
+              "line_start": 2,
+              "replacement": "\"42\""
+            }
+          ]
+        }
+      ],
+      "help": [
+        "make the value match `string`, or change the declared type"
+      ],
+      "maturity": "proven",
+      "message": "mismatched types: expected `string`, found `int`",
+      "origin": "front_end",
+      "primary_span": {
+        "byte_end": 34,
+        "byte_start": 32,
+        "col_end": 23,
+        "col_start": 21,
+        "file": "literal_mismatch_fix.wj",
+        "label": "expected `string`, found `int`",
+        "line_end": 2,
+        "line_start": 2
+      },
+      "severity": "error"
+    }
+  ],
+  "schema_version": 2,
+  "success": false,
+  "summary": {
+    "elapsed_ms": 0,
+    "errors": 1,
+    "files_cached": 0,
+    "files_checked": 0,
+    "warnings": 0
+  },
+  "windjammer_version": "VERSION"
+}

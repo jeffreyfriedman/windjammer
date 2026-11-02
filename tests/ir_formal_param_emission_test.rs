@@ -63,6 +63,8 @@ fn wrap(name: string) -> Holder {
         default_int_literals: Default::default(),
         last_uses: Default::default(),
         module_path: Vec::new(),
+        returned_fields: Default::default(),
+        clone_sites: Default::default(),
     }]);
 
     let output = gen.generate_program(&program, &analyzed);

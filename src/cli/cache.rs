@@ -112,3 +112,24 @@ pub fn execute_setup() -> Result<()> {
     println!("Opt out: WJ_USE_LOCAL_TARGET=1");
     Ok(())
 }
+
+/// `wj cache warm`: compile a trivial program once so the shared target tree holds the pre-built
+/// runtime. Later `wj build` / `wj run --compiled` of programs without network, async, CLI or crypto code
+/// then take about a second of CPU instead of compiling the runtime's dependencies on first use.
+pub fn execute_warm() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let src = dir.path().join("warm.wj");
+    std::fs::write(&src, "fn main() {\n    println(\"warm\")\n}\n")?;
+    let out = dir.path().join("out");
+    let exe = std::env::current_exe()?;
+    let status = std::process::Command::new(exe)
+        .arg("build")
+        .arg(&src)
+        .arg("-o")
+        .arg(&out)
+        .status()?;
+    anyhow::ensure!(status.success(), "warm-up build failed");
+    let s = cargo_cache::status();
+    println!("{} runtime cache ready ({} in {})", "Warm:".green().bold(), format_size(s.shared_bytes), s.shared.display());
+    Ok(())
+}

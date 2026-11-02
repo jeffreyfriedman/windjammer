@@ -401,6 +401,11 @@ impl IrPipeline {
             None
         };
 
+        // CLONE-BORROWED-TO-OWNED sites from the final parameter ownership (C6, `clone_facts`).
+        for f in functions.iter_mut() {
+            f.clone_sites = crate::ir::clone_facts::borrowed_returned_fields(&f.returned_fields, &f.param_types);
+        }
+
         // Stage 6: Collect results into IrModule
         let effect_sets = effect_result
             .as_ref()
