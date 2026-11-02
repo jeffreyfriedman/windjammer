@@ -3,6 +3,8 @@
 //! Time seen by a program is `real elapsed + virtual sleep`, so `sleep(100ms)` returns at once but
 //! `Instant::elapsed()` still reports at least 100ms. With the deterministic-time flag the real part
 //! is dropped entirely and the wall clock starts at a fixed instant: runs are reproducible bit for bit.
+//! In a live `wj run` the sleep is also waited out in real time (`Sched::real_sleep`); that real wait is taken out
+//! of the real part, so a sleep is counted once.
 
 use super::*;
 use crate::interpreter::native::{downcast, Native};
@@ -97,7 +99,9 @@ pub fn duration_ns(v: &Value) -> R<i128> {
 impl Interpreter {
     /// Monotonic nanoseconds since the interpreter started (virtual sleep included).
     pub(crate) fn mono_ns(&self) -> i128 {
-        let real = if self.sched.deterministic { 0 } else { self.clock_reading("clock.elapsed", || self.epoch.elapsed().as_nanos() as i128) };
+        // real time spent waiting out a sleep (`Sched::real_sleep`) is already in the virtual clock: count it once
+        let slept = self.sched.slept_ns as i128;
+        let real = if self.sched.deterministic { 0 } else { self.clock_reading("clock.elapsed", || self.epoch.elapsed().as_nanos() as i128 - slept) };
         real + self.sched.clock as i128
     }
     /// Wall-clock nanoseconds since the Unix epoch.

@@ -38,7 +38,7 @@ fn test_param_simple(x: i32) -> i32 {
 fn test_let_patterns() -> i32 {
     let (x, y) = (10_i32, 20_i32);
     let _ = 100;
-    (x + y) as i32
+    x + y
 }
 
 #[inline]
@@ -65,9 +65,9 @@ fn test_match_patterns(color: Color) -> i32 {
 #[inline]
 fn test_for_loop_patterns() -> i32 {
     let pairs = vec![(1_i32, 2_i32), (3_i32, 4_i32), (5_i32, 6_i32)];
-    let mut sum: i32 = 0_i32;
+    let mut sum = 0_i32;
     for (a, b) in pairs {
-        sum = sum + a as i32 + b;
+        sum = sum + a + b;
     }
     sum
 }

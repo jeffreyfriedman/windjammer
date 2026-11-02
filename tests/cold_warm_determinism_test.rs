@@ -18,6 +18,17 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+fn corpus_all() -> Vec<PathBuf> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/verified");
+    let mut all: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "wj"))
+        .collect();
+    all.sort();
+    all
+}
+
 fn corpus_sample() -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/verified");
     let mut all: Vec<PathBuf> = std::fs::read_dir(&dir)
@@ -57,10 +68,9 @@ fn build(project: &Path, src: &Path, out: &Path) -> Option<String> {
     std::fs::read_to_string(out.join(format!("{stem}.rs"))).ok()
 }
 
-#[test]
-fn cold_and_warm_builds_emit_identical_rust() {
+fn assert_cold_equals_warm(files: Vec<PathBuf>) {
     let mut diverged = Vec::new();
-    for file in corpus_sample() {
+    for file in files {
         let project = tempfile::TempDir::new().unwrap();
         std::fs::write(project.path().join("wj.toml"), "[package]\nname = \"p\"\nversion = \"0.1.0\"\nedition = \"2025\"\n").unwrap();
         std::fs::create_dir_all(project.path().join("src")).unwrap();
@@ -75,4 +85,17 @@ fn cold_and_warm_builds_emit_identical_rust() {
         }
     }
     assert!(diverged.is_empty(), "cold/warm builds differ for: {diverged:?}");
+}
+
+/// Per-commit gate: a stable sample of the golden corpus.
+#[test]
+fn cold_and_warm_builds_emit_identical_rust() {
+    assert_cold_equals_warm(corpus_sample());
+}
+
+/// Nightly / CI gate: the whole golden corpus (`cargo test -- --ignored cold_and_warm_whole_corpus`).
+#[test]
+#[ignore = "whole-corpus run; nightly/CI"]
+fn cold_and_warm_whole_corpus_emit_identical_rust() {
+    assert_cold_equals_warm(corpus_all());
 }

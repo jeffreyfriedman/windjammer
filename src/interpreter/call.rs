@@ -894,6 +894,12 @@ impl Interpreter {
                         }
                         return self.call_builtin_fn(&path, args);
                     }
+                    // a std module function the interpreter lacks stops here, like `module::f()` does (never a
+                    // lookup on a function value that reads as a user mistake)
+                    let lower = |s: &str| s.chars().next().is_some_and(|c| c.is_ascii_lowercase());
+                    if lower(p.rsplit("::").next().unwrap_or("")) && lower(method) && !self.builtins.constant(&path).is_some() {
+                        return Err(unsupported(format!("`std::{}` is not implemented by the interpreter", path)));
+                    }
                 }
             }
         }

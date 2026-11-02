@@ -14,7 +14,7 @@ struct DialogueState {
 impl DialogueState {
 #[inline]
 fn is_quest_completed(&self, quest_id: &QuestId) -> bool {
-        let mut i: usize = 0_usize;
+        let mut i = 0_usize;
         while i < self.completed_quests.len() {
             if self.completed_quests[i] == quest_id {
                 return true;

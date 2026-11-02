@@ -21,9 +21,9 @@ struct AnimationClip {
 impl AnimationClip {
 #[inline]
 fn find_keyframe_index(&self, target_time: f32) -> usize {
-        let mut before_idx: usize = 0_usize;
+        let mut before_idx = 0_usize;
         let mut after_idx = self.keyframes.len() - 1_usize;
-        let mut i: usize = 0_usize;
+        let mut i = 0_usize;
         while i < self.keyframes.len() {
             if self.keyframes[i].time <= target_time && target_time <= self.keyframes[i + 1].time {
                 before_idx = i;
