@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "wj")]
 #[command(about = "Windjammer - A simple language that transpiles to Rust", long_about = None)]
-#[command(version)]
+#[command(disable_version_flag = true)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -669,6 +669,44 @@ pub enum Commands {
         action: CacheCommand,
     },
 
+    /// Show this wj's identity: version, commit, commit date, dirty flag, build profile, build date
+    Version {
+        /// Machine-readable output
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems)
+    Doctor {
+        /// Machine-readable output
+        #[arg(long)]
+        json: bool,
+
+        /// Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate)
+        #[arg(long)]
+        expect_head: bool,
+    },
+
+    /// Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup
+    #[command(name = "install-dev")]
+    InstallDev {
+        /// Destination (default: $CARGO_HOME/bin/wj, else ~/.cargo/bin/wj)
+        #[arg(long, value_name = "PATH")]
+        to: Option<PathBuf>,
+
+        /// Binary to install (default: the running wj)
+        #[arg(long, value_name = "PATH")]
+        from: Option<PathBuf>,
+
+        /// Install even if it is older than what is installed
+        #[arg(long)]
+        force: bool,
+
+        /// Print what would happen without writing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
     SelfInstall {
@@ -724,6 +762,8 @@ pub enum CacheCommand {
         #[arg(long)]
         aggressive: bool,
     },
+    /// Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm)
+    Warm,
     /// Write env.sh / env.ps1 for bare `cargo` invocations
     Setup,
 }

@@ -671,7 +671,7 @@ pub static ERRORS: &[CodeInfo] = &[
         category: C::Type,
         origin: O::FrontEnd,
         maturity: "high_confidence",
-        rust_codes: &[],
+        rust_codes: &["E0608"],
         explanation: "An iterator produces its items one at a time; it has no positions to index. Indexing needs a list.",
         cause: "Writing `it[i]` on the result of `.map(..)`, `.filter(..)`, `.chars()` or `.split(..)` without collecting it.",
         fix: "Collect into a list first (`let items = it.collect()`), then index `items[i]`, or use `.nth(i)`.",

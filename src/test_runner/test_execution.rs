@@ -1050,7 +1050,7 @@ pub(crate) fn generate_test_harness(
 
     let runtime_dep_line = if no_runtime_copy {
         format!(
-            "windjammer-runtime = {{ path = \"{}\", default-features = false }}",
+            "windjammer-runtime = {{ path = \"{}\", default-features = false, features = [\"full\"] }}",
             path_to_toml_string(&runtime_path)
         )
     } else {
@@ -1094,7 +1094,7 @@ pub(crate) fn generate_test_harness(
             "✓".green().bold()
         );
 
-        "windjammer-runtime = { path = \"crates/windjammer-runtime\", default-features = false }"
+        "windjammer-runtime = { path = \"crates/windjammer-runtime\", default-features = false, features = [\"full\"] }"
             .to_string()
     };
 

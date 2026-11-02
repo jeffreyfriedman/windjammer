@@ -102,7 +102,11 @@ pub fn ensure(project_root: &Path, rust_files: &[PathBuf], sigs: &[ExternSig], l
     }
     if uses_runtime && !deps.iter().any(|d| d.starts_with("windjammer-runtime")) {
         let rt = crate::cargo_toml::dependency_management::find_windjammer_runtime_path_with(None);
-        manifest.push_str(&format!("windjammer-runtime = {{ path = \"{}\", default-features = false }}\n", rt.display()));
+        let srcs: Vec<String> = rust_files.iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect();
+        let map = crate::cargo_toml::runtime_features::FeatureMap::load(&rt);
+        let feats = crate::cargo_toml::runtime_features::runtime_features(map.as_ref(), srcs.iter().map(|s| s.as_str()));
+        let feats = feats.iter().map(|f| format!("\"{f}\"")).collect::<Vec<_>>().join(", ");
+        manifest.push_str(&format!("windjammer-runtime = {{ path = \"{}\", default-features = false, features = [{feats}] }}\n", rt.display()));
     }
     let mut lib_rs = String::from("#![allow(dead_code, unused_imports, non_snake_case, clippy::all)]\n");
     for f in rust_files {

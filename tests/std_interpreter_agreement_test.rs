@@ -175,3 +175,74 @@ fn module_constants_are_readable_in_qualified_form() {
     let o = Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&f).current_dir(dir.path()).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&o.stdout), "ok\n", "{}", String::from_utf8_lossy(&o.stderr));
 }
+
+// ---- unimplemented std functions stop the program; they never evaluate to nothing -----------------------------
+
+/// Every name on the shrink-only lists, i.e. everything the standard library declares that the interpreter
+/// cannot run.
+fn allowlisted() -> BTreeSet<String> {
+    let mut all = read_list(&root().join("tests/data/std_interpreter_missing.txt"));
+    all.extend(read_list(&root().join("tests/data/runtime_interpreter_missing.txt")));
+    all
+}
+
+/// Run `fn main` calling `call` (after `use std::<module>`) through `wj run --interpret`.
+/// Returns (stdout, stderr, exit code).
+fn run_call(module: &str, call: &str) -> (String, String, i32) {
+    let dir = tempfile::TempDir::new().unwrap();
+    let f = dir.path().join("prog.wj");
+    fs::write(&f, format!("use std::{module}\n\nfn main() {{\n    println(\"before\")\n    let r = {call}\n    println(\"after\")\n}}\n")).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["run", "--interpret"])
+        .arg(&f)
+        .current_dir(dir.path())
+        .env("WJ_NO_STALE_WARN", "1")
+        .output()
+        .unwrap();
+    (String::from_utf8_lossy(&o.stdout).to_string(), String::from_utf8_lossy(&o.stderr).to_string(), o.status.code().unwrap_or(-1))
+}
+
+/// Names that collide with a type keyword, so `module::name()` does not parse (the dot form is still checked).
+const NOT_WRITABLE_AS_PATH: &[&str] = &["json::string"];
+
+/// Calling an allowlisted (unimplemented) std function in any spelling stops with exit status 2 and says
+/// "not implemented by the interpreter"; the statement after the call never runs, so the call cannot have
+/// evaluated to a silent `None`/unit (the stale-binary bug this gate exists for).
+#[test]
+fn calling_an_unimplemented_std_function_stops_with_exit_2() {
+    let names: Vec<String> = allowlisted().into_iter().collect();
+    assert!(names.len() > 50, "the allowlists are unexpectedly small: {}", names.len());
+    let failures = std::sync::Mutex::new(Vec::new());
+    std::thread::scope(|s| {
+        for chunk in names.chunks(names.len().div_ceil(4)) {
+            let failures = &failures;
+            s.spawn(move || {
+                for n in chunk {
+                    let (m, f) = n.split_once("::").unwrap();
+                    for (form, call) in [("path", format!("{m}::{f}()")), ("dot", format!("{m}.{f}()"))] {
+                        if form == "path" && NOT_WRITABLE_AS_PATH.contains(&n.as_str()) {
+                            continue;
+                        }
+                        let (out, err, code) = run_call(m, &call);
+                        // `wj check` may reject a name the runtime exports but std/*.wj never declares (WJ0036): also a stop
+                        let ok = code == 2 && (err.contains("not implemented by the interpreter") || err.contains("[WJ0036]")) && !out.contains("after");
+                        if !ok {
+                            failures.lock().unwrap().push(format!("{n} ({form}): exit {code}, stdout {out:?}, stderr {:?}", err.lines().next().unwrap_or("")));
+                        }
+                    }
+                }
+            });
+        }
+    });
+    let failures = failures.into_inner().unwrap();
+    assert!(failures.is_empty(), "{} unimplemented std calls did not stop with exit 2:\n{}", failures.len(), failures.join("\n"));
+}
+
+/// The oracle for the gate above: an implemented function in the same spelling does run to completion.
+#[test]
+fn an_implemented_std_function_still_runs_in_both_spellings() {
+    for call in ["math::sqrt(4.0)", "math.sqrt(4.0)"] {
+        let (out, err, code) = run_call("math", call);
+        assert_eq!((out.as_str(), code), ("before\nafter\n", 0), "{call}: {err}");
+    }
+}

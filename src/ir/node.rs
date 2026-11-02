@@ -120,6 +120,11 @@ pub struct IrFunction {
 
     /// Inline modules containing the definition (`AnalyzedFunction::module_path`): with `name`, its identity (C3).
     pub module_path: Vec<String>,
+
+    /// CLONE-BORROWED-TO-OWNED (C6, `clone_facts`): returned field projections of a parameter
+    /// (candidates, by node, with the root) and, after the solver, those whose root is borrowed.
+    pub returned_fields: std::collections::BTreeMap<usize, String>,
+    pub clone_sites: std::collections::BTreeMap<usize, String>,
 }
 
 impl IrFunction {
@@ -336,6 +341,7 @@ impl IrFunction {
         let return_type = SafetyType::owned(return_base);
 
         let optimizations = OptimizationHints::from_analyzed(analyzed);
+        let params: Vec<&str> = analyzed.decl.parameters.iter().map(|p| p.name.as_str()).collect();
 
         IrFunction {
             name,
@@ -350,15 +356,15 @@ impl IrFunction {
             ownership_trail: std::collections::BTreeMap::new(),
             module_path: analyzed.module_path.clone(),
             default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
-            last_uses: crate::ir::liveness::last_uses(
-                &analyzed
-                    .decl
-                    .parameters
-                    .iter()
-                    .map(|p| p.name.as_str())
-                    .collect::<Vec<_>>(),
+            last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),
+            returned_fields: crate::ir::clone_facts::returned_param_fields(
+                &params,
                 &analyzed.decl.body,
+                analyzed.decl.return_type.as_ref().is_some_and(|t| {
+                    !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_))
+                }),
             ),
+            clone_sites: std::collections::BTreeMap::new(),
         }
     }
 }

@@ -109,6 +109,36 @@ fn float_width_says_cast() {
 }
 
 #[test]
+fn compare_usize_with_i32_says_as_int() {
+    let d = first("fn main() { let v = vec![1]; let i: i32 = 0; if i < v.len() {} }\n");
+    let t = all_text(&d);
+    assert!(t.contains("as int") && t.contains("`usize`"), "{t}");
+    assert_ne!(d.code, "WJ0099");
+}
+
+#[test]
+fn char_for_string_says_to_string_or_chars() {
+    let d = first("fn f() -> String { 'a' }\nfn main() { f(); }\n");
+    let t = all_text(&d);
+    assert!(t.contains("c.to_string()") && t.contains("s.chars()"), "{t}");
+}
+
+#[test]
+fn dropped_branch_value_says_else() {
+    let d = first("fn main() { let n = 1; if n > 0 { String::from(\"x\") } }\n");
+    let t = all_text(&d);
+    assert!(t.contains("an `if` without `else` has no value") && t.contains("add an `else` branch"), "{t}");
+}
+
+#[test]
+fn collect_message_names_the_items() {
+    let d = first("fn main() { let l = \"a b\"; let p: Vec<String> = l.split(' ').collect(); }\n");
+    assert_eq!(d.code, "WJ0029");
+    assert_eq!(d.message, "cannot collect `&str` items into `Vec<string>`");
+    assert!(all_text(&d).contains("add `.map(|s| s.to_string())` before `.collect()`"));
+}
+
+#[test]
 fn int_into_float_says_cast() {
     let d = first("fn f(n: f64) {}\nfn main() { let k: i64 = 3; f(k); }\n");
     let t = all_text(&d);

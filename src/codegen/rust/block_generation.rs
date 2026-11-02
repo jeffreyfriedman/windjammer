@@ -187,6 +187,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Implicit return of `self.field` on borrowed `self` with owned return type.
                         // Skip for Copy types — they don't need .clone() (bool, i32, f32, etc.)
                         if super::self_analysis::is_self_field_chain(expr)
+                            && self.returned_field_clone(expr).is_none()
                             && (self.inferred_mut_borrowed_params.contains("self")
                                 || self.inferred_borrowed_params.contains("self"))
                         {
