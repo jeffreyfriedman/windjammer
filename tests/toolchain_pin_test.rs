@@ -80,7 +80,7 @@ fn matching_pins_pass_silently_by_commit_prefix_and_by_version() {
 }
 
 #[test]
-fn wj_pin_md_in_an_ancestor_is_honoured_and_wj_toml_overrides_it() {
+fn ancestor_pin_file_is_honoured_and_wj_toml_overrides_it() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join(windjammer::toolchain::pin::PIN_FILE), "# pin\n\n```\nWJ_REPO=https://example.com/wj.git\nWJ_COMMIT=1111111111111111111111111111111111111111\n```\n").unwrap();
     let app = root.path().join("apps").join("one");
