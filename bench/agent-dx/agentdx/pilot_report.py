@@ -130,7 +130,7 @@ def build_report(trials, n_boot=2000, prev=None):
         md += ["", "## Context attribution (stream-json arms)", "",
                "First-turn input = system prompt + tool definitions + pack + task prompt. Pack tokens are estimated as bytes/3.5. "
                "Schema tokens are the first-turn difference to the matching no-MCP arm (T), minus the pack difference.", "",
-               "| arm | first-turn input | pack tokens (est) | other fixed (system, tools, task) | tool-result tokens (est, all turns) | docs shell calls | MCP calls | total tokens in | turns |",
+               "| arm | first-turn input | pack tokens (est, bytes/3.5) | other fixed (system, tools, task) | tool-result tokens (est, all turns) | docs shell calls | MCP calls | total tokens in | turns |",
                "|---|---|---|---|---|---|---|---|---|"]
         js["attribution"] = {}
         for a in sorted({t["arm"] for t in with_log}):

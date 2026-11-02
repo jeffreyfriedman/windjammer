@@ -1,0 +1,931 @@
+{
+ "n_trials": 120,
+ "arms": {
+  "pass": {
+   "B": [
+    0.9666666666666667,
+    0.8666666666666667,
+    1.0
+   ],
+   "E": [
+    0.9666666666666667,
+    0.8666666666666667,
+    1.0
+   ],
+   "F": [
+    0.9,
+    0.7666666666666667,
+    1.0
+   ],
+   "T": [
+    0.8666666666666667,
+    0.7,
+    1.0
+   ]
+  },
+  "verify": {
+   "B": [
+    2.2666666666666666,
+    1.5333333333333334,
+    3.1
+   ],
+   "E": [
+    2.4,
+    1.7333333333333334,
+    3.2666666666666666
+   ],
+   "F": [
+    1.8333333333333333,
+    1.1333333333333333,
+    2.6
+   ],
+   "T": [
+    3.033333333333333,
+    1.8,
+    4.933333333333334
+   ]
+  },
+  "to_green": {
+   "B": [
+    1.6666666666666667,
+    1.1481481481481481,
+    2.5384615384615383
+   ],
+   "E": [
+    1.7777777777777777,
+    1.2142857142857142,
+    2.52
+   ],
+   "F": [
+    1.64,
+    1.0384615384615385,
+    2.4583333333333335
+   ],
+   "T": [
+    1.9583333333333333,
+    1.2380952380952381,
+    2.8333333333333335
+   ]
+  },
+  "turns": {
+   "B": [
+    3.8333333333333335,
+    2.8666666666666667,
+    5.233333333333333
+   ],
+   "E": [
+    5.433333333333334,
+    3.7333333333333334,
+    7.633333333333334
+   ],
+   "F": [
+    4.1,
+    3.2,
+    5.5
+   ],
+   "T": [
+    4.166666666666667,
+    2.8666666666666667,
+    5.666666666666667
+   ]
+  },
+  "tok_in": {
+   "B": [
+    44278.0,
+    35561.166666666664,
+    57596.13333333333
+   ],
+   "E": [
+    40284.433333333334,
+    27903.866666666665,
+    54761.53333333333
+   ],
+   "F": [
+    29407.8,
+    20654.766666666666,
+    40450.933333333334
+   ],
+   "T": [
+    28951.066666666666,
+    21316.1,
+    39132.066666666666
+   ]
+  },
+  "tok_out": {
+   "B": [
+    1294.1,
+    922.6333333333333,
+    1698.0
+   ],
+   "E": [
+    1671.3,
+    1174.7333333333333,
+    2191.9333333333334
+   ],
+   "F": [
+    1401.7333333333333,
+    1078.3666666666666,
+    1793.1
+   ],
+   "T": [
+    1462.4333333333334,
+    988.2333333333333,
+    1972.4
+   ]
+  },
+  "cost": {
+   "B": [
+    0.04774906,
+    0.03705939666666667,
+    0.059953959999999994
+   ],
+   "E": [
+    0.04253744,
+    0.033624706666666664,
+    0.05173219
+   ],
+   "F": [
+    0.040117153333333336,
+    0.026146383333333335,
+    0.055766500000000004
+   ],
+   "T": [
+    0.043117423333333335,
+    0.031566659999999996,
+    0.057833306666666674
+   ]
+  },
+  "wall": {
+   "B": [
+    155.97533333333334,
+    100.64633333333333,
+    222.663
+   ],
+   "E": [
+    165.95600000000002,
+    99.56266666666667,
+    248.33933333333334
+   ],
+   "F": [
+    128.07266666666666,
+    55.117333333333335,
+    221.22400000000002
+   ],
+   "T": [
+    173.31233333333333,
+    87.67433333333334,
+    295.58833333333337
+   ]
+  },
+  "think": {
+   "B": [
+    19.4461,
+    14.208033333333333,
+    25.405866666666665
+   ],
+   "E": [
+    19.6937,
+    14.980933333333333,
+    25.12043333333333
+   ],
+   "F": [
+    17.494433333333333,
+    10.852599999999999,
+    24.98026666666667
+   ],
+   "T": [
+    20.175766666666668,
+    14.1815,
+    28.235333333333333
+   ]
+  },
+  "tool": {
+   "B": [
+    130.477,
+    69.98100000000001,
+    205.442
+   ],
+   "E": [
+    138.444,
+    64.29733333333334,
+    232.807
+   ],
+   "F": [
+    107.27533333333332,
+    26.241666666666667,
+    208.95633333333333
+   ],
+   "T": [
+    127.829,
+    53.70933333333333,
+    216.841
+   ]
+  },
+  "denied": {
+   "B": [
+    0.13333333333333333,
+    0.0,
+    0.3333333333333333
+   ],
+   "E": [
+    0.1,
+    0.0,
+    0.26666666666666666
+   ],
+   "F": [
+    0.2,
+    0.0,
+    0.4666666666666667
+   ],
+   "T": [
+    0.2,
+    0.0,
+    0.43333333333333335
+   ]
+  },
+  "capden": {
+   "B": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "E": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "F": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "T": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "silent": {
+   "B": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "E": [
+    0.03333333333333333,
+    0.0,
+    0.13333333333333333
+   ],
+   "F": [
+    0.1,
+    0.0,
+    0.23333333333333334
+   ],
+   "T": [
+    0.06666666666666667,
+    0.0,
+    0.2
+   ]
+  }
+ },
+ "diffs": {
+  "pass": {
+   "B-E": [
+    0.0,
+    -0.1333333333333333,
+    0.1333333333333333
+   ],
+   "B-F": [
+    0.06666666666666665,
+    -0.09999999999999998,
+    0.23333333333333328
+   ],
+   "B-T": [
+    0.09999999999999998,
+    -0.033333333333333326,
+    0.2666666666666667
+   ],
+   "E-F": [
+    0.06666666666666665,
+    -0.06666666666666665,
+    0.20000000000000007
+   ],
+   "E-T": [
+    0.09999999999999998,
+    -0.033333333333333326,
+    0.2666666666666667
+   ],
+   "F-T": [
+    0.033333333333333326,
+    -0.16666666666666663,
+    0.2333333333333334
+   ]
+  },
+  "verify": {
+   "B-E": [
+    -0.1333333333333333,
+    -1.1,
+    0.8666666666666667
+   ],
+   "B-F": [
+    0.43333333333333335,
+    -0.5666666666666669,
+    1.4000000000000001
+   ],
+   "B-T": [
+    -0.7666666666666666,
+    -2.6,
+    0.5666666666666669
+   ],
+   "E-F": [
+    0.5666666666666667,
+    -0.33333333333333326,
+    1.4
+   ],
+   "E-T": [
+    -0.6333333333333333,
+    -2.6333333333333337,
+    0.7999999999999998
+   ],
+   "F-T": [
+    -1.2,
+    -3.1,
+    0.1333333333333333
+   ]
+  },
+  "to_green": {
+   "B-E": [
+    -0.11111111111111094,
+    -0.8,
+    0.5925925925925926
+   ],
+   "B-F": [
+    0.02666666666666684,
+    -0.7826086956521738,
+    0.8148148148148151
+   ],
+   "B-T": [
+    -0.2916666666666665,
+    -1.2307692307692308,
+    0.510989010989011
+   ],
+   "E-F": [
+    0.13777777777777778,
+    -0.47435897435897423,
+    0.7057142857142857
+   ],
+   "E-T": [
+    -0.18055555555555558,
+    -0.8900000000000001,
+    0.4782608695652173
+   ],
+   "F-T": [
+    -0.31833333333333336,
+    -1.0833333333333333,
+    0.35185185185185186
+   ]
+  },
+  "turns": {
+   "B-E": [
+    -1.6,
+    -3.9,
+    0.5999999999999996
+   ],
+   "B-F": [
+    -0.26666666666666616,
+    -1.9333333333333331,
+    1.5999999999999996
+   ],
+   "B-T": [
+    -0.3333333333333335,
+    -1.8000000000000003,
+    1.2666666666666666
+   ],
+   "E-F": [
+    1.333333333333334,
+    -0.20000000000000018,
+    3.133333333333333
+   ],
+   "E-T": [
+    1.2666666666666666,
+    -0.3333333333333335,
+    3.0666666666666664
+   ],
+   "F-T": [
+    -0.06666666666666732,
+    -1.5000000000000004,
+    1.2666666666666662
+   ]
+  },
+  "tok_in": {
+   "B-E": [
+    3993.5666666666657,
+    -12736.700000000004,
+    22301.166666666664
+   ],
+   "B-F": [
+    14870.2,
+    1251.3666666666613,
+    31502.033333333333
+   ],
+   "B-T": [
+    15326.933333333334,
+    3804.0,
+    29748.099999999995
+   ],
+   "E-F": [
+    10876.633333333335,
+    -1818.4000000000015,
+    23367.199999999997
+   ],
+   "E-T": [
+    11333.366666666669,
+    -1656.0999999999985,
+    25509.9
+   ],
+   "F-T": [
+    456.7333333333336,
+    -10243.599999999999,
+    11756.233333333334
+   ]
+  },
+  "tok_out": {
+   "B-E": [
+    -377.20000000000005,
+    -958.7666666666667,
+    157.0999999999999
+   ],
+   "B-F": [
+    -107.63333333333344,
+    -556.8,
+    341.23333333333335
+   ],
+   "B-T": [
+    -168.33333333333348,
+    -718.1666666666667,
+    321.73333333333335
+   ],
+   "E-F": [
+    269.5666666666666,
+    -120.29999999999995,
+    747.4000000000001
+   ],
+   "E-T": [
+    208.86666666666656,
+    -238.93333333333317,
+    711.4000000000001
+   ],
+   "F-T": [
+    -60.700000000000045,
+    -560.0666666666666,
+    420.79999999999995
+   ]
+  },
+  "cost": {
+   "B-E": [
+    0.00521162,
+    -0.007597376666666669,
+    0.019783053333333335
+   ],
+   "B-F": [
+    0.007631906666666667,
+    -0.01229554666666667,
+    0.02428495333333333
+   ],
+   "B-T": [
+    0.004631636666666668,
+    -0.010890546666666674,
+    0.018196720000000007
+   ],
+   "E-F": [
+    0.002420286666666667,
+    -0.011583966666666674,
+    0.012982123333333342
+   ],
+   "E-T": [
+    -0.0005799833333333324,
+    -0.016954966666666675,
+    0.012914579999999995
+   ],
+   "F-T": [
+    -0.0030002699999999993,
+    -0.02221213666666668,
+    0.016734166666666668
+   ]
+  },
+  "wall": {
+   "B-E": [
+    -9.980666666666679,
+    -112.73866666666669,
+    83.60733333333333
+   ],
+   "B-F": [
+    27.902666666666676,
+    -83.90033333333335,
+    117.67566666666667
+   ],
+   "B-T": [
+    -17.33699999999999,
+    -125.10766666666669,
+    71.18166666666666
+   ],
+   "E-F": [
+    37.883333333333354,
+    -75.97566666666668,
+    135.29266666666666
+   ],
+   "E-T": [
+    -7.3563333333333105,
+    -141.421,
+    122.59566666666669
+   ],
+   "F-T": [
+    -45.239666666666665,
+    -193.73499999999999,
+    94.53800000000001
+   ]
+  },
+  "think": {
+   "B-E": [
+    -0.2475999999999985,
+    -7.6448333333333345,
+    7.774566666666667
+   ],
+   "B-F": [
+    1.951666666666668,
+    -5.984500000000004,
+    9.521833333333333
+   ],
+   "B-T": [
+    -0.7296666666666667,
+    -9.658800000000003,
+    6.7318333333333324
+   ],
+   "E-F": [
+    2.1992666666666665,
+    -4.78703333333333,
+    8.739866666666664
+   ],
+   "E-T": [
+    -0.4820666666666682,
+    -10.267033333333334,
+    7.739766666666668
+   ],
+   "F-T": [
+    -2.6813333333333347,
+    -13.027199999999999,
+    6.067300000000003
+   ]
+  },
+  "tool": {
+   "B-E": [
+    -7.9669999999999845,
+    -120.33599999999998,
+    96.73700000000001
+   ],
+   "B-F": [
+    23.201666666666682,
+    -104.31133333333335,
+    125.60066666666667
+   ],
+   "B-T": [
+    2.6480000000000103,
+    -89.82300000000001,
+    88.60133333333334
+   ],
+   "E-F": [
+    31.168666666666667,
+    -107.672,
+    139.904
+   ],
+   "E-T": [
+    10.614999999999995,
+    -111.47266666666667,
+    137.44033333333334
+   ],
+   "F-T": [
+    -20.553666666666672,
+    -154.191,
+    119.29633333333331
+   ]
+  },
+  "denied": {
+   "B-E": [
+    0.033333333333333326,
+    -0.1,
+    0.16666666666666669
+   ],
+   "B-F": [
+    -0.06666666666666668,
+    -0.3333333333333333,
+    0.16666666666666666
+   ],
+   "B-T": [
+    -0.06666666666666668,
+    -0.2666666666666667,
+    0.1
+   ],
+   "E-F": [
+    -0.1,
+    -0.39999999999999997,
+    0.13333333333333336
+   ],
+   "E-T": [
+    -0.1,
+    -0.33333333333333337,
+    0.1
+   ],
+   "F-T": [
+    0.0,
+    -0.2,
+    0.19999999999999998
+   ]
+  },
+  "capden": {
+   "B-E": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "B-F": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "B-T": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "E-F": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "E-T": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "F-T": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "silent": {
+   "B-E": [
+    -0.03333333333333333,
+    -0.13333333333333333,
+    0.0
+   ],
+   "B-F": [
+    -0.1,
+    -0.26666666666666666,
+    0.0
+   ],
+   "B-T": [
+    -0.06666666666666667,
+    -0.2,
+    0.0
+   ],
+   "E-F": [
+    -0.06666666666666668,
+    -0.2,
+    0.06666666666666667
+   ],
+   "E-T": [
+    -0.03333333333333333,
+    -0.2,
+    0.1
+   ],
+   "F-T": [
+    0.03333333333333334,
+    -0.16666666666666666,
+    0.23333333333333334
+   ]
+  }
+ },
+ "friction": [
+  {
+   "id": "slow-command:run-compiled",
+   "title": "slow `wj run` (compiled) >= 30s",
+   "fix_kind": "performance",
+   "fix_location": "build cache / runtime pre-build; see wall-time table",
+   "wasted_calls": 75,
+   "est_tokens": 711487,
+   "example": "",
+   "arms": [
+    "B",
+    "E",
+    "F",
+    "T"
+   ],
+   "n_trials": 54,
+   "n_tasks": 10,
+   "rank": 1,
+   "priority": "P0"
+  },
+  {
+   "id": "type-mismatch",
+   "title": "type mismatch (often int/float, string/&str)",
+   "fix_kind": "diagnostic text",
+   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+   "wasted_calls": 40,
+   "est_tokens": 393620,
+   "example": "error[E0308]: mismatched types\n    --> main.rs:32:21\n     |\n  32 |         tokens.push(t);\nFor more information about this error, try `rustc --explain E0308`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 5 warnings emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 5 warnings emitted",
+   "arms": [
+    "B",
+    "E",
+    "F",
+    "T"
+   ],
+   "n_trials": 28,
+   "n_tasks": 8,
+   "rank": 2,
+   "priority": "P0"
+  },
+  {
+   "id": "slow-command:build-compiled",
+   "title": "slow `wj build` (compiled) >= 30s",
+   "fix_kind": "performance",
+   "fix_location": "build cache / runtime pre-build; see wall-time table",
+   "wasted_calls": 27,
+   "est_tokens": 260584,
+   "example": "",
+   "arms": [
+    "B",
+    "E",
+    "F",
+    "T"
+   ],
+   "n_trials": 25,
+   "n_tasks": 9,
+   "rank": 3,
+   "priority": "P0"
+  },
+  {
+   "id": "rustc-leak",
+   "title": "raw rustc/cargo error surfaced from generated code",
+   "fix_kind": "codegen / diagnostic mapping",
+   "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+   "wasted_calls": 20,
+   "est_tokens": 163178,
+   "example": "error[E0369]: cannot add `&std::string::String` to `&str`\n  --> main.rs:33:45\n   |\n33 |             out = &digits[ri..ri + 1_usize] + &out;\nFor more information about this error, try `rustc --explain E0369`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted",
+   "arms": [
+    "E",
+    "F",
+    "T"
+   ],
+   "n_trials": 11,
+   "n_tasks": 5,
+   "rank": 4,
+   "priority": "P1"
+  },
+  {
+   "id": "collect-type",
+   "title": "collect/iterator element type mismatch in generated Rust",
+   "fix_kind": "codegen",
+   "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
+   "wasted_calls": 12,
+   "est_tokens": 108636,
+   "example": "error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`\n    --> main.rs:8:55\n     |\n   8 |         let parts = line.split_whitespace().collect::<Vec<String>>();\nFor more information about this error, try `rustc --explain E0277`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted",
+   "arms": [
+    "B",
+    "E",
+    "F",
+    "T"
+   ],
+   "n_trials": 11,
+   "n_tasks": 4,
+   "rank": 5,
+   "priority": "P1"
+  },
+  {
+   "id": "silent-divergence",
+   "title": "interpreted run passed but compiled grade failed (silent divergence)",
+   "fix_kind": "interpreter / check parity",
+   "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+   "wasted_calls": 7,
+   "est_tokens": 56530,
+   "example": "",
+   "arms": [
+    "E",
+    "F",
+    "T"
+   ],
+   "n_trials": 6,
+   "n_tasks": 5,
+   "rank": 6,
+   "priority": "P1"
+  },
+  {
+   "id": "lint-leakage",
+   "title": "Rust-leakage lint rejected idiomatic-looking code",
+   "fix_kind": "lint rule",
+   "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
+   "wasted_calls": 6,
+   "est_tokens": 53947,
+   "example": "error: string literal `.to_string()` is forbidden Rust leakage [W0006]\n  --> <ws>/main.wj:51:35\n  = note: Windjammer string literals are already `string`; `.to_string()` is a Rustism\n  = help: prefer bare string literal \u2014 codegen emits `String::from(\"\u2026\")`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/2",
+   "arms": [
+    "B",
+    "E",
+    "T"
+   ],
+   "n_trials": 6,
+   "n_tasks": 3,
+   "rank": 7,
+   "priority": "P1"
+  },
+  {
+   "id": "runtime-panic",
+   "title": "runtime panic during the loop",
+   "fix_kind": "docs",
+   "fix_location": "pack section on Option/Result handling and index bounds",
+   "wasted_calls": 5,
+   "est_tokens": 41076,
+   "example": "thread 'main' (37289280) panicked at main.rs:168:48:\nindex out of bounds: the len is 0 but the index is 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+   "arms": [
+    "E",
+    "T"
+   ],
+   "n_trials": 4,
+   "n_tasks": 3,
+   "rank": 8,
+   "priority": "P1"
+  },
+  {
+   "id": "method-parity",
+   "title": "method accepted by the interpreter is missing on the compiled path",
+   "fix_kind": "stdlib parity / check",
+   "fix_location": "`wj check` must reject what rustc will (R5 check-vs-build gate); alias or implement the std method; `wj docs` entry",
+   "wasted_calls": 2,
+   "est_tokens": 21283,
+   "example": "error[E0599]: no method named `iter` found for struct `Chars<'a>` in the current scope\n   --> main.rs:16:42\n    |\n 16 |             for (i, x) in digits.chars().iter().enumerate() {\nFor more information about this error, try `rustc --explain E0599`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 1 warning emitted",
+   "arms": [
+    "B",
+    "F"
+   ],
+   "n_trials": 2,
+   "n_tasks": 2,
+   "rank": 9,
+   "priority": "P2"
+  },
+  {
+   "id": "name-unresolved",
+   "title": "unresolved name",
+   "fix_kind": "diagnostic text",
+   "fix_location": "diagnostic should list candidates and the import to add",
+   "wasted_calls": 1,
+   "est_tokens": 7832,
+   "example": "error[E0433]: cannot find `strings` in `std`\n   --> main.rs:153:39\n    |\n153 |         let parts: Vec<String> = std::strings::split_whitespace(&line);\nFor more information about this error, try `rustc --explain E0433`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 2 warnings emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 2 warnings emitted",
+   "arms": [
+    "F"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 10,
+   "priority": "P2"
+  }
+ ],
+ "aps": {},
+ "attribution": {
+  "B": {
+   "first_turn_input": 14503.933333333332,
+   "pack_tokens": 4720.857142857143,
+   "tool_result_tokens": 873.6666666666666,
+   "docs_calls": 0.0,
+   "mcp_calls": 0.0,
+   "tokens_in": 44278.0,
+   "turns": 3.8333333333333335
+  },
+  "E": {
+   "first_turn_input": 8660.9,
+   "pack_tokens": 441.14285714285717,
+   "tool_result_tokens": 973.2666666666667,
+   "docs_calls": 0.0,
+   "mcp_calls": 0.43333333333333335,
+   "tokens_in": 40284.433333333334,
+   "turns": 5.433333333333334
+  },
+  "F": {
+   "first_turn_input": 8161.9,
+   "pack_tokens": 424.2857142857143,
+   "tool_result_tokens": 1107.0333333333333,
+   "docs_calls": 0.13333333333333333,
+   "mcp_calls": 0.0,
+   "tokens_in": 29407.8,
+   "turns": 4.1
+  },
+  "T": {
+   "first_turn_input": 8094.9,
+   "pack_tokens": 370.57142857142856,
+   "tool_result_tokens": 850.6666666666666,
+   "docs_calls": 0.0,
+   "mcp_calls": 0.0,
+   "tokens_in": 28951.066666666666,
+   "turns": 4.166666666666667
+  }
+ },
+ "mcp_schema_tokens": 495.4285714285714
+}
