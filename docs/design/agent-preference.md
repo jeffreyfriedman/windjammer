@@ -200,7 +200,7 @@ pass rate (0.87) against 0.90-0.97 for the same sheet in pilot 3, so pass-rate d
 | S (none) | 0.87 | 6.8 | 46.7k | $0.048 | |
 | Sa strings | 0.97 | 6.3 | 46.4k | $0.046 | String/`char` mismatch in 10 trials vs 6 |
 | Sb ownership | 1.00 | 4.9 | 33.7k | $0.046 | lint codes in 17 trials vs 5 |
-| Sc **input** | 0.83 | **16.6** | **197.9k** | **$0.130** | 794 `wj docs` calls, trait-bound and name errors, 3 of 5 failures hit the turn cap |
+| Sc **input** | 0.83 | **16.6** | **197.9k** | **$0.130** | 794 `wj docs` calls, trait-bound and name errors, all 5 failures hit the 25-turn cap |
 | Sd len | 1.00 | 6.4 | 48.1k | $0.048 | width errors (`usize`/`i32`) in 10 trials vs 3 |
 | Se printing | 0.90 | 4.6 | 33.3k | $0.043 | no Display error in either arm |
 | Sf tools line | 0.97 | 4.5 | 29.7k | $0.040 | `wj docs` used in 0 trials vs 3 |
