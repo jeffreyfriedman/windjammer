@@ -76,287 +76,16 @@ fn json_of(v: &Value) -> R<serde_json::Value> {
     downcast::<JsonObj>(v).map(|j| j.0.borrow().clone()).ok_or_else(|| semantic(format!("expected a json::Value, found {}", v.type_name())))
 }
 
-/// JSON with object keys in insertion order (serde derive writes struct fields in declaration
-/// order; `serde_json::Map` would sort them).
-enum Ser {
-    Null,
-    Bool(bool),
-    Num(String),
-    Str(String),
-    Arr(Vec<Ser>),
-    Obj(Vec<(String, Ser)>),
+/// Host `json::Value` objects encode as themselves inside typed values.
+fn native_json(v: &Value) -> Option<serde_json::Value> {
+    downcast::<JsonObj>(v).map(|j| j.0.borrow().clone())
 }
 
-impl Ser {
-    fn from_value(j: &serde_json::Value) -> Ser {
-        use serde_json::Value as J;
-        match j {
-            J::Null => Ser::Null,
-            J::Bool(b) => Ser::Bool(*b),
-            J::Number(n) => Ser::Num(n.to_string()),
-            J::String(t) => Ser::Str(t.clone()),
-            J::Array(a) => Ser::Arr(a.iter().map(Ser::from_value).collect()),
-            J::Object(o) => Ser::Obj(o.iter().map(|(k, v)| (k.clone(), Ser::from_value(v))).collect()),
-        }
-    }
-
-    /// `pretty`: serde_json's 2-space layout.
-    fn render(&self, pretty: bool, depth: usize, out: &mut String) {
-        let quote = |t: &str| serde_json::to_string(t).unwrap_or_default();
-        let nl = |out: &mut String, d: usize| {
-            out.push('\n');
-            out.push_str(&"  ".repeat(d));
-        };
-        match self {
-            Ser::Null => out.push_str("null"),
-            Ser::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-            Ser::Num(n) => out.push_str(n),
-            Ser::Str(t) => out.push_str(&quote(t)),
-            Ser::Arr(a) if a.is_empty() => out.push_str("[]"),
-            Ser::Obj(o) if o.is_empty() => out.push_str("{}"),
-            Ser::Arr(a) => {
-                out.push('[');
-                for (i, x) in a.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    if pretty {
-                        nl(out, depth + 1);
-                    }
-                    x.render(pretty, depth + 1, out);
-                }
-                if pretty {
-                    nl(out, depth);
-                }
-                out.push(']');
-            }
-            Ser::Obj(o) => {
-                out.push('{');
-                for (i, (k, x)) in o.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    if pretty {
-                        nl(out, depth + 1);
-                    }
-                    out.push_str(&quote(k));
-                    out.push(':');
-                    if pretty {
-                        out.push(' ');
-                    }
-                    x.render(pretty, depth + 1, out);
-                }
-                if pretty {
-                    nl(out, depth);
-                }
-                out.push('}');
-            }
-        }
-    }
-}
-
-/// Interpreter value -> ordered JSON, following serde's default derive encoding.
-fn to_json(it: &mut Interpreter, v: &Value) -> R<Ser> {
-    use Ser as J;
-    Ok(match v {
-        Value::Unit => J::Null,
-        Value::Bool(b) => J::Bool(*b),
-        Value::Int(n, _) => J::Num(n.to_string()),
-        Value::Float(f, _) => serde_json::Number::from_f64(*f).map(|n| J::Num(n.to_string())).unwrap_or(J::Null),
-        Value::Char(c) => J::Str(c.to_string()),
-        Value::Str(t) => J::Str((**t).clone()),
-        Value::Vec(_) | Value::Tuple(_) => J::Arr(v.items().iter().map(|x| to_json(it, x)).collect::<R<Vec<_>>>()?),
-        Value::Set(m) => J::Arr(m.keys().map(|k| to_json(it, &k.0)).collect::<R<Vec<_>>>()?),
-        Value::Map(m) => {
-            let mut o = Vec::new();
-            for (k, x) in m.iter() {
-                let key = match &k.0 {
-                    Value::Str(t) => (**t).clone(),
-                    other => it.display_string(other)?,
-                };
-                o.push((key, to_json(it, x)?));
-            }
-            J::Obj(o)
-        }
-        Value::Struct(sv) => {
-            if sv.fields.iter().enumerate().all(|(i, (n, _))| **n == i.to_string()) && !sv.fields.is_empty() {
-                if sv.fields.len() == 1 {
-                    return to_json(it, &sv.fields[0].1);
-                }
-                return Ok(J::Arr(sv.fields.iter().map(|(_, x)| to_json(it, x)).collect::<R<Vec<_>>>()?));
-            }
-            let mut o = Vec::new();
-            for (n, x) in &sv.fields {
-                o.push((n.to_string(), to_json(it, x)?));
-            }
-            J::Obj(o)
-        }
-        Value::Enum(e) => match (&*e.ty, &e.payload) {
-            ("Option", Payload::Tuple(p)) if e.idx == 1 => to_json(it, &p[0])?,
-            ("Option", _) => J::Null,
-            (_, Payload::Unit) => J::Str(e.variant.to_string()),
-            (_, Payload::Tuple(p)) => {
-                let inner = if p.len() == 1 { to_json(it, &p[0])? } else { J::Arr(p.iter().map(|x| to_json(it, x)).collect::<R<Vec<_>>>()?) };
-                J::Obj(vec![(e.variant.to_string(), inner)])
-            }
-            (_, Payload::Struct(fs)) => {
-                let mut inner = Vec::new();
-                for (n, x) in fs {
-                    inner.push((n.to_string(), to_json(it, x)?));
-                }
-                J::Obj(vec![(e.variant.to_string(), J::Obj(inner))])
-            }
-        },
-        Value::Native(_) => Ser::from_value(&json_of(v)?),
-        Value::Ref(p) => to_json(it, &p.read()?)?,
-        Value::Rc(slot) => {
-            let inner = slot.borrow().clone();
-            to_json(it, &inner)?
-        }
-        other => return Err(unsupported(format!("serialising a {} to JSON", other.type_name()))),
-    })
-}
-
-/// JSON -> interpreter value of static type `t`.
-fn from_json(it: &mut Interpreter, j: &serde_json::Value, t: &Type) -> Result<Value, String> {
-    use serde_json::Value as J;
-    if let Some(ity) = IntTy::from_type(t) {
-        return match j {
-            J::Number(n) => n
-                .as_i64()
-                .map(|x| x as i128)
-                .or_else(|| n.as_u64().map(|x| x as i128))
-                .filter(|x| ity.fits(*x))
-                .map(|x| Value::Int(x, ity))
-                .ok_or_else(|| format!("invalid value: {}, expected {}", j, ity.name())),
-            _ => Err(format!("invalid type: {}, expected {}", kind_name(j), ity.name())),
-        };
-    }
-    if let Some(ft) = type_is_float(t) {
-        return match j {
-            J::Number(n) => Ok(Value::Float(n.as_f64().unwrap_or(0.0), ft)),
-            _ => Err(format!("invalid type: {}, expected f64", kind_name(j))),
-        };
-    }
-    match t {
-        Type::Bool => match j {
-            J::Bool(b) => Ok(Value::Bool(*b)),
-            _ => Err(format!("invalid type: {}, expected a boolean", kind_name(j))),
-        },
-        Type::String => match j {
-            J::String(x) => Ok(s(x)),
-            _ => Err(format!("invalid type: {}, expected a string", kind_name(j))),
-        },
-        Type::Vec(e) => match j {
-            J::Array(xs) => Ok(Value::vec(xs.iter().map(|x| from_json(it, x, e)).collect::<Result<_, _>>()?)),
-            _ => Err(format!("invalid type: {}, expected a sequence", kind_name(j))),
-        },
-        Type::Option(e) => match j {
-            J::Null => Ok(Value::none()),
-            _ => Ok(Value::some(from_json(it, j, e)?)),
-        },
-        Type::Tuple(ts) => match j {
-            J::Array(xs) if xs.len() == ts.len() => Ok(Value::tuple(xs.iter().zip(ts).map(|(x, t)| from_json(it, x, t)).collect::<Result<_, _>>()?)),
-            _ => Err("invalid type, expected a tuple".to_string()),
-        },
-        Type::Reference(i) | Type::MutableReference(i) => from_json(it, j, i),
-        Type::Parameterized(n, _) | Type::Custom(n) if n.rsplit("::").next().is_some_and(|b| matches!(b, "Vec" | "VecDeque")) => {
-            let elem = args_of(t).first().cloned().unwrap_or(Type::Infer);
-            from_json(it, j, &Type::Vec(Box::new(elem)))
-        }
-        Type::Parameterized(n, args) if n.ends_with("Map") => match j {
-            J::Object(o) => {
-                let vt = args.get(1).cloned().unwrap_or(Type::Infer);
-                let mut m = std::collections::BTreeMap::new();
-                for (k, x) in o {
-                    m.insert(Key(s(k)), from_json(it, x, &vt)?);
-                }
-                Ok(Value::btree_map(m))
-            }
-            _ => Err(format!("invalid type: {}, expected a map", kind_name(j))),
-        },
-        Type::Custom(n) | Type::Parameterized(n, _) => {
-            let base = n.rsplit("::").next().unwrap_or(n).to_string();
-            if let Some(def) = it.structs.get(&base) {
-                let fields: Vec<(&'static str, Type)> = def.fields.iter().map(|(n, t)| (*n, t.clone())).collect();
-                let copy = def.copy;
-                let J::Object(o) = j else { return Err(format!("invalid type: {}, expected struct {}", kind_name(j), base)) };
-                let mut out = Vec::new();
-                for (fname, ft) in fields {
-                    let val = match o.get(fname) {
-                        Some(x) => from_json(it, x, &ft)?,
-                        None if matches!(ft, Type::Option(_)) => Value::none(),
-                        None => return Err(format!("missing field `{}`", fname)),
-                    };
-                    out.push((Rc::from(fname), val));
-                }
-                return Ok(it.make_struct(&base, out, copy));
-            }
-            if it.enums.contains_key(&base) {
-                return enum_from_json(it, j, &base);
-            }
-            Err(format!("cannot deserialise into `{}`", base))
-        }
-        other => Err(format!("cannot deserialise into {:?}", other)),
-    }
-}
-
-fn enum_from_json(it: &mut Interpreter, j: &serde_json::Value, en: &str) -> Result<Value, String> {
-    use crate::interpreter::engine::VariantKind;
-    let (name, payload) = match j {
-        serde_json::Value::String(v) => (v.clone(), None),
-        serde_json::Value::Object(o) if o.len() == 1 => {
-            let (k, v) = o.iter().next().unwrap();
-            (k.clone(), Some(v.clone()))
-        }
-        _ => return Err(format!("invalid enum encoding for {}", en)),
-    };
-    let (idx, kind) = {
-        let def = &it.enums[en];
-        let idx = def.variants.iter().position(|v| v.name == name).ok_or_else(|| format!("unknown variant `{}`", name))?;
-        let kind = match &def.variants[idx].kind {
-            VariantKind::Unit => (0, Vec::new(), Vec::new()),
-            VariantKind::Tuple(ts) => (1, ts.clone(), Vec::new()),
-            VariantKind::Struct(fs) => (2, fs.iter().map(|(_, t)| t.clone()).collect(), fs.iter().map(|(n, _)| n.to_string()).collect()),
-        };
-        (idx, kind)
-    };
-    match (kind.0, payload) {
-        (0, _) => it.make_variant(en, idx, vec![]).map_err(|_| "enum construction failed".to_string()),
-        (1, Some(p)) => {
-            let items = if kind.1.len() == 1 { vec![p] } else if let serde_json::Value::Array(a) = p { a } else { return Err("expected an array".into()) };
-            let vals = items.iter().zip(&kind.1).map(|(x, t)| from_json(it, x, t)).collect::<Result<Vec<_>, _>>()?;
-            it.make_variant(en, idx, vals).map_err(|_| "enum construction failed".to_string())
-        }
-        (2, Some(serde_json::Value::Object(o))) => {
-            let mut fs = Vec::new();
-            for (n, t) in kind.2.iter().zip(&kind.1) {
-                let x = o.get(n).ok_or_else(|| format!("missing field `{}`", n))?;
-                fs.push((Rc::from(n.as_str()), from_json(it, x, t)?));
-            }
-            let vname = it.enums[en].variants[idx].name;
-            Ok(Value::enum_val(en, vname, idx as u32, Payload::Struct(fs)))
-        }
-        _ => Err(format!("invalid payload for variant `{}`", name)),
-    }
-}
-
-fn args_of(t: &Type) -> Vec<Type> {
-    match t {
-        Type::Parameterized(_, a) => a.clone(),
-        Type::Vec(e) => vec![(**e).clone()],
-        _ => vec![],
-    }
-}
-
-fn kind_name(j: &serde_json::Value) -> &'static str {
-    match j {
-        serde_json::Value::Null => "null",
-        serde_json::Value::Bool(_) => "boolean",
-        serde_json::Value::Number(_) => "number",
-        serde_json::Value::String(_) => "string",
-        serde_json::Value::Array(_) => "sequence",
-        serde_json::Value::Object(_) => "map",
+fn encoded(it: &Interpreter, v: &Value, pretty: bool) -> Value {
+    let wire = |n: &str| it.structs.get(n).map(|d| d.wire.clone());
+    match super::json_codec::encode(v, pretty, native_json, &wire) {
+        Ok(t) => Value::ok(s(&t)),
+        Err(e) => Value::err(s(&e)),
     }
 }
 
@@ -367,31 +96,11 @@ fn register_json(r: &mut Registry) {
             Err(e) => Value::err(s(&e.to_string())),
         })
     });
-    // a json::Value, or any serialisable value (the runtime's `stringify` is generic over Serialize)
-    r.func("json::stringify", |it, a| {
-        let j = to_json(it, &arg(&a, 0, "stringify")?)?;
-        let mut out = String::new();
-        j.render(false, 0, &mut out);
-        Ok(Value::ok(s(&out)))
-    });
-    r.func("json::stringify_pretty", |it, a| {
-        let j = to_json(it, &arg(&a, 0, "stringify_pretty")?)?;
-        let mut out = String::new();
-        j.render(true, 0, &mut out);
-        Ok(Value::ok(s(&out)))
-    });
-    r.func("json::to_string", |it, a| {
-        let j = to_json(it, &arg(&a, 0, "to_string")?)?;
-        let mut out = String::new();
-        j.render(false, 0, &mut out);
-        Ok(Value::ok(s(&out)))
-    });
-    r.func("json::to_string_pretty", |it, a| {
-        let j = to_json(it, &arg(&a, 0, "to_string_pretty")?)?;
-        let mut out = String::new();
-        j.render(true, 0, &mut out);
-        Ok(Value::ok(s(&out)))
-    });
+    // a json::Value, or any encodable value (the runtime's `stringify` is generic over Serialize)
+    r.func("json::stringify", |it, a| Ok(encoded(it, &arg(&a, 0, "stringify")?, false)));
+    r.func("json::stringify_pretty", |it, a| Ok(encoded(it, &arg(&a, 0, "stringify_pretty")?, true)));
+    r.func("json::to_string", |it, a| Ok(encoded(it, &arg(&a, 0, "to_string")?, false)));
+    r.func("json::to_string_pretty", |it, a| Ok(encoded(it, &arg(&a, 0, "to_string_pretty")?, true)));
     r.func("json::parse_string", |it, a| {
         let ty = it.type_hint.take().ok_or_else(|| {
             unsupported("`json::parse_string` needs its target type: `json::parse_string::<T>(text)` or `let x: Result<T, string> = ...`")
@@ -400,11 +109,8 @@ fn register_json(r: &mut Registry) {
             Type::Result(ok, _) => *ok,
             other => other,
         };
-        let j = match serde_json::from_str::<serde_json::Value>(arg_str(&a, 0, "parse_string")?.as_str()) {
-            Ok(j) => j,
-            Err(e) => return Ok(Value::err(s(&e.to_string()))),
-        };
-        Ok(match from_json(it, &j, &ty) {
+        let text = arg_str(&a, 0, "parse_string")?;
+        Ok(match super::json_codec::decode(it, text.as_str(), &ty) {
             Ok(v) => Value::ok(v),
             Err(m) => Value::err(s(&m)),
         })

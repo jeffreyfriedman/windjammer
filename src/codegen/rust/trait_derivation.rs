@@ -144,14 +144,31 @@ impl CodeGenerator<'_> {
                     && args.iter().all(|a| self.type_is_serde_derivable(a, depth))
             }
             Type::Custom(name) => self.named_type_is_serde_derivable(name, depth),
+            Type::FunctionPointer { .. } | Type::TraitObject(_) | Type::ImplTrait(_) => false,
             _ => true,
         }
+    }
+
+    /// ADR-0027: an enum derives `Serialize`/`Deserialize` under the same rule as a struct.
+    pub(super) fn enum_is_serde_derivable(&self, e: &EnumDecl) -> bool {
+        use crate::parser::EnumVariantData;
+        (self.serde_available || self.needs_serde_imports)
+            && e.variants.iter().all(|v| match &v.data {
+                EnumVariantData::Unit => true,
+                EnumVariantData::Tuple(ts) => ts.iter().all(|t| self.type_is_serde_derivable(t, 0)),
+                EnumVariantData::Struct(fs) => fs.iter().all(|(_, t)| self.type_is_serde_derivable(t, 0)),
+            })
     }
 
     fn named_type_is_serde_derivable(&self, name: &str, depth: usize) -> bool {
         let leaf = crate::type_classification::type_name_leaf(name);
         if let Some(fields) = self.lookup_struct_field_types(leaf) {
             return fields.values().all(|t| self.type_is_serde_derivable(t, depth + 1));
+        }
+        let prefix = format!("{leaf}::");
+        let variants: Vec<&Vec<Type>> = self.enum_variant_types.iter().filter(|(k, _)| k.starts_with(&prefix)).map(|(_, v)| v).collect();
+        if !variants.is_empty() {
+            return variants.iter().all(|ts| ts.iter().all(|t| self.type_is_serde_derivable(t, depth + 1)));
         }
         !self.idiom.foreign_imported_types.contains(leaf)
     }
