@@ -43,9 +43,18 @@ resolved, with and without eager machine-code loops) because it lives in `tests/
 | `vp_collection_misses` | map `get`/`remove`/`contains_key` misses, `first`/`last`/`pop` on empty, `find`/`position` misses, string `find`, `parse` failures, `and_then`/`map`/`unwrap_or` on them, lookups in a loop |
 | `vp_shadowing` | parameter, loop variable (nested), match binding, retyping, block value, closure parameter |
 | `vp_loop_exits` | `return` of enum/Option/Result from nested `while`/`for`/`loop`, labelled `break`/`continue`, `break <value>` |
-| `vp_closure_captures` | captured `Option`/enum/`Vec`, closures returning Option, closures in a `Vec`, closures returned from functions, a captured name shadowed later |
+| `vp_closure_captures` | captured `Option`/enum/`Vec`, closures returning Option, closures called through their bindings, a captured name shadowed later |
 | `vp_option_fields` | Option fields read in methods, rewritten each iteration, matched inside loops, `ok_or`, `map` |
 
 Not generated: a generator of value-position programs is the next rung (a grammar over the cross product of
 value kind x position, with the walker as oracle for the resolved engine and rustc for both). The hand-written
 set is the seed corpus for it.
+
+## Mutation checks
+
+| Gate | Mutant | Result |
+|---|---|---|
+| differential corpus, walker vs resolved | remove the fix of the bare-`None` bug (`names.retain(..)` in `src/interpreter/resolved/matching.rs`) and rebuild | the ecosystem tests of `wj-config`, `wj-cookie`, `wj-dotenv` and `wj-toml` (12 tests, 24 rows with their panic-location rows) diverge: walker `pass`, resolved `fail` at the package's `get` helper. `vp_collection_misses` diverges too: walker `exit0`, resolved `exit101` |
+| differential corpus, compiled arm | none needed: the 14 repros of `docs/drift/findings.md` and 61 compiled-red ecosystem tests are real divergences the corpus reports until they are ledgered | each ledger line is `known`, not hidden |
+| drift budget (ledger) | `scripts/wj/drift_selftest.wj` plants a new, changed, vanished, grown and vacuous result | 11 of 11 checks, each fails the ledger comparer for its own reason |
+| `#runs` guard | a program that does not parse (an `option_binding_plus_literal.wj` with its first line joined to a comment) agreed with itself in all three modes and passed the corpus | found while recording; `<program>#runs` rows now fail such a program |

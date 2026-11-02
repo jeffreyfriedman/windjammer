@@ -41,9 +41,9 @@ fn main() {
     println(show(full.last().map(|x| *x)))
     println(show(popper.pop()))
     println(show(popper.pop()))
-    println(show(full.iter().position(|x| *x == 5).map(|p| p as int)))
-    println(show(full.iter().position(|x| *x == 50).map(|p| p as int)))
-    println("${full.iter().find(|x| **x > 4).is_some()} ${full.iter().find(|x| **x > 40).is_none()}")
+    println(show(full.position(|x| *x == 5).map(|p| p as int)))
+    println(show(full.position(|x| *x == 50).map(|p| p as int)))
+    println("${full.find(|x| **x > 4).is_some()} ${full.find(|x| **x > 40).is_none()}")
     let s = "hello world"
     println(show(s.find("o").map(|p| p as int)))
     println(show(s.find("zz").map(|p| p as int)))
@@ -64,4 +64,29 @@ fn main() {
     }
     println("${hits} ${misses}")
     println("${m.contains_key("a")} ${m.contains_key("c")} ${m.remove("c").is_none()} ${m.remove("a").is_some()}")
+    // a lookup in a hot loop whose miss arm yields the value `None` (the in-place map-lookup path)
+    let mut seen: HashMap<int, int> = HashMap::new()
+    let mut fresh: int = 0
+    let mut repeats: int = 0
+    let mut n: int = 0
+    let one: int = 1
+    while n < 300 {
+        let key = n % 23
+        let prev = match seen.get(&key) {
+            Some(c) => Some(*c + one),
+            None => None,
+        }
+        match prev {
+            Some(c) => {
+                repeats += 1
+                seen.insert(key, c)
+            }
+            None => {
+                fresh += 1
+                seen.insert(key, 1)
+            }
+        }
+        n += 1
+    }
+    println("${fresh} ${repeats} ${seen.len()}")
 }
