@@ -21,6 +21,7 @@ const CASES: &[(&str, &[&str])] = &[
     ("tests/engine_parity/str_fast.wj", &["fmt", "pushstr"]),
     ("tests/engine_parity/jit_loop_inline.wj", &["inline"]),
     ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins", "unboxed"]),
+    ("tests/engine_parity/option_arm_values.wj", &["mapget", "mapins"]),
     ("tests/engine_parity/packed_vecs.wj", &["packed"]),
 ];
 
