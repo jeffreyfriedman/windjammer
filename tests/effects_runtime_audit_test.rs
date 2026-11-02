@@ -96,9 +96,7 @@ fn the_scanner_sees_the_guards_it_is_meant_to_see() {
 
 /// Interpreter std functions that are sinks but have no function of the same name in the compiled runtime yet: a program that
 /// calls one runs under `wj run --interpret` and fails to compile under `wj build`. The list may only shrink.
-const PARITY_GAPS: &[&str] = &[
-    "env::home_dir", "env::remove", "env::set", "fs::canonicalize", "fs::metadata", "fs::set_current_dir", "fs::write_bytes", "process::run_with_args",
-];
+const PARITY_GAPS: &[&str] = &[];
 
 #[test]
 fn every_sink_of_an_authority_module_exists_in_the_compiled_runtime() {
