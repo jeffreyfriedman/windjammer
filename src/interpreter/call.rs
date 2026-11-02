@@ -633,6 +633,18 @@ impl Interpreter {
         self.define(p, a);
     }
 
+    /// Is there room for `bytes` more of the interpreter's stack (and a few calls) before
+    /// `depth_check` would refuse a call? Machine code that stands for calls asks first.
+    pub(crate) fn stack_room(&self, bytes: usize) -> bool {
+        match self.stack_guard {
+            Some((base, budget)) => {
+                let here = 0u8;
+                base.saturating_sub(&here as *const u8 as usize) + bytes <= budget
+            }
+            None => self.depth + 64 <= self.max_depth,
+        }
+    }
+
     pub(crate) fn depth_check(&mut self) -> R<()> {
         let over_stack = match self.stack_guard {
             Some((base, budget)) => {

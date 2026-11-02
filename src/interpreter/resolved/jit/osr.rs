@@ -8,9 +8,9 @@
 //! function registered (`resolved/osr.rs`). Nothing the loop does is visible before that point, so
 //! the closure engine's run of the statement is the run the program would have had.
 
-use super::lower::{self, Level, Path, Plan, NO_SLOT, S};
+use super::lower::{self, Level, Path, Plan, StructSpill, NO_SLOT, S};
 use super::rt::Ctx;
-use super::kinds::{bits, class_of, int_value, ty_of, value, Class, Ty};
+use super::kinds::{bits, class_of, int_value, ty_of, value, value_class, Class, Ty};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::engine::Interpreter;
 use crate::interpreter::error::{Ctl, R};
@@ -122,6 +122,9 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
             }
             let u = match compile(it, site, &reg, &refs, &sig) {
                 Ok(u) => {
+                    if u.plan.inlines {
+                        debug(it, site, "inlines method calls");
+                    }
                     debug(it, site, "compiled");
                     Some(Rc::new(u))
                 }
@@ -151,6 +154,12 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     for (i, slot, t) in &unit.plan.live {
         buf[*i] = read(it, b + slot, reg.kind(*slot)).and_then(|v| bits(&v, *t))?;
     }
+    for sp in &unit.plan.live_structs {
+        load_struct(it, b + sp.slot, reg.kind(sp.slot), sp, &mut buf)?;
+    }
+    if unit.plan.inlines && !it.stack_room(INLINE_STACK) {
+        return None; // the frames inlined calls stand for might not fit: the closures check
+    }
     for (i, x) in init {
         buf[*i] = *x;
     }
@@ -163,6 +172,9 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     for sp in e.spills.iter().filter(|sp| sp.slot != NO_SLOT && !e.after) {
         write(it, b + sp.slot, reg.kind(sp.slot), value(buf[sp.buf], sp.ty), sp.fresh);
     }
+    for sp in e.structs.iter().filter(|_| !e.after) {
+        write(it, b + sp.slot, reg.kind(sp.slot), make_struct(sp, &buf), sp.fresh);
+    }
     if !e.planned {
         let n = unit.unplanned.get() + 1;
         unit.unplanned.set(n);
@@ -172,6 +184,31 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
         }
     }
     Some((exit, buf, raised))
+}
+
+/// Stack bytes a unit with inlined calls must have left before it runs (far more than the frames).
+const INLINE_STACK: usize = 1 << 20;
+
+/// Read struct local `i` field by field into the spill buffer; `None`: it no longer has the shape.
+pub(super) fn load_struct(it: &Interpreter, i: usize, kind: Option<SlotKind>, sp: &StructSpill, buf: &mut [i64]) -> Option<()> {
+    let v = read(it, i, kind)?;
+    let Value::Struct(s) = &v else { return None };
+    if *s.name != *sp.name || s.fields.len() != sp.fields.len() || s.uid != 0 {
+        return None;
+    }
+    for ((n, x), (m, k, t)) in s.fields.iter().zip(&sp.fields) {
+        if **n != **m {
+            return None;
+        }
+        buf[*k] = bits(x, *t)?;
+    }
+    Some(())
+}
+
+/// The struct value a struct local's fields make.
+pub(super) fn make_struct(sp: &StructSpill, buf: &[i64]) -> Value {
+    let fields = sp.fields.iter().map(|(n, k, t)| (n.clone(), value(buf[*k], *t))).collect();
+    Value::Struct(Rc::new(crate::interpreter::value::StructVal { name: sp.name.clone(), fields, copy: sp.copy, uid: 0 }))
 }
 
 /// A scalar local's value (a boxed one's walker slot holds it).
@@ -206,6 +243,14 @@ fn classify(v: &Value, kind: Option<SlotKind>) -> Class {
     };
     if let Some(t) = direct {
         return Class::Scalar(t);
+    }
+    let held = match (kind, v) {
+        (Some(SlotKind::Boxed), Value::Ref(p)) if p.path.is_empty() => p.slot.try_borrow().ok().and_then(|g| value_class(&g)),
+        (Some(SlotKind::Plain), v) => value_class(v),
+        _ => None,
+    };
+    if let Some(c) = held {
+        return c;
     }
     match super::rt::peek(v, |x| Some(class_of(x))) {
         Some(Class::Scalar(_)) | None => Class::Opaque,
