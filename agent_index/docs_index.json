@@ -3617,109 +3617,127 @@
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
+    "name": "Code mode: one program instead of many tool calls",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
+    "summary": "When you have a set of MCP tools, write a Windjammer program that calls them instead of calling them one by one. `wj mcp bind SERVER --tools tools.json --tool list_issues --tool create_issue` writes t",
+    "tags": []
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Collections and iteration",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`let v = [1, 2, 3]` is a growable `Vec`. Iterate directly: `for x in v`, `for (i, x) in v.enumerate()`. Adapter",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Compiled path gaps (be honest with the user)",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: today about half of",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Core idioms",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Types: `int` (64-bit), `float` (f64), `bool`, `string`, `char`, `Vec<T>`, `Option<T>`, `Result<T, E>`,",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Error handling",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Use `Option`/`Result`, `match`, `?`, `unwrap_or`, `map_err`, `ok_or`. `.unwrap()` and `.expect()` are lint errors",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Modules and tests",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Inline `mod name { pub fn .. }` and one-file-per-module (`a.wj` or `a/mod.wj`, found next to the importer or in the",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Permissions: exit 126 and the fix line",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
+    "name": "Races, flaky tests and replays: `--simulate`, `--record`, `--replay`",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
+    "summary": "A test that passes \"usually\" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a",
+    "tags": []
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Reading input and arguments",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Programs that read standard input should use one spelling that behaves the same under `wj run --interpret` and `wj build`:",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Structs, enums, traits",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Methods take plain `self`; whether it is read-only, mutating or consuming is inferred from the body. Mutating a",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "The 25 things agents get wrong first",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "1. `println!(\"{}\", x)`: macros do not exist. Write `println(\"${x}\")` (W0007/W0008, ADR-0014).",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "The loop",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "What not to write",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "Each of these is flagged by `wj check` (the block must produce a diagnostic):",
     "tags": []
   },
   {
     "kind": "guide",
-    "module": "WINDJAMMER_FOR_AGENTS",
+    "module": "WINDJAMMER_REFERENCE",
     "name": "Where to look next",
     "signature": "",
-    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "source": "docs/agent/WINDJAMMER_REFERENCE.md",
     "summary": "`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_rust.md`, `_python`, `_go`, `_typescript`),",
     "tags": []
   },
@@ -6822,6 +6840,116 @@
     "signature": "fn trunc(x: f64) -> f64",
     "source": "std/math.wj",
     "summary": "Truncate (remove fractional part)",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "call",
+    "signature": "fn call(server: string, tool: string, args_json: string) -> Result<string, string>",
+    "source": "std/mcp.wj",
+    "summary": "std::mcp — tools of Model Context Protocol servers (ADR-0021 section 12, code mode) Interpreter only: `wj build` stops with an error for programs that use it. `",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_bool",
+    "signature": "fn get_bool(json: string, key: string) -> Option<bool>",
+    "source": "std/mcp.wj",
+    "summary": "/ The boolean at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_float",
+    "signature": "fn get_float(json: string, key: string) -> Option<float>",
+    "source": "std/mcp.wj",
+    "summary": "/ The number at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_int",
+    "signature": "fn get_int(json: string, key: string) -> Option<int>",
+    "source": "std/mcp.wj",
+    "summary": "/ The integer at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_ints",
+    "signature": "fn get_ints(json: string, key: string) -> Vec<int>",
+    "source": "std/mcp.wj",
+    "summary": "/ The integers of the array at `key` (other elements are skipped).",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_items",
+    "signature": "fn get_items(json: string, key: string) -> Vec<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The JSON text of each element of the array at `key`.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_raw",
+    "signature": "fn get_raw(json: string, key: string) -> Option<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The JSON text of the value at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_string",
+    "signature": "fn get_string(json: string, key: string) -> Option<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The string at `key` of the JSON object `json`, if there is one.",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "get_strings",
+    "signature": "fn get_strings(json: string, key: string) -> Vec<string>",
+    "source": "std/mcp.wj",
+    "summary": "/ The strings of the array at `key` (other elements are skipped).",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::mcp",
+    "name": "quote",
+    "signature": "fn quote(s: string) -> string",
+    "source": "std/mcp.wj",
+    "summary": "/ `s` as a JSON string literal, quotes included.",
     "tags": [
       "fn"
     ]
