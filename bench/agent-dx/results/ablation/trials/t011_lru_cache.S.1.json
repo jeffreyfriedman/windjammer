@@ -1,0 +1,104 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "S",
+ "arm_name": "sheet",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn find(keys: Vec<int>, k: int) -> int {\n    let mut i = 0\n    while i < keys.len() as int {\n        if keys[i as usize] == k { return i }\n        i += 1\n    }\n    -1\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut keys: Vec<int> = []\n    let mut vals: Vec<int> = []\n    let mut cap = 1\n    let mut first = true\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i >= 0 {\n                keys.remove(i as usize)\n                vals.remove(i as usize)\n            }\n            keys.insert(0, k)\n            vals.insert(0, v)\n            if keys.len() as int > cap {\n                let last = keys.len() - 1\n                println(\"evict ${keys[last]}\")\n                keys.remove(last)\n                vals.remove(last)\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i < 0 {\n                println(\"-1\")\n            } else {\n                let v = vals[i as usize]\n                keys.remove(i as usize)\n                vals.remove(i as usize)\n                keys.insert(0, k)\n                vals.insert(0, v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut s = \"\"\n                let mut j = 0\n                while j < keys.len() {\n                    if j > 0 { s = s + \" \" }\n                    s = s + \"${keys[j]}\"\n                    j += 1\n                }\n                println(\"${s}\")\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn find(keys: Vec<int>, k: int) -> int {\n    let mut i = 0\n    while i < keys.len() as int {\n        if keys[i as usize] == k { return i }\n        i += 1\n    }\n    -1\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut keys: Vec<int> = []\n    let mut vals: Vec<int> = []\n    let mut cap = 1\n    let mut first = true\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i >= 0 {\n                keys.remove(i as usize)\n                vals.remove(i as usize)\n            }\n            keys.insert(0, k)\n            vals.insert(0, v)\n            if keys.len() as int > cap {\n                let last = keys.len() - 1\n                println(\"evict ${keys[last]}\")\n                keys.remove(last)\n                vals.remove(last)\n            }\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let i = find(keys, k)\n            if i < 0 {\n                println(\"-1\")\n            } else {\n                let v = vals[i as usize]\n                keys.remove(i as usize)\n                vals.remove(i as usize)\n                keys.insert(0, k)\n                vals.insert(0, v)\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if keys.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut s = \"\"\n                let mut j = 0\n                while j < keys.len() {\n                    if j > 0 { s = s + \" \" }\n                    s = s + \"${keys[j]}\"\n                    j += 1\n                }\n                println(\"${s}\")\n            }\n        }\n    }\n}\n",
+ "first_turn_input": 8178,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 8.151,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 13.24,
+ "pack_bytes": 1497,
+ "pack_file": "sheet_full.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-02T02:59:49",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 11.558,
+ "tool_result_tokens_est": 259,
+ "tool_wait_seconds": 8.15,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7829,
+   "cache_write": 347,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8178,
+   "output": 3,
+   "result_chars": 908,
+   "turn": 1
+  },
+  {
+   "cache_read": 8176,
+   "cache_write": 1583,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9761,
+   "output": 207,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 11.558,
+  "cost_usd": 0.0217385,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache in `main.wj`. I ran it only on Example 1, and it printed the expected output (`1`, `evict 2`, `-1`, `3 1`). I didn't run Example 2 or any edge cases such as an empty cache for `keys`.\n\nThe cache keeps keys and values in two parallel lists, with the most recently used entry at the front. Each `put` or successful `get` moves its key to the front. After a `put`, an entry over ca",
+  "subtype": "success",
+  "tokens_in": 17939,
+  "tokens_out": 1241,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 32.95
+}
