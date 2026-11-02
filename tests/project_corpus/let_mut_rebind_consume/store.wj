@@ -1,0 +1,9 @@
+pub struct Store {
+    pub n: int,
+}
+
+pub fn put_version(store: Store) -> Store {
+    let mut out = store
+    out.n = out.n + 1
+    out
+}

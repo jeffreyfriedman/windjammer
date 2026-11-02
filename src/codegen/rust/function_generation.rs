@@ -14,6 +14,7 @@ use super::CodeGenerator;
 impl<'ast> CodeGenerator<'ast> {
     pub(crate) fn generate_function(&mut self, analyzed: &AnalyzedFunction<'ast>) -> String {
         let func = &analyzed.decl;
+        self.current_module_path.clone_from(&analyzed.module_path);
 
         // PARAMETERIZED TESTS: Check for @test_cases decorator
         // If present, generate multiple test functions instead of one

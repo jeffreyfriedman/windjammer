@@ -62,6 +62,7 @@ fn wrap(name: string) -> Holder {
         ownership_trail: Default::default(),
         default_int_literals: Default::default(),
         last_uses: Default::default(),
+        module_path: Vec::new(),
     }]);
 
     let output = gen.generate_program(&program, &analyzed);

@@ -406,6 +406,7 @@ fn apply_owned_string_literal_coercion<'ast>(
 fn signature_lookup_for_call<'ast>(
     gen: &CodeGenerator<'ast>,
     func_name: &str,
+    function: &Expression<'ast>,
 ) -> (String, Option<String>) {
     if gen.in_impl_block {
         if let Some(ref tn) = gen.current_struct_name {
@@ -430,6 +431,10 @@ fn signature_lookup_for_call<'ast>(
         if let Some((receiver, _method)) = func_name.rsplit_once("::") {
             return (func_name.to_string(), Some(receiver.to_string()));
         }
+    }
+    // C3: the resolver's definition path is the identity; names are the fallback.
+    if let Some(path) = gen.resolved_callee_path(function) {
+        return (path.to_string(), None);
     }
     let lookup = gen.signature_lookup_callee_name(func_name);
     (lookup.into_owned(), None)
@@ -847,7 +852,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     // Unified signature resolution: local registry first, then converged library-wide registry.
     let mut resolved_via_fallback = false;
-    let (sig_lookup_name, sig_receiver_type) = signature_lookup_for_call(gen, func_name);
+    let (sig_lookup_name, sig_receiver_type) = signature_lookup_for_call(gen, func_name, function);
     if signature.is_none() {
         if let Some(ref tn) = sig_receiver_type {
             let method = sig_lookup_name.rsplit("::").next().unwrap_or(func_name);

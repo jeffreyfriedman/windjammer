@@ -1,0 +1,11 @@
+pub enum Shape {
+    Circle(f64),
+    Dot,
+}
+
+pub fn area(s: Shape) -> f64 {
+    match s {
+        Shape::Circle(r) => r * r,
+        Shape::Dot => 0.0,
+    }
+}

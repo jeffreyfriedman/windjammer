@@ -69,6 +69,23 @@ impl<'a> ResolvedProgram<'a> {
         &self.collected.defs
     }
 
+    /// Callee expression identity -> definition path (`a::take`, `Counter::new`) for every free or path
+    /// call that names exactly one function of the program. The Rust backend keys signatures by it (C3).
+    pub fn callee_def_paths(&self) -> std::collections::HashMap<usize, String> {
+        let defs = &self.collected.defs;
+        self.calls
+            .iter()
+            .filter(|c| matches!(c.kind, CallKind::Free | CallKind::Path))
+            .filter_map(|c| match c.res {
+                Res::Def(id) => Some((c.callee_key.0, defs.get(id))),
+                _ => None,
+            })
+            .filter(|(_, d)| matches!(d.kind, DefKind::Fn | DefKind::ExternFn | DefKind::AssocFn { .. }))
+            .filter(|(_, d)| !d.path.starts_with('<'))
+            .map(|(k, d)| (k, d.path.clone()))
+            .collect()
+    }
+
     /// Calls whose enclosing function has the given full path.
     pub fn calls_in(&self, fn_path: &str) -> Vec<&CallResolution> {
         let ids = self.collected.defs.find_path(fn_path);

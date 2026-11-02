@@ -52,20 +52,12 @@ impl<'ast> Analyzer<'ast> {
     fn resolve_callee_signature<'a>(
         name: &str,
         arg_count: usize,
-        has_receiver: bool,
         registry: &'a SignatureRegistry,
     ) -> Option<&'a FunctionSignature> {
         registry
             .get_signature(name)
             .or_else(|| registry.lookup_method(name))
             .or_else(|| registry.find_signature_by_name_and_arg_count(name, arg_count))
-            .or_else(|| {
-                if has_receiver {
-                    registry.find_signature_ending_with(name)
-                } else {
-                    None
-                }
-            })
     }
 
     /// True when a return type denotes a composite that stores owned arguments (struct/enum).
@@ -158,7 +150,7 @@ impl<'ast> Analyzer<'ast> {
         let Some(name) = Self::extract_call_target_name(function) else {
             return false;
         };
-        let Some(sig) = Self::resolve_callee_signature(&name, arg_count, false, registry) else {
+        let Some(sig) = Self::resolve_callee_signature(&name, arg_count, registry) else {
             return false;
         };
         matches!(

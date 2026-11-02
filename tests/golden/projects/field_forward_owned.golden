@@ -1,0 +1,43 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod web;
+
+// Re-export public items
+pub use web::*;
+// ==== main.rs ====
+mod web;
+fn main() {
+    let reply = web::Reply { status: 200_i64, body: String::from("ok") };
+    println!("{}", web::to_response(reply));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod web;
+
+// Re-export public items
+pub use web::*;
+// ==== web.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Reply {
+    pub status: i64,
+    pub body: String,
+}
+
+#[inline]
+pub fn to_response(reply: Reply) -> String {
+    base_response(reply.status, &reply.body)
+}
+
+#[inline]
+pub fn base_response(status: i64, body: &str) -> String {
+    format!("{}:{}", status, body)
+}
+

@@ -5182,16 +5182,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn method_arg_is_collection_key(
-        &self,
-        object: &Expression<'ast>,
-        method: &str,
-        arg_index: usize,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        self.method_arg_is_key_method(object, method, arg_index, func, true)
-    }
-
     fn method_arg_is_key_method(
         &self,
         object: &Expression<'ast>,
@@ -5285,16 +5275,6 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(base),
                 &self.signature_registry,
             ))
-    }
-
-    fn method_arg_is_qualified_collection_key(
-        &self,
-        object: &Expression<'ast>,
-        method: &str,
-        arg_index: usize,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        self.method_arg_is_qualified_key(object, method, arg_index, func, true)
     }
 
     fn method_arg_is_qualified_key(
@@ -7790,13 +7770,13 @@ impl<'ast> CodeGenerator<'ast> {
                     .or_else(|| self.signature_registry.get_signature(name).cloned())
                     .or_else(|| {
                         self.signature_registry
-                            .find_signature_ending_with(simple)
+                            .find_unique_signature_ending_with(simple)
                             .cloned()
                     })
                     .or_else(|| {
                         self.global_signature_registry
                             .as_ref()
-                            .and_then(|g| g.find_signature_ending_with(simple).cloned())
+                            .and_then(|g| g.find_unique_signature_ending_with(simple).cloned())
                     })
             }
             Expression::FieldAccess { object, field, .. } => {
@@ -7822,16 +7802,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
-    }
-
-    /// Free-function / associated-fn call: argument `i` expects an owned WJ formal.
-    fn free_call_callee_emits_owned_arg(
-        &self,
-        function: &Expression<'ast>,
-        arg_index: usize,
-        _func: &FunctionDecl<'ast>,
-    ) -> bool {
-        self.free_call_callee_emits_owned_arg_with_call_count(function, arg_index, None)
     }
 
     fn free_call_callee_emits_owned_arg_with_call_count(
@@ -9329,11 +9299,6 @@ impl<'ast> CodeGenerator<'ast> {
         !same_module
     }
 
-    fn callee_arg_is_shared_custom_borrow(&self, callee: &str, arg_index: usize) -> bool {
-        self.callee_is_cross_module_free_fn(callee)
-            && self.free_call_arg_expects_borrow(callee, arg_index)
-    }
-
     fn forward_call_target_for_param(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -9526,25 +9491,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         has_wj_owned && has_runtime_borrow
-    }
-
-    fn refreshed_sig_for_forward_check(
-        &self,
-        sig: &crate::analyzer::FunctionSignature,
-    ) -> crate::analyzer::FunctionSignature {
-        let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
-        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(&sig.name).cloned()),
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(simple).cloned()),
-            self.signature_registry.get_signature(&sig.name).cloned(),
-            self.signature_registry.get_signature(simple).cloned(),
-            Some(sig.clone()),
-        ])
-        .unwrap_or_else(|| sig.clone())
     }
 
     /// True when every forward of `param_name` is into a scanned `AsRef<Path>` formal
@@ -11817,7 +11763,7 @@ impl<'ast> CodeGenerator<'ast> {
         match function {
             Expression::Identifier { name, .. } => global
                 .get_signature(name)
-                .or_else(|| global.find_signature_ending_with(name))
+                .or_else(|| global.find_unique_signature_ending_with(name))
                 .cloned(),
             Expression::FieldAccess { object, field, .. } => {
                 let receiver = match &**object {
@@ -11827,7 +11773,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let key = format!("{receiver}::{field}");
                 global
                     .get_signature(&key)
-                    .or_else(|| global.find_signature_ending_with(field))
+                    .or_else(|| global.find_unique_signature_ending_with(field))
                     .cloned()
             }
             _ => None,
@@ -12105,7 +12051,7 @@ impl<'ast> CodeGenerator<'ast> {
         let registry_borrow = if let Some(g) = self.global_signature_registry.as_ref() {
             g.get_signature(callee_name)
                 .or_else(|| g.lookup_method(callee_name))
-                .or_else(|| g.find_signature_ending_with(simple))
+                .or_else(|| g.find_unique_signature_ending_with(simple))
                 .map(|sig| self.signature_param_expects_borrow(sig, arg_index))
         } else {
             None
@@ -12120,7 +12066,7 @@ impl<'ast> CodeGenerator<'ast> {
             .signature_registry
             .get_signature(callee_name)
             .or_else(|| self.signature_registry.lookup_method(callee_name))
-            .or_else(|| self.signature_registry.find_signature_ending_with(simple))
+            .or_else(|| self.signature_registry.find_unique_signature_ending_with(simple))
         {
             return self.signature_param_expects_borrow(sig, arg_index);
         }
@@ -13002,8 +12948,14 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
 
-        let mut keys = vec![func.name.clone()];
-        if let Some(stem) = self.current_wj_file.file_stem() {
+        // An inline-module function's identity is its module path (C3); its bare key belongs to
+        // whichever homonym registered last and must not take this function's formals.
+        let mut keys = if self.current_module_path.is_empty() {
+            vec![func.name.clone()]
+        } else {
+            vec![format!("{}::{}", self.current_module_path.join("::"), func.name)]
+        };
+        if let Some(stem) = self.current_wj_file.file_stem().filter(|_| self.current_module_path.is_empty()) {
             let stem = stem.to_string_lossy();
             if !stem.is_empty() {
                 keys.push(format!("{stem}::{}", func.name));

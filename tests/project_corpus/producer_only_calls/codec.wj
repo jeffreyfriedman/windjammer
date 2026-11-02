@@ -1,0 +1,11 @@
+pub fn encode(n: int) -> Vec<int> {
+    let mut out = Vec::new()
+    for i in 0..n {
+        out.push(i)
+    }
+    out
+}
+
+pub fn frame_len(buf: Vec<int>) -> int {
+    buf.len() as int
+}

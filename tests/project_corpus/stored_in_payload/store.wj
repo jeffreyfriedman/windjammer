@@ -1,0 +1,13 @@
+pub struct Prep {
+    pub name: string,
+}
+
+pub struct Session {
+    pub prepared: Vec<Prep>,
+}
+
+pub fn parse(session: Session, name: string) -> Session {
+    let mut s = session
+    s.prepared.push(Prep { name: name })
+    s
+}
