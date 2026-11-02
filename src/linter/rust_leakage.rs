@@ -187,9 +187,9 @@ impl<'ast> RustLeakageLinter<'ast> {
 
         // For self parameter, suggest "self"
         let suggestion = if param_name == "self" {
-            "use inferred ownership: `self`".to_string()
+            format!("write `self` instead of `{hint}self`")
         } else {
-            format!("use inferred ownership: `{}`", param_name)
+            format!("write `{param_name}` instead of `{hint} {param_name}`")
         };
 
         let note = if param_name == "self" {
@@ -301,12 +301,12 @@ impl<'ast> RustLeakageLinter<'ast> {
                         message: format!("explicit .{}() call", method),
                         location: loc,
                         help: Some(
-                            "give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`"
+                            "write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`"
                                 .to_string(),
                         ),
-                        note: Some(".unwrap() is a Rust-specific panic convention".to_string()),
+                        note: Some("`.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead".to_string()),
                         suggestion: Some(
-                            "prefer explicit error handling in Windjammer".to_string(),
+                            "replace `.unwrap()` with `?? default`".to_string(),
                         ),
                     });
                 }
@@ -320,7 +320,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                         level: LintLevel::Error,
                         message: "explicit .iter() call".to_string(),
                         location: loc,
-                        help: Some("use direct iteration: `for x in collection`".to_string()),
+                        help: Some("write `for x in items` instead of `for x in items.iter()`".to_string()),
                         note: Some("Windjammer supports direct iteration".to_string()),
                         suggestion: Some(
                             "remove .iter() - use the collection directly".to_string(),
@@ -340,7 +340,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                         message: "explicit .clone() call".to_string(),
                         location: loc,
                         help: Some(
-                            "remove .clone() - the compiler infers cloning automatically"
+                            "write `x` instead of `x.clone()`: the compiler copies values when they are used again"
                                 .to_string(),
                         ),
                         note: Some(
@@ -372,11 +372,11 @@ impl<'ast> RustLeakageLinter<'ast> {
                             .to_string(),
                         location: loc,
                         help: Some(
-                            "prefer bare string literal — codegen emits `String::from(\"…\")`"
+                            "write `\"text\"` instead of `\"text\".to_string()`"
                                 .to_string(),
                         ),
                         note: Some(
-                            "Windjammer string literals are already `string`; `.to_string()` is a Rustism"
+                            "a string literal is already a `string`, so the call adds nothing"
                                 .to_string(),
                         ),
                         suggestion: Some("remove `.to_string()`".to_string()),
@@ -488,7 +488,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                 level: LintLevel::Error,
                 message: "explicit borrow in function call".to_string(),
                 location: loc,
-                help: Some("remove explicit borrow - pass value directly".to_string()),
+                help: Some("write `f(x)` instead of `f(&x)`: the compiler decides how to pass the value".to_string()),
                 note: Some("Windjammer infers borrowing automatically".to_string()),
                 suggestion: Some("remove `&` or `&mut`".to_string()),
             });
@@ -508,7 +508,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                     message: "explicit reference type in parameter".to_string(),
                     location,
                     help: Some(format!(
-                        "use inferred type: remove `&` from `{}`",
+                        "write `{0}: T` instead of `{0}: &T`: remove the `&`, the compiler infers borrowing",
                         param.name
                     )),
                     note: Some("Windjammer infers borrowing automatically".to_string()),
