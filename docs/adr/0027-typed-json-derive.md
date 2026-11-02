@@ -125,5 +125,9 @@ corpus stays green when serde releases.
 
 - Programs that relied on unknown fields being ignored now fail to decode until they add `@json(allow_unknown)`
   or declare the field. This is the intended trade; it is called out in the changelog.
+- The policy is a property of the type, so it also applies to compiled `http` `.json::<T>()` / `body_json::<T>()`
+  decoding. Response types for third-party APIs, which grow fields over time, should carry `@json(allow_unknown)`;
+  request types a service owns should keep the default. Revisit the default (or a per-call override) at rung 2 if
+  the corpus of real programs shows `allow_unknown` on most response types.
 - Error strings change shape (path prefix, line/column). Programs that matched exact error text need updating.
 - The interpreter's JSON codec no longer imitates serde: it calls it.
