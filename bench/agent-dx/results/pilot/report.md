@@ -6,8 +6,8 @@
 
 | arm | name | trials | context pack |
 |---|---|---|---|
-| A | interpreted-first | 30 | yes |
-| B | compiled-first | 30 | yes |
+| A | interpreted-first | 30 | WINDJAMMER_REFERENCE.md |
+| B | compiled-first | 30 | WINDJAMMER_REFERENCE.md |
 
 ## Arm means
 
@@ -24,6 +24,7 @@
 | agent-thinking seconds (API time) | 11.3 [9.6, 13.3] | 16.2 [10.9, 23.4] |
 | tool-wait seconds (wj commands) | 0.3 [0.1, 0.5] | 66.1 [32.8, 105.4] |
 | harness permission denials (should be 0) | 0.1 [0.0, 0.3] | 0.2 [0.0, 0.4] |
+| capability denials seen (WJ004x) | n/a | n/a |
 | silent divergence (interp pass, compiled fail) | 0.433 [0.167, 0.700] | 0.000 [0.000, 0.000] |
 
 ## Paired differences (task-paired, first minus second)
@@ -41,6 +42,7 @@
 | agent-thinking seconds (API time) | -4.9 [-10.7, -0.5] |
 | tool-wait seconds (wj commands) | -65.9 [-109.3, -32.2] |
 | harness permission denials (should be 0) | -0.1 [-0.3, 0.2] |
+| capability denials seen (WJ004x) | n/a |
 | silent divergence (interp pass, compiled fail) | 0.433 [0.167, 0.700] |
 
 ## Per-task pass rate (passes/trials)
@@ -71,7 +73,7 @@
 
 ## Interpreter vs compiled divergence
 
-13 of 60 trials had an interpreted hidden-oracle result different from the compiled one (13 silent: interpreter green, compiled red).
+13/60 trials had an interpreted hidden-oracle result different from the compiled one (13 silent: interpreter green, compiled red).
 - t006_base_convert arm A trial 0: interp=True compiled=False
 - t006_base_convert arm A trial 1: interp=True compiled=False
 - t006_base_convert arm A trial 2: interp=True compiled=False
@@ -82,6 +84,24 @@
 - t013_bst arm A trial 1: interp=True compiled=False
 - t018_word_freq arm A trial 0: interp=True compiled=False
 - t018_word_freq arm A trial 1: interp=True compiled=False
+
+## Paired differences versus control B (task-clustered 95% CI)
+
+| metric | A - B |
+|---|---|
+| pass@1 (compiled hidden oracle) | -0.333 [-0.633, -0.100] |
+| verify calls (wj check/run/test/build) | -0.3 [-1.2, 0.7] |
+| verify calls to green (passing trials) | -0.6 [-1.5, -0.0] |
+| agent turns | -1.8 [-3.5, -0.5] |
+| tokens in (incl. cache) | -21869.1 [-42514.3, -6136.0] |
+| tokens out | -246.3 [-590.3, 32.6] |
+| cost USD | -0.013 [-0.024, -0.005] |
+| wall seconds | -76.6 [-137.5, -34.1] |
+| agent-thinking seconds (API time) | -4.9 [-10.7, -0.5] |
+| tool-wait seconds (wj commands) | -65.9 [-109.3, -32.2] |
+| harness permission denials (should be 0) | -0.1 [-0.3, 0.2] |
+| capability denials seen (WJ004x) | n/a |
+| silent divergence (interp pass, compiled fail) | 0.433 [0.167, 0.700] |
 
 Mode violations (agent used the other arm's loop commands): 1.
 

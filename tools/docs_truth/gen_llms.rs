@@ -9,7 +9,8 @@ const RAW: &str = "https://raw.githubusercontent.com/jeffreyfriedman/windjammer/
 
 /// (path, link text, one-line description) for `llms.txt`. Every path must exist.
 const INDEX: &[(&str, &str, &str, &str)] = &[
-    ("Start here", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "Windjammer for agents", "The edit-check-run loop, core idioms and pitfalls; every code block is executed in CI"),
+    ("Start here", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "Windjammer for agents", "The 2 KB sheet: types, idioms, input, the build loop; its code block is executed in CI"),
+    ("Start here", "docs/agent/WINDJAMMER_REFERENCE.md", "Windjammer reference for agents", "The full guide behind the sheet (also searchable with `wj docs`); every code block is executed in CI"),
     ("Start here", "docs/reference/cli.md", "CLI reference", "Every `wj` subcommand, generated from the clap definitions"),
     ("Start here", "docs/reference/targets.md", "Backend support matrix", "Which backends pass how much of the conformance corpus (generated)"),
     ("Language", "docs/reference/keywords.md", "Keywords and operators", "Lexer keywords (generated from the lexer)"),
@@ -41,6 +42,7 @@ fn version(ctx: &Ctx) -> String {
 /// Hand-written or generated documents inlined into `llms-full.txt`, in order (the MCP manifest is rendered separately).
 const FULL: &[&str] = &[
     "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "docs/agent/WINDJAMMER_REFERENCE.md",
     "docs/reference/cli.md",
     "docs/reference/targets.md",
     "docs/reference/keywords.md",

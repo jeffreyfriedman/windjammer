@@ -127,7 +127,7 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
         15 => format!("ps[(i + 1) % 4].n = {} % 997", int_expr(r, 1)),
         16 => format!("if {} {{\n{}\n}} else {{\n{}\n}}", cond(r), stmt(r, depth + 1, iters, inner), stmt(r, depth + 1, iters, inner)),
         // planted edges, late enough that the loop is in machine code
-        17 => planted(r.below(7), late),
+        17 => planted(r.below(8), late),
         // a literal-typed value stored into the `i32` local keeps `i32` only while it fits (`retag`)
         22 => format!("a = i * {}", r.pick(&["3", "3000000", "-1000000"])),
         23 => "a = a + 1".into(),
@@ -159,7 +159,7 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
 }
 
 /// An edge reached at a late iteration (`late`), when the loop runs as machine code: a zero divisor,
-/// an index past the end (read and write), `usize` underflow, `i32` and `u8` overflow.
+/// an index past the end (read and write), `usize` underflow, `i32`, `u8` and `int` overflow.
 fn planted(kind: u64, late: u64) -> String {
     match kind {
         0 => format!("if i == {late} {{ b = b / (i - {late}) }}"),
@@ -170,6 +170,8 @@ fn planted(kind: u64, late: u64) -> String {
         5 => format!("if i == {late} {{ v[{late} % {LEN} + {LEN}] = 1 }}"),
         // a zero divisor inside a method machine code inlines (its frame is in the backtrace)
         6 => format!("if i == {late} {{ b = g.div(i - {late}) }}"),
+        // an `int` overflow inside an inlined method (nothing else plants one: the random mix rarely does)
+        7 => format!("if i == {late} {{ b = V2 {{ x: b + 4611686018427387904, y: 1 }}.dot(V2 {{ x: 2, y: 0 }}) }}"),
         // a panic inside a function a closure-run statement calls (its frame is in the backtrace)
         _ => format!("if i == {late} {{ b = h(-1) }}"),
     }
@@ -193,7 +195,7 @@ fn program(seed: u64) -> String {
     }
     // every third program has one edge of each kind in turn, so each kind is exercised
     if seed % 3 == 0 {
-        body += &planted((seed / 3) % 8, iters - 1 - r.below(iters / 4));
+        body += &planted((seed / 3) % 9, iters - 1 - r.below(iters / 4));
         body.push('\n');
     }
     format!(
@@ -334,14 +336,14 @@ fn every_machine_code_check_is_load_bearing() {
     }
 }
 
-/// Mutation gate (debug builds) for the struct-local and inlining bail-outs, on the corpus programs
-/// written for them: the box a closure captures from a struct `let` (`box`) and methods of same-name
-/// types in different modules (`dupe`).
+/// Mutation gate (debug builds) on the corpus programs written for checks the generator does not reach:
+/// the box the first write after a struct `let` makes for its closures (`box`), and the closure engine's
+/// in-place `match m.get(&k)` lookup (`mapget`) and `m.insert(k, x)` into a shared map (`mapins`).
 #[test]
 #[cfg(debug_assertions)]
-fn every_inlining_check_is_load_bearing() {
+fn every_corpus_check_is_load_bearing() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/engine_parity");
-    for (m, file) in [("box", "jit_loop_inline.wj"), ("dupe", "same_name_types.wj")] {
+    for (m, file) in [("box", "jit_loop_inline.wj"), ("mapget", "map_get_match.wj"), ("mapins", "map_get_match.wj")] {
         let p = root.join(file);
         let base = run(&p, "walker", &[], &[]);
         assert_eq!(run(&p, "resolved", &[], &[("WJ_JIT_LOOP_HOT", "0")]), base, "{file} differs without a mutant");

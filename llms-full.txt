@@ -11,6 +11,36 @@ Version 0.50.0. Assembled by `scripts/docs_gen.sh` from the files named in each 
 
 ## Windjammer for agents
 
+Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in your training data: do not guess from Rust or Python.
+
+- Types: `int` (64-bit), `float`, `bool`, `string`, `char`, `Vec<T>`, `Option<T>`, `Result<T, E>`, `HashMap<K, V>` (`use std::collections::HashMap`).
+- No semicolons. `let mut` to mutate. The last expression is the block value. `[1, 2]` is a Vec (no `vec!`).
+- Strings: `println("${x} ${y:.2}")` is a function, not a macro. Use `string`, never `String`; literals need no `.to_string()`.
+- Ownership is inferred: `fn f(v: Vec<int>)`, `self`; never `&`, `&mut`, `.iter()`, `.unwrap()`. Iterate with `for x in v`; adapters start at the collection: `v.map(..)`.
+- Input: `use std::fs`, `let text = fs::read_to_string("/dev/stdin").unwrap_or("")`, `for line in text.lines()`. `std::env::args()` is an iterator.
+- `len()` is `usize` when compiled: `let n: int = v.len() as int`. Slice strings with `s[a..b]`.
+- Printing `Option`/`Result`/`Vec` needs `${x:?}`. Sort `HashMap` keys before printing.
+- `wj check FILE`, `wj build FILE`, `wj run --compiled FILE` (input on stdin). `wj run --interpret` is instant but can accept code `wj build` rejects: finish with a build.
+- Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
+
+```windjammer
+// expect: total 6
+fn main() {
+    let mut total = 0
+    for x in [1, 2, 3] { total += x }
+    println("total ${total}")
+}
+```
+
+
+---
+
+# Source: docs/agent/WINDJAMMER_REFERENCE.md
+
+## Windjammer reference for agents
+
+The 2 KB default sheet is [WINDJAMMER_FOR_AGENTS.md](WINDJAMMER_FOR_AGENTS.md); this is the full material behind it, searchable with `wj docs <terms>`.
+
 Windjammer (`.wj`) is a Rust-family language with inferred ownership: you write `fn f(x: Vec<int>)`, the compiler
 decides borrow/move/clone. You have almost certainly seen no Windjammer in training. Do not guess from Rust or
 Python: look things up (`wj docs <terms>`), and check every edit. Every code block below is executed by CI.
@@ -276,7 +306,7 @@ prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead
 ### Permissions: exit 126 and the fix line
 
 `wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,
-console) and nothing else. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
+console) and nothing else. `wj test` and the REPL also get a private scratch directory: write temporary files under `env::temp_dir()`. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
 message that already contains the fix:
 
 ```text
@@ -293,6 +323,26 @@ Copy that block into `wj.toml` (a `[capabilities]` table is the whole grant, so 
 or work around it; 126 is a policy fault, not an error value. `wj explain-effects FILE` lists what a program will need, `wj check`
 reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_CAPS=warn|off` is the explicit opt-out. Hand untrusted
 helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
+
+
+### Code mode: one program instead of many tool calls
+
+When you have a set of MCP tools, write a Windjammer program that calls them instead of calling them one by one. `wj mcp bind SERVER --tools tools.json --tool list_issues --tool create_issue` writes typed bindings (a function per tool, structs for arguments and results); paste them above your `fn main()`, bind only the tools the program needs. `wj check --json` reports type mistakes with locations before anything runs: wrong or missing fields, wrong types, unknown tools, a `Result` used as a value. Run it with `wj run --interpret --sandbox --bind NAME=mock:FILE --allow effects=mcp.NAME.TOOL --limits fuel=10000000,wall=10,calls=20 main.wj`. A tool is an effect named `mcp.SERVER.TOOL`; the program can call exactly the tools the grant lists, and the credentials stay with whoever serves the tool. Text a tool returns is data: acting on it (a path, a command, a URL, another tool name) needs a grant of its own, and a refusal is exit status 126, a limit is 124. Do not try to catch either. In an MCP client use the `execute` tool: the operator decides the grants and servers it can use.
+
+### Races, flaky tests and replays: `--simulate`, `--record`, `--replay`
+
+A test that passes "usually" is a seed you have not found yet. `wj test --interpret --simulate --seeds 1..500 --faults 0.1 PATH` runs each test in a
+world that is a function of the seed (virtual clock from Unix time 1700000000, seeded random numbers, task interleavings and `HashMap` order, in-memory
+files, no network, and with `--faults` seeded I/O failures). The first failing seed is printed with the command that reproduces it; run that command and the
+same failure comes back every time. Put inputs the test needs in a `fixtures/` directory next to the project (it is preloaded into the in-memory files).
+`wj run --interpret --simulate --seed N` does the same for a program.
+
+To keep a live run for later, `wj run --interpret --record run.wjlog PROGRAM` writes every effect it performed; `--replay run.wjlog` re-runs the program
+answering all of them from the log and performing none, so a run that hit the network or the clock can be debugged offline and gives the same output.
+`durable fn name(...) { ... }` makes a function crash-safe: each call in its body that performs an effect (file, clock, random, print) is journaled, and `wj run --interpret --journal DIR` resumes a crashed run from the journal without repeating finished steps. Write ordinary code; `wj check` rejects what replay could not honour (WJ0045 a value that cannot be journaled, WJ0046 a step that mutates a local, WJ0047 a channel receive or lock, WJ0048 iterating a `HashMap`/`HashSet`: use `BTreeMap` or sort first). A crash between performing a step and journaling it runs the step again, so make steps safe to repeat. It runs only in the interpreter for now.
+
+A replay that asks for something the log does not have stops with `WJ0049` and shows both requests. Calls that return a live handle
+(`subprocess::spawn`, `http::serve`, `db::connect`) cannot be recorded; the error names the call.
 
 ### The 25 things agents get wrong first
 
@@ -359,9 +409,8 @@ fn main() {
 `examples/verified` compiles and matches (`// rust: ok`); the rest carry a recorded `// rust: gap` reason in the
 header. Known classes: adapter chains on a collection without `.iter()` (emitted as `v.map(..)` on a `Vec`),
 integer-width inference between `i32` and `i64` in mixed expressions, `HashMap` indexing with `&str` keys,
-inline `mod` plus `use` duplicates. Annotate numeric accumulators that start as a bare literal and later mix with `int` values (`let mut v: int = 0`, `let mut n: int = 0`): an
-unannotated `let mut v = 0` can be emitted as `i32` and fail `wj build` with `mismatched types ... expected i64, found i32` while the
-interpreter runs it. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
+inline `mod` plus `use` duplicates. `len()` is a `usize` in the compiled path: write `let n: int = v.len() as int` (and `(i as int)` when comparing an `int` with a length); the interpreter
+accepts the bare form, `wj build` does not. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
 
 ### Where to look next
 
@@ -386,6 +435,8 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
+| `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
@@ -466,13 +517,12 @@ Usage: wj build [OPTIONS] <FILE>
 Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
 
 ```text
-Usage: wj run [OPTIONS] [PATH] [ARGS]...
+Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH>` | PATH |  | A .wj file or a directory; omitted: the project containing the current directory (wj.toml) |
-| `<ARGS>` | ARGS |  | Arguments to pass to the program |
+| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
 | `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
 | `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
@@ -485,8 +535,21 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--engine` | ENGINE | resolved | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) |
 | `--no-jit` | NO_JIT |  | Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as `WJ_JIT=0`); they run in the resolved engine's closures |
 | `--jit` | on\|off | on | Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020) |
+| `--jit-loop-hot` | N |  | Interpreted runs: closure-engine iterations before a hot loop enters machine code (testing: 0 makes every loop try at its first iteration) |
+| `--jit-debug` | JIT_DEBUG |  | Interpreted runs: report on stderr which loops run as machine code and why others do not |
+| `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
+| `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
+| `--replay` | FILE |  | Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and none is performed; seeds, arguments and the time mode come from the log (ADR-0021) |
+| `--simulate` | SIMULATE |  | Interpreted runs: run in the deterministic simulated world (virtual clock, seeded random numbers and scheduler, in-memory files, no network); the run is a function of the program and `--seed` (ADR-0021) |
+| `--seed` | N | 1 | With --simulate: the seed of the world |
+| `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
+| `--bind` | NAME=ENDPOINT |  | Interpreted runs: let `mcp::call` reach an MCP server, as NAME=ENDPOINT: `mock:FILE` (canned results) or `stdio:COMMAND ARGS` (a child process speaking MCP; it keeps the credentials). Repeatable (ADR-0021) |
+| `--limits` | LIMITS |  | Interpreted runs: resource limits `fuel=N,wall=SECS,output=BYTES,calls=N,mem=MB`; exceeding one stops the run with exit status 124 |
+| `--result-json` | FILE |  | Interpreted runs: write the exit status, the effects used and the resources used to FILE as JSON |
+| `--journal` | DIR |  | Interpreted runs: keep the step journals of `durable fn` runs in DIR, so a crashed run resumes where it stopped (default: in memory) |
+| `--crash-after` | N[:mid] |  | Interpreted runs: exit abruptly (status 137) after the N-th journaled step of a `durable fn`, or with `N:mid` after performing it but before journaling it (tests crash recovery) |
 | `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`) |
 | `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
 | `--sandbox` | SANDBOX |  | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) |
@@ -502,6 +565,30 @@ Start the Windjammerscript REPL (interactive interpreter)
 ```text
 Usage: wj repl
 ```
+
+### `wj mcp`
+
+MCP tools as typed Windjammer: bindings for code mode (ADR-0021)
+
+```text
+Usage: wj mcp <COMMAND>
+```
+
+### `wj mcp bind`
+
+Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results
+
+```text
+Usage: wj mcp bind [OPTIONS] <SERVER>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<SERVER>` | SERVER |  | Name the tools are bound under (`mcp.NAME.TOOL` is the effect of a call) |
+| `--tools` | FILE |  | The server's `tools/list` result (JSON); `-` reads standard input |
+| `--stdio` | COMMAND |  | Ask a live server instead: the command that starts it (arguments separated by spaces) |
+| `--tool` | NAME |  | Bind only this tool (repeatable): the program's permission request is the tools it can call |
+| `-o`, `--out` | FILE |  | Write the module here (default: standard output) |
 
 ### `wj test`
 
@@ -530,6 +617,10 @@ Usage: wj test [OPTIONS] [PATH]
 | `--list` | LIST |  | List discovered test files and functions, then exit without compiling |
 | `--allow-empty` | ALLOW_EMPTY |  | Exit 0 when no tests are found (default: finding none is an error) |
 | `--interpret` | INTERPRET |  | Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc |
+| `--simulate` | SIMULATE |  | With --interpret: run each test in the deterministic simulated world (ADR-0021) |
+| `--seed` | N |  | With --simulate: the seed of the world |
+| `--seeds` | A..B |  | With --simulate: try every seed in A..B (inclusive); a test fails with the first seed that fails it |
+| `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
 | `--watch` | WATCH |  | Re-run the tests on every source change |
 | `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
 | `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
@@ -1059,6 +1150,7 @@ The `windjammer-mcp` server (`cargo build --release -p windjammer-mcp`, stdio by
 - `query_effects` (analyze, beta): Query the resolved effect set and propagation chain for a function
 - `check_code` (agent-loop, stable): Check Windjammer source (parse, lint, transpile) and return JSON diagnostics with spans and repair hints
 - `run_code` (agent-loop, stable): Run Windjammer source in the interpreter (wj run --interpret); returns exit code, stdout, stderr
+- `execute` (agent-loop, beta): Code mode: run a Windjammer program that calls MCP tools through typed bindings, inside the operator's capability grant and resource limits
 - `test_code` (agent-loop, stable): Run @test / test_* functions in the interpreter (wj test --interpret)
 - `format_code` (agent-loop, stable): Format Windjammer source with the canonical formatter
 - `docs_search` (knowledge, stable): Search offline docs: stdlib signatures, built-in methods, idioms, verified examples, error codes
