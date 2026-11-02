@@ -23,6 +23,7 @@ mod shared;
 mod std_cap;
 mod std_caps_rt;
 mod std_mcp;
+mod json_codec;
 mod std_data;
 mod std_extra;
 mod std_fns;

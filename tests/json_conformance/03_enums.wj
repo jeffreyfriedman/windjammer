@@ -1,0 +1,68 @@
+// Typed JSON (ADR-0027): enums use serde's externally tagged form, alone and as struct fields.
+// expect: enc "Low"
+// expect: enc {"Sized":3}
+// expect: enc {"Pair":[1,"b"]}
+// expect: enc {"Named":{"w":2,"h":5}}
+// expect: enc {"id":7,"kind":{"Sized":9},"level":"High"}
+// expect: ok 7 9 High
+// expect: $.level: unknown variant `Mid`, expected `Low` or `High` at line 1 column 36
+// expect: $.kind.Named: missing field `h` at line 1 column 31
+use std::json
+
+enum Level {
+    Low,
+    High,
+}
+
+enum Kind {
+    Plain,
+    Sized(int),
+    Pair(int, string),
+    Named { w: int, h: int },
+}
+
+struct Job {
+    id: int,
+    kind: Kind,
+    level: Level,
+}
+
+fn enc(r: Result<string, string>) {
+    match r {
+        Ok(s) => println("enc ${s}"),
+        Err(e) => println("err ${e}"),
+    }
+}
+
+fn job(text: string) {
+    let r: Result<Job, string> = json.parse_string(text)
+    match r {
+        Ok(j) => {
+            let n = match j.kind {
+                Kind::Sized(n) => n,
+                _ => 0,
+            }
+            match j.level {
+                Level::Low => println("ok ${j.id} ${n} Low"),
+                Level::High => println("ok ${j.id} ${n} High"),
+            }
+        }
+        Err(e) => println(e),
+    }
+}
+
+fn main() {
+    enc(json.to_string(Level::Low))
+    enc(json.to_string(Kind::Sized(3)))
+    enc(json.to_string(Kind::Pair(1, "b")))
+    enc(json.to_string(Kind::Named { w: 2, h: 5 }))
+    let j = Job { id: 7, kind: Kind::Sized(9), level: Level::High }
+    let text = match json.to_string(j) {
+        Ok(s) => s,
+        Err(e) => e,
+    }
+    enc(Ok(text))
+    job(text)
+    job("{\"id\":1,\"kind\":\"Plain\",\"level\":\"Mid\"}")
+    job("{\"id\":1,\"kind\":{\"Named\":{\"w\":1}},\"level\":\"Low\"}")
+}

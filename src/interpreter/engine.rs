@@ -43,6 +43,9 @@ pub struct StructDef {
     pub rc_fields: Rc<[Rc<str>]>,
     pub tuple: bool,
     pub copy: bool,
+    /// JSON (ADR-0027): each field's wire name (`@json(rename = ..)`) and whether unknown fields are accepted.
+    pub wire: Rc<[&'static str]>,
+    pub allow_unknown: bool,
 }
 
 pub struct VariantDef {
