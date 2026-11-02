@@ -111,6 +111,8 @@ chrono = "0.4"
 # interpreter std modules (regex, crypto, csv, url): same crates the runtime uses
 regex = "1"
 sha2 = "0.10"
+hmac = "0.12"
+subtle = "2.6"
 sha1 = "0.10"
 base64 = "0.22"
 rand = "0.8"
