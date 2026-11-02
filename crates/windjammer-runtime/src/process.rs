@@ -19,6 +19,11 @@ pub fn run(program: &str, args: &[String]) -> Result<String, String> {
     }
 }
 
+/// Run a command with arguments and return its standard output (Windjammer `std::process::run_with_args`).
+pub fn run_with_args(program: &str, args: &[String]) -> Result<String, String> {
+    run(program, args)
+}
+
 /// Run a command and return full output
 pub fn run_with_output(program: &str, args: &[String]) -> Result<ProcessOutput, String> {
     crate::caps::process(program);
@@ -98,5 +103,12 @@ mod tests {
             assert_eq!(output.status, 0);
             assert_eq!(output.stdout.trim(), "test");
         }
+    }
+
+    #[test]
+    fn run_with_args_returns_stdout() {
+        let out = run_with_args("echo", &["a".to_string(), "b".to_string()]).unwrap();
+        assert_eq!(out.trim(), "a b");
+        assert!(run_with_args("windjammer-no-such-program", &[]).is_err());
     }
 }
