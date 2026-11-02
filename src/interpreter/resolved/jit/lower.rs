@@ -411,7 +411,7 @@ impl Lo<'_, '_> {
             self.b.ins().store(MemFlags::trusted(), x, self.buf, (sp.buf * 8) as i32);
         }
         self.stmts.push(StmtRun { stmt: s, spills: spills.clone(), structs });
-        for sid in boxing.into_iter().filter(|_| !super::kinds::mutant(self.it, "box")) {
+        for sid in boxing {
             self.vstructs[sid].boxed();
         }
         let k = self.b.ins().iconst(types::I64, (self.stmts.len() - 1) as i64);
