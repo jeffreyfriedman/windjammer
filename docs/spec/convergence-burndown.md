@@ -2,7 +2,7 @@
 
 Owner rule: every step reports LOC deleted and the ratchet delta. Kill criterion: two consecutive steps that do not
 lower `D-WIDTH-OWNERS` stop the stream until the cause is understood. Baseline (tests/golden/explain_counts.txt):
-`D-WIDTH-OWNERS` 191, `D-CLONE-OUTSIDE-SOLVER` 25, `D-OWN-STAGES` 21, `D-CLONE-LASTUSE` 1, `EXPLAIN-ERROR` 5.
+`D-WIDTH-OWNERS` 191 (81 after the 2026-11-02 measurement fix), `D-CLONE-OUTSIDE-SOLVER` 25, `D-OWN-STAGES` 21, `D-CLONE-LASTUSE` 1, `EXPLAIN-ERROR` 5.
 
 LOC figures are file sizes (wc -l) for whole-file deletions and function spans for partial ones; function spans were
 measured from `fn` to the next `fn` and over-count inside `impl` blocks, so treat them as upper bounds. "Status":
@@ -64,4 +64,27 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C4 loop var + literal fact | 6559e2ff7 | 0 | ~120 | not measured (gate 3 passed: counts did not rise) |
 | C4 len() into declared int | af60eb7fa+ | 0 | ~30 | not measured |
 
-These last two steps added facts without deleting legacy paths. Under the kill criterion the next step must delete.
+| C4 cross-module field widths (P0) | 72e..cb634d32b | 0 | ~130 | 0 |
+| C4 delete return-width counter ascription | this branch | 112 | 1 | 0 |
+| explain: compare types, not spellings | this branch | 1 | 14 | 191 -> 81 (measurement fix, see below) |
+
+### Why the width-deletion step did not move D-WIDTH-OWNERS (kill criterion, 2026-11-02)
+
+`D-WIDTH-OWNERS` was mostly measuring spelling. The explain report compared the solver's `Debug` label (`Vec(I64)`,
+`HashMap(String, I64)`, `Option(I64)`) with the emitted Rust spelling (`Vec < i64 >`), so every compound-typed local was
+a finding even when both sides agree. 110 of the 191 findings were this artifact; comparing labels by type (not by
+spelling) leaves 81 real disagreements. That fix is a measurement correction, not a deletion, and is reported
+separately from the deletion.
+
+The deleted branch (`mut_let_rhs_is_return_width_counter` ascription in untyped `let mut`, 112 lines) only printed a
+type annotation that the literal suffix already carried (`let mut i: usize = 0_usize` became `let mut i = 0_usize`);
+the golden corpus changed in 13 files, all redundant annotations, and rustc rejects did not change. It removed a decider
+of the *annotation*, not of the *width*, so it could not move the counter.
+
+What the 81 real findings are (sampled over examples/verified): `i64 -> i32` (solver says int, codegen paints i32;
+the W3/W4 peer thicket and W6 let paints decide them) and `u64 -> usize` (the solver has no usize class for `len()` and
+indexing). Neither moves until the solver models usize (`len()`, `count()`, indexing) and codegen reads
+`solver_i64_locals` for *all* inits, not just literals. That is the next step that can lower the counter; deleting
+further codegen paints first would only change spellings.
+
+Under the kill criterion the stream stops here for the owner's decision. New baseline: `D-WIDTH-OWNERS` 81.
