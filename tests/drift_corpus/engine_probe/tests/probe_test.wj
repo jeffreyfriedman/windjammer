@@ -1,0 +1,13 @@
+// The one documented difference between the engines (ADR-0020): a function declared to return an integer
+// that returns something else. The walker carries the value on; the resolved engine reports the mismatch.
+// drift_selftest.wj runs this under both engines and requires them to differ, proving that WJ_TEST_ENGINE
+// really switches the engine the corpus comparison depends on.
+fn twice(x: int) -> int {
+    x + x
+}
+
+fn test_ill_typed_integer_result() {
+    let s = "ab"
+    let r = twice(s)
+    assert(true, "reached")
+}
