@@ -17,7 +17,10 @@ fn run(cwd: &Path, cache: &Path, now: i64, extra: &[(&str, &str)]) -> Output {
         fs::write(&f, "fn main() {\n    println(\"hi\")\n}\n").unwrap();
     }
     let mut c = Command::new(env!("CARGO_BIN_EXE_wj"));
-    c.args(["check", "t.wj"]).current_dir(cwd).env("WJ_CARGO_TARGET_ROOT", cache).env("WJ_TOOLCHAIN_NOW", now.to_string());
+    c.args(["check", "t.wj"])
+        .current_dir(cwd)
+        .env("WJ_CARGO_TARGET_ROOT", cache)
+        .env("WJ_TOOLCHAIN_NOW", now.to_string());
     c.env_remove("WJ_NO_STALE_WARN");
     for (k, v) in extra {
         c.env(k, v);
@@ -33,27 +36,55 @@ fn warned(o: &Output) -> bool {
 fn standalone_binary_warns_after_sixty_days_once_per_day() {
     let Some(ts) = commit_ts() else { return };
     let (work, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    assert!(!warned(&run(work.path(), cache.path(), ts + 59 * DAY, &[])), "59 days is fine");
+    assert!(
+        !warned(&run(work.path(), cache.path(), ts + 59 * DAY, &[])),
+        "59 days is fine"
+    );
     let first = run(work.path(), cache.path(), ts + 61 * DAY, &[]);
     assert!(warned(&first), "{}", String::from_utf8_lossy(&first.stderr));
     let err = String::from_utf8_lossy(&first.stderr);
-    assert_eq!(err.lines().filter(|l| l.contains("wj: warning:")).count(), 1, "{err}");
-    assert!(err.contains("wj doctor") && err.contains("WJ_NO_STALE_WARN=1"), "{err}");
-    assert!(!warned(&run(work.path(), cache.path(), ts + 61 * DAY + 3600, &[])), "second run the same day stays quiet");
-    assert!(warned(&run(work.path(), cache.path(), ts + 62 * DAY + 3600, &[])), "next day warns again");
+    assert_eq!(
+        err.lines().filter(|l| l.contains("wj: warning:")).count(),
+        1,
+        "{err}"
+    );
+    assert!(
+        err.contains("wj doctor") && err.contains("WJ_NO_STALE_WARN=1"),
+        "{err}"
+    );
+    assert!(
+        !warned(&run(work.path(), cache.path(), ts + 61 * DAY + 3600, &[])),
+        "second run the same day stays quiet"
+    );
+    assert!(
+        warned(&run(work.path(), cache.path(), ts + 62 * DAY + 3600, &[])),
+        "next day warns again"
+    );
 }
 
 #[test]
 fn silence_switch_suppresses_the_warning_and_the_stamp() {
     let Some(ts) = commit_ts() else { return };
     let (work, cache) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    assert!(!warned(&run(work.path(), cache.path(), ts + 90 * DAY, &[("WJ_NO_STALE_WARN", "1")])));
-    assert!(warned(&run(work.path(), cache.path(), ts + 90 * DAY, &[])), "silencing must not consume the day's warning");
+    assert!(!warned(&run(
+        work.path(),
+        cache.path(),
+        ts + 90 * DAY,
+        &[("WJ_NO_STALE_WARN", "1")]
+    )));
+    assert!(
+        warned(&run(work.path(), cache.path(), ts + 90 * DAY, &[])),
+        "silencing must not consume the day's warning"
+    );
 }
 
 fn fake_checkout(newest: i64) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
-    fs::write(d.path().join("Cargo.toml"), "[package]\nname = \"windjammer\"\nversion = \"0.0.0\"\n").unwrap();
+    fs::write(
+        d.path().join("Cargo.toml"),
+        "[package]\nname = \"windjammer\"\nversion = \"0.0.0\"\n",
+    )
+    .unwrap();
     let date = format!("{newest} +0000");
     let git = |args: &[&str]| {
         let o = Command::new("git")
@@ -102,6 +133,12 @@ fn a_binary_younger_than_thirty_days_pays_almost_nothing() {
         warn_with(&id, now);
     }
     let per_call = start.elapsed() / n;
-    assert!(per_call < std::time::Duration::from_micros(20), "hot path costs {per_call:?} per call");
-    assert!(!missing.join("toolchain").exists(), "a fresh binary must not touch the stamp directory");
+    assert!(
+        per_call < std::time::Duration::from_micros(20),
+        "hot path costs {per_call:?} per call"
+    );
+    assert!(
+        !missing.join("toolchain").exists(),
+        "a fresh binary must not touch the stamp directory"
+    );
 }
