@@ -6,7 +6,7 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 - No semicolons. `let mut` to mutate. The last expression is the block value. `[1, 2]` is a Vec (no `vec!`).
 - Strings: `println("${x} ${y:.2}")` is a function, not a macro. Use `string`, never `String`; literals need no `.to_string()`.
 - Ownership is inferred: `fn f(v: Vec<int>)`, `self`; never `&`, `&mut`, `.iter()`, `.unwrap()`. Iterate with `for x in v`; adapters start at the collection: `v.map(..)`.
-- `len()` is `usize` when compiled: `let n: int = v.len() as int`. Slice strings with `s.as_str()[a..b]`.
+- `len()` is `usize` when compiled: `let n: int = v.len() as int`. Slice strings with `s[a..b]`.
 - Printing `Option`/`Result`/`Vec` needs `${x:?}`. Sort `HashMap` keys before printing.
 - `wj check FILE`, `wj build FILE`, `wj run --compiled FILE` (input on stdin). `wj run --interpret` is instant but can accept code `wj build` rejects: finish with a build.
 - Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
