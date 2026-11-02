@@ -214,29 +214,32 @@ fn args_of(t: &Type) -> Vec<Type> {
     }
 }
 
-thread_local! {
-    /// The `&'static` name lists serde's error constructors want, leaked once per distinct list.
-    static NAMES: RefCell<HashMap<Vec<&'static str>, &'static [&'static str]>> = RefCell::new(HashMap::new());
-    static STRS: RefCell<HashSet<&'static str>> = RefCell::new(HashSet::new());
+/// serde's `OneOf` rendering of the expected names (`unknown field` / `unknown variant` messages).
+/// `de::Error::unknown_field` wants `&'static` lists; serde_json's default implementation is exactly
+/// `custom("unknown field `x`, expected ...")`, which this reproduces from the program's own names.
+fn one_of(names: &[&str]) -> String {
+    match names {
+        [] => "there are no fields".to_string(),
+        [a] => format!("expected `{a}`"),
+        [a, b] => format!("expected `{a}` or `{b}`"),
+        _ => format!("expected one of {}", names.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(", ")),
+    }
 }
 
-fn static_names(names: Vec<&'static str>) -> &'static [&'static str] {
-    NAMES.with(|m| *m.borrow_mut().entry(names.clone()).or_insert_with(|| Box::leak(names.into_boxed_slice())))
+fn unknown_field<E: de::Error>(v: &str, names: &[&str]) -> E {
+    E::custom(format_args!("unknown field `{v}`, {}", one_of(names)))
 }
 
-fn static_str(s: &str) -> &'static str {
-    STRS.with(|m| {
-        let mut m = m.borrow_mut();
-        match m.get(s) {
-            Some(x) => x,
-            None => {
-                let x: &'static str = Box::leak(s.to_string().into_boxed_str());
-                m.insert(x);
-                x
-            }
-        }
-    })
+fn unknown_variant<E: de::Error>(v: &str, names: &[&str]) -> E {
+    if names.is_empty() {
+        E::custom(format_args!("unknown variant `{v}`, there are no variants"))
+    } else {
+        E::custom(format_args!("unknown variant `{v}`, {}", one_of(names)))
+    }
 }
+
+/// Type and field-name hints passed to `deserialize_struct`/`deserialize_enum`: serde_json ignores them.
+const NO_NAMES: &[&str] = &[];
 
 impl<'de> DeserializeSeed<'de> for Dec<'_> {
     type Value = Value;
@@ -290,20 +293,17 @@ impl<'de> DeserializeSeed<'de> for Dec<'_> {
                 if let Some(def) = self.it.structs.get(&base) {
                     let fields: Vec<(&'static str, Type)> = def.fields.iter().map(|(n, t)| (*n, t.clone())).collect();
                     let (tuple, copy, allow_unknown) = (def.tuple, def.copy, def.allow_unknown);
-                    let wire = def.wire.clone();
-                    let names = static_names(wire.to_vec());
-                    let v = StructV { it: self.it, name: &base, fields: &fields, names, copy, allow_unknown };
-                    let sname = static_str(&base);
+                    let names = def.wire.clone();
+                    let v = StructV { it: self.it, name: &base, fields: &fields, names: &names, copy, allow_unknown };
                     return match (tuple, fields.len()) {
-                        (true, 1) => d.deserialize_newtype_struct(sname, v),
-                        (true, n) => d.deserialize_tuple_struct(sname, n, v),
-                        _ => d.deserialize_struct(sname, names, v),
+                        (true, 1) => d.deserialize_newtype_struct("", v),
+                        (true, n) => d.deserialize_tuple_struct("", n, v),
+                        _ => d.deserialize_struct("", NO_NAMES, v),
                     };
                 }
                 if self.it.enums.contains_key(&base) {
-                    let names = static_names(self.it.enums[&base].variants.iter().map(|v| v.name).collect());
-                    let ename = static_str(&base);
-                    return d.deserialize_enum(ename, names, EnumV { it: self.it, name: &base, names });
+                    let names: Vec<&'static str> = self.it.enums[&base].variants.iter().map(|v| v.name).collect();
+                    return d.deserialize_enum("", NO_NAMES, EnumV { it: self.it, name: &base, names: &names });
                 }
                 Err(de::Error::custom(format!("cannot decode JSON into `{base}`")))
             }
@@ -402,7 +402,7 @@ struct StructV<'a> {
     it: &'a mut Interpreter,
     name: &'a str,
     fields: &'a [(&'static str, Type)],
-    names: &'static [&'static str],
+    names: &'a [&'static str],
     copy: bool,
     allow_unknown: bool,
 }
@@ -474,19 +474,19 @@ impl StructV<'_> {
 
 /// A struct's field name (its index); an unknown name is an error unless `@json(allow_unknown)`
 /// (ADR-0027: deny by default), in which case it is `None` and its value is skipped.
-struct FieldSeed {
-    names: &'static [&'static str],
+struct FieldSeed<'a> {
+    names: &'a [&'static str],
     allow_unknown: bool,
 }
 
-impl<'de> DeserializeSeed<'de> for FieldSeed {
+impl<'de> DeserializeSeed<'de> for FieldSeed<'_> {
     type Value = Option<usize>;
     fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Option<usize>, D::Error> {
         d.deserialize_identifier(self)
     }
 }
 
-impl<'de> Visitor<'de> for FieldSeed {
+impl<'de> Visitor<'de> for FieldSeed<'_> {
     type Value = Option<usize>;
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("field identifier")
@@ -495,7 +495,7 @@ impl<'de> Visitor<'de> for FieldSeed {
         match self.names.iter().position(|n| *n == v) {
             Some(i) => Ok(Some(i)),
             None if self.allow_unknown => Ok(None),
-            None => Err(E::unknown_field(v, self.names)),
+            None => Err(unknown_field(v, self.names)),
         }
     }
 }
@@ -504,27 +504,27 @@ impl<'de> Visitor<'de> for FieldSeed {
 struct EnumV<'a> {
     it: &'a mut Interpreter,
     name: &'a str,
-    names: &'static [&'static str],
+    names: &'a [&'static str],
 }
 
-struct VariantSeed {
-    names: &'static [&'static str],
+struct VariantSeed<'a> {
+    names: &'a [&'static str],
 }
 
-impl<'de> DeserializeSeed<'de> for VariantSeed {
+impl<'de> DeserializeSeed<'de> for VariantSeed<'_> {
     type Value = usize;
     fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<usize, D::Error> {
         d.deserialize_identifier(self)
     }
 }
 
-impl<'de> Visitor<'de> for VariantSeed {
+impl<'de> Visitor<'de> for VariantSeed<'_> {
     type Value = usize;
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("variant identifier")
     }
     fn visit_str<E: de::Error>(self, v: &str) -> Result<usize, E> {
-        self.names.iter().position(|n| *n == v).ok_or_else(|| E::unknown_variant(v, self.names))
+        self.names.iter().position(|n| *n == v).ok_or_else(|| unknown_variant(v, self.names))
     }
 }
 
@@ -557,9 +557,9 @@ impl<'de> Visitor<'de> for EnumV<'_> {
             }
             Some((ts, names)) => {
                 let fields: Vec<(&'static str, Type)> = names.into_iter().zip(ts).collect();
-                let fnames = static_names(fields.iter().map(|(n, _)| *n).collect());
+                let fnames: Vec<&'static str> = fields.iter().map(|(n, _)| *n).collect();
                 let label = format!("struct variant {}::{}", self.name, self.names[idx]);
-                let v = va.struct_variant(fnames, VariantFieldsV { it: &mut *self.it, label, fields: &fields, names: fnames })?;
+                let v = va.struct_variant(NO_NAMES, VariantFieldsV { it: &mut *self.it, label, fields: &fields, names: &fnames })?;
                 let Value::Tuple(vals) = v else { return mk(self.it, vec![v]) };
                 let payload = fields.iter().map(|(n, _)| Rc::from(*n)).zip(vals.iter().cloned()).collect();
                 let vname = self.it.enums[self.name].variants[idx].name;
@@ -568,7 +568,7 @@ impl<'de> Visitor<'de> for EnumV<'_> {
         }
     }
     fn visit_str<E: de::Error>(self, v: &str) -> DeResult<E> {
-        let idx = self.names.iter().position(|n| *n == v).ok_or_else(|| E::unknown_variant(v, self.names))?;
+        let idx = self.names.iter().position(|n| *n == v).ok_or_else(|| unknown_variant(v, self.names))?;
         self.it.make_variant(self.name, idx, vec![]).map_err(|e| E::custom(format!("{e:?}")))
     }
 }
@@ -578,7 +578,7 @@ struct VariantFieldsV<'a> {
     it: &'a mut Interpreter,
     label: String,
     fields: &'a [(&'static str, Type)],
-    names: &'static [&'static str],
+    names: &'a [&'static str],
 }
 
 impl<'de> Visitor<'de> for VariantFieldsV<'_> {

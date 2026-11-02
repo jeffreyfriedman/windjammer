@@ -7,6 +7,8 @@
 // expect: ok 7 9 High
 // expect: $.level: unknown variant `Mid`, expected `Low` or `High` at line 1 column 36
 // expect: $.kind.Named: missing field `h` at line 1 column 31
+// expect: $.kind: unknown variant `Bogus`, expected one of `Plain`, `Sized`, `Pair`, `Named` at line 1 column 22
+// expect: $.color: unknown field `color`, expected one of `id`, `kind`, `level` at line 1 column 15
 use std::json
 
 enum Level {
@@ -65,4 +67,6 @@ fn main() {
     job(text)
     job("{\"id\":1,\"kind\":\"Plain\",\"level\":\"Mid\"}")
     job("{\"id\":1,\"kind\":{\"Named\":{\"w\":1}},\"level\":\"Low\"}")
+    job("{\"id\":1,\"kind\":\"Bogus\"}")
+    job("{\"id\":1,\"color\":2}")
 }
