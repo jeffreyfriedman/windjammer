@@ -93,7 +93,20 @@ fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Par
         let sl = Some(l.clone());
         Locator::new(&ix).word(&sl, word)
     };
-    let deps = manifest_deps(root);
+    let mut deps = manifest_deps(root);
+    // a crate named by a `use` (`use axum::Router`) is declared by that import, whether or not wj.toml lists it
+    for p in parsed {
+        for line in p.text.lines() {
+            let t = line.trim_start();
+            let t = t.strip_prefix("pub ").unwrap_or(t);
+            if let Some(rest) = t.strip_prefix("use ") {
+                let head: String = rest.trim_start_matches("::").chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                if !head.is_empty() {
+                    deps.insert(head);
+                }
+            }
+        }
+    }
     for c in &r.calls {
         match &c.res {
             // `github::list_issues()` where nothing named `github` is declared, imported, a dependency or part of std

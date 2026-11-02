@@ -80,12 +80,6 @@ impl Journalable for str {
     fn to_json(&self) -> Json {
         Json::String(self.to_string())
     }
-    fn from_json(j: &Json) -> Result<Self, String>
-    where
-        Self: Sized,
-    {
-        Err(bad("an unsized string", j))
-    }
 }
 
 impl Journalable for char {

@@ -57,3 +57,9 @@ fn an_unknown_module_path_is_reported() {
         assert!(codes(ok).is_empty(), "{ok}\n=> {:?}", codes(ok));
     }
 }
+
+#[test]
+fn a_crate_named_by_a_use_is_not_an_unknown_module() {
+    let c = codes("use axum::Router\nfn main() {\n    axum::serve(1)\n}\n");
+    assert!(!c.contains(&"WJ0002".to_string()), "{c:?}");
+}

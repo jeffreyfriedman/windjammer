@@ -62,10 +62,13 @@ fn a_program_without_a_durable_fn_has_no_journal_in_its_rust() {
 
 #[test]
 fn what_a_compiled_build_cannot_journal_yet_is_refused_with_the_reason() {
-    let (o, _) = emitted("struct Point { x: int }\nfn make() -> Point { Point { x: 1 } }\ndurable fn run() -> int {\n    let p = make()\n    p.x\n}\nfn main() { println(\"${run()}\") }\n");
+    let (o, _) = emitted("struct Point { x: int }\ndurable fn run(p: Point) -> int {\n    p.x\n}\nfn main() { println(\"${run(Point { x: 1 })}\") }\n");
     assert!(!o.status.success());
     let t = text(&o);
-    assert!(t.contains("cannot journal yet") && t.contains("Point"), "{t}");
+    assert!(t.contains("cannot journal yet") && t.contains("argument `p`") && t.contains("Point"), "{t}");
+    // a pure helper that returns a struct is not a step: it is not journaled, so it is not refused
+    let (o, _) = emitted("struct Point { x: int }\nfn make() -> Point { Point { x: 1 } }\ndurable fn run() -> int {\n    let p = make()\n    p.x\n}\nfn main() { println(\"${run()}\") }\n");
+    assert!(o.status.success(), "{}", text(&o));
     let (o, _) = emitted("struct S { n: int }\nimpl S {\n    durable fn go(self) -> int { 1 }\n}\nfn main() {}\n");
     assert!(text(&o).contains("method"), "{}", text(&o));
 }
