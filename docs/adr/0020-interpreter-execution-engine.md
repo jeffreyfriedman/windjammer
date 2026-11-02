@@ -482,6 +482,35 @@ the fast path over 300 lines) is not met, so the rung stops here. What remains p
 binds arm names to boxed locals) and the `let c = match ..` value path. The next lever is unboxed arm bindings for arms
 whose bodies take no reference to the binding.
 
+### Round 7 (Nov 2): a gate that fast paths fire; unboxed bindings; strings
+- Firing gate. Every fast path falls back to a correct generic path, so parity gates stay green when one silently stops
+  being taken (round 6 found two such cases by profiling). The interpreter counts each path, and `WJ_JIT_DEBUG` reports the
+  counts at exit (`[fast] inline N mapget N mapins N packed N unboxed N fmt N pushstr N`). `--test fast_paths` asserts each
+  is non-zero on the benchmark kernels and corpus programs written for it. In debug builds `WJ_JIT_MUTANT=nofast-<path>`
+  switches one path off, and the self-test shows the gate then fails for that path while the program still prints what
+  the walker prints.
+- Unboxed arm bindings. An arm of an in-place `match m.get(k)` whose body only reads its binding (no call, closure,
+  reference or place write, and the binding never assigned) binds the value itself rather than a box. The compile fixpoint
+  still boxes it if the body needs one. It fires on every lookup hit. The 3M-iteration hashmap variant moved little (0.90 to
+  0.87 s), while the comparison script's ratio went from 2.27x to 1.96x across runs at different loads.
+- Strings. A `format` template made only of bare `{}` placeholders (every interpolated string) is split into literal
+  pieces at compile time. At run time every argument is evaluated first, as `format_args` does, and their displays are
+  joined with the pieces. A statement `s.push_str(x)` on a local string appends in place. `strings` halved (the
+  2M-iteration variant went from 0.71 to 0.37 s). `str_fast.wj` covers escaped and lone braces, a user `Display` that runs
+  after all the arguments, a shared string, a captured string, a char argument and a panic.
+- Closures, profiled and not changed. Per call: a walker `Scope` saved and restored, a `Box<Place>` for each captured
+  variable, and generic `Value` arithmetic in the bodies; the comparison of captured names is a small part. A pointer-first
+  comparison of names gave no measurable change and was dropped. The lever is a closure call without the scope swap and
+  with typed parameters for closures whose bodies need neither.
+- Found while writing the corpus (both engines agree, so parity is unaffected): a panic inside an interpolated expression
+  reports an empty file name and an implausible column (`at :3:8680022:`).
+
+`scripts/interp_compare.sh --runs 5`, load 50 at start and 59 at end (`bench/interp/compare.json`), resolved / Node:
+`structs` 0.69x, `fib30` 0.77x, `loop5m` 0.99x, `sieve` 1.78x, `strings` 1.82x (2.47x before), `hashmap` 1.96x (2.27x
+before; 1.97x in a separate run at load 46), `nbody` 2.22x, `closures` 2.64x (2.00x in the previous run; its code is
+unchanged, so the difference is load). The round 6 kill criterion, `hashmap` within 2x Node, is met in both runs, though
+narrowly.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to
