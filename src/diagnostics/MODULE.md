@@ -15,7 +15,7 @@ In: native diagnostics of each producer (lints, surface-syntax findings, IR solv
 - Corpus gate: tests/diag_hints_corpus.rs replays every failure recorded in bench/agent-dx/results/pilot*; uncovered kinds are ratcheted in tests/diag_hints_ratchet/.
 
 ## Owns
-The schema, the code registry, rustc-to-WJ code and message translation (`rustc_text.rs`), fix-oriented hints for common type errors (`hints.rs`: String/&str, int/usize, Option<T>/T, float widths, collect element types), wording for interpreter run-time messages (`runtime_text.rs`), fix application.
+The schema, the code registry, rustc-to-WJ code and message translation (`rustc_text.rs`), fix-oriented hints for common type errors (`hints.rs`: String/&str, int/usize, Option<T>/T, float widths, collect element types), wording for interpreter run-time messages (`error/runtime_text.rs`, re-exported here), fix application.
 
 ## Never decides
 Whether a program is correct (producers decide); how files are discovered (see `check`).

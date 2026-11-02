@@ -133,6 +133,13 @@ fn recorded_failures_now_carry_fix_hints() {
     }
     assert!(total > 100, "corpus unexpectedly small: {total}");
     println!("corpus: {total} recorded error blocks, {covered} covered ({:.1}%), {specific} with a specific hint ({:.1}%)", 100.0 * covered as f64 / total as f64, 100.0 * specific as f64 / total as f64);
+    // Ratchet on the share of failures with a SPECIFIC hint (not the generic fallback): may only rise.
+    let floor: usize = std::fs::read_to_string(root().join("tests/diag_hints_ratchet/min_specific_percent.txt"))
+        .ok()
+        .and_then(|t| t.trim().parse().ok())
+        .unwrap_or(0);
+    let pct = specific * 100 / total;
+    assert!(pct >= floor, "specific-hint share fell to {pct}% (floor {floor}%)");
     let actual: BTreeSet<String> = uncovered.keys().cloned().collect();
     ratchet("uncovered", &actual);
 }

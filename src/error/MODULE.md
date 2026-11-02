@@ -28,3 +28,6 @@ Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test
 
 ## Span validation (`span_check.rs`)
 The one place that decides whether a (line, column, byte range) is well-formed for a source text: `validate_span`, `validate_position`, `validate_report_spans` (library validator for the `wj check --json` schema: call it on the report and fail on any returned string), LSP conversions `byte_to_lsp_position` / `lsp_position_to_byte` (UTF-16), and the assertion layer `assert_location` / `assert_extent` (panics on a zero line/column or reversed range in debug builds and in tests that call `set_strict(true)`; `SourceLocation::new` and the parser's diagnostic emitters call it). Convention: lines and columns 1-based, columns in Unicode scalar values, byte offsets 0-based half-open, LSP positions 0-based lines and UTF-16 units.
+
+## Run-time message wording (`runtime_text.rs`)
+Pure classification of interpreter messages ("`X` doesn't implement `Display`", no method on `Result`, indexing an Iterator, nonexistent stdin helpers) into a stable code plus a one-line "what to write". Lives here, below `interpreter` and `diagnostics`, so the interpreter's renderer can use it without an upward import; `diagnostics::runtime_text` re-exports it.

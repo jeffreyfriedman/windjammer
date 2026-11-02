@@ -3,6 +3,6 @@ error[W0002]: explicit .unwrap() call
   |
 4 |     println("${v.unwrap()}")
   |                  ^^^^^^
-  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`
-  = note: .unwrap() is a Rust-specific panic convention
+  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`
+  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead
   = explain: wj explain W0002
