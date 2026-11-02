@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/interpreter_project_bench.py > scripts/interpreter_project_bench.py && python3 scripts/interpreter_project_bench.py $W/bin/fakewj --files 5 --runs 2 --write; cat docs/generated/measured.json; rc=$?; rm -rf scripts; exit $rc

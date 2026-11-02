@@ -1,0 +1,11 @@
+📦 Using provided version: 0.60.0
+🔄 Syncing version 0.60.0 across project files...
+⚠️  Warning: Could not find version in README.md
+
+✨ Version sync complete!
+
+📝 Files updated:
+  (no changes detected)
+
+🔍 Review changes with: git diff
+💾 Commit with: git add -A && git commit -m 'chore: Sync version to 0.60.0'

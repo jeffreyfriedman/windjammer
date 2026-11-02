@@ -1,0 +1,25 @@
+// rust: ok
+// tags: x
+// expect: 3
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}

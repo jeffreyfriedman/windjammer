@@ -1,0 +1,30 @@
+     "median": #,
+     "min": #,
+     "max": #,
+     "stdev": #,
+     "n": 1
+    },
+    "cpu": {
+     "median": #,
+     "min": #,
+     "max": #,
+     "stdev": #,
+     "n": 1
+    },
+    "binary_bytes": 80,
+    "source": {
+     "clone": 1,
+     "to_string": 1,
+     "as_cast": 3,
+     "format": 1,
+     "lines": 7
+    },
+    "heap": {
+     "allocs": 12,
+     "bytes": 3456
+    }
+   },
+   "output": "result 42"
+  }
+ }
+}

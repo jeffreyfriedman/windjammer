@@ -1,0 +1,4 @@
+non-sink (HashMap/Rc builtins, 400k iterations): off #s on #s overhead #% (4 runs per arm)
+sink-dense (fs::exists + random + time, 30k iterations): off #s on #s overhead #% (4 runs per arm)
+load average # -> #: PROVISIONAL (load above #); re-measure on a quiet machine
+exit=3

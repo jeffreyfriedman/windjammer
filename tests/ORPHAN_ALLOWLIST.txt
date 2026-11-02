@@ -10,3 +10,4 @@ examples/syntax_tests/** | example package whose tests are run by `wj test examp
 examples/tests/** | example package whose tests are run by `wj test examples`
 tests/fixtures/formatter/* | golden input/expected pairs read by directory in tests/formatter_golden_test.rs
 tests/fixtures/resolve/* | resolver fixtures read by directory in tests/resolve_fixtures_test.rs
+tests/py_ports/** | fixture trees and recorded expectations for the Windjammer script ports (scripts/wj/port_gates.wj)

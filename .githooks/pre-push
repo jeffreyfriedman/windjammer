@@ -39,7 +39,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         fi
         
         # Also check workspace dependency versions
-        "$ROOT_DIR/scripts/check-versions.sh" "v$TAG_VERSION" || exit 1
+        WJ_BIN="${WJ:-$(command -v wj || true)}"
+        [ -x "$WJ_BIN" ] || WJ_BIN="$ROOT_DIR/target/release/wj"
+        if [ -x "$WJ_BIN" ] && [ -d "$ROOT_DIR/windjammer-ecosystem/packages" ]; then
+            (cd "$ROOT_DIR" && "$WJ_BIN" run scripts/wj/check_versions.wj "v$TAG_VERSION") || exit 1
+        else
+            echo "  (skipping the crate-version check: needs wj and windjammer-ecosystem/ at the repository root; the publish workflow runs it)"
+        fi
         
         echo "Tag v$TAG_VERSION matches Cargo.toml version — OK"
     fi
