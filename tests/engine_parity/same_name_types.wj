@@ -74,5 +74,13 @@ fn main() {
         s += p.get() + q.get() + p.x - q.x + a::col().code() + b::col().code()
         i += 1
     }
+    // struct locals the loop is entered with, whose methods machine code could inline
+    let pa = a::mk(2)
+    let pb = b::mk(3)
+    let mut k = 0
+    while k < 600 {
+        s += pa.get() + pb.get() + pa.x
+        k += 1
+    }
     println("${s} ${a::col().code()} ${b::col().code()} ${a::mk(3).get()} ${b::mk(3).get()}")
 }
