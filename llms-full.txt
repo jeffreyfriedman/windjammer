@@ -493,7 +493,11 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj cache path` | Print the shared (or --verify) Cargo target directory |
 | `wj cache status` | Show cache sizes and free disk |
 | `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) |
+| `wj cache warm` | Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm) |
 | `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations |
+| `wj version` | Show this wj's identity: version, commit, commit date, dirty flag, build profile, build date |
+| `wj doctor` | Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems) |
+| `wj install-dev` | Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup |
 | `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH |
 
 ### `wj new`
@@ -975,6 +979,14 @@ Usage: wj cache prune [OPTIONS]
 |---|---|---|---|
 | `--aggressive` | AGGRESSIVE |  | Also clear debug incremental trees when reclaiming |
 
+### `wj cache warm`
+
+Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm)
+
+```text
+Usage: wj cache warm
+```
+
 ### `wj cache setup`
 
 Write env.sh / env.ps1 for bare `cargo` invocations
@@ -982,6 +994,46 @@ Write env.sh / env.ps1 for bare `cargo` invocations
 ```text
 Usage: wj cache setup
 ```
+
+### `wj version`
+
+Show this wj's identity: version, commit, commit date, dirty flag, build profile, build date
+
+```text
+Usage: wj version [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--json` | JSON |  | Machine-readable output |
+
+### `wj doctor`
+
+Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems)
+
+```text
+Usage: wj doctor [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--json` | JSON |  | Machine-readable output |
+| `--expect-head` | EXPECT_HEAD |  | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) |
+
+### `wj install-dev`
+
+Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup
+
+```text
+Usage: wj install-dev [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--to` | PATH |  | Destination (default: $CARGO_HOME/bin/wj, else ~/.cargo/bin/wj) |
+| `--from` | PATH |  | Binary to install (default: the running wj) |
+| `--force` | FORCE |  | Install even if it is older than what is installed |
+| `--dry-run` | DRY_RUN |  | Print what would happen without writing anything |
 
 ### `wj self-install`
 
