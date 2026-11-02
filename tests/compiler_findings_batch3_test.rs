@@ -494,3 +494,58 @@ impl Writer {
     let rs = fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
     assert!(!rs.contains("fn flush(self)"), "flush takes self by value:\n{rs}");
 }
+
+/// Borrowed (`&str`) `string` parameters ending the arms of an `if` expression that initialises an owned
+/// `String` field are converted in each arm.
+#[test]
+fn if_arms_of_borrowed_params_into_owned_string_field() {
+    type_checks(
+        r#"pub struct Check {
+    pub code: string,
+    pub message: string,
+}
+
+fn check(code: string, passed: bool, ok_message: string, bad_message: string) -> Check {
+    Check { code: code, message: if passed { ok_message } else { bad_message } }
+}
+
+fn main() {
+    println(check("c1", true, "fine", "broken").message)
+}
+"#,
+    );
+}
+
+/// A list literal in each arm of an `if` expression bound by `let` is a `Vec`, like a list literal assigned
+/// directly to a `Vec` field.
+#[test]
+fn list_literals_in_if_arms_are_vecs() {
+    type_checks(
+        r#"pub struct Line {
+    pub account: string,
+    pub cents: int,
+}
+
+pub struct Entry {
+    pub lines: Vec<Line>,
+}
+
+fn line(account: string, cents: int) -> Line {
+    Line { account: account, cents: cents }
+}
+
+fn build(positive: bool) -> Entry {
+    let lines = if positive {
+        [line("a", 5), line("b", -5)]
+    } else {
+        [line("b", 5), line("a", -5)]
+    }
+    Entry { lines: lines }
+}
+
+fn main() {
+    println(build(true).lines.len())
+}
+"#,
+    );
+}
