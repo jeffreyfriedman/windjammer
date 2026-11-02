@@ -138,3 +138,32 @@ fn trivia_check_rejects_hidden_tokens() {
     assert!(check_trivia(" /* c */ \t/* a\nb */").is_ok());
     assert!(check_trivia("/* never closed").is_err());
 }
+
+// ---- escapes: the oracle decodes `\u{H..}` and `\0` as the language defines them (SPEC-LEX-016) ----
+
+#[test]
+fn oracle_accepts_unicode_escapes_in_strings_and_chars() {
+    for src in [
+        "let w = \"caf\\u{e9}\"\n",
+        "let c = '\\u{41}'\nlet e = '\\u{1F600}'\n",
+        "let z = \"a\\0b\"\n",
+        "let bad = \"bad \\u{zz}\"\n",
+        "let max = \"\\u{10FFFF}\\u{0}\"\n",
+    ] {
+        let v = check_source(src);
+        assert!(v.is_empty(), "source {src:?}:\n{}", v.join("\n"));
+    }
+}
+
+#[test]
+fn oracle_rejects_a_wrongly_decoded_unicode_escape() {
+    // mutation: a token whose value is the raw escape text instead of the character it names
+    let src = "let w = \"caf\\u{e9}\"\n";
+    let mut t = lexed(src);
+    for tok in t.iter_mut() {
+        if let windjammer::lexer::Token::StringLiteral(s) = &mut tok.token {
+            *s = "cafu{e9}".to_string();
+        }
+    }
+    assert!(!check_stream(src, &t).is_empty(), "a mis-decoded \\u{{..}} escape must be reported");
+}

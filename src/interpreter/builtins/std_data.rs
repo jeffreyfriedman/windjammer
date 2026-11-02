@@ -586,6 +586,48 @@ fn register_crypto(r: &mut Registry) {
     r.func("crypto::sha256_bytes", |it, a| Ok(bytes_value(&sha2::Sha256::digest(bytes_of(it, arg(&a, 0, "sha256_bytes")?)?))));
     r.func("crypto::sha512_bytes", |it, a| Ok(bytes_value(&sha2::Sha512::digest(bytes_of(it, arg(&a, 0, "sha512_bytes")?)?))));
     r.func("crypto::sha1_bytes", |it, a| Ok(bytes_value(&sha1::Sha1::digest(bytes_of(it, arg(&a, 0, "sha1_bytes")?)?))));
+    // HMAC-SHA-256 and constant-time comparison: pure computation, so no capability check (like the hashes above).
+    r.func("crypto::hmac_sha256", |_, a| {
+        Ok(s(&hex(&hmac_sha256(arg_str(&a, 0, "hmac_sha256")?.as_bytes(), arg_str(&a, 1, "hmac_sha256")?.as_bytes()))))
+    });
+    r.func("crypto::hmac_sha256_bytes", |it, a| {
+        let key = bytes_of(it, arg(&a, 0, "hmac_sha256_bytes")?)?;
+        let data = bytes_of(it, arg(&a, 1, "hmac_sha256_bytes")?)?;
+        Ok(bytes_value(&hmac_sha256(&key, &data)))
+    });
+    r.func("crypto::verify_hmac_sha256", |_, a| {
+        use hmac::Mac;
+        let expected = match hex_decode(&arg_str(&a, 2, "verify_hmac_sha256")?) {
+            Some(b) => b,
+            None => return Ok(Value::Bool(false)),
+        };
+        let (key, data) = (arg_str(&a, 0, "verify_hmac_sha256")?, arg_str(&a, 1, "verify_hmac_sha256")?);
+        let mut mac = <hmac::Hmac<sha2::Sha256> as Mac>::new_from_slice(key.as_bytes()).expect("HMAC accepts keys of any length");
+        mac.update(data.as_bytes());
+        Ok(Value::Bool(mac.verify_slice(&expected).is_ok()))
+    });
+    r.func("crypto::constant_time_eq", |_, a| {
+        use subtle::ConstantTimeEq;
+        let (xs, ys) = (arg_str(&a, 0, "constant_time_eq")?, arg_str(&a, 1, "constant_time_eq")?);
+        let (x, y) = (xs.as_bytes(), ys.as_bytes());
+        Ok(Value::Bool(x.len() == y.len() && bool::from(x.ct_eq(y))))
+    });
+}
+
+fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
+    use hmac::Mac;
+    let mut mac = <hmac::Hmac<sha2::Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts keys of any length");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
+
+/// Case-insensitive hex to bytes; `None` for odd length or a non-hex digit.
+fn hex_decode(text: &str) -> Option<Vec<u8>> {
+    if text.len() % 2 != 0 {
+        return None;
+    }
+    let digit = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
+    text.as_bytes().chunks(2).map(|p| Some(digit(p[0])? * 16 + digit(p[1])?)).collect()
 }
 
 // ===================================================================== time

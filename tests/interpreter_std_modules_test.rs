@@ -116,6 +116,58 @@ print("$: missing field `qty` at line 1 column 14")
 }
 
 #[test]
+fn crypto_hmac_sha256_matches_python_and_rfc4231() {
+    check(
+        r##"
+use std::crypto
+use std::strings
+fn repeat_byte(b: int, n: int) -> Vec<u8> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < n {
+        out.push(b)
+        i = i + 1
+    }
+    out
+}
+fn hex_of(bytes: Vec<u8>) -> string {
+    let digits = "0123456789abcdef"
+    let mut out = ""
+    for b in bytes {
+        let hi = b / 16
+        let lo = b % 16
+        out = out + strings::substring(digits, hi, hi + 1) + strings::substring(digits, lo, lo + 1)
+    }
+    out
+}
+fn main() {
+    println(crypto::hmac_sha256("Jefe", "what do ya want for nothing?"))
+    println(hex_of(crypto::hmac_sha256_bytes(repeat_byte(11, 20), [72, 105, 32, 84, 104, 101, 114, 101])))
+    println(hex_of(crypto::hmac_sha256_bytes(repeat_byte(170, 131), repeat_byte(65, 7))))
+    let tag = crypto::hmac_sha256("k", "m")
+    println(crypto::verify_hmac_sha256("k", "m", tag))
+    println(crypto::verify_hmac_sha256("k", "m", tag.to_uppercase()))
+    println(crypto::verify_hmac_sha256("k", "other", tag))
+    println(crypto::verify_hmac_sha256("k", "m", "not hex"))
+    println(crypto::verify_hmac_sha256("k", "m", ""))
+    println(crypto::constant_time_eq("abc", "abc"))
+    println(crypto::constant_time_eq("abc", "abd"))
+    println(crypto::constant_time_eq("abc", "abcd"))
+}
+"##,
+        r##"
+import hmac, hashlib
+def h(k, d): return hmac.new(k, d, hashlib.sha256).hexdigest()
+print(h(b"Jefe", b"what do ya want for nothing?"))
+print(h(bytes([0x0b]) * 20, b"Hi There"))
+print(h(bytes([0xaa]) * 131, b"A" * 7))
+print("true"); print("true"); print("false"); print("false"); print("false")
+print("true"); print("false"); print("false")
+"##,
+    );
+}
+
+#[test]
 fn crypto_hashes_and_base64_match_python() {
     check(
         r##"
