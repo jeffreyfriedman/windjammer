@@ -2,7 +2,7 @@
 
 What every conformant backend must do identically, graded by the tiers of ADR-0007 (status: Proposed).
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/execution/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/execution/`.
 
 **Backends today (evidence: docs/backends/CONFORMANCE.md, tests/conformance_programs/SUPPORT.toml).** Rust (Tier 1), Go/JavaScript/TypeScript (portable emitters), WebAssembly (via the Rust generator), the interpreter (`wj run --interpret`, Tier 3). The shared corpus (`tests/conformance_programs/`) has independent oracles; `SUPPORT.toml` lists the known-failing pairs: on Rust almost all are the `rust-int-literal-width-inference` known issue (root cause: Q-027), on Go/JS/TS the `{:+}`/`{:#}` flags and pretty debug. Everything in this spec is checked here against the **interpreter only**; the interpreter is explicitly the weakest voice, so each example's expectation is derived by hand and cross-checked against Python/Rust semantics, never copied from the interpreter's output.
 

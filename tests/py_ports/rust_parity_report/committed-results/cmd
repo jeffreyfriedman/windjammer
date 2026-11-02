@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/rust_parity_report.wj results.json

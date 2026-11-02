@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/bench_effects_overhead.wj --wj $W/bin/fakewj --runs 2 --max-load 0.0001; echo "exit=$?"

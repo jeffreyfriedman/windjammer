@@ -43,10 +43,11 @@ step "spec examples (interpreter, in-process)" t spec_conformance_test::
 step "spec examples on every backend" t spec_backends_test::
 step "eject == build" t eject_equivalence_test::
 step "installed-binary smoke" t installed_binary_smoke_test::
-step "orphan tests" scripts/check-orphan-tests.sh
+WJ="${WJ:-target/release/wj}"
+step "orphan tests" "$WJ" run scripts/wj/check_orphan_tests.wj
 if [ $full = 1 ]; then
   step "backend conformance" t backend_conformance_test::
-  step "whole suite (ratchet: only new failures)" scripts/check-test-ratchet.sh --release --test all
+  step "whole suite (ratchet: only new failures)" "$WJ" run scripts/wj/check_test_ratchet.wj --release --test all
 fi
 
 echo

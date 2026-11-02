@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/interpreter_project_bench.wj $W/bin/fakewj --files 6 --runs 2

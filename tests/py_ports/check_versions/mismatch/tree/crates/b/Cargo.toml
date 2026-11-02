@@ -1,0 +1,4 @@
+[dependencies]
+windjammer = { path = "../..", version = "0.41.0" }
+other-crate = { path = "../a", version = "0.49.9" }
+_weird = { path = "x", version = "9" }

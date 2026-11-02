@@ -1,0 +1,139 @@
+// Overhead of the capability gate (ADR-0021 gates: interpreter overhead <= 5% on general programs).
+//
+//   wj run scripts/wj/bench_effects_overhead.wj [--wj PATH] [--runs N] [--max-load L] [--json OUT] [--mode caps|record]
+//
+// `--mode caps` (default) compares WJ_CAPS=off with enforce. `--mode record` compares a plain run with `--record LOG`
+// (ADR-0021 E3 gate: record overhead <= 2x on the sink-dense program, <= +3% on the non-sink one; the log is written to a
+// temporary file).
+//
+// Arms are interleaved (off, on, on, off, ...) and measured in child CPU time (user + sys), median of N runs; both
+// arms must print identical output. The run REFUSES to produce a verdict when the 1-minute load average exceeds
+// --max-load (default 20): a number measured on a loaded machine is not a result (see the benchmark rules in
+// docs/testing/). `load_avg_1m` is recorded next to every number. Run from the repository root.
+use std::env
+use std::fs
+use std::process
+use wj_cli_args::long_flag_value_or
+use wj_cli_args::long_flag_value
+use wj_json_doc::object
+use wj_json_doc::array
+use wj_json_doc::with
+use wj_json_doc::push
+use wj_json_doc::from_str
+use wj_json_doc::from_int
+use wj_json_doc::from_float
+use wj_json_doc::Json
+use wj_json_doc::dumps
+use wj_proc::timed
+use wj_proc::load_avg
+use wj_stats::median
+use wj_table::fixed
+use wj_table::signed
+
+struct Run {
+    cpu: f64,
+    out: string,
+}
+
+// one run of `prog` under arm `arm`; CPU seconds (user + sys) and trimmed stdout
+fn run_once(wj: string, prog: string, arm: string, mode: string) -> Run {
+    let mut argv: Vec<string> = Vec::new()
+    let mut log = ""
+    if mode == "record" {
+        log = "/tmp/wj-bench-" + prog.replace("/", "_") + ".wjlog"
+        argv = ["WJ_CAPS=enforce", wj, "run", "--interpret", prog]
+        if arm == "record" {
+            argv.push("--record")
+            argv.push(log)
+        }
+    } else {
+        argv = ["WJ_CAPS=" + arm, wj, "run", "--interpret", "--deterministic-time", prog]
+    }
+    let t = match timed("env", argv) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln("cannot run ${prog}: ${e}")
+            process.exit(1)
+            panic("unreachable")
+        },
+    }
+    if mode == "record" && fs.exists(log) {
+        let _ = fs.remove_file(log)
+    }
+    if t.output.status != 0 {
+        eprintln("${prog} failed under WJ_CAPS=${arm}: ${t.output.stderr}")
+        process.exit(1)
+    }
+    Run { cpu: t.user + t.sys, out: t.output.stdout.trim().to_string() }
+}
+
+fn main() {
+    let args = env.args()
+    let wj = long_flag_value_or(args, "wj", env.get_or("WJ", "wj"))
+    let runs: int = (long_flag_value_or(args, "runs", "9")).parse::<int>() ?? 9
+    let max_load: f64 = (long_flag_value_or(args, "max-load", "20.0")).parse::<f64>() ?? 20.0
+    let json_out = long_flag_value(args, "json")
+    let mode = long_flag_value_or(args, "mode", "caps")
+    if mode != "caps" && mode != "record" {
+        eprintln("--mode must be caps or record")
+        process.exit(2)
+    }
+    let load = load_avg()
+    let names = ["non-sink (HashMap/Rc builtins, 400k iterations)", "sink-dense (fs::exists + random + time, 30k iterations)"]
+    let progs = ["bench/effects/nonsink.wj", "bench/effects/sink.wj"]
+    let base = if mode == "caps" { "off" } else { "plain" }
+    let test = if mode == "caps" { "enforce" } else { "record" }
+    let mut results = array()
+    let mut lines: Vec<string> = Vec::new()
+    let mut w = 0
+    while w < progs.len() {
+        let prog = progs[w]
+        let _ = run_once(wj, prog, base, mode)
+        let _ = run_once(wj, prog, test, mode)
+        let mut base_t: Vec<f64> = Vec::new()
+        let mut test_t: Vec<f64> = Vec::new()
+        let mut outs: Vec<string> = Vec::new()
+        let mut r = 0
+        while r < runs {
+            for arm in [base, test, test, base] {
+                let x = run_once(wj, prog, arm, mode)
+                if arm == base {
+                    base_t.push(x.cpu)
+                } else {
+                    test_t.push(x.cpu)
+                }
+                if !outs.contains(x.out) {
+                    outs.push(x.out)
+                }
+            }
+            r = r + 1
+        }
+        if outs.len() != 1 {
+            eprintln("${names[w]}: the arms printed different output: ${outs}")
+            process.exit(1)
+        }
+        let mb = median(base_t)
+        let mt = median(test_t)
+        let overhead = 100.0 * (mt / mb - 1.0)
+        let entry = with(with(with(with(with(object(), "workload", from_str(names[w])), "off_s", from_float(mb)), "on_s", from_float(mt)), "overhead_pct", from_float(overhead)), "runs_per_arm", from_int((2 * runs) as i64))
+        results = push(results, entry)
+        lines.push("${names[w]}: off ${fixed(mb, 3)}s on ${fixed(mt, 3)}s overhead ${signed(overhead, 1)}% (${2 * runs} runs per arm)")
+        w = w + 1
+    }
+    let load_after = load_avg()
+    let worst = if load > load_after { load } else { load_after }
+    let valid = worst <= max_load
+    let report = with(with(with(with(with(with(object(), "load_avg_1m_before", from_float(load)), "load_avg_1m_after", from_float(load_after)), "max_load", from_float(max_load)), "valid", Json::Bool(valid)), "cpu_time", Json::Bool(true)), "results", results)
+    for l in lines {
+        println(l)
+    }
+    let verdict = if valid { "valid measurement" } else { "PROVISIONAL (load above ${fixed(max_load, 1)}); re-measure on a quiet machine" }
+    println("load average ${fixed(load, 1)} -> ${fixed(load_after, 1)}: ${verdict}")
+    match json_out {
+        Some(path) => {
+            let _ = fs.write(path, dumps(report, 1, false))
+        },
+        None => {},
+    }
+    process.exit(if valid { 0 } else { 3 })
+}

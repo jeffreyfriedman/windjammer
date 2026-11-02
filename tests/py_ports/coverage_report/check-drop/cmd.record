@@ -1,0 +1,1 @@
+git -C $REPO show $ORIG:scripts/coverage_report.py > /tmp/orig-cov-$$.py; CR="python3 /tmp/orig-cov-$$.py"; D0=$(pwd -P); sed "s#@W@#$D0#g" export.in.json > export.json; sed "s#@W@#$D0#g" export2.in.json > export2.json; $CR --update export.json cov/base.json cli; $CR --check export2.json cov/base.json cli; rc=$?; rm -f export.json export2.json /tmp/orig-cov-$$.py; exit $rc

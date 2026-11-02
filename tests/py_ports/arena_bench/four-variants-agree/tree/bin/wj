@@ -1,0 +1,10 @@
+#!/bin/sh
+# stand-in for wj build: writes a generated crate with the program's name
+out=""; src=""
+shift
+while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; --no-cargo|--no-lint) ;; *) src="$1" ;; esac; shift; done
+name=$(basename "$src" .wj)
+mkdir -p "$out"
+echo "$name" > "$out/name"
+if [ -n "$WJ_AUTO_ARENA" ]; then echo "buf.clear();" > "$out/$name.rs"; else echo "fn main() {}" > "$out/$name.rs"; fi
+case "$src" in *breaks*) echo "boom" 1>&2; exit 1 ;; esac

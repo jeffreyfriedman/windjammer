@@ -1,0 +1,241 @@
+// Aggregate an llvm-cov JSON export per src/ module and compare with / update the baseline.
+//
+// Ratchet rule: per module, covered-line percentage may not drop by more than TOLERANCE points
+// (new code with tests keeps it level; deleting tests or adding untested code lowers it).
+//
+//   wj run scripts/wj/coverage_report.wj MODE EXPORT.json BASELINE.json SCOPE      (MODE: --check | --update)
+use std::env
+use std::fs
+use std::process
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::items
+use wj_json_doc::members
+use wj_json_doc::as_f64
+use wj_json_doc::as_i64
+use wj_json_doc::as_str
+use wj_json_doc::dumps
+use wj_json_doc::object
+use wj_json_doc::array
+use wj_json_doc::with
+use wj_json_doc::push
+use wj_json_doc::from_str
+use wj_json_doc::from_int
+use wj_json_doc::from_float
+use wj_json_doc::float_repr
+use wj_table::fixed
+
+const TOLERANCE: f64 = 0.5
+
+struct Module {
+    name: string,
+    lines: i64,
+    covered: i64,
+    branches: i64,
+    branches_covered: i64,
+}
+
+struct FileCov {
+    rel: string,
+    uncovered: i64,
+    lines: i64,
+}
+
+fn is_user_facing(rel: string) -> bool {
+    rel.starts_with("src/bin/") || rel.starts_with("src/cli/") || rel.starts_with("src/test_runner/") || rel.starts_with("src/linter/") || rel.starts_with("src/formatter/") || rel.starts_with("src/check/") || rel.starts_with("src/interpreter/")
+}
+
+fn module_of(rel: string) -> string {
+    let parts = rel.split("/").collect()
+    if parts.len() > 2 {
+        return parts[1]
+    }
+    let last = parts[1]
+    if last.ends_with(".rs") {
+        return last.substring(0, last.len() - 3)
+    }
+    last
+}
+
+// Python's round(100.0 * covered / lines, 2)
+fn pct(covered: i64, lines: i64) -> f64 {
+    if lines == 0 {
+        return 100.0
+    }
+    let raw = 100.0 * (covered as f64) / (lines as f64)
+    fixed(raw, 2).parse::<f64>() ?? raw
+}
+
+fn count_of(doc: Json, key: string) -> i64 {
+    match get(doc, key) {
+        Some(v) => as_i64(v) ?? 0,
+        None => 0,
+    }
+}
+
+fn aggregate(export: Json, root: string, scope: string) -> Json {
+    let mut mods: Vec<Module> = Vec::new()
+    let mut files: Vec<FileCov> = Vec::new()
+    let data = items(get(export, "data") ?? array())
+    let first = if data.len() > 0 { data[0] } else { object() }
+    let prefix = root + "/"
+    for f in items(get(first, "files") ?? array()) {
+        // llvm-cov writes physical paths; a path outside the granted tree cannot be canonicalized, and is not ours anyway
+        let name = as_str(get(f, "filename") ?? object()) ?? ""
+        if !name.starts_with(prefix) {
+            continue
+        }
+        let rel = name.substring(prefix.len(), name.len())
+        if !rel.starts_with("src/") {
+            continue
+        }
+        let summary = get(f, "summary") ?? object()
+        let lines = get(summary, "lines") ?? object()
+        let br = get(summary, "branches") ?? object()
+        let key = module_of(rel)
+        let mut found = false
+        let mut i = 0
+        while i < mods.len() {
+            if mods[i].name == key {
+                mods[i].lines = mods[i].lines + count_of(lines, "count")
+                mods[i].covered = mods[i].covered + count_of(lines, "covered")
+                mods[i].branches = mods[i].branches + count_of(br, "count")
+                mods[i].branches_covered = mods[i].branches_covered + count_of(br, "covered")
+                found = true
+            }
+            i = i + 1
+        }
+        if !found {
+            mods.push(Module { name: key, lines: count_of(lines, "count"), covered: count_of(lines, "covered"), branches: count_of(br, "count"), branches_covered: count_of(br, "covered") })
+        }
+        files.push(FileCov { rel: rel, uncovered: count_of(lines, "count") - count_of(lines, "covered"), lines: count_of(lines, "count") })
+    }
+    mods.sort_by(|a, b| a.name.cmp(b.name))
+    let mut tot_l = 0
+    let mut tot_c = 0
+    let mut modules = object()
+    for m in mods {
+        tot_l = tot_l + m.lines
+        tot_c = tot_c + m.covered
+        let entry = with(with(with(with(with(object(), "lines", from_int(m.lines)), "covered", from_int(m.covered)), "branches", from_int(m.branches)), "branches_covered", from_int(m.branches_covered)), "pct", from_float(pct(m.covered, m.lines)))
+        modules = with(modules, m.name, entry)
+    }
+    let mut user: Vec<FileCov> = Vec::new()
+    for f in files {
+        if is_user_facing(f.rel) {
+            user.push(f)
+        }
+    }
+    user.sort_by(|a, b| b.uncovered.cmp(a.uncovered))
+    let mut top = array()
+    let mut n = 0
+    for f in user {
+        if n >= 15 {
+            break
+        }
+        top = push(top, with(with(with(object(), "file", from_str(f.rel)), "uncovered_lines", from_int(f.uncovered)), "lines", from_int(f.lines)))
+        n = n + 1
+    }
+    let denom = if tot_l > 1 { tot_l } else { 1 }
+    let total = with(with(with(object(), "lines", from_int(tot_l)), "covered", from_int(tot_c)), "pct", from_float(fixed(100.0 * (tot_c as f64) / (denom as f64), 2).parse::<f64>() ?? 0.0))
+    with(with(with(with(object(), "total", total), "modules", modules), "biggest_uncovered_user_facing", top), "scope", from_str(scope))
+}
+
+fn read_json(path: string) -> Option<Json> {
+    match fs.read_to_string(path) {
+        Ok(t) => match parse(t) {
+            Ok(d) => Some(d),
+            Err(e) => {
+                println("${path}: ${e}")
+                process.exit(1)
+                None
+            },
+        },
+        Err(_) => None,
+    }
+}
+
+fn pad5(n: i64) -> string {
+    wj_table::pad_left("${n}", 5)
+}
+
+fn main() {
+    let args = env.args()
+    if args.len() < 5 {
+        println("usage: coverage_report.wj MODE EXPORT.json BASELINE.json SCOPE")
+        process.exit(2)
+    }
+    let mode = args[1]
+    let export_path = args[2]
+    let baseline_path = args[3]
+    let scope = args[4]
+    let root = env.current_dir()
+    let export = match read_json(export_path) {
+        Some(e) => e,
+        None => {
+            println("cannot read ${export_path}")
+            process.exit(1)
+            object()
+        },
+    }
+    let got = aggregate(export, root, scope)
+    let total = get(got, "total") ?? object()
+    println("coverage (${scope}): ${count_of(total, "covered")}/${count_of(total, "lines")} lines = ${float_repr(as_f64(get(total, "pct") ?? object()) ?? 0.0)}%")
+    let mut shown = 0
+    for u in items(get(got, "biggest_uncovered_user_facing") ?? array()) {
+        if shown >= 10 {
+            break
+        }
+        println("  uncovered ${pad5(count_of(u, "uncovered_lines"))} / ${pad5(count_of(u, "lines"))}  ${as_str(get(u, "file") ?? object()) ?? ""}")
+        shown = shown + 1
+    }
+    let base_opt = read_json(baseline_path)
+    if mode == "--update" || base_opt.is_none() {
+        let dir = match fs.parent(baseline_path) {
+            Some(p) => p,
+            None => "",
+        }
+        if dir.len() > 0 {
+            let _ = fs.create_dir_all(dir)
+        }
+        match fs.write(baseline_path, dumps(got, 2, false) + "\n") {
+            Ok(_) => {},
+            Err(e) => {
+                println("cannot write ${baseline_path}: ${e}")
+                process.exit(1)
+            },
+        }
+        println("wrote ${baseline_path}")
+        process.exit(0)
+    }
+    let base = base_opt ?? object()
+    let base_scope = as_str(get(base, "scope") ?? object())
+    let base_scope_text = match base_scope {
+        Some(s) => "'" + s + "'",
+        None => "None",
+    }
+    if base_scope != Some(scope) {
+        println("baseline scope ${base_scope_text} != '${scope}': compare like with like")
+        process.exit(1)
+    }
+    let mut drops: Vec<string> = Vec::new()
+    let got_modules = get(got, "modules") ?? object()
+    for m in members(get(base, "modules") ?? object()) {
+        match get(got_modules, m.key) {
+            Some(g) => {
+                let gp = as_f64(get(g, "pct") ?? object()) ?? 0.0
+                let bp = as_f64(get(m.value, "pct") ?? object()) ?? 0.0
+                if gp + TOLERANCE < bp {
+                    drops.push("${m.key}: ${float_repr(bp)}% -> ${float_repr(gp)}%")
+                }
+            },
+            None => {},
+        }
+    }
+    if drops.len() > 0 {
+        println("coverage dropped:\n  " + drops.join("\n  "))
+        process.exit(1)
+    }
+    println("coverage ratchet: ok")
+}

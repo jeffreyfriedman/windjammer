@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/gen-check-mutants.py > scripts/gen-check-mutants.py && python3 scripts/gen-check-mutants.py --per-op 1 && ls tests/check_negative/mutants; rc=$?; rm -rf tests scripts; exit $rc
