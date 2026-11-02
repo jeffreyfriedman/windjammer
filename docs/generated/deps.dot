@@ -152,7 +152,7 @@ digraph deps {
   "check" -> "lexer" [label="5"];
   "check" -> "linter" [label="1"];
   "check" -> "metadata" [label="1"];
-  "check" -> "module_system" [label="2"];
+  "check" -> "module_system" [label="3"];
   "check" -> "package" [label="7"];
   "check" -> "parser" [label="24"];
   "check" -> "resolve" [label="3"];
