@@ -1,0 +1,3 @@
+pub fn take(items: Vec<int>) -> int {
+    items.len() as int
+}

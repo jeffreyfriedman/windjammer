@@ -1,0 +1,11 @@
+// Two files define `take` with different return types and parameter use. Each call must bind to its own
+// module's definition (C3 identity). Expected by hand: len 3, len 3.
+// expect: 3 3
+mod a
+mod b
+
+fn main() {
+    let n = b::take([1, 2, 3])
+    let ys = a::take([4, 5, 6])
+    println("${n} ${ys.len()}")
+}

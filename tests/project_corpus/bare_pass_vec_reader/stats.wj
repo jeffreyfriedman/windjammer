@@ -1,0 +1,7 @@
+pub fn total(xs: Vec<int>) -> int {
+    let mut sum = 0
+    for x in xs {
+        sum = sum + x
+    }
+    sum
+}

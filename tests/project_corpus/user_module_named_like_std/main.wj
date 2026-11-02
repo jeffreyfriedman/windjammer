@@ -1,0 +1,9 @@
+// A user module named like a std module (`http`) must be the user module, not the runtime one (identity).
+// Same program as field_forward_owned otherwise. Expected by hand.
+// expect: 200:ok
+mod http
+
+fn main() {
+    let reply = http::Reply { status: 200, body: "ok" }
+    println(http::to_response(reply))
+}

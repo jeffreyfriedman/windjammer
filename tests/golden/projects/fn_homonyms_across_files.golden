@@ -1,0 +1,45 @@
+// ==== a.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn take(items: Vec<i64>) -> Vec<i64> {
+    items
+}
+
+// ==== b.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn take(items: Vec<i64>) -> i64 {
+    items.len() as i64
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod a;
+pub mod b;
+
+// Re-export public items
+pub use a::*;
+pub use b::*;
+// ==== main.rs ====
+mod a;
+mod b;
+fn main() {
+    let n = b::take(vec![1_i64, 2_i64, 3_i64]);
+    let ys: Vec<i64> = a::take(vec![4_i64, 5_i64, 6_i64]);
+    println!("{} {}", n, ys.len());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod a;
+pub mod b;
+
+// Re-export public items
+pub use a::*;
+pub use b::*;
