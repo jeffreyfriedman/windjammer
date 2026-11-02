@@ -147,8 +147,10 @@ impl RunJournal {
 
     pub fn record(&mut self, idx: usize, callee: &str, result: Json, vt_ns: u64) -> Result<(), String> {
         if let Some(f) = self.file.as_mut() {
-            let line = canon(&json!({ "step": idx, "callee": callee, "result": result, "vt_ns": vt_ns }));
-            writeln!(f, "{line}").and_then(|_| f.flush()).map_err(|e| format!("cannot write the journal: {e}"))?;
+            // one `write` per step (keys in canonical order: callee, result, step, vt_ns); the file is unbuffered, so a crash of the
+            // process never loses a step that `record` returned from
+            let line = format!("{{\"callee\":{},\"result\":{},\"step\":{idx},\"vt_ns\":{vt_ns}}}\n", Json::String(callee.to_string()), canon(&result));
+            f.write_all(line.as_bytes()).map_err(|e| format!("cannot write the journal: {e}"))?;
         }
         self.steps.insert(idx, Entry { callee: callee.to_string(), result, vt_ns });
         Ok(())
@@ -157,7 +159,7 @@ impl RunJournal {
     /// The function returned `result`: mark the run finished.
     pub fn finish(mut self, result: &Json) -> Result<(), String> {
         if let Some(f) = self.file.as_mut() {
-            writeln!(f, "{}", canon(&json!({ "done": result }))).and_then(|_| f.flush()).map_err(|e| format!("cannot write the journal: {e}"))?;
+            f.write_all(format!("{{\"done\":{}}}\n", canon(result)).as_bytes()).map_err(|e| format!("cannot write the journal: {e}"))?;
         }
         Ok(())
     }
@@ -166,6 +168,13 @@ impl RunJournal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_recorded_step_line_is_the_canonical_form_of_its_object() {
+        let (callee, result) = ("fs::read \"x\"", json!({"b": [1, 2], "a": null}));
+        let fast = format!("{{\"callee\":{},\"result\":{},\"step\":{},\"vt_ns\":{}}}", Json::String(callee.to_string()), canon(&result), 3, 7);
+        assert_eq!(fast, canon(&json!({ "step": 3, "callee": callee, "result": result, "vt_ns": 7 })));
+    }
 
     #[test]
     fn canonical_text_sorts_keys() {

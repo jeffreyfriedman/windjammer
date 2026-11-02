@@ -589,9 +589,27 @@ Delivered: `durable_core` (one journal implementation compiled into the interpre
 | One journal: interpreter crash then compiled resume, and the reverse, output and files equal the uninterrupted run, at every step boundary | **Met: 70 crash points agree, both directions, on the 5 sample workflows** (`WJ_DURABLE_COMPILED=1 cargo test --test durable_compiled`; the run builds the samples, about 3 minutes) |
 | Vectors: journal scenarios and value encodings against both implementations | **Met** (`tests/effects/durable_vectors.json`, `durable_value_vectors.json`; `durable_core` and runtime unit tests) |
 | Emitted code: one `durable::run` per durable function, one `durable::step` per step position, none in a program without `durable fn`, no `#[durable]` attribute | **Met** (`durable_compiled`) |
-| Compiled journal cost at most 2x per step over in-memory | **Not measured** (machine loaded); provisional until the benchmark runs on a quiet machine |
+| Compiled journal cost at most 2x per step over in-memory | **Not met (measured 2026-11-02, CPU time, median of 22 runs per arm, 3000 steps, load 19-20)**: 0.0044 s in memory, 0.0132 s file-backed, **3.0x** after the single-write change (4.3x before it); see "Measured 2026-11-02" below for the profile and plan |
 
 Found by the gate: the generated Rust emitted the `durable` marker as an attribute, and the compiled runtime lacked `fs::append` that the interpreter has. The second produced a new gate (`every_sink_of_an_authority_module_exists_in_the_compiled_runtime`) with a shrink-only list of 8 sinks the compiled runtime still lacks (`env::home_dir`, `env::remove`, `env::set`, `fs::canonicalize`, `fs::metadata`, `fs::set_current_dir`, `fs::write_bytes`, `process::run_with_args`). Kill criteria: none triggered.
+
+### Measured 2026-11-02 (quiet window, load 12 to 20; samples taken above load 20 were discarded)
+
+Interpreter workloads (`bench/effects/*.wj`, CPU time user+sys, median, interleaved arms, identical output on both arms):
+
+| Gate | Result |
+|---|---|
+| Capability enforcement overhead at most 5% on general programs | **Met: +2.5%** on the non-sink workload (400k iterations of HashMap/Rc builtins, 18 runs per arm). The sink-dense workload (30k `fs::exists`, random and time calls) runs 7.0x slower with enforcement on, as before: every sink pays a grant check, and the workload is nothing else |
+| Record overhead at most 2x on the sink-dense program, at most +3% on the non-sink one | **Met: 1.44x sink-dense, +2.95% non-sink** (the non-sink figure is at the noise floor of the gate) |
+| Replay overhead (no gate; replay performs no effect) | +25.8% sink-dense, +2.4% non-sink |
+| Code-mode cold start under 5 ms (in-process `execute()`) | **Met: median 4.44 ms, p90 8.08 ms**, load 12.8 (`code_mode::the_in_process_execute_path_starts_fast`) |
+| Compiled journal at most 2x per step over in-memory | **Not met: 3.0x** (4.3x with the previous two-write record path) |
+
+Profile of the compiled journal: `bench/effects/durable.wj` (3000 steps, each a `time::now_millis()` call that costs about 1 microsecond) runs in 4.4 ms in memory and 13.2 ms with `WJ_JOURNAL_DIR`; the extra 2.9 microseconds per step is one unbuffered `write` system call plus the canonical JSON text of the record. The first measurement was 23.5 ms because `writeln!` on the raw file issued two system calls per step and built the record through a `serde_json::json!` tree; `RunJournal::record` now formats the canonical line directly and writes it once (byte-identical, pinned by a unit test and the shared vectors). What remains is the cost of the system call itself against a step that is nearly free; the interpreter's 1.57x hides it because its steps are slower.
+
+Plan, not yet done: journal reads that cannot change the outside world (`time`, `random`, `env` reads, `fs` reads) lazily and flush the buffer before the next step that writes outside the process (file writes, network, process, console), so the journal is always complete before anything that cannot be undone and a crash can only re-run reads; this keeps the at-least-once contract and amortizes the system call over runs of read steps. The classification is the sink table's (`FsRead`, `EnvRead`, `Time`, `Random` against the write kinds), available at the lowering site. Kill criterion: if the cross-implementation gate (70 crash points) disagrees after the change, or the lazy journal changes what a resumed run prints, drop it and keep the 2x gate as unmet rather than weaken it.
+
+Scripts: `scripts/wj/bench_effects_overhead.wj` placed `--record` and `--replay` after the program file, where `wj run` hands them to the program as its own arguments, so record and replay modes measured nothing (the log was never written); the flags now come before the program. The script does not yet build with `wj run --compiled` (use-after-move of the `base` and `test` strings in the arm loop, a compiler gap to file); the figures above were taken with a small Python harness that runs the same arms, recorded here as the fallback until that is fixed.
 
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 
