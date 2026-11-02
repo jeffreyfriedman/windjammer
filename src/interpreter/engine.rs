@@ -512,8 +512,8 @@ impl Interpreter {
 }
 
 /// Counts of the fast paths taken in a run: machine-code loops compiled with inlined method calls,
-/// in-place `match m.get(k)` and `m.insert(k, x)`, `push`es that kept a vector packed, and the
-/// unboxed arm bindings of in-place lookups.
+/// in-place `match m.get(k)` and `m.insert(k, x)`, `push`es that kept a vector packed, the
+/// unboxed arm bindings of in-place lookups, plain `format` templates and in-place `push_str`.
 #[derive(Default, Debug, Clone, Copy)]
 pub(crate) struct FastHits {
     pub(crate) inline: u64,
@@ -522,6 +522,10 @@ pub(crate) struct FastHits {
     pub(crate) packed: u64,
     /// Arm bindings of in-place map lookups kept unboxed.
     pub(crate) unboxed: u64,
+    /// `format` templates of bare `{}`s joined from their pieces.
+    pub(crate) fmt: u64,
+    /// `s.push_str(x)` statements appended in place.
+    pub(crate) pushstr: u64,
 }
 
 impl Interpreter {

@@ -224,7 +224,10 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.flush();
         if it.jit_debug {
             let f = it.fast;
-            eprintln!("[fast] inline {} mapget {} mapins {} packed {} unboxed {}", f.inline, f.mapget, f.mapins, f.packed, f.unboxed);
+            eprintln!(
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr
+            );
         }
         if let Some(p) = &opts.result_json {
             let (steps, effect_calls, output_bytes) = it.usage();

@@ -50,11 +50,12 @@ pub(super) fn map_get(cx: &mut Cx, value: E) -> Option<MapGet> {
     Some(MapGet { map: expr(cx, o)?.code(), key: expr(cx, key)?.code() })
 }
 
-/// An expression that cannot rebind a local or call anything: locals, literals, references to them,
-/// and operators over those (so the receiver's slot is the same before and after it runs).
-fn simple(e: E) -> bool {
+/// An expression that cannot rebind a local: locals, literals, references to them, operators over
+/// those and `format` of those (so the receiver's slot is the same before and after it runs).
+pub(super) fn simple(e: E) -> bool {
     match e {
         Expression::Identifier { .. } | Expression::Literal { .. } => true,
+        Expression::MacroInvocation { name, args, is_repeat: false, .. } if name == "format" => args.iter().all(|a| simple(a)),
         Expression::Unary { operand, .. } => simple(operand),
         Expression::Binary { left, right, .. } => simple(left) && simple(right),
         Expression::FieldAccess { object, .. } => simple(object),
@@ -86,7 +87,8 @@ fn local_map(v: &mut Value, f: impl FnOnce(&mut Rc<crate::interpreter::kmap::KMa
 /// A statement `m.insert(k, x)` (its value unused) on a local holding a map.
 pub(super) fn insert_stmt(cx: &mut Cx, s: S) -> Option<Code> {
     let Statement::Expression { expr: call, .. } = s else { return None };
-    let Expression::MethodCall { object: Expression::Identifier { name, .. }, method, type_args: None, arguments, .. } = call else { return None };
+    let Expression::MethodCall { object: Expression::Identifier { name, .. }, method, type_args: None, arguments, location } = call else { return None };
+    let loc = location.as_ref();
     let [(None, k), (None, x)] = arguments.as_slice() else { return None };
     if method != "insert" || !cx.it.drop_types.is_empty() || !simple(k) || !simple(x) {
         return None;
@@ -102,6 +104,7 @@ pub(super) fn insert_stmt(cx: &mut Cx, s: S) -> Option<Code> {
         it.fast.mapins += 1;
         let k = strip_refs(kc(it, b)?)?;
         let x = strip_refs(xc(it, b)?)?;
+        it.mark(loc); // as the generic call marks the call once its arguments are evaluated
         // test-only mutant (debug builds): a map another binding shares is not written (no copy)
         let skip_shared = cfg!(debug_assertions) && it.jit_mutant.as_deref() == Some("mapins");
         local_map(&mut it.rstack[b + slot], |km| {

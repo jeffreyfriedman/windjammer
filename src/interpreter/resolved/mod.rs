@@ -23,6 +23,7 @@ pub(crate) mod jit;
 mod literal;
 mod mapfast;
 mod matching;
+mod strfast;
 mod method;
 pub(crate) mod osr;
 mod place;

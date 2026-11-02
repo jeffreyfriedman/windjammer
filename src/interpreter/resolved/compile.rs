@@ -584,6 +584,9 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
     if let Some(c) = super::mapfast::insert_stmt(cx, s) {
         return Some(c);
     }
+    if let Some(c) = super::strfast::push_str_stmt(cx, s) {
+        return Some(c);
+    }
     if let Some(c) = stmt_native(cx, s) {
         return Some(c);
     }

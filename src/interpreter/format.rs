@@ -642,3 +642,27 @@ fn parse_spec(s: &str) -> Spec {
     }
     sp
 }
+
+/// A `format` template whose placeholders are all a bare `{}` (escaped braces allowed), split at the
+/// placeholders: `nargs + 1` literal pieces, or `None` when the template has a name, an index or a
+/// spec (`format_args` then reads it). For a bare `{}` `format_args` writes `display_string` of the
+/// argument (its default spec neither signs nor pads), which is what the pieces are joined with.
+pub(crate) fn plain_template(t: &str, nargs: usize) -> Option<Vec<String>> {
+    let mut pieces = vec![String::new()];
+    let mut it = t.chars().peekable();
+    while let Some(c) = it.next() {
+        match (c, it.peek()) {
+            ('{', Some('{')) | ('}', Some('}')) => {
+                it.next();
+                pieces.last_mut()?.push(c);
+            }
+            ('{', Some('}')) => {
+                it.next();
+                pieces.push(String::new());
+            }
+            ('{', _) => return None,
+            (c, _) => pieces.last_mut()?.push(c),
+        }
+    }
+    (pieces.len() == nargs + 1).then_some(pieces)
+}
