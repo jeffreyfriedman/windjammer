@@ -84,6 +84,7 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     // processes
     ("process::run", &[u(Process, Res::CmdArg(0))]),
     ("process::run_with_output", &[u(Process, Res::CmdArg(0))]),
+    ("process::run_inherit", &[u(Process, Res::CmdArg(0))]),
     ("process::run_with_args", &[u(Process, P0)]),
     ("subprocess::spawn", &[u(Process, P0)]),
     // network

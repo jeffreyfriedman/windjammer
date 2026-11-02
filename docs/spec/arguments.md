@@ -2,7 +2,7 @@
 
 Named arguments and parameter defaults ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 3). The parser rewrites every call to a callee declared in the same file into a positional call with the defaults filled in, so all backends see ordinary calls. Arguments are evaluated in parameter order.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/arguments/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/arguments/`.
 
 ## Named arguments and defaults
 

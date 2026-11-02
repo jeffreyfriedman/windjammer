@@ -2,7 +2,7 @@
 
 `x |> stage` is parser-level sugar for a call (design: docs/design/pipe-operator.md). Because the parser removes it, all backends agree by construction.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/pipe/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/pipe/`.
 
 ## Basic pipe
 

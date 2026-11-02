@@ -2,7 +2,7 @@
 
 ADR-0004 (accepted 2026-10-10) decides the surface: `async f()`/`spawn f()` prefixes and blocks, one handle type `Task<T>` with `.wait()`, structured concurrency through `scope { }`, channels as methods, no `<-` operators, no `go`. **Almost none of this is implemented.** Rules marked [PLANNED] carry an `xfail` example (the example states the intended behaviour; it is expected to fail today and the run fails if it starts passing).
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/concurrency/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/concurrency/`.
 
 ## spawn
 

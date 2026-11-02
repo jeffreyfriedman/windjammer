@@ -1,0 +1,1 @@
+$WJ run $ALLOW $SCRIPTS/check_versions.wj 0.50.0

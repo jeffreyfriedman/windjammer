@@ -1,0 +1,4 @@
+// rust: gap
+fn main() {
+    let x: int = 1
+}

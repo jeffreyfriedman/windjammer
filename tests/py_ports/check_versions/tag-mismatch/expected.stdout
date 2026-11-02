@@ -1,0 +1,7 @@
+Workspace version: 0.50.0
+
+Checking against tag version: 0.51.0
+ERROR: Tag version (0.51.0) doesn't match workspace version (0.50.0)
+  Update Cargo.toml: version = "0.51.0"
+
+FAILED: Found 1 version mismatch(es)

@@ -1,0 +1,2 @@
+sieve {'baseline': #, 'idiomatic': #, 'optimized': #}
+fib {'baseline': #, 'idiomatic': #, 'optimized': #}
