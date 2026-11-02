@@ -735,6 +735,13 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Generate code for struct literal expression Struct { field: value }
     /// Handles string coercion, field shorthand, auto-clone for borrowed self
+    /// Integer width a field of the struct literal being generated imposes on its value's literals.
+    fn struct_literal_field_int_target(&self, field_name: &str) -> Option<crate::parser::Type> {
+        let struct_name = self.current_struct_literal_name.as_deref()?;
+        let field_type = self.lookup_struct_field_types(struct_name)?.get(field_name)?.clone();
+        Self::assignment_target_needs_int_codegen_context(&field_type).then_some(field_type)
+    }
+
     pub(in crate::codegen::rust) fn generate_struct_literal(
         &mut self,
         name: &str,
@@ -774,15 +781,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let prev_expr_ctx = self.in_expression_context;
                 self.in_expression_context = true;
                 let prev_struct_assign_int = self.assignment_int_target_type.take();
-                if let Some(struct_name) = self.current_struct_literal_name.as_deref() {
-                    if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
-                        if let Some(field_type) = field_types.get(field_name) {
-                            if Self::assignment_target_needs_int_codegen_context(field_type) {
-                                self.assignment_int_target_type = Some(field_type.clone());
-                            }
-                        }
-                    }
-                }
+                self.assignment_int_target_type = self.struct_literal_field_int_target(field_name);
                 let mut expr_str = self.generate_expression(expr);
                 self.assignment_int_target_type = prev_struct_assign_int;
                 self.in_expression_context = prev_expr_ctx;

@@ -15,6 +15,63 @@ fn trace_import(msg: impl AsRef<str>) {
     }
 }
 
+pub fn merge_struct_fields_from_items(
+    items: &[Item<'_>],
+    module_prefix: &[String],
+    global_struct_fields: &mut HashMap<String, HashMap<String, Type>>,
+    struct_defining_module_paths: &mut HashMap<String, Vec<Vec<String>>>,
+) {
+    for item in items {
+        match item {
+            Item::Struct { decl, .. } => {
+                let qualified =
+                    qualify_struct_key(module_prefix, &decl.name);
+                let mut fields = HashMap::new();
+                for field in &decl.fields {
+                    fields.insert(field.name.clone(), field.field_type.clone());
+                }
+                global_struct_fields.insert(qualified, fields);
+                struct_defining_module_paths
+                    .entry(decl.name.clone())
+                    .or_default()
+                    .push(module_prefix.to_vec());
+            }
+            Item::Mod { name, items, .. } => {
+                let mut next = module_prefix.to_vec();
+                next.push(name.clone());
+                merge_struct_fields_from_items(
+                    items,
+                    &next,
+                    global_struct_fields,
+                    struct_defining_module_paths,
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Field types of the structs declared in `program` itself (the solver's field-read typing, NUM-FIELD-DECLARED).
+pub fn local_struct_field_table(
+    program: &crate::parser::Program<'_>,
+) -> std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>> {
+    let mut fields = std::collections::HashMap::new();
+    let mut paths = std::collections::HashMap::new();
+    merge_struct_fields_from_items(&program.items, &[], &mut fields, &mut paths);
+    // Tuple-variant payloads (`Val::Int(i64)`) are positional fields of `Val::Int` (NUM-FIELD-DECLARED).
+    for item in &program.items {
+        if let crate::parser::Item::Enum { decl, .. } = item {
+            for v in &decl.variants {
+                if let crate::parser::EnumVariantData::Tuple(tys) = &v.data {
+                    let payload = tys.iter().enumerate().map(|(i, t)| (i.to_string(), t.clone())).collect();
+                    fields.insert(format!("{}::{}", decl.name, v.name), payload);
+                }
+            }
+        }
+    }
+    fields
+}
+
 /// Build registry key: `a::b::StructName` from file/nested-mod prefix and struct name.
 pub fn qualify_struct_key(module_prefix: &[String], struct_name: &str) -> String {
     if module_prefix.is_empty() {
