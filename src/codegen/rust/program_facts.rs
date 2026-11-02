@@ -16,8 +16,6 @@ pub(crate) struct IdiomScratch {
     pub(crate) next_closure_borrows_captures: bool,
     /// Locals bound to `lines()` / `split(..)` / `split_whitespace()` (their `next()` yields `&str`).
     pub(crate) text_iterator_locals: HashSet<String>,
-    /// Functions declared only inside inline `mod`s (emitted inside their module, not at top level).
-    pub(crate) inline_mod_fn_names: HashSet<String>,
     /// Names a type annotation in this file can refer to: items declared here and `use` imports.
     pub(crate) file_scope_type_names: HashSet<String>,
     /// True when the file has a glob import or nested `mod` (name scope is not tracked precisely).
@@ -32,7 +30,6 @@ pub(crate) struct IdiomScratch {
 impl<'ast> CodeGenerator<'ast> {
     /// Hand-written trait impls (`impl PartialEq for T`) suppress the matching auto-derive.
     pub(super) fn collect_user_trait_impls(&mut self, program: &Program<'_>) {
-        self.idiom.inline_mod_fn_names = Self::inline_mod_only_function_names(program);
         self.collect_file_scope(program);
         self.idiom.user_trait_impls.clear();
         for item in &program.items {
@@ -94,34 +91,6 @@ impl<'ast> CodeGenerator<'ast> {
     /// `opt.copied().unwrap_or(d)` / `.cloned().unwrap_or(d)`: the receiver already yields owned values.
     pub(super) fn receiver_already_owned(expr_str: &str) -> bool {
         expr_str.contains(".copied().unwrap_or") || expr_str.contains(".cloned().unwrap_or")
-    }
-
-    /// Functions declared inside an inline `mod` are analyzed (signature registry) but emitted inside
-    /// their module by `generate_inline_module_item`, never again at the top level.
-    pub(super) fn inline_mod_only_function_names(program: &Program<'_>) -> HashSet<String> {
-        let top_level: HashSet<&str> = program
-            .items
-            .iter()
-            .filter_map(|item| match item {
-                Item::Function { decl, .. } => Some(decl.name.as_str()),
-                _ => None,
-            })
-            .collect();
-        program
-            .items
-            .iter()
-            .filter_map(|item| match item {
-                Item::Mod { items, .. } => Some(items),
-                _ => None,
-            })
-            .flatten()
-            .filter_map(|item| match item {
-                Item::Function { decl, .. } => Some(decl.name.as_str()),
-                _ => None,
-            })
-            .filter(|n| !top_level.contains(n))
-            .map(|n| n.to_string())
-            .collect()
     }
 
     /// `&k` where `k` is an owned local (`let k = "x"` emits `String`): the user's `&` is the only borrow

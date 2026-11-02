@@ -480,7 +480,6 @@ impl<'ast> Analyzer<'ast> {
             cow_optimizations,
             cache_locality,
             mut str_ref_optimizable_params,
-            mut inferred_param_types,
         ) = if self.convergence_only {
             // str_ref analysis is cheap and affects signatures (param_types change
             // from String to &str), so it MUST run during convergence.
@@ -504,19 +503,6 @@ impl<'ast> Analyzer<'ast> {
             }
             str_ref_optimizable_params
                 .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
-            let inferred_param_types: Vec<Type> = func
-                .parameters
-                .iter()
-                .map(|param| {
-                    if str_ref_optimizable_params.contains(&param.name) {
-                        Type::Reference(Box::new(Type::Custom("str".to_string())))
-                    } else if param.decorators.iter().any(|d| d.name == "string_ref") {
-                        Type::Reference(Box::new(Type::String))
-                    } else {
-                        param.type_.clone()
-                    }
-                })
-                .collect();
             let mut returned_parameters = HashSet::new();
             let mut field_extract_parameters = HashSet::new();
             let mut field_mutated_parameters = HashSet::new();
@@ -548,7 +534,6 @@ impl<'ast> Analyzer<'ast> {
                 Vec::new(),
                 super::CacheLocalityAnalysis::default(),
                 str_ref_optimizable_params,
-                inferred_param_types,
             )
         } else {
             let clone_optimizations = self.detect_unnecessary_clones(func);
@@ -618,20 +603,6 @@ impl<'ast> Analyzer<'ast> {
             str_ref_optimizable_params
                 .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
 
-            let inferred_param_types: Vec<Type> = func
-                .parameters
-                .iter()
-                .map(|param| {
-                    if str_ref_optimizable_params.contains(&param.name) {
-                        Type::Reference(Box::new(Type::Custom("str".to_string())))
-                    } else if param.decorators.iter().any(|d| d.name == "string_ref") {
-                        Type::Reference(Box::new(Type::String))
-                    } else {
-                        param.type_.clone()
-                    }
-                })
-                .collect();
-
             (
                 clone_optimizations,
                 struct_mapping_optimizations,
@@ -649,7 +620,6 @@ impl<'ast> Analyzer<'ast> {
                 cow_optimizations,
                 cache_locality,
                 str_ref_optimizable_params,
-                inferred_param_types,
             )
         };
 
@@ -845,7 +815,7 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        inferred_param_types = func
+        let inferred_param_types: Vec<Type> = func
             .parameters
             .iter()
             .map(|param| {
@@ -884,6 +854,7 @@ impl<'ast> Analyzer<'ast> {
             cow_optimizations,
             cache_locality,
             str_ref_optimizable_params,
+            module_path: Vec::new(),
         })
     }
 

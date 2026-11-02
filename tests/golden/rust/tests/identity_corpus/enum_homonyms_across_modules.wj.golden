@@ -1,0 +1,33 @@
+mod a {
+    #[derive(Clone, Debug, PartialEq, Copy)]
+pub enum Shape {
+    Circle(f64),
+    Dot,
+}    #[inline]
+pub fn area(s: Shape) -> f64 {
+        match s {
+            Shape::Circle(r) => r * r,
+            Shape::Dot => 0.0_f64,
+        }
+}}
+
+mod b {
+    #[derive(Clone, Debug, PartialEq, Copy)]
+pub enum Shape {
+    Circle(i64),
+    Square(i64),
+}    #[inline]
+pub fn area(s: Shape) -> i64 {
+        match s {
+            Shape::Circle(r) => r * 3_i64,
+            Shape::Square(k) => k * k,
+        }
+}}
+
+fn main() {
+    let x = a::area(a::Shape::Circle(2.0_f64));
+    let y = b::area(b::Shape::Circle(2_i64));
+    let z = b::area(b::Shape::Square(3_i64));
+    println!("{} {} {}", x, y, z);
+}
+
