@@ -222,12 +222,12 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="379"];
+  "codegen" -> "ir" [label="380"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="665"];
+  "codegen" -> "parser" [label="666"];
   "codegen" -> "parser_impl" [label="2"];
-  "codegen" -> "resolve" [label="1"];
+  "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
@@ -239,11 +239,11 @@ digraph deps {
   "compiler" -> "analyzer" [label="33"];
   "compiler" -> "build_utils" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
-  "compiler" -> "codegen" [label="44"];
+  "compiler" -> "codegen" [label="38"];
   "compiler" -> "compiler_config" [label="4"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
-  "compiler" -> "debug_env" [label="5"];
+  "compiler" -> "debug_env" [label="4"];
   "compiler" -> "decorator_registry" [label="1"];
   "compiler" -> "embedded_assets" [label="2"];
   "compiler" -> "inference" [label="1"];
@@ -253,7 +253,7 @@ digraph deps {
   "compiler" -> "metadata" [label="45"];
   "compiler" -> "module_system" [label="1"];
   "compiler" -> "optimizer" [label="1"];
-  "compiler" -> "parser" [label="87"];
+  "compiler" -> "parser" [label="91"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
