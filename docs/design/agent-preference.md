@@ -223,4 +223,5 @@ Sheet v2 candidate (about 0.9 KB): types and basics, the input recipe, `len() as
 before it replaces the current sheet; the size ratchet stays at 2 KB until then.
 
 Side finding fixed in this change: guide entries in `wj docs` were indexed by heading and first line only, so `wj docs stdin` found nothing and agents without the input tip
-spent 26 turns each searching. Guide sections now carry their 20 most frequent identifier words as search tags (`src/agent_index/docs_search.rs::section_keywords`).
+spent 26 turns each searching. Guide sections now carry their 20 most frequent identifier words as search tags (`src/agent_index/docs_search.rs::section_keywords`; `wj docs stdin` now returns the section).
+A follow-up check of the no-input-tip arm with the fixed index (8 trials, `results/ablation-sc-docsfix/`, stopped by the permission-denial guard after agents probed with compound shell commands) did not remove the flailing: 19.9 turns and 24 docs calls per trial, 7 of 8 passing. Searching helps only when the agent asks for the right word, so the recipe stays in the sheet.
