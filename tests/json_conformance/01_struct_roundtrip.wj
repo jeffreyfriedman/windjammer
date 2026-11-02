@@ -1,0 +1,81 @@
+// Typed JSON (ADR-0027): encode and decode structs of scalars, string, Option, Vec and nested structs.
+// expect: enc {"city":"London","zip":null}
+// expect: enc {"name":"Ada","age":36,"tags":["math","code"],"home":{"city":"London","zip":"N1"},"score":1.5,"nick":null,"small":7}
+// expect: ok Ada 36 2 London N1 1.5 - 7
+// expect: ok Bo 1 0 Paris - 2 nick 255
+// expect: enc {"points":[{"x":1,"y":-2},{"x":3,"y":4}],"label":"p"}
+// expect: ok 2 3 4 p
+// expect: {
+// expect:   "x": 1,
+// expect:   "y": -2
+// expect: }
+use std::json
+
+struct Address {
+    city: string,
+    zip: Option<string>,
+}
+
+struct User {
+    name: string,
+    age: int,
+    tags: Vec<string>,
+    home: Address,
+    score: f64,
+    nick: Option<string>,
+    small: u8,
+}
+
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+struct Path {
+    points: Vec<Point>,
+    label: string,
+}
+
+fn show(text: string) {
+    let r: Result<User, string> = json.parse_string(text)
+    match r {
+        Ok(u) => {
+            let zip = match u.home.zip { Some(z) => z, None => "-" }
+            let nick = match u.nick { Some(n) => n, None => "-" }
+            println("ok ${u.name} ${u.age} ${u.tags.len()} ${u.home.city} ${zip} ${u.score} ${nick} ${u.small}")
+        }
+        Err(e) => println("err ${e}"),
+    }
+}
+
+fn main() {
+    let a = Address { city: "London", zip: None }
+    match json.to_string(a) {
+        Ok(s) => println("enc ${s}"),
+        Err(e) => println("err ${e}"),
+    }
+    let u = User { name: "Ada", age: 36, tags: ["math", "code"], home: Address { city: "London", zip: Some("N1") }, score: 1.5, nick: None, small: 7 }
+    let text = match json.to_string(u) {
+        Ok(s) => s,
+        Err(e) => e,
+    }
+    println("enc ${text}")
+    show(text)
+    show("{\"name\": \"Bo\", \"age\": 1, \"tags\": [], \"home\": {\"city\": \"Paris\", \"zip\": null}, \"score\": 2, \"nick\": \"nick\", \"small\": 255}")
+    let p = Path { points: [Point { x: 1, y: -2 }, Point { x: 3, y: 4 }], label: "p" }
+    match json.to_string(p) {
+        Ok(s) => {
+            println("enc ${s}")
+            let back: Result<Path, string> = json.parse_string(s)
+            match back {
+                Ok(q) => println("ok ${q.points.len()} ${q.points[1].x} ${q.points[1].y} ${q.label}"),
+                Err(e) => println("err ${e}"),
+            }
+        }
+        Err(e) => println("err ${e}"),
+    }
+    match json.to_string_pretty(Point { x: 1, y: -2 }) {
+        Ok(s) => println(s),
+        Err(e) => println("err ${e}"),
+    }
+}

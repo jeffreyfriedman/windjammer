@@ -12,8 +12,36 @@ pub fn parse(s: &str) -> Result<Value, String> {
 }
 
 /// Deserialize JSON into any type implementing `Deserialize`.
+///
+/// Errors follow ADR-0027: `<JSONPath>: <message> at line L column C` (`$.home.city: missing field ...`),
+/// the same text the interpreter produces.
 pub fn parse_string<T: for<'de> Deserialize<'de>>(s: impl AsRef<str>) -> Result<T, String> {
-    serde_json::from_str(s.as_ref()).map_err(|e| e.to_string())
+    let mut de = serde_json::Deserializer::from_str(s.as_ref());
+    match serde_path_to_error::deserialize(&mut de) {
+        Ok(v) => de.end().map(|_| v).map_err(|e| format!("$: {e}")),
+        Err(e) => Err(format!("{}: {}", json_path(e.path()), e.inner())),
+    }
+}
+
+/// `$`, `$.home.city`, `$.tags[2]`, `$["odd key"]` (mirrored by the interpreter's `json_codec::json_path`).
+pub fn json_path(p: &serde_path_to_error::Path) -> String {
+    use serde_path_to_error::Segment;
+    let mut out = String::from("$");
+    for seg in p.iter() {
+        match seg {
+            Segment::Seq { index } => out.push_str(&format!("[{index}]")),
+            Segment::Map { key } | Segment::Enum { variant: key } => {
+                if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    out.push('.');
+                    out.push_str(key);
+                } else {
+                    out.push_str(&format!("[{}]", serde_json::to_string(key).unwrap_or_default()));
+                }
+            }
+            Segment::Unknown => out.push_str(".?"),
+        }
+    }
+    out
 }
 
 /// Serialize a typed value to compact JSON string.

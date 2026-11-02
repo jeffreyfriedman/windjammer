@@ -1,0 +1,62 @@
+// Typed JSON (ADR-0027): decode errors name the JSONPath, serde's message, and the line and column.
+// expect: $.extra: unknown field `extra`, expected `city` or `zip` at line 1 column 19
+// expect: $.city: invalid type: integer `3`, expected a string at line 1 column 9
+// expect: $: missing field `city` at line 1 column 12
+// expect: $.home: missing field `city` at line 1 column 39
+// expect: $.home.zip: invalid type: boolean `true`, expected a string at line 1 column 59
+// expect: $.tags[1]: invalid type: integer `2`, expected a string at line 1 column 33
+// expect: $.small: invalid value: integer `300`, expected u8 at line 1 column 85
+// expect: $.age: invalid type: floating point `1.5`, expected i64 at line 1 column 21
+// expect: $.age: invalid type: floating point `1e+20`, expected i64 at line 1 column 39
+// expect: $: duplicate field `city` at line 1 column 18
+// expect: $: trailing characters at line 1 column 14
+// expect: $.city: EOF while parsing a value at line 1 column 8
+// expect: $: invalid length 1, expected struct Address with 2 elements at line 1 column 5
+use std::json
+
+struct Address {
+    city: string,
+    zip: Option<string>,
+}
+
+struct User {
+    name: string,
+    age: int,
+    tags: Vec<string>,
+    home: Address,
+    score: f64,
+    nick: Option<string>,
+    small: u8,
+}
+
+fn addr(text: string) {
+    let r: Result<Address, string> = json.parse_string(text)
+    match r {
+        Ok(a) => println("ok ${a.city}"),
+        Err(e) => println(e),
+    }
+}
+
+fn user(text: string) {
+    let r: Result<User, string> = json.parse_string(text)
+    match r {
+        Ok(u) => println("ok ${u.name}"),
+        Err(e) => println(e),
+    }
+}
+
+fn main() {
+    addr("{\"city\":\"x\",\"extra\":1}")
+    addr("{\"city\":3}")
+    addr("{\"zip\":\"N1\"}")
+    user("{\"name\":\"a\",\"age\":1,\"tags\":[],\"home\":{}}")
+    user("{\"name\":\"a\",\"age\":1,\"tags\":[],\"home\":{\"city\":\"c\",\"zip\":true}}")
+    user("{\"name\":\"a\",\"age\":1,\"tags\":[\"x\",2]}")
+    user("{\"name\":\"a\",\"age\":1,\"tags\":[],\"home\":{\"city\":\"c\"},\"score\":1.0,\"nick\":null,\"small\":300}")
+    user("{\"name\":\"a\",\"age\":1.5}")
+    user("{\"name\":\"a\",\"age\":100000000000000000000}")
+    addr("{\"city\":\"x\",\"city\":\"y\"}")
+    addr("{\"city\":\"x\"} []")
+    addr("{\"city\":")
+    addr("[\"x\"]")
+}
