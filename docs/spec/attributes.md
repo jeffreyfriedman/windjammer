@@ -2,7 +2,7 @@
 
 `@name(args)` annotations on items.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/attributes/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/attributes/`.
 
 Attributes the compiler interprets today include `derive`, `test`, `property_test`, `test_cases`, `timing`, `route` (web) and several UI/runtime decorators. The authoritative list lives in `src/decorator_registry.rs`; unknown attributes parse and are ignored by the core.
 

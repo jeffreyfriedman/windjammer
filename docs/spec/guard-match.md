@@ -2,7 +2,7 @@
 
 A `match` without a scrutinee, Elixir `cond` style ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 7). Lowered by the parser to a `match` with guards, so every backend sees an existing construct.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/guard-match/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/guard-match/`.
 
 ## Guard-only match
 

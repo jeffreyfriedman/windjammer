@@ -12,7 +12,7 @@ A program developed against the interpreter is rejected by the compiled path for
 | W0001 | explicit `&mut self` | but accepted inside `impl Trait for T` |
 | W0012 (warning) | `.as_str()` | was a hard error; now a warning in every mode, removed by `wj fix` |
 
-Conversely the interpreter needs `.as_str()` before `s[a..b]` on `String` values and a collected `Vec` for `env::args()` indexing, while the
-compiled path forbids `.as_str()` and cannot `.collect()` `env::args()` (already a `Vec`: E0599). Programs that work in both modes need
+Conversely the interpreter needs `.as_str()` before `s[a..b]` on `String` values, while the compiled path forbids `.as_str()`
+(`env::args()` is a `Vec` in both modes now, so it indexes the same way). Programs that work in both modes need
 loop-based helpers for these; see `bench/agent-dx/solutions/wj/`. `wj lint`/`wj check` run on the interpreter-targeted file would surface
 the compiled-mode errors earlier (suggestion: make `wj run --interpret` print the same W-lints as warnings).

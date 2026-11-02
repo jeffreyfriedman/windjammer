@@ -2,7 +2,7 @@
 
 The enumerable methods of [ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 1, available on lists, sets, maps (as `(key, value)` pairs), ranges and iterators. They are declared once in `src/stdlib_surface/enumerable.rs` (signatures for readers: `std/enumerable.wj`) and implemented once per backend. Closures receive each element by reference, exactly like `filter`. The Rust iterator methods with the same meaning on every backend (`map`, `filter`, `flat_map`, `scan`, `take_while`, `skip_while`, `windows`, `chunks`, `sort_by_key`, `min_by_key`, `max_by_key`, `partition`, `first`, `last`, `nth`) keep their Rust semantics.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/collections/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/collections/`.
 
 ## Grouping and counting
 

@@ -34,6 +34,13 @@ pub fn run_with_output(program: &str, args: &[String]) -> Result<ProcessOutput, 
     })
 }
 
+/// Run a command that shares this process's stdout, stderr and stdin; the result is its exit status
+pub fn run_inherit(program: &str, args: &[String]) -> Result<i32, String> {
+    crate::caps::process(program);
+    let status = Command::new(program).args(args).status().map_err(|e| e.to_string())?;
+    Ok(status.code().unwrap_or(-1))
+}
+
 /// Exit the current process
 pub fn exit(code: i32) -> ! {
     std::process::exit(code);
@@ -69,6 +76,15 @@ mod tests {
             let result = run("echo", &["hello".to_string()]);
             assert!(result.is_ok());
             assert_eq!(result.unwrap().trim(), "hello");
+        }
+    }
+
+    #[test]
+    fn test_run_inherit_reports_the_exit_status() {
+        #[cfg(unix)]
+        {
+            assert_eq!(run_inherit("sh", &["-c".to_string(), "exit 3".to_string()]), Ok(3));
+            assert!(run_inherit("definitely-not-a-program-xyz", &[]).is_err());
         }
     }
 

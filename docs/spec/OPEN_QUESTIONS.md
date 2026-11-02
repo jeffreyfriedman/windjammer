@@ -3,7 +3,7 @@
 Each entry is a place where the implementation contradicts an accepted ADR or the old grammar, or where the behaviour is ambiguous. The spec does **not** silently pick a semantics: the rule text says what is recommended, and the executable example for it is marked `// xfail: Q-NNN` (it must fail today and the run fails if it starts passing, so this list cannot rot). Repro for every question is the named example under `tests/spec/` (or `docs/spec/repros/`). "Rec." is the recommendation.
 
 ## Q-001 Escape sequences and the old grammar
-Old `docs/windjammer.ebnf` lists `\xNN`; the lexer maps any unknown `\c` to `c` (so `"\x41"` is `x41`). Rule SPEC-LEX-010 records the implementation. Rec.: reject unknown escapes with an error and add `\u{...}`; hex escapes only if byte strings arrive. Repro: `tests/spec/lexical/SPEC-LEX-010.wj`.
+Old `docs/windjammer.ebnf` lists `\xNN`; the lexer maps any unknown `\c` to `c` (so `"\x41"` is `x41`). Rule SPEC-LEX-010 records the implementation. `\u{...}` and string `\0` exist now (SPEC-LEX-016). Rec.: reject unknown escapes with an error; hex escapes only if byte strings arrive. Repro: `tests/spec/lexical/SPEC-LEX-010.wj`.
 
 ## Q-002 Block comments
 **Resolved (wt/parser-gaps2):** nested `/* */` implemented in the lexer and formatter (SPEC-LEX-015 passes).

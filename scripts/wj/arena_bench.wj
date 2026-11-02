@@ -1,0 +1,143 @@
+// Compiled-Windjammer arena benchmarks (ADR-0025).
+//
+// Builds each program in benchmarks/arenas/wj/ with `wj build --release` semantics (generated crate, `cargo build --release`),
+// optionally with WJ_AUTO_ARENA=1, checks that variants print the same checksum, and reports the median and
+// min of N runs plus the 1/5/15-minute load average at measurement time.
+//
+//   wj run scripts/wj/arena_bench.wj --wj <path to wj binary> [--runs 11]       (run from the repository root)
+use std::env
+use std::fs
+use std::process
+use std::time::Instant
+use wj_cli_args::long_flag_value
+use wj_cli_args::long_flag_value_or
+use wj_proc::capture
+use wj_proc::sh_in
+use wj_proc::quote
+use wj_proc::load_avgs
+use wj_stats::median
+use wj_stats::min
+use wj_table::fixed
+use wj_table::pad_left
+use wj_table::pad_right
+
+const HERE: string = "benchmarks/arenas"
+
+struct Case {
+    label: string,
+    file: string,
+    auto_arena: bool,
+}
+
+struct Result {
+    label: string,
+    median: f64,
+    min: f64,
+    output: string,
+    hoisted: bool,
+}
+
+// Python's repr of the (1, 5, 15) minute tuple
+fn load_tuple() -> string {
+    let xs = load_avgs()
+    "(" + wj_json_doc::float_repr(xs[0]) + ", " + wj_json_doc::float_repr(xs[1]) + ", " + wj_json_doc::float_repr(xs[2]) + ")"
+}
+
+fn die(msg: string) {
+    eprintln(msg)
+    process.exit(1)
+}
+
+fn build(wj: string, src: string, out: string, auto_arena: bool, target: string) -> string {
+    let mut argv: Vec<string> = Vec::new()
+    if auto_arena {
+        argv.push("WJ_AUTO_ARENA=1")
+    }
+    for a in [wj, "build", "--no-cargo", "--no-lint", "-o", out, src] {
+        argv.push(a)
+    }
+    match capture("env", argv) {
+        Ok(o) => {
+            if o.status != 0 {
+                die("wj build failed for ${src}:\n${o.stderr}")
+            }
+        },
+        Err(e) => die("cannot run ${wj}: ${e}"),
+    }
+    match sh_in(out, "env CARGO_TARGET_DIR=" + quote(target) + " cargo build --release -q 2>/dev/null") {
+        Ok(o) => {
+            if o.status != 0 {
+                die("cargo build failed in ${out}")
+            }
+        },
+        Err(e) => die("cannot run cargo: ${e}"),
+    }
+    let base = fs.file_name(src) ?? "prog.wj"
+    target + "/release/" + base[0..base.len() - 3].to_string()
+}
+
+fn main() {
+    let args = env.args()
+    let wj = match long_flag_value(args, "wj") {
+        Some(w) => w,
+        None => {
+            eprintln("usage: arena_bench.wj --wj PATH [--runs N]")
+            process.exit(2)
+            ""
+        },
+    }
+    let runs: int = (long_flag_value_or(args, "runs", "11")).parse::<int>() ?? 11
+    let cases = [
+        Case { label: "particles_vec", file: "particles_vec.wj", auto_arena: false },
+        Case { label: "particles_arena", file: "particles_arena.wj", auto_arena: false },
+        Case { label: "labels_loop", file: "labels_loop.wj", auto_arena: false },
+        Case { label: "labels_loop+auto_arena", file: "labels_loop.wj", auto_arena: true },
+    ]
+    let tmp = "/tmp/wj-arena-bench-${process.pid()}"
+    let _ = fs.create_dir_all(tmp)
+    let target = tmp + "/target"
+    println("load before: ${load_tuple()}")
+    let mut results: Vec<Result> = Vec::new()
+    for c in cases {
+        let safe = c.label.replace("+", "_")
+        let out = tmp + "/" + safe
+        let exe = build(wj, HERE + "/wj/" + c.file, out, c.auto_arena, target + safe)
+        let gen_rs = fs.read_to_string(out + "/" + c.file.replace(".wj", ".rs")) ?? ""
+        let mut times: Vec<f64> = Vec::new()
+        let mut outputs: Vec<string> = Vec::new()
+        let mut i = 0
+        while i < runs {
+            let t = Instant::now()
+            match capture("env", [exe]) {
+                Ok(o) => {
+                    times.push(t.elapsed().as_secs_f64())
+                    if o.status != 0 {
+                        die("${exe} exited with ${o.status}")
+                    }
+                    let text = o.stdout.trim().to_string()
+                    if !outputs.contains(text) {
+                        outputs.push(text)
+                    }
+                },
+                Err(e) => die("cannot run ${exe}: ${e}"),
+            }
+            i = i + 1
+        }
+        if outputs.len() != 1 {
+            die("AssertionError: ${outputs}")
+        }
+        results.push(Result { label: c.label, median: median(times), min: min(times), output: outputs[0], hoisted: gen_rs.contains(".clear();") })
+    }
+    println("load after: ${load_tuple()}")
+    for r in results {
+        println("${pad_right(r.label, 26)} median ${pad_left(fixed(r.median * 1000.0, 1), 8)} ms  min ${pad_left(fixed(r.min * 1000.0, 1), 8)} ms  output ${r.output}  scratch_reuse applied: ${if r.hoisted { "True" } else { "False" }}")
+    }
+    if results[0].output != results[1].output {
+        die("AssertionError: particle checksums differ")
+    }
+    if results[2].output != results[3].output {
+        die("AssertionError: label checksums differ")
+    }
+    println("particles: arena vs fresh Vec per frame: ${fixed(results[0].median / results[1].median, 2)}x;  labels: auto-arena vs plain: ${fixed(results[2].median / results[3].median, 2)}x")
+    let _ = fs.remove_dir_all(tmp)
+}

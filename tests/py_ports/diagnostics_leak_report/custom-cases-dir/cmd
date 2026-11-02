@@ -1,0 +1,1 @@
+export CARGO_TARGET_DIR=/tmp/wj-gate-leak-target; PATH="$W/bin:$PATH" $WJ run $ALLOW $SCRIPTS/diagnostics_leak_report.wj $W/bin/wj other_cases

@@ -1,0 +1,1 @@
+mkdir -p scripts && git -C $REPO show $ORIG:scripts/check-negative-oracle.sh > scripts/check-negative-oracle.sh && export LC_ALL=C CARGO_TARGET_DIR=/tmp/wj-gate-neg-target; PATH="$W/bin:$PATH" bash scripts/check-negative-oracle.sh $W/bin/wj; echo "exit=$?"; rm -rf scripts; cat tests/check_negative/oracle.tsv

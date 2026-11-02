@@ -1,0 +1,2 @@
+// expect: rustc:E0308
+fn main() {}

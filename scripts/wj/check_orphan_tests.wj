@@ -1,0 +1,235 @@
+// Fails when a test file exists that no runner reaches.
+//
+// Candidates (relative to the repo root):
+//   - tests/**/*.rs         (build.rs wires top-level files; subdir files need a reference)
+//   - tests/**/*.wj         (and *_test.wj, *_tests.wj, test_*.wj anywhere else)
+//   - tests/**/*.sh         (runner scripts)
+//   - tests/**/*.skip, *.disabled (disabled tests are never allowed)
+//
+// A candidate is "reached" when any of these holds:
+//   1. top-level tests/*.rs (build.rs includes it in the `all` binary)
+//   2. a `// consumes: <glob>` line in a tests/*.rs file matches it
+//   3. its repo-relative path, or its basename, is mentioned in a reference file
+//      (tests/*.rs, tests/common/*.rs, src/**/*.rs, scripts/*, Makefile, .github/**)
+//   4. it matches an entry in tests/ORPHAN_ALLOWLIST.txt ("<glob> | <reason>")
+//
+//   wj run scripts/wj/check_orphan_tests.wj        (run from the repository root)
+use std::collections::HashSet
+use std::env
+use std::fs
+use std::process
+use std::regex
+use std::strings
+use wj_proc::git_ls_files
+
+const ALLOWLIST: string = "tests/ORPHAN_ALLOWLIST.txt"
+
+// shell `case` globbing: `*` matches any run of characters (slashes included), `?` one character
+fn glob_matches(text: Vec<char>, ti: usize, pat: Vec<char>, pi: usize) -> bool {
+    if pi == pat.len() {
+        return ti == text.len()
+    }
+    let p = pat[pi]
+    if p == '*' {
+        let mut k = ti
+        while k <= text.len() {
+            if glob_matches(text, k, pat, pi + 1) {
+                return true
+            }
+            k = k + 1
+        }
+        return false
+    }
+    if ti >= text.len() {
+        return false
+    }
+    if p == '?' || p == text[ti] {
+        return glob_matches(text, ti + 1, pat, pi + 1)
+    }
+    false
+}
+
+fn slashes(s: string) -> usize {
+    let mut n = 0
+    for c in s.chars() {
+        if c == '/' {
+            n = n + 1
+        }
+    }
+    n
+}
+
+// a single `*` does not cross `/` (use `**` to cross directories)
+fn matches_glob(path: string, glob: string) -> bool {
+    let t: Vec<char> = path.chars().collect()
+    let g: Vec<char> = glob.chars().collect()
+    if !glob_matches(t, 0, g, 0) {
+        return false
+    }
+    if glob.contains("**") {
+        return true
+    }
+    slashes(path) == slashes(glob)
+}
+
+fn cat_files(paths: Vec<string>) -> string {
+    let mut parts = Vec::new()
+    for p in paths {
+        if let Ok(text) = fs.read_to_string(p) {
+            parts.push(text)
+        }
+    }
+    parts.join("")
+}
+
+fn top_level_in(dir: string, ext: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            for e in entries {
+                let p = e.path()
+                if p.ends_with(ext) && e.is_file() {
+                    out.push(p)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    out.sort()
+    out
+}
+
+fn is_top_level_rs(f: string) -> bool {
+    let re = regex.compile("^(crates/[^/]+/)?tests/[^/]+\\.rs$") ?? regex.compile("x") ?? panic("bad pattern")
+    re.is_match(f)
+}
+
+fn main() {
+    let mut allow_globs: Vec<string> = Vec::new()
+    if fs.is_file(ALLOWLIST) {
+        for line in strings.split_lines(fs.read_to_string(ALLOWLIST) ?? "") {
+            if line.len() == 0 || line.starts_with("#") {
+                continue
+            }
+            let bar = line.find("|")
+            let reason = match bar {
+                Some(i) => line[i + 1..line.len()].to_string(),
+                None => line,
+            }
+            let glob = match bar {
+                Some(i) => strings.trim_end(line[0..i].to_string()),
+                None => strings.trim_end(line),
+            }
+            if bar.is_none() || strings.trim(reason).len() == 0 {
+                eprintln("ERROR: ${ALLOWLIST} entry without a reason: ${line}")
+                process.exit(2)
+            }
+            allow_globs.push(glob)
+        }
+    }
+
+    // candidate files (tracked files only, so scratch outputs never count)
+    let tracked = git_ls_files(".", ["tests/**", "crates/*/tests/**", "*_test.wj", "*_tests.wj", "*/test_*.wj", "test_*.wj"]) ?? Vec::new()
+    let mut candidates: Vec<string> = Vec::new()
+    for f in tracked {
+        let wanted = f.ends_with(".rs") || f.ends_with(".wj") || f.ends_with(".sh") || f.ends_with(".skip") || f.ends_with(".disabled") || f.ends_with(".bak")
+        if wanted && f != "tests/ORPHAN_ALLOWLIST.txt" {
+            if candidates.len() == 0 || candidates[candidates.len() - 1] != f {
+                candidates.push(f)
+            }
+        }
+    }
+
+    // reference corpus: text in which a candidate may be mentioned
+    let mut corpus_files: Vec<string> = top_level_in("tests", ".rs")
+    for f in top_level_in("tests/common", ".rs") {
+        corpus_files.push(f)
+    }
+    for f in git_ls_files(".", ["src/**/*.rs", "scripts/*", "Makefile", ".github/**", "build.rs"]) ?? Vec::new() {
+        corpus_files.push(f)
+    }
+    let corpus = cat_files(corpus_files)
+
+    // `// consumes: <glob>` declarations
+    let consumes = regex.compile("(?m)^[ \\t]*//[/!]?[ \\t]*consumes:[ \\t]*(\\S+)") ?? regex.compile("x") ?? panic("bad pattern")
+    let mut consumed: Vec<string> = Vec::new()
+    for f in top_level_in("tests", ".rs") {
+        for line in strings.split_lines(fs.read_to_string(f) ?? "") {
+            if line.contains("consumes:") {
+                match consumes.captures(line) {
+                    Some(c) => consumed.push(c.get(1) ?? ""),
+                    None => {},
+                }
+            }
+        }
+    }
+
+    // every file-like token mentioned in the corpus
+    let token_re = regex.compile("[A-Za-z0-9_./-]+\\.(?:wj|rs|sh|skip|disabled)") ?? regex.compile("x") ?? panic("bad pattern")
+    let mut tokens: HashSet<string> = HashSet::new()
+    for m in token_re.find_all(corpus) {
+        tokens.insert(m.text())
+    }
+    // a candidate is mentioned when any of its path suffixes ("a/b/c.wj", "b/c.wj", "c.wj") is a token
+    let mut mentioned: HashSet<string> = HashSet::new()
+    for f in candidates {
+        let parts: Vec<string> = f.split("/").collect()
+        let mut i = parts.len()
+        let mut suffix = ""
+        while i > 0 {
+            i = i - 1
+            suffix = if suffix.len() == 0 { parts[i] } else { parts[i] + "/" + suffix }
+            if tokens.contains(suffix) {
+                mentioned.insert(f)
+                break
+            }
+        }
+    }
+
+    let mut orphans: Vec<string> = Vec::new()
+    for f in candidates {
+        if f.ends_with(".skip") || f.ends_with(".disabled") || f.ends_with(".bak") {
+            orphans.push(f + "  (disabled test file)")
+            continue
+        }
+        if is_top_level_rs(f) {
+            continue
+        }
+        let mut hit = false
+        for g in consumed {
+            if matches_glob(f, g) {
+                hit = true
+                break
+            }
+        }
+        if hit {
+            continue
+        }
+        for g in allow_globs {
+            if matches_glob(f, g) {
+                hit = true
+                break
+            }
+        }
+        if hit {
+            continue
+        }
+        if mentioned.contains(f) {
+            continue
+        }
+        orphans.push(f)
+    }
+
+    if orphans.len() > 0 {
+        eprintln("ERROR: ${orphans.len()} test file(s) are not reached by any runner:")
+        for o in orphans {
+            eprintln("  ${o}")
+        }
+        eprintln("")
+        eprintln("Fix: wire the file (top-level tests/*.rs, a '// consumes: <glob>' line in a tests/*.rs")
+        eprintln("runner, or a reference from a runner), delete it, or add '<glob> | <reason>' to ${ALLOWLIST}")
+        eprintln("(allow-list is for fixtures/helpers only).")
+        process.exit(1)
+    }
+    println("OK: all ${candidates.len()} candidate test files are reached by a runner.")
+}

@@ -1,0 +1,648 @@
+op_int_annotated_string      1
+op_string_annotated_int      2
+op_unknown_method            3
+op_let_int_gets_string       3
+op_let_string_gets_int       1
+op_let_bool_gets_int         1
+op_undefined_variable        3
+op_drop_argument             3
+op_extra_argument            3
+op_argument_wrong_type       3
+op_return_wrong_type         4
+op_unknown_field             1
+op_undefined_function        3
+total 31
+== a_unicode__argument_wrong_type.wj
+// mutant: argument_wrong_type of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add("oops", 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__drop_argument.wj
+// mutant: drop_argument of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__extra_argument.wj
+// mutant: extra_argument of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2, 0), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__int_annotated_string.wj
+// mutant: int_annotated_string of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n: string = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__let_int_gets_string.wj
+// mutant: let_int_gets_string of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = "oops"
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__let_string_gets_int.wj
+// mutant: let_string_gets_int of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = 42
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__return_wrong_type.wj
+// mutant: return_wrong_type of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    return "oops"
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__string_annotated_int.wj
+// mutant: string_annotated_int of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name: int = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__undefined_function.wj
+// mutant: undefined_function of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add_missing(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__undefined_variable.wj
+// mutant: undefined_variable of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg_undefined
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.len()}")
+}
+== a_unicode__unknown_method.wj
+// mutant: unknown_method of examples/verified/a_unicode.wj
+struct Counter {
+    count: int,
+    label: string,
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn greet(name: string) -> string {
+    let msg: string = "héllo wörld — ${name}"
+    msg
+}
+
+fn main() {
+    let total: int = 5
+    let name = "ünï"
+    let n = 42
+    let c = Counter { count: add(1, 2), label: greet(name) }
+    println("${c.count} ${total} ${n}")
+    println("${c.label.length_of()}")
+}
+== b_plain__argument_wrong_type.wj
+// mutant: argument_wrong_type of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double("oops")} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__drop_argument.wj
+// mutant: drop_argument of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double()} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__extra_argument.wj
+// mutant: extra_argument of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21, 0)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__let_bool_gets_int.wj
+// mutant: let_bool_gets_int of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = 1
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__let_int_gets_string.wj
+// mutant: let_int_gets_string of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = "oops"
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__return_wrong_type.wj
+// mutant: return_wrong_type of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return "oops"
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__string_annotated_int.wj
+// mutant: string_annotated_int of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s: int = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__undefined_function.wj
+// mutant: undefined_function of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double_missing(21)} ${check(ready)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__undefined_variable.wj
+// mutant: undefined_variable of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready_undefined)} ${f} ${s} ${items.len()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== b_plain__unknown_method.wj
+// mutant: unknown_method of examples/verified/b_plain.wj
+fn double(x: int) -> int {
+    return x * 2
+}
+
+fn check(flag: bool) -> bool {
+    flag
+}
+
+fn main() {
+    let ready: bool = true
+    let f: f64 = 1.5
+    let s = "hi"
+    let items = [1, 2, 3]
+    println("${double(21)} ${check(ready)} ${f} ${s} ${items.length_of()}")
+    let result = double(double(2))
+    println("${result}")
+}
+== d_methods__return_wrong_type.wj
+// mutant: return_wrong_type of examples/verified/d_methods.wj
+struct Stack {
+    items: Vec<int>,
+    top: int,
+}
+
+impl Stack {
+    fn size(self) -> int {
+        self.items.len()
+    }
+    fn peek(self) -> int {
+        self.top
+    }
+}
+
+fn helper(v: Vec<int>) -> int {
+    return "oops"
+    v.len()
+}
+
+fn main() {
+    let s = Stack { items: [1], top: 1 }
+    println("${s.size()} ${s.peek()} ${helper(s.items)}")
+    let weird = "call(x) \"quoted\" ${helper([1])}"
+    println(weird)
+}
+== d_methods__undefined_variable.wj
+// mutant: undefined_variable of examples/verified/d_methods.wj
+struct Stack {
+    items: Vec<int>,
+    top: int,
+}
+
+impl Stack {
+    fn size(self) -> int {
+        self.items.len()
+    }
+    fn peek(self) -> int {
+        self.top
+    }
+}
+
+fn helper(v: Vec<int>) -> int {
+    v.len()
+}
+
+fn main() {
+    let s = Stack { items: [1], top: 1 }
+    println("${s.size()} ${s.peek()} ${helper(s.items)}")
+    let weird = "call(x) \"quoted\" ${helper([1])}"
+    println(weird_undefined)
+}
+== d_methods__unknown_field.wj
+// mutant: unknown_field of examples/verified/d_methods.wj
+struct Stack {
+    items: Vec<int>,
+    top: int,
+}
+
+impl Stack {
+    fn size(self) -> int {
+        self.itemsx.len()
+    }
+    fn peek(self) -> int {
+        self.top
+    }
+}
+
+fn helper(v: Vec<int>) -> int {
+    v.len()
+}
+
+fn main() {
+    let s = Stack { items: [1], top: 1 }
+    println("${s.size()} ${s.peek()} ${helper(s.items)}")
+    let weird = "call(x) \"quoted\" ${helper([1])}"
+    println(weird)
+}
+== d_methods__unknown_method.wj
+// mutant: unknown_method of examples/verified/d_methods.wj
+struct Stack {
+    items: Vec<int>,
+    top: int,
+}
+
+impl Stack {
+    fn size(self) -> int {
+        self.items.length_of()
+    }
+    fn peek(self) -> int {
+        self.top
+    }
+}
+
+fn helper(v: Vec<int>) -> int {
+    v.len()
+}
+
+fn main() {
+    let s = Stack { items: [1], top: 1 }
+    println("${s.size()} ${s.peek()} ${helper(s.items)}")
+    let weird = "call(x) \"quoted\" ${helper([1])}"
+    println(weird)
+}
+== e_generic__argument_wrong_type.wj
+// mutant: argument_wrong_type of examples/verified/e_generic.wj
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    a * b
+}
+fn main() {
+    let a: i64 = 7
+    println("${id(a)} ${pair("oops", 3)}")
+}
+== e_generic__drop_argument.wj
+// mutant: drop_argument of examples/verified/e_generic.wj
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    a * b
+}
+fn main() {
+    let a: i64 = 7
+    println("${id(a)} ${pair(2)}")
+}
+== e_generic__extra_argument.wj
+// mutant: extra_argument of examples/verified/e_generic.wj
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    a * b
+}
+fn main() {
+    let a: i64 = 7
+    println("${id(a)} ${pair(2, 3, 0)}")
+}
+== e_generic__let_int_gets_string.wj
+// mutant: let_int_gets_string of examples/verified/e_generic.wj
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    a * b
+}
+fn main() {
+    let a: i64 = "oops"
+    println("${id(a)} ${pair(2, 3)}")
+}
+== e_generic__return_wrong_type.wj
+// mutant: return_wrong_type of examples/verified/e_generic.wj
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    return "oops"
+    a * b
+}
+fn main() {
+    let a: i64 = 7
+    println("${id(a)} ${pair(2, 3)}")
+}
+== e_generic__undefined_function.wj
+// mutant: undefined_function of examples/verified/e_generic.wj
+fn id<T>(x: T) -> T {
+    x
+}
+fn pair(a: int, b: int) -> int {
+    a * b
+}
+fn main() {
+    let a: i64 = 7
+    println("${id(a)} ${pair_missing(2, 3)}")
+}

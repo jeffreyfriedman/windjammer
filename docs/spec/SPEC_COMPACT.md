@@ -1,6 +1,6 @@
 # Windjammer in one page (compact spec for LLM context)
 
-Authoritative, checked against the implementation by `scripts/spec_check.sh`. IDs refer to docs/spec/. Marked **[gap]** = specified/accepted but not implemented today (see OPEN_QUESTIONS.md). Files are `.wj`, UTF-8. No macros, no semicolons required, no `null`, no exceptions.
+Authoritative, checked against the implementation by `scripts/wj/spec_check.wj`. IDs refer to docs/spec/. Marked **[gap]** = specified/accepted but not implemented today (see OPEN_QUESTIONS.md). Files are `.wj`, UTF-8. No macros, no semicolons required, no `null`, no exceptions.
 
 ## Program shape
 ```windjammer

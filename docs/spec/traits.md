@@ -2,7 +2,7 @@
 
 Shared behaviour and parametric polymorphism. Generic code is monomorphised by the compiler backends and dispatched dynamically by the interpreter; the observable behaviour is the same.
 
-Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/traits/`.
+Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/wj/spec_check.wj`; each rule's executable example is the code block below it, stored in `tests/spec/traits/`.
 
 ## Traits and impls
 

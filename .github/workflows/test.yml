@@ -61,8 +61,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Check out the ecosystem packages (the scripts under scripts/wj use them)
+        uses: actions/checkout@v6
+        with:
+          repository: jeffreyfriedman/windjammer-ecosystem
+          path: windjammer-ecosystem
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Build wj
+        run: cargo build --release --bin wj
+
       - name: Fail on test files no runner reaches
-        run: scripts/check-orphan-tests.sh
+        run: ./target/release/wj run scripts/wj/check_orphan_tests.wj
+
+      - name: Script ports match their recorded originals (tests/py_ports)
+        run: ./target/release/wj run scripts/wj/port_gates.wj --wj $PWD/target/release/wj
 
   docs-truth:
     name: Docs Truth (generated docs, examples, links)
@@ -380,7 +398,7 @@ jobs:
       - name: Test scripts parse
         if: runner.os != 'Windows'
         shell: bash
-        run: bash -n scripts/check-test-ratchet.sh scripts/check-orphan-tests.sh
+        run: ./target/release/wj check scripts/wj/check_test_ratchet.wj
       
       - name: Test examples (Unix)
         if: matrix.rust == 'stable' && runner.os != 'Windows'
