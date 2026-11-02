@@ -11,7 +11,7 @@ fn test_array_index_backward_propagation() {
 
 fn test_loop_index_backward_propagation() {
     let items: Vec<String> = Vec::new();
-    let mut i: usize = 0_usize;
+    let mut i = 0_usize;
     while i < items.len() {
         let _value = items[i].to_string();
         i += 1;
