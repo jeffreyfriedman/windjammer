@@ -6,6 +6,7 @@ use std::fs
 use std::process
 use std::regex
 use std::strings
+use wj_proc::git_changed
 
 fn version_re() -> string {
     "[0-9]+\\.[0-9]+\\.[0-9]+"
@@ -130,7 +131,7 @@ fn main() {
     println("✨ Version sync complete!")
     println("")
     println("📝 Files updated:")
-    let changed = wj_proc::git_changed(".") ?? Vec::new()
+    let changed = git_changed(".") ?? Vec::new()
     let mut shown = 0
     for f in changed {
         if f.ends_with(".md") || f.ends_with(".toml") {
