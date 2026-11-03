@@ -1,0 +1,43 @@
+// Fixed prelude of every generated drift program (scripts/wj/drift_gen.wj): the value kinds' declarations
+// and their `show` functions. Every integer literal in a generated cell goes through `num` so literal
+// typing is not what the generator probes (the repros cover that).
+use std::collections::HashMap
+
+enum Shape3 {
+    A,
+    B(int),
+    C { n: int },
+}
+
+fn num(n: int) -> int {
+    n
+}
+
+fn show_opt(x: Option<int>) -> string {
+    match x {
+        Some(a) => "some ${a}",
+        None => "none",
+    }
+}
+
+fn show_res(x: Result<int, string>) -> string {
+    match x {
+        Ok(a) => "ok ${a}",
+        Err(e) => "err ${e}",
+    }
+}
+
+fn show_enm(x: Shape3) -> string {
+    match x {
+        Shape3::A => "A",
+        Shape3::B(a) => "B${a}",
+        Shape3::C { n } => "C${n}",
+    }
+}
+
+fn show_ostr(x: Option<string>) -> string {
+    match x {
+        Some(s) => "some ${s}",
+        None => "none",
+    }
+}
