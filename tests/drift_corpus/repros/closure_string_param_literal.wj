@@ -1,0 +1,7 @@
+// A closure with a `string` parameter called with a string literal: the compiled backend declares
+// the parameter String and passes &str.
+fn main() {
+    let name = "outer"
+    let f = |who: string| who + "-closure"
+    println("${f("arg")} ${name}")
+}

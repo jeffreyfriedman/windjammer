@@ -1,0 +1,27 @@
+use crate::Receiver
+use crate::channel_sum_range
+use crate::drain_int_until_sentinel
+use crate::send_int_range_with_sentinel
+
+@test
+fn test_send_reassign_loop_sum() {
+    let out = channel_sum_range(5)
+    assert_eq(out.0, 5)
+    assert_eq(out.1, 10)
+}
+
+@test
+fn test_send_recv_api_drain_sum() {
+    let rx = send_int_range_with_sentinel(5)
+    let out = drain_int_until_sentinel(rx)
+    assert_eq(out.0, 5)
+    assert_eq(out.1, 10)
+}
+
+@test
+fn test_drain_empty_sentinel_only() {
+    let rx = send_int_range_with_sentinel(0)
+    let out = drain_int_until_sentinel(rx)
+    assert_eq(out.0, 0)
+    assert_eq(out.1, 0)
+}

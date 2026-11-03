@@ -1,0 +1,282 @@
+use crate::SemVer
+use crate::parse
+use crate::build_of
+use crate::compare
+use crate::format_version
+use crate::is_equal
+use crate::is_newer
+use crate::is_older
+use crate::is_zero_version
+use crate::bump_major
+use crate::bump_minor
+use crate::bump_patch
+use crate::clear_prerelease
+use crate::clear_build
+use crate::is_zero_major
+use crate::major_of
+use crate::require_zero_major
+use crate::require_equal
+use std::strings
+use crate::minor_of
+use crate::patch_of
+use crate::prerelease_of
+
+fn test_parse_simple_version() {
+    match parse("1.2.3") {
+        Ok(v) => {
+            assert_eq(v.major, 1)
+            assert_eq(v.minor, 2)
+            assert_eq(v.patch, 3)
+            assert_eq(v.pre, "")
+            assert_eq(v.build, "")
+        },
+        Err(_) => assert(false, "parse 1.2.3"),
+    }
+}
+
+fn test_parse_with_prerelease_and_build() {
+    match parse("1.0.0-alpha.1+build.5") {
+        Ok(v) => {
+            assert_eq(v.major, 1)
+            assert_eq(v.pre, "alpha.1")
+            assert_eq(v.build, "build.5")
+        },
+        Err(_) => assert(false, "parse prerelease"),
+    }
+}
+
+fn test_parse_rejects_empty() {
+    match parse("") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+fn test_compare_ordering() {
+    match parse("1.0.0") {
+        Ok(a) => {
+            match parse("2.0.0") {
+                Ok(b) => assert_eq(compare(a, b), -1),
+                Err(_) => assert(false, "parse b"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+    match parse("1.2.3") {
+        Ok(a) => {
+            match parse("1.2.4") {
+                Ok(b) => assert_eq(compare(a, b), -1),
+                Err(_) => assert(false, "parse patch"),
+            }
+        },
+        Err(_) => assert(false, "parse a2"),
+    }
+    match parse("1.0.0") {
+        Ok(a) => {
+            match parse("1.0.0") {
+                Ok(b) => assert_eq(compare(a, b), 0),
+                Err(_) => assert(false, "parse b same"),
+            }
+        },
+        Err(_) => assert(false, "parse same"),
+    }
+}
+
+fn test_prerelease_is_older_than_release() {
+    match parse("1.0.0-alpha") {
+        Ok(pre) => {
+            match parse("1.0.0") {
+                Ok(rel) => assert_eq(compare(pre, rel), -1),
+                Err(_) => assert(false, "parse rel"),
+            }
+        },
+        Err(_) => assert(false, "parse pre"),
+    }
+}
+
+fn test_format_version_roundtrip() {
+    match parse("3.4.5-beta.2+meta") {
+        Ok(v) => assert_eq(format_version(v), "3.4.5-beta.2+meta"),
+        Err(_) => assert(false, "parse roundtrip"),
+    }
+}
+
+fn test_is_newer() {
+    match parse("1.2.4") {
+        Ok(a) => {
+            match parse("1.2.3") {
+                Ok(b) => {
+                    assert(is_newer(a, b), "patch bump is newer")
+                    assert(!is_newer(b, a), "older is not newer")
+                },
+                Err(_) => assert(false, "parse b"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+}
+
+fn test_is_equal_ignores_build() {
+    match parse("1.2.3+build1") {
+        Ok(a) => {
+            match parse("1.2.3+build2") {
+                Ok(b) => assert(is_equal(a, b), "build ignored"),
+                Err(_) => assert(false, "parse b"),
+            }
+            match parse("1.2.4") {
+                Ok(c) => assert(!is_equal(a, c), "patch differs"),
+                Err(_) => assert(false, "parse c"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+}
+
+fn test_is_older() {
+    match parse("1.2.3") {
+        Ok(a) => {
+            match parse("1.2.4") {
+                Ok(b) => {
+                    assert(is_older(a, b), "older")
+                    assert(!is_older(b, a), "newer not older")
+                },
+                Err(_) => assert(false, "parse b"),
+            }
+        },
+        Err(_) => assert(false, "parse a"),
+    }
+}
+
+fn test_bump_patch() {
+    match parse("1.2.3-beta+meta") {
+        Ok(v) => {
+            let next = bump_patch(v)
+            assert_eq(next.major, 1)
+            assert_eq(next.minor, 2)
+            assert_eq(next.patch, 4)
+            assert_eq(next.pre, "")
+            assert_eq(next.build, "")
+            assert_eq(format_version(next), "1.2.4")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+fn test_bump_minor_and_major() {
+    match parse("1.2.3-beta+meta") {
+        Ok(v) => {
+            let minor = bump_minor(v)
+            assert_eq(format_version(minor), "1.3.0")
+            let major = bump_major(v)
+            assert_eq(format_version(major), "2.0.0")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+fn test_clear_prerelease() {
+    match parse("1.2.3-rc.1+build") {
+        Ok(v) => {
+            let cleared = clear_prerelease(v)
+            assert_eq(format_version(cleared), "1.2.3+build")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+fn test_clear_build() {
+    match parse("1.2.3-rc.1+build") {
+        Ok(v) => {
+            let cleared = clear_build(v)
+            assert_eq(format_version(cleared), "1.2.3-rc.1")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+}
+
+fn sample_ver() -> SemVer {
+    match parse("1.2.3") {
+        Ok(v) => v,
+        Err(_) => SemVer { major: 0, minor: 0, patch: 0, pre: "", build: "" },
+    }
+}
+
+fn test_component_accessors_and_zero() {
+    assert_eq(major_of(sample_ver()), 1)
+    assert_eq(minor_of(sample_ver()), 2)
+    assert_eq(patch_of(sample_ver()), 3)
+    assert(!is_zero_version(sample_ver()), "not zero")
+    match parse("0.0.0") {
+        Ok(v) => assert(is_zero_version(v), "zero"),
+        Err(_) => assert(false, "parse zero"),
+    }
+}
+
+fn test_prerelease_build_accessors() {
+    match parse("1.2.3-beta.1+build.9") {
+        Ok(v) => {
+            assert_eq(prerelease_of(v), "beta.1")
+            assert_eq(build_of(v), "build.9")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    match parse("1.2.3") {
+        Ok(v) => {
+            assert_eq(prerelease_of(v), "")
+            assert_eq(build_of(v), "")
+        },
+        Err(_) => assert(false, "parse release"),
+    }
+}
+
+fn test_require_zero_major() {
+    match parse("0.1.0") {
+        Ok(v) => {
+            match require_zero_major(v) {
+                Ok(parsed) => assert(is_zero_major(parsed), "zero"),
+                Err(_) => assert(false, "zero major"),
+            }
+        },
+        Err(_) => assert(false, "parse zero"),
+    }
+    match parse("1.2.3") {
+        Ok(v) => {
+            match require_zero_major(v) {
+                Ok(_) => assert(false, "one major must Err"),
+                Err(msg) => assert(strings.contains(msg, "zero"), "mentions zero"),
+            }
+        },
+        Err(_) => assert(false, "parse one"),
+    }
+}
+
+fn test_require_equal() {
+    match parse("1.2.3") {
+        Ok(left) => {
+            match parse("1.2.3") {
+                Ok(right) => {
+                    match require_equal(left, right) {
+                        Ok(kept) => assert(is_equal(kept, right), "equal"),
+                        Err(_) => assert(false, "equal ok"),
+                    }
+                },
+                Err(_) => assert(false, "parse right"),
+            }
+        },
+        Err(_) => assert(false, "parse left"),
+    }
+    match parse("1.2.3") {
+        Ok(left) => {
+            match parse("1.2.4") {
+                Ok(right) => {
+                    match require_equal(left, right) {
+                        Ok(_) => assert(false, "mismatch must Err"),
+                        Err(msg) => assert(strings.contains(msg, "equal"), "mentions equal"),
+                    }
+                },
+                Err(_) => assert(false, "parse right again"),
+            }
+        },
+        Err(_) => assert(false, "parse left again"),
+    }
+}

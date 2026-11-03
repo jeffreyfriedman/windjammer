@@ -1,0 +1,22 @@
+pub struct ChatConfig {
+    pub jwt_secret: string,
+    /// Commands allowed per user per window.
+    pub rate_limit: int,
+    pub rate_window_ms: int,
+    pub max_text: int,
+    /// Messages remembered per hub (oldest dropped first).
+    pub history_cap: int,
+    /// A connection silent for longer than this is reported by `Hub::expired`.
+    pub idle_timeout_ms: int,
+}
+
+pub fn default_chat_config() -> ChatConfig {
+    ChatConfig {
+        jwt_secret: "",
+        rate_limit: 30,
+        rate_window_ms: 10000,
+        max_text: 2000,
+        history_cap: 100,
+        idle_timeout_ms: 60000,
+    }
+}

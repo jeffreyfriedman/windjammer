@@ -1,0 +1,134 @@
+use crate::basic_auth_header
+use crate::bearer_auth_header
+use crate::decode_or
+use crate::encode
+use crate::decode
+use crate::encode_bytes
+use crate::decode_bytes
+use crate::ensure_padding
+use crate::is_basic_auth_header
+use crate::is_bearer_auth_header
+use crate::require_bearer
+use crate::has_padding
+use crate::is_encoded
+use crate::looks_like_base64
+use crate::needs_padding
+use crate::strip_padding
+use std::strings
+
+fn test_encode_hello() {
+    let text = "Hello"
+    let expected = "SGVsbG8="
+    assert_eq(encode(text), expected)
+}
+
+fn test_decode_hello() {
+    let encoded = "SGVsbG8="
+    match decode(encoded) {
+        Ok(text) => {
+            let expected = "Hello"
+            assert_eq(text, expected)
+        },
+        Err(_) => assert(false, "decode Hello"),
+    }
+}
+
+fn test_roundtrip_empty() {
+    let encoded = encode("")
+    match decode(encoded) {
+        Ok(out) => assert_eq(out, ""),
+        Err(_) => assert(false, "empty roundtrip"),
+    }
+}
+
+fn test_roundtrip_punctuation() {
+    let encoded = encode("a+b/c=")
+    match decode(encoded) {
+        Ok(out) => assert_eq(out, "a+b/c="),
+        Err(_) => assert(false, "punct roundtrip"),
+    }
+}
+
+fn test_decode_rejects_garbage() {
+    let bad = "!!!"
+    match decode(bad) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message"),
+    }
+}
+
+fn test_encode_bytes_roundtrip() {
+    let mut bytes: Vec<u8> = Vec::new()
+    bytes.push(0)
+    bytes.push(255)
+    bytes.push(10)
+    let encoded = encode_bytes(bytes)
+    match decode_bytes(encoded) {
+        Ok(out) => {
+            assert_eq(out.len(), 3)
+            assert_eq(out[0], 0)
+            assert_eq(out[1], 255)
+            assert_eq(out[2], 10)
+        },
+        Err(_) => assert(false, "bytes roundtrip"),
+    }
+}
+
+fn test_basic_auth_header() {
+    // user:pass → dXNlcjpwYXNz
+    assert_eq(basic_auth_header("user", "pass"), "Authorization: Basic dXNlcjpwYXNz")
+}
+
+fn test_is_basic_auth_header() {
+    assert(is_basic_auth_header(basic_auth_header("user", "pass")), "basic yes")
+    assert(!is_basic_auth_header("Authorization: Bearer tok"), "bearer no")
+    assert(!is_basic_auth_header(""), "empty")
+}
+
+fn test_bearer_auth_header() {
+    assert_eq(bearer_auth_header("tok"), "Authorization: Bearer tok")
+    assert(is_bearer_auth_header(bearer_auth_header("abc")), "bearer yes")
+    assert(!is_bearer_auth_header(basic_auth_header("u", "p")), "basic no")
+}
+
+fn test_decode_or() {
+    assert_eq(decode_or("SGVsbG8=", "fallback"), "Hello")
+    assert_eq(decode_or("!!!", "fallback"), "fallback")
+}
+
+fn test_looks_like_base64_and_is_encoded() {
+    assert(looks_like_base64("SGVsbG8="), "padding")
+    assert(looks_like_base64("YQ=="), "short")
+    assert(!looks_like_base64(""), "empty")
+    assert(!looks_like_base64("!!!"), "junk")
+    assert(is_encoded("SGVsbG8="), "round-trips")
+    assert(!is_encoded("!!!"), "not encoded")
+}
+
+fn test_has_padding_and_strip_padding() {
+    assert(has_padding("SGVsbG8="), "one pad")
+    assert(has_padding("YQ=="), "two pad")
+    assert(!has_padding("YQ"), "no pad")
+    assert_eq(strip_padding("SGVsbG8="), "SGVsbG8")
+    assert_eq(strip_padding("YQ=="), "YQ")
+    assert_eq(strip_padding("YQ"), "YQ")
+}
+
+fn test_ensure_padding() {
+    assert_eq(ensure_padding("SGVsbG8"), "SGVsbG8=")
+    assert_eq(ensure_padding("YQ"), "YQ==")
+    assert_eq(ensure_padding("SGVsbG8="), "SGVsbG8=")
+    assert_eq(ensure_padding("YQ=="), "YQ==")
+}
+
+@test
+fn test_require_bearer() {
+    match require_bearer(bearer_auth_header("abc")) {
+        Ok(header) => assert(is_bearer_auth_header(header), "bearer"),
+        Err(_) => assert(false, "bearer ok"),
+    }
+    match require_bearer(basic_auth_header("u", "p")) {
+        Ok(_) => assert(false, "basic must Err"),
+        Err(msg) => assert(strings.contains(msg, "bearer"), "mentions bearer"),
+    }
+}

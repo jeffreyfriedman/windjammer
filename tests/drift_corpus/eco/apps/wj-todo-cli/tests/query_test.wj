@@ -1,0 +1,140 @@
+use crate::domain::Todo
+use crate::domain::done_count
+use crate::domain::filter_pending
+use crate::domain::filter_done
+use crate::domain::find_by_id
+use crate::domain::has_pending
+use crate::domain::pending_count
+use crate::domain::sort_todos_by_id
+use crate::domain::count_todos
+use crate::domain::only_pending
+use crate::domain::require_only_pending
+use crate::domain::require_done
+use crate::domain::require_pending
+use crate::domain::total_count
+use std::strings
+
+fn make_todo(id: int, title: string, done: bool) -> Todo {
+    Todo {
+        id: id,
+        title: title,
+        done: done,
+    }
+}
+
+fn test_filter_pending_only() {
+    let mut todos = Vec::new()
+    todos.push(make_todo(1, "open", false))
+    todos.push(make_todo(2, "closed", true))
+    let filtered = filter_pending(todos)
+    assert_eq(filtered.len(), 1)
+    assert_eq(filtered[0].id, 1)
+}
+
+fn test_filter_done_only() {
+    let mut todos = Vec::new()
+    todos.push(make_todo(1, "open", false))
+    todos.push(make_todo(2, "closed", true))
+    let filtered = filter_done(todos)
+    assert_eq(filtered.len(), 1)
+    assert_eq(filtered[0].id, 2)
+}
+
+fn test_sort_todos_by_id_orders_ascending() {
+    let mut todos = Vec::new()
+    todos.push(make_todo(3, "c", false))
+    todos.push(make_todo(1, "a", false))
+    todos.push(make_todo(2, "b", true))
+    let sorted = sort_todos_by_id(todos)
+    assert_eq(sorted[0].id, 1)
+    assert_eq(sorted[1].id, 2)
+    assert_eq(sorted[2].id, 3)
+}
+
+fn test_count_todos() {
+    let mut todos = Vec::new()
+    todos.push(make_todo(1, "open", false))
+    todos.push(make_todo(2, "closed", true))
+    todos.push(make_todo(3, "also-open", false))
+    let counts = count_todos(todos)
+    assert_eq(counts.0, 3)
+    assert_eq(counts.1, 2)
+    assert_eq(counts.2, 1)
+}
+
+fn sample_todos() -> Vec<Todo> {
+    let mut todos = Vec::new()
+    todos.push(make_todo(1, "open", false))
+    todos.push(make_todo(2, "closed", true))
+    todos.push(make_todo(3, "also-open", false))
+    todos
+}
+
+fn test_pending_done_find_and_empty() {
+    assert_eq(pending_count(sample_todos()), 2)
+    assert_eq(done_count(sample_todos()), 1)
+    match find_by_id(sample_todos(), 2) {
+        Some(t) => {
+            assert_eq(t.id, 2)
+            assert(t.done, "done")
+        },
+        None => assert(false, "find 2"),
+    }
+    match find_by_id(sample_todos(), 9) {
+        Some(_) => assert(false, "missing"),
+        None => {},
+    }
+}
+
+fn test_has_pending_done_and_total() {
+    assert(has_pending(sample_todos()), "pending")
+    assert_eq(total_count(sample_todos()), 3)
+    assert(!has_pending(Vec::new()), "empty no pending")
+    assert_eq(total_count(Vec::new()), 0)
+}
+
+fn test_only_pending_and_require_pending() {
+    match require_pending(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "pending"), "mentions pending"),
+    }
+    match require_pending(sample_todos()) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "sample pending"),
+    }
+    let mut one = Vec::new()
+    one.push(make_todo(4, "solo", false))
+    one.push(make_todo(5, "done", true))
+    match only_pending(one) {
+        Some(t) => assert_eq(t.id, 4),
+        None => assert(false, "one pending"),
+    }
+    match only_pending(sample_todos()) {
+        Some(_) => assert(false, "two pending is not only"),
+        None => {},
+    }
+}
+
+fn test_require_done() {
+    match require_done(sample_todos()) {
+        Ok(n) => assert(n > 0, "has done"),
+        Err(_) => assert(false, "sample done"),
+    }
+    match require_done(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "done"), "mentions done"),
+    }
+}
+
+fn test_require_only_pending() {
+    let mut one = Vec::new()
+    one.push(make_todo(4, "solo", false))
+    match require_only_pending(one) {
+        Ok(t) => assert_eq(t.id, 4),
+        Err(_) => assert(false, "one pending"),
+    }
+    match require_only_pending(sample_todos()) {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "one"), "mentions one"),
+    }
+}

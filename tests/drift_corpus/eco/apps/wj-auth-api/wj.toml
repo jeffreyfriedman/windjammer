@@ -1,0 +1,31 @@
+[package]
+name = "wj-auth-api"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_cors = { path = "../../packages/wj-cors/build" }
+wj_compress = { path = "../../packages/wj-compress/build" }
+wj_template = { path = "../../packages/wj-template/build" }
+wj_uuid = { path = "../../packages/wj-uuid/build" }
+wj_config = { path = "../../packages/wj-config/build" }
+wj_toml = { path = "../../packages/wj-toml/build" }
+wj_cookie = { path = "../../packages/wj-cookie/build" }
+wj_rate_limit = { path = "../../packages/wj-rate-limit/build" }
+wj_headers = { path = "../../packages/wj-headers/build" }
+wj_validate = { path = "../../packages/wj-validate/build" }
+wj_hash = { path = "../../packages/wj-hash/build" }
+wj_jwt = { path = "../../packages/wj-jwt/build" }
+wj_router = { path = "../../packages/wj-router/build" }
+wj_mime = { path = "../../packages/wj-mime/build" }
+wj_duration = { path = "../../packages/wj-duration/build" }
+wj_dotenv = { path = "../../packages/wj-dotenv/build" }
+wj_timefmt = { path = "../../packages/wj-timefmt/build" }
+wj_inflect = { path = "../../packages/wj-inflect/build" }
+wj_log = { path = "../../packages/wj-log/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

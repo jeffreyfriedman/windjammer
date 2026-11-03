@@ -1,0 +1,145 @@
+use crate::domain::FetchConfig
+use crate::domain::url_from_argv
+
+fn test_url_from_argv_reads_positional() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.url, "https://example.com/api"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_errors_when_missing() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(msg.len() > 0, "error message required"),
+    }
+}
+
+fn test_url_from_argv_fail_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("--fail")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert(req.fail_on_error, "fail flag should be set"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_retries_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("--retries=2")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.max_retries, 2),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_config_default_retries() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("https://example.com/api")
+    let mut config = FetchConfig::defaults()
+    config.max_retries = 3
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.max_retries, 3),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_output_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("--output=response.json")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.output_path, "response.json"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_output_short_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("-o")
+    argv.push("body.txt")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.output_path, "body.txt"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_silent_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("-s")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert(req.silent, "silent flag should be set"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_silent_long_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("--silent")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert(req.silent, "silent flag should be set"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_timeout_flag() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("--timeout=5")
+    argv.push("https://example.com/api")
+    let config = FetchConfig::defaults()
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.timeout_secs, 5),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_config_default_timeout() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("https://example.com/api")
+    let mut config = FetchConfig::defaults()
+    config.timeout_secs = 10
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.timeout_secs, 10),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_url_from_argv_timeout_overrides_config() {
+    let mut argv = Vec::new()
+    argv.push("wj-fetch")
+    argv.push("--timeout=2")
+    argv.push("https://example.com/api")
+    let mut config = FetchConfig::defaults()
+    config.timeout_secs = 30
+    match url_from_argv(argv, config) {
+        Ok(req) => assert_eq(req.timeout_secs, 2),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}

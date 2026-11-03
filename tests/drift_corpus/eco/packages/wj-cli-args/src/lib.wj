@@ -1,0 +1,290 @@
+use std::env
+use std::strings
+
+/// Full process argv, including the program name at index 0.
+pub fn read_argv() -> Vec<string> {
+    env.args()
+}
+
+/// Tokens after the program name (`args[1..]`).
+pub fn tail(args: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 1
+    while i < args.len() {
+        out.push(args[i])
+        i = i + 1
+    }
+    out
+}
+
+/// `Ok(n)` when there are `n` tokens after the program name, otherwise `Err`.
+pub fn require_tail(args: Vec<string>, n: int) -> Result<int, string> {
+    let rest = tail(args)
+    if rest.len() == n {
+        return Ok(n)
+    }
+    Err("expected tail")
+}
+
+fn long_prefix(name: string) -> string {
+    "--${name}"
+}
+
+fn equals_prefix(name: string) -> string {
+    "--${name}="
+}
+
+fn is_long_flag_token(token: string, name: string) -> bool {
+    let prefix = long_prefix(name)
+    if token == prefix {
+        return true
+    }
+    strings.starts_with(token, "${prefix}=")
+}
+
+fn value_from_equals_token(token: string, name: string) -> Option<string> {
+    let prefix = equals_prefix(name)
+    if !strings.starts_with(token, prefix) {
+        return None
+    }
+    let parts = strings.split(token, "=")
+    if parts.len() < 2 {
+        return None
+    }
+    let mut value_parts = Vec::new()
+    let mut i = 1
+    while i < parts.len() {
+        value_parts.push(parts[i])
+        i = i + 1
+    }
+    Some(strings.join(value_parts, "="))
+}
+
+/// True when `--name` or `--name=value` appears in argv (after the program name).
+pub fn has_long_flag(args: Vec<string>, name: string) -> bool {
+    let rest = tail(args)
+    for token in rest {
+        if is_long_flag_token(token, name) {
+            return true
+        }
+    }
+    false
+}
+
+/// Value from `--name=value` or the token immediately after bare `--name`.
+pub fn long_flag_value(args: Vec<string>, name: string) -> Option<string> {
+    let rest = tail(args)
+    let mut i = 0
+    while i < rest.len() {
+        let token = rest[i]
+        match value_from_equals_token(token, name) {
+            Some(value) => return Some(value),
+            None => {},
+        }
+        if token == long_prefix(name) {
+            let next = i + 1
+            if next < rest.len() {
+                let candidate = rest[next]
+                if !strings.starts_with(candidate, "--") {
+                    return Some(candidate)
+                }
+            }
+            return None
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// Non-flag tokens after the program name, in order.
+/// Tokens starting with `--` are skipped (including `--name=value`).
+/// Space-separated option values are still collected unless the caller
+/// reads them with `long_flag_value`.
+pub fn positionals(args: Vec<string>) -> Vec<string> {
+    let rest = tail(args)
+    let mut out = Vec::new()
+    for token in rest {
+        if strings.starts_with(token, "--") {
+            continue
+        }
+        out.push(token)
+    }
+    out
+}
+
+/// Count of non-flag tokens after the program name.
+pub fn positional_count(args: Vec<string>) -> int {
+    positionals(args).len()
+}
+
+/// First positional token after the program name (skips `--` flags).
+pub fn first_positional(args: Vec<string>) -> Option<string> {
+    let pos = positionals(args)
+    if pos.len() == 0 {
+        return None
+    }
+    Some(pos[0])
+}
+
+/// Positional at 0-based `index`, or None when out of range.
+pub fn nth_positional(args: Vec<string>, index: int) -> Option<string> {
+    let pos = positionals(args)
+    if index < 0 {
+        return None
+    }
+    if index >= pos.len() {
+        return None
+    }
+    Some(pos[index])
+}
+
+/// Positional at `index`, or `Err` when it is missing.
+pub fn require_nth(args: Vec<string>, index: int) -> Result<string, string> {
+    match nth_positional(args, index) {
+        Some(value) => Ok(value),
+        None => Err("expected nth"),
+    }
+}
+
+/// First positional or a usage error when none is present.
+pub fn require_first_positional(args: Vec<string>, usage: string) -> Result<string, string> {
+    match first_positional(args) {
+        Some(value) => {
+            if value.len() == 0 {
+                return Err(usage)
+            }
+            Ok(value)
+        },
+        None => Err(usage),
+    }
+}
+
+/// Value from `--name` / `--name=value`, or a usage error when absent.
+pub fn require_long_flag_value(args: Vec<string>, name: string, usage: string) -> Result<string, string> {
+    match long_flag_value(args, name) {
+        Some(value) => Ok(value),
+        None => Err(usage),
+    }
+}
+
+/// Value from `--name` / `--name=value`, or `default` when the flag is absent.
+pub fn long_flag_value_or(args: Vec<string>, name: string, default: string) -> string {
+    match long_flag_value(args, name) {
+        Some(value) => value,
+        None => default,
+    }
+}
+
+/// Last positional argument, if any.
+pub fn last_positional(args: Vec<string>) -> Option<string> {
+    let pos = positionals(args)
+    let n = positional_count(args)
+    if n == 0 {
+        return None
+    }
+    Some(pos[n - 1])
+}
+
+/// The last positional argument, or `Err` when there is none.
+pub fn require_last_positional(args: Vec<string>) -> Result<string, string> {
+    match last_positional(args) {
+        Some(value) => Ok(value),
+        None => Err("expected last"),
+    }
+}
+
+/// True when `args` contains any `--…` long flag.
+pub fn has_any_long_flag(args: Vec<string>) -> bool {
+    let mut i = 0
+    while i < args.len() {
+        if strings.starts_with(args[i], "--") {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Number of `--…` long flags in `args`.
+pub fn long_flag_count(args: Vec<string>) -> int {
+    let mut n = 0
+    let mut i = 0
+    while i < args.len() {
+        if strings.starts_with(args[i], "--") {
+            n = n + 1
+        }
+        i = i + 1
+    }
+    n
+}
+
+/// `Ok(n)` when `args` has exactly `n` long flags, otherwise `Err`.
+pub fn require_long_flags(args: Vec<string>, n: int) -> Result<int, string> {
+    if long_flag_count(args) == n {
+        return Ok(n)
+    }
+    Err("expected long flags")
+}
+
+pub fn arg_count(args: Vec<string>) -> int {
+    let mut n = 0
+    for _ in args {
+        n = n + 1
+    }
+    n
+}
+
+/// `Ok(n)` when `args` has exactly `n` entries, otherwise `Err`.
+pub fn require_argc(args: Vec<string>, n: int) -> Result<int, string> {
+    if arg_count(args) == n {
+        return Ok(n)
+    }
+    Err("expected argc")
+}
+
+pub fn only_program_name(args: Vec<string>) -> bool {
+    arg_count(args) == 1
+}
+
+/// First argument (the program name), if any.
+pub fn program_name(args: Vec<string>) -> Option<string> {
+    if args.len() == 0 {
+        return None
+    }
+    Some(args[0])
+}
+
+/// Program name, or `Err` when argv is empty.
+pub fn require_program(args: Vec<string>) -> Result<string, string> {
+    match program_name(args) {
+        Some(name) => Ok(name),
+        None => Err("expected program"),
+    }
+}
+
+/// True when `--help` is present.
+pub fn has_help_flag(args: Vec<string>) -> bool {
+    has_long_flag(args, "help")
+}
+
+/// True when `--version` is present.
+pub fn has_version_flag(args: Vec<string>) -> bool {
+    has_long_flag(args, "version")
+}
+
+/// Argument count when `--version` is present.
+pub fn require_version(args: Vec<string>) -> Result<int, string> {
+    if has_version_flag(args) {
+        return Ok(arg_count(args))
+    }
+    Err("expected version")
+}
+
+/// Require at least `n` positionals; returns the actual count on success.
+pub fn require_positional_count(args: Vec<string>, n: int) -> Result<int, string> {
+    let count = positional_count(args)
+    if count >= n {
+        return Ok(count)
+    }
+    Err("expected at least ${n} positional arguments, got ${count}")
+}

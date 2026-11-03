@@ -1,0 +1,174 @@
+use std::collections::HashMap
+use std::fs
+use std::strings
+
+/// Parse dotenv text into key/value pairs.
+/// Skips blank lines and `#` comments. Trims keys/values. Values may contain `=`.
+pub fn parse(content: string) -> HashMap<string, string> {
+    let mut map = HashMap::new()
+    let lines = strings.split_lines(content)
+    for line in lines {
+        let trimmed = strings.trim(line)
+        if trimmed.len() == 0 {
+            continue
+        }
+        if strings.starts_with(trimmed, "#") {
+            continue
+        }
+        let parts = strings.split(trimmed, "=")
+        if parts.len() < 2 {
+            continue
+        }
+        let key = strings.trim(parts[0])
+        let mut value_parts = Vec::new()
+        let mut i = 1
+        while i < parts.len() {
+            value_parts.push(parts[i])
+            i = i + 1
+        }
+        let value = strings.join(value_parts, "=")
+        let value_trimmed = strings.trim(value)
+        if key.len() > 0 {
+            map.insert(key, value_trimmed)
+        }
+    }
+    map
+}
+
+/// Load a dotenv file from `path`.
+pub fn load(path: string) -> Result<HashMap<string, string>, string> {
+    match fs.read_to_string(path) {
+        Ok(content) => Ok(parse(content)),
+        Err(e) => Err(e),
+    }
+}
+
+/// Look up `key`, or return `default` when missing.
+pub fn get_or(map: HashMap<string, string>, key: string, default: string) -> string {
+    match map.get(key) {
+        Some(value) => value,
+        None => default,
+    }
+}
+
+/// True when `key` is present (even if value is empty).
+pub fn has(map: HashMap<string, string>, key: string) -> bool {
+    map.get(key).is_some()
+}
+
+/// Look up `key`, or `Err` naming the missing key.
+pub fn require(map: HashMap<string, string>, key: string) -> Result<string, string> {
+    match map.get(key) {
+        Some(value) => Ok(value),
+        None => Err("missing env key: ${key}"),
+    }
+}
+
+/// All keys in `map` (order not guaranteed).
+pub fn keys(map: HashMap<string, string>) -> Vec<string> {
+    let mut out = Vec::new()
+    for (key, _value) in map {
+        out.push(key)
+    }
+    out
+}
+
+/// Number of entries in `map`.
+pub fn key_count(map: HashMap<string, string>) -> int {
+    let mut n = 0
+    for (_key, _value) in map {
+        n = n + 1
+    }
+    n
+}
+
+/// True when `map` has no entries.
+pub fn is_empty(map: HashMap<string, string>) -> bool {
+    key_count(map) == 0
+}
+
+/// `Ok(0)` when `map` has no entries.
+pub fn require_empty(map: HashMap<string, string>) -> Result<int, string> {
+    if is_empty(map) {
+        return Ok(0)
+    }
+    Err("expected empty")
+}
+
+/// True when `map` has at least one entry.
+pub fn has_keys(map: HashMap<string, string>) -> bool {
+    !is_empty(map)
+}
+
+/// Number of values in `map` (same as key_count for a flat env map).
+pub fn value_count(map: HashMap<string, string>) -> int {
+    let mut n = 0
+    for (_k, _v) in map {
+        n = n + 1
+    }
+    n
+}
+
+/// Look up `key` as `Option` (None when missing).
+pub fn get(map: HashMap<string, string>, key: string) -> Option<string> {
+    match map.get(key) {
+        Some(value) => Some(value),
+        None => None,
+    }
+}
+
+/// All values in `map` (order not guaranteed).
+pub fn values(map: HashMap<string, string>) -> Vec<string> {
+    let mut out = Vec::new()
+    for (_key, value) in map {
+        out.push(value)
+    }
+    out
+}
+
+/// True when `key` is missing or its trimmed value is empty.
+pub fn is_blank(map: HashMap<string, string>, key: string) -> bool {
+    match get(map, key) {
+        Some(value) => strings.len(strings.trim(value)) == 0,
+        None => true,
+    }
+}
+
+/// `Ok(key)` when `key` is missing or its trimmed value is empty, otherwise `Err`.
+pub fn require_blank(map: HashMap<string, string>, key: string) -> Result<string, string> {
+    if is_blank(map, key) {
+        return Ok(key)
+    }
+    Err("expected blank")
+}
+
+/// Key count when `map` has entries, otherwise `Err`.
+pub fn require_nonempty(map: HashMap<string, string>) -> Result<int, string> {
+    if !has_keys(map) {
+        return Err("expected entries")
+    }
+    Ok(key_count(map))
+}
+
+/// Value for `key` when it is present and non-blank, otherwise `Err`.
+pub fn require_value(map: HashMap<string, string>, key: string) -> Result<string, string> {
+    if is_blank(map, key) {
+        return Err("expected value")
+    }
+    match get(map, key) {
+        Some(value) => Ok(value),
+        None => Err("expected value"),
+    }
+}
+
+/// Merge `overlay` onto `base`; overlay keys win on conflict.
+pub fn merge(base: HashMap<string, string>, overlay: HashMap<string, string>) -> HashMap<string, string> {
+    let mut out = HashMap::new()
+    for (key, value) in base {
+        out.insert(key, value)
+    }
+    for (key, value) in overlay {
+        out.insert(key, value)
+    }
+    out
+}

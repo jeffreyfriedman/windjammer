@@ -1,0 +1,109 @@
+/// Human-readable stdout for a successful apply.
+pub fn format_apply_result(applied_count: int, applied_versions: Vec<int>) -> string {
+    if applied_count == 0 {
+        return "no pending migrations"
+    }
+    let mut out = "applied ${applied_count} migration(s):"
+    for version in applied_versions {
+        out = "${out} ${version}"
+    }
+    out
+}
+
+/// Human-readable stdout for migration status.
+pub fn format_status_result(applied_versions: Vec<int>, pending_versions: Vec<int>) -> string {
+    let mut out = "applied:"
+    if applied_versions.len() == 0 {
+        out = "${out} (none)"
+    } else {
+        for version in applied_versions {
+            out = "${out} ${version}"
+        }
+    }
+    out = "${out}\npending:"
+    if pending_versions.len() == 0 {
+        out = "${out} (none)"
+    } else {
+        for version in pending_versions {
+            out = "${out} ${version}"
+        }
+    }
+    out
+}
+
+pub fn version_count(versions: Vec<int>) -> int {
+    let mut n = 0
+    for _ in versions {
+        n = n + 1
+    }
+    n
+}
+
+pub fn has_pending(pending_versions: Vec<int>) -> bool {
+    version_count(pending_versions) > 0
+}
+
+/// First pending version, or an error when caught up.
+pub fn require_first_pending(pending_versions: Vec<int>) -> Result<int, string> {
+    match first_pending(pending_versions) {
+        Some(v) => Ok(v),
+        None => Err("expected first pending"),
+    }
+}
+
+/// First pending version, or None when caught up.
+pub fn first_pending(pending_versions: Vec<int>) -> Option<int> {
+    if pending_versions.len() == 0 {
+        return None
+    }
+    Some(pending_versions[0])
+}
+
+/// Last applied version, or an error when none are applied.
+pub fn require_last_applied(applied_versions: Vec<int>) -> Result<int, string> {
+    match last_applied(applied_versions) {
+        Some(v) => Ok(v),
+        None => Err("expected last applied"),
+    }
+}
+
+/// Last applied version, or None when none applied.
+pub fn last_applied(applied_versions: Vec<int>) -> Option<int> {
+    let n = applied_versions.len()
+    if n == 0 {
+        return None
+    }
+    Some(applied_versions[n - 1])
+}
+
+/// Sum of applied and pending version counts.
+pub fn total_versions(applied_versions: Vec<int>, pending_versions: Vec<int>) -> int {
+    version_count(applied_versions) + version_count(pending_versions)
+}
+
+/// The only pending version, or an error when the list is empty or has more than one.
+pub fn require_only_pending(pending_versions: Vec<int>) -> Result<int, string> {
+    match only_pending(pending_versions) {
+        Some(v) => Ok(v),
+        None => Err("expected one pending"),
+    }
+}
+
+/// The only pending version when the list has exactly one entry.
+pub fn only_pending(pending_versions: Vec<int>) -> Option<int> {
+    if pending_versions.len() == 1 {
+        Some(pending_versions[0])
+    } else {
+        None
+    }
+}
+
+/// Pending count when at least one version is outstanding.
+pub fn require_pending(pending_versions: Vec<int>) -> Result<int, string> {
+    let n = version_count(pending_versions)
+    if n == 0 {
+        Err("expected pending")
+    } else {
+        Ok(n)
+    }
+}

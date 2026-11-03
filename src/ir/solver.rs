@@ -27,6 +27,13 @@ pub struct SolverResult {
     pub clones: CloneRequirements,
     /// Diagnostics produced during solving.
     pub diagnostics: Vec<SolverDiagnostic>,
+    /// Variables whose type is the numeric default (ADR-0015 `int`/`float`), not a width some use
+    /// fixed. Indexed by variable.
+    pub defaulted: Vec<bool>,
+    /// Union-find class of each variable (an opaque id; equal ids mean one class).
+    pub class_of: Vec<u32>,
+    /// Variables where two different exact integer widths met (the class has no single width).
+    pub width_conflicts: Vec<ConstraintVar>,
 }
 
 /// A diagnostic emitted by the solver.
@@ -179,6 +186,10 @@ pub struct Solver {
     diagnostics: Vec<SolverDiagnostic>,
     /// Deferred numeric class constraints — resolved after all other constraints.
     numeric_classes: Vec<(ConstraintVar, NumericClass)>,
+    /// NUM-USIZE preferences, resolved after every exact width is known.
+    usize_prefs: Vec<ConstraintVar>,
+    width_conflicts: Vec<ConstraintVar>,
+    defaulted_roots: std::collections::HashSet<u32>,
     /// Region union-find for aliasing analysis.
     region_uf: RegionUnionFind,
     /// `UsedAs(value, site)` edges: `value` must satisfy `site`'s ownership requirement.
@@ -196,6 +207,9 @@ impl Solver {
             clones: CloneRequirements::new(n),
             diagnostics: Vec::new(),
             numeric_classes: Vec::new(),
+            usize_prefs: Vec::new(),
+            width_conflicts: Vec::new(),
+            defaulted_roots: std::collections::HashSet::new(),
             region_uf: RegionUnionFind::new(),
             flows: Vec::new(),
         }
@@ -243,7 +257,12 @@ impl Solver {
             })
             .collect();
 
+        let defaulted: Vec<bool> = (0..n).map(|v| self.defaulted_roots.contains(&self.uf.find(v))).collect();
+        let class_of: Vec<u32> = (0..n).map(|v| self.uf.find(v)).collect();
         SolverResult {
+            width_conflicts: self.width_conflicts,
+            class_of,
+            defaulted,
             types,
             ownership: self.ownership,
             class_ownership,
@@ -264,6 +283,9 @@ impl Solver {
                     let root = self.uf.find(ra);
                     match (type_a, type_b) {
                         (Some(ta), Some(tb)) if ta != tb => {
+                            if is_integer_type(&ta) && is_integer_type(&tb) {
+                                self.width_conflicts.extend([*a, *b]);
+                            }
                             self.diagnostics.push(SolverDiagnostic {
                                 kind: DiagnosticKind::TypeError,
                                 message: format!("type conflict: {:?} vs {:?}", ta, tb),
@@ -282,6 +304,9 @@ impl Solver {
                 let root = self.uf.find(var.0);
                 match &self.types[root as usize] {
                     Some(existing) if existing != base_type => {
+                        if is_integer_type(existing) && is_integer_type(base_type) {
+                            self.width_conflicts.push(*var);
+                        }
                         self.diagnostics.push(SolverDiagnostic {
                             kind: DiagnosticKind::TypeError,
                             message: format!(
@@ -341,6 +366,8 @@ impl Solver {
                     self.numeric_classes.push((*var, NumericClass::Float));
                 }
             }
+
+            Constraint::PrefersUsize(var) => self.usize_prefs.push(*var),
 
             Constraint::OwnershipIs(var, ownership) => {
                 // Ownership is a per-variable requirement (OWN-LATTICE), not a property of the
@@ -428,6 +455,14 @@ impl Solver {
     /// Resolve deferred numeric class constraints by inferring defaults
     /// for variables that have no explicit type yet.
     fn resolve_numeric_classes(&mut self) {
+        // ADR-0028 lattice: exact width > index class (`usize`) > `int` default. A class is an
+        // index class when it has no exact width and any member is an index source or use.
+        for i in 0..self.usize_prefs.len() {
+            let root = self.uf.find(self.usize_prefs[i].0);
+            if self.types[root as usize].is_none() {
+                self.types[root as usize] = Some(BaseType::Usize);
+            }
+        }
         // Collect the strongest numeric class per root variable
         let mut root_classes: std::collections::HashMap<u32, NumericClass> =
             std::collections::HashMap::new();
@@ -462,6 +497,7 @@ impl Solver {
                     NumericClass::Numeric => BaseType::I64,
                 };
                 self.types[root as usize] = Some(default);
+                self.defaulted_roots.insert(root);
             }
         }
     }
@@ -492,7 +528,7 @@ fn is_numeric_type(ty: &BaseType) -> bool {
     is_integer_type(ty) || is_float_type(ty)
 }
 
-fn is_integer_type(ty: &BaseType) -> bool {
+pub(crate) fn is_integer_type(ty: &BaseType) -> bool {
     matches!(
         ty,
         BaseType::I8
@@ -505,6 +541,8 @@ fn is_integer_type(ty: &BaseType) -> bool {
             | BaseType::U32
             | BaseType::U64
             | BaseType::U128
+            | BaseType::Usize
+            | BaseType::Isize
     )
 }
 
@@ -819,6 +857,61 @@ mod tests {
             Some(BaseType::F64),
             "IsFloat is more specific than IsNumeric, should infer F64"
         );
+    }
+
+    // --- ADR-0028: index class ---
+
+    /// A counter compared with `len()` (`i < v.len()`, `i = i + 1`) is one class with no exact
+    /// width: it is `usize`, not the `int` default, and it is a solved width (not defaulted).
+    #[test]
+    fn index_class_without_exact_width_is_usize() {
+        let mut cs = ConstraintSet::new();
+        let (i, zero, len, one) = (cs.fresh_var(), cs.fresh_var(), cs.fresh_var(), cs.fresh_var());
+        cs.add(Constraint::IsInteger(zero));
+        cs.add(Constraint::IsInteger(one));
+        cs.add(Constraint::TypeEquals(i, zero));
+        cs.add(Constraint::TypeEquals(i, len));
+        cs.add(Constraint::TypeEquals(i, one));
+        cs.add(Constraint::PrefersUsize(len));
+        let r = Solver::new(&cs).solve(&cs);
+        for v in [i, zero, len, one] {
+            assert_eq!(r.types[v.0 as usize], Some(BaseType::Usize));
+            assert!(!r.defaulted[v.0 as usize]);
+        }
+    }
+
+    /// An exact width beats the index preference in either order, without a diagnostic
+    /// (`let n: int = v.len()` converts at the site).
+    #[test]
+    fn exact_width_beats_index_preference_in_any_order() {
+        for pref_first in [true, false] {
+            let mut cs = ConstraintSet::new();
+            let (n, len) = (cs.fresh_var(), cs.fresh_var());
+            if pref_first {
+                cs.add(Constraint::PrefersUsize(len));
+            }
+            cs.add(Constraint::TypeEquals(n, len));
+            cs.add(Constraint::TypeIs(n, BaseType::I64));
+            if !pref_first {
+                cs.add(Constraint::PrefersUsize(len));
+            }
+            let r = Solver::new(&cs).solve(&cs);
+            assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+            assert_eq!(r.types[len.0 as usize], Some(BaseType::I64));
+        }
+    }
+
+    /// A class with no index member still takes the `int` default.
+    #[test]
+    fn literal_class_without_index_member_stays_int() {
+        let mut cs = ConstraintSet::new();
+        let (a, other) = (cs.fresh_var(), cs.fresh_var());
+        cs.add(Constraint::IsInteger(a));
+        cs.add(Constraint::PrefersUsize(other));
+        let r = Solver::new(&cs).solve(&cs);
+        assert_eq!(r.types[a.0 as usize], Some(BaseType::I64));
+        assert!(r.defaulted[a.0 as usize]);
+        assert_eq!(r.types[other.0 as usize], Some(BaseType::Usize));
     }
 
     // --- Phase 1B: Region unification tests ---

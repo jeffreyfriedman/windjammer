@@ -1,0 +1,38 @@
+use crate::adapters::load_store
+use crate::adapters::save_store
+use crate::adapters::run_args
+use crate::adapters::read_args
+use crate::domain::config_from_env
+use crate::domain::resolve_file_path
+use std::process
+
+fn main() {
+    let config = config_from_env()
+    let path = resolve_file_path(".", config.file_name)
+    let args = read_args()
+    match load_store(path) {
+        Ok(store) => {
+            match run_args(store, args, config) {
+                Ok(result) => {
+                    match save_store(path, result.0) {
+                        Ok(_) => {
+                            println("{}", result.1)
+                        },
+                        Err(e) => {
+                            eprintln("wj-todo-cli: ${e}")
+                            process.exit(1)
+                        },
+                    }
+                },
+                Err(e) => {
+                    eprintln("wj-todo-cli: ${e}")
+                    process.exit(1)
+                },
+            }
+        },
+        Err(e) => {
+            eprintln("wj-todo-cli: ${e}")
+            process.exit(1)
+        },
+    }
+}

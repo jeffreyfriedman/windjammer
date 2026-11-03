@@ -1,0 +1,151 @@
+use std::strings
+
+use crate::domain::FetchConfig
+use crate::domain::parse::parse_nonneg_int
+
+pub struct FetchRequest {
+    pub url: string,
+    pub fail_on_error: bool,
+    pub max_retries: int,
+    pub output_path: string,
+    pub silent: bool,
+    pub timeout_secs: int,
+}
+
+const USAGE: string = "usage: wj-fetch [--fail] [--retries=N] [--timeout=SECS] [--output=PATH|-o PATH] [-s|--silent] <url>"
+
+pub fn url_from_argv(argv: Vec<string>, config: FetchConfig) -> Result<FetchRequest, string> {
+    let rest = tail(argv)
+    let fail_on_error = config.fail_on_error || fail_flag_present(rest)
+    let silent = silent_flag_present(rest)
+    let mut max_retries = config.max_retries
+    match retries_flag_value(rest) {
+        Some(value) => {
+            max_retries = value
+        },
+        None => {},
+    }
+    let mut timeout_secs = config.timeout_secs
+    match timeout_flag_value(rest) {
+        Some(value) => {
+            timeout_secs = value
+        },
+        None => {},
+    }
+    let mut output_path = ""
+    match output_path_value(rest) {
+        Some(path) => {
+            output_path = path
+        },
+        None => {},
+    }
+    match first_positional(rest) {
+        Some(url) => {
+            if strings.len(url) == 0 {
+                return Err(USAGE)
+            }
+            Ok(FetchRequest {
+                url: url,
+                fail_on_error: fail_on_error,
+                max_retries: max_retries,
+                output_path: output_path,
+                silent: silent,
+                timeout_secs: timeout_secs,
+            })
+        },
+        None => Err(USAGE),
+    }
+}
+
+fn tail(args: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 1
+    while i < args.len() {
+        out.push(args[i])
+        i = i + 1
+    }
+    out
+}
+
+fn fail_flag_present(rest: Vec<string>) -> bool {
+    for token in rest {
+        if token == "--fail" {
+            return true
+        }
+        if strings.starts_with(token, "--fail=") {
+            return true
+        }
+    }
+    false
+}
+
+fn silent_flag_present(rest: Vec<string>) -> bool {
+    for token in rest {
+        if token == "-s" || token == "--silent" {
+            return true
+        }
+    }
+    false
+}
+
+fn retries_flag_value(rest: Vec<string>) -> Option<int> {
+    let prefix = "--retries="
+    for token in rest {
+        if strings.starts_with(token, prefix) {
+            let value = strings.substring(token, strings.len(prefix), strings.len(token))
+            return parse_nonneg_int(value)
+        }
+    }
+    None
+}
+
+fn timeout_flag_value(rest: Vec<string>) -> Option<int> {
+    let prefix = "--timeout="
+    for token in rest {
+        if strings.starts_with(token, prefix) {
+            let value = strings.substring(token, strings.len(prefix), strings.len(token))
+            return parse_nonneg_int(value)
+        }
+    }
+    None
+}
+
+fn output_path_value(rest: Vec<string>) -> Option<string> {
+    let prefix = "--output="
+    let mut i = 0
+    while i < rest.len() {
+        let token = rest[i]
+        if strings.starts_with(token, prefix) {
+            return Some(strings.substring(token, strings.len(prefix), strings.len(token)))
+        }
+        if token == "-o" {
+            if i + 1 < rest.len() {
+                return Some(rest[i + 1])
+            }
+            return None
+        }
+        i = i + 1
+    }
+    None
+}
+
+fn first_positional(rest: Vec<string>) -> Option<string> {
+    let mut i = 0
+    while i < rest.len() {
+        let token = rest[i]
+        if token == "-o" {
+            i = i + 2
+            continue
+        }
+        if token == "-s" || token == "--silent" {
+            i = i + 1
+            continue
+        }
+        if strings.starts_with(token, "--") {
+            i = i + 1
+            continue
+        }
+        return Some(token)
+    }
+    None
+}

@@ -13,6 +13,7 @@
 //! Output also includes `step_sites`: the source positions of the calls the interpreter journals.
 
 use super::analysis::{full_path, sink_uses, EffectFacts};
+use super::kind::EffectKind;
 use super::sinks;
 use crate::parser::ast::core::{Expression, FunctionDecl, Pattern, Statement};
 use crate::parser::ast::operators::UnaryOp;
@@ -39,6 +40,8 @@ pub struct DurableFacts {
     pub functions: Vec<String>,
     /// (file, line, column) of every call in a durable body that is a journaled step.
     pub step_sites: BTreeSet<(PathBuf, usize, usize)>,
+    /// The step sites whose call only reads (time, random, environment, files): a compiled build journals them lazily.
+    pub read_sites: BTreeSet<(PathBuf, usize, usize)>,
     pub findings: Vec<DurableFinding>,
     /// What a compiled build cannot journal yet (methods, user-defined types), one message each. Not errors of `wj check`.
     pub compiled_blockers: Vec<String>,
@@ -235,6 +238,21 @@ impl Pass<'_, '_> {
         }
     }
 
+    /// A call whose every effect is a read of the outside world (never a write): losing its journal line costs a repeated read.
+    fn read_only(&self, c: &CallResolution) -> bool {
+        let read = |k: &EffectKind| matches!(k, EffectKind::FsRead | EffectKind::EnvRead | EffectKind::Time | EffectKind::Random);
+        let sink_reads = |path: &str| {
+            let uses = sink_uses(path, c);
+            !uses.is_empty() && uses.iter().all(|(k, _)| read(k))
+        };
+        match &c.res {
+            Res::Def(id) => self.facts.get(*id).is_some_and(|f| !f.open && !f.effects.is_empty() && f.effects.keys().all(|e| read(&e.kind))),
+            Res::Unresolved(Reason::External(p)) | Res::Prim(p) => sink_reads(&full_path(p, &c.callee)),
+            Res::Unresolved(Reason::NotFound(_)) if c.kind == CallKind::Free => sink_reads(&c.callee),
+            _ => false,
+        }
+    }
+
     fn call(&mut self, e: &Expression<'_>) {
         let Some(c) = self.calls.get(&ExprKey(e as *const Expression<'_> as usize)).copied() else { return };
         // state the body does not own (WJ0047): receives, locks, atomics with no user method of that name
@@ -257,6 +275,9 @@ impl Pass<'_, '_> {
         }
         if let Some(l) = &c.location {
             self.out.step_sites.insert((l.file.clone(), l.line, l.column));
+            if self.read_only(c) {
+                self.out.read_sites.insert((l.file.clone(), l.line, l.column));
+            }
         }
         let handle = sinks::HANDLE_SINKS.contains(&sinks::canonical(&c.callee).as_str());
         let ret = match &c.res {

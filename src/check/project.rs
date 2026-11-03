@@ -82,7 +82,16 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
 }
 
 fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, out: &mut Vec<Diagnostic>) {
-    let base = if root.is_file() { root.parent().unwrap_or(root) } else { root };
+    // Module paths are relative to the package's source root: `src/shapes.wj` is module `shapes` whether the
+    // check starts at the package root or at `src`.
+    let package_src = root.join("src");
+    let base = if root.is_file() {
+        root.parent().unwrap_or(root)
+    } else if root.join(crate::module_system::project::MANIFEST).is_file() && package_src.is_dir() {
+        package_src.as_path()
+    } else {
+        root
+    };
     let inputs: Vec<ParsedFile<'_>> = parsed
         .iter()
         .map(|p| {

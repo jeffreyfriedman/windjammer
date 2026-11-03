@@ -415,6 +415,8 @@ pub(crate) fn is_copy_base(base: &BaseType) -> bool {
         | BaseType::U32
         | BaseType::U64
         | BaseType::U128
+        | BaseType::Usize
+        | BaseType::Isize
         | BaseType::F32
         | BaseType::F64 => true,
         BaseType::Tuple(elems) => elems.iter().all(is_copy_base),
@@ -435,6 +437,8 @@ fn is_integer_base(base: &BaseType) -> bool {
             | BaseType::U32
             | BaseType::U64
             | BaseType::U128
+            | BaseType::Usize
+            | BaseType::Isize
     )
 }
 
@@ -486,6 +490,8 @@ pub(crate) fn is_display_coercible_to_string(base: &BaseType) -> bool {
             | BaseType::U32
             | BaseType::U64
             | BaseType::U128
+            | BaseType::Usize
+            | BaseType::Isize
             | BaseType::F32
             | BaseType::F64
             | BaseType::Bool
@@ -517,14 +523,14 @@ fn needs_numeric_cast(actual: &BaseType, expected: &BaseType) -> bool {
 fn is_signed_integer_base(base: &BaseType) -> bool {
     matches!(
         base,
-        BaseType::I8 | BaseType::I16 | BaseType::I32 | BaseType::I64 | BaseType::I128
+        BaseType::I8 | BaseType::I16 | BaseType::I32 | BaseType::I64 | BaseType::I128 | BaseType::Isize
     )
 }
 
 fn is_unsigned_integer_base(base: &BaseType) -> bool {
     matches!(
         base,
-        BaseType::U8 | BaseType::U16 | BaseType::U32 | BaseType::U64 | BaseType::U128
+        BaseType::U8 | BaseType::U16 | BaseType::U32 | BaseType::U64 | BaseType::U128 | BaseType::Usize
     )
 }
 

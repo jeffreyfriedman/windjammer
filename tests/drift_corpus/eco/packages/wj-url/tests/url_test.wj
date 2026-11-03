@@ -1,0 +1,274 @@
+use crate::parse
+use crate::require_root
+use crate::format_url
+use crate::is_https
+use crate::is_root_path
+use crate::join_url
+use crate::origin
+use crate::query_get
+use crate::query_get_or
+use crate::query_has
+use crate::query_remove
+use crate::query_set
+use crate::with_fragment
+use crate::with_query
+use crate::without_fragment
+use crate::without_query
+use std::strings
+
+@test
+fn test_parse_https_with_path_query_fragment() {
+    let text = "https://example.com:8443/api/v1?x=1&y=2#top"
+    match parse(text) {
+        Ok(u) => {
+            assert_eq(u.scheme, "https")
+            assert_eq(u.host, "example.com")
+            assert_eq(u.port, "8443")
+            assert_eq(u.path, "/api/v1")
+            assert_eq(u.query, "x=1&y=2")
+            assert_eq(u.fragment, "top")
+        },
+        Err(_) => assert(false, "parse full url"),
+    }
+}
+
+@test
+fn test_parse_http_no_port() {
+    let text = "http://localhost/path"
+    match parse(text) {
+        Ok(u) => {
+            assert_eq(u.scheme, "http")
+            assert_eq(u.host, "localhost")
+            assert_eq(u.port, "")
+            assert_eq(u.path, "/path")
+        },
+        Err(_) => assert(false, "parse localhost"),
+    }
+}
+
+@test
+fn test_parse_rejects_empty() {
+    match parse("") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_parse_rejects_missing_scheme() {
+    match parse("example.com/path") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_format_url_roundtrip() {
+    match parse("https://a.b:443/x?q=1#f") {
+        Ok(u) => assert_eq(format_url(u), "https://a.b:443/x?q=1#f"),
+        Err(_) => assert(false, "parse for format"),
+    }
+}
+
+@test
+fn test_join_absolute_relative_replaces() {
+    match join_url("https://example.com/a/b", "https://other.com/z") {
+        Ok(out) => assert_eq(out, "https://other.com/z"),
+        Err(_) => assert(false, "join absolute"),
+    }
+}
+
+@test
+fn test_join_path_relative() {
+    match join_url("https://example.com/a/b", "c") {
+        Ok(out) => assert_eq(out, "https://example.com/a/c"),
+        Err(_) => assert(false, "join relative"),
+    }
+}
+
+@test
+fn test_join_rooted_path() {
+    match join_url("https://example.com/a/b", "/root") {
+        Ok(out) => assert_eq(out, "https://example.com/root"),
+        Err(_) => assert(false, "join rooted"),
+    }
+}
+
+@test
+fn test_join_relative_keeps_query_and_fragment() {
+    match join_url("https://example.com/a/b", "c?x=1#sec") {
+        Ok(out) => assert_eq(out, "https://example.com/a/c?x=1#sec"),
+        Err(_) => assert(false, "join with query"),
+    }
+}
+
+@test
+fn test_query_get_finds_key() {
+    match query_get("a=1&b=two&c=3", "b") {
+        Some(v) => assert_eq(v, "two"),
+        None => assert(false, "expected b"),
+    }
+}
+
+@test
+fn test_query_get_decodes_percent_and_plus() {
+    match query_get("q=hello%20world", "q") {
+        Some(v) => assert_eq(v, "hello world"),
+        None => assert(false, "expected decoded q"),
+    }
+    match query_get("q=hello+world", "q") {
+        Some(v) => assert_eq(v, "hello world"),
+        None => assert(false, "expected plus as space"),
+    }
+}
+
+@test
+fn test_query_set_encodes_spaces_and_ampersand() {
+    let out = query_set("", "q", "a&b c")
+    assert(strings.contains(out, "q="), "has key")
+    assert(!strings.contains(out, "q=a&b"), "ampersand encoded")
+    match query_get(out, "q") {
+        Some(v) => assert_eq(v, "a&b c"),
+        None => assert(false, "roundtrip q"),
+    }
+}
+
+@test
+fn test_query_get_missing_key() {
+    match query_get("a=1", "z") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+@test
+fn test_query_set_adds_and_replaces() {
+    let with_b = query_set("a=1", "b", "2")
+    assert(strings.contains(with_b, "a=1"), "keeps a")
+    assert(strings.contains(with_b, "b=2"), "adds b")
+    let replaced = query_set("a=1&b=old", "b", "new")
+    assert(strings.contains(replaced, "b=new"), "replaces b")
+    assert(!strings.contains(replaced, "b=old"), "drops old b")
+}
+
+@test
+fn test_query_remove_drops_key() {
+    let out = query_remove("a=1&b=2&c=3", "b")
+    assert(strings.contains(out, "a=1"), "keeps a")
+    assert(strings.contains(out, "c=3"), "keeps c")
+    assert(!strings.contains(out, "b=2"), "drops b")
+}
+
+@test
+fn test_query_has() {
+    assert(query_has("a=1&b=2", "a"), "has a")
+    assert(!query_has("a=1&b=2", "z"), "missing z")
+}
+
+@test
+fn test_with_query_sets_on_url() {
+    match parse("https://example.com/path?old=1#f") {
+        Ok(u) => {
+            let updated = with_query(u, "a=1&b=2")
+            assert_eq(updated.query, "a=1&b=2")
+            assert_eq(updated.fragment, "f")
+            assert_eq(format_url(updated), "https://example.com/path?a=1&b=2#f")
+        },
+        Err(_) => assert(false, "parse for with_query"),
+    }
+}
+
+@test
+fn test_origin_and_is_https() {
+    match parse("https://example.com:8443/api") {
+        Ok(u) => {
+            assert(is_https(u), "https")
+            assert_eq(origin(u), "https://example.com:8443")
+        },
+        Err(_) => assert(false, "parse https"),
+    }
+    match parse("http://example.com/x") {
+        Ok(u) => {
+            assert(!is_https(u), "http")
+            assert_eq(origin(u), "http://example.com")
+        },
+        Err(_) => assert(false, "parse http"),
+    }
+}
+
+@test
+fn test_query_get_or() {
+    assert_eq(query_get_or("a=1&b=2", "a", "0"), "1")
+    assert_eq(query_get_or("a=1&b=2", "z", "0"), "0")
+}
+
+@test
+fn test_without_query_with_fragment_and_is_root_path() {
+    match parse("https://example.com/api?x=1#top") {
+        Ok(u) => {
+            let no_q = without_query(u)
+            assert_eq(format_url(no_q), "https://example.com/api#top")
+            let with_f = with_fragment(no_q, "bottom")
+            assert_eq(with_f.fragment, "bottom")
+            assert(!is_root_path(with_f), "api is not root")
+        },
+        Err(_) => assert(false, "parse"),
+    }
+    match parse("https://example.com/") {
+        Ok(u) => assert(is_root_path(u), "slash is root"),
+        Err(_) => assert(false, "parse root slash"),
+    }
+    match parse("https://example.com") {
+        Ok(u) => assert(is_root_path(u), "empty path is root"),
+        Err(_) => assert(false, "parse no path"),
+    }
+}
+
+@test
+fn test_scheme_host_and_require_https() {
+    use crate::host_of
+    use crate::require_https
+    use crate::scheme_of
+    match parse("https://example.com/api") {
+        Ok(u) => {
+            assert_eq(scheme_of(u), "https")
+            assert_eq(host_of(u), "example.com")
+            match require_https(u) {
+                Ok(kept) => assert_eq(kept.host, "example.com"),
+                Err(_) => assert(false, "https ok"),
+            }
+        },
+        Err(_) => assert(false, "parse https"),
+    }
+    match parse("http://example.com/api") {
+        Ok(u) => {
+            match require_https(u) {
+                Ok(_) => assert(false, "http must Err"),
+                Err(msg) => assert(strings.contains(msg, "https"), "mentions https"),
+            }
+        },
+        Err(_) => assert(false, "parse http"),
+    }
+}
+
+@test
+fn test_require_root() {
+    match parse("http://example.com/") {
+        Ok(u) => {
+            match require_root(u) {
+                Ok(kept) => assert(is_root_path(kept), "root"),
+                Err(_) => assert(false, "root ok"),
+            }
+        },
+        Err(_) => assert(false, "parse root"),
+    }
+    match parse("http://example.com/api") {
+        Ok(u) => {
+            match require_root(u) {
+                Ok(_) => assert(false, "path must Err"),
+                Err(msg) => assert(strings.contains(msg, "root"), "mentions root"),
+            }
+        },
+        Err(_) => assert(false, "parse path"),
+    }
+}

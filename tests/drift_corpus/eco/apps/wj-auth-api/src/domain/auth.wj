@@ -1,0 +1,937 @@
+use std::collections::HashMap
+use std::compress
+use std::json
+use std::strings
+use std::http::HttpMethod
+
+use wj_compress::content_encoding_gzip
+use wj_compress::negotiate
+use wj_cookie::format_set_cookie
+use wj_cookie::parse_cookie_header
+use wj_cookie::SetCookie
+use wj_cors::allow_origin
+use wj_cors::preflight
+use wj_hash::hash_password
+use wj_hash::verify_password
+use wj_headers::defaults
+use wj_headers::format_headers
+use wj_inflect::slugify
+use wj_jwt::sign
+use wj_jwt::verify
+use wj_log::log_tagged
+use wj_mime::html as html_mime
+use wj_mime::json as json_mime
+use wj_rate_limit::check_key
+use wj_rate_limit::fixed_window
+use wj_rate_limit::rate_limit_headers
+use wj_rate_limit::WindowBucket
+use wj_router::match_route
+use wj_template::render_html
+use wj_timefmt::format_rfc3339
+use wj_timefmt::from_epoch_secs
+use wj_uuid::v7
+use wj_validate::require_max_len
+use wj_validate::require_min_len
+use wj_validate::require_nonempty
+
+use crate::domain::config::AuthConfig
+
+pub struct HttpReply {
+    pub status: u16,
+    pub body: string,
+    pub content_type: string,
+    pub allow_origin: string,
+    pub content_encoding: string,
+    pub set_cookie: string,
+    pub extra_headers: string,
+}
+
+struct RateBucket {
+    window_start_ms: int,
+    count: int,
+}
+
+struct UserRecord {
+    id: string,
+    username: string,
+    password_hash: string,
+}
+
+struct RegisterBody {
+    username: string,
+    password: string,
+}
+
+struct LoginBody {
+    username: string,
+    password: string,
+}
+
+struct TokenBody {
+    token: string,
+}
+
+struct CreatedBody {
+    created: bool,
+    id: string,
+    username: string,
+}
+
+struct MeBody {
+    username: string,
+    sub: string,
+    tenant: string,
+    expires_at: string,
+}
+
+struct ErrorBody {
+    error: string,
+}
+
+struct OkBody {
+    ok: bool,
+}
+
+pub struct AuthApp {
+    config: AuthConfig,
+    users: Vec<UserRecord>,
+    buckets: HashMap<string, RateBucket>,
+}
+
+impl AuthApp {
+    pub fn new(config: AuthConfig) -> AuthApp {
+        AuthApp {
+            config: config,
+            users: Vec::new(),
+            buckets: HashMap::new(),
+        }
+    }
+
+    pub fn handle(
+        self,
+        method: string,
+        path: string,
+        origin: string,
+        accept_encoding: string,
+        authorization: string,
+        cookie: string,
+        client_key: string,
+        now_ms: int,
+        body: string,
+    ) -> HttpReply {
+        let parsed = match parse_method(method) {
+            Some(value) => value,
+            None => return json_error(405, "method not allowed"),
+        }
+        self.handle_http(
+            parsed,
+            path,
+            origin,
+            accept_encoding,
+            authorization,
+            cookie,
+            client_key,
+            now_ms,
+            body,
+        )
+    }
+
+    /// Adapter entry: same-crate `HttpMethod` (avoids dual-runtime mismatch in tests
+    /// and string-lit → demoted `&str` + `.to_string()` in multipass codegen).
+    pub fn handle_http(
+        self,
+        method: HttpMethod,
+        path: string,
+        origin: string,
+        accept_encoding: string,
+        authorization: string,
+        cookie: string,
+        client_key: string,
+        now_ms: int,
+        body: string,
+    ) -> HttpReply {
+        let path = own(path)
+        let origin = own(origin)
+        let accept_encoding = own(accept_encoding)
+        let authorization = own(authorization)
+        let cookie = own(cookie)
+        let client_key = own(client_key)
+        let body = own(body)
+        let allowed = self.config.allowed_origins
+        let level = self.config.log_level
+        match method {
+            HttpMethod::OPTIONS => {
+                let reply = self.handle_options(path, origin, allowed)
+                emit_access_log(level, "OPTIONS", path, reply.status)
+                return reply
+            },
+            _ => {},
+        }
+        match self.check_rate(client_key, now_ms) {
+            Some(limit_reply) => {
+                let reply = with_transport(limit_reply, origin, accept_encoding, allowed)
+                emit_access_log(level, method_label(method), path, reply.status)
+                return reply
+            },
+            None => {},
+        }
+        let reply = self.dispatch(method, path, body, authorization, cookie)
+        let out = with_transport(reply, origin, accept_encoding, allowed)
+        emit_access_log(level, method_label(method), path, out.status)
+        out
+    }
+
+    fn check_rate(self, client_key: string, now_ms: int) -> Option<HttpReply> {
+        if self.config.rate_limit < 1 {
+            return None
+        }
+        let key = rate_key(client_key)
+        let lim = fixed_window(self.config.rate_limit, self.config.window_ms)
+        let checked = check_key(lim, buckets_for_limit(self.buckets), key, now_ms)
+        self.buckets = buckets_from_limit(checked.0)
+        let result = checked.1
+        if result.allowed {
+            return None
+        }
+        let header_block = rate_limit_headers(result)
+        Some(HttpReply {
+            status: 429,
+            body: "{\"error\":\"rate limit exceeded\"}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: header_block,
+        })
+    }
+
+    fn dispatch(
+        self,
+        method: HttpMethod,
+        path: string,
+        body: string,
+        authorization: string,
+        cookie: string,
+    ) -> HttpReply {
+        match route_match("/health", path) {
+            Some(_) => {
+                match method {
+                    HttpMethod::GET => json_ok(),
+                    _ => json_error(404, "not found"),
+                }
+            },
+            None => {
+                match route_match("/", path) {
+                    Some(_) => {
+                        match method {
+                            HttpMethod::GET => welcome_page(),
+                            _ => json_error(404, "not found"),
+                        }
+                    },
+                    None => {
+                        match route_match("/index.html", path) {
+                            Some(_) => {
+                                match method {
+                                    HttpMethod::GET => welcome_page(),
+                                    _ => json_error(404, "not found"),
+                                }
+                            },
+                            None => {
+                                match route_match("/register", path) {
+                                    Some(_) => {
+                                        match method {
+                                            HttpMethod::POST => self.register(body),
+                                            _ => json_error(404, "not found"),
+                                        }
+                                    },
+                                    None => {
+                                        match route_match("/login", path) {
+                                            Some(_) => {
+                                                match method {
+                                                    HttpMethod::POST => self.login(body),
+                                                    _ => json_error(404, "not found"),
+                                                }
+                                            },
+                                            None => {
+                                                match route_match("/logout", path) {
+                                                    Some(_) => {
+                                                        match method {
+                                                            HttpMethod::POST => logout(),
+                                                            _ => json_error(404, "not found"),
+                                                        }
+                                                    },
+                                                    None => {
+                                                        match route_match("/me", path) {
+                                                            Some(_) => {
+                                                                match method {
+                                                                    HttpMethod::GET => self.profile(authorization, cookie),
+                                                                    _ => json_error(404, "not found"),
+                                                                }
+                                                            },
+                                                            None => json_error(404, "not found"),
+                                                        }
+                                                    },
+                                                }
+                                            },
+                                        }
+                                    },
+                                }
+                            },
+                        }
+                    },
+                }
+            },
+        }
+    }
+
+    fn handle_options(self, path: string, origin: string, allowed: Vec<string>) -> HttpReply {
+        let _path = path
+        let methods = "GET,POST,OPTIONS"
+        let headers = "Content-Type, Authorization, Cookie"
+        match cors_preflight(origin, allowed, methods, headers) {
+            Some(headers) => HttpReply {
+                status: 204,
+                body: "",
+                content_type: "",
+                allow_origin: headers.allow_origin,
+                content_encoding: "",
+                set_cookie: "",
+                extra_headers: security_header_block(),
+            },
+            None => json_error(403, "origin not allowed"),
+        }
+    }
+
+    fn register(self, body: string) -> HttpReply {
+        let parsed: RegisterBody = match json.parse_string(body) {
+            Ok(value) => value,
+            Err(_) => return json_error(400, "invalid json"),
+        }
+        let username = match self.validate_username(parsed.username) {
+            Ok(value) => value,
+            Err(err) => return json_error(400, err),
+        }
+        let password = match self.validate_password(parsed.password) {
+            Ok(value) => value,
+            Err(err) => return json_error(400, err),
+        }
+        if self.find_user(username) {
+            return json_error(409, "username taken")
+        }
+        let user_id = match new_user_id() {
+            Ok(id) => id,
+            Err(_) => return json_error(500, "id failed"),
+        }
+        match hash_pw(password) {
+            Ok(digest) => {
+                self.users.push(UserRecord {
+                    id: "${user_id}",
+                    username: "${username}",
+                    password_hash: digest,
+                })
+                json_created(user_id, username)
+            },
+            Err(_) => json_error(500, "hash failed"),
+        }
+    }
+
+    fn login(self, body: string) -> HttpReply {
+        let parsed: LoginBody = match json.parse_string(body) {
+            Ok(value) => value,
+            Err(_) => return json_error(400, "invalid json"),
+        }
+        let username = match self.validate_username(parsed.username) {
+            Ok(value) => value,
+            Err(err) => return json_error(400, err),
+        }
+        let password = match self.validate_password(parsed.password) {
+            Ok(value) => value,
+            Err(err) => return json_error(400, err),
+        }
+        let tenant = self.config.tenant_slug
+        let secret = self.config.jwt_secret
+        match self.verify_user(username, password) {
+            Some(user_id) => match sign_jwt(user_id, tenant, secret, self.config.jwt_ttl_secs) {
+                Ok(token) => {
+                    let cookie = access_token_cookie("${token}")
+                    let payload = TokenBody { token: token }
+                    match json.to_string(payload) {
+                        Ok(text) => HttpReply {
+                            status: 200,
+                            body: text,
+                            content_type: mime_json(),
+                            allow_origin: "",
+                            content_encoding: "",
+                            set_cookie: cookie,
+                            extra_headers: "",
+                        },
+                        Err(_) => json_error(500, "serialization failed"),
+                    }
+                },
+                Err(_) => json_error(500, "token failed"),
+            },
+            None => json_error(401, "invalid credentials"),
+        }
+    }
+
+    fn validate_username(self, value: string) -> Result<string, string> {
+        let trimmed = match validate_nonempty("username", value) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+        let slugged = username_slug(trimmed)
+        let nonempty = match validate_nonempty("username", slugged) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+        validate_max_len("username", nonempty, self.config.max_username_len)
+    }
+
+    fn validate_password(self, value: string) -> Result<string, string> {
+        let trimmed = match validate_nonempty("password", value) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+        let min_ok = match validate_min_len("password", trimmed, self.config.min_password_len) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        }
+        validate_max_len("password", min_ok, self.config.max_password_len)
+    }
+
+    fn profile(self, authorization: string, cookie: string) -> HttpReply {
+        let token = resolve_token(authorization, cookie)
+        if strings.len(token) == 0 {
+            return json_error(401, "missing bearer token")
+        }
+        let secret = self.config.jwt_secret
+        match verify_jwt(token, secret) {
+            Ok(claims) => {
+                match self.username_for_id(claims.sub) {
+                    Some(username) => {
+                        let payload = MeBody {
+                            username: username,
+                            sub: claims.sub,
+                            tenant: claims.tenant,
+                            expires_at: format_expiry(claims.exp),
+                        }
+                        match json.to_string(payload) {
+                            Ok(text) => HttpReply {
+                                status: 200,
+                                body: text,
+                                content_type: mime_json(),
+                                allow_origin: "",
+                                content_encoding: "",
+                                set_cookie: "",
+                                extra_headers: "",
+                            },
+                            Err(_) => json_error(500, "serialization failed"),
+                        }
+                    },
+                    None => json_error(401, "unknown subject"),
+                }
+            },
+            Err(_) => json_error(401, "invalid token"),
+        }
+    }
+
+    fn find_user(self, username: string) -> bool {
+        let mut i = 0
+        while i < self.users.len() {
+            if self.users[i].username == username {
+                return true
+            }
+            i = i + 1
+        }
+        false
+    }
+
+    fn username_for_id(self, id: string) -> Option<string> {
+        let mut i = 0
+        while i < self.users.len() {
+            if self.users[i].id == id {
+                return Some(self.users[i].username)
+            }
+            i = i + 1
+        }
+        None
+    }
+
+    fn verify_user(self, username: string, password: string) -> Option<string> {
+        let mut i = 0
+        while i < self.users.len() {
+            let record = self.users[i]
+            if record.username == username {
+                let digest = record.password_hash
+                match check_password(password, digest) {
+                    Ok(ok) => {
+                        if ok {
+                            return Some(record.id)
+                        }
+                        return None
+                    },
+                    Err(_) => return None,
+                }
+            }
+            i = i + 1
+        }
+        None
+    }
+}
+
+pub fn gzip_decode_body(body: string) -> Result<string, string> {
+    gzip_body_decode(body)
+}
+
+struct JwtClaimsView {
+    sub: string,
+    tenant: string,
+    exp: int,
+}
+
+fn new_user_id() -> Result<string, string> {
+    v7()
+}
+
+fn hash_pw(password: string) -> Result<string, string> {
+    let password = own(password)
+    hash_password(password)
+}
+
+fn check_password(password: string, digest: string) -> Result<bool, string> {
+    let password = own(password)
+    let digest = own(digest)
+    verify_password(password, digest)
+}
+
+fn sign_jwt(sub: string, tenant: string, secret: string, ttl_secs: int) -> Result<string, string> {
+    let sub = own(sub)
+    let tenant = own(tenant)
+    let secret = own(secret)
+    sign(sub, tenant, secret, ttl_secs)
+}
+
+fn verify_jwt(token: string, secret: string) -> Result<JwtClaimsView, string> {
+    let token = own(token)
+    let secret = own(secret)
+    match verify(token, secret) {
+        Ok(claims) => Ok(JwtClaimsView {
+            sub: claims.sub,
+            tenant: claims.tenant_slug,
+            exp: claims.exp,
+        }),
+        Err(err) => Err(err),
+    }
+}
+
+fn cors_preflight(
+    origin: string,
+    allowed: Vec<string>,
+    methods: string,
+    headers: string,
+) -> Option<wj_cors::CorsHeaders> {
+    let origin = own(origin)
+    let methods = own(methods)
+    let headers = own(headers)
+    preflight(origin, allowed, methods, headers)
+}
+
+fn cors_allow(origin: string, allowed: Vec<string>) -> Option<string> {
+    let origin = own(origin)
+    allow_origin(origin, allowed)
+}
+
+fn gzip_body_encode(body: string) -> Result<string, string> {
+    compress.gzip_encode(body)
+}
+
+fn gzip_body_decode(body: string) -> Result<string, string> {
+    compress.gzip_decode(body)
+}
+
+fn validate_nonempty(field: string, value: string) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_nonempty(field, value)
+}
+
+fn validate_min_len(field: string, value: string, min: int) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_min_len(field, value, min)
+}
+
+fn validate_max_len(field: string, value: string, max: int) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_max_len(field, value, max)
+}
+
+fn with_transport(reply: HttpReply, origin: string, accept_encoding: string, allowed: Vec<string>) -> HttpReply {
+    let with_cors = apply_cors(reply, origin, allowed)
+    let with_gzip = apply_gzip(with_cors, accept_encoding)
+    apply_security(with_gzip)
+}
+
+fn apply_cors(reply: HttpReply, origin: string, allowed: Vec<string>) -> HttpReply {
+    if strings.len(origin) == 0 {
+        return reply
+    }
+    match cors_allow(origin, allowed) {
+        Some(ao) => HttpReply {
+            status: reply.status,
+            body: reply.body,
+            content_type: reply.content_type,
+            allow_origin: ao,
+            content_encoding: reply.content_encoding,
+            set_cookie: reply.set_cookie,
+            extra_headers: reply.extra_headers,
+        },
+        None => reply,
+    }
+}
+
+fn apply_security(reply: HttpReply) -> HttpReply {
+    let security = security_header_block()
+    let merged = merge_header_blocks(reply.extra_headers, security)
+    HttpReply {
+        status: reply.status,
+        body: reply.body,
+        content_type: reply.content_type,
+        allow_origin: reply.allow_origin,
+        content_encoding: reply.content_encoding,
+        set_cookie: reply.set_cookie,
+        extra_headers: merged,
+    }
+}
+
+fn security_header_block() -> string {
+    format_headers(defaults())
+}
+
+fn merge_header_blocks(left: string, right: string) -> string {
+    if strings.len(left) == 0 {
+        return right
+    }
+    if strings.len(right) == 0 {
+        return left
+    }
+    "${left}\n${right}"
+}
+
+fn apply_gzip(reply: HttpReply, accept_encoding: string) -> HttpReply {
+    if reply.status == 204 {
+        return reply
+    }
+    let status = reply.status
+    let body = reply.body
+    let allow_origin = reply.allow_origin
+    let content_encoding = reply.content_encoding
+    let set_cookie = reply.set_cookie
+    let content_type = reply.content_type
+    let extra_headers = reply.extra_headers
+    match negotiate(accept_encoding) {
+        Some(_) => match gzip_body_encode(body) {
+            Ok(encoded) => HttpReply {
+                status: status,
+                body: encoded,
+                content_type: content_type,
+                allow_origin: allow_origin,
+                content_encoding: content_encoding_gzip(),
+                set_cookie: set_cookie,
+                extra_headers: extra_headers,
+            },
+            Err(_) => HttpReply {
+                status: status,
+                body: "",
+                content_type: content_type,
+                allow_origin: allow_origin,
+                content_encoding: content_encoding,
+                set_cookie: set_cookie,
+                extra_headers: extra_headers,
+            },
+        },
+        None => HttpReply {
+            status: status,
+            body: body,
+            content_type: content_type,
+            allow_origin: allow_origin,
+            content_encoding: content_encoding,
+            set_cookie: set_cookie,
+            extra_headers: extra_headers,
+        },
+    }
+}
+
+fn welcome_page() -> HttpReply {
+    let mut vars = HashMap::new()
+    vars.insert("title", "wj-auth-api")
+    vars.insert("message", "Register, login, and call /me with a Bearer JWT or access_token cookie.")
+    let html = render_html(
+        "<!DOCTYPE html><html><head><title>{{title}}</title></head><body><h1>{{title}}</h1><p>{{message}}</p></body></html>",
+        vars,
+    )
+    HttpReply {
+        status: 200,
+        body: html,
+        content_type: mime_html(),
+        allow_origin: "",
+        content_encoding: "",
+        set_cookie: "",
+        extra_headers: "",
+    }
+}
+
+fn resolve_token(authorization: string, cookie: string) -> string {
+    let bearer = bearer_token(authorization)
+    if strings.len(bearer) > 0 {
+        return bearer
+    }
+    cookie_access_token(cookie)
+}
+
+fn cookie_access_token(cookie: string) -> string {
+    match parse_cookie_header(cookie) {
+        Ok(map) => {
+            match map.get("access_token") {
+                Some(v) => "${v}",
+                None => "",
+            }
+        },
+        Err(_) => "",
+    }
+}
+
+fn access_token_cookie(token: string) -> string {
+    format_set_cookie(SetCookie {
+        name: "access_token",
+        value: token,
+        path: "/",
+        http_only: true,
+        secure: false,
+        same_site: "Lax",
+    })
+}
+
+fn clear_access_token_cookie() -> string {
+    format_set_cookie(SetCookie {
+        name: "access_token",
+        value: "",
+        path: "/",
+        http_only: true,
+        secure: false,
+        same_site: "Lax",
+    })
+}
+
+fn logout() -> HttpReply {
+    HttpReply {
+        status: 200,
+        body: "{\"ok\":true}",
+        content_type: mime_json(),
+        allow_origin: "",
+        content_encoding: "",
+        set_cookie: clear_access_token_cookie(),
+        extra_headers: "",
+    }
+}
+
+fn bearer_token(authorization: string) -> string {
+    let trimmed = strings.trim(authorization)
+    let lower = strings.to_lower(trimmed)
+    let prefix = "bearer "
+    if !strings.starts_with(lower, prefix) {
+        return ""
+    }
+    strings.trim(strings.substring(trimmed, strings.len(prefix), strings.len(trimmed)))
+}
+
+fn json_ok() -> HttpReply {
+    let payload = OkBody { ok: true }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: 200,
+            body: text,
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: 200,
+            body: "{\"ok\":true}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn json_created(id: string, username: string) -> HttpReply {
+    let payload = CreatedBody {
+        created: true,
+        id: id,
+        username: username,
+    }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: 201,
+            body: text,
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: 201,
+            body: "{\"created\":true}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn json_error(status: u16, message: string) -> HttpReply {
+    let payload = ErrorBody { error: message }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: status,
+            body: text,
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: status,
+            body: "{\"error\":\"unknown\"}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            set_cookie: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn rate_key(client_key: string) -> string {
+    if strings.len(client_key) == 0 {
+        return "anon"
+    }
+    client_key
+}
+
+fn buckets_for_limit(buckets: HashMap<string, RateBucket>) -> HashMap<string, WindowBucket> {
+    let mut out = HashMap::new()
+    for (key, bucket) in buckets {
+        out.insert(key, WindowBucket {
+            window_start_ms: bucket.window_start_ms,
+            count: bucket.count,
+        })
+    }
+    out
+}
+
+fn buckets_from_limit(buckets: HashMap<string, WindowBucket>) -> HashMap<string, RateBucket> {
+    let mut out = HashMap::new()
+    for (key, bucket) in buckets {
+        out.insert(key, RateBucket {
+            window_start_ms: bucket.window_start_ms,
+            count: bucket.count,
+        })
+    }
+    out
+}
+
+
+fn mime_json() -> string {
+    let value = own(json_mime())
+    value
+}
+
+fn mime_html() -> string {
+    let value = own(html_mime())
+    value
+}
+
+fn format_expiry(exp: int) -> string {
+    format_rfc3339(from_epoch_secs(exp))
+}
+
+/// Stable access-log line for tests and `wj-log` emission.
+pub fn format_access_log(method: string, path: string, status: u16) -> string {
+    let message = access_log_message(method, path, status)
+    "[auth] ${message}"
+}
+
+fn access_log_message(method: string, path: string, status: u16) -> string {
+    "${method} ${path} -> ${status}"
+}
+
+fn emit_access_log(level: string, method: string, path: string, status: u16) {
+    let level = own(level)
+    let method = own(method)
+    let path = own(path)
+    let message = access_log_message(method, path, status)
+    log_tagged(level, "auth", message)
+}
+
+fn method_label(method: HttpMethod) -> string {
+    match method {
+        HttpMethod::GET => "GET",
+        HttpMethod::POST => "POST",
+        HttpMethod::PUT => "PUT",
+        HttpMethod::DELETE => "DELETE",
+        HttpMethod::PATCH => "PATCH",
+        HttpMethod::HEAD => "HEAD",
+        HttpMethod::OPTIONS => "OPTIONS",
+    }
+}
+
+fn username_slug(value: string) -> string {
+    let value = own(value)
+    slugify(value)
+}
+
+fn own(value: string) -> string {
+    value
+}
+
+fn route_match(pattern: string, path: string) -> Option<HashMap<string, string>> {
+    let pattern = own(pattern)
+    let path = own(path)
+    match_route(pattern, path)
+}
+
+fn parse_method(label: string) -> Option<HttpMethod> {
+    if label == "GET" {
+        return Some(HttpMethod::GET)
+    }
+    if label == "POST" {
+        return Some(HttpMethod::POST)
+    }
+    if label == "PUT" {
+        return Some(HttpMethod::PUT)
+    }
+    if label == "DELETE" {
+        return Some(HttpMethod::DELETE)
+    }
+    if label == "PATCH" {
+        return Some(HttpMethod::PATCH)
+    }
+    if label == "HEAD" {
+        return Some(HttpMethod::HEAD)
+    }
+    if label == "OPTIONS" {
+        return Some(HttpMethod::OPTIONS)
+    }
+    None
+}

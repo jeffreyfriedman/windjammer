@@ -1,0 +1,16 @@
+#[inline]
+fn mark(flags: Vec<bool>, columns: &Vec<i64>) -> Vec<bool> {
+    let mut out: Vec<bool> = flags;
+    for c in columns.iter().copied() {
+        if c >= 0_i64 && c < ((out.len() as i64)) {
+            out[c as usize] = true;
+        }
+    }
+    out
+}
+
+fn main() {
+    let r: Vec<bool> = mark(vec![false, false, false], &vec![1_i64, 5_i64, -1_i64]);
+    println!("{} {} {}", r[0], r[1], r[2]);
+}
+

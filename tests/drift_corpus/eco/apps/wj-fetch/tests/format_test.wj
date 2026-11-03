@@ -1,0 +1,159 @@
+use crate::domain::format_body
+use crate::domain::is_client_error_status
+use crate::domain::is_success_status
+use crate::domain::require_info
+use crate::domain::require_redirect
+use std::strings
+
+fn test_is_success_and_client_error_status() {
+    assert(is_success_status(200), "200")
+    assert(is_success_status(201), "201")
+    assert(!is_success_status(404), "404")
+    assert(is_client_error_status(404), "404 client")
+    assert(!is_client_error_status(500), "500 not client")
+}
+
+fn test_redirect_server_informational_status() {
+    use crate::domain::is_informational_status
+    use crate::domain::is_redirect_status
+    use crate::domain::is_server_error_status
+    assert(is_informational_status(100), "100")
+    assert(is_informational_status(101), "101")
+    assert(!is_informational_status(200), "200 not info")
+    assert(is_redirect_status(301), "301")
+    assert(is_redirect_status(302), "302")
+    assert(!is_redirect_status(200), "200 not redirect")
+    assert(is_server_error_status(500), "500")
+    assert(is_server_error_status(503), "503")
+    assert(!is_server_error_status(404), "404 not server")
+}
+
+fn test_format_body_uses_json_util_pretty() {
+    let out = format_body("{\"a\":1}")
+    assert_str_contains(out, "a")
+    assert_str_contains(out, "1")
+}
+
+fn test_format_body_falls_back_to_raw_text() {
+    let out = format_body("not-json")
+    assert_eq(out, "not-json")
+}
+
+fn test_format_fetch_result_includes_status_and_body() {
+    use crate::domain::format_fetch_result
+    let out = format_fetch_result(200, "{\"ok\":true}")
+    assert(out.len() > 0, "non-empty")
+    assert_str_contains(out, "200")
+    assert_str_contains(out, "ok")
+}
+
+fn test_format_fetch_error_message() {
+    use crate::domain::format_fetch_error
+    let msg = format_fetch_error(404, "not found")
+    assert_str_contains(msg, "404")
+    assert_str_contains(msg, "not found")
+}
+
+fn test_resolve_fetch_output_stdout_without_file() {
+    use crate::domain::resolve_fetch_output
+    match resolve_fetch_output(200, "{\"ok\":true}", "", false) {
+        Ok(pair) => {
+            assert_eq(pair.0, "")
+            assert_str_contains(pair.1, "HTTP 200")
+            assert_str_contains(pair.1, "ok")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_resolve_fetch_output_file_and_message() {
+    use crate::domain::resolve_fetch_output
+    match resolve_fetch_output(201, "{\"saved\":true}", "out.json", false) {
+        Ok(pair) => {
+            assert_str_contains(pair.0, "saved")
+            assert_str_contains(pair.1, "HTTP 201")
+            assert_str_contains(pair.1, "written to out.json")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_resolve_fetch_output_silent_body_only() {
+    use crate::domain::resolve_fetch_output
+    match resolve_fetch_output(200, "{\"ok\":true}", "", true) {
+        Ok(pair) => {
+            assert_eq(pair.0, "")
+            assert_str_contains(pair.1, "ok")
+            assert(!str_contains(pair.1, "HTTP"), "silent omits status line")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_resolve_fetch_output_silent_with_output_file() {
+    use crate::domain::resolve_fetch_output
+    match resolve_fetch_output(200, "plain", "out.txt", true) {
+        Ok(pair) => {
+            assert_eq(pair.0, "plain")
+            assert_eq(pair.1, "")
+        },
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+fn test_require_success_and_status_class() {
+    use crate::domain::require_success
+    use crate::domain::status_class
+    match require_success(201) {
+        Ok(code) => assert_eq(code, 201),
+        Err(_) => assert(false, "201 success"),
+    }
+    match require_success(404) {
+        Ok(_) => assert(false, "404 must Err"),
+        Err(msg) => assert(strings.contains(msg, "success"), "mentions success"),
+    }
+    assert_eq(status_class(100), "1xx")
+    assert_eq(status_class(204), "2xx")
+    assert_eq(status_class(301), "3xx")
+    assert_eq(status_class(404), "4xx")
+    assert_eq(status_class(503), "5xx")
+    assert_eq(status_class(99), "other")
+}
+
+fn test_require_redirect() {
+    match require_redirect(301) {
+        Ok(code) => assert_eq(code, 301),
+        Err(_) => assert(false, "301 redirect"),
+    }
+    match require_redirect(200) {
+        Ok(_) => assert(false, "200 must Err"),
+        Err(msg) => assert(strings.contains(msg, "redirect"), "mentions redirect"),
+    }
+}
+
+fn test_require_info() {
+    match require_info(100) {
+        Ok(code) => assert_eq(code, 100),
+        Err(_) => assert(false, "100 informational"),
+    }
+    match require_info(200) {
+        Ok(_) => assert(false, "200 must Err"),
+        Err(msg) => assert(strings.contains(msg, "informational"), "mentions informational"),
+    }
+}
+
+fn str_contains(text: string, needle: string) -> bool {
+    let mut i = 0
+    let nlen = strings.len(needle)
+    if nlen == 0 {
+        return true
+    }
+    while i + nlen <= strings.len(text) {
+        let slice = strings.substring(text, i, i + nlen)
+        if slice == needle {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}

@@ -1,0 +1,106 @@
+use crate::digest_equals
+use crate::digest_hex_len
+use crate::digest_of
+use crate::etag
+use crate::hex
+use crate::hex_upper
+use crate::is_digest
+use crate::is_etag
+use crate::require_match
+use crate::looks_like_sha256_hex
+use crate::normalize_hex
+use crate::require_digest
+use crate::verify
+use crate::verify_etag
+use std::strings
+
+@test
+fn test_sha256_hello() {
+    let digest = hex("hello")
+    assert_eq(digest, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+}
+
+@test
+fn test_sha256_empty() {
+    let digest = hex("")
+    assert_eq(digest, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+}
+
+@test
+fn test_verify_true() {
+    assert(verify("hello", "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"), "expected match")
+}
+
+@test
+fn test_verify_false() {
+    assert(!verify("hello", "deadbeef"), "expected mismatch")
+}
+
+@test
+fn test_etag_quoted_digest() {
+    assert_eq(
+        etag("hello"),
+        "\"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824\""
+    )
+}
+
+@test
+fn test_looks_like_sha256_hex() {
+    let digest = hex("hello")
+    assert(looks_like_sha256_hex(digest), "real digest")
+    assert(!looks_like_sha256_hex("deadbeef"), "too short")
+    assert(!looks_like_sha256_hex(""), "empty")
+    assert(!looks_like_sha256_hex("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b982g"), "non-hex")
+}
+
+@test
+fn test_normalize_hex_and_digest_len() {
+    assert_eq(digest_hex_len(), 64)
+    assert_eq(normalize_hex("ABCD"), "abcd")
+    assert(looks_like_sha256_hex(normalize_hex(hex("hello"))), "normalized digest")
+}
+
+@test
+fn test_verify_etag() {
+    let tag = etag("hello")
+    assert(verify_etag("hello", tag), "match")
+    assert(!verify_etag("hello", "\"deadbeef\""), "mismatch")
+    assert(!verify_etag("hello", "unquoted"), "needs quotes")
+}
+
+@test
+fn test_digest_equals_and_is_etag() {
+    let dig = hex("hello")
+    assert(digest_equals(dig, "2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824"), "case fold")
+    assert(!digest_equals(dig, "deadbeef"), "mismatch")
+    assert(is_etag(etag("hello")), "quoted digest")
+    assert(!is_etag("unquoted"), "no quotes")
+    assert(!is_etag("\"short\""), "bad length")
+}
+
+@test
+fn test_hex_upper_and_require_digest() {
+    let dig = hex("hello")
+    let upper = hex_upper("hello")
+    assert_eq(strings.len(upper), 64)
+    assert(digest_equals(dig, upper), "upper equals lower")
+    assert_eq(upper, "2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824")
+    match require_digest(dig) {
+        Ok(v) => assert_eq(v, dig),
+        Err(_) => assert(false, "valid digest"),
+    }
+    match require_digest("deadbeef") {
+        Ok(_) => assert(false, "short must Err"),
+        Err(msg) => assert(strings.contains(msg, "digest"), "mentions digest"),
+    }
+}
+
+@test
+fn test_is_digest_and_digest_of() {
+    let dig = digest_of("hello")
+    assert_eq(dig, hex("hello"))
+    assert(is_digest(dig), "digest shape")
+    assert(is_digest(strings.to_upper(dig)), "upper digest")
+    assert(!is_digest("deadbeef"), "short")
+    assert(!is_digest(""), "empty")
+}

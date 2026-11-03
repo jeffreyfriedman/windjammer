@@ -96,12 +96,14 @@ pub struct RunJournal {
     file: Option<std::fs::File>,
     steps: HashMap<usize, Entry>,
     next: usize,
+    /// Journal lines of read-only steps not written yet: they go out with the next record that does (see `record_lazy`).
+    pending: String,
 }
 
 impl RunJournal {
     /// Open (and, in `dir`, create) the journal of the run `id`. Without a directory the journal lives in memory.
     pub fn open(dir: Option<&Path>, id: &str, fn_qual: &str, args: &[Json]) -> Result<Opened, String> {
-        let mut run = RunJournal { file: None, steps: HashMap::new(), next: 0 };
+        let mut run = RunJournal { file: None, steps: HashMap::new(), next: 0, pending: String::new() };
         let Some(dir) = dir else { return Ok(Opened::Run(Box::new(run))) };
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create the journal directory {}: {e}", dir.display()))?;
         let path: PathBuf = dir.join(format!("{id}.wjlog"));
@@ -147,17 +149,33 @@ impl RunJournal {
 
     pub fn record(&mut self, idx: usize, callee: &str, result: Json, vt_ns: u64) -> Result<(), String> {
         if let Some(f) = self.file.as_mut() {
-            let line = canon(&json!({ "step": idx, "callee": callee, "result": result, "vt_ns": vt_ns }));
-            writeln!(f, "{line}").and_then(|_| f.flush()).map_err(|e| format!("cannot write the journal: {e}"))?;
+            // one `write` per step (keys in canonical order: callee, result, step, vt_ns); the file is unbuffered, so a crash of the
+            // process never loses a step that `record` returned from
+            let line = format!("{{\"callee\":{},\"result\":{},\"step\":{idx},\"vt_ns\":{vt_ns}}}\n", Json::String(callee.to_string()), canon(&result));
+            // earlier read-only steps still pending go out in the same write, in order
+            self.pending.push_str(&line);
+            let out = std::mem::take(&mut self.pending);
+            f.write_all(out.as_bytes()).map_err(|e| format!("cannot write the journal: {e}"))?;
         }
         self.steps.insert(idx, Entry { callee: callee.to_string(), result, vt_ns });
         Ok(())
     }
 
+    /// Record a step that only reads (time, random, environment, files): the line waits for the next `record` (a step that writes
+    /// outside the process) or for `finish`. A crash can lose such lines, and the resumed run reads again; nothing outside the
+    /// process has depended on the lost value, because every write flushes first.
+    pub fn record_lazy(&mut self, idx: usize, callee: &str, result: Json, vt_ns: u64) {
+        if self.file.is_some() {
+            self.pending.push_str(&format!("{{\"callee\":{},\"result\":{},\"step\":{idx},\"vt_ns\":{vt_ns}}}\n", Json::String(callee.to_string()), canon(&result)));
+        }
+        self.steps.insert(idx, Entry { callee: callee.to_string(), result, vt_ns });
+    }
+
     /// The function returned `result`: mark the run finished.
     pub fn finish(mut self, result: &Json) -> Result<(), String> {
         if let Some(f) = self.file.as_mut() {
-            writeln!(f, "{}", canon(&json!({ "done": result }))).and_then(|_| f.flush()).map_err(|e| format!("cannot write the journal: {e}"))?;
+            self.pending.push_str(&format!("{{\"done\":{}}}\n", canon(result)));
+            f.write_all(self.pending.as_bytes()).map_err(|e| format!("cannot write the journal: {e}"))?;
         }
         Ok(())
     }
@@ -166,6 +184,33 @@ impl RunJournal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_recorded_step_line_is_the_canonical_form_of_its_object() {
+        let (callee, result) = ("fs::read \"x\"", json!({"b": [1, 2], "a": null}));
+        let fast = format!("{{\"callee\":{},\"result\":{},\"step\":{},\"vt_ns\":{}}}", Json::String(callee.to_string()), canon(&result), 3, 7);
+        assert_eq!(fast, canon(&json!({ "step": 3, "callee": callee, "result": result, "vt_ns": 7 })));
+    }
+
+    #[test]
+    fn a_lazy_step_is_written_with_the_next_eager_one_and_in_order() {
+        let dir = std::env::temp_dir().join(format!("wj_lazy_journal_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let Ok(Opened::Run(mut j)) = RunJournal::open(Some(&dir), "m.f-0000000000000001", "m::f", &[]) else { panic!("open") };
+        let file = dir.join("m.f-0000000000000001.wjlog");
+        j.record_lazy(0, "now", json!(5), 0);
+        assert_eq!(std::fs::read_to_string(&file).unwrap().lines().count(), 1, "only the header so far");
+        j.record(1, "write", json!(true), 0).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        let steps: Vec<_> = text.lines().skip(1).map(|l| serde_json::from_str::<Json>(l).unwrap()["step"].as_u64().unwrap()).collect();
+        assert_eq!(steps, [0, 1]);
+        j.record_lazy(2, "now", json!(6), 0);
+        j.finish(&json!(null)).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(text.lines().count(), 5, "{text}");
+        assert!(text.lines().last().unwrap().contains("done"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn canonical_text_sorts_keys() {

@@ -1,0 +1,435 @@
+use crate::parse_cron
+use crate::matches_cron
+use crate::matches_field
+use crate::CronDateTime
+use crate::every_day
+use crate::every_hour
+use crate::every_minute
+use crate::require_cron
+use crate::format_cron
+use crate::is_wildcard_field
+use crate::next_run
+use crate::source_of
+use std::strings
+
+// --- parse_cron ---
+
+fn test_parse_standard_five_field() {
+    let result = parse_cron("*/5 * * * *")
+    match result {
+        Ok(expr) => {
+            assert_eq(expr.minute, "*/5")
+            assert_eq(expr.hour, "*")
+            assert_eq(expr.day_of_month, "*")
+            assert_eq(expr.month, "*")
+            assert_eq(expr.day_of_week, "*")
+        },
+        Err(_e) => {
+            assert(false, "should parse five-field cron")
+        },
+    }
+}
+
+fn test_parse_specific_values() {
+    let result = parse_cron("0 9 1 1 0")
+    match result {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "9")
+            assert_eq(expr.day_of_month, "1")
+            assert_eq(expr.month, "1")
+            assert_eq(expr.day_of_week, "0")
+        },
+        Err(_e) => {
+            assert(false, "should parse specific values")
+        },
+    }
+}
+
+fn test_parse_too_few_fields() {
+    let result = parse_cron("* * *")
+    assert(result.is_err(), "three fields should fail")
+}
+
+fn test_parse_too_many_fields() {
+    let result = parse_cron("* * * * * * *")
+    assert(result.is_err(), "seven fields should fail")
+}
+
+fn test_parse_empty_string() {
+    let result = parse_cron("")
+    assert(result.is_err(), "empty string should fail")
+}
+
+fn test_parse_retains_source_five_field() {
+    match parse_cron("*/5 * * * *") {
+        Ok(expr) => assert_eq(expr.source, "*/5 * * * *"),
+        Err(_e) => assert(false, "should parse five-field cron"),
+    }
+}
+
+fn test_parse_retains_source_alias() {
+    match parse_cron("  @hourly  ") {
+        Ok(expr) => assert_eq(expr.source, "  @hourly  "),
+        Err(_e) => assert(false, "@hourly should parse"),
+    }
+}
+
+// --- matches_field ---
+
+fn test_matches_wildcard() {
+    assert(matches_field("*", 0), "wildcard matches 0")
+    assert(matches_field("*", 59), "wildcard matches 59")
+}
+
+fn test_matches_exact_value() {
+    assert(matches_field("5", 5), "5 matches 5")
+    assert(!matches_field("5", 6), "5 does not match 6")
+}
+
+fn test_matches_step() {
+    assert(matches_field("*/15", 0), "*/15 matches 0")
+    assert(matches_field("*/15", 15), "*/15 matches 15")
+    assert(matches_field("*/15", 30), "*/15 matches 30")
+    assert(matches_field("*/15", 45), "*/15 matches 45")
+    assert(!matches_field("*/15", 10), "*/15 does not match 10")
+}
+
+fn test_matches_list() {
+    assert(matches_field("1,5,10", 1), "list matches 1")
+    assert(matches_field("1,5,10", 5), "list matches 5")
+    assert(matches_field("1,5,10", 10), "list matches 10")
+    assert(!matches_field("1,5,10", 3), "list does not match 3")
+}
+
+fn test_matches_range() {
+    assert(matches_field("1-5", 1), "range matches 1")
+    assert(matches_field("1-5", 3), "range matches 3")
+    assert(matches_field("1-5", 5), "range matches 5")
+    assert(!matches_field("1-5", 0), "range does not match 0")
+    assert(!matches_field("1-5", 6), "range does not match 6")
+}
+
+// --- matches_cron (full expression against time components) ---
+
+fn test_matches_cron_all_wildcards() {
+    match parse_cron("* * * * *") {
+        Ok(expr) => {
+            assert(matches_cron(expr, 30, 12, 15, 6, 3), "all wildcards match any time")
+        },
+        Err(_e) => {
+            assert(false, "should parse cron")
+        },
+    }
+}
+
+fn test_matches_cron_specific_minute() {
+    match parse_cron("30 * * * *") {
+        Ok(expr) => {
+            assert(matches_cron(expr, 30, 12, 15, 6, 3), "minute 30 matches")
+            assert(!matches_cron(expr, 29, 12, 15, 6, 3), "minute 29 does not match")
+        },
+        Err(_e) => {
+            assert(false, "should parse cron")
+        },
+    }
+}
+
+fn test_matches_cron_every_5_minutes_at_9am() {
+    match parse_cron("*/5 9 * * *") {
+        Ok(expr) => {
+            assert(matches_cron(expr, 0, 9, 1, 1, 3), "0 min, 9 hour matches")
+            assert(matches_cron(expr, 15, 9, 1, 1, 3), "15 min, 9 hour matches")
+            assert(!matches_cron(expr, 3, 9, 1, 1, 3), "3 min does not match */5")
+            assert(!matches_cron(expr, 0, 10, 1, 1, 3), "hour 10 does not match 9")
+        },
+        Err(_e) => {
+            assert(false, "should parse cron")
+        },
+    }
+}
+
+fn test_matches_cron_weekday_only() {
+    match parse_cron("0 8 * * 1-5") {
+        Ok(expr) => {
+            assert(matches_cron(expr, 0, 8, 1, 1, 1), "Monday matches 1-5")
+            assert(matches_cron(expr, 0, 8, 1, 1, 5), "Friday matches 1-5")
+            assert(!matches_cron(expr, 0, 8, 1, 1, 0), "Sunday does not match 1-5")
+            assert(!matches_cron(expr, 0, 8, 1, 1, 6), "Saturday does not match 1-5")
+        },
+        Err(_e) => {
+            assert(false, "should parse cron")
+        },
+    }
+}
+
+// --- next_run (minute-level stepping) ---
+
+fn test_next_run_every_5_minutes() {
+    match parse_cron("*/5 * * * *") {
+        Ok(expr) => {
+            let start = CronDateTime {
+                year: 2026,
+                month: 1,
+                day_of_month: 1,
+                hour: 12,
+                minute: 0,
+                day_of_week: 1,
+            }
+            let next = next_run(expr, start, 10)
+            match next {
+                Some(dt) => {
+                    assert_eq(dt.hour, 12)
+                    assert_eq(dt.minute, 5)
+                    assert_eq(dt.day_of_month, 1)
+                    assert_eq(dt.month, 1)
+                    assert_eq(dt.day_of_week, 1)
+                },
+                None => assert(false, "expected a next run"),
+            }
+        },
+        Err(_e) => assert(false, "should parse cron"),
+    }
+}
+
+fn test_next_run_crosses_hour() {
+    match parse_cron("*/5 * * * *") {
+        Ok(expr) => {
+            let start = CronDateTime {
+                year: 2026,
+                month: 1,
+                day_of_month: 1,
+                hour: 12,
+                minute: 58,
+                day_of_week: 1,
+            }
+            let next = next_run(expr, start, 10)
+            match next {
+                Some(dt) => {
+                    assert_eq(dt.hour, 13)
+                    assert_eq(dt.minute, 0)
+                },
+                None => assert(false, "expected a next run"),
+            }
+        },
+        Err(_e) => assert(false, "should parse cron"),
+    }
+}
+
+fn test_next_run_specific_minute() {
+    match parse_cron("30 * * * *") {
+        Ok(expr) => {
+            let start = CronDateTime {
+                year: 2026,
+                month: 1,
+                day_of_month: 1,
+                hour: 12,
+                minute: 29,
+                day_of_week: 1,
+            }
+            let next = next_run(expr, start, 10)
+            match next {
+                Some(dt) => {
+                    assert_eq(dt.hour, 12)
+                    assert_eq(dt.minute, 30)
+                },
+                None => assert(false, "expected a next run"),
+            }
+        },
+        Err(_e) => assert(false, "should parse cron"),
+    }
+}
+
+fn test_next_run_weekday_range_skips_weekend() {
+    match parse_cron("0 8 * * 1-5") {
+        Ok(expr) => {
+            let start = CronDateTime {
+                year: 2026,
+                month: 1,
+                day_of_month: 1,
+                hour: 7,
+                minute: 59,
+                day_of_week: 6, // Saturday
+            }
+            let next = next_run(expr, start, 60 * 24 * 3)
+            match next {
+                Some(dt) => {
+                    assert_eq(dt.hour, 8)
+                    assert_eq(dt.minute, 0)
+                    assert_eq(dt.day_of_week, 1) // Monday
+                    assert_eq(dt.day_of_month, 3)
+                },
+                None => assert(false, "expected a next run"),
+            }
+        },
+        Err(_e) => assert(false, "should parse cron"),
+    }
+}
+
+fn test_next_run_respects_max_minutes_ahead() {
+    match parse_cron("0 0 1 1 *") {
+        Ok(expr) => {
+            let start = CronDateTime {
+                year: 2026,
+                month: 1,
+                day_of_month: 2,
+                hour: 0,
+                minute: 0,
+                day_of_week: 1,
+            }
+            let next = next_run(expr, start, 60)
+            match next {
+                Some(_dt) => assert(false, "should not find next run in 60 minutes"),
+                None => {},
+            }
+        },
+        Err(_e) => assert(false, "should parse cron"),
+    }
+}
+
+// --- named aliases ---
+
+fn test_parse_alias_hourly() {
+    match parse_cron("@hourly") {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "*")
+            assert_eq(expr.day_of_month, "*")
+            assert_eq(expr.month, "*")
+            assert_eq(expr.day_of_week, "*")
+        },
+        Err(_e) => assert(false, "@hourly should parse"),
+    }
+}
+
+fn test_parse_alias_daily() {
+    match parse_cron("@daily") {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "0")
+            assert_eq(expr.day_of_month, "*")
+            assert_eq(expr.month, "*")
+            assert_eq(expr.day_of_week, "*")
+        },
+        Err(_e) => assert(false, "@daily should parse"),
+    }
+}
+
+fn test_parse_alias_weekly() {
+    match parse_cron("@weekly") {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "0")
+            assert_eq(expr.day_of_month, "*")
+            assert_eq(expr.month, "*")
+            assert_eq(expr.day_of_week, "0")
+        },
+        Err(_e) => assert(false, "@weekly should parse"),
+    }
+}
+
+fn test_parse_alias_monthly() {
+    match parse_cron("@monthly") {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "0")
+            assert_eq(expr.day_of_month, "1")
+            assert_eq(expr.month, "*")
+            assert_eq(expr.day_of_week, "*")
+        },
+        Err(_e) => assert(false, "@monthly should parse"),
+    }
+}
+
+fn test_parse_alias_yearly() {
+    match parse_cron("@yearly") {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "0")
+            assert_eq(expr.day_of_month, "1")
+            assert_eq(expr.month, "1")
+            assert_eq(expr.day_of_week, "*")
+        },
+        Err(_e) => assert(false, "@yearly should parse"),
+    }
+}
+
+fn test_parse_alias_annually_same_as_yearly() {
+    match parse_cron("@annually") {
+        Ok(expr) => {
+            assert_eq(expr.minute, "0")
+            assert_eq(expr.hour, "0")
+            assert_eq(expr.day_of_month, "1")
+            assert_eq(expr.month, "1")
+            assert_eq(expr.day_of_week, "*")
+        },
+        Err(_e) => assert(false, "@annually should parse"),
+    }
+}
+
+fn test_parse_unknown_alias_fails() {
+    let result = parse_cron("@reboot")
+    assert(result.is_err(), "@reboot is not a schedule expression")
+}
+
+// --- range with step ---
+
+fn test_matches_range_with_step() {
+    assert(matches_field("1-10/2", 1), "1-10/2 matches 1")
+    assert(matches_field("1-10/2", 3), "1-10/2 matches 3")
+    assert(matches_field("1-10/2", 9), "1-10/2 matches 9")
+    assert(!matches_field("1-10/2", 2), "1-10/2 does not match 2")
+    assert(!matches_field("1-10/2", 10), "1-10/2 does not match 10 (out of step)")
+    assert(!matches_field("1-10/2", 0), "1-10/2 does not match 0")
+    assert(!matches_field("1-10/2", 11), "1-10/2 does not match 11")
+}
+
+fn test_matches_cron_range_step_minutes() {
+    match parse_cron("10-20/5 * * * *") {
+        Ok(expr) => {
+            assert(matches_cron(expr, 10, 0, 1, 1, 0), "minute 10")
+            assert(matches_cron(expr, 15, 0, 1, 1, 0), "minute 15")
+            assert(matches_cron(expr, 20, 0, 1, 1, 0), "minute 20")
+            assert(!matches_cron(expr, 12, 0, 1, 1, 0), "minute 12 off step")
+        },
+        Err(_e) => assert(false, "should parse range/step cron"),
+    }
+}
+
+fn test_every_minute_format_and_wildcard() {
+    assert(is_wildcard_field("*"), "star")
+    assert(!is_wildcard_field("*/5"), "step not pure wildcard")
+    let expr = every_minute()
+    assert_eq(format_cron(expr), "* * * * *")
+    assert(matches_cron(expr, 0, 0, 1, 1, 0), "any minute")
+    assert(matches_cron(expr, 59, 23, 31, 12, 6), "any time")
+}
+
+fn test_every_hour_and_is_every_minute() {
+    let hourly = every_hour()
+    assert_eq(format_cron(hourly), "0 * * * *")
+    assert(matches_cron(hourly, 0, 5, 1, 1, 0), "top of hour")
+    assert(!matches_cron(hourly, 1, 5, 1, 1, 0), "not minute 1")
+}
+
+fn test_is_every_hour_and_source_of() {
+    let hourly = every_hour()
+    assert_eq(source_of(hourly), "0 * * * *")
+    match parse_cron("@daily") {
+        Ok(expr) => assert_eq(source_of(expr), "@daily"),
+        Err(_) => assert(false, "parse @daily"),
+    }
+}
+
+fn test_every_day_and_require_cron() {
+    let daily = every_day()
+    assert_eq(format_cron(daily), "0 0 * * *")
+    match require_cron("*/5 * * * *") {
+        Ok(expr) => assert_eq(format_cron(expr), "*/5 * * * *"),
+        Err(_) => assert(false, "valid cron"),
+    }
+    match require_cron("not a cron") {
+        Ok(_) => assert(false, "invalid must Err"),
+        Err(msg) => assert(strings.contains(msg, "cron"), "mentions cron"),
+    }
+}

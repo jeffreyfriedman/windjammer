@@ -1,0 +1,273 @@
+use std::mime
+use std::strings
+
+/// Common MIME type for JSON responses.
+pub fn json() -> string {
+    mime.APPLICATION_JSON
+}
+
+/// Common MIME type for HTML responses.
+pub fn html() -> string {
+    mime.TEXT_HTML
+}
+
+/// Fallback binary MIME type.
+pub fn octet_stream() -> string {
+    mime.APPLICATION_OCTET_STREAM
+}
+
+/// MIME type for a file extension (without leading dot).
+pub fn from_extension(ext: string) -> string {
+    mime.from_extension(ext)
+}
+
+/// MIME type inferred from a file path.
+pub fn from_path(path: string) -> string {
+    mime.from_path(path)
+}
+
+/// True for text-like MIME types.
+pub fn is_text(mime_type: string) -> bool {
+    mime.is_text(mime_type)
+}
+
+/// `Ok(mime_type)` when it is a text type, otherwise `Err`.
+pub fn require_text(mime_type: string) -> Result<string, string> {
+    if is_text(mime_type) {
+        Ok(mime_type)
+    } else {
+        Err("expected text")
+    }
+}
+
+/// True for `image/*`.
+pub fn is_image(mime_type: string) -> bool {
+    mime.is_image(mime_type)
+}
+
+/// True for `audio/*`.
+pub fn is_audio(mime_type: string) -> bool {
+    mime.is_audio(mime_type)
+}
+
+/// True for `video/*`.
+pub fn is_video(mime_type: string) -> bool {
+    mime.is_video(mime_type)
+}
+
+/// `Content-Type` response header line for `mime_type`.
+pub fn content_type(mime_type: string) -> string {
+    "Content-Type: ${mime_type}"
+}
+
+/// True when `mime_type` is JSON (`application/json`, optional parameters).
+pub fn is_json(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "application/json") {
+        let rest_len = strings.len(trimmed) - 16
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 16, 17)
+        return next == ";"
+    }
+    false
+}
+
+/// True when `mime_type` is HTML (`text/html`, optional parameters).
+pub fn is_html(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "text/html") {
+        let rest_len = strings.len(trimmed) - 9
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 9, 10)
+        return next == ";"
+    }
+    false
+}
+
+pub fn is_octet_stream(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "application/octet-stream") {
+        let rest_len = strings.len(trimmed) - 24
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 24, 25)
+        return next == ";"
+    }
+    false
+}
+
+/// `Content-Type` header line for JSON (`json()`).
+pub fn content_type_json() -> string {
+    content_type(json())
+}
+
+/// `Content-Type` header line for HTML (`html()`).
+pub fn content_type_html() -> string {
+    content_type(html())
+}
+
+/// Common MIME type for plain text responses.
+pub fn plain() -> string {
+    "text/plain; charset=utf-8"
+}
+
+/// `Content-Type` header line for plain text.
+pub fn content_type_plain() -> string {
+    content_type(plain())
+}
+
+/// True when `mime_type` is CSS (`text/css`, optional parameters).
+pub fn is_css(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "text/css") {
+        let rest_len = strings.len(trimmed) - 8
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 8, 9)
+        return next == ";"
+    }
+    false
+}
+
+/// True when `mime_type` is XML (`application/xml`, optional parameters).
+pub fn is_xml(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "application/xml") {
+        let rest_len = strings.len(trimmed) - 15
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 15, 16)
+        return next == ";"
+    }
+    false
+}
+
+/// True when `mime_type` is plain text (`text/plain`, optional parameters).
+pub fn is_plain(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "text/plain") {
+        let rest_len = strings.len(trimmed) - 10
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 10, 11)
+        return next == ";"
+    }
+    false
+}
+
+/// `Ok(mime_type)` when it is plain text, otherwise `Err`.
+pub fn require_plain(mime_type: string) -> Result<string, string> {
+    if is_plain(mime_type) {
+        Ok(mime_type)
+    } else {
+        Err("expected plain")
+    }
+}
+
+/// Common MIME type for CSS responses.
+pub fn css() -> string {
+    "text/css; charset=utf-8"
+}
+
+/// Common MIME type for XML responses.
+pub fn xml() -> string {
+    "application/xml; charset=utf-8"
+}
+
+/// `Content-Type` header line for CSS.
+pub fn content_type_css() -> string {
+    content_type(css())
+}
+
+/// `Content-Type` header line for XML.
+pub fn content_type_xml() -> string {
+    content_type(xml())
+}
+
+/// Common MIME type for JavaScript responses.
+pub fn javascript() -> string {
+    "application/javascript; charset=utf-8"
+}
+
+/// `Content-Type` header line for JavaScript.
+pub fn content_type_javascript() -> string {
+    content_type(javascript())
+}
+
+/// True when `mime_type` is JavaScript (`application/javascript` or `text/javascript`).
+pub fn is_javascript(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "application/javascript") {
+        let rest_len = strings.len(trimmed) - 22
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 22, 23)
+        return next == ";"
+    }
+    if strings.starts_with(trimmed, "text/javascript") {
+        let rest_len = strings.len(trimmed) - 15
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 15, 16)
+        return next == ";"
+    }
+    false
+}
+
+/// Common MIME type for PNG images.
+pub fn png() -> string {
+    "image/png"
+}
+
+/// `Content-Type` header line for PNG.
+pub fn content_type_png() -> string {
+    content_type(png())
+}
+
+/// Common MIME type for JPEG images.
+pub fn jpeg() -> string {
+    "image/jpeg"
+}
+
+/// `Content-Type` header line for JPEG.
+pub fn content_type_jpeg() -> string {
+    content_type(jpeg())
+}
+
+/// True when `mime_type` is JPEG (`image/jpeg`, optional parameters).
+pub fn is_jpeg(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "image/jpeg") {
+        let rest_len = strings.len(trimmed) - 10
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 10, 11)
+        return next == ";"
+    }
+    false
+}
+
+/// True when `mime_type` is PNG (`image/png`, optional parameters).
+pub fn is_png(mime_type: string) -> bool {
+    let trimmed = strings.trim(mime_type)
+    if strings.starts_with(trimmed, "image/png") {
+        let rest_len = strings.len(trimmed) - 9
+        if rest_len == 0 {
+            return true
+        }
+        let next = strings.substring(trimmed, 9, 10)
+        return next == ";"
+    }
+    false
+}

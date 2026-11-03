@@ -1,0 +1,162 @@
+use std::time
+
+/// Parse a duration string into milliseconds.
+/// Thin-wraps `std::time.parse_duration_ms` (`1h30m`, `5s`, `250ms`, bare number = ms).
+pub fn parse_ms(text: string) -> Result<int, string> {
+    time.parse_duration_ms(text)
+}
+
+/// Format milliseconds as a compact duration (`5ms`, `3s`, `1h30m`).
+/// Thin-wraps `std::time.format_duration_ms`.
+pub fn format_ms(ms: int) -> string {
+    time.format_duration_ms(ms)
+}
+
+/// Parse a duration string into whole seconds (floor of milliseconds / 1000).
+pub fn parse_secs(text: string) -> Result<int, string> {
+    match parse_ms(text) {
+        Ok(ms) => Ok(ms / 1000),
+        Err(e) => Err(e),
+    }
+}
+
+/// Format whole seconds as a compact duration.
+pub fn format_secs(secs: int) -> string {
+    format_ms(secs * 1000)
+}
+
+/// Floor conversion from milliseconds to whole seconds.
+pub fn ms_to_secs(ms: int) -> int {
+    ms / 1000
+}
+
+/// Convert whole seconds to milliseconds.
+pub fn secs_to_ms(secs: int) -> int {
+    secs * 1000
+}
+
+/// Parse a duration string, or `default` when parsing fails.
+pub fn parse_ms_or(text: string, default: int) -> int {
+    match parse_ms(text) {
+        Ok(ms) => ms,
+        Err(_) => default,
+    }
+}
+
+/// True when `ms` is strictly greater than zero.
+pub fn is_positive(ms: int) -> bool {
+    ms > 0
+}
+
+/// Clamp `ms` into the inclusive range `[min_ms, max_ms]`.
+pub fn clamp_ms(ms: int, min_ms: int, max_ms: int) -> int {
+    if ms < min_ms {
+        return min_ms
+    }
+    if ms > max_ms {
+        return max_ms
+    }
+    ms
+}
+
+/// Parse a duration string into whole seconds, or `default` when parsing fails.
+pub fn parse_secs_or(text: string, default: int) -> int {
+    match parse_secs(text) {
+        Ok(secs) => secs,
+        Err(_) => default,
+    }
+}
+
+/// True when `ms` is exactly zero.
+pub fn is_zero(ms: int) -> bool {
+    ms == 0
+}
+
+/// Add `delta_ms` to `ms` (may be negative).
+pub fn add_ms(ms: int, delta_ms: int) -> int {
+    ms + delta_ms
+}
+
+/// Subtract `delta_ms` from `ms`.
+pub fn sub_ms(ms: int, delta_ms: int) -> int {
+    ms - delta_ms
+}
+
+/// Absolute value of `ms`.
+pub fn abs_ms(ms: int) -> int {
+    if ms < 0 {
+        return 0 - ms
+    }
+    ms
+}
+
+/// True when `ms` is strictly less than zero.
+pub fn is_negative(ms: int) -> bool {
+    ms < 0
+}
+
+pub fn min_ms(a: int, b: int) -> int {
+    if a < b {
+        return a
+    }
+    b
+}
+
+pub fn max_ms(a: int, b: int) -> int {
+    if a > b {
+        return a
+    }
+    b
+}
+
+/// True when `ms` is outside the inclusive `[lo, hi]` range.
+pub fn outside_ms(ms: int, lo: int, hi: int) -> bool {
+    !within_ms(ms, lo, hi)
+}
+
+/// Accept `ms` only when positive; else return an error.
+pub fn require_positive(ms: int) -> Result<int, string> {
+    if is_positive(ms) {
+        return Ok(ms)
+    }
+    Err("expected positive duration")
+}
+
+/// Inclusive range check: `lo <= ms <= hi`.
+pub fn within_ms(ms: int, lo: int, hi: int) -> bool {
+    ms >= lo && ms <= hi
+}
+
+/// True when `ms` is greater than or equal to `bound`.
+pub fn is_at_least(ms: int, bound: int) -> bool {
+    ms >= bound
+}
+
+/// `Ok(ms)` when `ms` is greater than or equal to `bound`, otherwise `Err`.
+pub fn require_at_least(ms: int, bound: int) -> Result<int, string> {
+    if is_at_least(ms, bound) {
+        return Ok(ms)
+    }
+    Err("expected at least")
+}
+
+/// True when `ms` is less than or equal to `bound`.
+pub fn is_at_most(ms: int, bound: int) -> bool {
+    ms <= bound
+}
+
+/// `Ok(ms)` when `ms` is less than or equal to `bound`, otherwise `Err`.
+pub fn require_at_most(ms: int, bound: int) -> Result<int, string> {
+    if is_at_most(ms, bound) {
+        return Ok(ms)
+    }
+    Err("expected at most")
+}
+
+/// Accept `ms` when zero or positive; else return an error.
+pub fn require_nonneg(ms: int) -> Result<int, string> {
+    if ms >= 0 {
+        return Ok(ms)
+    }
+    Err("expected nonneg duration")
+}

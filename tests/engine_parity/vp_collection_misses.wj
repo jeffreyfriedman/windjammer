@@ -1,0 +1,92 @@
+// Misses of every lookup that yields an Option/Result, used as values: map get, vec first/last/pop on
+// empty, find/position with no match, string find, parse failure, and `unwrap_or`/`map`/`and_then` on them.
+use std::collections::HashMap
+
+fn show(x: Option<int>) -> string {
+    match x {
+        Some(v) => "some ${v}",
+        None => "none",
+    }
+}
+
+fn get_or_none(m: HashMap<string, int>, k: string) -> Option<int> {
+    match m.get(k) {
+        Some(v) => Some(*v),
+        None => None,
+    }
+}
+
+fn key_at(i: int) -> string {
+    match i {
+        0 => "a",
+        1 => "b",
+        2 => "c",
+        3 => "d",
+        _ => "a",
+    }
+}
+
+fn main() {
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("a", 1)
+    m.insert("b", 2)
+    println(show(get_or_none(m, "a")))
+    println(show(get_or_none(m, "zz")))
+    let empty: Vec<int> = Vec::new()
+    let full = [4, 5, 6]
+    let mut popper = [9]
+    println(show(empty.first().map(|x| *x)))
+    println(show(full.first().map(|x| *x)))
+    println(show(empty.last().map(|x| *x)))
+    println(show(full.last().map(|x| *x)))
+    println(show(popper.pop()))
+    println(show(popper.pop()))
+    println(show(full.position(|x| *x == 5).map(|p| p as int)))
+    println(show(full.position(|x| *x == 50).map(|p| p as int)))
+    println("${full.find(|x| **x > 4).is_some()} ${full.find(|x| **x > 40).is_none()}")
+    let s = "hello world"
+    println(show(s.find("o").map(|p| p as int)))
+    println(show(s.find("zz").map(|p| p as int)))
+    let a = "42".parse::<int>()
+    let b = "4x2".parse::<int>()
+    println("${a.is_ok()} ${b.is_err()} ${a.unwrap_or(-1)} ${b.unwrap_or(-1)}")
+    let chained = get_or_none(m, "b").and_then(|v| get_or_none(m, "a").map(|w| v + w))
+    let chained_miss = get_or_none(m, "b").and_then(|v| get_or_none(m, "q").map(|w| v + w))
+    println("${show(chained)} ${show(chained_miss)}")
+    println("${get_or_none(m, "nope").unwrap_or(7)} ${get_or_none(m, "b").unwrap_or(7)}")
+    let mut hits = 0
+    let mut misses = 0
+    for i in 0..5 {
+        match get_or_none(m, key_at(i)) {
+            Some(_) => { hits += 1 },
+            None => { misses += 1 },
+        }
+    }
+    println("${hits} ${misses}")
+    println("${m.contains_key("a")} ${m.contains_key("c")} ${m.remove("c").is_none()} ${m.remove("a").is_some()}")
+    // a lookup in a hot loop whose miss arm yields the value `None` (the in-place map-lookup path)
+    let mut seen: HashMap<int, int> = HashMap::new()
+    let mut fresh: int = 0
+    let mut repeats: int = 0
+    let mut n: int = 0
+    let one: int = 1
+    while n < 300 {
+        let key = n % 23
+        let prev = match seen.get(&key) {
+            Some(c) => Some(*c + one),
+            None => None,
+        }
+        match prev {
+            Some(c) => {
+                repeats += 1
+                seen.insert(key, c)
+            }
+            None => {
+                fresh += 1
+                seen.insert(key, 1)
+            }
+        }
+        n += 1
+    }
+    println("${fresh} ${repeats} ${seen.len()}")
+}

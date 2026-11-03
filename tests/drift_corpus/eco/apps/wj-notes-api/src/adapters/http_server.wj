@@ -1,0 +1,179 @@
+use std::http::*
+use std::strings
+use std::sync::{Arc, Mutex}
+
+use crate::domain::HttpReply
+use crate::domain::NotesApp
+use crate::domain::NotesConfig
+use crate::domain::NoteStore
+
+pub fn serve(port: int, store: NoteStore, config: NotesConfig) -> Result<(), string> {
+    let app = NotesApp::new(config, store)
+    let shared = Arc::new(Mutex::new(app))
+    match server_serve(bind_address(), port, |req| dispatch(req, shared)) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
+fn bind_address() -> string {
+    "0.0.0.0"
+}
+
+fn dispatch(req: ServerRequest, state: Arc<Mutex<NotesApp>>) -> ServerResponse {
+    let path = req.path
+    let body = req.body
+    let headers = req.headers
+    let meta = headers_meta(headers)
+    let now_ms = 0
+    match state.lock() {
+        Ok(mut app) => {
+            // Same-crate HttpMethod — string labels demote `handle`'s method formal
+            // to `&str` then still emit owned `String` from helpers (cargo-bin 0.50.0).
+            let reply = app.handle_http(
+                req.method,
+                path,
+                meta.0,
+                meta.1,
+                meta.2,
+                now_ms,
+                body,
+                meta.3,
+            )
+            to_response(reply)
+        },
+        Err(_) => server_error("internal server error"),
+    }
+}
+
+fn headers_meta(headers: Vec<(string, string)>) -> (string, string, string, string) {
+    let mut origin = ""
+    let mut accept_encoding = ""
+    let mut client_key = ""
+    let mut if_none_match = ""
+    for pair in headers {
+        let key = pair.0
+        let value = pair.1
+        if header_key_matches(key, "Origin") {
+            origin = value
+            continue
+        }
+        if header_key_matches(key, "Accept-Encoding") {
+            accept_encoding = value
+            continue
+        }
+        if header_key_matches(key, "If-None-Match") {
+            if_none_match = value
+            continue
+        }
+        if header_key_matches(key, "X-Client-Key") {
+            client_key = value
+        }
+    }
+    (origin, accept_encoding, client_key, if_none_match)
+}
+
+fn header_key_matches(actual: string, expected: string) -> bool {
+    actual == expected
+}
+
+fn to_response(reply: HttpReply) -> ServerResponse {
+    let mut resp = base_response(reply.status, reply.body)
+    if strings_len(reply.content_type) > 0 {
+        resp = resp.header(own("Content-Type"), reply.content_type)
+    }
+    if strings_len(reply.allow_origin) > 0 {
+        resp = resp.header(own("Access-Control-Allow-Origin"), reply.allow_origin)
+    }
+    if strings_len(reply.content_encoding) > 0 {
+        resp = resp.header(own("Content-Encoding"), reply.content_encoding)
+    }
+    resp = apply_extra_headers(resp, reply.extra_headers)
+    resp
+}
+
+fn apply_extra_headers(resp: ServerResponse, block: string) -> ServerResponse {
+    if strings_len(block) == 0 {
+        return resp
+    }
+    let lines = strings.split(block, "\n")
+    let mut i = 0
+    while i < lines.len() {
+        let line = strings.trim(lines[i])
+        if strings_len(line) == 0 {
+            i = i + 1
+            continue
+        }
+        match split_header_line(line) {
+            Some(pair) => {
+                resp = resp.header(pair.0, pair.1)
+            },
+            None => {},
+        }
+        i = i + 1
+    }
+    resp
+}
+
+fn split_header_line(line: string) -> Option<(string, string)> {
+    let colon = find_char(line, ":")
+    if colon < 0 {
+        return None
+    }
+    let name = strings.trim(strings.substring(line, 0, colon))
+    let value = strings.trim(strings.substring(line, colon + 1, strings.len(line)))
+    Some((name, value))
+}
+
+fn find_char(text: string, needle: string) -> int {
+    let mut i = 0
+    let n = strings.len(text)
+    while i < n {
+        if strings.substring(text, i, i + 1) == needle {
+            return i
+        }
+        i = i + 1
+    }
+    -1
+}
+
+fn strings_len(text: string) -> int {
+    strings.len(text)
+}
+
+fn base_response(status: u16, body: string) -> ServerResponse {
+    if status == 204 {
+        return ServerResponse::no_content()
+    }
+    if status == 201 {
+        return json_response(ServerResponse::created(body))
+    }
+    if status == 200 {
+        return ServerResponse::json(body)
+    }
+    if status == 400 {
+        return json_response(ServerResponse::bad_request(body))
+    }
+    if status == 403 {
+        return json_response(ServerResponse::forbidden(body))
+    }
+    if status == 404 {
+        return json_response(ServerResponse::with_status(404, body))
+    }
+    if status == 429 {
+        return json_response(ServerResponse::with_status(429, body))
+    }
+    json_response(ServerResponse::internal_error(body))
+}
+
+fn json_response(resp: ServerResponse) -> ServerResponse {
+    resp.header(own("Content-Type"), own("application/json"))
+}
+
+fn server_error(message: string) -> ServerResponse {
+    json_response(ServerResponse::internal_error(message))
+}
+
+fn own(value: string) -> string {
+    value
+}

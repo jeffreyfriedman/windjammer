@@ -1,0 +1,254 @@
+use crate::abs_ms
+use crate::add_ms
+use crate::clamp_ms
+use crate::format_ms
+use crate::format_secs
+use crate::is_negative
+use crate::is_positive
+use crate::is_zero
+use crate::max_ms
+use crate::min_ms
+use crate::ms_to_secs
+use crate::outside_ms
+use crate::parse_ms
+use crate::parse_ms_or
+use crate::parse_secs
+use crate::parse_secs_or
+use crate::require_positive
+use crate::require_at_least
+use crate::require_at_most
+use crate::secs_to_ms
+use crate::sub_ms
+use crate::within_ms
+use std::strings
+
+@test
+fn test_parse_ms_unit() {
+    match parse_ms("5ms") {
+        Ok(v) => assert_eq(v, 5),
+        Err(_) => assert(false, "parse 5ms"),
+    }
+}
+
+@test
+fn test_parse_seconds() {
+    match parse_ms("3s") {
+        Ok(v) => assert_eq(v, 3000),
+        Err(_) => assert(false, "parse 3s"),
+    }
+}
+
+@test
+fn test_parse_minutes() {
+    match parse_ms("2m") {
+        Ok(v) => assert_eq(v, 120000),
+        Err(_) => assert(false, "parse 2m"),
+    }
+}
+
+@test
+fn test_parse_hours() {
+    match parse_ms("1h") {
+        Ok(v) => assert_eq(v, 3600000),
+        Err(_) => assert(false, "parse 1h"),
+    }
+}
+
+@test
+fn test_parse_compound() {
+    match parse_ms("1h30m") {
+        Ok(v) => assert_eq(v, 5400000),
+        Err(_) => assert(false, "parse 1h30m"),
+    }
+}
+
+@test
+fn test_parse_compound_with_seconds() {
+    match parse_ms("1m5s") {
+        Ok(v) => assert_eq(v, 65000),
+        Err(_) => assert(false, "parse 1m5s"),
+    }
+}
+
+@test
+fn test_parse_bare_number_is_ms() {
+    match parse_ms("250") {
+        Ok(v) => assert_eq(v, 250),
+        Err(_) => assert(false, "parse bare"),
+    }
+}
+
+@test
+fn test_parse_empty_err() {
+    match parse_ms("") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "rejected"),
+    }
+}
+
+@test
+fn test_parse_invalid_err() {
+    match parse_ms("nope") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "rejected"),
+    }
+}
+
+@test
+fn test_format_ms_seconds() {
+    assert_eq(format_ms(3000), "3s")
+}
+
+@test
+fn test_format_ms_compound() {
+    assert_eq(format_ms(5400000), "1h30m")
+}
+
+@test
+fn test_format_ms_small() {
+    assert_eq(format_ms(5), "5ms")
+}
+
+@test
+fn test_parse_secs() {
+    match parse_secs("2m") {
+        Ok(v) => assert_eq(v, 120),
+        Err(_) => assert(false, "parse_secs 2m"),
+    }
+}
+
+@test
+fn test_format_secs() {
+    assert_eq(format_secs(120), "2m")
+}
+
+@test
+fn test_ms_to_secs_and_secs_to_ms() {
+    assert_eq(ms_to_secs(2500), 2)
+    assert_eq(ms_to_secs(999), 0)
+    assert_eq(secs_to_ms(3), 3000)
+    assert_eq(format_ms(secs_to_ms(120)), "2m")
+}
+
+@test
+fn test_parse_ms_or_falls_back() {
+    assert_eq(parse_ms_or("5s", 0), 5000)
+    assert_eq(parse_ms_or("not-a-duration", 42), 42)
+}
+
+@test
+fn test_is_positive() {
+    assert(is_positive(1), "1ms positive")
+    assert(!is_positive(0), "zero not positive")
+    assert(!is_positive(-5), "negative not positive")
+}
+
+@test
+fn test_clamp_ms() {
+    assert_eq(clamp_ms(50, 0, 100), 50)
+    assert_eq(clamp_ms(-10, 0, 100), 0)
+    assert_eq(clamp_ms(200, 0, 100), 100)
+}
+
+@test
+fn test_parse_secs_or_is_zero_add_ms() {
+    assert_eq(parse_secs_or("2m", 0), 120)
+    assert_eq(parse_secs_or("bad", 9), 9)
+    assert(is_zero(0), "zero")
+    assert(!is_zero(1), "nonzero")
+    assert_eq(add_ms(100, 50), 150)
+    assert_eq(add_ms(100, -30), 70)
+}
+
+@test
+fn test_sub_ms_abs_ms_is_negative() {
+    assert_eq(sub_ms(100, 30), 70)
+    assert_eq(sub_ms(30, 100), -70)
+    assert_eq(abs_ms(-50), 50)
+    assert_eq(abs_ms(50), 50)
+    assert_eq(abs_ms(0), 0)
+    assert(is_negative(-1), "neg")
+    assert(!is_negative(0), "zero not neg")
+    assert(!is_negative(1), "pos not neg")
+}
+
+@test
+fn test_min_max_within_ms() {
+    assert_eq(min_ms(10, 20), 10)
+    assert_eq(min_ms(20, 10), 10)
+    assert_eq(max_ms(10, 20), 20)
+    assert_eq(max_ms(20, 10), 20)
+    assert(within_ms(50, 0, 100), "inside")
+    assert(within_ms(0, 0, 100), "lo")
+    assert(within_ms(100, 0, 100), "hi")
+    assert(!within_ms(-1, 0, 100), "below")
+    assert(!within_ms(101, 0, 100), "above")
+}
+
+@test
+fn test_is_nonzero_outside_and_require_positive() {
+    assert(outside_ms(-1, 0, 100), "below")
+    assert(outside_ms(101, 0, 100), "above")
+    assert(!outside_ms(50, 0, 100), "inside")
+    match require_positive(10) {
+        Ok(n) => assert_eq(n, 10),
+        Err(_) => assert(false, "positive"),
+    }
+    match require_positive(0) {
+        Ok(_) => assert(false, "zero must Err"),
+        Err(msg) => assert(strings.contains(msg, "positive"), "mentions positive"),
+    }
+    match require_positive(-5) {
+        Ok(_) => assert(false, "neg must Err"),
+        Err(msg) => assert(strings.contains(msg, "positive"), "mentions positive"),
+    }
+}
+
+@test
+fn test_bounds_and_require_nonneg() {
+    use crate::is_at_least
+    use crate::is_at_most
+    use crate::require_nonneg
+    assert(is_at_least(10, 10), "eq least")
+    assert(is_at_least(11, 10), "above least")
+    assert(!is_at_least(9, 10), "below least")
+    assert(is_at_most(10, 10), "eq most")
+    assert(is_at_most(9, 10), "below most")
+    assert(!is_at_most(11, 10), "above most")
+    match require_nonneg(0) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "zero ok"),
+    }
+    match require_nonneg(5) {
+        Ok(n) => assert_eq(n, 5),
+        Err(_) => assert(false, "pos ok"),
+    }
+    match require_nonneg(-1) {
+        Ok(_) => assert(false, "neg must Err"),
+        Err(msg) => assert(strings.contains(msg, "nonneg"), "mentions nonneg"),
+    }
+}
+
+@test
+fn test_require_at_least() {
+    match require_at_least(10, 5) {
+        Ok(n) => assert_eq(n, 10),
+        Err(_) => assert(false, "at least"),
+    }
+    match require_at_least(3, 5) {
+        Ok(_) => assert(false, "below must Err"),
+        Err(msg) => assert(strings.contains(msg, "at least"), "mentions at least"),
+    }
+}
+
+@test
+fn test_require_at_most() {
+    match require_at_most(3, 5) {
+        Ok(n) => assert_eq(n, 3),
+        Err(_) => assert(false, "at most"),
+    }
+    match require_at_most(10, 5) {
+        Ok(_) => assert(false, "above must Err"),
+        Err(msg) => assert(strings.contains(msg, "at most"), "mentions at most"),
+    }
+}

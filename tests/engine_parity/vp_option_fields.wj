@@ -1,0 +1,73 @@
+// Option fields of structs read and rewritten in value position: `take`, `replace`-style swaps via
+// match, `unwrap_or`, `map`, `ok_or`, an Option field matched inside a loop, and a method that
+// returns the field.
+struct Node {
+    label: string,
+    next: Option<int>,
+    note: Option<string>,
+}
+
+impl Node {
+    fn peek(self) -> Option<int> {
+        self.next
+    }
+
+    fn note_or(self, dflt: string) -> string {
+        match self.note {
+            Some(n) => n,
+            None => dflt,
+        }
+    }
+
+    fn advance(self) -> Node {
+        let step: int = 1
+        let nx = match self.next {
+            Some(v) => if v > 2 { Some(v - step) } else { None },
+            None => None,
+        }
+        Node { label: self.label, next: nx, note: self.note }
+    }
+}
+
+fn show(x: Option<int>) -> string {
+    match x {
+        Some(v) => "some ${v}",
+        None => "none",
+    }
+}
+
+fn main() {
+    let n = Node { label: "a", next: Some(4), note: None }
+    println("${show(n.peek())} ${n.note_or("-")}")
+    let mut cur = n.advance()
+    let mut steps = 0
+    while steps < 5 {
+        println("${cur.label} ${show(cur.peek())}")
+        cur = cur.advance()
+        steps += 1
+    }
+    let m = Node { label: "b", next: None, note: Some("hi") }
+    println("${show(m.peek())} ${m.note_or("-")}")
+    let r: Result<int, string> = m.peek().ok_or("no next")
+    match r {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    let n2 = Node { label: "c", next: Some(4), note: None }
+    let mapped = n2.peek().map(|v| v * 2)
+    println(show(mapped))
+    let mut nodes: Vec<Node> = Vec::new()
+    nodes.push(Node { label: "x", next: Some(3), note: None })
+    nodes.push(Node { label: "y", next: None, note: Some("n") })
+    nodes.push(Node { label: "z", next: Some(1), note: Some("m") })
+    let mut sum = 0
+    let mut notes = ""
+    for nd in nodes {
+        match nd.next {
+            Some(v) => { sum += v },
+            None => { sum += 100 },
+        }
+        notes = notes + nd.note_or("_")
+    }
+    println("${sum} ${notes}")
+}

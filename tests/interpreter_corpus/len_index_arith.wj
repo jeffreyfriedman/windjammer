@@ -1,0 +1,61 @@
+// seeds: 1 4 7 12
+// ADR-0028: lengths, index arithmetic and counters print the same values in the interpreter and the compiled program.
+pub struct Stat {
+    pub count: int,
+    pub last: int,
+}
+
+fn positions(v: Vec<int>, needle: int) -> Vec<int> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < v.len() {
+        if v[i] == needle {
+            out.push(i + 1)
+        }
+        i = i + 1
+    }
+    out
+}
+
+fn stat(v: Vec<int>) -> Stat {
+    let n: int = v.len()
+    Stat { count: n, last: v[v.len() - 1] }
+}
+
+fn main() {
+    let s: int = __SEED__
+    let mut v = Vec::new()
+    let mut k = 0
+    while k < s + 5 {
+        v.push((k * 7 + s) % 5)
+        k = k + 1
+    }
+    println("len ${v.len()}")
+    let mut sum = 0
+    for idx in 0..v.len() {
+        sum = sum + v[idx]
+    }
+    println("sum ${sum}")
+    let mut swaps = 0
+    let mut i = 0
+    while i < v.len() {
+        let mut j = i + 1
+        while j < v.len() {
+            if v[j] > v[i] {
+                let t = v[i]
+                v[i] = v[j]
+                v[j] = t
+                swaps = swaps + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    let first = v[0]
+    let last = v[v.len() - 1]
+    println("swaps ${swaps} first ${first} last ${last}")
+    let p = positions(v, 2)
+    println("positions ${p.len()}")
+    let st = stat(v)
+    println("count ${st.count} last ${st.last}")
+}

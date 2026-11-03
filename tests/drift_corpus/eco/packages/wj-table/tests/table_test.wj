@@ -1,0 +1,42 @@
+use crate::Table
+use crate::new
+use crate::right_align
+use crate::add_row
+use crate::markdown
+use crate::plain
+use crate::pad_left
+use crate::pad_right
+use crate::fixed
+use crate::signed
+
+fn sample() -> Table {
+    let t = right_align(new(["kernel", "ms"]), [1])
+    add_row(add_row(t, ["sieve", "1.5"]), ["matmul", "22.25"])
+}
+
+fn test_markdown_layout() {
+    let want = "| kernel | ms |\n|---|---:|\n| sieve | 1.5 |\n| matmul | 22.25 |"
+    assert_eq(markdown(sample()), want)
+}
+
+fn test_plain_pads_columns_and_aligns_numbers() {
+    let want = "kernel     ms\nsieve     1.5\nmatmul  22.25"
+    assert_eq(plain(sample(), "  "), want)
+}
+
+fn test_padding() {
+    assert_eq(pad_left("ab", 5), "   ab")
+    assert_eq(pad_right("ab", 5), "ab   ")
+    assert_eq(pad_left("abcdef", 3), "abcdef")
+}
+
+fn test_fixed_matches_python_formatting() {
+    // f"{2.0005:.3f}" == "2.000" (the binary value is just below the tie), f"{1.0005:.3f}" == "1.000"
+    assert_eq(fixed(0.1234567, 3), "0.123")
+    assert_eq(fixed(2.5, 0), "2")
+    assert_eq(fixed(3.5, 0), "4")
+    assert_eq(fixed(1234.5, 1), "1234.5")
+    assert_eq(fixed(-0.0004, 3), "-0.000")
+    assert_eq(signed(1.25, 1), "+1.2")
+    assert_eq(signed(-1.0, 1), "-1.0")
+}

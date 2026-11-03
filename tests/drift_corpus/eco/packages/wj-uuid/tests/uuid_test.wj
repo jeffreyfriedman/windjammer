@@ -1,0 +1,224 @@
+use crate::v4
+use crate::v1
+use crate::v1_from_timestamp
+use crate::v5
+use crate::v5_dns
+use crate::v5_url
+use crate::v7
+use crate::v7_from_timestamp
+use crate::version
+use crate::is_canonical
+use crate::is_valid
+use crate::is_version
+use crate::is_nil
+use crate::is_max
+use crate::normalize
+use crate::hyphen_count
+use crate::require_v4
+use crate::require_max
+use crate::require_v7
+use crate::require_valid
+use crate::require_version
+use crate::with_hyphens
+use crate::without_hyphens
+use crate::NIL
+use crate::MAX
+use std::strings
+
+fn test_v1_from_timestamp_known_vector() {
+    match v1_from_timestamp(1700000000000, 984, "123456789abc") {
+        Ok(id) => assert_eq(id, "04afc000-833b-11ee-83d8-123456789abc"),
+        Err(_) => assert(false, "v1_from_timestamp failed"),
+    }
+}
+
+fn test_v1_from_timestamp_validates_clock_seq() {
+    match v1_from_timestamp(1700000000000, 99999, "123456789abc") {
+        Ok(_) => assert(false, "expected clock_seq Err"),
+        Err(msg) => assert(strings.contains(msg, "clock_seq"), "clock_seq message"),
+    }
+}
+
+fn test_v5_dns_rfc4122_vector() {
+    match v5_dns("www.example.com") {
+        Ok(id) => assert_eq(id, "2ed6657d-e927-568b-95e1-2665a8aea6a2"),
+        Err(_) => assert(false, "v5_dns failed"),
+    }
+}
+
+fn test_v5_url_rfc4122_vector() {
+    match v5_url("www.example.com") {
+        Ok(id) => assert_eq(id, "b63cdfa4-3df9-568e-97ae-006c5b8fd652"),
+        Err(_) => assert(false, "v5_url failed"),
+    }
+}
+
+fn test_v5_is_deterministic() {
+    match v5("6ba7b810-9dad-11d1-80b4-00c04fd430c8", "www.example.com") {
+        Ok(a) => {
+            match v5("6ba7b810-9dad-11d1-80b4-00c04fd430c8", "www.example.com") {
+                Ok(b) => assert_eq(a, b),
+                Err(_) => assert(false, "second v5 failed"),
+            }
+        },
+        Err(_) => assert(false, "first v5 failed"),
+    }
+}
+
+fn test_version_detects_v1_v4_v5_v7() {
+    assert_eq(version("04afc000-833b-11ee-83d8-123456789abc"), Some(1))
+    assert_eq(version("550e8400-e29b-41d4-a716-446655440000"), Some(4))
+    assert_eq(version("2ed6657d-e927-568b-95e1-2665a8aea6a2"), Some(5))
+    assert_eq(version("017f22e2-79b0-7cc3-98c4-dc0c0c07398f"), Some(7))
+}
+
+fn test_v4_has_canonical_shape() {
+    let id = v4()
+    assert_eq(strings.len(id), 36)
+    assert(strings.substring(id, 8, 9) == "-", "dash 1")
+    assert(strings.substring(id, 13, 14) == "-", "dash 2")
+    assert(strings.substring(id, 18, 19) == "-", "dash 3")
+    assert(strings.substring(id, 23, 24) == "-", "dash 4")
+    assert(strings.substring(id, 14, 15) == "4", "version nibble")
+}
+
+fn test_v4_variant_nibble_is_rfc4122() {
+    let id = v4()
+    let variant = strings.substring(id, 19, 20)
+    let ok = variant == "8" || variant == "9" || variant == "a" || variant == "b"
+    assert(ok, "variant nibble")
+}
+
+fn test_v4_generates_distinct_values() {
+    let a = v4()
+    let b = v4()
+    assert(a != b, "uuids should differ")
+}
+
+fn test_is_valid_accepts_v1_v4_v5_v7() {
+    assert(is_valid("04afc000-833b-11ee-83d8-123456789abc"), "v1")
+    assert(is_valid("550E8400-E29B-41D4-A716-446655440000"), "v4 uppercase")
+    assert(is_valid("2ed6657d-e927-568b-95e1-2665a8aea6a2"), "v5")
+    assert(is_valid("017f22e2-79b0-7cc3-98c4-dc0c0c07398f"), "v7")
+}
+
+fn test_is_valid_rejects_wrong_length() {
+    assert(!is_valid("550e8400-e29b-41d4-a716-44665544000"), "short")
+    assert(!is_valid("550e8400-e29b-41d4-a716-4466554400000"), "long")
+}
+
+fn test_is_valid_rejects_unsupported_version() {
+    assert(!is_valid("550e8400-e29b-31d4-a716-446655440000"), "version 3")
+}
+
+fn test_is_valid_rejects_bad_variant() {
+    assert(!is_valid("550e8400-e29b-41d4-c716-446655440000"), "variant c")
+}
+
+fn test_normalize_lowercases() {
+    assert_eq(normalize("550E8400-E29B-41D4-A716-446655440000"), "550e8400-e29b-41d4-a716-446655440000")
+}
+
+fn test_v1_now_has_version_one() {
+    match v1() {
+        Ok(id) => {
+            assert_eq(strings.substring(id, 14, 15), "1")
+            assert(is_valid(id), "generated v1")
+        },
+        Err(_) => assert(false, "v1 failed"),
+    }
+}
+
+fn test_v4_roundtrip_valid() {
+    let id = v4()
+    assert(is_valid(id), "generated v4")
+}
+
+fn test_v7_from_timestamp_rfc9562_vector() {
+    // RFC 9562 Appendix A.4 — unix_ts_ms 0x017F22E279B0 with patched rand.
+    match v7_from_timestamp(1645557742000, "0cc318c4dc0c0c07398f") {
+        Ok(id) => assert_eq(id, "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"),
+        Err(_) => assert(false, "v7_from_timestamp failed"),
+    }
+}
+
+fn test_v7_from_timestamp_rejects_bad_random_hex() {
+    match v7_from_timestamp(1645557742000, "abcd") {
+        Ok(_) => assert(false, "expected short random Err"),
+        Err(msg) => assert(strings.contains(msg, "random"), "random message"),
+    }
+}
+
+fn test_v7_now_has_version_seven() {
+    match v7() {
+        Ok(id) => {
+            assert_eq(strings.substring(id, 14, 15), "7")
+            assert(is_valid(id), "generated v7")
+        },
+        Err(_) => assert(false, "v7 failed"),
+    }
+}
+
+fn test_nil_and_max_constants() {
+    assert_eq(NIL, "00000000-0000-0000-0000-000000000000")
+    assert_eq(MAX, "ffffffff-ffff-ffff-ffff-ffffffffffff")
+    // Literals (not module consts) into owned formals until
+    // bug_module_const_string_owned_formal_call_site_test is green.
+    assert(is_nil("00000000-0000-0000-0000-000000000000"), "nil")
+    assert(is_max("ffffffff-ffff-ffff-ffff-ffffffffffff"), "max")
+    assert(!is_nil("ffffffff-ffff-ffff-ffff-ffffffffffff"), "max is not nil")
+    assert(!is_max("00000000-0000-0000-0000-000000000000"), "nil is not max")
+    assert(is_max("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"), "max uppercase")
+}
+
+fn test_is_version() {
+    let id = v4()
+    assert(is_version(id, 4), "v4")
+    assert(!is_version(id, 7), "not v7")
+    match v7() {
+        Ok(v7id) => {
+            assert(is_version(v7id, 7), "v7")
+            assert(!is_version(v7id, 4), "not v4")
+        },
+        Err(_) => assert(false, "v7 for is_version"),
+    }
+    assert(!is_version("not-a-uuid", 4), "invalid")
+}
+
+fn test_is_v4_is_v7_and_is_canonical() {
+    let id = v4()
+    assert(is_canonical(id), "generated canonical")
+    match v7() {
+        Ok(v7id) => {
+        },
+        Err(_) => assert(false, "v7"),
+    }
+    assert(is_canonical("550e8400-e29b-41d4-a716-446655440000"), "lower dashed")
+    assert(!is_canonical("550E8400-E29B-41D4-A716-446655440000"), "upper not canonical")
+    assert(!is_canonical("550e8400e29b41d4a716446655440000"), "no dashes")
+}
+
+fn test_without_hyphens_and_require_valid() {
+    let id = "550e8400-e29b-41d4-a716-446655440000"
+    assert_eq(without_hyphens(id), "550e8400e29b41d4a716446655440000")
+    assert_eq(without_hyphens(NIL), "00000000000000000000000000000000")
+    match require_valid(id) {
+        Ok(v) => assert_eq(normalize(v), id),
+        Err(_) => assert(false, "valid"),
+    }
+    match require_valid("not-a-uuid") {
+        Ok(_) => assert(false, "invalid must Err"),
+        Err(msg) => assert(strings.contains(msg, "uuid"), "mentions uuid"),
+    }
+}
+
+fn test_require_max() {
+    match require_max("ffffffff-ffff-ffff-ffff-ffffffffffff") {
+        Ok(id) => assert(is_max(id), "max"),
+        Err(_) => assert(false, "max ok"),
+    }
+    match require_max("00000000-0000-0000-0000-000000000000") {
+        Ok(_) => assert(false, "nil must Err"),
+        Err(msg) => assert(strings.contains(msg, "max"), "mentions max"),
+    }
+}

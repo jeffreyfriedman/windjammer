@@ -1,0 +1,258 @@
+use std::collections::HashMap
+use std::strings
+
+/// Replace `{{key}}` placeholders using `vars`. Unknown keys stay in the output.
+/// Whitespace inside braces is ignored: `{{ name }}` uses key `name`.
+pub fn render(template: string, vars: HashMap<string, string>) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < strings.len(template) {
+        if strings.starts_with(strings.substring(template, i, strings.len(template)), "{{") {
+            match read_placeholder(template, i) {
+                Some(pair) => {
+                    let name = pair.0
+                    let end = pair.1
+                    match lookup_var(vars, name) {
+                        Some(value) => {
+                            out = "${out}${value}"
+                        },
+                        None => {
+                            out = "${out}${strings.substring(template, i, end)}"
+                        },
+                    }
+                    i = end
+                },
+                None => {
+                    out = "${out}${strings.substring(template, i, i + 1)}"
+                    i = i + 1
+                },
+            }
+        } else {
+            out = "${out}${strings.substring(template, i, i + 1)}"
+            i = i + 1
+        }
+    }
+    out
+}
+
+/// Like `render`, but fills missing keys from `defaults` first (`vars` win on conflict).
+pub fn render_with_defaults(
+    template: string,
+    vars: HashMap<string, string>,
+    defaults: HashMap<string, string>,
+) -> string {
+    render(template, merge_maps(defaults, vars))
+}
+
+/// Escape `&`, `<`, `>`, and `"` for HTML text nodes.
+pub fn escape_html(text: string) -> string {
+    let amp = strings.replace(text, "&", "&amp;")
+    let lt = strings.replace(amp, "<", "&lt;")
+    let gt = strings.replace(lt, ">", "&gt;")
+    strings.replace(gt, "\"", "&quot;")
+}
+
+/// Like `render`, but HTML-escapes every substituted value.
+pub fn render_html(template: string, vars: HashMap<string, string>) -> string {
+    let mut safe = HashMap::new()
+    for (key, value) in vars {
+        safe.insert(key, escape_html(value))
+    }
+    render(template, safe)
+}
+
+/// Like `render`, but returns `Err` when the template references a key not in `vars`.
+pub fn render_strict(template: string, vars: HashMap<string, string>) -> Result<string, string> {
+    let required = placeholder_names(template)
+    let mut provided = Vec::new()
+    for (key, _value) in vars {
+        provided.push(key)
+    }
+    let mut i = 0
+    while i < required.len() {
+        let name = required[i]
+        if !list_contains(provided, "${name}") {
+            return Err("missing template key: ${name}")
+        }
+        i = i + 1
+    }
+    Ok(render(template, vars))
+}
+
+/// True when `template` contains at least one well-formed `{{key}}` placeholder.
+pub fn has_placeholders(template: string) -> bool {
+    placeholder_names(template).len() > 0
+}
+
+/// Keys referenced as `{{key}}` in `template` that are absent from `vars`.
+pub fn missing_keys(template: string, vars: HashMap<string, string>) -> Vec<string> {
+    let required = placeholder_names(template)
+    let mut provided = Vec::new()
+    for (key, _value) in vars {
+        provided.push(key)
+    }
+    let mut missing = Vec::new()
+    for name in required {
+        let key = "${name}"
+        if !list_contains(provided, key) && !list_contains(missing, key) {
+            missing.push(name)
+        }
+    }
+    missing
+}
+
+/// Every `{{key}}` name appearing in `template` (in order, duplicates allowed).
+pub fn placeholder_names(template: string) -> Vec<string> {
+    let mut names = Vec::new()
+    let mut i = 0
+    while i < strings.len(template) {
+        if strings.starts_with(strings.substring(template, i, strings.len(template)), "{{") {
+            match read_placeholder(template, i) {
+                Some(pair) => {
+                    names.push(pair.0)
+                    i = pair.1
+                },
+                None => {
+                    i = i + 1
+                },
+            }
+        } else {
+            i = i + 1
+        }
+    }
+    names
+}
+
+/// Number of `{{key}}` placeholders in `template`.
+pub fn placeholder_count(template: string) -> int {
+    placeholder_names(template).len()
+}
+
+/// Number of distinct `{{key}}` names in `template`.
+pub fn unique_placeholder_count(template: string) -> int {
+    let names = placeholder_names(template)
+    let mut seen = Vec::new()
+    let mut i = 0
+    while i < names.len() {
+        if !list_contains(seen, names[i]) {
+            seen.push(names[i])
+        }
+        i = i + 1
+    }
+    seen.len()
+}
+
+/// Number of unbound placeholder names in `template`.
+pub fn missing_count(template: string, vars: HashMap<string, string>) -> int {
+    missing_keys(template, vars).len()
+}
+
+/// Return `template` when fully bound, or `Err` listing unbound placeholders.
+pub fn require_fully_bound(template: string, vars: HashMap<string, string>) -> Result<string, string> {
+    let missing = missing_keys(template, vars)
+    if missing.len() == 0 {
+        return Ok(template)
+    }
+    Err("unbound placeholders")
+}
+
+/// True when `template` has no well-formed placeholders.
+pub fn is_plain(template: string) -> bool {
+    !has_placeholders(template)
+}
+
+/// Last `{{key}}` name in `template`, or `None` when plain.
+pub fn last_placeholder(template: string) -> Option<string> {
+    let names = placeholder_names(template)
+    if names.len() == 0 {
+        return None
+    }
+    Some(names[names.len() - 1])
+}
+
+/// `Ok(template)` when it has no placeholders, otherwise `Err`.
+pub fn require_plain(template: string) -> Result<string, string> {
+    if is_plain(template) {
+        return Ok(template)
+    }
+    Err("expected plain")
+}
+
+/// First `{{key}}` name in `template`, or `None` when plain.
+pub fn first_placeholder(template: string) -> Option<string> {
+    let names = placeholder_names(template)
+    if names.len() == 0 {
+        return None
+    }
+    Some(names[0])
+}
+
+/// First placeholder name when one exists, otherwise `Err`.
+pub fn require_placeholder(template: string) -> Result<string, string> {
+    match first_placeholder(template) {
+        Some(name) => Ok(name),
+        None => Err("expected placeholder"),
+    }
+}
+
+/// Last placeholder name when one exists, otherwise `Err`.
+pub fn require_last(template: string) -> Result<string, string> {
+    match last_placeholder(template) {
+        Some(name) => Ok(name),
+        None => Err("expected last"),
+    }
+}
+
+fn list_contains(items: Vec<string>, needle: string) -> bool {
+    let mut i = 0
+    while i < items.len() {
+        if items[i] == needle {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+fn merge_maps(base: HashMap<string, string>, overrides: HashMap<string, string>) -> HashMap<string, string> {
+    let mut out = HashMap::new()
+    for (key, value) in base {
+        out.insert(key, value)
+    }
+    for (key, value) in overrides {
+        out.insert(key, value)
+    }
+    out
+}
+
+fn lookup_var(vars: HashMap<string, string>, key: string) -> Option<string> {
+    for (k, v) in vars {
+        if k == key {
+            return Some(v)
+        }
+    }
+    None
+}
+
+/// Returns `(name, index_after_closing)`.
+fn read_placeholder(text: string, start: usize) -> Option<(string, usize)> {
+    if !strings.starts_with(strings.substring(text, start, strings.len(text)), "{{") {
+        return None
+    }
+    let mut i = start + 2
+    let mut name = ""
+    while i + 1 < strings.len(text) {
+        let tail = strings.substring(text, i, strings.len(text))
+        if strings.starts_with(tail, "}}") {
+            let trimmed = strings.trim(name)
+            if strings.len(trimmed) == 0 {
+                return None
+            }
+            return Some((trimmed, i + 2))
+        }
+        let ch = strings.substring_chars(text, i, i + 1)
+        name = "${name}${ch}"
+        i = i + 1
+    }
+    None
+}

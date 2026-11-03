@@ -1,0 +1,79 @@
+use wj_cli_args::has_long_flag
+use wj_cli_args::long_flag_value
+use wj_cli_args::positionals
+
+use crate::domain::Options
+use crate::domain::default_options
+
+pub struct Command {
+    pub options: Options,
+    pub paths: Vec<string>,
+    pub line_numbers: bool,
+    pub count_only: bool,
+    pub files_with_matches: bool,
+    pub respect_ignore: bool,
+    pub include_hidden: bool,
+    pub replace: Option<string>,
+    pub write: bool,
+}
+
+const USAGE: string = "usage: wj-grep [--ignore-case] [--word] [--fixed] [--invert] [--count] [--files-with-matches] [--no-line-number] [--no-ignore] [--hidden] [--context=N] [--before=N] [--after=N] [--max-count=N] [--replace=TEXT [--write]] PATTERN [PATH...]"
+
+fn int_flag(args: Vec<string>, name: string, default: int) -> Result<int, string> {
+    match long_flag_value(args, name) {
+        Some(text) => match text.parse::<int>() {
+            Ok(n) => Ok(n),
+            Err(_) => Err("--${name} expects a number, got '${text}' (context)"),
+        },
+        None => Ok(default),
+    }
+}
+
+pub fn parse_args(args: Vec<string>) -> Result<Command, string> {
+    let pos = positionals(args)
+    if pos.len() == 0 {
+        return Err(USAGE)
+    }
+    let mut o = default_options()
+    o.pattern = pos[0]
+    o.ignore_case = has_long_flag(args, "ignore-case")
+    o.word = has_long_flag(args, "word")
+    o.fixed = has_long_flag(args, "fixed")
+    o.invert = has_long_flag(args, "invert")
+    let context = match int_flag(args, "context", 0) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    o.before = match int_flag(args, "before", context) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    o.after = match int_flag(args, "after", context) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    o.max_count = match int_flag(args, "max-count", 0) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    let mut paths = Vec::new()
+    let mut i = 1
+    while i < pos.len() {
+        paths.push(pos[i])
+        i = i + 1
+    }
+    if paths.len() == 0 {
+        paths.push(".")
+    }
+    Ok(Command {
+        options: o,
+        paths: paths,
+        line_numbers: !has_long_flag(args, "no-line-number"),
+        count_only: has_long_flag(args, "count"),
+        files_with_matches: has_long_flag(args, "files-with-matches"),
+        respect_ignore: !has_long_flag(args, "no-ignore"),
+        include_hidden: has_long_flag(args, "hidden"),
+        replace: long_flag_value(args, "replace"),
+        write: has_long_flag(args, "write"),
+    })
+}

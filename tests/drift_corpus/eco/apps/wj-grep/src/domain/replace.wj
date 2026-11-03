@@ -1,0 +1,22 @@
+use wj_regex::match_count
+use wj_regex::replace_all
+
+use crate::domain::options::Options
+use crate::domain::options::effective_pattern
+
+/// Rewrite every match of `o` in `text`; returns the new text and the number of replacements.
+/// `$1`-style capture references in `replacement` follow the regex engine's syntax.
+pub fn replace_text(text: string, o: Options, replacement: string) -> Result<(string, int), string> {
+    let pattern = effective_pattern(o)
+    let count = match match_count(pattern, text) {
+        Ok(n) => n,
+        Err(e) => return Err(e),
+    }
+    if count == 0 {
+        return Ok((text, 0))
+    }
+    match replace_all(pattern, text, replacement) {
+        Ok(rewritten) => Ok((rewritten, count)),
+        Err(e) => Err(e),
+    }
+}

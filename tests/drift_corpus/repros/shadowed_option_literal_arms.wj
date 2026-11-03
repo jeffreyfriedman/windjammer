@@ -1,0 +1,17 @@
+// `let item = Some(5)` matched twice, the first time binding `item` again: the compiled backend types
+// the first scrutinee's literal as i64 and the second use's arms as i32 and i64.
+fn main() {
+    let item = Some(5)
+    match item {
+        Some(item) => {
+            let item = item + 1
+            println("inner ${item}")
+        }
+        None => println("none"),
+    }
+    let item2 = match item {
+        Some(item) => item * 3,
+        None => 0,
+    }
+    println("${item2}")
+}

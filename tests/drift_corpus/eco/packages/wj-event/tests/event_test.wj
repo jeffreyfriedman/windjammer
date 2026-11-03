@@ -1,0 +1,242 @@
+use crate::clear_listeners
+use crate::clear_queue
+use crate::drain
+use crate::emit
+use crate::event_name
+use crate::event_payload
+use crate::has_listener
+use crate::has_pending
+use crate::is_empty
+use crate::is_idle
+use crate::listener_count
+use std::strings
+use crate::listener_ids
+use crate::match_pattern
+use crate::new_bus
+use crate::peek
+use crate::pending_count
+use crate::require_pending_count
+use crate::require_listener_count
+use crate::require_idle
+use crate::require_empty
+use crate::require_pending
+use crate::queue_len
+use crate::subscribe
+use crate::unsubscribe
+
+@test
+fn test_new_bus_has_no_listeners() {
+    let bus = new_bus()
+    assert_eq(listener_count(bus), 0)
+    let ids = listener_ids(bus, "user.created")
+    assert_eq(ids.len(), 0)
+}
+
+@test
+fn test_listener_count_tracks_subscribe_and_unsubscribe() {
+    let bus = subscribe(subscribe(new_bus(), "a", "x"), "b", "y")
+    assert_eq(listener_count(bus), 2)
+    let cleared = unsubscribe(bus, "a")
+    assert_eq(listener_count(cleared), 1)
+}
+
+@test
+fn test_subscribe_registers_listener() {
+    let bus = new_bus()
+    let next = subscribe(bus, "audit", "user.created")
+    let ids = listener_ids(next, "user.created")
+    assert_eq(ids.len(), 1)
+    assert_eq(ids[0], "audit")
+}
+
+@test
+fn test_unsubscribe_removes_listener() {
+    let bus = subscribe(new_bus(), "audit", "user.created")
+    let cleared = unsubscribe(bus, "audit")
+    let ids = listener_ids(cleared, "user.created")
+    assert_eq(ids.len(), 0)
+}
+
+@test
+fn test_emit_and_drain_returns_event() {
+    let bus = subscribe(new_bus(), "audit", "user.created")
+    let queued = emit(bus, "user.created", "{\"id\":1}")
+    let drained = drain(queued)
+    assert_eq(drained.1.len(), 1)
+    assert_eq(drained.1[0].name, "user.created")
+    assert_eq(drained.1[0].payload, "{\"id\":1}")
+}
+
+@test
+fn test_drain_clears_queue() {
+    let bus = emit(new_bus(), "ping", "pong")
+    let drained = drain(bus)
+    assert_eq(drained.1.len(), 1)
+    let again = drain(drained.0)
+    assert_eq(again.1.len(), 0)
+}
+
+@test
+fn test_wildcard_pattern_matches() {
+    assert(match_pattern("user.*", "user.created"), "suffix wildcard")
+    assert(!match_pattern("user.*", "order.created"), "different prefix")
+    assert(match_pattern("*", "anything"), "star matches all")
+}
+
+@test
+fn test_listener_ids_respects_wildcard() {
+    let bus = subscribe(new_bus(), "all", "*")
+    let ids = listener_ids(bus, "user.created")
+    assert_eq(ids.len(), 1)
+}
+
+@test
+fn test_multiple_listeners_same_event() {
+    let bus = subscribe(new_bus(), "a", "tick")
+    let bus2 = subscribe(bus, "b", "tick")
+    let ids = listener_ids(bus2, "tick")
+    assert_eq(ids.len(), 2)
+}
+
+@test
+fn test_queue_len_tracks_emits() {
+    let bus = new_bus()
+    assert_eq(queue_len(bus), 0)
+    let queued = emit(emit(bus, "a", "1"), "b", "2")
+    assert_eq(queue_len(queued), 2)
+}
+
+@test
+fn test_clear_queue_keeps_listeners() {
+    let bus = subscribe(new_bus(), "audit", "user.*")
+    let queued = emit(bus, "user.created", "{}")
+    assert_eq(queue_len(queued), 1)
+    let cleared = clear_queue(queued)
+    assert_eq(queue_len(cleared), 0)
+    assert_eq(listener_count(cleared), 1)
+    let ids = listener_ids(cleared, "user.created")
+    assert_eq(ids.len(), 1)
+}
+
+@test
+fn test_has_pending() {
+    let empty = new_bus()
+    assert(!has_pending(empty), "empty")
+    let queued = emit(new_bus(), "x", "1")
+    assert(has_pending(queued), "queued")
+    let drained = drain(emit(new_bus(), "x", "1"))
+    assert(!has_pending(drained.0), "after drain")
+}
+
+@test
+fn test_is_empty_and_has_listeners() {
+    assert(is_empty(new_bus()), "no listeners")
+    assert(!is_empty(subscribe(new_bus(), "a", "tick")), "has listener")
+}
+
+@test
+fn test_peek_does_not_drain() {
+    let queued = emit(emit(new_bus(), "a", "1"), "b", "2")
+    let peeked = peek(queued)
+    match peeked.1 {
+        Some(ev) => {
+            assert_eq(ev.name, "a")
+            assert_eq(ev.payload, "1")
+        },
+        None => assert(false, "peek first"),
+    }
+    assert_eq(queue_len(peeked.0), 2)
+}
+
+@test
+fn test_pending_count() {
+    assert_eq(pending_count(new_bus()), 0)
+    let queued = emit(emit(new_bus(), "a", "1"), "b", "2")
+    assert_eq(pending_count(queued), 2)
+}
+
+@test
+fn test_has_listener_and_clear_listeners() {
+    let bus = subscribe(subscribe(new_bus(), "a", "tick"), "b", "tock")
+    assert(has_listener(bus, "a"), "has a")
+    assert(has_listener(bus, "b"), "has b")
+    assert(!has_listener(bus, "c"), "no c")
+    let cleared = clear_listeners(bus)
+    assert(is_empty(cleared), "no listeners")
+    assert_eq(listener_count(cleared), 0)
+}
+
+@test
+fn test_is_idle_and_event_accessors() {
+    assert(is_idle(new_bus()), "empty is idle")
+    let queued = emit(new_bus(), "tick", "payload-1")
+    assert(!is_idle(queued), "queued not idle")
+    let peeked = peek(queued)
+    match peeked.1 {
+        Some(ev) => {
+            assert_eq(event_name(ev), "tick")
+            assert_eq(event_payload(ev), "payload-1")
+        },
+        None => assert(false, "peek event"),
+    }
+}
+
+@test
+fn test_require_idle() {
+    match require_idle(new_bus()) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "fresh bus"),
+    }
+    match require_idle(emit(new_bus(), "tick", "payload-1")) {
+        Ok(_) => assert(false, "queued must Err"),
+        Err(msg) => assert(strings.contains(msg, "idle"), "mentions idle"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    match require_empty(new_bus()) {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "no listeners"),
+    }
+    match require_empty(subscribe(new_bus(), "a", "tick")) {
+        Ok(_) => assert(false, "subscribed must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+}
+
+@test
+fn test_require_pending() {
+    match require_pending(emit(new_bus(), "tick", "1")) {
+        Ok(n) => assert(n > 0, "queued"),
+        Err(_) => assert(false, "pending ok"),
+    }
+    match require_pending(new_bus()) {
+        Ok(_) => assert(false, "fresh must Err"),
+        Err(msg) => assert(strings.contains(msg, "pending"), "mentions pending"),
+    }
+}
+
+@test
+fn test_require_pending_count() {
+    match require_pending_count(emit(new_bus(), "tick", "1"), 1) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "one queued"),
+    }
+    match require_pending_count(new_bus(), 1) {
+        Ok(_) => assert(false, "fresh must Err"),
+        Err(msg) => assert(strings.contains(msg, "pending count"), "mentions pending count"),
+    }
+}
+
+@test
+fn test_require_listener_count() {
+    match require_listener_count(subscribe(new_bus(), "a", "tick"), 1) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "one listener"),
+    }
+    match require_listener_count(new_bus(), 1) {
+        Ok(_) => assert(false, "fresh must Err"),
+        Err(msg) => assert(strings.contains(msg, "listener count"), "mentions listener count"),
+    }
+}

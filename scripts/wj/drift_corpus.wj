@@ -1,0 +1,337 @@
+// Differential corpus runner: every test of the pinned ecosystem snapshot (tests/drift_corpus/eco) and every
+// value-position program (tests/engine_parity/vp_*.wj) runs under the tree walker, the resolved engine and
+// the compiled backend; one TSV row per case: id <TAB> walker <TAB> resolved <TAB> compiled.
+//
+//   wj run scripts/wj/drift_corpus.wj <wj-binary> <out.tsv> [--compiled recorded|live|skip] [--record] [--only SUBSTR]
+//
+// Tokens: a test is `pass`, `fail` or `absent`; a program is `exit<N>:<bytes>:<checksum>` of its stdout.
+// Rows `<id>#loc` compare the `file.wj:line` of a panic (interpreted engines and compiled tests only).
+// Compiled results come from tests/drift_corpus/compiled_baseline.tsv (`recorded`, the default), or run now
+// through `wj test --json` / `wj run --compiled` in a scratch copy (`live`; `--record` rewrites the baseline).
+// WJ_CARGO_WRAPPER (for example a build-slot gate) prefixes every compiled run.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::items
+use wj_json_doc::as_str
+use wj_json_doc::as_bool
+use wj_json_doc::object
+use wj_proc::sh
+use wj_proc::quote
+
+const CORPUS: string = "tests/drift_corpus"
+const BASELINE: string = "tests/drift_corpus/compiled_baseline.tsv"
+const SCRATCH: string = "/tmp/wj-drift-live"
+
+struct Opts {
+    wj: string,
+    out: string,
+    compiled: string,
+    record: bool,
+    only: string,
+}
+
+// ---- tokens ----
+
+fn checksum(s: string) -> string {
+    let mut h = 17
+    for b in s.as_bytes() {
+        h = (h * 31 + (b as int)) % 1000000007
+    }
+    "${s.len()}:${h}"
+}
+
+// `file.wj:line` of the first panic location in `text`, or ""
+fn loc_of(text: string) -> string {
+    let at = text.find(".wj:")
+    if at.is_none() {
+        return ""
+    }
+    let p = at.unwrap_or(0)
+    let bytes = text.as_bytes()
+    let mut start = p
+    while start > 0 && bytes[start - 1] != 32 && bytes[start - 1] != 10 && bytes[start - 1] != 40 && bytes[start - 1] != 34 {
+        start -= 1
+    }
+    let mut end = p + 4
+    while end < bytes.len() && bytes[end] >= 48 && bytes[end] <= 57 {
+        end += 1
+    }
+    let raw = text[start..end].to_string()
+    // location relative to the program, whichever directory it ran from
+    let parts = strings.split(raw, "/")
+    parts[parts.len() - 1]
+}
+
+// ---- one case's outcome ----
+
+struct Outcome {
+    token: string,
+    loc: string,
+}
+
+fn none_outcome() -> Outcome {
+    Outcome { token: "absent", loc: "" }
+}
+
+struct TestRun {
+    ids: Vec<string>,
+    outs: Vec<Outcome>,
+}
+
+fn json_body(stdout: string) -> string {
+    // compiled runs print build progress before the JSON document
+    let marker = "{\n  \""
+    match stdout.find(marker) {
+        Some(i) => stdout[i..].to_string(),
+        None => stdout,
+    }
+}
+
+fn parse_tests(target: string, stdout: string) -> TestRun {
+    let mut run = TestRun { ids: Vec::new(), outs: Vec::new() }
+    match parse(json_body(stdout)) {
+        Ok(doc) => {
+            for t in items(get(doc, "tests") ?? object()) {
+                let name = as_str(get(t, "name") ?? object()) ?? "?"
+                let file = as_str(get(t, "file") ?? object()) ?? "?"
+                let msg = as_str(get(t, "message") ?? object()) ?? ""
+                let status = as_str(get(t, "status") ?? object()) ?? ""
+                let ok = (as_bool(get(t, "passed") ?? object()) ?? false) || status == "passed"
+                run.ids.push("${target}::${strings.replace(file, "./", "")}::${name}")
+                run.outs.push(Outcome { token: if ok { "pass" } else { "fail" }, loc: loc_of(msg) })
+            }
+        },
+        Err(_) => {},
+    }
+    run
+}
+
+fn label(dir: string) -> string {
+    strings.replace(dir, "tests/drift_corpus/eco/", "")
+}
+
+fn lookup(run: TestRun, id: string) -> Outcome {
+    let mut i = 0
+    while i < run.ids.len() {
+        if run.ids[i] == id {
+            return run.outs[i]
+        }
+        i += 1
+    }
+    none_outcome()
+}
+
+// ---- running ----
+
+fn wrapper() -> string {
+    env::var("WJ_CARGO_WRAPPER").unwrap_or("")
+}
+
+fn interp_tests(o: Opts, dir: string, engine: string) -> TestRun {
+    let cmd = "cd ${quote(dir)} && WJ_TEST_ENGINE=${engine} ${quote(o.wj)} test --interpret --json"
+    match sh(cmd) {
+        Ok(r) => parse_tests(label(dir), r.stdout),
+        Err(_) => TestRun { ids: Vec::new(), outs: Vec::new() },
+    }
+}
+
+fn live_tests(o: Opts, dir: string) -> TestRun {
+    // a scratch copy: compiled runs write build trees next to the sources
+    let cmd = "cd ${SCRATCH}/${label(dir)} && ${wrapper()} ${quote(o.wj)} test --json"
+    match sh(cmd) {
+        Ok(r) => parse_tests(label(dir), r.stdout),
+        Err(_) => TestRun { ids: Vec::new(), outs: Vec::new() },
+    }
+}
+
+fn run_program(o: Opts, file: string, mode: string) -> Outcome {
+    let cmd = if mode == "compiled" {
+        "${wrapper()} ${quote(o.wj)} run --compiled --no-lint ${quote(file)}"
+    } else {
+        "${quote(o.wj)} run --interpret --no-lint --deterministic-time --engine ${mode} ${quote(file)} < /dev/null"
+    }
+    match sh(cmd) {
+        Ok(r) => {
+            let loc = if mode == "compiled" || r.status == 0 { "" } else { loc_of(r.stderr) }
+            Outcome { token: "exit${r.status}:${checksum(r.stdout)}", loc: loc }
+        },
+        Err(e) => Outcome { token: "error", loc: "" },
+    }
+}
+
+// ---- the baseline of compiled results ----
+
+fn read_baseline() -> TestRun {
+    let mut run = TestRun { ids: Vec::new(), outs: Vec::new() }
+    match fs.read_to_string(BASELINE) {
+        Ok(text) => {
+            for line in strings.split_lines(text) {
+                let f = strings.split(line, "\t")
+                if f.len() == 3 {
+                    run.ids.push(f[0])
+                    run.outs.push(Outcome { token: f[1], loc: f[2] })
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    run
+}
+
+fn row(id: string, w: string, r: string, c: string) -> string {
+    "${id}\t${w}\t${r}\t${c}\n"
+}
+
+fn sorted_dirs(parent: string) -> Vec<string> {
+    let mut names = Vec::new()
+    match fs.read_dir(parent) {
+        Ok(entries) => {
+            for e in entries {
+                if e.is_dir() {
+                    names.push(e.path())
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    names.sort()
+    names
+}
+
+fn main() {
+    let args = env::args()
+    let mut o = Opts { wj: args[1], out: args[2], compiled: "recorded", record: false, only: "" }
+    let mut i = 3
+    while i < args.len() {
+        if args[i] == "--compiled" {
+            o.compiled = args[i + 1]
+            i += 1
+        } else if args[i] == "--record" {
+            o.record = true
+        } else if args[i] == "--only" {
+            o.only = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    let baseline = read_baseline()
+    if o.compiled == "live" {
+        let _ = sh("rm -rf ${SCRATCH} && mkdir -p ${SCRATCH} && cp -R ${CORPUS}/eco/. ${SCRATCH}/")
+    }
+    let mut out = ""
+    let mut recorded = ""
+    let mut targets = sorted_dirs("${CORPUS}/eco/packages")
+    for d in sorted_dirs("${CORPUS}/eco/apps") {
+        targets.push(d)
+    }
+    for dir in targets {
+        if !fs.exists("${dir}/wj.toml") || !strings.contains(dir, o.only) {
+            continue
+        }
+        let w = interp_tests(o, dir, "walker")
+        let r = interp_tests(o, dir, "resolved")
+        let c = if o.compiled == "live" { live_tests(o, dir) } else { baseline }
+        let mut ids = Vec::new()
+        for id in w.ids {
+            ids.push(id)
+        }
+        for id in r.ids {
+            if !ids.contains(id) {
+                ids.push(id)
+            }
+        }
+        if o.compiled == "live" {
+            for id in c.ids {
+                if !ids.contains(id) {
+                    ids.push(id)
+                }
+            }
+        }
+        for id in ids {
+            let wo = lookup(w, id)
+            let ro = lookup(r, id)
+            let co = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else { lookup(c, id) }
+            out = out + row(id, wo.token, ro.token, co.token)
+            if wo.loc != "" || ro.loc != "" || co.loc != "" {
+                let cl = if o.compiled == "skip" { "skip" } else { "loc:${co.loc}" }
+                out = out + row("${id}#loc", "loc:${wo.loc}", "loc:${ro.loc}", cl)
+            }
+            if o.compiled == "live" {
+                recorded = recorded + "${id}\t${co.token}\t${co.loc}\n"
+            }
+        }
+        println("  ${dir}: ${ids.len()} tests")
+    }
+    // value-position programs and the minimal repros of ledgered divergences
+    let mut progs = Vec::new()
+    for dir in ["tests/engine_parity", "${CORPUS}/repros"] {
+        match fs.read_dir(dir) {
+            Ok(es) => {
+                for e in es {
+                    let p = e.path()
+                    let base = e.name()
+                    let wanted = if dir == "tests/engine_parity" { strings.starts_with(base, "vp_") } else { true }
+                    if wanted && strings.ends_with(p, ".wj") && strings.contains(p, o.only) {
+                        progs.push(p)
+                    }
+                }
+            },
+            Err(_) => {},
+        }
+    }
+    progs.sort()
+    for p in progs {
+        let w = run_program(o, p, "walker")
+        let r = run_program(o, p, "resolved")
+        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else if o.compiled == "live" { run_program(o, p, "compiled") } else { lookup(baseline, p) }
+        out = out + row(p, w.token, r.token, c.token)
+        // a program that does not run under the walker agrees with itself in every mode: it is a broken case
+        let ran = strings.starts_with(w.token, "exit0:")
+        out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") { "runs" } else { "broken" }, "runs")
+        if o.compiled == "live" {
+            recorded = recorded + "${p}\t${c.token}\t\n"
+        }
+        if w.loc != "" || r.loc != "" {
+            out = out + row("${p}#loc", "loc:${w.loc}", "loc:${r.loc}", "skip")
+        }
+    }
+    println("  ${progs.len()} programs")
+    let _ = sh("rm -f tests/engine_parity/vp_*.wj.meta ${CORPUS}/repros/*.wj.meta")
+    match fs.write(o.out, out) {
+        Ok(_) => {},
+        Err(e) => {
+            println("cannot write ${o.out}: ${e}")
+            process.exit(2)
+        },
+    }
+    if o.compiled == "live" {
+        let _ = sh("rm -rf ${SCRATCH}")
+    }
+    if o.record && o.compiled == "live" {
+        if o.only != "" {
+            // a partial run replaces only its own rows
+            let mut kept = ""
+            for line in strings.split_lines(fs.read_to_string(BASELINE).unwrap_or("")) {
+                let id = strings.split(line, "\t")[0]
+                if id != "" && !strings.contains(id, o.only) && (!strings.starts_with(id, "#") || strings.starts_with(id, "# compiled")) {
+                    kept = kept + line + "\n"
+                }
+            }
+            recorded = kept + recorded
+        }
+        if o.only == "" {
+            let ver = match sh("${quote(o.wj)} --version") {
+                Ok(r) => strings.trim(r.stdout),
+                Err(_) => "unknown",
+            }
+            recorded = "# compiled results recorded with: ${ver}\n" + recorded
+        }
+        let _ = fs.write(BASELINE, recorded)
+        println("  recorded ${BASELINE}")
+    }
+}

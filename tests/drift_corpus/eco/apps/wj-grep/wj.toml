@@ -1,0 +1,24 @@
+[package]
+name = "wj-grep"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_regex = { path = "../../packages/wj-regex/build" }
+wj_gitignore = { path = "../../packages/wj-gitignore/build" }
+wj_fs_walk = { path = "../../packages/wj-fs-walk/build" }
+wj_cli_args = { path = "../../packages/wj-cli-args/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[capabilities]
+# tests write scratch files under the system temp directory
+fs.read = ["./**", "/tmp/**"]
+fs.write = ["./**", "/tmp/**"]
+
+[capabilities.dependencies.wj_fs_walk]
+fs.read = ["./**", "/tmp/**"]

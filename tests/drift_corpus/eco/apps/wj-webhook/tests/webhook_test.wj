@@ -1,0 +1,159 @@
+use crate::domain::WebhookApp
+use crate::domain::WebhookConfig
+use crate::domain::signature_for
+use std::crypto
+use std::strings
+
+fn test_health_returns_ok_json() {
+    let app = WebhookApp::new("secret")
+    let reply = app.handle("GET", "/health", "", "", "", "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "ok")
+}
+
+fn test_post_webhook_rejects_bad_token() {
+    let app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"1\"}"
+    let reply = app.handle("POST", "/webhook", "", "wrong", "", body)
+    assert_eq(reply.status, 401)
+}
+
+fn test_post_webhook_accepts_token_and_lists_event() {
+    let mut app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"evt-1\"}"
+    let reply = app.handle("POST", "/webhook", "", "secret", "", body)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "ping")
+    let listed = app.handle("GET", "/events", "", "", "", "")
+    assert_eq(listed.status, 200)
+    assert_str_contains(listed.body, "ping")
+    assert_str_contains(listed.body, "evt-1")
+}
+
+fn test_post_webhook_invalid_json_returns_400() {
+    let app = WebhookApp::new("secret")
+    let reply = app.handle("POST", "/webhook", "", "secret", "", "{bad")
+    assert_eq(reply.status, 400)
+}
+
+fn test_post_webhook_accepts_hmac_signature() {
+    let mut app = WebhookApp::new("secret")
+    let body = "{\"event\":\"order.created\",\"id\":\"42\"}"
+    let sig = signature_for("secret", "{\"event\":\"order.created\",\"id\":\"42\"}")
+    let reply = app.handle("POST", "/webhook", "", "", sig, body)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "order.created")
+}
+
+fn test_signature_for_matches_rfc_4231_case_2() {
+    // RFC 4231 section 4.3: key "Jefe", data "what do ya want for nothing?".
+    let sig = signature_for("Jefe", "what do ya want for nothing?")
+    assert_eq(sig, "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843")
+}
+
+fn test_post_webhook_rejects_tampered_body() {
+    let app = WebhookApp::new("secret")
+    let signed = "{\"event\":\"order.created\",\"id\":\"42\"}"
+    let sig = signature_for("secret", signed)
+    let tampered = "{\"event\":\"order.created\",\"id\":\"43\"}"
+    let reply = app.handle("POST", "/webhook", "", "", sig, tampered)
+    assert_eq(reply.status, 401)
+}
+
+fn test_post_webhook_rejects_signature_from_another_secret() {
+    let app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"1\"}"
+    let sig = signature_for("other-secret", body)
+    let reply = app.handle("POST", "/webhook", "", "", sig, body)
+    assert_eq(reply.status, 401)
+}
+
+fn test_post_webhook_rejects_old_demo_sha256_signature() {
+    let app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"1\"}"
+    let demo = crypto.sha256("secret.${body}")
+    let reply = app.handle("POST", "/webhook", "", "", demo, body)
+    assert_eq(reply.status, 401)
+}
+
+fn test_post_webhook_rejects_truncated_and_malformed_signatures() {
+    let app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"1\"}"
+    let sig = signature_for("secret", body)
+    let truncated = strings.substring(sig, 0, 62)
+    assert_eq(app.handle("POST", "/webhook", "", "", truncated, body).status, 401)
+    assert_eq(app.handle("POST", "/webhook", "", "", "not-hex", body).status, 401)
+}
+
+fn test_token_must_match_the_whole_secret() {
+    let app = WebhookApp::new("secret")
+    let body = "{\"event\":\"ping\",\"id\":\"1\"}"
+    assert_eq(app.handle("POST", "/webhook", "", "secre", "", body).status, 401)
+    assert_eq(app.handle("POST", "/webhook", "", "secret!", "", body).status, 401)
+    assert_eq(app.handle("POST", "/webhook", "", "SECRET", "", body).status, 401)
+}
+
+fn test_signature_for_is_deterministic() {
+    let a = signature_for("secret", "{\"event\":\"ping\",\"id\":\"1\"}")
+    let b = signature_for("secret", "{\"event\":\"ping\",\"id\":\"1\"}")
+    assert_eq(a, b)
+    assert(a.len() > 0, "signature must be non-empty")
+}
+
+fn test_unknown_path_returns_404() {
+    let app = WebhookApp::new("secret")
+    let reply = app.handle("GET", "/nope", "", "", "", "")
+    assert_eq(reply.status, 404)
+}
+
+fn test_security_headers_on_health() {
+    let app = WebhookApp::new("secret")
+    let reply = app.handle("GET", "/health", "", "", "", "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+}
+
+fn test_cors_preflight_allowed_origin() {
+    let app = WebhookApp::new_with_config(config_with_cors())
+    let reply = app.handle("OPTIONS", "/webhook", "http://localhost:3000", "", "", "")
+    assert_eq(reply.status, 204)
+    assert_eq(reply.allow_origin, "http://localhost:3000")
+    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+}
+
+fn test_cors_preflight_rejects_unknown_origin() {
+    let app = WebhookApp::new_with_config(config_with_cors())
+    let reply = app.handle("OPTIONS", "/webhook", "http://evil.example", "", "", "")
+    assert_eq(reply.status, 403)
+}
+
+fn test_post_webhook_rejects_empty_event() {
+    let app = WebhookApp::new("secret")
+    let body = "{\"event\":\"\",\"id\":\"1\"}"
+    let reply = app.handle("POST", "/webhook", "", "secret", "", body)
+    assert_eq(reply.status, 400)
+    assert_str_contains(reply.body, "event")
+}
+
+fn test_post_webhook_rejects_oversized_event() {
+    let mut cfg = default_config()
+    cfg.max_event_len = 10
+    let app = WebhookApp::new_with_config(cfg)
+    let body = "{\"event\":\"this-is-way-too-long\",\"id\":\"1\"}"
+    let reply = app.handle("POST", "/webhook", "", "secret", "", body)
+    assert_eq(reply.status, 400)
+    assert_str_contains(reply.body, "event")
+}
+
+fn config_with_cors() -> WebhookConfig {
+    let mut cfg = default_config()
+    cfg.allowed_origins.push("http://localhost:3000")
+    cfg
+}
+
+fn default_config() -> WebhookConfig {
+    let mut cfg = WebhookConfig::defaults()
+    cfg.secret = "secret"
+    cfg
+}

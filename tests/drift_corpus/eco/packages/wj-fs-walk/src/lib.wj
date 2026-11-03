@@ -1,0 +1,265 @@
+use std::fs
+use std::strings
+
+/// True when `name` starts with `.` (dotfile / hidden directory name).
+pub fn is_hidden_name(name: string) -> bool {
+    strings.starts_with(name, ".")
+}
+
+/// `Ok(name)` when `name` is a hidden dotfile name, otherwise `Err`.
+pub fn require_hidden(name: string) -> Result<string, string> {
+    if is_hidden_name(name) {
+        return Ok(name)
+    }
+    Err("expected hidden name")
+}
+
+/// Depth-first list of every file and directory path under `root` (not including `root`).
+pub fn walk(root: string) -> Result<Vec<string>, string> {
+    walk_into(root, true, true)
+}
+
+/// Depth-first list of file paths under `root`.
+pub fn walk_files(root: string) -> Result<Vec<string>, string> {
+    walk_into(root, true, false)
+}
+
+/// Depth-first list of directory paths under `root` (not including `root`).
+pub fn walk_dirs(root: string) -> Result<Vec<string>, string> {
+    walk_into(root, false, true)
+}
+
+/// Files under `root` whose path ends with `suffix` (e.g. `.md`).
+pub fn walk_files_with_suffix(root: string, suffix: string) -> Result<Vec<string>, string> {
+    match walk_files(root) {
+        Ok(paths) => {
+            let mut filtered = Vec::new()
+            for path in paths {
+                if strings.ends_with(path, suffix) {
+                    filtered.push(path)
+                }
+            }
+            Ok(filtered)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Number of files under `root` (includes hidden files).
+pub fn count_files(root: string) -> Result<int, string> {
+    match walk_files(root) {
+        Ok(paths) => {
+            let mut n = 0
+            for _path in paths {
+                n = n + 1
+            }
+            Ok(n)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `root` contains at least one file.
+pub fn has_files(root: string) -> Result<bool, string> {
+    match count_files(root) {
+        Ok(n) => Ok(n > 0),
+        Err(e) => Err(e),
+    }
+}
+
+/// Number of directories under `root` (not including `root`).
+pub fn count_dirs(root: string) -> Result<int, string> {
+    match walk_dirs(root) {
+        Ok(paths) => {
+            let mut n = 0
+            for _path in paths {
+                n = n + 1
+            }
+            Ok(n)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `root` contains at least one subdirectory.
+pub fn has_dirs(root: string) -> Result<bool, string> {
+    match count_dirs(root) {
+        Ok(n) => Ok(n > 0),
+        Err(e) => Err(e),
+    }
+}
+
+/// Number of files plus directories under `root`.
+pub fn count_entries(root: string) -> Result<int, string> {
+    match count_files(root) {
+        Ok(files) => {
+            match count_dirs(root) {
+                Ok(dirs) => Ok(files + dirs),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `root` contains at least one file or directory.
+pub fn has_entries(root: string) -> Result<bool, string> {
+    match count_entries(root) {
+        Ok(n) => Ok(n > 0),
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(1)` when `root` contains a file or directory, otherwise `Err`.
+pub fn require_entries(root: string) -> Result<int, string> {
+    match has_entries(root) {
+        Ok(yes) => {
+            if yes {
+                return Ok(1)
+            }
+            Err("expected entries")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Like `walk_files`, but skips entries whose basename starts with `.`.
+pub fn walk_files_skip_hidden(root: string) -> Result<Vec<string>, string> {
+    match walk_files(root) {
+        Ok(paths) => {
+            let mut filtered = Vec::new()
+            for path in paths {
+                if !is_hidden_name(path_basename(path)) {
+                    filtered.push(path)
+                }
+            }
+            Ok(filtered)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Number of non-hidden files under `root`.
+pub fn count_visible_files(root: string) -> Result<int, string> {
+    match walk_files_skip_hidden(root) {
+        Ok(paths) => {
+            let mut n = 0
+            for _path in paths {
+                n = n + 1
+            }
+            Ok(n)
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `root` contains at least one file ending with `suffix`.
+pub fn has_suffix_files(root: string, suffix: string) -> Result<bool, string> {
+    match walk_files_with_suffix(root, suffix) {
+        Ok(paths) => Ok(paths.len() > 0),
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(1)` when `root` has a file ending in `suffix`, otherwise `Err`.
+pub fn require_suffix(root: string, suffix: string) -> Result<int, string> {
+    match has_suffix_files(root, suffix) {
+        Ok(yes) => {
+            if yes {
+                return Ok(1)
+            }
+            Err("expected suffix")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Final path segment of `path`.
+pub fn basename_of(path: string) -> string {
+    path_basename(path)
+}
+
+/// File count under `root`, or `Err` when there are none.
+pub fn require_files(root: string) -> Result<int, string> {
+    match count_files(root) {
+        Ok(n) => {
+            if n > 0 {
+                return Ok(n)
+            }
+            Err("expected files")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Directory count under `root`, or `Err` when there are none.
+pub fn require_dirs(root: string) -> Result<int, string> {
+    match count_dirs(root) {
+        Ok(n) => {
+            if n > 0 {
+                return Ok(n)
+            }
+            Err("expected dirs")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// True when `root` has no files or subdirectories.
+pub fn is_empty_tree(root: string) -> Result<bool, string> {
+    match has_entries(root) {
+        Ok(yes) => Ok(!yes),
+        Err(e) => Err(e),
+    }
+}
+
+/// `Ok(0)` when `root` has no files or subdirectories.
+pub fn require_empty_tree(root: string) -> Result<int, string> {
+    match is_empty_tree(root) {
+        Ok(yes) => {
+            if yes {
+                return Ok(0)
+            }
+            Err("expected empty")
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn path_basename(path: string) -> string {
+    let parts = strings.split(path, "/")
+    if parts.len() == 0 {
+        return path
+    }
+    parts[parts.len() - 1]
+}
+
+fn walk_into(dir: string, include_files: bool, include_dirs: bool) -> Result<Vec<string>, string> {
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            let mut out = Vec::new()
+            for entry in entries {
+                let path = entry.path()
+                if entry.is_dir() {
+                    if include_dirs {
+                        out.push("${path}")
+                    }
+                    match walk_into(path, include_files, include_dirs) {
+                        Ok(nested) => {
+                            for p in nested {
+                                out.push(p)
+                            }
+                        },
+                        Err(e) => return Err(e),
+                    }
+                } else if entry.is_file() {
+                    if include_files {
+                        out.push(path)
+                    }
+                }
+            }
+            Ok(out)
+        },
+        Err(e) => Err(e),
+    }
+}

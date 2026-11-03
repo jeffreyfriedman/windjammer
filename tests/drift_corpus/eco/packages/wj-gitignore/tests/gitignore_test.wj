@@ -1,0 +1,103 @@
+use crate::Rule
+use crate::parse
+use crate::is_ignored
+use crate::filter_unignored
+
+@test
+fn test_blank_lines_and_comments_are_skipped() {
+    let rules = parse("# build output\n\n   \ntarget\n")
+    assert_eq(rules.len(), 1)
+    assert_eq(rules[0].pattern, "target")
+}
+
+@test
+fn test_parse_flags() {
+    let rules = parse("!keep.log\nbuild/\n/root.txt\nsrc/*.o\n")
+    assert_eq(rules.len(), 4)
+    assert(rules[0].negated, "bang negates")
+    assert_eq(rules[0].pattern, "keep.log")
+    assert(rules[1].dir_only, "trailing slash is dir only")
+    assert_eq(rules[1].pattern, "build")
+    assert(rules[2].anchored, "leading slash anchors")
+    assert_eq(rules[2].pattern, "root.txt")
+    assert(rules[3].anchored, "inner slash anchors")
+}
+
+@test
+fn test_unanchored_name_matches_at_any_depth() {
+    let rules = parse("*.log\n")
+    assert(is_ignored(rules, "a.log", false), "top level")
+    assert(is_ignored(rules, "deep/er/b.log", false), "nested")
+    assert(!is_ignored(rules, "a.txt", false), "other extension")
+}
+
+@test
+fn test_star_does_not_match_substring_of_name() {
+    let rules = parse("*.o\n")
+    assert(!is_ignored(rules, "foo.obj", false), "foo.obj is not *.o")
+}
+
+@test
+fn test_dir_only_rule_ignores_dirs_not_files() {
+    let rules = parse("build/\n")
+    assert(is_ignored(rules, "build", true), "dir named build")
+    assert(!is_ignored(rules, "build", false), "file named build")
+}
+
+@test
+fn test_files_inside_ignored_dir_are_ignored() {
+    let rules = parse("target/\n")
+    assert(is_ignored(rules, "target/debug/app", false), "child of ignored dir")
+    assert(is_ignored(rules, "crates/x/target/out.txt", false), "nested ignored dir")
+    assert(!is_ignored(rules, "src/main.wj", false), "unrelated")
+}
+
+@test
+fn test_anchored_rule_only_matches_from_root() {
+    let rules = parse("/todo.txt\n")
+    assert(is_ignored(rules, "todo.txt", false), "root")
+    assert(!is_ignored(rules, "sub/todo.txt", false), "not nested")
+}
+
+@test
+fn test_inner_slash_pattern_is_anchored() {
+    let rules = parse("docs/*.tmp\n")
+    assert(is_ignored(rules, "docs/a.tmp", false), "match")
+    assert(!is_ignored(rules, "other/docs/a.tmp", false), "anchored")
+    assert(!is_ignored(rules, "docs/sub/a.tmp", false), "single segment star")
+}
+
+@test
+fn test_double_star_prefix() {
+    let rules = parse("**/cache/*.bin\n")
+    assert(is_ignored(rules, "cache/a.bin", false), "zero segments")
+    assert(is_ignored(rules, "x/y/cache/a.bin", false), "many segments")
+}
+
+@test
+fn test_negation_reincludes_and_last_rule_wins() {
+    let rules = parse("*.log\n!keep.log\n")
+    assert(is_ignored(rules, "a.log", false), "ignored")
+    assert(!is_ignored(rules, "keep.log", false), "re-included")
+    let flipped = parse("!keep.log\n*.log\n")
+    assert(is_ignored(flipped, "keep.log", false), "later rule wins")
+}
+
+@test
+fn test_cannot_reinclude_file_under_ignored_dir() {
+    let rules = parse("out/\n!out/keep.txt\n")
+    assert(is_ignored(rules, "out/keep.txt", false), "parent dir excluded")
+}
+
+@test
+fn test_filter_unignored_keeps_order() {
+    let mut paths = Vec::new()
+    paths.push("src/a.wj")
+    paths.push("target/x")
+    paths.push("b.log")
+    paths.push("README.md")
+    let kept = filter_unignored("target/\n*.log\n", paths)
+    assert_eq(kept.len(), 2)
+    assert_eq(kept[0], "src/a.wj")
+    assert_eq(kept[1], "README.md")
+}

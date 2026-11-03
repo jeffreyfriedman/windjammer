@@ -1,0 +1,77 @@
+// TDD: version string is the CI smoke contract for wj-hello.
+
+use crate::domain::crate_name
+use crate::domain::require_identity
+use crate::domain::require_zero_major
+use crate::domain::semver
+use crate::domain::version
+use std::strings
+
+fn test_version_string() {
+    let v = version()
+    assert_eq(v, "wj-hello 0.1.0")
+}
+
+fn test_version_is_non_empty() {
+    let v = version()
+    assert(v.len() > 0, "version must not be empty")
+}
+
+fn test_crate_name_and_semver() {
+    assert_eq(crate_name(), "wj-hello")
+    assert_eq(semver(), "0.1.0")
+    assert_eq(version(), "${crate_name()} ${semver()}")
+}
+
+fn test_is_zero_major_and_matches_identity() {
+    use crate::domain::is_zero_major
+    use crate::domain::matches_identity
+    assert(is_zero_major(), "0.x is zero major")
+    assert(matches_identity("wj-hello", "0.1.0"), "exact identity")
+    assert(!matches_identity("other", "0.1.0"), "wrong crate")
+    assert(!matches_identity("wj-hello", "9.9.9"), "wrong semver")
+}
+
+fn test_require_crate() {
+    use crate::domain::require_crate
+    match require_crate("wj-hello") {
+        Ok(name) => assert_eq(name, "wj-hello"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+    match require_crate("wrong") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(strings.contains(msg, "wrong"), "mentions expected"),
+    }
+}
+
+fn test_require_semver_and_is_smoke_identity() {
+    use crate::domain::is_smoke_identity
+    use crate::domain::require_semver
+    match require_semver("0.1.0") {
+        Ok(v) => assert_eq(v, "0.1.0"),
+        Err(_) => assert(false, "current semver"),
+    }
+    match require_semver("1.0.0") {
+        Ok(_) => assert(false, "stable must Err"),
+        Err(msg) => assert(strings.contains(msg, "semver"), "mentions semver"),
+    }
+    assert(is_smoke_identity(), "name and semver line")
+}
+
+fn test_require_zero_major() {
+    match require_zero_major() {
+        Ok(v) => assert(strings.starts_with(v, "0."), "zero major"),
+        Err(_) => assert(false, "smoke is 0.x"),
+    }
+}
+
+fn test_require_identity() {
+    match require_identity("wj-hello", "0.1.0") {
+        Ok(line) => assert_eq(line, "wj-hello 0.1.0"),
+        Err(_) => assert(false, "exact identity"),
+    }
+    match require_identity("other", "0.1.0") {
+        Ok(_) => assert(false, "wrong crate must Err"),
+        Err(msg) => assert(strings.contains(msg, "identity"), "mentions identity"),
+    }
+}

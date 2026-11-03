@@ -1,0 +1,73 @@
+use std::json
+use crate::domain::inputs::MemberInput
+use crate::domain::inputs::ProjectInput
+use crate::domain::model::User
+use crate::domain::reply::Reply
+use crate::domain::reply::error_reply
+use crate::domain::reply::from_json
+use crate::domain::reply::no_content
+use crate::domain::rules::can_admin
+use crate::domain::rules::check_member_role
+use crate::domain::rules::check_project_name
+use crate::domain::store::TaskStore
+
+pub fn project_list(store: TaskStore, user: User) -> Reply {
+    from_json(200, json.to_string(store.projects_for(user.id)))
+}
+
+pub fn project_create(store: TaskStore, user: User, body: string) -> Reply {
+    let input: ProjectInput = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    match check_project_name(input.name) {
+        Ok(_) => {},
+        Err(e) => return error_reply(422, e),
+    }
+    let project = store.add_project(input.name, input.description.unwrap_or(""), user.id)
+    from_json(201, json.to_string(project))
+}
+
+pub fn project_show(store: TaskStore, user: User, project_id: int) -> Reply {
+    let project = match store.project(project_id) {
+        Some(p) => p,
+        None => return error_reply(404, "project not found"),
+    }
+    if store.role_in(project_id, user.id) == "" {
+        return error_reply(403, "not a member of this project")
+    }
+    from_json(200, json.to_string(project))
+}
+
+pub fn project_remove(store: TaskStore, user: User, project_id: int) -> Reply {
+    if store.project(project_id).is_none() {
+        return error_reply(404, "project not found")
+    }
+    if !can_admin(store.role_in(project_id, user.id)) {
+        return error_reply(403, "only owners and admins can delete a project")
+    }
+    store.delete_project(project_id)
+    no_content()
+}
+
+pub fn project_set_member(store: TaskStore, user: User, project_id: int, body: string) -> Reply {
+    if store.project(project_id).is_none() {
+        return error_reply(404, "project not found")
+    }
+    if !can_admin(store.role_in(project_id, user.id)) {
+        return error_reply(403, "only owners and admins can manage members")
+    }
+    let input: MemberInput = match json.parse_string(body) {
+        Ok(value) => value,
+        Err(_) => return error_reply(400, "invalid json"),
+    }
+    match check_member_role(input.role) {
+        Ok(_) => {},
+        Err(e) => return error_reply(422, e),
+    }
+    if store.user(input.user_id).is_none() {
+        return error_reply(404, "user not found")
+    }
+    store.set_member(project_id, input.user_id, input.role)
+    from_json(200, json.to_string(store.members_of(project_id)))
+}

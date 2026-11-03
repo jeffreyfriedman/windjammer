@@ -1,0 +1,19 @@
+[package]
+name = "wj-fetch"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_http_client = { path = "../../packages/wj-http-client/build" }
+wj_json_util = { path = "../../packages/wj-json-util/build" }
+wj_retry = { path = "../../packages/wj-retry/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[capabilities]
+# a request to a reserved host name that cannot resolve (the failure path of the fetch loop)
+net.connect = ["example.invalid.test"]

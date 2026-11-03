@@ -1,0 +1,17 @@
+// `parts.len() - 1` on a local bound from a call, returned from a function declared `-> int`: after the
+// usize class landed in the numeric solver the compiled backend emits `parts.len() - 1_i64`.
+fn pieces(text: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    out.push(text)
+    out.push(text)
+    out
+}
+
+fn gaps(text: string) -> int {
+    let parts = pieces(text)
+    parts.len() - 1
+}
+
+fn main() {
+    println("${gaps("a")}")
+}

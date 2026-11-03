@@ -1,0 +1,74 @@
+use crate::adapters::read_argv
+use crate::adapters::run_apply
+use crate::adapters::run_list
+use crate::adapters::run_status
+use crate::domain::config_from_env
+use crate::domain::format_apply_result
+use crate::domain::format_list_result
+use crate::adapters::run_validate
+use crate::domain::format_validate_result
+use crate::domain::parse_command
+use std::process
+
+fn main() {
+    let config = config_from_env()
+    let argv = read_argv()
+    match parse_command(argv, config) {
+        Ok(cmd) => {
+            if cmd.kind == "apply" {
+                match run_apply(cmd.url, cmd.dir) {
+                    Ok(report) => {
+                        let msg = format_apply_result(report.applied_count, report.applied_versions)
+                        println("{}", msg)
+                    },
+                    Err(e) => {
+                        eprintln("wj-migrate-cli: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "status" {
+                match run_status(cmd.url, cmd.dir) {
+                    Ok(report) => {
+                        let msg = format_status_result(report.applied_versions, report.pending_versions)
+                        println("{}", msg)
+                    },
+                    Err(e) => {
+                        eprintln("wj-migrate-cli: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "list" {
+                match run_list(cmd.dir) {
+                    Ok(lines) => {
+                        let msg = format_list_result(lines)
+                        println("{}", msg)
+                    },
+                    Err(e) => {
+                        eprintln("wj-migrate-cli: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "validate" {
+                match run_validate(cmd.dir) {
+                    Ok(count) => {
+                        let msg = format_validate_result(count)
+                        println("{}", msg)
+                    },
+                    Err(e) => {
+                        eprintln("wj-migrate-cli: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else {
+                eprintln("wj-migrate-cli: ${USAGE}")
+                process.exit(1)
+            }
+        },
+        Err(e) => {
+            eprintln("wj-migrate-cli: ${e}")
+            process.exit(1)
+        },
+    }
+}
+
+const USAGE: string = "usage: wj-migrate-cli apply|status|list|validate [--url URL] [--dir DIR]"

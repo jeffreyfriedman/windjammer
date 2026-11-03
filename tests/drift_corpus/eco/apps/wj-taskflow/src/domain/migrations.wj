@@ -1,0 +1,18 @@
+use wj_migrate::migrations_from_filenames
+use wj_migrate::pending
+use wj_migrate::Migration
+
+/// Schema files shipped with the app (`migrations/*.sql`), in order.
+pub fn schema_migrations() -> Result<Vec<Migration>, string> {
+    let mut names = Vec::new()
+    names.push("001_initial_schema.sql")
+    migrations_from_filenames(names)
+}
+
+/// Migrations still to apply given the versions already recorded in the database.
+pub fn pending_versions(applied: Vec<int>) -> Result<Vec<Migration>, string> {
+    match schema_migrations() {
+        Ok(all) => Ok(pending(all, applied)),
+        Err(e) => Err(e),
+    }
+}

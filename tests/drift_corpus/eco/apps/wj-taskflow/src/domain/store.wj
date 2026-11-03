@@ -1,0 +1,266 @@
+use crate::domain::model::Member
+use crate::domain::model::Project
+use crate::domain::model::Task
+use crate::domain::model::TaskFilter
+use crate::domain::model::User
+
+/// In-memory persistence port. A database adapter would offer the same operations
+/// (the reference schema is `migrations/001_initial_schema.sql`).
+pub struct TaskStore {
+    users: Vec<User>,
+    projects: Vec<Project>,
+    members: Vec<Member>,
+    tasks: Vec<Task>,
+    next_user: int,
+    next_project: int,
+    next_task: int,
+}
+
+impl TaskStore {
+    pub fn new() -> TaskStore {
+        TaskStore {
+            users: Vec::new(),
+            projects: Vec::new(),
+            members: Vec::new(),
+            tasks: Vec::new(),
+            next_user: 1,
+            next_project: 1,
+            next_task: 1,
+        }
+    }
+
+    pub fn add_user(self, username: string, email: string, password_hash: string) -> Result<User, string> {
+        for u in self.users {
+            if u.username == username {
+                return Err("username already taken")
+            }
+            if u.email.to_lowercase() == email.to_lowercase() {
+                return Err("email already registered")
+            }
+        }
+        let user = User {
+            id: self.next_user,
+            username: username,
+            email: email,
+            password_hash: password_hash,
+        }
+        self.next_user = self.next_user + 1
+        self.users.push(user.clone())
+        Ok(user)
+    }
+
+    pub fn user(self, id: int) -> Option<User> {
+        for u in self.users {
+            if u.id == id {
+                return Some(u.clone())
+            }
+        }
+        None
+    }
+
+    pub fn user_by_name(self, username: string) -> Option<User> {
+        for u in self.users {
+            if u.username == username {
+                return Some(u.clone())
+            }
+        }
+        None
+    }
+
+    /// Create a project; its creator becomes the owner.
+    pub fn add_project(self, name: string, description: string, owner_id: int) -> Project {
+        let project = Project {
+            id: self.next_project,
+            name: name,
+            description: description,
+            owner_id: owner_id,
+        }
+        self.next_project = self.next_project + 1
+        self.projects.push(project.clone())
+        self.set_member(project.id, owner_id, "owner")
+        project
+    }
+
+    pub fn project(self, id: int) -> Option<Project> {
+        for p in self.projects {
+            if p.id == id {
+                return Some(p.clone())
+            }
+        }
+        None
+    }
+
+    /// Role of `user_id` in `project_id`, or "" when not a member.
+    pub fn role_in(self, project_id: int, user_id: int) -> string {
+        for m in self.members {
+            if m.project_id == project_id && m.user_id == user_id {
+                return m.role.clone()
+            }
+        }
+        ""
+    }
+
+    pub fn set_member(self, project_id: int, user_id: int, role: string) {
+        let mut kept = Vec::new()
+        for m in self.members {
+            if !(m.project_id == project_id && m.user_id == user_id) {
+                kept.push(m.clone())
+            }
+        }
+        kept.push(Member {
+            project_id: project_id,
+            user_id: user_id,
+            role: role,
+        })
+        self.members = kept
+    }
+
+    pub fn members_of(self, project_id: int) -> Vec<Member> {
+        let mut out = Vec::new()
+        for m in self.members {
+            if m.project_id == project_id {
+                out.push(m.clone())
+            }
+        }
+        out
+    }
+
+    pub fn projects_for(self, user_id: int) -> Vec<Project> {
+        let mut out = Vec::new()
+        for p in self.projects {
+            if self.role_in(p.id, user_id) != "" {
+                out.push(p.clone())
+            }
+        }
+        out
+    }
+
+    /// Remove a project with its tasks and memberships; false when it did not exist.
+    pub fn delete_project(self, id: int) -> bool {
+        if self.project(id).is_none() {
+            return false
+        }
+        let mut projects = Vec::new()
+        for p in self.projects {
+            if p.id != id {
+                projects.push(p.clone())
+            }
+        }
+        self.projects = projects
+        let mut members = Vec::new()
+        for m in self.members {
+            if m.project_id != id {
+                members.push(m.clone())
+            }
+        }
+        self.members = members
+        let mut tasks = Vec::new()
+        for t in self.tasks {
+            if t.project_id != id {
+                tasks.push(t.clone())
+            }
+        }
+        self.tasks = tasks
+        true
+    }
+
+    pub fn add_task(self, project_id: int, title: string, description: string, status: string, priority: string, created_by: int) -> Task {
+        let task = Task {
+            id: self.next_task,
+            project_id: project_id,
+            title: title,
+            description: description,
+            status: status,
+            priority: priority,
+            assigned_to: None,
+            created_by: created_by,
+        }
+        self.next_task = self.next_task + 1
+        self.tasks.push(task.clone())
+        task
+    }
+
+    pub fn task(self, id: int) -> Option<Task> {
+        for t in self.tasks {
+            if t.id == id {
+                return Some(t.clone())
+            }
+        }
+        None
+    }
+
+    pub fn tasks_of(self, project_id: int, filter: TaskFilter) -> Vec<Task> {
+        let needle = filter.text.to_lowercase()
+        let mut out = Vec::new()
+        for t in self.tasks {
+            if t.project_id != project_id {
+                continue
+            }
+            if filter.status != "" && t.status != filter.status {
+                continue
+            }
+            if filter.priority != "" && t.priority != filter.priority {
+                continue
+            }
+            if filter.assignee != 0 && t.assigned_to != Some(filter.assignee) {
+                continue
+            }
+            if needle != "" {
+                let hay = "${t.title} ${t.description}".to_lowercase()
+                if !hay.contains(needle) {
+                    continue
+                }
+            }
+            out.push(t.clone())
+        }
+        out
+    }
+
+    pub fn assign_task(self, task_id: int, user_id: int) -> bool {
+        let mut found = false
+        let mut tasks = Vec::new()
+        for t in self.tasks {
+            let mut next = t.clone()
+            if t.id == task_id {
+                next.assigned_to = Some(user_id)
+                found = true
+            }
+            tasks.push(next)
+        }
+        self.tasks = tasks
+        found
+    }
+
+    /// Apply the given fields; returns the updated task, or None when `id` is unknown.
+    pub fn update_task(self, id: int, title: Option<string>, description: Option<string>, status: Option<string>, priority: Option<string>) -> Option<Task> {
+        let mut updated = None
+        let mut tasks = Vec::new()
+        for t in self.tasks {
+            let mut next = t.clone()
+            if t.id == id {
+                next.title = title.clone().unwrap_or(t.title.clone())
+                next.description = description.clone().unwrap_or(t.description.clone())
+                next.status = status.clone().unwrap_or(t.status.clone())
+                next.priority = priority.clone().unwrap_or(t.priority.clone())
+                updated = Some(next.clone())
+            }
+            tasks.push(next)
+        }
+        self.tasks = tasks
+        updated
+    }
+
+    pub fn delete_task(self, id: int) -> bool {
+        let mut found = false
+        let mut tasks = Vec::new()
+        for t in self.tasks {
+            if t.id == id {
+                found = true
+            } else {
+                tasks.push(t.clone())
+            }
+        }
+        self.tasks = tasks
+        found
+    }
+}

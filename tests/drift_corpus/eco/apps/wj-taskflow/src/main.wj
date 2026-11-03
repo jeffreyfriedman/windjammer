@@ -1,0 +1,22 @@
+use std::env
+
+use crate::adapters::serve
+use crate::domain::Taskflow
+use crate::domain::config_from_env
+
+fn main() {
+    let config = config_from_env()
+    if config.jwt_secret == "" {
+        eprintln("wj-taskflow: set TASKFLOW_JWT_SECRET")
+        std::process::exit(2)
+    }
+    let port = match env::var("PORT") {
+        Ok(text) => text.parse::<int>().unwrap_or(8080),
+        Err(_) => 8080,
+    }
+    println("wj-taskflow listening on http://0.0.0.0:${port}")
+    match serve(port, Taskflow::new(config)) {
+        Ok(_) => {},
+        Err(e) => eprintln("wj-taskflow: ${e}"),
+    }
+}

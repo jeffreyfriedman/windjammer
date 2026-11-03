@@ -1,0 +1,42 @@
+/// A frame received from a client (JSON text over the socket).
+pub struct InFrame {
+    pub kind: string,
+    pub token: Option<string>,
+    pub room: Option<string>,
+    pub text: Option<string>,
+    pub to: Option<string>,
+    pub limit: Option<int>,
+}
+
+pub struct HistoryItem {
+    pub from: string,
+    pub text: string,
+    pub ts: int,
+}
+
+/// A frame sent to a client. `kind` is one of ok, error, message, dm, presence, history.
+pub struct OutFrame {
+    pub kind: string,
+    pub room: string,
+    pub from: string,
+    pub text: string,
+    pub users: Vec<string>,
+    pub items: Vec<HistoryItem>,
+}
+
+/// One outgoing frame addressed to one connection.
+pub struct Delivery {
+    pub conn: int,
+    pub text: string,
+}
+
+pub fn blank_frame(kind: string) -> OutFrame {
+    OutFrame {
+        kind: kind,
+        room: "",
+        from: "",
+        text: "",
+        users: Vec::new(),
+        items: Vec::new(),
+    }
+}

@@ -1,0 +1,79 @@
+// Closures that capture and return Option/enum/Vec values: by-value captures of an Option, a counter
+// closure that returns Option, closures called through their bindings, and a captured value that is
+// later shadowed.
+enum Tag {
+    A,
+    B(int),
+}
+
+fn show(x: Option<int>) -> string {
+    match x {
+        Some(v) => "some ${v}",
+        None => "none",
+    }
+}
+
+fn tag_text(t: Tag) -> string {
+    match t {
+        Tag::A => "A",
+        Tag::B(n) => "B${n}",
+    }
+}
+
+fn main() {
+    let maybe: Option<int> = Some(7)
+    let get = || maybe
+    println(show(get()))
+    let nothing: Option<int> = None
+    let get_nothing = || nothing
+    println(show(get_nothing()))
+    let limit = 3
+    let mut count = 0
+    let mut next = || {
+        count += 1
+        if count <= limit {
+            Some(count * count)
+        } else {
+            None
+        }
+    }
+    let mut seen = ""
+    let mut i = 0
+    while i < 5 {
+        match next() {
+            Some(v) => { seen = seen + "${v} " }
+            None => { seen = seen + "end " }
+        }
+        i += 1
+    }
+    println(seen)
+    let five: int = 5
+    let add5 = |x: int| x + five
+    let add9 = |x: int| x + 9
+    println("${add5(1)} ${add9(1)}")
+    let four: int = 4
+    let nine: int = 9
+    let t = Tag::B(four)
+    let tf = move || tag_text(Tag::B(nine))
+    println("${tag_text(t)} ${tf()}")
+    let v = [1, 2, 3]
+    let total = || {
+        let mut s = 0
+        for x in v {
+            s += x
+        }
+        s
+    }
+    println("${total()}")
+    let base: Option<int> = Some(2)
+    let one: int = 1
+    let base = match base {
+        Some(b) => Some(b + one),
+        None => None,
+    }
+    let late = || base
+    println(show(late()))
+    let one_value: int = 1
+    let pick = |flag: bool| if flag { Some(one_value) } else { None }
+    println("${show(pick(true))} ${show(pick(false))}")
+}

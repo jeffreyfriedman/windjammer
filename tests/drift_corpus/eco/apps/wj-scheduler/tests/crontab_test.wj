@@ -1,0 +1,168 @@
+use crate::domain::parse_crontab_line
+use crate::domain::parse_crontab
+use crate::domain::due_count
+use crate::domain::due_schedules
+use crate::domain::expr_count
+use crate::domain::parse_civil
+use crate::domain::require_first
+use crate::domain::require_last
+use crate::domain::require_only
+use std::strings
+
+fn test_parse_crontab_line_skips_blank() {
+    match parse_crontab_line("   ") {
+        Some(_e) => assert(false, "blank should skip"),
+        None => {},
+    }
+}
+
+fn test_parse_crontab_line_skips_comment() {
+    match parse_crontab_line("# nightly job") {
+        Some(_e) => assert(false, "comment should skip"),
+        None => {},
+    }
+}
+
+fn test_parse_crontab_line_keeps_expr() {
+    match parse_crontab_line("*/5 * * * *") {
+        Some(expr) => assert_eq(expr, "*/5 * * * *"),
+        None => assert(false, "expr should be kept"),
+    }
+}
+
+fn test_parse_crontab_line_keeps_alias() {
+    match parse_crontab_line("  @hourly  ") {
+        Some(expr) => assert_eq(expr, "@hourly"),
+        None => assert(false, "alias should be kept"),
+    }
+}
+
+fn test_parse_crontab_collects_valid_lines() {
+    let text = "# jobs\n\n@hourly\n*/15 * * * *\n"
+    match parse_crontab(text) {
+        Ok(exprs) => {
+            assert_eq(exprs.len(), 2)
+            assert_eq(exprs[0], "@hourly")
+            assert_eq(exprs[1], "*/15 * * * *")
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_crontab_rejects_bad_expr() {
+    let text = "@hourly\n* * *\n"
+    assert(parse_crontab(text).is_err(), "bad expr should fail")
+}
+
+fn test_due_schedules_filters_matching() {
+    match parse_civil("2026-01-01T09:00") {
+        Ok(at) => {
+            let mut exprs = Vec::new()
+            exprs.push("@hourly")
+            exprs.push("0 8 * * *")
+            exprs.push("*/5 * * * *")
+            match due_schedules(exprs, at) {
+                Ok(due) => {
+                    assert_eq(due.len(), 2)
+                    assert_eq(due[0], "@hourly")
+                    assert_eq(due[1], "*/5 * * * *")
+                },
+                Err(e) => assert(false, e),
+            }
+        },
+        Err(_e) => assert(false, "civil"),
+    }
+}
+
+fn test_due_schedules_empty_when_none_match() {
+    match parse_civil("2026-01-01T09:07") {
+        Ok(at) => {
+            let mut exprs = Vec::new()
+            exprs.push("@hourly")
+            exprs.push("0 8 * * *")
+            match due_schedules(exprs, at) {
+                Ok(due) => assert_eq(due.len(), 0),
+                Err(e) => assert(false, e),
+            }
+        },
+        Err(_e) => assert(false, "civil"),
+    }
+}
+
+fn sample_exprs() -> Vec<string> {
+    let mut exprs = Vec::new()
+    exprs.push("@hourly")
+    exprs.push("*/5 * * * *")
+    exprs
+}
+
+fn test_expr_helpers_and_due_count() {
+    assert_eq(expr_count(sample_exprs()), 2)
+    match parse_civil("2026-01-01T09:00") {
+        Ok(at) => {
+            match due_count(sample_exprs(), at) {
+                Ok(n) => assert_eq(n, 2),
+                Err(e) => assert(false, e),
+            }
+        },
+        Err(_) => assert(false, "civil"),
+    }
+}
+
+fn test_last_expr_and_only_expr() {
+    use crate::domain::last_expr
+    use crate::domain::only_expr
+    match last_expr(sample_exprs()) {
+        Some(e) => assert_eq(e, "*/5 * * * *"),
+        None => assert(false, "last"),
+    }
+    match last_expr(Vec::new()) {
+        Some(_) => assert(false, "empty last"),
+        None => {},
+    }
+    let mut one = Vec::new()
+    one.push("@daily")
+    match only_expr(one) {
+        Some(e) => assert_eq(e, "@daily"),
+        None => assert(false, "one expr"),
+    }
+    match only_expr(sample_exprs()) {
+        Some(_) => assert(false, "two exprs is not only"),
+        None => {},
+    }
+}
+
+fn test_require_only() {
+    let mut one = Vec::new()
+    one.push("@daily")
+    match require_only(one) {
+        Ok(e) => assert_eq(e, "@daily"),
+        Err(_) => assert(false, "one expr"),
+    }
+    match require_only(sample_exprs()) {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "one"), "mentions one"),
+    }
+}
+
+fn test_require_last() {
+    match require_last(sample_exprs()) {
+        Ok(e) => assert_eq(e, "*/5 * * * *"),
+        Err(_) => assert(false, "last expr"),
+    }
+    match require_last(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "last"), "mentions last"),
+    }
+}
+
+fn test_require_first() {
+    match require_first(sample_exprs()) {
+        Ok(e) => assert_eq(e, "@hourly"),
+        Err(_) => assert(false, "first expr"),
+    }
+    match require_first(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}
