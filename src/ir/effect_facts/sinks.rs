@@ -209,7 +209,7 @@ pub fn may_be_sink(path: &str) -> bool {
     match from_end.next() {
         Some(module) => matches!(
             module,
-            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap" | "mcp"
+            "fs" | "path" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap" | "mcp"
         ),
         None => false,
     }

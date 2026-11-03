@@ -357,6 +357,3 @@ pub(crate) fn ordering_of(v: &Value) -> Option<std::cmp::Ordering> {
     }
 }
 
-pub(crate) fn no_arg_unsupported(what: &str) -> super::error::Ctl {
-    unsupported(format!("`{}` is not implemented by the interpreter", what))
-}

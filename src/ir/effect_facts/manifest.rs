@@ -235,6 +235,29 @@ mod tests {
         assert!(r.check(&EffectKind::FsRead, Some("wj.toml")).is_ok());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_link_swapped_behind_the_programs_back_is_noticed_within_the_cache_ttl() {
+        let dir = std::env::temp_dir().join(format!("wj_ttl_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::create_dir_all(dir.join("b")).unwrap();
+        std::fs::write(dir.join("a/f.txt"), "a").unwrap();
+        std::fs::write(dir.join("b/f.txt"), "b").unwrap();
+        std::os::unix::fs::symlink(dir.join("a"), dir.join("l")).unwrap();
+        let mut g = Grant::sandbox(&dir);
+        g.allow(EffectKind::FsRead, "./a/**");
+        let through_link = dir.join("l/f.txt").to_string_lossy().to_string();
+        assert!(g.check(&EffectKind::FsRead, Some(&through_link)).is_ok());
+        assert!(g.check(&EffectKind::FsRead, Some(&through_link)).is_ok(), "served again, from the cache or not");
+        // another process points the link at a directory outside the grant
+        std::fs::remove_file(dir.join("l")).unwrap();
+        std::os::unix::fs::symlink(dir.join("b"), dir.join("l")).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        assert!(g.check(&EffectKind::FsRead, Some(&through_link)).is_err(), "a decision older than the TTL is made again");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn local_profile_is_the_project_directory() {
         let g = Grant::local_profile(&root());
