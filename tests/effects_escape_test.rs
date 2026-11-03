@@ -121,6 +121,13 @@ fn cases() -> Vec<Case> {
         legit("bound/spelled-manifest-pattern-grants-manifests", "[capabilities]\nfs.write = [\"$ROOT/out/**/wj.toml\"]\n", "use std::fs", "let r = fs::write(\"$ROOT/out/p/wj.toml\", \"pwn\")\n    println(\"DONE ${r.is_ok()}\")"),
         legit("bound/spelled-lock-pattern-grants-locks", "[capabilities]\nfs.write = [\"$ROOT/out/*.wj-capabilities.lock\"]\n", "use std::fs", "let r = fs::write(\"$ROOT/out/a.wj-capabilities.lock\", \"pwn\")\n    println(\"DONE ${r.is_ok()}\")"),
         legit("bound/exact-source-grants-it", "[capabilities]\nfs.write = [\"$ROOT/src/main.wj\"]\n", "use std::fs", "let r = fs::write(\"$ROOT/src/main.wj\", \"pwn\")\n    println(\"DONE ${r.is_ok()}\")"),
+        // ---- the decision cache must not outlive the file system it was made against (mutation-checked: without the
+        // generation bump on `fs.write`, the second read below is served from the cache and runs instead of stopping)
+        esc("cache/read-then-swap-in-a-link", "[capabilities]\nfs.read = [\"$ROOT/out/**\"]\nfs.write = [\"$ROOT/out/**\", \"$ROOT/outside/**\"]\n", "use std::fs", "let a = fs::read_to_string(\"$ROOT/out/a.txt\")\n    let m = fs::rename(\"$ROOT/out/olink\", \"$ROOT/out/a.txt\")\n    let b = fs::read_to_string(\"$ROOT/out/a.txt\")\n    println(\"DONE\")", "fs.read"),
+        legit("cache/repeated-reads-of-one-path", FS, "use std::fs", "let a = fs::read_to_string(\"$ROOT/data/ok.txt\")\n    let b = fs::read_to_string(\"$ROOT/data/ok.txt\")\n    let c = fs::read_to_string(\"$ROOT/data/ok.txt\")\n    println(\"DONE ${a.unwrap()}${b.unwrap()}${c.unwrap()}\")"),
+        // `path::` functions are the `fs::` functions under the runtime's name; the gate's prefilter once skipped the module
+        esc("path/exists-outside-scope", FS, "use std::path", "let r = path::exists(\"$ROOT/secret.txt\")\n    println(\"DONE\")", "fs.read"),
+        legit("path/exists-inside-scope", FS, "use std::path", "let r = path::exists(\"$ROOT/data/ok.txt\")\n    println(\"DONE ${r}\")"),
         esc("self/chdir-then-relative", FS, "use std::fs", "let r = fs::set_current_dir(\"$ROOT/data\")\n    println(\"DONE\")", "env.write"),
         // ---- filesystem: legitimate use inside the scope
         legit("fs/ok-read", FS, "use std::fs", "let r = fs::read_to_string(\"$ROOT/data/ok.txt\")\n    println(\"DONE ${r.unwrap()}\")"),
@@ -285,6 +292,7 @@ fn fixture() -> PathBuf {
 }
 
 fn run_case(c: &Case) -> (i32, String, String, PathBuf) {
+    windjammer::ir::effect_facts::reset_decision_cache();
     let root = fixture();
     let subst = |s: &str| s.replace("$ROOT", &root.display().to_string());
     let program = format!("{}\nfn main() {{\n    {}\n}}\n", c.uses, subst(c.body));

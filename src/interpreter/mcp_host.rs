@@ -123,10 +123,6 @@ impl McpHost {
         Err(format!("unknown endpoint `{spec}`: use mock:FILE or stdio:COMMAND ARGS"))
     }
 
-    pub fn is_bound(&self, name: &str) -> bool {
-        self.binds.contains_key(name)
-    }
-
     /// `Ok(text)` is a result, `Err(text)` a tool error or a host problem; both reach the script as values.
     pub fn call(&mut self, server: &str, tool: &str, args_json: &str) -> Result<String, String> {
         let Some(ep) = self.binds.get_mut(server) else {

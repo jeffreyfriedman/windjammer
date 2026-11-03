@@ -184,19 +184,6 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    pub(in crate::codegen::rust) fn struct_fields_include_vec_or_array(
-        &self,
-        struct_name: &str,
-    ) -> bool {
-        let base = struct_name.split('<').next().unwrap_or(struct_name);
-        let Some(fields) = self.lookup_struct_field_types(base) else {
-            return false;
-        };
-        fields
-            .values()
-            .any(|t| matches!(t, Type::Vec(_) | Type::Array(_, _)))
-    }
-
     /// P3.353: void builders / narrow-return fns default coordinate locals to i32/u32 width.
     pub(in crate::codegen::rust) fn function_prefers_i32_coord_locals(&self) -> bool {
         let Some(rt) = &self.current_function_return_type else {

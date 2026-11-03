@@ -34,7 +34,7 @@ pub mod violations;
 
 pub use analysis::{analyze, analyze_with, EffectFacts, FnEffects};
 pub use crates::CrateEffects;
-pub use grant::{Denial, Grant, Scope};
+pub use grant::{reset_decision_cache, Denial, Grant, Scope};
 pub use manifest::grant_from_manifest_text;
 pub use kind::EffectKind;
 pub use lock::CapLock;
