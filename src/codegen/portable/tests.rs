@@ -31,9 +31,11 @@ fn js_represents_wide_ints_as_bigint_and_narrow_as_number() {
 }
 
 #[test]
-fn untyped_literals_adopt_usize_from_len_comparison() {
+fn untyped_literals_compared_with_len_stay_int() {
+    // ADR-0015: `len()` is an `int` in the portable backends; the counter stays `int64` and the length is
+    // converted (earlier expectation: the counter adopted Go's `uint`).
     let out = go("fn main() {\n    let v = vec![1, 2, 3]\n    let mut i = 0\n    while i < v.len() {\n        i += 1\n    }\n}\n");
-    assert!(out.contains("var i uint = uint(0)"), "{out}");
+    assert!(out.contains("var i int64 = int64(0)") && out.contains("int64(uint(len(v)))"), "{out}");
 }
 
 #[test]

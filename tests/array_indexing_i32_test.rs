@@ -69,10 +69,12 @@ fn test_array_index() {
 
     println!("Generated Rust:\n{}", rust_code);
 
-    // Verify auto-cast is generated
+    // `i` meets only the index use, so the numeric solver gives it the index width (ADR-0028,
+    // NUM-USIZE) and no cast is needed; an `int` `i` must be cast at the index.
+    let solved_usize = rust_code.contains("let i = 2_usize;") && rust_code.contains("items[i]");
     assert!(
-        rust_code.contains("i as usize") || rust_code.contains("(i as usize)"),
-        "Should generate auto-cast: items[i as usize]\nGenerated:\n{}",
+        solved_usize || rust_code.contains("i as usize"),
+        "Should index with a usize `i` or cast: items[i as usize]\nGenerated:\n{}",
         rust_code
     );
 
