@@ -632,6 +632,38 @@ Mutation checks. Without the generation bump on writes, `cache/read-then-swap-in
 
 Open: record on the non-sink workload is 1.5 to 2 points over its gate in this window; the cost is a fixed per-run setup, to be profiled next. The benchmark script `scripts/wj/bench_effects_overhead.wj` now builds and starts under `wj run --compiled` (with the packages it imports copied clean; the shared ecosystem checkout carries stale `gen/Cargo.toml` files that point at an older embedded runtime and collide in the lockfile), but a compiled script runs with its build directory as the working directory, so the workloads' repository-relative paths do not resolve and the measurement stops at the first run. Until that is fixed the figures above come from a small Python harness that runs the same arms (not in the repository). The cache does not help `fs.write` checks (each write starts a new generation by design).
 
+### Tight grant decisions (2026-11-03)
+
+**Cost curve** (sink-dense workload, 30k iterations of `fs::exists`, random and time; enforced against `WJ_CAPS=off` (0.119 s); CPU time, median of 18 interleaved runs per arm, load at most 18.7, private `wj` copy; gate 2x):
+
+| Decision cache time-to-live | Enforcement cost |
+|---|---|
+| 50 ms (previous default) | 1.14x |
+| 5 ms | 1.13x |
+| 1 ms | 1.13x |
+| **100 microseconds (new default)** | **1.20x to 1.22x** |
+| 30 microseconds | 1.49x |
+| 10 microseconds | 3.52x (the cache never hits) |
+| cache off | 3.52x to 3.56x |
+
+Any time-to-live down to 30 microseconds meets the 2x gate; 100 microseconds is the default because it keeps a margin of 0.8x under the gate (30 microseconds sits at the knee of the curve, where a slower machine tips into uncached cost). The trust window is 500 times shorter than before at the same cost. Invalidation is unchanged: every granted `fs.write` or `env.write` drops the cache, any `process` or `ffi` use or a second thread turns it off for the run.
+
+**The real fix: decide on the open file.** A name can be re-pointed between a check and an open (a link swapped by another process), an open file cannot. `Grant::open_read` opens the file first (read-only, no side effects), takes its canonical path from the descriptor (`fcntl(F_GETPATH)` on macOS, `/proc/self/fd` on Linux), runs the same grant rules on that path, and hands the same handle to the reader; nothing resolves the name a second time. A file that cannot be opened is decided by name (so an existing file outside the grant and a missing one both give the denial: no existence oracle); allowed, the caller gets its own I/O error. Denial text is byte-identical to the name-based one.
+
+Sink-by-sink split:
+
+| Sinks | Mechanism | Residual window |
+|---|---|---|
+| `fs::read_to_string`, `fs::read`, `fs::read_bytes` (interpreter and compiled runtime) | **fd-verified**, no cache, no name check beforehand (`sinks::FD_VERIFIED_READS`; the runtime audit requires each to open through `caps::open_read`) | none: the file that is read is the file that was checked |
+| `fs::exists`, `is_file`, `is_dir`, `metadata`, `canonicalize`, `read_dir`, `path::*` (they report, they do not return file content) | name check, `fs.read` decision cache of 100 microseconds | an answer about a name may describe a path that was re-pointed up to 100 microseconds earlier |
+| write sinks (`write`, `append`, `write_string`, `write_bytes`, `create_dir*`, `remove*`, `rename`, `copy` (destination), `db::connect`) | name check at the call, never cached | the time between the check and the operation (microseconds): an external actor with write access inside a granted directory can swap a link in that window |
+
+Threat model: external actors with write access inside a granted directory. The program itself cannot create or move a link without a granted write, which starts a new cache generation, so the cache never serves a decision made before the program's own change. Not covered: an actor that already has write access to the granted tree and races a write sink in the window above.
+
+Not done, designed: the same treatment for writes needs the parent directory descriptor (open the parent, take its canonical path from the descriptor, check `parent/name`, then `openat` the final component with `O_NOFOLLOW`, resolving a link in the last component by hand), and on Linux `openat2(RESOLVE_BENEATH)`; `copy` and `rename` need it for both operands. Opening a FIFO for reading blocks until a writer appears, even when the grant would deny it afterwards; a denied FIFO therefore costs a blocked open (not a leak).
+
+Tests (`tests/effects_fd_verify_test.rs`, independent oracle: the content of the files, GRANTED against DENIED-SECRET): a swapper re-points a link between the granted and the denied directory as fast as it can (create a temporary link, rename it over the link, as `ln -sfn` does) for 1.5 seconds while the reader reads through it. fd-verified read: 23,115 allowed reads, 24,699 denials, **0 reads of the denied file**. The same stress with the old order (check the name, then open the name) leaks within the first second, so the test can see the race. Cached checks: 1,859 allowed checks fell into a denied interval, the latest began 34 microseconds after the swap (bound: the time-to-live); the bound is exact, not statistical, because an entry older than the time-to-live is never served and an entry younger than it was made by a decision taken after the swap would have been a denial. Mutation checks: deciding on the name instead of the open file (Mutant A) gives 2,833 leaks and fails the test; serving cached entries without the expiry (Mutant B) fails the staleness test at 100.04 microseconds. `fs::read_to_string` of a file, 20,000 calls, enforced against off: about 2 microseconds more per call, inside the noise.
+
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 
 Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
