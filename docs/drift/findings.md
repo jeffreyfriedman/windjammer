@@ -38,7 +38,7 @@ Suggested fix direction: literals take the type of the expected/unified type, de
 | `nested_vec_index_by_value` | `let row = grid[r]` on a `Vec<Vec<int>>` parameter: generated `let row: Vec<i64> = &grid[r]` (E0308); needs a clone or a borrowed binding |
 | `map_get_loop_str` | `m.get(k)` with `k` the loop variable over a list of string literals: `get(&k)` is `&&str` against `HashMap<String, _>` (E0277) |
 | `closure_string_param_literal` | `\|who: string\| ...` called with a string literal: parameter `String`, argument `&str` (E0308) |
-| `self_by_value_reuse` | a `self`-by-value method that moves fields, then the value is used again: rustc E0382. The interpreter copies and prints; the compiled backend moves. A use-after-move check in the front end (or an auto-clone) would close it |
+| `self_by_value_reuse` | a `self`-by-value method that moves fields, then the value is used again: rustc E0382. The interpreter copies and prints; the compiled backend moves. **Closed**: the interpreted run now refuses it before running with WJ0007, predicted from the generated Rust (ADR-0030) |
 
 ## C. Regression at the integrated head: the usize class (ADR-0028)
 
