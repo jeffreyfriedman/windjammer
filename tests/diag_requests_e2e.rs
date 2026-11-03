@@ -22,7 +22,9 @@ struct Case {
 const CASES: &[Case] = &[
     Case {
         name: "r1_len_into_int",
-        src: "fn main() {\n    let v: Vec<int> = [1, 2, 3]\n    let idx: int = v.len()\n    println(\"${idx}\")\n}\n",
+        // A plain `let idx: int = v.len()` is converted by the solver (NUM-USIZE-TO-INT); a `len()` inside a
+        // tuple slot is not yet, so rustc still rejects it and the hint must reach the user.
+        src: "fn main() {\n    let v: Vec<int> = [1, 2, 3]\n    let pair: (int, int) = (v.len(), 0)\n    println(\"${pair.0}\")\n}\n",
         code: "WJ0003",
         line: 3,
         hint: &["as int"],
