@@ -611,6 +611,27 @@ Lazy journal for read-only steps (done the same day): a step whose call only rea
 
 Scripts: `scripts/wj/bench_effects_overhead.wj` placed `--record` and `--replay` after the program file, where `wj run` hands them to the program as its own arguments, so record and replay modes measured nothing (the log was never written); the flags now come before the program. The script does not yet build with `wj run --compiled`: the arm loop moves its string locals (a compiler gap, filed as `docs/known-issues/compiled-array-literal-moves-string-locals.md` and ported as a ratcheted failing test; the script carries explicit `.clone()` calls as the workaround), and the ecosystem packages it imports (`wj-table` and others) do not pass `wj check` with the current compiler (`WJ0003`, `len()` against `int` in the package source), so the compiled build stops before the script itself. The figures above were taken with a small Python harness that runs the same arms, recorded here as the fallback until both are fixed; the harness is not in the repository.
 
+### Effects performance round (2026-11-03)
+
+Measured with a private copy of the `wj` built from this branch (the shared target directory is overwritten by other builds, which once gave a slow binary mid-run), CPU time, median of 18 runs per arm, load at most 20. Profile first (`sample`): 80% of enforced time on the sink-dense workload was system calls from `canonical_abs` (the working-directory lookup and the per-component `getattrlist`/`open`/`fcntl` of `realpath`), run on every file check.
+
+| Change | Before | After |
+|---|---|---|
+| Enforcement, sink-dense (30k iterations of `fs::exists`, random, time) | 7.04x | **1.15x** (gate: 2x) |
+| Enforcement, non-sink | +2.5% | +3.1% (gate: 5%) |
+| One `fs::exists` check, 20,000 calls, enforced against `WJ_CAPS=off` | 0.42 to 0.62 s against 0.02 to 0.05 s (about 20 to 30 microseconds a check) | 0.04 s against 0.05 s (not distinguishable from noise) |
+| Record, sink-dense | 1.44x (when enforcement dominated the base); 3.16x once enforcement was cheap | **1.77x** (gate: 2x) |
+| Record, non-sink | +2.95% | **+4.7% to 5.1%: gate of +3% not met in this window** (three runs, same code path; a fixed setup cost, not per-sink) |
+| Replay, sink-dense | +25.8% | 1.83x of a now much faster base (about 1 microsecond a sink); no gate |
+| Code-mode cold start, `execute()` | median 4.44 ms, p90 8.08 ms | median 3.85 ms, p90 5.90 ms (not profiled separately) |
+| Compiled journal, write-heavy workload (3000 steps, each a `fs::write`) | not measured | **1.04x** over in-memory (the write the step performs dominates) |
+
+What changed. (1) `Grant::check` keeps a decision cache for `fs.read`: a resource that was allowed is not resolved again until the cache is invalidated. It is dropped by every granted `fs.write` or `env.write` (rename, `set_current_dir`; they start a new generation), turned off for the rest of the run by any `process` or `ffi` use or by a second thread using the same grant, expires after 50 ms (bounding how long a link swapped by another process can go unnoticed), is never used for denials or writes, and is cleared when the grant is edited. The working directory is read once per generation, and absolute paths skip it. (2) The effect log writes each event as one formatted line and canonical text without a `String` per key; the old implementation is the oracle in a unit test. (3) The gate's prefilter skipped the `path` module, so `path::exists`, `path::is_file`, `path::is_dir` and `path::canonicalize` were not checked at all in the interpreter: fixed, with an escape case.
+
+Mutation checks. Without the generation bump on writes, `cache/read-then-swap-in-a-link` (a program renames a link over a path it has just read, then reads it again) fails the escape corpus; without the 50 ms expiry, `a_link_swapped_behind_the_programs_back_is_noticed_within_the_cache_ttl` fails. The 16 `bound/*` and 6 `run_inherit` cases stay byte-identical.
+
+Open: record on the non-sink workload is 1.5 to 2 points over its gate in this window; the cost is a fixed per-run setup, to be profiled next. The cache does not help `fs.write` checks (each write starts a new generation by design).
+
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 
 Delivered: `durable fn` (parser marker, `ir/effect_facts/durable.rs`, `check/durable_sites.rs`, `interpreter/durable_rt.rs`), `wj run --interpret --journal DIR [--crash-after N[:mid]]`, WJ0045 to WJ0048 in `wj check`, SPEC-EFF-021 to 026 (no longer `xfail`) and 048. The compiled-backend story is a refusal plus the design above (stage E4b).
