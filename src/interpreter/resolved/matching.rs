@@ -7,7 +7,7 @@
 //! `match m.get(&k) { Some(v) => .., None => .. }` on a map looks the key up in place (`mapfast.rs`).
 
 use super::compile::{Cx, E};
-use super::expr::{expr, expr_eval};
+use super::expr::{expr, expr_eval, X};
 use super::island::{self, Island};
 use super::Code;
 use crate::interpreter::engine::Interpreter;
@@ -26,29 +26,33 @@ struct Arm {
     body: Code,
 }
 
-/// `e` as the walker's `eval_raw`: lowered, else an island.
-fn raw(cx: &mut Cx, e: E) -> Option<Code> {
+/// `e` as the walker's `eval_raw`: lowered, else an island. The flag says the value may be a reference.
+fn raw(cx: &mut Cx, e: E) -> Option<(Code, bool)> {
     // a boxed local as is (a lock guard stays a guard), as the walker reads a variable
     if let Expression::Identifier { name, .. } = e {
         if let Some(slot) = cx.local(name).filter(|s| cx.is_boxed(*s)) {
             let name: &'static str = name.as_str();
-            return Some(Box::new(move |it, b| island::read_boxed_raw(it, b + slot, name)));
+            return Some((Box::new(move |it, b| island::read_boxed_raw(it, b + slot, name)), true));
         }
     }
     if let Some(x) = expr(cx, e) {
-        return Some(x.code());
+        let r = x.is_raw();
+        return Some((x.code(), r));
     }
     let island = Island::new(cx, &format!("{:?}", e));
-    Some(Box::new(move |it, b| island.run(it, b, |it| it.eval_raw(e))))
+    Some((Box::new(move |it, b| island.run(it, b, |it| it.eval_raw(e))), true))
 }
 
-pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static>]) -> Option<Code> {
+/// A lowered `match`: `X::V` when no arm body can yield a reference (then `let c = match ..` keeps `c`
+/// in a plain slot rather than a box), else `X::R`, the walker's `eval_raw` of the arm taken.
+pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static>]) -> Option<X> {
     if matches!(value, Expression::Unary { op: UnaryOp::MutRef, .. }) || Interpreter::is_place_expr(value) {
         return None;
     }
     let lookup = super::mapfast::map_get(cx, value);
     let opt_arms = lookup.is_some() && arms.iter().all(|a| opt_arm(a).is_some());
-    let scrut = raw(cx, value)?;
+    let scrut = raw(cx, value)?.0;
+    let mut by_ref = cx.it.fast_off("matchval");
     let mut compiled = Vec::with_capacity(arms.len());
     for arm in arms {
         cx.enter();
@@ -69,10 +73,13 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
         };
         let body = raw(cx, arm.body);
         cx.leave();
-        compiled.push(Arm { pat: &arm.pattern, slots, plain, guard, body: body? });
+        let (body, r) = body?;
+        by_ref |= r;
+        compiled.push(Arm { pat: &arm.pattern, slots, plain, guard, body });
     }
     let fast = lookup.zip(arms.iter().map(opt_arm).collect::<Option<Vec<Opt>>>());
-    Some(Box::new(move |it, b| {
+    let code: Code = Box::new(move |it, b| {
+        it.fast.matchval += !by_ref as u64;
         if let Some((get, kinds)) = &fast {
             if let Some(found) = get.run(it, b)? {
                 return opt_match(it, b, &compiled, kinds, found);
@@ -117,7 +124,8 @@ pub(super) fn match_stmt(cx: &mut Cx, value: E, arms: &'static [MatchArm<'static
             return r;
         }
         Err(panic_ctl(format!("no match arm matched value of type `{}`", v.type_name())))
-    }))
+    });
+    Some(if by_ref { X::R(code) } else { X::V(code) })
 }
 
 /// The walker's `pop_scope` for an arm: a panic poisons the lock guards its bindings hold, then
