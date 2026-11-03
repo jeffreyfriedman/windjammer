@@ -164,7 +164,7 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
     for (i, x) in init {
         buf[*i] = *x;
     }
-    let mut ctx = Ctx { it: it as *mut Interpreter, base: b, fail: 0, plan: &unit.plan, reg, raised: None };
+    let mut ctx = Ctx { it: it as *mut Interpreter, base: b, fail: 0, plan: &unit.plan, reg, raised: None, cells: Vec::new() };
     // SAFETY: `f` is finalized code of the module `it.jit` keeps alive, with the `UnitFn` signature;
     // `ctx` and `buf` (`nbuf` slots) outlive the call.
     let exit = unsafe { (unit.f)(&mut ctx, buf.as_mut_ptr()) } as usize;
