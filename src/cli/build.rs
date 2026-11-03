@@ -78,6 +78,14 @@ pub fn execute(
     if !path.exists() {
         anyhow::bail!("path not found: {}", path.display());
     }
+    // ADR-0026: Rust crates without a hand-written surface get a generated one in .wj-cache (one note line each)
+    if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
+        for note in crate::package::rust_surface_gen::cache::ensure(&root, Some(output_dir), crate::toolchain::install::cargo_home().as_deref()) {
+            if !quiet {
+                eprintln!("note: {note}");
+            }
+        }
+    }
     // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
     stop_on_rust_crate_errors(path)?;
     // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
