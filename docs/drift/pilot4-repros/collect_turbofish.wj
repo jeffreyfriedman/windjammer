@@ -1,0 +1,5 @@
+fn main() {
+    let line = " a b  c "
+    let parts = line.trim().split(" ").collect::<Vec<string>>()
+    println("${parts.len()}")
+}
