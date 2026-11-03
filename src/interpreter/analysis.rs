@@ -9,16 +9,39 @@ use crate::parser::{EnumPatternBinding, Expression, Pattern, Statement, Type, Un
 use std::collections::HashSet;
 use std::rc::Rc;
 
+/// Names the body mutates (`all`), and names it only reassigns whole with `=` (`rebound`).
+#[derive(Default)]
+struct Muts {
+    all: HashSet<&'static str>,
+    rebound: HashSet<&'static str>,
+}
+
+impl Muts {
+    fn insert(&mut self, n: &'static str) {
+        self.all.insert(n);
+    }
+    fn contains(&self, n: &str) -> bool {
+        self.all.contains(n)
+    }
+}
+
 pub fn analyze(it: &mut Interpreter, f: &Rc<FuncDef>) -> (Vec<bool>, bool) {
-    let mut set: HashSet<&'static str> = HashSet::new();
+    let mut set = Muts::default();
     for s in f.body {
         scan_stmt(it, f.module, s, &mut set);
     }
     let mut out = Vec::new();
     for p in f.params.iter().filter(|p| p.name != "self") {
         let by_type = matches!(p.type_, Type::MutableReference(_));
+        let name = p.name.as_str();
+        // only reassigned whole (`slot = f(slot)`): the compiler takes some such parameters by value
+        // (one it also passes on or returns), so its own decision answers (test-only mutant `paramassign`,
+        // debug builds: always `&mut`)
+        let mutated = set.contains(name)
+            || (set.rebound.contains(name)
+                && ((cfg!(debug_assertions) && it.jit_mutant.as_deref() == Some("paramassign")) || it.compiled_mut_ref(f, name).unwrap_or(true)));
         // a `mut` parameter is an owned local copy (Rust: by value); only inferred `&mut` writes through
-        out.push(by_type || (!p.is_mutable && set.contains(p.name.as_str())));
+        out.push(by_type || (!p.is_mutable && mutated));
     }
     let self_mut = set.contains("self")
         || f.params.first().map(|p| p.name == "self" && p.ownership == crate::parser::OwnershipHint::Mut).unwrap_or(false);
@@ -58,7 +81,7 @@ fn pattern_has_ref_mut(p: &Pattern<'static>) -> bool {
     }
 }
 
-fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>, out: &mut HashSet<&'static str>) {
+fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>, out: &mut Muts) {
     match s {
         Statement::Let { value, else_block, .. } => {
             scan_expr(it, module, value, out);
@@ -69,9 +92,16 @@ fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>
             }
         }
         Statement::Const { value, .. } | Statement::Static { value, .. } => scan_expr(it, module, value, out),
-        Statement::Assignment { target, value, .. } => {
-            if let Some(r) = root(target) {
-                out.insert(r);
+        Statement::Assignment { target, value, compound_op, .. } => {
+            match (target, compound_op) {
+                (Expression::Identifier { name, .. }, None) => {
+                    out.rebound.insert(name.as_str());
+                }
+                _ => {
+                    if let Some(r) = root(target) {
+                        out.insert(r);
+                    }
+                }
             }
             scan_expr(it, module, target, out);
             scan_expr(it, module, value, out);
@@ -130,7 +160,7 @@ fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>
     }
 }
 
-fn scan_expr(it: &mut Interpreter, module: usize, e: &'static Expression<'static>, out: &mut HashSet<&'static str>) {
+fn scan_expr(it: &mut Interpreter, module: usize, e: &'static Expression<'static>, out: &mut Muts) {
     match e {
         Expression::Literal { .. } | Expression::Identifier { .. } => {}
         Expression::Binary { left, right, .. } => {

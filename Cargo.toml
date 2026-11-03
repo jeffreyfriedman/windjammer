@@ -482,3 +482,7 @@ path = "tests/build_speed_gate.rs"
 [[test]]
 name = "build_output_golden"
 path = "tests/build_output_golden.rs"
+
+[[test]]
+name = "move_prediction"
+path = "tests/move_prediction_test.rs"

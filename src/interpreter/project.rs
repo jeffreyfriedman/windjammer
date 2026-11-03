@@ -310,6 +310,9 @@ impl Interpreter {
         let decl_files: Vec<(String, &[crate::parser::Item<'_>])> = all.iter().map(|f| (f.module_path.join("::"), &f.program.items[..])).collect();
         self.note_duplicate_types(&decl_files);
         self.project_loading = true;
+        for (f, &m) in all.iter().zip(&ids) {
+            self.programs.insert(m, f.program);
+        }
         let reg: Result<(), RuntimeError> = all.iter().zip(&ids).try_for_each(|(f, &m)| self.register_items(m, &f.program.items));
         self.project_loading = false;
         reg?;
