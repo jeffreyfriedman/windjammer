@@ -84,13 +84,13 @@ fn every_os_touching_runtime_function_reaches_a_capability_check() {
 
 #[test]
 fn the_scanner_sees_the_guards_it_is_meant_to_see() {
-    // a mutation check on the oracle itself: removing the guard from `fs::read_to_string` must make the scan fail
+    // a mutation check on the oracle itself: removing the guard from `fs::write` must make the scan fail
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime/src");
     let src = std::fs::read_to_string(base.join("fs.rs")).unwrap();
     let cs = chunks(&src);
-    let read = cs.iter().find(|c| c.name == "read_to_string").expect("fs::read_to_string");
-    assert!(read.text.contains("caps::fs_read"), "{}", read.text);
-    let stripped = read.text.replace("caps::fs_read", "removed");
+    let read = cs.iter().find(|c| c.name == "write").expect("fs::write");
+    assert!(read.text.contains("caps::fs_write"), "{}", read.text);
+    let stripped = read.text.replace("caps::fs_write", "removed");
     assert!(OS_TOKENS.iter().any(|t| stripped.contains(t)) && !stripped.contains("caps::"));
 }
 
@@ -122,4 +122,20 @@ fn every_sink_of_an_authority_module_exists_in_the_compiled_runtime() {
     assert!(new.is_empty(), "sinks the compiled runtime lacks (add them to windjammer-runtime): {new:?}");
     let fixed: Vec<_> = known.difference(&missing).collect();
     assert!(fixed.is_empty(), "now present in the runtime: remove from PARITY_GAPS: {fixed:?}");
+}
+
+/// The file reads that decide on the open file (`FD_VERIFIED_READS`) must open through `caps::open_read` in the compiled runtime too:
+/// a read that opened the name again after the check would bring the race back.
+#[test]
+fn the_fd_verified_reads_open_through_the_checked_handle() {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime/src");
+    let src = std::fs::read_to_string(base.join("fs.rs")).unwrap();
+    let cs = chunks(&src);
+    for path in windjammer::ir::effect_facts::sinks::FD_VERIFIED_READS {
+        let name = path.strip_prefix("fs::").unwrap();
+        let c = cs.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("fs::{name} is not in the runtime"));
+        let delegates = cs.iter().any(|d| d.name != name && c.text.contains(&format!("{}(", d.name)) && d.text.contains("caps::open_read"));
+        assert!(c.text.contains("caps::open_read") || delegates, "fs::{name} must open through caps::open_read: {}", c.text);
+        assert!(!c.text.contains("std::fs::read"), "fs::{name} reads the name again: {}", c.text);
+    }
 }

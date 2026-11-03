@@ -76,6 +76,19 @@ pub fn bypass<T>(f: impl FnOnce() -> T) -> T {
     r
 }
 
+/// Open a file for reading and decide on the path of the open file, not on the name (a name can be re-pointed between a check and
+/// an open, an open file cannot). Read from the returned handle. Without an installed grant this is `File::open`.
+pub fn open_read(p: impl AsRef<Path>) -> std::io::Result<std::fs::File> {
+    let name = p.as_ref();
+    let grant = if BYPASS.with(|b| b.get()) > 0 { None } else { GRANT.get() };
+    let Some(g) = grant else { return std::fs::File::open(name) };
+    match g.open_read(&name.to_string_lossy()) {
+        Ok(f) => Ok(f),
+        Err(crate::caps_core::grant::OpenError::Io(e)) => Err(e),
+        Err(crate::caps_core::grant::OpenError::Denied(d)) => fault(d),
+    }
+}
+
 pub fn fs_read(p: impl AsRef<Path>) {
     check(&EffectKind::FsRead, Some(&p.as_ref().to_string_lossy()));
 }

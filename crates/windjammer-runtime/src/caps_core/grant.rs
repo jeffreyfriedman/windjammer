@@ -14,6 +14,44 @@ pub enum Scope {
     Only(Vec<String>),
 }
 
+/// Why `Grant::open_read` did not return a file.
+#[derive(Debug)]
+pub enum OpenError {
+    Denied(Denial),
+    Io(std::io::Error),
+}
+
+/// The canonical path of an open file, from the descriptor (macOS `F_GETPATH`, Linux `/proc/self/fd`).
+fn path_of_open_file(f: &std::fs::File) -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::ffi::OsStrExt;
+        extern "C" {
+            fn fcntl(fd: i32, cmd: i32, ...) -> i32;
+        }
+        const F_GETPATH: i32 = 50;
+        let mut buf = [0u8; 1024];
+        // SAFETY: F_GETPATH writes a NUL-terminated path of at most PATH_MAX (1024) bytes into the buffer
+        let r = unsafe { fcntl(f.as_raw_fd(), F_GETPATH, buf.as_mut_ptr()) };
+        if r < 0 {
+            return None;
+        }
+        let n = buf.iter().position(|&b| b == 0)?;
+        return Some(PathBuf::from(std::ffi::OsStr::from_bytes(&buf[..n])));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::AsRawFd;
+        return std::fs::read_link(format!("/proc/self/fd/{}", f.as_raw_fd())).ok();
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = f;
+        None
+    }
+}
+
 /// Why a check failed (shown in the `capability denied` message and the WJ0040/WJ0041 diagnostics).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Denial {
@@ -88,7 +126,12 @@ struct ReadCache {
     stamp: Option<std::time::Instant>,
 }
 
-const CACHE_TTL: std::time::Duration = std::time::Duration::from_millis(50);
+const CACHE_TTL: std::time::Duration = std::time::Duration::from_micros(100);
+
+/// How long a cached `fs.read` decision may be served (the bound on the staleness of names that are only checked).
+pub fn decision_ttl() -> std::time::Duration {
+    CACHE_TTL
+}
 
 /// The working directory, looked up once per generation (`set_current_dir` is an `env.write`, which starts a new one).
 static CWD: std::sync::Mutex<Option<(u64, PathBuf)>> = std::sync::Mutex::new(None);
@@ -327,7 +370,7 @@ impl Grant {
                 }
             }
         }
-        let decision = self.check_uncached(kind, resource);
+        let decision = self.check_with(kind, resource, None);
         if decision.is_ok() {
             match kind {
                 // the action that follows this check may change what a path resolves to
@@ -347,13 +390,42 @@ impl Grant {
         decision
     }
 
+    /// Open `res` for reading and decide on the path of **the file that was opened**, not on the name: a name can be re-pointed
+    /// (a link swapped by another process) between a check and an open, an open file cannot. The returned handle is the one
+    /// that was checked; read from it, do not open the name again. Denials are made before any byte is read, and opening a
+    /// file for reading changes nothing on disk.
+    ///
+    /// When `res` cannot be opened the name decides (an existing file outside the grant and a missing one both give the denial,
+    /// so the answer is no oracle for existence); allowed, the error is the caller's I/O error.
+    pub fn open_read(&self, res: &str) -> Result<std::fs::File, OpenError> {
+        if device_effect(&EffectKind::FsRead, res).is_some() {
+            self.check(&EffectKind::FsRead, Some(res)).map_err(OpenError::Denied)?;
+            return std::fs::File::open(res).map_err(OpenError::Io);
+        }
+        let file = match std::fs::File::open(res) {
+            Ok(f) => f,
+            Err(e) => {
+                self.check(&EffectKind::FsRead, Some(res)).map_err(OpenError::Denied)?;
+                return Err(OpenError::Io(e));
+            }
+        };
+        match path_of_open_file(&file) {
+            Some(real) => self.check_with(&EffectKind::FsRead, Some(res), Some(real)).map_err(OpenError::Denied)?,
+            // a platform that cannot name an open file: the name decides (the old, racy order)
+            None => self.check(&EffectKind::FsRead, Some(res)).map_err(OpenError::Denied)?,
+        }
+        Ok(file)
+    }
+
     fn forget_decisions(&mut self) {
         if let Ok(c) = self.read_cache.get_mut() {
             c.allowed.clear();
         }
     }
 
-    fn check_uncached(&self, kind: &EffectKind, resource: Option<&str>) -> Result<(), Denial> {
+    /// The decision, from scratch. `canonical` is the already-resolved path of a file that is open (see `open_read`); without it the
+    /// resource is resolved by name.
+    fn check_with(&self, kind: &EffectKind, resource: Option<&str>, canonical: Option<PathBuf>) -> Result<(), Denial> {
         // standard devices are the console / the entropy source, not files (`fs::read_to_string("/dev/stdin")`)
         if let (EffectKind::FsRead | EffectKind::FsWrite, Some(res)) = (kind, resource) {
             match device_effect(kind, res) {
@@ -390,7 +462,7 @@ impl Grant {
         };
         let ok = match kind {
             EffectKind::FsRead | EffectKind::FsWrite => {
-                let p = m::canonical_abs(res, &Self::base_for(res));
+                let p = canonical.unwrap_or_else(|| m::canonical_abs(res, &Self::base_for(res)));
                 let inside = |pat: &String| {
                     m::path_matches_cached(pat, &p, &self.root, &mut |prefix, base| {
                         self.prefix_cache.lock().unwrap_or_else(|e| e.into_inner()).entry(prefix.to_string()).or_insert_with(|| m::canonical_abs(prefix, base)).clone()
