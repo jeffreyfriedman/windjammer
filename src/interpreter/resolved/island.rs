@@ -21,6 +21,8 @@ pub(super) struct Island {
     names: Vec<(&'static str, usize)>,
     /// Locals a `let` island declares: bound to the walker's new slots once it has run.
     declares: Vec<(&'static str, usize)>,
+    /// Locals the walker only reads, by value (`with_copies`): an unboxed one is bound to a fresh copy.
+    copies: Vec<(&'static str, usize)>,
     module: usize,
     ret: Option<&'static Type>,
     self_ty: Option<std::rc::Rc<str>>,
@@ -34,7 +36,16 @@ impl Island {
         for (_, s) in &names {
             cx.need_box(*s);
         }
-        Island { names, declares: Vec::new(), module: cx.module, ret: cx.ret, self_ty: cx.self_ty.clone() }
+        Island { names, declares: Vec::new(), copies: Vec::new(), module: cx.module, ret: cx.ret, self_ty: cx.self_ty.clone() }
+    }
+
+    /// An island whose construct reaches the locals in `text` as places (boxed) and only reads those in
+    /// `read_text` (closure-free reads, so a copy is what the walker sees): the latter stay unboxed.
+    pub(super) fn with_copies(cx: &mut Cx, text: &str, read_text: &str) -> Island {
+        let mut island = Island::new(cx, text);
+        let copies = cx.visible_locals(&identifiers(read_text));
+        island.copies = copies.into_iter().filter(|(_, s)| !island.names.iter().any(|(_, t)| t == s)).collect();
+        island
     }
 
     pub(super) fn declaring(mut self, declares: Vec<(&'static str, usize)>) -> Island {
@@ -52,6 +63,14 @@ impl Island {
             if let Value::Ref(p) = &it.rstack[b + s] {
                 scope.vars.push((n, p.slot.clone()));
             }
+        }
+        it.fast.argcopy += !self.copies.is_empty() as u64;
+        for (n, s) in &self.copies {
+            let slot = match &it.rstack[b + s] {
+                Value::Ref(p) => p.slot.clone(),
+                v => std::rc::Rc::new(std::cell::RefCell::new(v.clone())),
+            };
+            scope.vars.push((n, slot));
         }
         let start = scope.vars.len();
         let saved = std::mem::replace(&mut it.scope, scope);
