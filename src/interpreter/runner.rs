@@ -228,8 +228,8 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if it.jit_debug {
             let f = it.fast;
             eprintln!(
-                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {}",
-                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} matchval {} pushfmt {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.matchval, f.pushfmt
             );
         }
         if let Some(p) = &opts.result_json {

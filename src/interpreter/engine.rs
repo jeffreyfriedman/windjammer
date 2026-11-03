@@ -540,6 +540,12 @@ pub(crate) struct FastHits {
     pub(crate) closurescope: u64,
     /// Machine-code element reads and writes done straight on a packed vector.
     pub(crate) packedidx: u64,
+    /// Machine-code element accesses through a reference chain resolved once per unit run.
+    pub(crate) vecresolve: u64,
+    /// Lowered `match` values known never to be references (a `let` of one gets a plain slot).
+    pub(crate) matchval: u64,
+    /// `s.push_str` of an interpolated string formatted straight into one buffer.
+    pub(crate) pushfmt: u64,
 }
 
 impl Interpreter {

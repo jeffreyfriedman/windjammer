@@ -566,15 +566,21 @@ fn stmt_tail(cx: &mut Cx, s: S) -> Option<Tail> {
             }
         }
     }
-    let native = stmt_native(cx, s);
+    // a lowered `match` yields its arm body's `eval_raw` value: raw unless no arm can yield a reference
+    let native = match s {
+        Statement::Match { value, arms, .. } => super::matching::match_stmt(cx, value, arms),
+        _ => stmt_native(cx, s).map(X::V),
+    };
     let island = native.is_none();
-    let code = match native {
-        Some(c) => c,
-        None => stmt_island(cx, s)?,
+    let (code, lowered_raw) = match native {
+        Some(x) => {
+            let r = x.is_raw();
+            (x.code(), r)
+        }
+        None => (stmt_island(cx, s)?, false),
     };
     let valued = matches!(s, Statement::Expression { .. } | Statement::If { .. } | Statement::Match { .. } | Statement::Loop { .. });
-    // a lowered `match` yields its arm body's `eval_raw` value
-    let raw = (island && valued) || matches!(s, Statement::Match { .. });
+    let raw = (island && valued) || lowered_raw;
     Some(if raw { Tail::Raw(code) } else { Tail::Code(code) })
 }
 
@@ -755,7 +761,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
         }
         // a function-body `use` binds names at run time: the walker runs such functions
         Statement::Use { .. } => return None,
-        Statement::Match { value, arms, .. } => super::matching::match_stmt(cx, value, arms)?,
+        Statement::Match { value, arms, .. } => super::matching::match_stmt(cx, value, arms)?.code(),
         _ => return None,
     };
     Some(code)
