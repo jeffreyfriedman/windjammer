@@ -6,14 +6,20 @@ use std::path::Path;
 
 /// Read entire file as a string
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String, String> {
-    crate::caps::fs_read(&path);
-    std::fs::read_to_string(path).map_err(|e| e.to_string())
+    use std::io::Read;
+    let mut file = crate::caps::open_read(path).map_err(|e| e.to_string())?;
+    let mut s = String::new();
+    file.read_to_string(&mut s).map_err(|e| e.to_string())?;
+    Ok(s)
 }
 
 /// Read entire file as bytes
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
-    crate::caps::fs_read(&path);
-    std::fs::read(path).map_err(|e| e.to_string())
+    use std::io::Read;
+    let mut file = crate::caps::open_read(path).map_err(|e| e.to_string())?;
+    let mut b = Vec::new();
+    file.read_to_end(&mut b).map_err(|e| e.to_string())?;
+    Ok(b)
 }
 
 /// Alias for read() for clarity  
