@@ -32,7 +32,7 @@ with four legacy deciders that disagree with each other and with the solver:
 `D-WIDTH-OWNERS` (the explain meter, gate 3) counts locals whose solver width differs from the emitted width. At
 `e5f389872` it is 81 after the spelling fix; the two dominant shapes are `u64 -> usize` (no usize class) and
 `i64 -> i32` (a legacy paint). Publishing the solver's literal widths for every literal was tried and made rustc
-reject about 40 golden programs, because the classes that contain `len()` were wrongly `int`.
+reject a number of golden programs, because the classes that contain `len()` were wrongly `int`.
 
 ## Decision
 
