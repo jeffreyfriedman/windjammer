@@ -32,6 +32,9 @@ pub(crate) struct SpanLog {
     params: HashMap<usize, Vec<NodeSpan>>,
     /// Token index at which each active parse entry started.
     starts: Vec<usize>,
+    /// Nodes the parser synthesised while desugaring (`x ?? d`, `a?.b`): their span covers the surface syntax they
+    /// came from, but they have no surface shape of their own (a synthetic closure has no `|`).
+    synthetic: std::collections::HashSet<usize>,
 }
 
 /// An immutable copy of the recorded spans that outlives borrows of the parser (the AST it
@@ -40,6 +43,7 @@ pub(crate) struct SpanLog {
 pub struct SpanSnapshot {
     spans: HashMap<usize, NodeSpan>,
     params: HashMap<usize, Vec<NodeSpan>>,
+    synthetic: std::collections::HashSet<usize>,
 }
 
 impl SpanSnapshot {
@@ -48,6 +52,10 @@ impl SpanSnapshot {
     }
     pub fn stmt(&self, s: &Statement) -> Option<NodeSpan> {
         self.spans.get(&(s as *const Statement as usize)).copied()
+    }
+    /// True for a node the parser synthesised while desugaring (see `SpanLog::synthetic`).
+    pub fn is_synthetic(&self, e: &Expression) -> bool {
+        self.synthetic.contains(&(e as *const Expression as usize))
     }
     /// Span of parameter `index` of a function whose `parameters` slice is `params`.
     pub fn param(&self, params: &[Parameter], index: usize) -> Option<NodeSpan> {
@@ -59,7 +67,7 @@ impl Parser {
     /// Copy of the spans recorded so far (empty if logging is off).
     pub fn span_snapshot(&self) -> SpanSnapshot {
         match self.span_log.borrow().as_ref() {
-            Some(l) => SpanSnapshot { spans: l.spans.clone(), params: l.params.clone() },
+            Some(l) => SpanSnapshot { spans: l.spans.clone(), params: l.params.clone(), synthetic: l.synthetic.clone() },
             None => SpanSnapshot::default(),
         }
     }
@@ -116,6 +124,7 @@ impl Parser {
         let mut ours = self.span_log.borrow_mut();
         if let (Some(t), Some(o)) = (theirs.as_ref(), ours.as_mut()) {
             o.spans.extend(t.spans.iter().map(|(k, v)| (*k, *v)));
+            o.synthetic.extend(t.synthetic.iter().copied());
         }
     }
 
@@ -149,5 +158,21 @@ impl Parser {
                 end_column: if last.byte_end >= first.byte_start { last.end_column } else { first.src_column },
             },
         );
+    }
+}
+
+impl Parser {
+    /// Allocate a node that desugaring invents (no surface form of its own) and remember that it is synthetic.
+    pub(crate) fn alloc_synthetic(&self, expr: Expression<'static>) -> &'static Expression<'static> {
+        let e = self.alloc_expr(expr);
+        if let Some(log) = self.span_log.borrow_mut().as_mut() {
+            log.synthetic.insert(e as *const Expression as usize);
+        }
+        e
+    }
+
+    /// True when `e` was allocated by `alloc_synthetic` (requires the span log).
+    pub fn is_synthetic_expr(&self, e: &Expression) -> bool {
+        self.span_log.borrow().as_ref().is_some_and(|l| l.synthetic.contains(&(e as *const Expression as usize)))
     }
 }

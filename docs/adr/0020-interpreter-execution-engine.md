@@ -440,7 +440,7 @@ Checks:
 - The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a zero divisor and an
   `int` overflow planted inside inlined methods. Its coverage test requires a quarter of the generated loops to inline.
 - Debug mutation gates on the final source: the six machine-code mutants (`overflow`, `range`, `divzero`, `bounds`, `nan`,
-  `retag`) against 60 generated programs, and `box` (the first write after a struct `let` fills the previous binding's
+  `retag`) against a corpus of generated programs, and `box` (the first write after a struct `let` fills the previous binding's
   box) against `jit_loop_inline.wj`, are each caught. `overflow` had stopped being caught once the generator changed, since
   only the random mix had ever overflowed `int`; an `int` overflow is now planted.
 
@@ -453,7 +453,7 @@ Packed `Vec` writers: `tests/interpreter_packed_vec_test.rs` (`--test packed_vec
 unpacked and drives both through every builtin that writes, comparing walker, resolved and eager-JIT output with the
 unpacked walker. The first version passed with a planted bug, a `reverse` that wrote the read cache without unpacking, because
 almost every write unpacks for good. The packed program now repacks before each step and reads results element by element,
-and the planted bug makes 19 of 80 programs differ.
+and the planted bug makes nineteen of eighty programs differ.
 
 ### Round 6 (Nov 2): maps without the call path (stopped at its kill line)
 Profile of `hashmap` (macOS `sample`, release): allocation was about 30% of the loop, spread over the argument vector,

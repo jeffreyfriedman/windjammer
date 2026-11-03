@@ -309,7 +309,7 @@ impl Parser {
 
                         // Desugar [..end] to .slice(0, end)
                         let end_expr = end.unwrap_or_else(|| {
-                            self.alloc_expr(Expression::MethodCall {
+                            self.alloc_synthetic(Expression::MethodCall {
                                 object: self.alloc_expr(expr.clone()),
                                 method: "len".to_string(),
                                 type_args: None,
@@ -318,14 +318,14 @@ impl Parser {
                             })
                         });
 
-                        self.alloc_expr(Expression::MethodCall {
+                        self.alloc_synthetic(Expression::MethodCall {
                             object: expr,
                             method: "slice".to_string(),
                             type_args: None,
                             arguments: vec![
                                 (
                                     None,
-                                    self.alloc_expr(Expression::Literal {
+                                    self.alloc_synthetic(Expression::Literal {
                                         value: Literal::Int(0),
                                         location: self.current_location(),
                                     }),
@@ -353,7 +353,7 @@ impl Parser {
 
                             // Desugar [start..end] to .slice(start, end)
                             let end_expr = end.unwrap_or_else(|| {
-                                self.alloc_expr(Expression::MethodCall {
+                                self.alloc_synthetic(Expression::MethodCall {
                                     object: expr,
                                     method: "len".to_string(),
                                     type_args: None,
@@ -362,7 +362,7 @@ impl Parser {
                                 })
                             });
 
-                            self.alloc_expr(Expression::MethodCall {
+                            self.alloc_synthetic(Expression::MethodCall {
                                 object: expr,
                                 method: "slice".to_string(),
                                 type_args: None,

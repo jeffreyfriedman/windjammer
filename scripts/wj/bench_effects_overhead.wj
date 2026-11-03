@@ -110,7 +110,7 @@ fn main() {
         let mut outs: Vec<string> = Vec::new()
         let mut r = 0
         while r < runs {
-            for arm in [base.clone(), test.clone(), test.clone(), base.clone()] {
+            for arm in [base, test, test, base] {
                 let x = run_once(wj, prog, arm, mode)
                 if arm == base {
                     base_t.push(x.cpu)

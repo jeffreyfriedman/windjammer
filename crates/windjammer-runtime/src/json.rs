@@ -24,7 +24,7 @@ pub fn parse_string<T: for<'de> Deserialize<'de>>(s: impl AsRef<str>) -> Result<
 }
 
 /// `$`, `$.home.city`, `$.tags[2]`, `$["odd key"]` (mirrored by the interpreter's `json_codec::json_path`).
-pub fn json_path(p: &serde_path_to_error::Path) -> String {
+pub(crate) fn json_path(p: &serde_path_to_error::Path) -> String {
     use serde_path_to_error::Segment;
     let mut out = String::from("$");
     for seg in p.iter() {

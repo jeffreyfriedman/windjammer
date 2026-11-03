@@ -200,10 +200,10 @@ impl Parser {
             ("unwrap_or", default)
         } else {
             let closure =
-                self.alloc_expr(Expression::Closure { parameters: vec![], body: default, location: location.clone() });
+                self.alloc_synthetic(Expression::Closure { parameters: vec![], body: default, location: location.clone() });
             ("unwrap_or_else", closure)
         };
-        self.alloc_expr(Expression::MethodCall {
+        self.alloc_synthetic(Expression::MethodCall {
             object: value,
             method: method.to_string(),
             type_args: None,
