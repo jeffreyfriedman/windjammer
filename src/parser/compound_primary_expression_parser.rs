@@ -245,14 +245,7 @@ impl Parser {
         // Parse closure body - can be either an expression or a block
         let body = if self.current_token() == &Token::LBrace {
             // Block closure: |x| { statements }
-            self.advance();
-            let statements = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            self.alloc_expr(Expression::Block {
-                statements,
-                is_unsafe: false,
-                location: self.current_location(),
-            })
+            self.parse_closure_block_body()?
         } else {
             // Expression closure: |x| expr
             // Check if this looks like a compound assignment (e.g., *c += 1)
@@ -300,6 +293,21 @@ impl Parser {
         }))
     }
 
+    /// `{ statements }` of a closure: the block's span starts at its `{` (not at `move` or `|params|`).
+    fn parse_closure_block_body(&mut self) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let block = self.closure_block_body_inner();
+        self.span_exit();
+        block
+    }
+
+    fn closure_block_body_inner(&mut self) -> Result<&'static Expression<'static>, String> {
+        self.advance();
+        let statements = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+        Ok(self.alloc_expr(Expression::Block { statements, is_unsafe: false, location: self.current_location() }))
+    }
+
     pub(in crate::parser) fn parse_primary_closure_or(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
@@ -309,14 +317,7 @@ impl Parser {
         // Parse closure body - can be either an expression or a block
         let body = if self.current_token() == &Token::LBrace {
             // Block closure: || { statements }
-            self.advance();
-            let statements = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            self.alloc_expr(Expression::Block {
-                statements,
-                is_unsafe: false,
-                location: self.current_location(),
-            })
+            self.parse_closure_block_body()?
         } else {
             // Expression closure: || expr
             self.parse_expression()?

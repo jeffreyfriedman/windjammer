@@ -30,6 +30,7 @@ const SNIPPETS: &[&str] = &[
     "fn m(x: int) {\n    match x {\n        1 => 2,\n        _ => 3,\n    }\n}\n",
     "fn r(s: string) -> string {\n    match s.find(\"x\") {\n        Some(q) => return s[0..q].to_string(),\n        None => return \"\",\n    }\n}\n",
     "fn w(words: Vec<string>) {\n    let mut freq = HashMap::new()\n    for w in words {\n        freq.entry(w).and_modify(|c| *c += 1).or_insert(1)\n    }\n}\n",
+    "fn t() {\n    let h = move || {\n        let a = 1\n        a + 1\n    }\n    let g = |x| {\n        x * 2\n    }\n    'outer: for i in 0..3 {\n        'inner: while true {\n            break 'outer\n        }\n    }\n}\n",
     "fn d(a: Option<int>) -> int {\n    let mut n = 0\n    match a {\n        Some(v) => n = v,\n        None => n = 1,\n    }\n    n\n}\n",
 ];
 
