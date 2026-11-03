@@ -81,6 +81,16 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | ADR-0028: lexical scoping (per-binding vars) | c1df05cfb | 0 | ~70 | 58 -> 58 (no corpus program shadows a width-carrying name) |
 | ADR-0028: delete five never-firing W5 sites | 3c6a01667 | 106 | 1 | 58 -> 58 |
 
+### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
+
+The 321-program golden corpus did not contain `len() - 1` returned as `int`, an `int` loop variable compared with
+`len()`, or a counter passed to a std `usize` formal and returned as `int` with a `-1` tail. The solver published a
+width for classes it could not decide. Rule added to `ir/numeric_facts.rs` (held classes): a class is not published
+when the solver recorded a type conflict in it, when a negated literal in it is unsigned, or when it contains a loop
+binding of unknown element type, a field read of unknown type or a `len()` on a receiver of unknown type. Receivers
+bound to calls, module functions and struct literals are typed. Gates: three golden-corpus programs
+(`tests/inference_corpus/usize_*.wj`) and `scripts/ecosystem_width_gate.wj` (nine targets compiled, all must pass).
+
 ### Kill criterion reached (2026-11-02, wt/c4-usize2)
 
 Two consecutive steps did not lower D-WIDTH-OWNERS (58). The 58 findings are: 25 `i64 -> i32` locals in

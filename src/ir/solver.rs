@@ -32,6 +32,8 @@ pub struct SolverResult {
     pub defaulted: Vec<bool>,
     /// Union-find class of each variable (an opaque id; equal ids mean one class).
     pub class_of: Vec<u32>,
+    /// Variables where two different exact integer widths met (the class has no single width).
+    pub width_conflicts: Vec<ConstraintVar>,
 }
 
 /// A diagnostic emitted by the solver.
@@ -186,6 +188,7 @@ pub struct Solver {
     numeric_classes: Vec<(ConstraintVar, NumericClass)>,
     /// NUM-USIZE preferences, resolved after every exact width is known.
     usize_prefs: Vec<ConstraintVar>,
+    width_conflicts: Vec<ConstraintVar>,
     defaulted_roots: std::collections::HashSet<u32>,
     /// Region union-find for aliasing analysis.
     region_uf: RegionUnionFind,
@@ -205,6 +208,7 @@ impl Solver {
             diagnostics: Vec::new(),
             numeric_classes: Vec::new(),
             usize_prefs: Vec::new(),
+            width_conflicts: Vec::new(),
             defaulted_roots: std::collections::HashSet::new(),
             region_uf: RegionUnionFind::new(),
             flows: Vec::new(),
@@ -256,6 +260,7 @@ impl Solver {
         let defaulted: Vec<bool> = (0..n).map(|v| self.defaulted_roots.contains(&self.uf.find(v))).collect();
         let class_of: Vec<u32> = (0..n).map(|v| self.uf.find(v)).collect();
         SolverResult {
+            width_conflicts: self.width_conflicts,
             class_of,
             defaulted,
             types,
@@ -278,6 +283,9 @@ impl Solver {
                     let root = self.uf.find(ra);
                     match (type_a, type_b) {
                         (Some(ta), Some(tb)) if ta != tb => {
+                            if is_integer_type(&ta) && is_integer_type(&tb) {
+                                self.width_conflicts.extend([*a, *b]);
+                            }
                             self.diagnostics.push(SolverDiagnostic {
                                 kind: DiagnosticKind::TypeError,
                                 message: format!("type conflict: {:?} vs {:?}", ta, tb),
@@ -296,6 +304,9 @@ impl Solver {
                 let root = self.uf.find(var.0);
                 match &self.types[root as usize] {
                     Some(existing) if existing != base_type => {
+                        if is_integer_type(existing) && is_integer_type(base_type) {
+                            self.width_conflicts.push(*var);
+                        }
                         self.diagnostics.push(SolverDiagnostic {
                             kind: DiagnosticKind::TypeError,
                             message: format!(

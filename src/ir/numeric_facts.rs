@@ -75,6 +75,18 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> HashSet<u32>
             held.extend(view.class(*v));
         }
     }
+    // The solver could not decide a class (two exact integer widths met): legacy.
+    held.extend(result.width_conflicts.iter().filter_map(|v| view.class(*v)));
+    // A negated literal in an unsigned class, or a loop binding of unknown element width: legacy.
+    for &v in &fc.unmodelled.negated_literals {
+        if matches!(view.int_type(v), Some(BaseType::U8 | BaseType::U16 | BaseType::U32 | BaseType::U64 | BaseType::U128 | BaseType::Usize)) {
+            held.extend(view.class(v));
+        }
+    }
+    let u = &fc.unmodelled;
+    for &v in u.loop_bindings.iter().chain(&u.unknown_lengths).chain(&u.unknown_fields) {
+        held.extend(view.class(v));
+    }
     // Bindings of one name with different widths cannot be named by one fact: their classes stay legacy.
     for (_, widths) in binding_widths(fc, &view) {
         if widths.iter().any(|w| w.1 != widths[0].1) {

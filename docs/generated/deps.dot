@@ -355,7 +355,7 @@ digraph deps {
   "ir" -> "source_map" [label="5"];
   "ir" -> "type_classification" [label="32"];
   "ir" -> "type_display" [label="1"];
-  "ir" -> "type_inference" [label="6"];
+  "ir" -> "type_inference" [label="7"];
   "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
   "linter" -> "auto_clone" [label="1"];
