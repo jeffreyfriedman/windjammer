@@ -10,6 +10,7 @@ pub mod files;
 mod file_cache;
 mod fix;
 mod front;
+pub mod moves;
 pub mod locate;
 mod project;
 mod rust_calls;

@@ -1403,7 +1403,6 @@ tests/drift_corpus/repros/map_get_unwrap_or_deref.wj	exit1:0:17
 tests/drift_corpus/repros/nested_vec_index_by_value.wj	exit1:0:17	
 tests/drift_corpus/repros/nth_cast.wj	exit0:2:18052	
 tests/drift_corpus/repros/option_binding_plus_literal.wj	exit1:0:17	
-tests/drift_corpus/repros/self_by_value_reuse.wj	exit1:0:17	
 tests/drift_corpus/repros/shadow_match_binding_literal.wj	exit1:0:17	
 tests/drift_corpus/repros/shadowed_option_literal_arms.wj	exit1:0:17	
 tests/engine_parity/vp_closure_captures.wj	exit0:59:942547515	
@@ -1416,3 +1415,4 @@ tests/engine_parity/vp_result_values.wj	exit0:105:696378321
 tests/engine_parity/vp_shadowing.wj	exit0:63:249324170	
 tests/engine_parity/vp_loop_exits.wj	exit0:58:158929211	
 tests/drift_corpus/repros/collect_annotated_let_split.wj	exit1:0:17	
+tests/engine_parity/vp_param_reassign.wj	exit0:29:167047742	

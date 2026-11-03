@@ -39,6 +39,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0027](0027-typed-json-derive.md) | Typed JSON for structs and enums (one data model, two engines) | Proposed |
 | [0028](0028-usize-class-in-the-numeric-solver.md) | An index class (`usize`) in the numeric solver | Accepted |
 | [0029](0029-int-at-the-surface.md) | `int` at the surface; rustc types the literals | Proposed |
+| [0030](0030-interpreter-rejects-what-rustc-rejects.md) | The interpreter refuses what the compiled build refuses, from the generated Rust | Proposed |
 <!-- wj:end -->
 
 ## Template
