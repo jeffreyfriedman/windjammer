@@ -185,6 +185,10 @@ pub static NOT_SINKS: &[&str] = &[
 pub static DYNAMIC_SINKS: &[&str] = &["mcp::call"];
 
 /// The effect `mcp::call` performs for these (possibly non-literal) arguments: `mcp.<server>.<tool>`, or `mcp.*` when either is computed.
+/// File reads that open the path themselves and decide on the open file (`Grant::open_read`), not on the name: no check by name
+/// runs before them. Each one must call `cap_open_read` (and the compiled runtime's `caps::open_read`) for its file.
+pub const FD_VERIFIED_READS: &[&str] = &["fs::read_to_string", "fs::read", "fs::read_bytes"];
+
 pub fn mcp_effect_name(server: Option<&str>, tool: Option<&str>) -> String {
     match (server, tool) {
         (Some(s), Some(t)) => format!("mcp.{s}.{t}"),
