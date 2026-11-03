@@ -29,7 +29,8 @@ def drop(text, prefix):
 
 
 def render():
-    sheet = open(PACK_PATH).read()
+    # The ablation ran on a frozen copy of the sheet (sheet_full.md); the live sheet has since gained bullets.
+    sheet = open(os.path.join(OUT_DIR, "sheet_full.md")).read()
     out = {"sheet_full.md": sheet}
     for arm, (name, prefix) in GROUPS.items():
         out[f"sheet_minus_{name}.md"] = drop(sheet, prefix)
