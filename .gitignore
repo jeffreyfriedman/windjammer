@@ -19,6 +19,10 @@ tests/generated/
 **/build/
 /test_output_*
 .wj-cache/
+# Analysis sidecars are cache output (docs/metadata-data-model.md); only the hand-authored,
+# embedded stdlib_meta/ is tracked.
+*.wj.meta
+!stdlib_meta/*.wj.meta
 .wj-compiler-stamp
 
 # IDE

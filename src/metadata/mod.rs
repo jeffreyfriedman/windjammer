@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 mod crate_metadata;
+pub mod legacy_sidecars;
 mod function_metadata;
 mod generated_rust_signatures;
 mod signature_filters;
@@ -237,12 +238,15 @@ pub fn merge_wj_meta_signatures_from_dir_only(
 ) {
     let mut copy_structs = Vec::new();
     let mut all_struct_fields = HashMap::new();
+    // Hand-authored, embedded metadata (`stdlib_meta/`): the one place sidecars are inputs by design.
+    let prev = TRUSTED_SIDECAR_DIR.with(|c| c.replace(true));
     merge_wj_meta_signatures_from_dir_inner(
         root,
         registry,
         &mut copy_structs,
         &mut all_struct_fields,
     );
+    TRUSTED_SIDECAR_DIR.with(|c| c.set(prev));
 }
 
 /// Public accessor for `merge_wj_meta_signatures_from_dir_inner` (used by compiler multipass).
@@ -360,6 +364,8 @@ fn wj_meta_is_current(path: &Path, meta: &ModuleMetadata) -> bool {
 }
 
 thread_local! {
+    /// Set while loading the compiler's own `stdlib_meta/`: sidecars there are intentional inputs.
+    static TRUSTED_SIDECAR_DIR: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Sidecars of the sources currently being compiled. A file's own previous `.wj.meta` is an
     /// output of that file; reading it back as an input makes the result depend on whether an
     /// earlier build left a cache behind (cold and warm builds must emit identical code).
@@ -375,7 +381,7 @@ fn same_file(a: &Path, b: &Path) -> bool {
 
 /// Run `f` with the sidecars of `source` excluded from every metadata merge on this thread.
 pub fn with_own_meta_excluded<R>(source: &Path, f: impl FnOnce() -> R) -> R {
-    let paths = vec![crate_metadata::meta_cache_path(source), source.with_extension("wj.meta")];
+    let paths = vec![crate_metadata::meta_cache_path(source)];
     let prev = OWN_META_PATHS.with(|c| std::mem::replace(&mut *c.borrow_mut(), paths));
     let out = f();
     OWN_META_PATHS.with(|c| *c.borrow_mut() = prev);
@@ -388,6 +394,11 @@ fn merge_single_wj_meta_file(
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
+    // Analysis metadata is read from the cache only; a `*.wj.meta` beside a source is a legacy sidecar
+    // (`wj clean --sidecars` removes it) and must not influence the build.
+    if !TRUSTED_SIDECAR_DIR.with(|c| c.get()) && !crate_metadata::is_cache_location(path) {
+        return;
+    }
     if OWN_META_PATHS.with(|c| c.borrow().iter().any(|own| same_file(own, path))) {
         return;
     }
