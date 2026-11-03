@@ -400,11 +400,7 @@ pub fn run(cli: Cli) -> Result<()> {
             windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?
         }
         Commands::Clean { all, sidecars } => {
-            if sidecars {
-                windjammer::cli::clean::remove_sidecars(&std::env::current_dir()?);
-            } else {
-                windjammer::cli::clean::execute(all)?;
-            }
+            windjammer::cli::clean::execute(all, sidecars)?;
         }
         Commands::Cache { action } => match action {
             CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,

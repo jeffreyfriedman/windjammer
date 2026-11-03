@@ -24,6 +24,12 @@ fn main() -> anyhow::Result<()> {
         println!("{}", windjammer::toolchain::identity::current().version_line());
         return Ok(());
     }
+    windjammer::metadata::set_global_meta_cache_dir(
+        std::env::var_os("WJ_META_CACHE_DIR")
+            .filter(|d| !d.is_empty())
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| windjammer::cargo_cache::cache_root().join("meta")),
+    );
     let cli = Cli::parse();
     wj_cli_cmds::run(cli)
 }

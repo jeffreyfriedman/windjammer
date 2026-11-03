@@ -18,8 +18,10 @@ Never next to a source file.
 
 - Project with `wj.toml` or `Cargo.toml`: `<project>/.wj-cache/<path under src>.wj.meta` (git-ignored).
 - No manifest above the source: `<cache root>/meta/<hash of the module root>/<path>.wj.meta`, where the
-  cache root is the Windjammer cache directory (`WJ_META_CACHE_DIR` overrides `<cache root>/meta`) and
-  the module root is the nearest ancestor directory named `src`, else the file's directory.
+  cache root is the Windjammer cache directory (the `wj` driver passes `WJ_META_CACHE_DIR` or
+  `<cache root>/meta` to the library; core code reads no environment) and the module root is found by
+  climbing out of module directories (a directory with `mod.wj`, or with a sibling `<name>.wj`), stopping
+  at the nearest ancestor named `src`, else the file's directory.
 
 A `*.wj.meta` found anywhere else is a legacy sidecar written by an older compiler. It is never read
 (`merge_single_wj_meta_file` accepts only cache locations and the embedded `stdlib_meta/`). `wj doctor`
