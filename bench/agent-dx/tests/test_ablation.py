@@ -43,3 +43,25 @@ class Ablation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Pilot4Packs(unittest.TestCase):
+    def test_committed_packs_equal_a_fresh_render(self):
+        for name, text in ablate.p4_render().items():
+            self.assertEqual(open(os.path.join(ablate.P4_DIR, name)).read(), text, f"{name} is stale: run agentdx.ablate.p4_write()")
+
+    def test_no_pilot4_pack_carries_a_loop_instruction_and_v2_is_small(self):
+        for arm in "KLMN":
+            text = open(arms.pack_path(arm)).read()
+            self.assertNotIn("wj build FILE", text); self.assertNotIn("--interpret", text)
+        self.assertLessEqual(len(open(arms.pack_path("N")).read().encode()), 900)
+        self.assertIn("/dev/stdin", open(arms.pack_path("N")).read())
+        self.assertIn("as int", open(arms.pack_path("N")).read())
+        self.assertNotIn("String", open(arms.pack_path("N")).read().replace("`string`, `char`", ""))
+
+    def test_arms_differ_only_in_loop_and_pack(self):
+        strip = lambda a: arms.prompt(T, a).replace(arms.LOOP_TEXT[arms.ARMS[a]["loop"]], "")
+        self.assertEqual(len({strip(a) for a in "KLMN"}), 1)
+        self.assertEqual(arms.ARMS["M"]["loop"], arms.ARMS["N"]["loop"])
+        self.assertEqual(arms.ARMS["K"]["pack_file"], arms.ARMS["L"]["pack_file"])
+        self.assertNotEqual(arms.ARMS["M"]["pack_file"], arms.ARMS["N"]["pack_file"])

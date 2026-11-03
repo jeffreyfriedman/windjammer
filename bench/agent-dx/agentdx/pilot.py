@@ -141,9 +141,11 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     tool = A.SHIMMED[lang]
     real = (real_wj or wj_bin()) if lang == "wj" else shutil.which(tool)
     S.install(shim_dir, real, log, os.path.join(ws, src), tool)
+    load0 = os.getloadavg()[0]
     t0 = time.time()
     res = agent.run(ws, shim_dir, arm, task)
     wall = time.time() - t0
+    load1 = os.getloadavg()[0]
     final = open(os.path.join(ws, src)).read()
     g = default_grader(task, ws, lang) if grader is default_grader else grader(task, ws)
     an = analyse_invocations(S.read_log(log, tool), lang)
@@ -160,7 +162,7 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           "wall_seconds": round(wall, 2), "thinking_seconds": api,
           "tool_wait_seconds": an["tool_wait_seconds"],
           "other_seconds": None if api is None else round(max(0.0, wall - api - an["tool_wait_seconds"]), 2),
-          "lang": lang, "capability_denials": an["capability_denials"], "final_build_calls": an["final_build_calls"],
+          "lang": lang, "load_avg": round((load0 + load1) / 2, 1), "capability_denials": an["capability_denials"], "final_build_calls": an["final_build_calls"],
           "docs_calls": sum(1 for r in an["invocations"] if r["verb"] in ("docs", "explain")),
           "pack_file": os.path.basename(A.pack_path(arm) or ""), "pack_bytes": len(open(A.pack_path(arm)).read()) if A.pack_path(arm) else 0,
           **(res.get("extra") or {}),
