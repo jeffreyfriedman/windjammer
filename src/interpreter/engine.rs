@@ -542,8 +542,6 @@ pub(crate) struct FastHits {
     pub(crate) packedidx: u64,
     /// Machine-code element accesses through a reference chain resolved once per unit run.
     pub(crate) vecresolve: u64,
-    /// Lowered `match` values known never to be references (a `let` of one gets a plain slot).
-    pub(crate) matchval: u64,
     /// `s.push_str` of an interpolated string formatted straight into one buffer.
     pub(crate) pushfmt: u64,
 }
