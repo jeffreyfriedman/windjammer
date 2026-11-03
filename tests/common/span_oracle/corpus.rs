@@ -23,6 +23,7 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         if p.is_dir() {
             if name == "target" || name.starts_with('.') || name == "node_modules"
                 || (name == "tree" && p.components().any(|c| c.as_os_str() == "py_ports"))
+                || (name == "drift_corpus" && p.parent().is_some_and(|d| d.ends_with("tests")))
             {
                 // recorded replay fixtures (tests/py_ports/*/*/tree) hold copies and deliberately broken inputs
                 continue;

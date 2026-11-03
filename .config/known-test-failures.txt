@@ -6,7 +6,6 @@
 #
 # Classes: multi-file ownership demotion (call-site vs defining module), String move-vs-clone
 # at last use, enum payload literal width without return-type context, while-counter width.
-bug_while_literal_bound_index_must_not_be_i32_test::while_literal_bound_index_must_not_be_i32
 cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
 # Inference differential corpus (docs/spec/inference-divergences.md); each is a minimal repro of an open divergence.
 # Dogfooding findings (docs/known-issues/dogfood-findings.md)
