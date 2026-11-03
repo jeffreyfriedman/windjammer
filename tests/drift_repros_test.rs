@@ -81,3 +81,9 @@ fn mismatch_between_integer_widths_names_both_widths() {
     assert_ne!(t.message, "mismatched types: expected an owned `int`, found an owned `int`");
     assert!(t.message.contains("i32") && t.message.contains("i64"), "message hides the widths: {}", t.message);
 }
+
+/// The same bare unit-variant pattern where the scrutinee of the match is itself a match.
+#[test]
+fn bare_unit_variant_pattern_in_nested_match_typechecks() {
+    generated_rust_typechecks("bare_unit_pattern_nested.wj");
+}
