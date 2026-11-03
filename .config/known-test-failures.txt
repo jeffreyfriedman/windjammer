@@ -6,7 +6,6 @@
 #
 # Classes: multi-file ownership demotion (call-site vs defining module), String move-vs-clone
 # at last use, enum payload literal width without return-type context, while-counter width.
-bug_while_literal_bound_index_must_not_be_i32_test::while_literal_bound_index_must_not_be_i32
 cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
 # Inference differential corpus (docs/spec/inference-divergences.md); each is a minimal repro of an open divergence.
 # Dogfooding findings (docs/known-issues/dogfood-findings.md)
@@ -25,7 +24,6 @@ codegen_correctness_test::option_param_consumed
 codegen_proactive_hardening_gates_test::len_to_int_formal_substring_must_cargo_check
 codegen_proactive_hardening_gates_test::typed_closure_string_predicate_must_cargo_check
 cross_crate_dogfooding_ownership_test::dogfood_substrate_full_store_patch_part_enum_value_layout
-formal_body_agreement_field_forward_test::formal_and_body_agree_when_options_field_is_forwarded
 # Third batch of compiler findings (numeric solver C4 / ownership convergence)
 compiler_findings_batch3_test::field_moved_into_function_keeps_mut_self_callers_valid
 compiler_findings_batch3_test::field_passed_to_extern_fn_keeps_borrowed_receiver

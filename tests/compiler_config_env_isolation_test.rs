@@ -11,6 +11,8 @@ const ALLOWED: &[&str] = &[
     "src/debug_env.rs",
     "src/test_runner/",
     "src/error_statistics.rs",
+    // The toolchain's single gateway to the process environment (wj doctor, pin file, stale warning).
+    "src/toolchain/env.rs",
     // Not compiler configuration: this is the interpreted *user program's* `std::env::var`
     // (stdlib semantics, same as fs/io there). It must read the real process environment.
     "src/interpreter/builtins/std_fns.rs",

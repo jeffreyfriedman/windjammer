@@ -41,16 +41,16 @@ impl Parser {
             return Err(format!("expected a field or method name after `?.` (at {})", self.pos_desc()));
         };
         self.advance();
-        let receiver = self.alloc_expr(Expression::Identifier { name: OPT_CHAIN_PARAM.to_string(), location: location.clone() });
+        let receiver = self.alloc_synthetic(Expression::Identifier { name: OPT_CHAIN_PARAM.to_string(), location: location.clone() });
         let body = if self.current_token() == &Token::LParen && !self.had_newline_before_current() {
             self.advance();
             let arguments = self.parse_call_rest(Some(format!(".{member}")))?;
-            self.alloc_expr(Expression::MethodCall { object: receiver, method: member, type_args: None, arguments, location: location.clone() })
+            self.alloc_synthetic(Expression::MethodCall { object: receiver, method: member, type_args: None, arguments, location: location.clone() })
         } else {
-            self.alloc_expr(Expression::FieldAccess { object: receiver, field: member, location: location.clone() })
+            self.alloc_synthetic(Expression::FieldAccess { object: receiver, field: member, location: location.clone() })
         };
-        let closure = self.alloc_expr(Expression::Closure { parameters: vec![OPT_CHAIN_PARAM.to_string()], body, location: location.clone() });
-        Ok(self.alloc_expr(Expression::MethodCall {
+        let closure = self.alloc_synthetic(Expression::Closure { parameters: vec![OPT_CHAIN_PARAM.to_string()], body, location: location.clone() });
+        Ok(self.alloc_synthetic(Expression::MethodCall {
             object,
             method: OPT_CHAIN.to_string(),
             type_args: None,
