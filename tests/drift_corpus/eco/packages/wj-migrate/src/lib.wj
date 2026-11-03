@@ -1,0 +1,280 @@
+pub mod db_apply
+pub mod db_status
+
+use std::strings
+
+/// One ordered SQL migration discovered from a filename.
+pub struct Migration {
+    pub version: int,
+    pub name: string,
+    pub filename: string,
+}
+
+/// Parse `NNN_name.sql` (leading zeros allowed on the version).
+pub fn parse_filename(filename: string) -> Result<Migration, string> {
+    let trimmed = strings.trim(filename)
+    if strings.len(trimmed) == 0 {
+        return Err("empty filename")
+    }
+    if !strings.ends_with(trimmed, ".sql") {
+        return Err("migration must end with .sql")
+    }
+    let stem = strings.substring(trimmed, 0, strings.len(trimmed) - 4)
+    match split_version_name(stem) {
+        Ok(parts) => Ok(Migration {
+            version: parts.0,
+            name: parts.1,
+            filename: trimmed,
+        }),
+        Err(e) => Err(e),
+    }
+}
+
+/// Sort migrations ascending by version (stable for equal versions).
+pub fn sort_migrations(items: Vec<Migration>) -> Vec<Migration> {
+    let mut out: Vec<Migration> = Vec::new()
+    for item in items {
+        out = insert_sorted(out, item)
+    }
+    out
+}
+
+fn insert_sorted(sorted: Vec<Migration>, item: Migration) -> Vec<Migration> {
+    let mut before: Vec<Migration> = Vec::new()
+    let mut after: Vec<Migration> = Vec::new()
+    let mut found_spot = false
+    for m in sorted {
+        if !found_spot && item.version < m.version {
+            found_spot = true
+        }
+        if found_spot {
+            after.push(m)
+        } else {
+            before.push(m)
+        }
+    }
+    let mut result = before
+    result.push(item)
+    for m in after {
+        result.push(m)
+    }
+    result
+}
+
+/// Migrations in `all` whose version is not in `applied` (result sorted).
+pub fn pending(all: Vec<Migration>, applied: Vec<int>) -> Vec<Migration> {
+    let sorted = sort_migrations(all)
+    let mut left: Vec<Migration> = Vec::new()
+    for m in sorted {
+        if !version_applied(applied, m.version) {
+            left.push(m)
+        }
+    }
+    left
+}
+
+/// Err when two migrations share a version number.
+pub fn validate_unique_versions(items: Vec<Migration>) -> Result<(), string> {
+    let sorted = sort_migrations(items)
+    let mut prev = -1
+    let mut first = true
+    for m in sorted {
+        if !first {
+            if m.version == prev {
+                return Err("duplicate migration version ${m.version}")
+            }
+        }
+        prev = m.version
+        first = false
+    }
+    Ok(())
+}
+
+/// SQL to create the bookkeeping table (portable subset).
+pub fn schema_table_sql() -> string {
+    "CREATE TABLE IF NOT EXISTS schema_migrations (\n  version INTEGER PRIMARY KEY NOT NULL,\n  name TEXT NOT NULL,\n  applied_at TEXT NOT NULL\n)"
+}
+
+/// SQL to list applied migration versions (oldest first).
+pub fn select_applied_sql() -> string {
+    "SELECT version FROM schema_migrations ORDER BY version ASC"
+}
+
+/// SQL to record that `m` was applied at `applied_at` (ISO-8601 text).
+pub fn record_applied_sql(m: Migration, applied_at: string) -> string {
+    let safe_name = escape_sql_literal(m.name)
+    let safe_at = escape_sql_literal(applied_at)
+    "INSERT INTO schema_migrations (version, name, applied_at) VALUES (${m.version}, '${safe_name}', '${safe_at}')"
+}
+
+fn escape_sql_literal(text: string) -> string {
+    strings.replace(text, "'", "''")
+}
+
+pub fn version_applied(applied: Vec<int>, version: int) -> bool {
+    for v in applied {
+        if v == version {
+            return true
+        }
+    }
+    false
+}
+
+fn split_version_name(stem: string) -> Result<(int, string), string> {
+    let mut i = 0
+    while i < strings.len(stem) {
+        let ch = strings.substring(stem, i, i + 1)
+        if !is_digit(ch) {
+            break
+        }
+        i = i + 1
+    }
+    if i == 0 {
+        return Err("expected numeric version prefix")
+    }
+    if i >= strings.len(stem) || strings.substring(stem, i, i + 1) != "_" {
+        return Err("expected underscore after version")
+    }
+    let version_text = strings.substring(stem, 0, i)
+    let name = strings.substring(stem, i + 1, strings.len(stem))
+    if strings.len(name) == 0 {
+        return Err("empty migration name")
+    }
+    Ok((to_int(version_text), name))
+}
+
+fn is_digit(ch: string) -> bool {
+    ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
+}
+
+fn to_int(text: string) -> int {
+    strings.parse_i32(text) as int
+}
+
+/// Discover and parse `.sql` migration basenames (sorted).
+pub fn migrations_from_filenames(filenames: Vec<string>) -> Result<Vec<Migration>, string> {
+    let mut items = Vec::new()
+    for name in filenames {
+        if !strings.ends_with(name, ".sql") {
+            continue
+        }
+        match parse_filename(name) {
+            Ok(m) => items.push(m),
+            Err(e) => return Err(e),
+        }
+    }
+    if items.len() == 0 {
+        return Err("no migration .sql files found")
+    }
+    Ok(sort_migrations(items))
+}
+
+/// Number of migrations in `items`.
+pub fn migration_count(items: Vec<Migration>) -> int {
+    let mut n = 0
+    for _m in items {
+        n = n + 1
+    }
+    n
+}
+
+/// `Ok(n)` when `items` has exactly `n` migrations, otherwise `Err`.
+pub fn require_migration_count(items: Vec<Migration>, n: int) -> Result<int, string> {
+    if migration_count(items) == n {
+        return Ok(n)
+    }
+    Err("expected count")
+}
+
+/// Highest version in `items`, or `0` when empty.
+pub fn latest_version(items: Vec<Migration>) -> int {
+    let sorted = sort_migrations(items)
+    if sorted.len() == 0 {
+        return 0
+    }
+    sorted[sorted.len() - 1].version
+}
+
+/// `Ok(version)` for the highest migration, or `Err` when the set is empty.
+pub fn require_latest(items: Vec<Migration>) -> Result<int, string> {
+    let version = latest_version(items)
+    if version > 0 {
+        return Ok(version)
+    }
+    Err("expected latest")
+}
+
+/// Number of migrations in `all` not yet in `applied`.
+pub fn pending_count(all: Vec<Migration>, applied: Vec<int>) -> int {
+    let left = pending(all, applied)
+    let mut n = 0
+    for _m in left {
+        n = n + 1
+    }
+    n
+}
+
+/// `Ok(n)` when that many migrations are still pending, otherwise `Err`.
+pub fn require_pending_count(all: Vec<Migration>, applied: Vec<int>, n: int) -> Result<int, string> {
+    if pending_count(all, applied) == n {
+        return Ok(n)
+    }
+    Err("expected pending count")
+}
+
+/// True when `version` exists in `all` and is not yet applied.
+pub fn is_pending(all: Vec<Migration>, applied: Vec<int>, version: int) -> bool {
+    if version_applied(applied, version) {
+        return false
+    }
+    for m in all {
+        if m.version == version {
+            return true
+        }
+    }
+    false
+}
+
+/// `Ok(version)` when that migration exists and is not yet applied, otherwise `Err`.
+pub fn require_pending(all: Vec<Migration>, applied: Vec<int>, version: int) -> Result<int, string> {
+    if is_pending(all, applied, version) {
+        return Ok(version)
+    }
+    Err("expected pending")
+}
+
+/// Lowest version in `items`, or `0` when empty.
+pub fn earliest_version(items: Vec<Migration>) -> int {
+    let sorted = sort_migrations(items)
+    if sorted.len() == 0 {
+        return 0
+    }
+    sorted[0].version
+}
+
+/// `Ok(version)` for the lowest migration, or `Err` when the set is empty.
+pub fn require_earliest(items: Vec<Migration>) -> Result<int, string> {
+    let version = earliest_version(items)
+    if version > 0 {
+        return Ok(version)
+    }
+    Err("expected earliest")
+}
+
+/// Migration name for `version`, or None when absent.
+pub fn name_of_version(items: Vec<Migration>, version: int) -> Option<string> {
+    for m in items {
+        if m.version == version {
+            return Some(m.name)
+        }
+    }
+    None
+}
+
+/// Migration name for `version`, or Err naming the missing version.
+pub fn require_name(items: Vec<Migration>, version: int) -> Result<string, string> {
+    match name_of_version(items, version) {
+        Some(name) => Ok(name),
+        None => Err("missing migration: ${version}"),
+    }
+}

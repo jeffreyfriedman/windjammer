@@ -1,0 +1,94 @@
+use std::cmp::Ordering
+/// Sum of the samples.
+pub fn sum(xs: Vec<f64>) -> f64 {
+    let mut total = 0.0
+    for x in xs {
+        total = total + x
+    }
+    total
+}
+
+/// Arithmetic mean (0.0 for no samples).
+pub fn mean(xs: Vec<f64>) -> f64 {
+    if xs.len() == 0 {
+        return 0.0
+    }
+    let n = xs.len() as f64
+    sum(xs) / n
+}
+
+/// Smallest sample (0.0 for no samples).
+pub fn min(xs: Vec<f64>) -> f64 {
+    if xs.len() == 0 {
+        return 0.0
+    }
+    let mut best = xs[0]
+    for x in xs {
+        if x < best {
+            best = x
+        }
+    }
+    best
+}
+
+/// Largest sample (0.0 for no samples).
+pub fn max(xs: Vec<f64>) -> f64 {
+    if xs.len() == 0 {
+        return 0.0
+    }
+    let mut best = xs[0]
+    for x in xs {
+        if x > best {
+            best = x
+        }
+    }
+    best
+}
+
+/// The samples in ascending order.
+pub fn sorted(xs: Vec<f64>) -> Vec<f64> {
+    let mut out = xs
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+    out
+}
+
+/// Median: the middle sample, or the mean of the two middle samples (Python's `statistics.median`).
+pub fn median(xs: Vec<f64>) -> f64 {
+    let n = xs.len()
+    if n == 0 {
+        return 0.0
+    }
+    let s = sorted(xs)
+    if n % 2 == 1 {
+        return s[n / 2]
+    }
+    (s[n / 2 - 1] + s[n / 2]) / 2.0
+}
+
+/// Population standard deviation (Python's `statistics.pstdev`).
+pub fn pstdev(xs: Vec<f64>) -> f64 {
+    let n = xs.len()
+    if n == 0 {
+        return 0.0
+    }
+    let m = mean(xs)
+    let mut acc = 0.0
+    for x in xs {
+        acc = acc + (x - m) * (x - m)
+    }
+    (acc / (n as f64)).sqrt()
+}
+
+/// Sample standard deviation (Python's `statistics.stdev`; 0.0 below two samples).
+pub fn stdev(xs: Vec<f64>) -> f64 {
+    let n = xs.len()
+    if n < 2 {
+        return 0.0
+    }
+    let m = mean(xs)
+    let mut acc = 0.0
+    for x in xs {
+        acc = acc + (x - m) * (x - m)
+    }
+    (acc / ((n - 1) as f64)).sqrt()
+}

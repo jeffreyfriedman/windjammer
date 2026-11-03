@@ -1,0 +1,47 @@
+use crate::Shared
+use crate::SharedMap
+use crate::shared_map_insert
+use crate::shared_map_len
+use crate::shared_map_new
+use crate::shared_map_require
+use crate::counter_get
+use crate::counter_inc
+use crate::counter_new
+use std::strings
+
+@test
+fn test_shared_map_insert_len() {
+    let m = shared_map_new()
+    assert_eq(shared_map_len(m), 0)
+}
+
+@test
+fn test_shared_map_len_after_inserts() {
+    let m = shared_map_new()
+    let m = shared_map_insert(m, "x", 1)
+    let m = shared_map_insert(m, "y", 2)
+    assert_eq(shared_map_len(m), 2)
+}
+
+@test
+fn test_counter_inc() {
+    let c = counter_new(0)
+    counter_inc(c)
+    counter_inc(c)
+    assert_eq(counter_get(c), 2)
+}
+
+@test
+fn test_shared_map_require() {
+    let m = shared_map_new()
+    let m = shared_map_insert(m, "x", 7)
+    match shared_map_require(m, "x") {
+        Ok(v) => assert_eq(v, 7),
+        Err(_) => assert(false, "present"),
+    }
+    let empty = shared_map_new()
+    match shared_map_require(empty, "missing") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "key"), "mentions key"),
+    }
+}

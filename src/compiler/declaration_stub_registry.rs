@@ -27,43 +27,6 @@ pub struct DeclarationStubContribution {
     pub module_path: String,
 }
 
-pub fn merge_struct_fields_from_items(
-    items: &[Item<'_>],
-    module_prefix: &[String],
-    global_struct_fields: &mut HashMap<String, HashMap<String, crate::parser::ast::types::Type>>,
-    struct_defining_module_paths: &mut HashMap<String, Vec<Vec<String>>>,
-) {
-    use crate::type_inference::struct_field_registry;
-    for item in items {
-        match item {
-            Item::Struct { decl, .. } => {
-                let qualified =
-                    struct_field_registry::qualify_struct_key(module_prefix, &decl.name);
-                let mut fields = HashMap::new();
-                for field in &decl.fields {
-                    fields.insert(field.name.clone(), field.field_type.clone());
-                }
-                global_struct_fields.insert(qualified, fields);
-                struct_defining_module_paths
-                    .entry(decl.name.clone())
-                    .or_default()
-                    .push(module_prefix.to_vec());
-            }
-            Item::Mod { name, items, .. } => {
-                let mut next = module_prefix.to_vec();
-                next.push(name.clone());
-                merge_struct_fields_from_items(
-                    items,
-                    &next,
-                    global_struct_fields,
-                    struct_defining_module_paths,
-                );
-            }
-            _ => {}
-        }
-    }
-}
-
 fn collect_float_signatures_from_program(
     program: &Program<'_>,
 ) -> HashMap<
@@ -114,7 +77,7 @@ pub fn collect_per_file_declaration_stubs(
     let mut struct_defining_module_paths = HashMap::new();
     let file_module =
         crate::analyzer::type_collector::wj_file_to_module_path(src_base, file).unwrap_or_default();
-    merge_struct_fields_from_items(
+    crate::type_inference::struct_field_registry::merge_struct_fields_from_items(
         &program.items,
         &file_module,
         &mut struct_fields,

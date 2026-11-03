@@ -1,0 +1,71 @@
+use crate::domain::ChatConfig
+use crate::domain::Hub
+
+// "head rest-of-line": split at the first space.
+fn split_head(line: string) -> (string, string) {
+    let words: Vec<string> = line.split(" ").collect()
+    let mut rest = Vec::new()
+    let mut first = true
+    for w in words {
+        if first {
+            first = false
+        } else {
+            rest.push(w.clone())
+        }
+    }
+    (words[0].clone(), rest.join(" "))
+}
+
+/// Run a scripted session against a fresh hub and return what the server would send.
+///
+/// One command per line; time advances one second per line:
+///   open            -> `conn N`
+///   close N         -> presence updates for the rooms N left
+///   N <json frame>  -> the deliveries, each printed as `-> M <json>`
+/// This is a stand-in transport: the hub only needs something that opens connections, reads text frames and
+/// writes the returned deliveries back, which is all a WebSocket server adapter has to do.
+pub fn run_transcript(config: ChatConfig, script: string) -> string {
+    let mut hub = Hub::new(config)
+    let mut out: Vec<string> = Vec::new()
+    let mut line_no = 0
+    for line in script.lines() {
+        line_no = line_no + 1
+        let now_ms = line_no * 1000
+        if line.trim() == "" {
+            continue
+        }
+        if line.trim() == "open" {
+            out.push("conn ${hub.connect(now_ms)}")
+            continue
+        }
+        let parts = split_head(line)
+        if parts.1 == "" {
+            out.push("line ${line_no}: expected 'open', 'close N' or 'N <frame>'")
+            continue
+        }
+        if parts.0 == "close" {
+            match parts.1.trim().parse::<int>() {
+                Ok(id) => {
+                    for d in hub.disconnect(id) {
+                        out.push("-> ${d.conn} ${d.text}")
+                    }
+                },
+                Err(_) => out.push("line ${line_no}: expected 'close N'"),
+            }
+            continue
+        }
+        match parts.0.parse::<int>() {
+            Ok(id) => {
+                if !hub.has_connection(id) {
+                    out.push("line ${line_no}: unknown connection ${id}")
+                    continue
+                }
+                for d in hub.receive(id, parts.1, now_ms) {
+                    out.push("-> ${d.conn} ${d.text}")
+                }
+            },
+            Err(_) => out.push("line ${line_no}: expected 'open', 'close N' or 'N <frame>'"),
+        }
+    }
+    out.join("\n")
+}

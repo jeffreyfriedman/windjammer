@@ -1,0 +1,14 @@
+// The loop variable of `for i in a..b` has the bounds' width, so a literal compared with it in the
+// body (even inside an `if` expression) takes that width (plan C4, lk-findings2 repro).
+fn count(n: int) -> int {
+    let mut hits = 0
+    for i in 0..n {
+        let z = if i == 0 { 1 } else { 2 }
+        hits = hits + z
+    }
+    hits
+}
+
+fn main() {
+    println(count(3))
+}

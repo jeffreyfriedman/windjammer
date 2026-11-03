@@ -1,0 +1,74 @@
+// Shadowing: a binding that hides a parameter, a loop variable, a match binding that hides an outer
+// local, the same name at a different type, and a block value that hides its own initializer.
+fn pick(x: int, flag: bool) -> int {
+    let x = if flag { x * 2 } else { x }
+    let x = x + 1
+    x
+}
+
+fn narrow(v: Option<int>) -> int {
+    let v = match v {
+        Some(v) => v,
+        None => -1,
+    }
+    let v = v * 10
+    v
+}
+
+fn retype(n: int) -> string {
+    let n = n + 1
+    let n = "n=${n}"
+    let n = n + "!"
+    n
+}
+
+fn main() {
+    println("${pick(3, true)} ${pick(3, false)}")
+    println("${narrow(Some(4))} ${narrow(None)}")
+    println(retype(1))
+    let x = 1
+    let r = {
+        let x = x + 10
+        let x = x * 2
+        x
+    }
+    println("${x} ${r}")
+    let mut acc = 0
+    for i in 0..3 {
+        let i = i * 100
+        for i in 0..2 {
+            acc += i
+        }
+        acc += i
+    }
+    println("${acc}")
+    let item: Option<int> = Some(5)
+    match item {
+        Some(item) => {
+            let item: int = item + 1
+            println("inner ${item}")
+        }
+        None => println("none"),
+    }
+    let item2 = match item {
+        Some(item) => item * 3,
+        None => 0,
+    }
+    println("${item2} ${item.is_some()}")
+    let name = "outer"
+    let f = |name: string| name + "-closure"
+    let arg: string = "arg"
+    println("${f(arg)} ${name}")
+    let mut total = 0
+    let mut k = 0
+    while k < 3 {
+        let total2 = total + k
+        let total = total2 * 2
+        total2;
+        k += 1
+        if total > 1000 {
+            break
+        }
+    }
+    println("${total} ${k}")
+}

@@ -1,0 +1,112 @@
+use wj_fs_walk::walk_files
+use wj_glob::filter as glob_filter
+use wj_gitignore::filter_unignored
+
+/// Filter already-listed paths with a shell glob (`*`, `?`, `**`).
+pub fn find_matching(pattern: string, paths: Vec<string>) -> Vec<string> {
+    glob_filter(pattern, paths)
+}
+
+/// Like `find_matching`, but drops paths excluded by `.gitignore` text (paths relative to the ignore file).
+pub fn find_unignored(pattern: string, paths: Vec<string>, gitignore: string) -> Vec<string> {
+    find_matching(pattern, filter_unignored(gitignore, paths))
+}
+
+/// Walk `root` for files, then keep those matching `pattern`.
+pub fn find_under(root: string, pattern: string) -> Result<Vec<string>, string> {
+    match walk_files(root) {
+        Ok(paths) => Ok(find_matching(pattern, paths)),
+        Err(e) => Err(e),
+    }
+}
+
+/// One path per line for CLI output.
+pub fn format_hits(hits: Vec<string>) -> string {
+    let mut out = ""
+    let mut i = 0
+    while i < hits.len() {
+        if i > 0 {
+            out = "${out}\n"
+        }
+        out = "${out}${hits[i]}"
+        i = i + 1
+    }
+    out
+}
+
+pub fn hit_count(hits: Vec<string>) -> int {
+    let mut n = 0
+    for _ in hits {
+        n = n + 1
+    }
+    n
+}
+
+/// Zero when the hit list is empty.
+pub fn require_empty(hits: Vec<string>) -> Result<int, string> {
+    if is_empty_hits(hits) {
+        Ok(0)
+    } else {
+        Err("expected empty")
+    }
+}
+
+pub fn is_empty_hits(hits: Vec<string>) -> bool {
+    hit_count(hits) == 0
+}
+
+pub fn first_hit(hits: Vec<string>) -> Option<string> {
+    if hits.len() == 0 {
+        return None
+    }
+    Some(hits[0])
+}
+
+/// Last hit, or an error when the list is empty.
+pub fn require_last(hits: Vec<string>) -> Result<string, string> {
+    match last_hit(hits) {
+        Some(p) => Ok(p),
+        None => Err("expected last"),
+    }
+}
+
+pub fn last_hit(hits: Vec<string>) -> Option<string> {
+    if hits.len() == 0 {
+        return None
+    }
+    Some(hits[hits.len() - 1])
+}
+
+pub fn require_first_hit(hits: Vec<string>) -> Result<string, string> {
+    match first_hit(hits) {
+        Some(p) => Ok(p),
+        None => Err("no hit"),
+    }
+}
+
+/// The only path when the hit list has exactly one entry.
+pub fn only_hit(hits: Vec<string>) -> Option<string> {
+    if hits.len() == 1 {
+        Some(hits[0])
+    } else {
+        None
+    }
+}
+
+/// The only hit path, or `Err` when the list is not a singleton.
+pub fn require_only_hit(hits: Vec<string>) -> Result<string, string> {
+    match only_hit(hits) {
+        Some(p) => Ok(p),
+        None => Err("expected one hit"),
+    }
+}
+
+/// Hit count when the list is non-empty.
+pub fn require_hits(hits: Vec<string>) -> Result<int, string> {
+    let n = hits.len()
+    if n == 0 {
+        Err("expected hits")
+    } else {
+        Ok(n as int)
+    }
+}

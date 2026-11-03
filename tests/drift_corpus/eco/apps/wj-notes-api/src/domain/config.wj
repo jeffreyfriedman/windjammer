@@ -1,0 +1,344 @@
+use std::collections::HashMap
+use std::env
+use std::strings
+
+use wj_config::from_toml
+use wj_config::merge
+use wj_dotenv::parse as parse_dotenv
+use wj_duration::parse_ms
+use wj_log::parse_level
+
+use crate::domain::parse_positive_int
+
+pub struct NotesConfig {
+    pub allowed_origins: Vec<string>,
+    pub rate_limit: int,
+    pub window_ms: int,
+    pub max_title_len: int,
+    pub max_body_len: int,
+    pub log_level: string,
+    pub public_base_url: string,
+}
+
+impl NotesConfig {
+    pub fn defaults() -> NotesConfig {
+        let mut allowed = Vec::new()
+        allowed.push("*")
+        NotesConfig {
+            allowed_origins: allowed,
+            rate_limit: 100,
+            window_ms: 60_000,
+            max_title_len: 200,
+            max_body_len: 10_000,
+            log_level: "info",
+            public_base_url: "http://localhost:8080",
+        }
+    }
+}
+
+pub fn config_from_env() -> NotesConfig {
+    NotesConfig {
+        allowed_origins: cors_origins_from_env(),
+        rate_limit: rate_limit_from_env(),
+        window_ms: window_ms_from_env(),
+        max_title_len: max_title_len_from_env(),
+        max_body_len: max_body_len_from_env(),
+        log_level: log_level_from_env(),
+        public_base_url: public_base_url_from_env(),
+    }
+}
+
+/// Defaults < dotenv text (`CORS_ORIGIN=…`). Dogfoods `wj-dotenv` + `wj-config::merge`.
+pub fn config_from_dotenv(text: string) -> NotesConfig {
+    notes_config_from_map(merge(default_string_map(), dotenv_to_config_map(parse_dotenv(text))))
+}
+
+/// Defaults < TOML text. Flat keys or `[limits]` section (`limits.max_title_len`).
+/// Dogfoods `wj-config::from_toml` / `wj-toml`.
+pub fn config_from_toml(text: string) -> NotesConfig {
+    notes_config_from_map(merge(default_string_map(), from_toml(text)))
+}
+
+pub fn port_from_env() -> int {
+    match env.get("PORT") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(port) => port,
+                None => 8080,
+            }
+        },
+        None => 8080,
+    }
+}
+
+fn default_string_map() -> HashMap<string, string> {
+    let mut defaults = HashMap::new()
+    defaults.insert("cors_origin", "*")
+    defaults.insert("rate_limit", "100")
+    defaults.insert("window_ms", "60000")
+    defaults.insert("max_title_len", "200")
+    defaults.insert("max_body_len", "10000")
+    defaults.insert("log_level", "info")
+    defaults.insert("public_base_url", "http://localhost:8080")
+    defaults
+}
+
+fn dotenv_to_config_map(raw: HashMap<string, string>) -> HashMap<string, string> {
+    let mut out = HashMap::new()
+    for (key, value) in raw {
+        let mapped = map_dotenv_key(key)
+        if strings.len(mapped) > 0 {
+            out.insert(mapped, value)
+        }
+    }
+    out
+}
+
+fn map_dotenv_key(key: string) -> string {
+    if key == "CORS_ORIGIN" || key == "cors_origin" {
+        return "cors_origin"
+    }
+    if key == "RATE_LIMIT" || key == "rate_limit" {
+        return "rate_limit"
+    }
+    if key == "RATE_WINDOW_MS" || key == "WINDOW_MS" || key == "window_ms" {
+        return "window_ms"
+    }
+    if key == "RATE_WINDOW" || key == "WINDOW" || key == "window" {
+        return "window"
+    }
+    if key == "MAX_TITLE_LEN" || key == "max_title_len" {
+        return "max_title_len"
+    }
+    if key == "MAX_BODY_LEN" || key == "max_body_len" {
+        return "max_body_len"
+    }
+    if key == "LOG_LEVEL" || key == "log_level" {
+        return "log_level"
+    }
+    if key == "PUBLIC_BASE_URL" || key == "public_base_url" {
+        return "public_base_url"
+    }
+    ""
+}
+
+/// Single-map reader (same shape as auth `auth_config_from_map`) — avoids owned
+/// HashMap helpers that cargo-bin injects mid-match defer-drop into.
+fn notes_config_from_map(map: HashMap<string, string>) -> NotesConfig {
+    let cors = match map.get("cors_origin") {
+        Some(v) => "${v}",
+        None => "*",
+    }
+    let rate_text = match map.get("rate_limit") {
+        Some(v) => "${v}",
+        None => "100",
+    }
+    let rate_limit = match parse_positive_int(rate_text) {
+        Some(n) => n,
+        None => 100,
+    }
+    let window_text = match map.get("window") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("window_ms") {
+                Some(v) => "${v}",
+                None => "60000",
+            }
+        },
+    }
+    let window_ms = match parse_window_ms(window_text) {
+        Some(n) => n,
+        None => 60_000,
+    }
+    let title_text = match map.get("limits.max_title_len") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("max_title_len") {
+                Some(v) => "${v}",
+                None => "200",
+            }
+        },
+    }
+    let max_title_len = match parse_positive_int(title_text) {
+        Some(n) => n,
+        None => 200,
+    }
+    let body_text = match map.get("limits.max_body_len") {
+        Some(v) => "${v}",
+        None => {
+            match map.get("max_body_len") {
+                Some(v) => "${v}",
+                None => "10000",
+            }
+        },
+    }
+    let max_body_len = match parse_positive_int(body_text) {
+        Some(n) => n,
+        None => 10_000,
+    }
+    let log_level = match map.get("log_level") {
+        Some(v) => normalize_log_level("${v}"),
+        None => "info",
+    }
+    let public_base_url = match map.get("public_base_url") {
+        Some(v) => normalize_base_url("${v}"),
+        None => "http://localhost:8080",
+    }
+    let mut allowed = Vec::new()
+    let trimmed = strings.trim(cors)
+    if strings.len(trimmed) == 0 {
+        allowed.push("*")
+    } else {
+        allowed.push(trimmed)
+    }
+    NotesConfig {
+        allowed_origins: allowed,
+        rate_limit: rate_limit,
+        window_ms: window_ms,
+        max_title_len: max_title_len,
+        max_body_len: max_body_len,
+        log_level: log_level,
+        public_base_url: public_base_url,
+    }
+}
+
+fn cors_origins_from_env() -> Vec<string> {
+    match env.get("CORS_ORIGIN") {
+        Some(value) => {
+            let trimmed = strings.trim(value)
+            if strings.len(trimmed) == 0 {
+                return default_origins()
+            }
+            let mut out = Vec::new()
+            out.push(trimmed)
+            out
+        },
+        None => default_origins(),
+    }
+}
+
+fn default_origins() -> Vec<string> {
+    let mut out = Vec::new()
+    out.push("*")
+    out
+}
+
+fn rate_limit_from_env() -> int {
+    match env.get("RATE_LIMIT") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(limit) => limit,
+                None => 100,
+            }
+        },
+        None => 100,
+    }
+}
+
+fn window_ms_from_env() -> int {
+    match env.get("RATE_WINDOW") {
+        Some(value) => {
+            match parse_window_ms(value) {
+                Some(ms) => ms,
+                None => 60_000,
+            }
+        },
+        None => {
+            match env.get("RATE_WINDOW_MS") {
+                Some(value) => {
+                    match parse_window_ms(value) {
+                        Some(ms) => ms,
+                        None => 60_000,
+                    }
+                },
+                None => 60_000,
+            }
+        },
+    }
+}
+
+fn max_title_len_from_env() -> int {
+    match env.get("MAX_TITLE_LEN") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 200,
+            }
+        },
+        None => 200,
+    }
+}
+
+fn max_body_len_from_env() -> int {
+    match env.get("MAX_BODY_LEN") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 10_000,
+            }
+        },
+        None => 10_000,
+    }
+}
+
+/// Milliseconds from bare digits or duration (`2m`, `500ms`). Digits are ms.
+fn parse_window_ms(text: string) -> Option<int> {
+    let text = own_cfg(text)
+    match parse_positive_int(text) {
+        Some(n) => Some(n),
+        None => duration_ms(text),
+    }
+}
+
+fn duration_ms(text: string) -> Option<int> {
+    let text = own_cfg(text)
+    match parse_ms(text) {
+        Ok(ms) => {
+            if ms < 1 {
+                return None
+            }
+            Some(ms)
+        },
+        Err(_) => None,
+    }
+}
+
+fn log_level_from_env() -> string {
+    match env.get("LOG_LEVEL") {
+        Some(value) => normalize_log_level(value),
+        None => "info",
+    }
+}
+
+fn public_base_url_from_env() -> string {
+    match env.get("PUBLIC_BASE_URL") {
+        Some(value) => normalize_base_url(value),
+        None => "http://localhost:8080",
+    }
+}
+
+/// Accept known levels via `wj-log::parse_level`; unknown values fall back to `info`.
+fn normalize_log_level(text: string) -> string {
+    let owned = own_cfg(strings.trim(text))
+    let probe = "${owned}"
+    match parse_level(probe) {
+        Some(_) => strings.to_lower(owned),
+        None => "info",
+    }
+}
+
+fn normalize_base_url(text: string) -> string {
+    let trimmed = strings.trim(text)
+    if strings.len(trimmed) == 0 {
+        return "http://localhost:8080"
+    }
+    // Strip trailing slash for join_url path segments.
+    if strings.ends_with(trimmed, "/") {
+        return strings.substring(trimmed, 0, strings.len(trimmed) - 1)
+    }
+    trimmed
+}
+
+fn own_cfg(value: string) -> string {
+    value
+}

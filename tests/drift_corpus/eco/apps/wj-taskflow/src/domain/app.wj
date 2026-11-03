@@ -1,0 +1,171 @@
+use std::collections::HashMap
+use std::json
+use wj_rate_limit::WindowBucket
+use wj_rate_limit::check_key
+use wj_rate_limit::fixed_window
+use wj_rate_limit::retry_after_header
+use wj_router::match_route
+
+use crate::domain::config::Config
+use crate::domain::auth::authenticate
+use crate::domain::auth::login_user
+use crate::domain::auth::register_user
+use crate::domain::projects::project_create
+use crate::domain::projects::project_list
+use crate::domain::projects::project_remove
+use crate::domain::projects::project_set_member
+use crate::domain::projects::project_show
+use crate::domain::tasks::task_assign
+use crate::domain::tasks::task_create
+use crate::domain::tasks::task_list
+use crate::domain::tasks::task_remove
+use crate::domain::tasks::task_show
+use crate::domain::tasks::task_update
+use crate::domain::inputs::OkBody
+use crate::domain::model::User
+use crate::domain::reply::Reply
+use crate::domain::reply::error_reply
+use crate::domain::reply::from_json
+use crate::domain::store::TaskStore
+
+/// The application: store + config + rate-limit state behind one `handle` entry point.
+/// No sockets, clock or environment are read here; the HTTP adapter feeds requests in.
+pub struct Taskflow {
+    store: TaskStore,
+    config: Config,
+    buckets: HashMap<string, WindowBucket>,
+}
+
+fn route_id(pattern: string, path: string) -> Option<int> {
+    match match_route(pattern, path) {
+        Some(params) => match params.get("id") {
+            Some(text) => match text.parse::<int>() {
+                Ok(n) => Some(n),
+                Err(_) => None,
+            },
+            None => None,
+        },
+        None => None,
+    }
+}
+
+impl Taskflow {
+    pub fn new(config: Config) -> Taskflow {
+        Taskflow {
+            store: TaskStore::new(),
+            config: config,
+            buckets: HashMap::new(),
+        }
+    }
+
+    /// `authorization` is the raw `Authorization` header ("" when absent); `client_key`
+    /// identifies the caller for rate limiting (address or API key); `now_ms` is the request time.
+    pub fn handle(self, method: string, target: string, authorization: string, client_key: string, now_ms: int, body: string) -> Reply {
+        let limited = self.check_rate(client_key, now_ms)
+        if limited.status != 0 {
+            return limited
+        }
+        if method != "GET" && method != "POST" && method != "PATCH" && method != "DELETE" {
+            return error_reply(405, "method not allowed")
+        }
+        let parts: Vec<string> = target.split("?").collect()
+        let path = parts[0]
+        let query = if parts.len() > 1 { parts[1] } else { "" }
+        if method == "GET" && path == "/health" {
+            return from_json(200, json.to_string(OkBody { ok: true }))
+        }
+        if method == "POST" && path == "/api/v1/auth/register" {
+            return register_user(self.store, body)
+        }
+        if method == "POST" && path == "/api/v1/auth/login" {
+            return login_user(self.store, self.config, body)
+        }
+        if !path.starts_with("/api/v1/") {
+            return error_reply(404, "not found")
+        }
+        let user = match authenticate(self.store, self.config, authorization) {
+            Ok(u) => u,
+            Err(denied) => return denied,
+        }
+        self.route(user, method, path, query, body)
+    }
+
+    // status 0 means "allowed" (no reply to send).
+    fn check_rate(self, client_key: string, now_ms: int) -> Reply {
+        let checked = check_key(fixed_window(self.config.rate_limit, self.config.rate_window_ms), self.buckets, client_key, now_ms)
+        self.buckets = checked.0
+        if checked.1.allowed {
+            return Reply { status: 0, body: "", headers: "" }
+        }
+        let mut denied = error_reply(429, "rate limit exceeded")
+        denied.headers = "Retry-After: ${retry_after_header(checked.1.retry_after_ms)}"
+        denied
+    }
+
+    fn route(self, user: User, method: string, path: string, query: string, body: string) -> Reply {
+        if method == "GET" && path == "/api/v1/auth/me" {
+            return from_json(200, json.to_string(user.view()))
+        }
+        if path == "/api/v1/projects" {
+            if method == "GET" {
+                return project_list(self.store, user)
+            }
+            if method == "POST" {
+                return project_create(self.store, user, body)
+            }
+        }
+        match route_id("/api/v1/projects/:id", path) {
+            Some(id) => {
+                if method == "GET" {
+                    return project_show(self.store, user, id)
+                }
+                if method == "DELETE" {
+                    return project_remove(self.store, user, id)
+                }
+            },
+            None => {},
+        }
+        match route_id("/api/v1/projects/:id/members", path) {
+            Some(id) => {
+                if method == "POST" {
+                    return project_set_member(self.store, user, id, body)
+                }
+            },
+            None => {},
+        }
+        match route_id("/api/v1/projects/:id/tasks", path) {
+            Some(id) => {
+                if method == "GET" {
+                    return task_list(self.store, user, id, query)
+                }
+                if method == "POST" {
+                    return task_create(self.store, user, id, body)
+                }
+            },
+            None => {},
+        }
+        match route_id("/api/v1/tasks/:id", path) {
+            Some(id) => {
+                if method == "GET" {
+                    return task_show(self.store, user, id)
+                }
+                if method == "PATCH" {
+                    return task_update(self.store, user, id, body)
+                }
+                if method == "DELETE" {
+                    return task_remove(self.store, user, id)
+                }
+            },
+            None => {},
+        }
+        match route_id("/api/v1/tasks/:id/assign", path) {
+            Some(id) => {
+                if method == "POST" {
+                    return task_assign(self.store, user, id, body)
+                }
+            },
+            None => {},
+        }
+        error_reply(404, "not found")
+    }
+}

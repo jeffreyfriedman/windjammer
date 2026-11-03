@@ -638,6 +638,17 @@ fn corpus_unsuffixed_literal_follows_typed_operand_in_nested_arithmetic() {
     corpus_check("mixed_typed_literal_width");
 }
 
+#[test]
+fn corpus_len_into_declared_int() {
+    // Expected output: 12 (3 + 3 + 3 + 3).
+    corpus_check("len_into_declared_int");
+}
+
+#[test]
+fn corpus_for_range_loop_var_width() {
+    corpus_check("for_range_loop_var_width");
+}
+
 /// Generated gate: random arithmetic over typed parameters (i32/u32/u8/i64), unsuffixed literals and
 /// casts must be accepted by rustc (the oracle). Compile-only: the values may overflow at runtime.
 #[test]

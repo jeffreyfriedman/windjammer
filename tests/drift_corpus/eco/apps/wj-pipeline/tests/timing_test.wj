@@ -1,0 +1,18 @@
+use crate::adapters::run::time_int_pipeline
+use crate::adapters::run::time_pool_pipeline
+
+@test
+fn test_time_int_pipeline_reports_elapsed() {
+    let t = time_int_pipeline(5)
+    assert_eq(t.count, 5)
+    assert_eq(t.sum, 20)
+    assert(t.elapsed_ms >= 0, "elapsed non-negative")
+}
+
+@test
+fn test_time_pool_pipeline_reports_elapsed() {
+    let t = time_pool_pipeline(5)
+    assert_eq(t.count, 5)
+    assert_eq(t.sum, 20)
+    assert(t.elapsed_ms >= 0, "elapsed non-negative")
+}

@@ -1,0 +1,133 @@
+use std::path
+use std::strings
+
+/// Shell-style glob match for `*`, `?`, and recursive `**`.
+/// Thin-wraps `std::path.glob_match` (tip GREEN p3515).
+pub fn is_match(pattern: string, candidate: string) -> bool {
+    path.glob_match(pattern, candidate)
+}
+
+/// Paths that match `pattern`.
+pub fn filter(pattern: string, paths: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < paths.len() {
+        // Fresh copies each iteration (read-only params are currently owned).
+        if is_match("${pattern}", "${paths[i]}") {
+            out.push("${paths[i]}")
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// First path that matches `pattern`, or `None`.
+pub fn first_match(pattern: string, paths: Vec<string>) -> Option<string> {
+    let hits = filter(pattern, paths)
+    if hits.len() == 0 {
+        return None
+    }
+    Some(hits[0])
+}
+
+/// Number of paths that match `pattern`.
+pub fn match_count(pattern: string, paths: Vec<string>) -> int {
+    filter(pattern, paths).len()
+}
+
+/// True when at least one path matches `pattern`.
+pub fn any_match(pattern: string, paths: Vec<string>) -> bool {
+    match_count(pattern, paths) > 0
+}
+
+/// True when no path matches `pattern`.
+pub fn none_match(pattern: string, paths: Vec<string>) -> bool {
+    !any_match(pattern, paths)
+}
+
+/// `Ok(1)` when no path matches `pattern`, otherwise `Err`.
+pub fn require_none(pattern: string, paths: Vec<string>) -> Result<int, string> {
+    if none_match(pattern, paths) {
+        return Ok(1)
+    }
+    Err("expected none")
+}
+
+/// True when every path matches `pattern` (true for an empty path list).
+pub fn all_match(pattern: string, paths: Vec<string>) -> bool {
+    let total = paths.len()
+    match_count(pattern, paths) == total
+}
+
+/// True when exactly one path matches `pattern`.
+pub fn exactly_one_match(pattern: string, paths: Vec<string>) -> bool {
+    match_count(pattern, paths) == 1
+}
+
+/// Last path that matches `pattern`, or `None`.
+pub fn last_match(pattern: string, paths: Vec<string>) -> Option<string> {
+    let hits = filter(pattern, paths)
+    if hits.len() == 0 {
+        return None
+    }
+    Some(hits[hits.len() - 1])
+}
+
+/// True when at least `n` paths match `pattern`.
+pub fn at_least_n_matches(pattern: string, paths: Vec<string>, n: int) -> bool {
+    match_count(pattern, paths) >= n
+}
+
+/// `Ok(n)` when at least `n` paths match `pattern`, otherwise `Err`.
+pub fn require_at_least(pattern: string, paths: Vec<string>, n: int) -> Result<int, string> {
+    if at_least_n_matches(pattern, paths, n) {
+        return Ok(n)
+    }
+    Err("expected at least")
+}
+
+pub fn at_most_n_matches(pattern: string, paths: Vec<string>, n: int) -> bool {
+    match_count(pattern, paths) <= n
+}
+
+/// `Ok(n)` when at most `n` paths match `pattern`, otherwise `Err`.
+pub fn require_at_most(pattern: string, paths: Vec<string>, n: int) -> Result<int, string> {
+    if at_most_n_matches(pattern, paths, n) {
+        return Ok(n)
+    }
+    Err("expected at most")
+}
+
+/// True when exactly `n` paths match `pattern`.
+pub fn exactly_n_matches(pattern: string, paths: Vec<string>, n: int) -> bool {
+    match_count(pattern, paths) == n
+}
+
+/// True when match count is in the inclusive `[lo, hi]` range.
+pub fn between_n_matches(pattern: string, paths: Vec<string>, lo: int, hi: int) -> bool {
+    let n = match_count(pattern, paths)
+    n >= lo && n <= hi
+}
+
+/// True when `pattern` contains `*` or `?`.
+pub fn has_meta(pattern: string) -> bool {
+    strings.contains(pattern, "*") || strings.contains(pattern, "?")
+}
+
+/// First matching path, or Err when nothing matches.
+pub fn require_match(pattern: string, paths: Vec<string>) -> Result<string, string> {
+    match first_match(pattern, paths) {
+        Some(hit) => Ok(hit),
+        None => Err("no match"),
+    }
+}
+
+/// Match count when it equals `n`.
+pub fn require_exact(pattern: string, paths: Vec<string>, n: int) -> Result<int, string> {
+    let count = match_count(pattern, paths)
+    if count == n {
+        Ok(count)
+    } else {
+        Err("expected exact matches")
+    }
+}

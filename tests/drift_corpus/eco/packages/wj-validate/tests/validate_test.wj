@@ -1,0 +1,390 @@
+use crate::all_ok
+use crate::error_count
+use crate::first_error
+use crate::has_errors
+use crate::is_email
+use crate::is_valid
+use crate::require_email
+use crate::require_int_range
+use crate::require_len_range
+use crate::require_max_len
+use crate::require_min_len
+use crate::require_nonempty
+use crate::require_nonneg
+use crate::require_one_of
+use crate::require_positive
+use crate::require_url
+use crate::require_https
+use crate::require_uuid
+use std::strings
+
+@test
+fn test_require_nonempty_ok() {
+    match require_nonempty("name", "Ada") {
+        Ok(v) => assert_eq(v, "Ada"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_nonempty_trims() {
+    match require_nonempty("name", "  Ada  ") {
+        Ok(v) => assert_eq(v, "Ada"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_nonempty_blank_err() {
+    match require_nonempty("name", "   ") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(strings.contains(msg, "name"), "field in error"),
+    }
+}
+
+@test
+fn test_require_min_len_ok() {
+    match require_min_len("password", "secret", 6) {
+        Ok(v) => assert_eq(v, "secret"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_min_len_err() {
+    match require_min_len("password", "hi", 6) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "too short"),
+    }
+}
+
+@test
+fn test_require_max_len_ok() {
+    match require_max_len("code", "ab", 3) {
+        Ok(v) => assert_eq(v, "ab"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_max_len_err() {
+    match require_max_len("code", "abcd", 3) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "too long"),
+    }
+}
+
+@test
+fn test_require_email_ok() {
+    match require_email("email", "ada@example.com") {
+        Ok(v) => assert_eq(v, "ada@example.com"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_email_err() {
+    match require_email("email", "not-an-email") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "bad email"),
+    }
+}
+
+@test
+fn test_require_int_range_ok() {
+    match require_int_range("age", 30, 0, 120) {
+        Ok(v) => assert_eq(v, 30),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_int_range_low_err() {
+    match require_int_range("age", -1, 0, 120) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "too low"),
+    }
+}
+
+@test
+fn test_require_int_range_high_err() {
+    match require_int_range("age", 200, 0, 120) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "too high"),
+    }
+}
+
+@test
+fn test_require_one_of_ok() {
+    let mut allowed = Vec::new()
+    allowed.push("red")
+    allowed.push("blue")
+    match require_one_of("color", "blue", allowed) {
+        Ok(v) => assert_eq(v, "blue"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_one_of_err() {
+    let mut allowed = Vec::new()
+    allowed.push("red")
+    allowed.push("blue")
+    match require_one_of("color", "green", allowed) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "not allowed"),
+    }
+}
+
+@test
+fn test_all_ok_empty() {
+    let errors = Vec::new()
+    match all_ok(errors) {
+        Ok(_) => assert(true, "ok"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_all_ok_with_errors() {
+    let mut errors = Vec::new()
+    errors.push("name is required")
+    errors.push("age out of range")
+    match all_ok(errors) {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => {
+            assert(strings.contains(msg, "name is required"), "first err")
+            assert(strings.contains(msg, "age out of range"), "second err")
+        },
+    }
+}
+
+@test
+fn test_require_url_https_ok() {
+    match require_url("home", "https://example.com/path") {
+        Ok(v) => assert_eq(v, "https://example.com/path"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_url_http_ok() {
+    match require_url("home", "http://localhost:8080") {
+        Ok(v) => assert_eq(v, "http://localhost:8080"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_url_rejects_relative() {
+    match require_url("home", "/relative") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(strings.contains(msg, "home"), "field in error"),
+    }
+}
+
+@test
+fn test_require_url_rejects_blank() {
+    match require_url("home", "  ") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "blank"),
+    }
+}
+
+@test
+fn test_require_uuid_ok() {
+    match require_uuid("id", "550e8400-e29b-41d4-a716-446655440000") {
+        Ok(v) => assert_eq(v, "550e8400-e29b-41d4-a716-446655440000"),
+        Err(_) => assert(false, "expected Ok"),
+    }
+}
+
+@test
+fn test_require_uuid_accepts_v7() {
+    match require_uuid("id", "017f22e2-79b0-7cc3-98c4-dc0c0c07398f") {
+        Ok(v) => assert_eq(v, "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"),
+        Err(_) => assert(false, "v7 should be Ok"),
+    }
+}
+
+@test
+fn test_require_uuid_accepts_v1_and_v5() {
+    match require_uuid("id", "04afc000-833b-11ee-83d8-123456789abc") {
+        Ok(_) => {},
+        Err(_) => assert(false, "v1"),
+    }
+    match require_uuid("id", "2ed6657d-e927-568b-95e1-2665a8aea6a2") {
+        Ok(_) => {},
+        Err(_) => assert(false, "v5"),
+    }
+}
+
+@test
+fn test_require_uuid_rejects_unsupported_version() {
+    match require_uuid("id", "550e8400-e29b-31d4-a716-446655440000") {
+        Ok(_) => assert(false, "version 3"),
+        Err(msg) => assert(strings.contains(msg, "id"), "field in error"),
+    }
+}
+
+@test
+fn test_require_uuid_rejects_bad_variant() {
+    match require_uuid("id", "550e8400-e29b-41d4-c716-446655440000") {
+        Ok(_) => assert(false, "variant c"),
+        Err(_) => assert(true, "bad variant"),
+    }
+}
+
+@test
+fn test_require_uuid_rejects_short() {
+    match require_uuid("id", "550e8400-e29b-41d4-a716") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(msg) => assert(strings.contains(msg, "id"), "field in error"),
+    }
+}
+
+@test
+fn test_require_uuid_rejects_non_hex() {
+    match require_uuid("id", "550e8400-e29b-41d4-a716-44665544000g") {
+        Ok(_) => assert(false, "expected Err"),
+        Err(_) => assert(true, "bad hex"),
+    }
+}
+
+@test
+fn test_require_len_range() {
+    match require_len_range("name", "Ada", 2, 10) {
+        Ok(v) => assert_eq(v, "Ada"),
+        Err(_) => assert(false, "ok"),
+    }
+    match require_len_range("name", "A", 2, 10) {
+        Ok(_) => assert(false, "too short"),
+        Err(msg) => assert(strings.contains(msg, "name"), "field"),
+    }
+    match require_len_range("name", "abcdefghijk", 2, 10) {
+        Ok(_) => assert(false, "too long"),
+        Err(msg) => assert(strings.contains(msg, "name"), "field"),
+    }
+}
+
+@test
+fn test_is_email() {
+    assert(is_email("a@b.co"), "ok")
+    assert(!is_email(""), "empty")
+    assert(!is_email("not-an-email"), "bad")
+}
+
+@test
+fn test_require_positive() {
+    match require_positive("n", 1) {
+        Ok(v) => assert_eq(v, 1),
+        Err(_) => assert(false, "ok"),
+    }
+    match require_positive("n", 0) {
+        Ok(_) => assert(false, "zero"),
+        Err(msg) => assert(strings.contains(msg, "n"), "field"),
+    }
+    match require_positive("n", -3) {
+        Ok(_) => assert(false, "neg"),
+        Err(_) => {},
+    }
+}
+
+@test
+fn test_require_nonneg() {
+    match require_nonneg("n", 0) {
+        Ok(v) => assert_eq(v, 0),
+        Err(_) => assert(false, "zero ok"),
+    }
+    match require_nonneg("n", 5) {
+        Ok(v) => assert_eq(v, 5),
+        Err(_) => assert(false, "pos ok"),
+    }
+    match require_nonneg("n", -1) {
+        Ok(_) => assert(false, "neg"),
+        Err(msg) => assert(strings.contains(msg, "n"), "field"),
+    }
+}
+
+@test
+fn test_has_errors() {
+    let empty = Vec::new()
+    assert(!has_errors(empty), "no errors")
+    let mut errs = Vec::new()
+    errs.push("bad")
+    assert(has_errors(errs), "has errors")
+}
+
+@test
+fn test_error_count_and_is_valid() {
+    assert_eq(error_count(Vec::new()), 0)
+    assert(is_valid(Vec::new()), "valid")
+    let mut errs = Vec::new()
+    errs.push("a")
+    errs.push("b")
+    assert_eq(error_count(errs), 2)
+    let mut bad = Vec::new()
+    bad.push("x")
+    assert(!is_valid(bad), "invalid")
+}
+
+@test
+fn test_last_error_and_require_clean() {
+    use crate::last_error
+    use crate::require_clean
+    match last_error(Vec::new()) {
+        Some(_) => assert(false, "empty last"),
+        None => {},
+    }
+    let mut errs = Vec::new()
+    errs.push("first")
+    errs.push("second")
+    match last_error(errs) {
+        Some(e) => assert_eq(e, "second"),
+        None => assert(false, "last"),
+    }
+    match require_clean(Vec::new()) {
+        Ok(_) => {},
+        Err(_) => assert(false, "clean"),
+    }
+    let mut bad = Vec::new()
+    bad.push("nope")
+    match require_clean(bad) {
+        Ok(_) => assert(false, "dirty must Err"),
+        Err(msg) => assert(strings.contains(msg, "nope"), "mentions error"),
+    }
+}
+
+@test
+fn test_only_error() {
+    use crate::only_error
+    match only_error(Vec::new()) {
+        Some(_) => assert(false, "empty is not only"),
+        None => {},
+    }
+    let mut one = Vec::new()
+    one.push("only")
+    match only_error(one) {
+        Some(msg) => assert_eq(msg, "only"),
+        None => assert(false, "one error"),
+    }
+    let mut two = Vec::new()
+    two.push("a")
+    two.push("b")
+    match only_error(two) {
+        Some(_) => assert(false, "two errors is not only"),
+        None => {},
+    }
+}
+
+@test
+fn test_require_https() {
+    match require_https("site", "https://example.com") {
+        Ok(url) => assert_eq(url, "https://example.com"),
+        Err(_) => assert(false, "https"),
+    }
+    match require_https("site", "http://example.com") {
+        Ok(_) => assert(false, "http must Err"),
+        Err(msg) => assert(strings.contains(msg, "https"), "mentions https"),
+    }
+}

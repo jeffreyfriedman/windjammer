@@ -1,0 +1,81 @@
+use crate::adapters::run_validate
+use std::fs
+
+fn test_run_validate_ok() {
+    let root = "/tmp/wj-migrate-cli-validate"
+    match setup_migration_dir(root) {
+        Ok(_) => {},
+        Err(e) => {
+            assert(false, e)
+            return
+        },
+    }
+    match run_validate(root) {
+        Ok(count) => assert_eq(count, 2),
+        Err(e) => assert(false, e),
+    }
+    teardown_dir("/tmp/wj-migrate-cli-validate")
+}
+
+fn test_run_validate_rejects_duplicate_version() {
+    let root = "/tmp/wj-migrate-cli-validate-dup"
+    match setup_duplicate_dir(root) {
+        Ok(_) => {},
+        Err(e) => {
+            assert(false, e)
+            return
+        },
+    }
+    match run_validate(root) {
+        Ok(_) => assert(false, "duplicate versions must fail"),
+        Err(msg) => assert_str_contains(msg, "duplicate"),
+    }
+    teardown_dir("/tmp/wj-migrate-cli-validate-dup")
+}
+
+fn setup_migration_dir(root: string) -> Result<(), string> {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    match fs.create_dir_all(root) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/001_create_items.sql", "CREATE TABLE items (id INTEGER PRIMARY KEY)") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/002_add_note.sql", "ALTER TABLE items ADD COLUMN note TEXT") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+fn setup_duplicate_dir(root: string) -> Result<(), string> {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+    match fs.create_dir_all(root) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/001_first.sql", "SELECT 1") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match fs.write("${root}/001_second.sql", "SELECT 2") {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+fn teardown_dir(root: string) {
+    match fs.remove_dir_all(root) {
+        Ok(_) => {},
+        Err(_) => {},
+    }
+}

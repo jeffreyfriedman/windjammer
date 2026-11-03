@@ -1,0 +1,402 @@
+use crate::adapters::run_args
+use crate::domain::TodoConfig
+use crate::domain::TodoStore
+use std::fs
+use std::strings
+
+@test
+fn test_run_add_message() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut args = Vec::new()
+    args.push("add")
+    args.push("milk")
+    match run_args(store, args, config) {
+        Ok(r) => {
+            assert_str_contains(r.1, "milk")
+            assert_str_contains(r.1, "1")
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+@test
+fn test_run_add_then_list() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("milk")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let mut list_args = Vec::new()
+            list_args.push("list")
+            match run_args(r1.0, list_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "milk")
+                },
+                Err(_) => assert(false, "list failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+fn test_run_list_json() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("json-task")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let mut list_args = Vec::new()
+            list_args.push("list")
+            list_args.push("--json")
+            match run_args(r1.0, list_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "json-task")
+                    assert_str_contains(r2.1, "[")
+                    assert_str_contains(r2.1, "id")
+                },
+                Err(_) => assert(false, "list json failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+fn test_run_list_pending_hides_done() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add1 = Vec::new()
+    add1.push("add")
+    add1.push("open-task")
+    match run_args(store, add1, config) {
+        Ok(r1) => {
+            let mut add2 = Vec::new()
+            add2.push("add")
+            add2.push("done-task")
+            match run_args(r1.0, add2, config) {
+                Ok(r2) => {
+                    let mut done_args = Vec::new()
+                    done_args.push("done")
+                    done_args.push("2")
+                    match run_args(r2.0, done_args, config) {
+                        Ok(r3) => {
+                            let mut list_args = Vec::new()
+                            list_args.push("list")
+                            list_args.push("--pending")
+                            match run_args(r3.0, list_args, config) {
+                                Ok(r4) => {
+                                    assert_str_contains(r4.1, "open-task")
+                                    assert(!str_contains(r4.1, "done-task"), "done task hidden")
+                                },
+                                Err(_) => assert(false, "list pending failed"),
+                            }
+                        },
+                        Err(_) => assert(false, "done failed"),
+                    }
+                },
+                Err(_) => assert(false, "add2 failed"),
+            }
+        },
+        Err(_) => assert(false, "add1 failed"),
+    }
+}
+
+fn str_contains(text: string, needle: string) -> bool {
+    let mut i = 0
+    let nlen = strings.len(needle)
+    if nlen == 0 {
+        return true
+    }
+    while i + nlen <= strings.len(text) {
+        let slice = strings.substring(text, i, i + nlen)
+        if slice == needle {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+fn test_run_clear_all() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("gone")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let mut clear_args = Vec::new()
+            clear_args.push("clear")
+            match run_args(r1.0, clear_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "cleared")
+                    let mut list_args = Vec::new()
+                    list_args.push("list")
+                    match run_args(r2.0, list_args, config) {
+                        Ok(r3) => assert_str_contains(r3.1, "no todos"),
+                        Err(_) => assert(false, "list after clear"),
+                    }
+                },
+                Err(_) => assert(false, "clear failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+fn test_run_clear_done() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add1 = Vec::new()
+    add1.push("add")
+    add1.push("keep")
+    match run_args(store, add1, config) {
+        Ok(r1) => {
+            let mut add2 = Vec::new()
+            add2.push("add")
+            add2.push("drop")
+            match run_args(r1.0, add2, config) {
+                Ok(r2) => {
+                    let mut done_args = Vec::new()
+                    done_args.push("done")
+                    done_args.push("2")
+                    match run_args(r2.0, done_args, config) {
+                        Ok(r3) => {
+                            let mut clear_args = Vec::new()
+                            clear_args.push("clear")
+                            clear_args.push("--done")
+                            match run_args(r3.0, clear_args, config) {
+                                Ok(r4) => {
+                                    assert_str_contains(r4.1, "removed 1")
+                                    let mut list_args = Vec::new()
+                                    list_args.push("list")
+                                    match run_args(r4.0, list_args, config) {
+                                        Ok(r5) => {
+                                            assert_str_contains(r5.1, "keep")
+                                            assert(!str_contains(r5.1, "drop"), "done item cleared")
+                                        },
+                                        Err(_) => assert(false, "list after clear --done"),
+                                    }
+                                },
+                                Err(_) => assert(false, "clear --done failed"),
+                            }
+                        },
+                        Err(_) => assert(false, "done failed"),
+                    }
+                },
+                Err(_) => assert(false, "add2 failed"),
+            }
+        },
+        Err(_) => assert(false, "add1 failed"),
+    }
+}
+
+fn test_run_export_keeps_store() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add1 = Vec::new()
+    add1.push("add")
+    add1.push("stay")
+    match run_args(store, add1, config) {
+        Ok(r1) => {
+            let mut add2 = Vec::new()
+            add2.push("add")
+            add2.push("also")
+            match run_args(r1.0, add2, config) {
+                Ok(r2) => {
+                    let mut export_args = Vec::new()
+                    export_args.push("export")
+                    match run_args(r2.0, export_args, config) {
+                        Ok(r3) => {
+                            assert_str_contains(r3.1, "stay")
+                            assert_str_contains(r3.1, "also")
+                            let mut list_args = Vec::new()
+                            list_args.push("list")
+                            match run_args(r3.0, list_args, config) {
+                                Ok(r4) => {
+                                    assert_str_contains(r4.1, "stay")
+                                    assert_str_contains(r4.1, "also")
+                                },
+                                Err(_) => assert(false, "list after export"),
+                            }
+                        },
+                        Err(_) => assert(false, "export failed"),
+                    }
+                },
+                Err(_) => assert(false, "add2 failed"),
+            }
+        },
+        Err(_) => assert(false, "add1 failed"),
+    }
+}
+
+fn test_run_import_replace() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("local")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let payload = "[{\"id\":9,\"title\":\"remote\",\"done\":false}]"
+            match fs.write("wj_todo_import_fixture.json", payload) {
+                Ok(_) => {},
+                Err(_) => assert(false, "write fixture"),
+            }
+            let mut import_args = Vec::new()
+            import_args.push("import")
+            import_args.push("wj_todo_import_fixture.json")
+            match run_args(r1.0, import_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "imported")
+                    let mut list_args = Vec::new()
+                    list_args.push("list")
+                    match run_args(r2.0, list_args, config) {
+                        Ok(r3) => {
+                            assert_str_contains(r3.1, "remote")
+                            assert(!str_contains(r3.1, "local"), "replace removes old todos")
+                        },
+                        Err(_) => assert(false, "list after import"),
+                    }
+                },
+                Err(_) => assert(false, "import failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+fn test_run_import_merge() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("keep")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let payload = "[{\"id\":2,\"title\":\"merged\",\"done\":true}]"
+            match fs.write("wj_todo_import_merge_fixture.json", payload) {
+                Ok(_) => {},
+                Err(_) => assert(false, "write fixture"),
+            }
+            let mut import_args = Vec::new()
+            import_args.push("import")
+            import_args.push("--merge")
+            import_args.push("wj_todo_import_merge_fixture.json")
+            match run_args(r1.0, import_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "imported")
+                    assert_str_contains(r2.1, "merge")
+                    let mut list_args = Vec::new()
+                    list_args.push("list")
+                    match run_args(r2.0, list_args, config) {
+                        Ok(r3) => {
+                            assert_str_contains(r3.1, "keep")
+                            assert_str_contains(r3.1, "merged")
+                        },
+                        Err(_) => assert(false, "list after import --merge"),
+                    }
+                },
+                Err(_) => assert(false, "import --merge failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+fn test_run_stats() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add1 = Vec::new()
+    add1.push("add")
+    add1.push("open")
+    match run_args(store, add1, config) {
+        Ok(r1) => {
+            let mut add2 = Vec::new()
+            add2.push("add")
+            add2.push("done-task")
+            match run_args(r1.0, add2, config) {
+                Ok(r2) => {
+                    let mut done_args = Vec::new()
+                    done_args.push("done")
+                    done_args.push("2")
+                    match run_args(r2.0, done_args, config) {
+                        Ok(r3) => {
+                            let mut stats_args = Vec::new()
+                            stats_args.push("stats")
+                            match run_args(r3.0, stats_args, config) {
+                                Ok(r4) => {
+                                    assert_str_contains(r4.1, "2 total")
+                                    assert_str_contains(r4.1, "1 pending")
+                                    assert_str_contains(r4.1, "1 done")
+                                },
+                                Err(_) => assert(false, "stats failed"),
+                            }
+                        },
+                        Err(_) => assert(false, "done failed"),
+                    }
+                },
+                Err(_) => assert(false, "add2 failed"),
+            }
+        },
+        Err(_) => assert(false, "add1 failed"),
+    }
+}
+
+fn test_run_stats_json() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("solo")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let mut stats_args = Vec::new()
+            stats_args.push("stats")
+            stats_args.push("--json")
+            match run_args(r1.0, stats_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "\"total\"")
+                    assert_str_contains(r2.1, "\"pending\"")
+                    assert_str_contains(r2.1, "\"done\"")
+                },
+                Err(_) => assert(false, "stats --json failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}
+
+fn test_run_edit_message() {
+    let store = TodoStore::new()
+    let config = TodoConfig::defaults()
+    let mut add_args = Vec::new()
+    add_args.push("add")
+    add_args.push("old name")
+    match run_args(store, add_args, config) {
+        Ok(r1) => {
+            let mut edit_args = Vec::new()
+            edit_args.push("edit")
+            edit_args.push("1")
+            edit_args.push("new name")
+            match run_args(r1.0, edit_args, config) {
+                Ok(r2) => {
+                    assert_str_contains(r2.1, "edited")
+                    assert_str_contains(r2.1, "new name")
+                    let mut list_args = Vec::new()
+                    list_args.push("list")
+                    match run_args(r2.0, list_args, config) {
+                        Ok(r3) => assert_str_contains(r3.1, "new name"),
+                        Err(_) => assert(false, "list after edit failed"),
+                    }
+                },
+                Err(_) => assert(false, "edit failed"),
+            }
+        },
+        Err(_) => assert(false, "add failed"),
+    }
+}

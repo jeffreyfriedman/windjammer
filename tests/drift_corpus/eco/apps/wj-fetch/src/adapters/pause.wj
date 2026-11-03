@@ -1,0 +1,5 @@
+use wj_retry::pause_ms as retry_pause_ms
+
+pub fn pause_ms(ms: int) {
+    retry_pause_ms(ms)
+}

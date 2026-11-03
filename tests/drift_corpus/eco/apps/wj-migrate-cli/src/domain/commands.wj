@@ -1,0 +1,195 @@
+use std::strings
+
+use crate::domain::MigrateConfig
+
+pub struct MigrateRequest {
+    pub url: string,
+    pub dir: string,
+}
+
+pub struct ListRequest {
+    pub dir: string,
+}
+
+pub struct ValidateRequest {
+    pub dir: string,
+}
+
+pub struct CliCommand {
+    pub kind: string,
+    pub url: string,
+    pub dir: string,
+}
+
+const USAGE: string = "usage: wj-migrate-cli apply|status|list|validate [--url URL] [--dir DIR]"
+
+pub fn parse_command(argv: Vec<string>, config: MigrateConfig) -> Result<CliCommand, string> {
+    let rest = tail(argv)
+    if rest.len() == 0 {
+        return Err(USAGE)
+    }
+    let kind = rest[0]
+    if kind != "apply" && kind != "status" && kind != "list" && kind != "validate" {
+        return Err(USAGE)
+    }
+    let dir = match resolve_dir(rest, config.default_dir) {
+        Ok(value) => value,
+        Err(e) => return Err(e),
+    }
+    if kind == "list" || kind == "validate" {
+        return Ok(CliCommand { kind: kind, url: "", dir: dir })
+    }
+    let url = match resolve_url(rest, config.default_url) {
+        Ok(value) => value,
+        Err(e) => return Err(e),
+    }
+    Ok(CliCommand { kind: kind, url: url, dir: dir })
+}
+
+pub fn parse_list(argv: Vec<string>, config: MigrateConfig) -> Result<ListRequest, string> {
+    match parse_command(argv, config) {
+        Ok(cmd) => {
+            if cmd.kind != "list" {
+                return Err(USAGE)
+            }
+            Ok(ListRequest { dir: cmd.dir })
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn parse_validate(argv: Vec<string>, config: MigrateConfig) -> Result<ValidateRequest, string> {
+    match parse_command(argv, config) {
+        Ok(cmd) => {
+            if cmd.kind != "validate" {
+                return Err(USAGE)
+            }
+            Ok(ValidateRequest { dir: cmd.dir })
+        },
+        Err(e) => Err(e),
+    }
+}
+
+pub fn parse_apply(argv: Vec<string>, config: MigrateConfig) -> Result<MigrateRequest, string> {
+    match parse_command(argv, config) {
+        Ok(cmd) => {
+            if cmd.kind != "apply" {
+                return Err(USAGE)
+            }
+            Ok(MigrateRequest { url: cmd.url, dir: cmd.dir })
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn resolve_url(rest: Vec<string>, default_url: string) -> Result<string, string> {
+    match flag_value(rest, "url") {
+        Some(value) => {
+            if strings.len(value) == 0 {
+                return Err("url must not be empty")
+            }
+            Ok(value)
+        },
+        None => {
+            if strings.len(default_url) == 0 {
+                return Err("missing --url (or set MIGRATE_URL / DATABASE_URL)")
+            }
+            Ok(default_url)
+        },
+    }
+}
+
+fn resolve_dir(rest: Vec<string>, default_dir: string) -> Result<string, string> {
+    match flag_value(rest, "dir") {
+        Some(value) => {
+            if strings.len(value) == 0 {
+                return Err("dir must not be empty")
+            }
+            Ok(value)
+        },
+        None => {
+            match last_positional(rest) {
+                Some(candidate) => {
+                    if strings.len(candidate) > 0 && candidate != "apply" && candidate != "status" && candidate != "list" && candidate != "validate" {
+                        return Ok(candidate)
+                    }
+                },
+                None => {},
+            }
+            if strings.len(default_dir) == 0 {
+                return Err("missing --dir (or set MIGRATIONS_DIR)")
+            }
+            Ok(default_dir)
+        },
+    }
+}
+
+fn tail(args: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i = 1
+    while i < args.len() {
+        out.push(args[i])
+        i = i + 1
+    }
+    out
+}
+
+fn long_prefix(name: string) -> string {
+    "--${name}"
+}
+
+fn equals_prefix(name: string) -> string {
+    "--${name}="
+}
+
+fn flag_value(rest: Vec<string>, name: string) -> Option<string> {
+    let mut i = 0
+    while i < rest.len() {
+        let token = rest[i]
+        let prefix = equals_prefix(name)
+        if strings.starts_with(token, prefix) {
+            let parts = strings.split(token, "=")
+            if parts.len() >= 2 {
+                let mut joined = parts[1]
+                let mut j = 2
+                while j < parts.len() {
+                    joined = "${joined}=${parts[j]}"
+                    j = j + 1
+                }
+                return Some(joined)
+            }
+        }
+        if token == long_prefix(name) {
+            let next = i + 1
+            if next < rest.len() {
+                let candidate = rest[next]
+                if !strings.starts_with(candidate, "--") {
+                    return Some(candidate)
+                }
+            }
+            return None
+        }
+        i = i + 1
+    }
+    None
+}
+
+fn last_positional(rest: Vec<string>) -> Option<string> {
+    let pos = positionals(rest)
+    if pos.len() == 0 {
+        return None
+    }
+    let last = pos[pos.len() - 1]
+    Some(last)
+}
+
+fn positionals(rest: Vec<string>) -> Vec<string> {
+    let mut out = Vec::new()
+    for token in rest {
+        if strings.starts_with(token, "--") {
+            continue
+        }
+        out.push(token)
+    }
+    out
+}

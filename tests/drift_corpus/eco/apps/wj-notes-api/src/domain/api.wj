@@ -1,0 +1,901 @@
+use std::collections::HashMap
+use std::compress
+use std::json
+use std::strings
+use std::http::HttpMethod
+
+use wj_base64::encode_text
+use wj_base64::decode_text
+use wj_compress::content_encoding_gzip
+use wj_compress::negotiate
+use wj_cors::allow_origin
+use wj_cors::preflight
+use wj_headers::defaults
+use wj_headers::format_headers
+use wj_mime::html as html_mime
+use wj_mime::json as json_mime
+use wj_json_util::pretty as json_pretty
+// Alias must not be `query_get`: loading `wj_url` registers Borrowed metadata under
+// that name and steals ownership at call sites of this Owned `get` (P3.283).
+use wj_querystring::get as qs_get
+use wj_regex::is_match
+use wj_sha::hex as sha_hex
+use wj_template::render_html
+use wj_url::join_url
+use wj_log::log_tagged
+use wj_rate_limit::check_key
+use wj_rate_limit::fixed_window
+use wj_rate_limit::rate_limit_headers
+use wj_rate_limit::WindowBucket
+use wj_router::match_route
+
+use crate::domain::note::Note
+use crate::domain::NoteStore
+use crate::domain::store::fetch_note
+use crate::domain::config::NotesConfig
+use crate::domain::parse_positive_int
+
+struct RateBucket {
+    window_start_ms: int,
+    count: int,
+}
+
+pub struct HttpReply {
+    pub status: u16,
+    pub body: string,
+    pub content_type: string,
+    pub allow_origin: string,
+    pub content_encoding: string,
+    pub extra_headers: string,
+}
+
+pub struct HttpRequest {
+    pub method: string,
+    pub path: string,
+    pub body: string,
+}
+
+struct NoteInput {
+    title: string,
+    body: string,
+}
+
+struct ErrorBody {
+    error: string,
+}
+
+struct OkBody {
+    ok: bool,
+}
+
+pub struct NotesApp {
+    store: NoteStore,
+    config: NotesConfig,
+    buckets: HashMap<string, RateBucket>,
+}
+
+pub fn handle_request(method: string, path: string, body: string, store: NoteStore) -> HttpReply {
+    let config = NotesConfig {
+        allowed_origins: Vec::new(),
+        rate_limit: 0,
+        window_ms: 60_000,
+        max_title_len: 200,
+        max_body_len: 10_000,
+        log_level: "info",
+        public_base_url: "http://localhost:8080",
+    }
+    let mut app = NotesApp::new(config, store)
+    app.handle(method, path, "", "", "", 0, body)
+}
+
+impl NotesApp {
+    pub fn new(config: NotesConfig, store: NoteStore) -> NotesApp {
+        NotesApp {
+            config: config,
+            store: store,
+            buckets: HashMap::new(),
+        }
+    }
+
+    pub fn handle(
+        self,
+        method: string,
+        path: string,
+        origin: string,
+        accept_encoding: string,
+        client_key: string,
+        now_ms: int,
+        body: string,
+    ) -> HttpReply {
+        let parsed = match parse_method(method) {
+            Some(value) => value,
+            None => return json_error(405, "method not allowed"),
+        }
+        self.handle_method(parsed, path, origin, accept_encoding, client_key, now_ms, body, "")
+    }
+
+    /// Conditional GET port: pass `If-None-Match` for 304 short-circuit.
+    pub fn handle_if_none_match(
+        self,
+        method: string,
+        path: string,
+        origin: string,
+        accept_encoding: string,
+        client_key: string,
+        now_ms: int,
+        body: string,
+        if_none_match: string,
+    ) -> HttpReply {
+        let parsed = match parse_method(method) {
+            Some(value) => value,
+            None => return json_error(405, "method not allowed"),
+        }
+        self.handle_method(
+            parsed,
+            path,
+            origin,
+            accept_encoding,
+            client_key,
+            now_ms,
+            body,
+            if_none_match,
+        )
+    }
+
+    /// Adapter port: same-crate `HttpMethod` avoids demoted `method: &str` + owned
+    /// label helper (see `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test`).
+    pub fn handle_http(
+        self,
+        method: HttpMethod,
+        path: string,
+        origin: string,
+        accept_encoding: string,
+        client_key: string,
+        now_ms: int,
+        body: string,
+        if_none_match: string,
+    ) -> HttpReply {
+        self.handle_method(
+            method,
+            path,
+            origin,
+            accept_encoding,
+            client_key,
+            now_ms,
+            body,
+            if_none_match,
+        )
+    }
+
+    fn handle_method(
+        self,
+        method: HttpMethod,
+        path: string,
+        origin: string,
+        accept_encoding: string,
+        client_key: string,
+        now_ms: int,
+        body: string,
+        if_none_match: string,
+    ) -> HttpReply {
+        let path = own(path)
+        let origin = own(origin)
+        let accept_encoding = own(accept_encoding)
+        let client_key = own(client_key)
+        let body = own(body)
+        let allowed = self.config.allowed_origins
+        let level = self.config.log_level
+        match method {
+            HttpMethod::OPTIONS => {
+                let reply = self.handle_options(path, origin, allowed)
+                emit_access_log(level, "OPTIONS", path, reply.status)
+                return reply
+            },
+            _ => {},
+        }
+        match self.check_rate(client_key, now_ms) {
+            Some(limit_reply) => {
+                let reply = with_transport(limit_reply, origin, accept_encoding, allowed)
+                emit_access_log(level, method_label(method), path, reply.status)
+                return reply
+            },
+            None => {},
+        }
+        let reply = self.dispatch(method, path, body, now_ms, if_none_match)
+        let out = with_transport(reply, origin, accept_encoding, allowed)
+        emit_access_log(level, method_label(method), path, out.status)
+        out
+    }
+
+    fn handle_options(self, path: string, origin: string, allowed: Vec<string>) -> HttpReply {
+        let _path = path
+        let methods = "GET,POST,PUT,DELETE,OPTIONS"
+        let headers = "Content-Type"
+        match cors_preflight(origin, allowed, methods, headers) {
+            Some(headers) => HttpReply {
+                status: 204,
+                body: "",
+                content_type: "",
+                allow_origin: headers.allow_origin,
+                content_encoding: "",
+                extra_headers: security_header_block(),
+            },
+            None => json_error(403, "origin not allowed"),
+        }
+    }
+
+    fn check_rate(self, client_key: string, now_ms: int) -> Option<HttpReply> {
+        if self.config.rate_limit < 1 {
+            return None
+        }
+        let key = rate_key(client_key)
+        let lim = fixed_window(self.config.rate_limit, self.config.window_ms)
+        let checked = check_key(lim, buckets_for_limit(self.buckets), key, now_ms)
+        self.buckets = buckets_from_limit(checked.0)
+        let result = checked.1
+        if result.allowed {
+            return None
+        }
+        let header_block = rate_limit_headers(result)
+        Some(HttpReply {
+            status: 429,
+            body: "{\"error\":\"rate limit exceeded\"}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: header_block,
+        })
+    }
+
+    fn dispatch(
+        self,
+        method: HttpMethod,
+        path: string,
+        body: string,
+        now_ms: int,
+        if_none_match: string,
+    ) -> HttpReply {
+        let split = split_path_query(path)
+        let path = split.0
+        let query = split.1
+        if path == "/" {
+            match method {
+                HttpMethod::GET => welcome_page(),
+                _ => json_error(404, "not found"),
+            }
+        } else if path == "/health" || path == "/health/" {
+            match method {
+                HttpMethod::GET => json_ok(),
+                _ => json_error(404, "not found"),
+            }
+        } else {
+            match route_match("/notes", path) {
+                Some(_) => {
+                    match method {
+                        HttpMethod::GET => {
+                            let want_pretty = query_wants_pretty(query)
+                            match list_notes_for_query(self.store.list(), query) {
+                                Ok(notes) => {
+                                    match json.to_string(notes) {
+                                        Ok(text) => HttpReply {
+                                            status: 200,
+                                            body: maybe_pretty_json(text, want_pretty),
+                                            content_type: mime_json(),
+                                            allow_origin: "",
+                                            content_encoding: "",
+                                            extra_headers: "",
+                                        },
+                                        Err(_) => json_error(500, "serialization failed"),
+                                    }
+                                },
+                                Err(msg) => error_from_message(400, msg),
+                            }
+                        },
+                        HttpMethod::POST => {
+                            let input: NoteInput = match json.parse_string(body) {
+                                Ok(value) => value,
+                                Err(_) => return json_error(400, "invalid json"),
+                            }
+                            match self.store.create(
+                                input.title,
+                                input.body,
+                                self.config.max_title_len,
+                                self.config.max_body_len,
+                                now_ms,
+                            ) {
+                                Ok(note) => created_note_reply(note, self.config.public_base_url),
+                                Err(msg) => error_from_message(400, msg),
+                            }
+                        },
+                        _ => json_error(404, "not found"),
+                    }
+                },
+                None => {
+                    match route_match("/notes/:id", path) {
+                        Some(params) => {
+                            match params.get("id") {
+                                Some(id_text) => {
+                                    match parse_positive_int(own(id_text)) {
+                                        Some(id) => {
+                                            match method {
+                                                HttpMethod::GET => {
+                                                    match fetch_note(self.store, id) {
+                                                        Some(note) => note_get_reply(note, if_none_match, query),
+                                                        None => json_error(404, "note not found"),
+                                                    }
+                                                },
+                                                HttpMethod::PUT => {
+                                                    let input: NoteInput = match json.parse_string(body) {
+                                                        Ok(value) => value,
+                                                        Err(_) => return json_error(400, "invalid json"),
+                                                    }
+                                                    match self.store.update(
+                                                        id,
+                                                        input.title,
+                                                        input.body,
+                                                        self.config.max_title_len,
+                                                        self.config.max_body_len,
+                                                    ) {
+                                                        Ok(note) => note_reply(200, note),
+                                                        Err(msg) => {
+                                                            let status = if msg == "note not found" { 404 } else { 400 }
+                                                            error_from_message(status, msg)
+                                                        },
+                                                    }
+                                                },
+                                                HttpMethod::DELETE => {
+                                                    match self.store.delete(id) {
+                                                        Ok(_) => HttpReply {
+                                                            status: 204,
+                                                            body: "",
+                                                            content_type: "",
+                                                            allow_origin: "",
+                                                            content_encoding: "",
+                                                            extra_headers: "",
+                                                        },
+                                                        Err(_) => json_error(404, "note not found"),
+                                                    }
+                                                },
+                                                _ => json_error(404, "not found"),
+                                            }
+                                        },
+                                        None => json_error(404, "not found"),
+                                    }
+                                },
+                                None => json_error(404, "not found"),
+                            }
+                        },
+                        None => json_error(404, "not found"),
+                    }
+                },
+            }
+        }
+    }
+}
+
+fn created_note_reply(note: Note, base_url: string) -> HttpReply {
+    let id = note.id
+    let location = note_location(base_url, id)
+    let reply = note_reply(201, note)
+    HttpReply {
+        status: reply.status,
+        body: reply.body,
+        content_type: reply.content_type,
+        allow_origin: reply.allow_origin,
+        content_encoding: reply.content_encoding,
+        extra_headers: merge_header_blocks(reply.extra_headers, location_header(location)),
+    }
+}
+
+fn note_location(base_url: string, id: int) -> string {
+    let base_url = own(base_url)
+    let relative = "/notes/${id}"
+    match join_absolute(base_url, relative) {
+        Ok(url) => url,
+        Err(_) => relative,
+    }
+}
+
+fn join_absolute(base: string, relative: string) -> Result<string, string> {
+    let base = own(base)
+    let relative = own(relative)
+    join_url(base, relative)
+}
+
+fn location_header(url: string) -> string {
+    "Location: ${url}"
+}
+
+fn note_get_reply(note: Note, if_none_match: string, query: string) -> HttpReply {
+    // Keep formal owned (cargo-bin otherwise demotes to &str while callers pass String).
+    let mut held: Vec<string> = Vec::new()
+    held.push(if_none_match)
+    let inm = held[0]
+    let want_base64 = query_wants_base64(query)
+    let material = "${note.uid}:${note.title}:${note.body}"
+    let tag = "\"${sha_digest(material)}\""
+    if etag_matches(inm, tag) {
+        return HttpReply {
+            status: 304,
+            body: "",
+            content_type: "",
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: etag_header_block(tag),
+        }
+    }
+    match json.to_string(note) {
+        Ok(text) => {
+            if want_base64 {
+                HttpReply {
+                    status: 200,
+                    body: encode_note_json(text),
+                    content_type: "text/plain",
+                    allow_origin: "",
+                    content_encoding: "",
+                    extra_headers: etag_header_block(tag),
+                }
+            } else {
+                HttpReply {
+                    status: 200,
+                    body: text,
+                    content_type: mime_json(),
+                    allow_origin: "",
+                    content_encoding: "",
+                    extra_headers: etag_header_block(tag),
+                }
+            }
+        },
+        Err(_) => json_error(500, "serialization failed"),
+    }
+}
+
+fn sha_digest(text: string) -> string {
+    let text = own(text)
+    sha_hex(text)
+}
+
+fn etag_matches(if_none_match: string, tag: string) -> bool {
+    let want = strings.trim(if_none_match)
+    if strings.len(want) == 0 {
+        return false
+    }
+    want == tag
+}
+
+fn etag_header_block(tag: string) -> string {
+    "ETag: ${tag}"
+}
+
+fn note_reply(status: u16, note: Note) -> HttpReply {
+    match json.to_string(note) {
+        Ok(text) => HttpReply {
+            status: status,
+            body: text,
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: "",
+        },
+        Err(_) => json_error(500, "serialization failed"),
+    }
+}
+
+fn error_from_message(status: u16, message: string) -> HttpReply {
+    let payload = ErrorBody { error: message }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: status,
+            body: text,
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: status,
+            body: "{\"error\":\"unknown\"}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn json_error(status: u16, message: string) -> HttpReply {
+    error_from_message(status, message)
+}
+
+fn json_ok() -> HttpReply {
+    let payload = OkBody { ok: true }
+    match json.to_string(payload) {
+        Ok(text) => HttpReply {
+            status: 200,
+            body: text,
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: "",
+        },
+        Err(_) => HttpReply {
+            status: 200,
+            body: "{\"ok\":true}",
+            content_type: mime_json(),
+            allow_origin: "",
+            content_encoding: "",
+            extra_headers: "",
+        },
+    }
+}
+
+fn cors_preflight(
+    origin: string,
+    allowed: Vec<string>,
+    methods: string,
+    headers: string,
+) -> Option<wj_cors::CorsHeaders> {
+    let origin = own(origin)
+    let methods = own(methods)
+    let headers = own(headers)
+    preflight(origin, allowed, methods, headers)
+}
+
+fn cors_allow(origin: string, allowed: Vec<string>) -> Option<string> {
+    let origin = own(origin)
+    allow_origin(origin, allowed)
+}
+
+fn with_transport(reply: HttpReply, origin: string, accept_encoding: string, allowed: Vec<string>) -> HttpReply {
+    let with_cors = apply_cors(reply, origin, allowed)
+    let with_gzip = apply_gzip(with_cors, accept_encoding)
+    apply_security(with_gzip)
+}
+
+fn apply_cors(reply: HttpReply, origin: string, allowed: Vec<string>) -> HttpReply {
+    if strings.len(origin) == 0 {
+        return reply
+    }
+    match cors_allow(origin, allowed) {
+        Some(ao) => HttpReply {
+            status: reply.status,
+            body: reply.body,
+            content_type: reply.content_type,
+            allow_origin: ao,
+            content_encoding: reply.content_encoding,
+            extra_headers: reply.extra_headers,
+        },
+        None => reply,
+    }
+}
+
+fn apply_security(reply: HttpReply) -> HttpReply {
+    let security = security_header_block()
+    let merged = merge_header_blocks(reply.extra_headers, security)
+    HttpReply {
+        status: reply.status,
+        body: reply.body,
+        content_type: reply.content_type,
+        allow_origin: reply.allow_origin,
+        content_encoding: reply.content_encoding,
+        extra_headers: merged,
+    }
+}
+
+fn apply_gzip(reply: HttpReply, accept_encoding: string) -> HttpReply {
+    if reply.status == 204 {
+        return reply
+    }
+    let status = reply.status
+    let body = reply.body
+    let allow_origin = reply.allow_origin
+    let content_encoding = reply.content_encoding
+    let content_type = reply.content_type
+    let extra_headers = reply.extra_headers
+    match negotiate(accept_encoding) {
+        Some(_) => match gzip_body_encode(body) {
+            Ok(encoded) => HttpReply {
+                status: status,
+                body: encoded,
+                content_type: content_type,
+                allow_origin: allow_origin,
+                content_encoding: content_encoding_gzip(),
+                extra_headers: extra_headers,
+            },
+            Err(_) => HttpReply {
+                status: status,
+                body: "",
+                content_type: content_type,
+                allow_origin: allow_origin,
+                content_encoding: content_encoding,
+                extra_headers: extra_headers,
+            },
+        },
+        None => HttpReply {
+            status: status,
+            body: body,
+            content_type: content_type,
+            allow_origin: allow_origin,
+            content_encoding: content_encoding,
+            extra_headers: extra_headers,
+        },
+    }
+}
+
+fn gzip_body_encode(body: string) -> Result<string, string> {
+    compress.gzip_encode(body)
+}
+
+fn gzip_body_decode(body: string) -> Result<string, string> {
+    compress.gzip_decode(body)
+}
+
+pub fn gzip_decode_body(body: string) -> Result<string, string> {
+    gzip_body_decode(body)
+}
+
+fn security_header_block() -> string {
+    format_headers(defaults())
+}
+
+fn merge_header_blocks(left: string, right: string) -> string {
+    if strings.len(left) == 0 {
+        return right
+    }
+    if strings.len(right) == 0 {
+        return left
+    }
+    "${left}\n${right}"
+}
+
+fn rate_key(client_key: string) -> string {
+    if strings.len(client_key) == 0 {
+        return "anonymous"
+    }
+    client_key
+}
+
+fn route_match(pattern: string, path: string) -> Option<HashMap<string, string>> {
+    let pattern = own(pattern)
+    let path = own(path)
+    match_route(pattern, path)
+}
+
+fn buckets_for_limit(buckets: HashMap<string, RateBucket>) -> HashMap<string, WindowBucket> {
+    let mut out = HashMap::new()
+    for (key, bucket) in buckets {
+        out.insert(key, WindowBucket {
+            window_start_ms: bucket.window_start_ms,
+            count: bucket.count,
+        })
+    }
+    out
+}
+
+fn buckets_from_limit(buckets: HashMap<string, WindowBucket>) -> HashMap<string, RateBucket> {
+    let mut out = HashMap::new()
+    for (key, bucket) in buckets {
+        out.insert(key, RateBucket {
+            window_start_ms: bucket.window_start_ms,
+            count: bucket.count,
+        })
+    }
+    out
+}
+
+fn split_path_query(full: string) -> (string, string) {
+    let q = find_char(full, "?")
+    if q < 0 {
+        return (full, "")
+    }
+    let path = strings.substring(full, 0, q)
+    let query = strings.substring(full, q, strings.len(full))
+    (path, query)
+}
+
+fn find_char(text: string, needle: string) -> int {
+    let mut i = 0
+    let n = strings.len(text)
+    while i < n {
+        let ch = strings.substring(text, i, i + 1)
+        if ch == needle {
+            return i
+        }
+        i = i + 1
+    }
+    -1
+}
+
+fn list_notes_for_query(notes: Vec<Note>, query: string) -> Result<Vec<Note>, string> {
+    let query = own(query)
+    let mut filtered = Vec::new()
+    match qs_get("${query}", "q") {
+        None => {
+            let mut i = 0
+            while i < notes.len() {
+                filtered.push(notes[i])
+                i = i + 1
+            }
+        },
+        Some(pattern) => {
+            let pattern = own(pattern)
+            // Validate pattern even when the store is empty.
+            match is_match("${pattern}", "") {
+                Ok(_) => {},
+                Err(msg) => {
+                    return Err(msg)
+                },
+            }
+            let mut i = 0
+            while i < notes.len() {
+                let note = notes[i]
+                match note_matches_pattern("${pattern}", note) {
+                    Ok(true) => {
+                        filtered.push(note)
+                    },
+                    Ok(false) => {},
+                    Err(msg) => {
+                        return Err(msg)
+                    },
+                }
+                i = i + 1
+            }
+        },
+    }
+    Ok(match qs_get("${query}", "limit") {
+        None => filtered,
+        Some(text) => {
+            match parse_positive_int(text) {
+                None => filtered,
+                Some(limit) => truncate_notes(filtered, limit),
+            }
+        },
+    })
+}
+
+fn note_matches_pattern(pattern: string, note: Note) -> Result<bool, string> {
+    let pattern = own(pattern)
+    match is_match("${pattern}", note.title) {
+        Ok(true) => Ok(true),
+        Ok(false) => is_match(pattern, note.body),
+        Err(msg) => Err(msg),
+    }
+}
+
+fn query_wants_pretty(query: string) -> bool {
+    let query = own(query)
+    match qs_get(query, "pretty") {
+        None => false,
+        Some(text) => text == "1" || text == "true",
+    }
+}
+
+fn query_wants_base64(query: string) -> bool {
+    let query = own(query)
+    match qs_get(query, "encoding") {
+        None => false,
+        Some(text) => text == "base64",
+    }
+}
+
+fn encode_note_json(text: string) -> string {
+    let text = own(text)
+    encode_text(text)
+}
+
+/// Test/helper port for decoding base64 note exports.
+pub fn decode_note_export(text: string) -> Result<string, string> {
+    let text = own(text)
+    decode_text(text)
+}
+
+fn maybe_pretty_json(text: string, want_pretty: bool) -> string {
+    if !want_pretty {
+        return text
+    }
+    let text = own(text)
+    json_pretty(text)
+}
+
+fn truncate_notes(notes: Vec<Note>, limit: int) -> Vec<Note> {
+    if limit <= 0 {
+        return notes
+    }
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < notes.len() && out.len() < limit {
+        out.push(notes[i])
+        i = i + 1
+    }
+    out
+}
+
+fn welcome_page() -> HttpReply {
+    let mut vars = HashMap::new()
+    vars.insert("title", "wj-notes-api")
+    vars.insert(
+        "message",
+        "REST notes API: GET/POST /notes, GET/PUT/DELETE /notes/{id}, GET /health.",
+    )
+    let html = render_html(
+        "<!DOCTYPE html><html><head><title>{{title}}</title></head><body><h1>{{title}}</h1><p>{{message}}</p></body></html>",
+        vars,
+    )
+    HttpReply {
+        status: 200,
+        body: html,
+        content_type: mime_html(),
+        allow_origin: "",
+        content_encoding: "",
+        extra_headers: "",
+    }
+}
+
+fn mime_html() -> string {
+    let value = own(html_mime())
+    value
+}
+
+fn mime_json() -> string {
+    let value = own(json_mime())
+    value
+}
+
+/// Stable access-log line for tests and `wj-log` emission.
+pub fn format_access_log(method: string, path: string, status: u16) -> string {
+    let message = access_log_message(method, path, status)
+    "[notes] ${message}"
+}
+
+fn access_log_message(method: string, path: string, status: u16) -> string {
+    "${method} ${path} -> ${status}"
+}
+
+fn emit_access_log(level: string, method: string, path: string, status: u16) {
+    let level = own(level)
+    let method = own(method)
+    let path = own(path)
+    let message = access_log_message(method, path, status)
+    log_tagged(level, "notes", message)
+}
+
+fn method_label(method: HttpMethod) -> string {
+    match method {
+        HttpMethod::GET => "GET",
+        HttpMethod::POST => "POST",
+        HttpMethod::PUT => "PUT",
+        HttpMethod::DELETE => "DELETE",
+        HttpMethod::PATCH => "PATCH",
+        HttpMethod::HEAD => "HEAD",
+        HttpMethod::OPTIONS => "OPTIONS",
+    }
+}
+
+fn own(value: string) -> string {
+    value
+}
+
+fn parse_method(label: string) -> Option<HttpMethod> {
+    if label == "GET" {
+        return Some(HttpMethod::GET)
+    }
+    if label == "POST" {
+        return Some(HttpMethod::POST)
+    }
+    if label == "PUT" {
+        return Some(HttpMethod::PUT)
+    }
+    if label == "DELETE" {
+        return Some(HttpMethod::DELETE)
+    }
+    if label == "PATCH" {
+        return Some(HttpMethod::PATCH)
+    }
+    if label == "HEAD" {
+        return Some(HttpMethod::HEAD)
+    }
+    if label == "OPTIONS" {
+        return Some(HttpMethod::OPTIONS)
+    }
+    None
+}

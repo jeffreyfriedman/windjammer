@@ -1,0 +1,216 @@
+use crate::allow_origin
+use crate::allow_origin_of
+use crate::allowed_origin_count
+use crate::require_origins
+use crate::allows_wildcard
+use crate::cors_header_lines
+use crate::cors_line_count
+use crate::default_allow_headers
+use crate::default_allow_methods
+use crate::format_cors_headers
+use crate::has_origins
+use crate::is_empty_allow_list
+use crate::is_origin_allowed
+use crate::is_wildcard_origin
+use crate::preflight
+use crate::preflight_defaults
+use crate::require_origin
+use std::strings
+
+@test
+fn test_origin_exact_match() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    assert(is_origin_allowed("https://app.example.com", allowed), "exact origin should match")
+}
+
+@test
+fn test_origin_wildcard() {
+    let mut allowed = Vec::new()
+    allowed.push("*")
+    assert(is_origin_allowed("https://any.example.com", allowed), "wildcard should allow any")
+}
+
+@test
+fn test_origin_reject() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    assert(!is_origin_allowed("https://evil.example.com", allowed), "unknown origin rejected")
+}
+
+@test
+fn test_allow_origin_echo() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match allow_origin("https://app.example.com", allowed) {
+        Some(value) => assert_eq(value, "https://app.example.com"),
+        None => assert(false, "expected Some"),
+    }
+}
+
+@test
+fn test_allow_origin_star() {
+    let mut allowed = Vec::new()
+    allowed.push("*")
+    match allow_origin("https://any.example.com", allowed) {
+        Some(value) => assert_eq(value, "*"),
+        None => assert(false, "expected Some"),
+    }
+}
+
+@test
+fn test_allow_origin_none() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match allow_origin("https://evil.example.com", allowed) {
+        Some(_) => assert(false, "expected None"),
+        None => assert(true, "rejected"),
+    }
+}
+
+@test
+fn test_preflight_headers() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match preflight("https://app.example.com", allowed, "GET,POST", "Content-Type") {
+        Some(h) => {
+            assert_eq(h.allow_origin, "https://app.example.com")
+            assert_eq(h.allow_methods, "GET,POST")
+            assert_eq(h.allow_headers, "Content-Type")
+        },
+        None => assert(false, "expected preflight headers"),
+    }
+}
+
+@test
+fn test_cors_header_lines() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match preflight("https://app.example.com", allowed, "GET,POST", "Content-Type") {
+        Some(h) => {
+            let lines = cors_header_lines(h)
+            assert_eq(lines.len(), 3)
+            assert_eq(lines[0], "Access-Control-Allow-Origin: https://app.example.com")
+            assert_eq(lines[1], "Access-Control-Allow-Methods: GET,POST")
+            assert_eq(lines[2], "Access-Control-Allow-Headers: Content-Type")
+        },
+        None => assert(false, "expected preflight for header lines"),
+    }
+}
+
+@test
+fn test_format_cors_headers() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match preflight("https://app.example.com", allowed, "GET,POST", "Content-Type") {
+        Some(h) => {
+            let text = format_cors_headers(h)
+            assert(strings.contains(text, "Access-Control-Allow-Origin: https://app.example.com"), "origin")
+            assert(strings.contains(text, "Access-Control-Allow-Methods: GET,POST"), "methods")
+            assert(strings.contains(text, "Access-Control-Allow-Headers: Content-Type"), "headers")
+        },
+        None => assert(false, "expected preflight for format"),
+    }
+}
+
+@test
+fn test_default_methods_and_headers() {
+    assert(strings.contains(default_allow_methods(), "GET"), "GET")
+    assert(strings.contains(default_allow_methods(), "OPTIONS"), "OPTIONS")
+    assert(strings.contains(default_allow_headers(), "Content-Type"), "Content-Type")
+    assert(strings.contains(default_allow_headers(), "Authorization"), "Authorization")
+}
+
+@test
+fn test_preflight_defaults() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match preflight_defaults("https://app.example.com", allowed) {
+        Some(h) => {
+            assert_eq(h.allow_origin, "https://app.example.com")
+            assert_eq(h.allow_methods, default_allow_methods())
+            assert_eq(h.allow_headers, default_allow_headers())
+        },
+        None => assert(false, "expected defaults preflight"),
+    }
+}
+
+@test
+fn test_allows_wildcard_and_is_wildcard_origin() {
+    let mut star = Vec::new()
+    star.push("*")
+    assert(allows_wildcard(star), "has *")
+    let mut exact = Vec::new()
+    exact.push("https://app.example.com")
+    assert(!allows_wildcard(exact), "no *")
+    assert(is_wildcard_origin("*"), "star")
+    assert(!is_wildcard_origin("https://app.example.com"), "echoed origin")
+}
+
+@test
+fn test_cors_line_count() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match preflight("https://app.example.com", allowed, "GET", "Content-Type") {
+        Some(h) => assert_eq(cors_line_count(h), 3),
+        None => assert(false, "preflight"),
+    }
+}
+
+@test
+fn test_allowed_origin_count() {
+    let mut allowed = Vec::new()
+    allowed.push("https://a.example")
+    allowed.push("https://b.example")
+    assert_eq(allowed_origin_count(allowed), 2)
+    let empty = Vec::new()
+    assert_eq(allowed_origin_count(empty), 0)
+}
+
+@test
+fn test_require_origin() {
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match require_origin("https://app.example.com", allowed) {
+        Ok(v) => assert_eq(v, "https://app.example.com"),
+        Err(_) => assert(false, "allowed origin"),
+    }
+    let mut again = Vec::new()
+    again.push("https://app.example.com")
+    match require_origin("https://evil.example", again) {
+        Ok(_) => assert(false, "rejected must Err"),
+        Err(msg) => assert(strings.contains(msg, "origin"), "mentions origin"),
+    }
+}
+
+@test
+fn test_empty_and_has_origins() {
+    assert(is_empty_allow_list(Vec::new()), "empty")
+    assert(!has_origins(Vec::new()), "no origins")
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    assert(!is_empty_allow_list(allowed), "nonempty")
+    let mut again = Vec::new()
+    again.push("https://app.example.com")
+    assert(has_origins(again), "has")
+}
+
+@test
+fn test_require_origins_and_allow_origin_of() {
+    match require_origins(Vec::new()) {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "origins"), "mentions origins"),
+    }
+    let mut allowed = Vec::new()
+    allowed.push("https://app.example.com")
+    match require_origins(allowed) {
+        Ok(n) => assert_eq(n, 1),
+        Err(_) => assert(false, "one origin"),
+    }
+    let mut again = Vec::new()
+    again.push("https://app.example.com")
+    match preflight_defaults("https://app.example.com", again) {
+        Some(headers) => assert_eq(allow_origin_of(headers), "https://app.example.com"),
+        None => assert(false, "defaults"),
+    }
+}

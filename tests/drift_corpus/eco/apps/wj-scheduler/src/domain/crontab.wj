@@ -1,0 +1,137 @@
+use std::strings
+use wj_cron::parse_cron
+use wj_cron::matches_cron
+use crate::domain::CivilTime
+
+/// Skip blank / comment lines; return trimmed expression otherwise.
+pub fn parse_crontab_line(line: string) -> Option<string> {
+    let trimmed = strings.trim(line)
+    if strings.len(trimmed) == 0 {
+        return None
+    }
+    if strings.starts_with(trimmed, "#") {
+        return None
+    }
+    Some(trimmed)
+}
+
+/// Parse a crontab text blob into validated cron expressions.
+pub fn parse_crontab(text: string) -> Result<Vec<string>, string> {
+    let lines = strings.split_lines(text)
+    let mut exprs = Vec::new()
+    let mut line_no = 0
+    let mut i = 0
+    while i < lines.len() {
+        line_no = line_no + 1
+        let line = lines[i]
+        match parse_crontab_line(line) {
+            Some(expr) => {
+                match parse_cron(expr) {
+                    Ok(cron) => {
+                        exprs.push(cron.source)
+                    },
+                    Err(_e) => {
+                        return Err("invalid cron on line ${line_no}")
+                    },
+                }
+            },
+            None => {},
+        }
+        i = i + 1
+    }
+    Ok(exprs)
+}
+
+/// Expressions that match `at`.
+pub fn due_schedules(exprs: Vec<string>, at: CivilTime) -> Result<Vec<string>, string> {
+    let mut due = Vec::new()
+    let mut i = 0
+    while i < exprs.len() {
+        // Call owned parse_cron directly (avoid demoted check_schedule + owned local).
+        match parse_cron(exprs[i]) {
+            Ok(cron) => {
+                let matched = matches_cron(cron, at.minute, at.hour, at.day, at.month, at.day_of_week)
+                if matched {
+                    due.push(exprs[i])
+                }
+            },
+            Err(e) => return Err(e),
+        }
+        i = i + 1
+    }
+    Ok(due)
+}
+
+pub fn expr_count(exprs: Vec<string>) -> int {
+    let mut n = 0
+    for _ in exprs {
+        n = n + 1
+    }
+    n
+}
+
+/// First expression, or an error when the list is empty.
+pub fn require_first(exprs: Vec<string>) -> Result<string, string> {
+    match first_expr(exprs) {
+        Some(e) => Ok(e),
+        None => Err("expected first"),
+    }
+}
+
+/// First expression, or None when empty.
+pub fn first_expr(exprs: Vec<string>) -> Option<string> {
+    if exprs.len() == 0 {
+        return None
+    }
+    Some(exprs[0])
+}
+
+/// Last expression, or an error when the list is empty.
+pub fn require_last(exprs: Vec<string>) -> Result<string, string> {
+    match last_expr(exprs) {
+        Some(e) => Ok(e),
+        None => Err("expected last"),
+    }
+}
+
+/// Last expression, or None when empty.
+pub fn last_expr(exprs: Vec<string>) -> Option<string> {
+    let n = exprs.len()
+    if n == 0 {
+        return None
+    }
+    Some(exprs[n - 1])
+}
+
+/// The only expression when the list has exactly one entry.
+pub fn only_expr(exprs: Vec<string>) -> Option<string> {
+    if exprs.len() == 1 {
+        Some(exprs[0])
+    } else {
+        None
+    }
+}
+
+/// The only expression, or `Err` when the list is not a singleton.
+pub fn require_only(exprs: Vec<string>) -> Result<string, string> {
+    match only_expr(exprs) {
+        Some(e) => Ok(e),
+        None => Err("expected one expression"),
+    }
+}
+
+/// Ok(count) when non-empty; Err when the crontab has no expressions.
+pub fn require_exprs(exprs: Vec<string>) -> Result<int, string> {
+    let n = expr_count(exprs)
+    if n == 0 {
+        return Err("crontab is empty")
+    }
+    Ok(n)
+}
+
+pub fn due_count(exprs: Vec<string>, at: CivilTime) -> Result<int, string> {
+    match due_schedules(exprs, at) {
+        Ok(due) => Ok(expr_count(due)),
+        Err(e) => Err(e),
+    }
+}

@@ -1,0 +1,16 @@
+// An `int` loop variable bounds-checked against `len()` and then used as the index: after the usize
+// class landed in the numeric solver the compiled backend emits `c >= 0_usize` for the `int` variable.
+fn mark(flags: Vec<bool>, columns: Vec<int>) -> Vec<bool> {
+    let mut out = flags
+    for c in columns {
+        if c >= 0 && c < out.len() {
+            out[c] = true
+        }
+    }
+    out
+}
+
+fn main() {
+    let r = mark([false, false, false], [1, 5, -1])
+    println("${r[0]} ${r[1]} ${r[2]}")
+}

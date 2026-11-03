@@ -1,0 +1,29 @@
+use crate::domain::parse_nonneg_int
+
+fn test_parse_nonneg_int_zero() {
+    match parse_nonneg_int("0") {
+        Some(n) => assert_eq(n, 0),
+        None => assert(false, "expected Some(0)"),
+    }
+}
+
+fn test_parse_nonneg_int_multi_digit() {
+    match parse_nonneg_int("12") {
+        Some(n) => assert_eq(n, 12),
+        None => assert(false, "expected Some(12)"),
+    }
+}
+
+fn test_parse_nonneg_int_rejects_negative() {
+    match parse_nonneg_int("-1") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+fn test_parse_nonneg_int_rejects_empty() {
+    match parse_nonneg_int("") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}

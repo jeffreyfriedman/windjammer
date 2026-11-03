@@ -1,0 +1,62 @@
+use crate::domain::format_check
+use crate::domain::format_next
+use crate::domain::format_explain
+use crate::domain::format_list
+use crate::domain::format_due
+use crate::domain::ExplainResult
+use crate::domain::CronDateTime
+
+fn test_format_check_match() {
+    assert_eq(format_check(true), "match")
+}
+
+fn test_format_check_no_match() {
+    assert_eq(format_check(false), "no-match")
+}
+
+fn test_format_next_some() {
+    let dt = CronDateTime {
+        year: 2026,
+        month: 1,
+        day_of_month: 1,
+        hour: 12,
+        minute: 5,
+        day_of_week: 4,
+    }
+    assert_eq(format_next(Some(dt)), "2026-01-01T12:05")
+}
+
+fn test_format_next_none() {
+    assert_eq(format_next(None), "none")
+}
+
+fn test_format_explain() {
+    let exp = ExplainResult {
+        minute: "0",
+        hour: "*",
+        day_of_month: "*",
+        month: "*",
+        day_of_week: "*",
+    }
+    assert_eq(format_explain(exp), "minute=0 hour=* day_of_month=* month=* day_of_week=*")
+}
+
+fn test_format_list_joins_lines() {
+    let mut exprs = Vec::new()
+    exprs.push("@hourly")
+    exprs.push("*/15 * * * *")
+    assert_eq(format_list(exprs), "@hourly\n*/15 * * * *")
+}
+
+fn test_format_list_empty() {
+    let exprs = Vec::new()
+    assert_eq(format_list(exprs), "(none)")
+}
+
+fn test_format_due_joins_or_none() {
+    let mut due = Vec::new()
+    due.push("@hourly")
+    assert_eq(format_due(due), "@hourly")
+    let empty = Vec::new()
+    assert_eq(format_due(empty), "(none)")
+}

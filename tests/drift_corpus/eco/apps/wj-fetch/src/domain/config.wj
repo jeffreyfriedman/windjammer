@@ -1,0 +1,54 @@
+use std::env
+
+use crate::domain::parse::parse_nonneg_int
+
+pub struct FetchConfig {
+    pub fail_on_error: bool,
+    pub max_retries: int,
+    pub timeout_secs: int,
+}
+
+impl FetchConfig {
+    pub fn defaults() -> FetchConfig {
+        FetchConfig {
+            fail_on_error: false,
+            max_retries: 0,
+            timeout_secs: 0,
+        }
+    }
+}
+
+pub fn config_from_env() -> FetchConfig {
+    let mut config = FetchConfig::defaults()
+    match env.get("FETCH_FAIL_ON_ERROR") {
+        Some(value) => {
+            if value == "1" || value == "true" {
+                config.fail_on_error = true
+            }
+        },
+        None => {},
+    }
+    match env.get("FETCH_MAX_RETRIES") {
+        Some(value) => {
+            match parse_nonneg_int(value) {
+                Some(n) => {
+                    config.max_retries = n
+                },
+                None => {},
+            }
+        },
+        None => {},
+    }
+    match env.get("FETCH_TIMEOUT_SECS") {
+        Some(value) => {
+            match parse_nonneg_int(value) {
+                Some(n) => {
+                    config.timeout_secs = n
+                },
+                None => {},
+            }
+        },
+        None => {},
+    }
+    config
+}

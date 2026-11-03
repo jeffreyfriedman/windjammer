@@ -1,0 +1,10 @@
+// A function returning Box<dyn Fn(int) -> int> built from a closure: the compiled backend emits a
+// zero-argument callable type.
+fn adder(n: int) -> Box<dyn Fn(int) -> int> {
+    Box::new(move |x| x + n)
+}
+
+fn main() {
+    let add5 = adder(5)
+    println("${add5(1)}")
+}

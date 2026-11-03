@@ -1,0 +1,41 @@
+use crate::mean
+use crate::median
+use crate::min
+use crate::max
+use crate::pstdev
+use crate::stdev
+use crate::sorted
+
+// Expected values come from Python's statistics module.
+
+fn test_mean_min_max() {
+    assert_eq(mean([3.0, 1.0, 2.0, 10.0]), 4.0)
+    assert_eq(min([3.0, 1.0, 2.0, 10.0]), 1.0)
+    assert_eq(max([3.0, 1.0, 2.0, 10.0]), 10.0)
+}
+
+fn test_median_odd_even() {
+    assert_eq(median([5.0, 1.0, 3.0]), 3.0)
+    assert_eq(median([4.0, 1.0, 3.0, 2.0]), 2.5)
+    assert_eq(median([7.0]), 7.0)
+}
+
+fn test_empty_samples_are_zero() {
+    let none: Vec<f64> = Vec::new()
+    assert_eq(mean(none.clone()), 0.0)
+    assert_eq(median(none.clone()), 0.0)
+    assert_eq(pstdev(none), 0.0)
+}
+
+fn test_stdev_matches_python() {
+    // statistics.pstdev([1,2,3,4]) = 1.118033988749895 ; statistics.stdev([1,2,3,4]) = 1.2909944487358056
+    assert_eq(pstdev([1.0, 2.0, 3.0, 4.0]), 1.118033988749895)
+    assert_eq(stdev([1.0, 2.0, 3.0, 4.0]), 1.2909944487358056)
+    assert_eq(stdev([5.0]), 0.0)
+}
+
+fn test_sorted_ascending() {
+    let s = sorted([3.0, 1.0, 2.0])
+    assert_eq(s[0], 1.0)
+    assert_eq(s[2], 3.0)
+}

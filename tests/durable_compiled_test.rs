@@ -50,8 +50,17 @@ fn a_durable_fn_is_lowered_to_a_journaled_run_with_wrapped_steps() {
     assert_eq!(rs.matches("windjammer_runtime::durable::run(").count(), 1, "{rs}");
     assert!(rs.contains(r#"windjammer_runtime::durable::run("run", vec![windjammer_runtime::durable::to_json(&seed)]"#), "{rs}");
     // three stages and three prints are steps; the plain `main` and the helper `stage` carry none
-    assert_eq!(rs.matches("windjammer_runtime::durable::step(").count(), 6, "{rs}");
+    assert_eq!(rs.matches("windjammer_runtime::durable::step(").count() + rs.matches("windjammer_runtime::durable::step_read(").count(), 6, "{rs}");
     assert!(rs.contains(r#"windjammer_runtime::durable::step("stage""#) && rs.contains(r#"windjammer_runtime::durable::step("println""#), "{rs}");
+}
+
+#[test]
+fn steps_that_only_read_are_journaled_lazily_and_the_others_are_not() {
+    let (o, rs) = emitted(&sample("c3_counter.wj"));
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(rs.contains(r#"windjammer_runtime::durable::step_read("read_count""#), "a file read is lazy: {rs}");
+    assert!(rs.contains(r#"windjammer_runtime::durable::step("write_count""#), "a file write is not: {rs}");
+    assert!(rs.contains(r#"windjammer_runtime::durable::step("println""#), "console output is not: {rs}");
 }
 
 #[test]
@@ -128,7 +137,8 @@ fn one_journal_two_implementations() {
         let b = Command::new(WJ).args(["build", "-o", "out", "."]).current_dir(&p).env("CARGO_TARGET_DIR", &target).output().unwrap();
         assert!(b.status.success(), "{name}: {}", text(&b));
         // `wj build` runs cargo in the debug profile unless asked otherwise
-        let bin = ["debug", "release"].iter().map(|profile| target.join(profile).join("p")).find(|f| f.is_file());
+        // cargo's target directory is `out/target` (or the caller's `CARGO_TARGET_DIR` on older builds of `wj`)
+        let bin = [p.join("out/target"), target.clone()].iter().flat_map(|t| ["debug", "release"].map(|profile| t.join(profile).join("p"))).find(|f| f.is_file());
         let Some(bin) = bin else {
             failures.push(format!("{name}: no binary `p` under {} (profiles debug, release)", target.display()));
             continue;

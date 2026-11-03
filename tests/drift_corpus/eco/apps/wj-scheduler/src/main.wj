@@ -1,0 +1,68 @@
+use crate::adapters::read_argv
+use crate::adapters::run_check
+use crate::adapters::run_next
+use crate::adapters::run_explain
+use crate::adapters::run_list
+use crate::adapters::run_due
+use crate::domain::config_from_env
+use crate::domain::parse_command
+use std::process
+
+fn main() {
+    let config = config_from_env()
+    let argv = read_argv()
+    match parse_command(argv, config) {
+        Ok(cmd) => {
+            if cmd.kind == "check" {
+                match run_check(cmd.expr, cmd.at) {
+                    Ok(msg) => println("{}", msg),
+                    Err(e) => {
+                        eprintln("wj-scheduler: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "next" {
+                match run_next(cmd.expr, cmd.at, cmd.max_minutes) {
+                    Ok(msg) => println("{}", msg),
+                    Err(e) => {
+                        eprintln("wj-scheduler: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "explain" {
+                match run_explain(cmd.expr) {
+                    Ok(msg) => println("{}", msg),
+                    Err(e) => {
+                        eprintln("wj-scheduler: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "list" {
+                match run_list(cmd.path) {
+                    Ok(msg) => println("{}", msg),
+                    Err(e) => {
+                        eprintln("wj-scheduler: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else if cmd.kind == "due" {
+                match run_due(cmd.path, cmd.at) {
+                    Ok(msg) => println("{}", msg),
+                    Err(e) => {
+                        eprintln("wj-scheduler: ${e}")
+                        process.exit(1)
+                    },
+                }
+            } else {
+                eprintln("wj-scheduler: ${USAGE}")
+                process.exit(1)
+            }
+        },
+        Err(e) => {
+            eprintln("wj-scheduler: ${e}")
+            process.exit(1)
+        },
+    }
+}
+
+const USAGE: string = "usage: wj-scheduler check|next|explain|list|due …"

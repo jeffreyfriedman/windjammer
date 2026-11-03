@@ -1,0 +1,201 @@
+use crate::accepts_gzip
+use crate::accepts_identity
+use crate::below_min_bytes
+use crate::content_encoding_gzip
+use crate::content_encoding_header
+use crate::content_encoding_identity
+use crate::content_encoding_identity_header
+use crate::default_min_bytes
+use crate::gzip_decode
+use crate::gzip_encode
+use crate::is_gzip_encoding
+use crate::is_identity_encoding
+use crate::meets_min_bytes
+use crate::negotiate
+use crate::negotiate_or_identity
+use crate::prefer_gzip
+use crate::prefer_identity
+use crate::require_identity
+use crate::require_negotiated
+use crate::should_compress
+use crate::should_compress_default
+use crate::vary_accept_encoding
+use std::strings
+
+@test
+fn test_accepts_gzip_simple() {
+    assert(accepts_gzip("gzip"), "plain gzip")
+    assert(accepts_gzip("gzip, deflate"), "list")
+    assert(accepts_gzip("deflate, gzip;q=1.0"), "with q")
+    assert(!accepts_gzip("deflate"), "no gzip")
+    assert(!accepts_gzip(""), "empty")
+}
+
+@test
+fn test_accepts_gzip_star() {
+    assert(accepts_gzip("*"), "star")
+    assert(accepts_gzip("*;q=0.5"), "star q")
+}
+
+@test
+fn test_accepts_gzip_q_zero() {
+    assert(!accepts_gzip("gzip;q=0"), "q=0 rejects")
+    assert(!accepts_gzip("gzip;q=0.0"), "q=0.0 rejects")
+}
+
+@test
+fn test_negotiate_prefers_gzip() {
+    match negotiate("gzip, deflate") {
+        Some(enc) => assert_eq(enc, "gzip"),
+        None => assert(false, "expected gzip"),
+    }
+}
+
+@test
+fn test_negotiate_identity_when_no_gzip() {
+    match negotiate("deflate, br") {
+        Some(_) => assert(false, "expected None"),
+        None => {},
+    }
+}
+
+@test
+fn test_content_encoding_gzip() {
+    assert_eq(content_encoding_gzip(), "gzip")
+}
+
+@test
+fn test_prefer_identity() {
+    assert(prefer_identity(""), "empty")
+    assert(prefer_identity("identity"), "identity")
+    assert(!prefer_identity("gzip"), "gzip not identity")
+}
+
+@test
+fn test_accepts_gzip_case_insensitive() {
+    assert(accepts_gzip("GZip"), "mixed case")
+    assert(accepts_gzip("GZIP, Deflate"), "upper")
+}
+
+@test
+fn test_gzip_roundtrip() {
+    match gzip_encode("hello compress world") {
+        Ok(encoded) => {
+            assert(encoded != "hello compress world", "compressed differs")
+            match gzip_decode(encoded) {
+                Ok(plain) => assert_eq(plain, "hello compress world"),
+                Err(_) => assert(false, "decode"),
+            }
+        },
+        Err(_) => assert(false, "encode"),
+    }
+}
+
+@test
+fn test_gzip_empty() {
+    match gzip_encode("") {
+        Ok(encoded) => {
+            match gzip_decode(encoded) {
+                Ok(plain) => assert_eq(plain, ""),
+                Err(_) => assert(false, "decode empty"),
+            }
+        },
+        Err(_) => assert(false, "encode empty"),
+    }
+}
+
+@test
+fn test_vary_accept_encoding() {
+    assert_eq(vary_accept_encoding(), "Vary: Accept-Encoding")
+}
+
+@test
+fn test_should_compress_respects_accept_and_min_size() {
+    assert(should_compress("gzip", 200, 100), "gzip + large enough")
+    assert(!should_compress("gzip", 50, 100), "below min bytes")
+    assert(!should_compress("deflate", 200, 100), "client rejects gzip")
+    assert(!should_compress("", 200, 100), "empty accept")
+}
+
+@test
+fn test_content_encoding_header() {
+    assert_eq(content_encoding_header(), "Content-Encoding: gzip")
+    assert_eq(content_encoding_gzip(), "gzip")
+}
+
+@test
+fn test_default_min_bytes_and_should_compress_default() {
+    assert_eq(default_min_bytes(), 1024)
+    assert(should_compress_default("gzip", 2048), "above default min")
+    assert(!should_compress_default("gzip", 100), "below default min")
+    assert(!should_compress_default("identity", 2048), "no gzip")
+}
+
+@test
+fn test_is_gzip_encoding() {
+    assert(is_gzip_encoding("gzip"), "bare")
+    assert(is_gzip_encoding(" gzip "), "trimmed")
+    assert(!is_gzip_encoding("deflate"), "deflate")
+    assert(!is_gzip_encoding(""), "empty")
+}
+
+@test
+fn test_is_identity_and_meets_min_bytes() {
+    assert(is_identity_encoding("identity"), "bare")
+    assert(is_identity_encoding(" Identity "), "trim")
+    assert(!is_identity_encoding("gzip"), "gzip")
+    assert(meets_min_bytes(2048, 1024), "above")
+    assert(!meets_min_bytes(100, 1024), "below")
+}
+
+@test
+fn test_content_encoding_identity_helpers() {
+    assert_eq(content_encoding_identity(), "identity")
+    assert_eq(content_encoding_identity_header(), "Content-Encoding: identity")
+    assert(is_identity_encoding(content_encoding_identity()), "constant is identity")
+}
+
+@test
+fn test_below_min_and_negotiate_or_identity() {
+    assert(below_min_bytes(100, 1024), "below")
+    assert(!below_min_bytes(2048, 1024), "meets")
+    assert_eq(negotiate_or_identity("gzip"), "gzip")
+    assert_eq(negotiate_or_identity("deflate"), "identity")
+    assert_eq(negotiate_or_identity(""), "identity")
+}
+
+@test
+fn test_accepts_identity_and_prefer_gzip() {
+    assert(accepts_identity("identity"), "bare")
+    assert(accepts_identity("gzip, identity"), "listed")
+    assert(accepts_identity("*"), "star")
+    assert(!accepts_identity("gzip"), "gzip only")
+    assert(prefer_gzip("gzip"), "gzip")
+    assert(prefer_gzip("gzip, deflate"), "gzip first")
+    assert(!prefer_gzip("identity"), "identity")
+    assert(!prefer_gzip(""), "empty")
+}
+
+@test
+fn test_require_identity() {
+    match require_identity("identity") {
+        Ok(coding) => assert_eq(coding, "identity"),
+        Err(_) => assert(false, "identity ok"),
+    }
+    match require_identity("gzip") {
+        Ok(_) => assert(false, "gzip must Err"),
+        Err(msg) => assert(strings.contains(msg, "identity"), "mentions identity"),
+    }
+}
+
+@test
+fn test_require_negotiated() {
+    match require_negotiated("gzip", "gzip") {
+        Ok(coding) => assert_eq(coding, "gzip"),
+        Err(_) => assert(false, "gzip"),
+    }
+    match require_negotiated("", "gzip") {
+        Ok(_) => assert(false, "identity must Err"),
+        Err(msg) => assert(strings.contains(msg, "coding"), "mentions coding"),
+    }
+}

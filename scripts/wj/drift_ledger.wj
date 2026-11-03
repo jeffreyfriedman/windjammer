@@ -1,0 +1,167 @@
+// The drift budget: compares one differential run against the ledger of known divergences.
+//
+//   wj run scripts/wj/drift_ledger.wj <results.tsv> <ledger.txt> [--min-cases N] [--base-ledger FILE]
+//
+// results.tsv rows: id <TAB> walker <TAB> resolved <TAB> compiled (an outcome token each; `skip` = not run).
+// A case diverges when its non-`skip` tokens are not all equal. ledger.txt lines: `id | signature | reason`
+// (`#` comments and blank lines ignored); the signature is `walker=A resolved=B compiled=C`.
+//
+// The gate fails (exit 1) on:
+//   new       a divergent case the ledger does not list
+//   changed   a listed case that diverges differently than its signature says
+//   stale     a listed case that no longer diverges (or is not in the corpus): remove its line
+//   grew      with --base-ledger, a ledger id the base ledger lacks (the ledger is shrink-only;
+//             DRIFT_ALLOW_GROWTH=1 permits it for the change that records a new finding)
+//   vacuous   fewer than --min-cases rows compared
+use std::env
+use std::fs
+use std::process
+use std::strings
+
+struct Row {
+    id: string,
+    walker: string,
+    resolved: string,
+    compiled: string,
+}
+
+fn parse_rows(text: string) -> Vec<Row> {
+    let mut rows = Vec::new()
+    for line in strings.split_lines(text) {
+        if strings.trim(line) == "" {
+            continue
+        }
+        let f = strings.split(line, "\t")
+        if f.len() == 4 {
+            rows.push(Row { id: f[0], walker: f[1], resolved: f[2], compiled: f[3] })
+        }
+    }
+    rows
+}
+
+fn diverges(r: Row) -> bool {
+    let toks = [r.walker, r.resolved, r.compiled]
+    let mut first = ""
+    for t in toks {
+        if t == "skip" {
+            continue
+        }
+        if first == "" {
+            first = t
+        } else if t != first {
+            return true
+        }
+    }
+    false
+}
+
+fn signature(r: Row) -> string {
+    "walker=${r.walker} resolved=${r.resolved} compiled=${r.compiled}"
+}
+
+struct Entry {
+    id: string,
+    sig: string,
+}
+
+fn parse_ledger(text: string) -> Vec<Entry> {
+    let mut out = Vec::new()
+    for line in strings.split_lines(text) {
+        let t = strings.trim(line)
+        if t == "" || strings.starts_with(t, "#") {
+            continue
+        }
+        let f = strings.split(t, " | ")
+        let sig = if f.len() > 1 { strings.trim(f[1]) } else { "" }
+        out.push(Entry { id: strings.trim(f[0]), sig: sig })
+    }
+    out
+}
+
+fn find_entry(es: Vec<Entry>, id: string) -> Option<Entry> {
+    for e in es {
+        if e.id == id {
+            return Some(e)
+        }
+    }
+    None
+}
+
+fn find_row(rows: Vec<Row>, id: string) -> Option<Row> {
+    for r in rows {
+        if r.id == id {
+            return Some(r)
+        }
+    }
+    None
+}
+
+fn read_or_empty(path: string) -> string {
+    match fs.read_to_string(path) {
+        Ok(t) => t,
+        Err(_) => "",
+    }
+}
+
+fn main() {
+    let args = env::args()
+    let mut min_cases = 1
+    let mut base = ""
+    let mut i = 3
+    while i < args.len() {
+        if args[i] == "--min-cases" {
+            min_cases = args[i + 1].parse::<int>().unwrap_or(1)
+            i += 1
+        } else if args[i] == "--base-ledger" {
+            base = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    let rows = parse_rows(read_or_empty(args[1]))
+    let ledger = parse_ledger(read_or_empty(args[2]))
+    let mut problems: Vec<string> = Vec::new()
+    let mut divergent = 0
+    for r in rows {
+        if !diverges(r) {
+            continue
+        }
+        divergent += 1
+        match find_entry(ledger, r.id) {
+            None => problems.push("new       ${r.id}  ${signature(r)}"),
+            Some(e) => {
+                if e.sig != signature(r) {
+                    problems.push("changed   ${r.id}  ledger: ${e.sig}  now: ${signature(r)}")
+                }
+            },
+        }
+    }
+    for e in ledger {
+        match find_row(rows, e.id) {
+            None => problems.push("stale     ${e.id}  not in the corpus: remove it from the ledger"),
+            Some(r) => {
+                if !diverges(r) {
+                    problems.push("stale     ${e.id}  no longer diverges: remove it from the ledger")
+                }
+            },
+        }
+    }
+    if base != "" && env::var("DRIFT_ALLOW_GROWTH").unwrap_or("") != "1" {
+        let old = parse_ledger(read_or_empty(base))
+        for e in ledger {
+            if find_entry(old, e.id).is_none() {
+                problems.push("grew      ${e.id}  the ledger is shrink-only (DRIFT_ALLOW_GROWTH=1 records a new finding)")
+            }
+        }
+    }
+    if rows.len() < min_cases {
+        problems.push("vacuous   ${rows.len()} cases compared, expected at least ${min_cases}")
+    }
+    println("drift ledger: ${rows.len()} cases, ${divergent} divergent, ${ledger.len()} ledgered")
+    for p in problems {
+        println("  ${p}")
+    }
+    if problems.len() > 0 {
+        process.exit(1)
+    }
+}

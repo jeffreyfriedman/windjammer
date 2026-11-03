@@ -1,0 +1,157 @@
+use crate::domain::Options
+use crate::domain::default_options
+use crate::domain::effective_pattern
+use crate::domain::match_lines
+use crate::domain::render_file
+
+fn opts(pattern: string) -> Options {
+    let mut o = default_options()
+    o.pattern = pattern
+    o
+}
+
+@test
+fn test_default_options_are_neutral() {
+    let o = default_options()
+    assert(!o.ignore_case, "case sensitive")
+    assert(!o.word, "no word boundary")
+    assert_eq(o.before, 0)
+    assert_eq(o.after, 0)
+    assert_eq(o.max_count, 0)
+}
+
+@test
+fn test_effective_pattern_plain_is_unchanged() {
+    assert_eq(effective_pattern(opts("fo+")), "fo+")
+}
+
+@test
+fn test_effective_pattern_flags() {
+    let mut o = opts("a.b")
+    o.fixed = true
+    assert_eq(effective_pattern(o), "a\\.b")
+    let mut w = opts("cat")
+    w.word = true
+    assert_eq(effective_pattern(w), "\\b(?:cat)\\b")
+    let mut i = opts("cat")
+    i.ignore_case = true
+    assert_eq(effective_pattern(i), "(?i)cat")
+}
+
+@test
+fn test_match_lines_reports_one_based_line_numbers() {
+    match match_lines("alpha\nbeta\nalpha beta\ngamma\n", opts("beta")) {
+        Ok(lines) => {
+            assert_eq(lines.len(), 2)
+            assert_eq(lines[0], 2)
+            assert_eq(lines[1], 3)
+        },
+        Err(e) => assert(false, "match_lines failed: ${e}"),
+    }
+}
+
+@test
+fn test_match_lines_regex_and_case_insensitive() {
+    let mut o = opts("^h[aeiou]llo")
+    o.ignore_case = true
+    match match_lines("Hello\nsay hello\nHULLO there\n", o) {
+        Ok(lines) => {
+            assert_eq(lines.len(), 2)
+            assert_eq(lines[0], 1)
+            assert_eq(lines[1], 3)
+        },
+        Err(e) => assert(false, "match_lines failed: ${e}"),
+    }
+}
+
+@test
+fn test_whole_word_does_not_match_inside_words() {
+    let mut o = opts("cat")
+    o.word = true
+    match match_lines("concatenate\nthe cat sat\ncatalog\n", o) {
+        Ok(lines) => {
+            assert_eq(lines.len(), 1)
+            assert_eq(lines[0], 2)
+        },
+        Err(e) => assert(false, "match_lines failed: ${e}"),
+    }
+}
+
+@test
+fn test_fixed_string_treats_metacharacters_literally() {
+    let mut o = opts("a.b")
+    o.fixed = true
+    match match_lines("a.b\naxb\n", o) {
+        Ok(lines) => {
+            assert_eq(lines.len(), 1)
+            assert_eq(lines[0], 1)
+        },
+        Err(e) => assert(false, "match_lines failed: ${e}"),
+    }
+}
+
+@test
+fn test_invert_selects_non_matching_lines() {
+    let mut o = opts("x")
+    o.invert = true
+    match match_lines("x\ny\nx\nz\n", o) {
+        Ok(lines) => {
+            assert_eq(lines.len(), 2)
+            assert_eq(lines[0], 2)
+            assert_eq(lines[1], 4)
+        },
+        Err(e) => assert(false, "match_lines failed: ${e}"),
+    }
+}
+
+@test
+fn test_max_count_limits_matching_lines() {
+    let mut o = opts("a")
+    o.max_count = 2
+    match match_lines("a\na\na\n", o) {
+        Ok(lines) => assert_eq(lines.len(), 2),
+        Err(e) => assert(false, "match_lines failed: ${e}"),
+    }
+}
+
+@test
+fn test_invalid_regex_is_an_error_not_a_panic() {
+    match match_lines("abc\n", opts("(unclosed")) {
+        Ok(_) => assert(false, "expected an error for an invalid pattern"),
+        Err(e) => assert(e.len() > 0, "error message present"),
+    }
+}
+
+@test
+fn test_render_plain_with_line_numbers() {
+    let text = "one\ntwo\nthree\n"
+    let out = render_file("f.txt", text, [2], 0, 0, true)
+    assert_eq(out, "f.txt:2:two")
+}
+
+@test
+fn test_render_without_line_numbers() {
+    let out = render_file("f.txt", "one\ntwo\n", [1], 0, 0, false)
+    assert_eq(out, "f.txt:one")
+}
+
+@test
+fn test_render_context_marks_context_with_dash() {
+    let text = "a\nb\nc\nd\ne\n"
+    let out = render_file("f", text, [3], 1, 1, true)
+    assert_eq(out, "f-2-b\nf:3:c\nf-4-d")
+}
+
+@test
+fn test_render_separates_distant_groups() {
+    let text = "a\nb\nc\nd\ne\nf\ng\n"
+    let out = render_file("f", text, [1, 7], 1, 0, true)
+    assert_eq(out, "f:1:a\n--\nf-6-f\nf:7:g")
+}
+
+@test
+fn test_render_merges_overlapping_context() {
+    let text = "a\nb\nc\nd\n"
+    let out = render_file("f", text, [1, 3], 1, 1, true)
+    assert_eq(out, "f:1:a\nf-2-b\nf:3:c\nf-4-d")
+}

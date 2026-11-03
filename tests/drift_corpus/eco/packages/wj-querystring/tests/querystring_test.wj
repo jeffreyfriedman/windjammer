@@ -1,0 +1,314 @@
+use crate::append
+use crate::first_key
+use crate::get
+use crate::get_all
+use crate::get_or
+use crate::has
+use crate::is_empty
+use crate::is_singleton
+use crate::keys
+use crate::last_key
+use crate::last_value
+use crate::pair_count
+use crate::require_empty
+use crate::require_singleton
+use crate::require_last_key
+use crate::require_first_key
+use crate::require_last_value
+use crate::require_count
+use crate::parse
+use crate::remove
+use crate::require
+use crate::set
+use crate::stringify
+use crate::unique_key_count
+use crate::require_unique
+use crate::require_pair_count
+use crate::value_count
+use std::strings
+
+@test
+fn test_parse_empty() {
+    let pairs = parse("")
+    assert_eq(pairs.len(), 0)
+}
+
+@test
+fn test_parse_simple_pairs() {
+    let pairs = parse("a=1&b=two")
+    assert_eq(pairs.len(), 2)
+    assert_eq(pairs[0].0, "a")
+    assert_eq(pairs[0].1, "1")
+    assert_eq(pairs[1].0, "b")
+    assert_eq(pairs[1].1, "two")
+}
+
+@test
+fn test_parse_key_without_value() {
+    let pairs = parse("flag&x=1")
+    assert_eq(pairs.len(), 2)
+    assert_eq(pairs[0].0, "flag")
+    assert_eq(pairs[0].1, "")
+    assert_eq(pairs[1].0, "x")
+    assert_eq(pairs[1].1, "1")
+}
+
+@test
+fn test_parse_strips_leading_question() {
+    let pairs = parse("?a=1")
+    assert_eq(pairs.len(), 1)
+    assert_eq(pairs[0].0, "a")
+    assert_eq(pairs[0].1, "1")
+}
+
+@test
+fn test_stringify_roundtrip() {
+    let pairs = parse("a=1&b=2")
+    let text = stringify(pairs)
+    assert_eq(text, "a=1&b=2")
+}
+
+@test
+fn test_get_first_value() {
+    match get("a=1&a=2&b=3", "a") {
+        Some(v) => assert_eq(v, "1"),
+        None => assert(false, "expected a"),
+    }
+}
+
+@test
+fn test_get_all_repeated_keys() {
+    let values = get_all("tag=red&tag=blue&x=1", "tag")
+    assert_eq(values.len(), 2)
+    assert_eq(values[0], "red")
+    assert_eq(values[1], "blue")
+}
+
+@test
+fn test_has_true_false() {
+    assert(has("a=1&b=2", "b"), "b present")
+    assert(!has("a=1", "z"), "z missing")
+}
+
+@test
+fn test_remove_drops_all_matching_keys() {
+    let out = remove("a=1&b=2&a=3", "a")
+    assert_eq(out, "b=2")
+}
+
+@test
+fn test_append_keeps_existing() {
+    let out = append("a=1", "a", "2")
+    assert(strings.contains(out, "a=1"), "keeps first")
+    assert(strings.contains(out, "a=2"), "appends second")
+}
+
+@test
+fn test_parse_plus_as_space() {
+    let pairs = parse("q=hello+world")
+    assert_eq(pairs.len(), 1)
+    assert_eq(pairs[0].1, "hello world")
+}
+
+@test
+fn test_stringify_encodes_spaces() {
+    let pairs = parse("q=hello world")
+    let text = stringify(pairs)
+    assert(strings.contains(text, "q="), "has key")
+    assert(!strings.contains(text, " "), "no raw space")
+}
+
+@test
+fn test_parse_percent_encoded_value() {
+    let pairs = parse("q=hello%20world")
+    assert_eq(pairs.len(), 1)
+    assert_eq(pairs[0].1, "hello world")
+}
+
+@test
+fn test_stringify_encodes_ampersand_in_value() {
+    let text = append("", "q", "a&b")
+    assert(strings.contains(text, "q="), "has key")
+    assert(!strings.contains(text, "q=a&b"), "ampersand must be encoded")
+    match get(text, "q") {
+        Some(v) => assert_eq(v, "a&b"),
+        None => assert(false, "roundtrip q"),
+    }
+}
+
+@test
+fn test_set_replaces_existing_key() {
+    let text = set("a=1&b=2&a=3", "a", "9")
+    match get(text, "a") {
+        Some(v) => assert_eq(v, "9"),
+        None => assert(false, "set a"),
+    }
+    assert_eq(get_all(text, "a").len(), 1)
+    match get(text, "b") {
+        Some(v) => assert_eq(v, "2"),
+        None => assert(false, "keep b"),
+    }
+}
+
+@test
+fn test_get_or_default() {
+    assert_eq(get_or("a=1", "a", "0"), "1")
+    assert_eq(get_or("a=1", "b", "0"), "0")
+}
+
+@test
+fn test_is_empty_and_pair_count() {
+    assert(is_empty(""), "empty string")
+    assert(is_empty("?"), "leading question only")
+    assert(!is_empty("a=1"), "has pair")
+    assert_eq(pair_count(""), 0)
+    assert_eq(pair_count("a=1&b=2&a=3"), 3)
+}
+
+@test
+fn test_keys_unique_in_order() {
+    let ks = keys("a=1&b=2&a=3")
+    assert_eq(ks.len(), 2)
+    assert_eq(ks[0], "a")
+    assert_eq(ks[1], "b")
+}
+
+@test
+fn test_unique_key_count_and_value_count() {
+    assert_eq(unique_key_count("a=1&b=2&a=3"), 2)
+    assert_eq(unique_key_count(""), 0)
+    assert_eq(value_count("a=1&b=2&a=3", "a"), 2)
+    assert_eq(value_count("a=1&b=2&a=3", "b"), 1)
+    assert_eq(value_count("a=1&b=2&a=3", "z"), 0)
+}
+
+@test
+fn test_require() {
+    match require("a=1&b=2", "a") {
+        Ok(v) => assert_eq(v, "1"),
+        Err(_) => assert(false, "require a"),
+    }
+    match require("a=1&b=2", "z") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "z"), "mentions key"),
+    }
+}
+
+@test
+fn test_last_key_and_is_singleton() {
+    match last_key("a=1&b=2") {
+        Some(k) => assert_eq(k, "b"),
+        None => assert(false, "last"),
+    }
+    match last_key("") {
+        Some(_) => assert(false, "empty"),
+        None => {},
+    }
+    assert(is_singleton("a=1"), "one pair")
+    assert(!is_singleton("a=1&b=2"), "two pairs")
+    assert(!is_singleton(""), "empty")
+}
+
+@test
+fn test_last_value_and_require_singleton() {
+    match last_value("a=1&b=2&a=3", "a") {
+        Some(v) => assert_eq(v, "3"),
+        None => assert(false, "last a"),
+    }
+    match last_value("a=1", "z") {
+        Some(_) => assert(false, "missing"),
+        None => {},
+    }
+    match require_singleton("a=1") {
+        Ok(k) => assert_eq(k, "a"),
+        Err(_) => assert(false, "singleton"),
+    }
+    match require_singleton("a=1&b=2") {
+        Ok(_) => assert(false, "two must Err"),
+        Err(msg) => assert(strings.contains(msg, "singleton"), "mentions singleton"),
+    }
+}
+
+@test
+fn test_require_empty() {
+    match require_empty("") {
+        Ok(n) => assert_eq(n, 0),
+        Err(_) => assert(false, "empty query"),
+    }
+    match require_empty("a=1") {
+        Ok(_) => assert(false, "pair must Err"),
+        Err(msg) => assert(strings.contains(msg, "empty"), "mentions empty"),
+    }
+}
+
+@test
+fn test_require_last_key() {
+    match require_last_key("a=1&b=2") {
+        Ok(k) => assert_eq(k, "b"),
+        Err(_) => assert(false, "last key"),
+    }
+    match require_last_key("") {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "last"), "mentions last"),
+    }
+}
+
+@test
+fn test_require_first_key() {
+    match require_first_key("a=1&b=2") {
+        Ok(k) => assert_eq(k, "a"),
+        Err(_) => assert(false, "first key"),
+    }
+    match require_first_key("") {
+        Ok(_) => assert(false, "empty must Err"),
+        Err(msg) => assert(strings.contains(msg, "first"), "mentions first"),
+    }
+}
+
+@test
+fn test_require_last_value() {
+    match require_last_value("a=1&a=2", "a") {
+        Ok(v) => assert_eq(v, "2"),
+        Err(_) => assert(false, "last value"),
+    }
+    match require_last_value("a=1", "z") {
+        Ok(_) => assert(false, "missing must Err"),
+        Err(msg) => assert(strings.contains(msg, "value"), "mentions value"),
+    }
+}
+
+@test
+fn test_require_count() {
+    match require_count("a=1&a=2", "a", 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two values"),
+    }
+    match require_count("a=1", "a", 2) {
+        Ok(_) => assert(false, "one must Err"),
+        Err(msg) => assert(strings.contains(msg, "count"), "mentions count"),
+    }
+}
+
+@test
+fn test_require_unique() {
+    match require_unique("a=1&b=2", 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two keys"),
+    }
+    match require_unique("a=1&a=2", 2) {
+        Ok(_) => assert(false, "duplicate must Err"),
+        Err(msg) => assert(strings.contains(msg, "unique"), "mentions unique"),
+    }
+}
+
+@test
+fn test_require_pair_count() {
+    match require_pair_count("a=1&a=2", 2) {
+        Ok(n) => assert_eq(n, 2),
+        Err(_) => assert(false, "two pairs"),
+    }
+    match require_pair_count("a=1", 2) {
+        Ok(_) => assert(false, "one must Err"),
+        Err(msg) => assert(strings.contains(msg, "pair count"), "mentions pair count"),
+    }
+}

@@ -1,0 +1,57 @@
+use std::env
+use std::strings
+
+pub struct SitegenConfig {
+    pub src_override: string,
+    pub out_override: string,
+    pub base_url: string,
+    pub site_title: string,
+}
+
+impl SitegenConfig {
+    pub fn defaults() -> SitegenConfig {
+        SitegenConfig {
+            src_override: "",
+            out_override: "",
+            base_url: "",
+            site_title: "",
+        }
+    }
+}
+
+pub fn config_from_env() -> SitegenConfig {
+    let mut config = SitegenConfig::defaults()
+    match env.get("SITEGEN_SRC") {
+        Some(value) => config.src_override = value,
+        None => {},
+    }
+    match env.get("SITEGEN_OUT") {
+        Some(value) => config.out_override = value,
+        None => {},
+    }
+    match env.get("SITEGEN_BASE_URL") {
+        Some(value) => config.base_url = value,
+        None => {},
+    }
+    match env.get("SITEGEN_TITLE") {
+        Some(value) => config.site_title = value,
+        None => {},
+    }
+    config
+}
+
+/// When argv dir is empty, use env override if set.
+pub fn resolve_src_dir(argv_src: string, src_override: string) -> string {
+    if strings.len(argv_src) == 0 && strings.len(src_override) > 0 {
+        return src_override
+    }
+    argv_src
+}
+
+/// When argv dir is empty, use env override if set.
+pub fn resolve_out_dir(argv_out: string, out_override: string) -> string {
+    if strings.len(argv_out) == 0 && strings.len(out_override) > 0 {
+        return out_override
+    }
+    argv_out
+}

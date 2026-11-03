@@ -1,0 +1,111 @@
+// Early exits from loops carrying values: `return Some/None/Err/enum` from nested while/for/loop,
+// `break` out of a labelled outer loop, `continue`, and a result built after the loop falls through.
+enum Found {
+    At(int),
+    Nowhere,
+}
+
+fn locate(grid: Vec<Vec<int>>, want: int) -> Found {
+    let mut r = 0
+    while r < grid.len() {
+        let row = grid[r].clone()
+        for c in 0..row.len() {
+            if row[c] == want {
+                return Found::At(r as int * 10 + c as int)
+            }
+        }
+        r += 1
+    }
+    Found::Nowhere
+}
+
+fn first_neg(xs: Vec<int>) -> Option<int> {
+    for x in xs {
+        if x < 0 {
+            return Some(x)
+        }
+    }
+    None
+}
+
+fn checked(xs: Vec<int>) -> Result<int, string> {
+    let mut sum = 0
+    let mut i = 0
+    loop {
+        if i >= xs.len() {
+            break
+        }
+        if xs[i] == 0 {
+            return Err("zero at ${i}")
+        }
+        sum += 100 / xs[i]
+        i += 1
+    }
+    Ok(sum)
+}
+
+fn skip_odds(n: int) -> int {
+    let mut acc = 0
+    let mut i = 0
+    while i < n {
+        i += 1
+        if i % 2 == 1 {
+            continue
+        }
+        acc += i
+    }
+    acc
+}
+
+fn label_of(f: Found) -> string {
+    match f {
+        Found::At(p) => "at ${p}",
+        Found::Nowhere => "nowhere",
+    }
+}
+
+fn main() {
+    let g = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    println(label_of(locate(g, 6)))
+    println(label_of(locate(g, 9)))
+    println(label_of(locate(g, 10)))
+    let a = match first_neg([1, 2, -3, -4]) {
+        Some(v) => Some(v),
+        None => None,
+    }
+    let b = match first_neg([1, 2]) {
+        Some(v) => Some(v),
+        None => None,
+    }
+    println("${a.unwrap_or(0)} ${b.is_none()}")
+    match checked([1, 2, 5]) {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match checked([1, 0, 5]) {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    println("${skip_odds(10)}")
+    let mut pairs = 0
+    'outer: for i in 0..6 {
+        for j in 0..6 {
+            if j > i {
+                continue 'outer
+            }
+            if i + j > 7 {
+                break 'outer
+            }
+            pairs += 1
+        }
+    }
+    println("${pairs}")
+    let mut n = 0
+    let v = loop {
+        n += 3
+        if n > 10 {
+            break n * 2
+        }
+    }
+    println("${v}")
+}

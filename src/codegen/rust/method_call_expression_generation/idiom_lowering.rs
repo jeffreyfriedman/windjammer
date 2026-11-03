@@ -100,6 +100,14 @@ impl<'ast> CodeGenerator<'ast> {
         if matches!(method, "cmp" | "partial_cmp") && args.len() == 1 && !args[0].starts_with('&') {
             args[0] = format!("&{}", args[0]);
         }
+        // `r ?? default` desugars to `unwrap_or_else(|| default)`; a `Result` passes the error to the closure.
+        if method == "unwrap_or_else"
+            && args.len() == 1
+            && args[0].starts_with("|| ")
+            && matches!(recv_ty, Some(Type::Result(..)))
+        {
+            args[0].replace_range(..2, "|_|");
+        }
         if method != "unwrap_or" || args.len() != 1 {
             return;
         }

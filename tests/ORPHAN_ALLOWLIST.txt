@@ -11,3 +11,4 @@ examples/tests/** | example package whose tests are run by `wj test examples`
 tests/fixtures/formatter/* | golden input/expected pairs read by directory in tests/formatter_golden_test.rs
 tests/fixtures/resolve/* | resolver fixtures read by directory in tests/resolve_fixtures_test.rs
 tests/py_ports/** | fixture trees and recorded expectations for the Windjammer script ports (scripts/wj/port_gates.wj)
+tests/drift_corpus/** | pinned ecosystem snapshot and its recorded results, read by directory in scripts/wj/drift_corpus.wj (the drift gate)

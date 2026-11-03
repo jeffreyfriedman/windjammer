@@ -1,0 +1,30 @@
+pub struct Config {
+    pub jwt_secret: string,
+    pub token_ttl_secs: int,
+    /// Requests allowed per client per window.
+    pub rate_limit: int,
+    pub rate_window_ms: int,
+}
+
+pub fn default_config() -> Config {
+    Config {
+        jwt_secret: "",
+        token_ttl_secs: 3600,
+        rate_limit: 100,
+        rate_window_ms: 60000,
+    }
+}
+
+/// Read configuration from the environment (`TASKFLOW_JWT_SECRET`, `TASKFLOW_RATE_LIMIT`).
+pub fn config_from_env() -> Config {
+    let mut config = default_config()
+    config.jwt_secret = std::env::var("TASKFLOW_JWT_SECRET").unwrap_or("")
+    match std::env::var("TASKFLOW_RATE_LIMIT") {
+        Ok(text) => match text.parse::<int>() {
+            Ok(n) => config.rate_limit = n,
+            Err(_) => {},
+        },
+        Err(_) => {},
+    }
+    config
+}

@@ -1,0 +1,46 @@
+use crate::domain::select_files
+
+fn sample() -> Vec<string> {
+    let mut paths = Vec::new()
+    paths.push("proj/src/main.wj")
+    paths.push("proj/.git/config")
+    paths.push("proj/.env")
+    paths.push("proj/target/out.bin")
+    paths.push("proj/notes.log")
+    paths.push("proj/README.md")
+    paths
+}
+
+@test
+fn test_select_hides_dotfiles_and_dot_directories_by_default() {
+    let kept = select_files("proj", sample(), "", true, false)
+    assert_eq(kept.len(), 4)
+    assert(!kept.contains(&"proj/.git/config".to_string()), ".git is hidden")
+    assert(!kept.contains(&"proj/.env".to_string()), ".env is hidden")
+}
+
+@test
+fn test_select_includes_hidden_on_request() {
+    let kept = select_files("proj", sample(), "", true, true)
+    assert_eq(kept.len(), 6)
+}
+
+@test
+fn test_select_applies_gitignore_relative_to_root() {
+    let kept = select_files("proj", sample(), "target/\n*.log\n", true, false)
+    assert_eq(kept.len(), 2)
+    assert_eq(kept[0], "proj/src/main.wj")
+    assert_eq(kept[1], "proj/README.md")
+}
+
+@test
+fn test_select_can_disable_gitignore() {
+    let kept = select_files("proj", sample(), "target/\n*.log\n", false, false)
+    assert_eq(kept.len(), 4)
+}
+
+@test
+fn test_select_handles_trailing_slash_on_root() {
+    let kept = select_files("proj/", sample(), "*.log\n", true, false)
+    assert_eq(kept.len(), 3)
+}

@@ -1,0 +1,190 @@
+use crate::domain::ProxyApp
+use crate::domain::ProxyConfig
+use crate::domain::ForwardResult
+use crate::domain::can_forward_method
+use crate::domain::is_mutating_method
+use crate::domain::is_safe_method
+use std::strings
+
+fn test_health_returns_ok() {
+    let mut app = ProxyApp::new(default_config())
+    let reply = app.handle_local("GET", "/health", "", "", "", 0)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "ok")
+}
+
+fn test_logs_endpoint_lists_entries() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 200, body: "upstream-body" }
+    let _ = app.complete_proxy("GET", "/v1/ping", "client-a", forward, 1000)
+    let listed = app.handle_local("GET", "/logs", "", "", "", 1001)
+    assert_eq(listed.status, 200)
+    assert_str_contains(listed.body, "/v1/ping")
+    assert_str_contains(listed.body, "client-a")
+}
+
+fn test_proxy_forwards_upstream_status_and_body() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 418, body: "teapot" }
+    let reply = app.complete_proxy("GET", "/v1/tea", "client-b", forward, 2000)
+    assert_eq(reply.status, 418)
+    assert_eq(reply.body, "teapot")
+}
+
+fn test_rate_limit_blocks_after_quota() {
+    let mut cfg = default_config()
+    cfg.rate_limit = 2
+    cfg.window_ms = 60_000
+    let mut app = ProxyApp::new(cfg)
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let r1 = app.complete_proxy("GET", "/v1/a", "client-c", forward, 0)
+    assert_eq(r1.status, 200)
+    let r2 = app.complete_proxy("GET", "/v1/b", "client-c", forward, 0)
+    assert_eq(r2.status, 200)
+    let r3 = app.complete_proxy("GET", "/v1/c", "client-c", forward, 0)
+    assert_eq(r3.status, 429)
+    assert_str_contains(r3.body, "rate limit")
+    assert_str_contains(r3.extra_headers, "Retry-After")
+    assert_str_contains(r3.extra_headers, "X-RateLimit-Limit")
+}
+
+fn test_security_headers_on_health() {
+    let mut app = ProxyApp::new(default_config())
+    let reply = app.handle_local("GET", "/health", "", "", "", 0)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+}
+
+fn test_security_headers_on_proxy_success() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let reply = app.complete_proxy("GET", "/v1/x", "client-d", forward, 5000)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+}
+
+fn test_unknown_path_returns_404() {
+    let mut app = ProxyApp::new(default_config())
+    let reply = app.handle_local("GET", "/nope", "", "", "", 0)
+    assert_eq(reply.status, 404)
+}
+
+fn test_post_health_returns_404() {
+    let mut app = ProxyApp::new(default_config())
+    let reply = app.handle_local("POST", "/health", "", "", "", 0)
+    assert_eq(reply.status, 404)
+}
+
+fn test_options_logs_returns_404() {
+    let mut app = ProxyApp::new(default_config())
+    let reply = app.handle_local("OPTIONS", "/logs", "", "", "", 0)
+    assert_eq(reply.status, 404)
+}
+
+fn test_delete_logs_clears_entries() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let _ = app.complete_proxy("GET", "/v1/a", "client-z", forward, 1000)
+    let cleared = app.handle_local("DELETE", "/logs", "", "", "", 1001)
+    assert_eq(cleared.status, 200)
+    assert_str_contains(cleared.body, "cleared")
+    let listed = app.handle_local("GET", "/logs", "", "", "", 1002)
+    assert_eq(listed.status, 200)
+    assert_str_contains(listed.body, "[]")
+}
+
+fn test_delete_logs_returns_cleared_count() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let _ = app.complete_proxy("GET", "/v1/x", "c1", forward, 0)
+    let _ = app.complete_proxy("GET", "/v1/y", "c2", forward, 1)
+    let reply = app.handle_local("DELETE", "/logs", "", "", "", 2)
+    assert_str_contains(reply.body, "\"cleared\":2")
+}
+
+fn test_log_max_trims_oldest_entries() {
+    let mut cfg = default_config()
+    cfg.log_max = 2
+    let mut app = ProxyApp::new(cfg)
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let _ = app.complete_proxy("GET", "/v1/a", "c1", forward, 0)
+    let _ = app.complete_proxy("GET", "/v1/b", "c2", forward, 1)
+    let _ = app.complete_proxy("GET", "/v1/c", "c3", forward, 2)
+    let listed = app.handle_local("GET", "/logs", "", "", "", 3)
+    assert_eq(listed.status, 200)
+    assert_str_contains(listed.body, "/v1/b")
+    assert_str_contains(listed.body, "/v1/c")
+    assert(!strings.contains(listed.body, "/v1/a"), "oldest entry should be trimmed")
+}
+
+fn test_can_forward_get_post_put_delete_patch_head() {
+    assert(can_forward_method("GET"), "GET")
+    assert(can_forward_method("POST"), "POST")
+    assert(can_forward_method("PUT"), "PUT")
+    assert(can_forward_method("DELETE"), "DELETE")
+    assert(can_forward_method("PATCH"), "PATCH")
+    assert(can_forward_method("HEAD"), "HEAD")
+}
+
+fn test_cannot_forward_options_or_trace() {
+    assert(!can_forward_method("OPTIONS"), "OPTIONS")
+    assert(!can_forward_method("TRACE"), "TRACE")
+    assert(!can_forward_method("CONNECT"), "CONNECT")
+}
+
+fn test_safe_and_mutating_methods() {
+    assert(is_safe_method("GET"), "GET safe")
+    assert(is_safe_method("HEAD"), "HEAD safe")
+    assert(!is_safe_method("POST"), "POST not safe")
+    assert(is_mutating_method("POST"), "POST mut")
+    assert(is_mutating_method("PUT"), "PUT mut")
+    assert(is_mutating_method("PATCH"), "PATCH mut")
+    assert(is_mutating_method("DELETE"), "DELETE mut")
+    assert(!is_mutating_method("GET"), "GET not mut")
+}
+
+fn test_put_proxy_records_method_in_logs() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 201, body: "created" }
+    let reply = app.complete_proxy("PUT", "/v1/item", "client-put", forward, 3000)
+    assert_eq(reply.status, 201)
+    assert_eq(reply.body, "created")
+    let listed = app.handle_local("GET", "/logs", "", "", "", 3001)
+    assert_str_contains(listed.body, "PUT")
+    assert_str_contains(listed.body, "/v1/item")
+}
+
+fn test_delete_proxy_records_method_in_logs() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 204, body: "" }
+    let reply = app.complete_proxy("DELETE", "/v1/item", "client-del", forward, 4000)
+    assert_eq(reply.status, 204)
+    let listed = app.handle_local("GET", "/logs", "", "", "", 4001)
+    assert_str_contains(listed.body, "DELETE")
+    assert_str_contains(listed.body, "/v1/item")
+}
+
+fn test_log_max_zero_keeps_all_entries() {
+    let mut cfg = default_config()
+    cfg.log_max = 0
+    let mut app = ProxyApp::new(cfg)
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let _ = app.complete_proxy("GET", "/v1/a", "c1", forward, 0)
+    let _ = app.complete_proxy("GET", "/v1/b", "c2", forward, 1)
+    let _ = app.complete_proxy("GET", "/v1/c", "c3", forward, 2)
+    let listed = app.handle_local("GET", "/logs", "", "", "", 3)
+    assert_str_contains(listed.body, "/v1/a")
+    assert_str_contains(listed.body, "/v1/b")
+    assert_str_contains(listed.body, "/v1/c")
+}
+
+fn default_config() -> ProxyConfig {
+    ProxyConfig {
+        upstream: "http://127.0.0.1:9000",
+        strip_prefix: "",
+        rate_limit: 100,
+        window_ms: 60_000,
+        log_max: 0,
+    }
+}

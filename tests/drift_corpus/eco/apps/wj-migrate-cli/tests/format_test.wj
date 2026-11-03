@@ -1,0 +1,16 @@
+use crate::domain::format_apply_result
+
+fn test_format_apply_result_none_pending() {
+    let versions = Vec::new()
+    let msg = format_apply_result(0, versions)
+    assert_eq(msg, "no pending migrations")
+}
+
+fn test_format_apply_result_lists_versions() {
+    let mut versions = Vec::new()
+    versions.push(1)
+    versions.push(2)
+    let msg = format_apply_result(2, versions)
+    assert_str_contains(msg, "2")
+    assert_str_contains(msg, "1")
+}

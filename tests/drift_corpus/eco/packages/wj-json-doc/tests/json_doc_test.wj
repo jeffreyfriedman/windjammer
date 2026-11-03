@@ -1,0 +1,145 @@
+use crate::parse
+use crate::dumps
+use crate::dumps_unicode
+use crate::float_repr
+use crate::quote
+use crate::chr
+use crate::get
+use crate::at
+use crate::keys
+use crate::as_f64
+use crate::as_str
+use crate::with
+use crate::push
+use crate::object
+use crate::array
+use crate::from_str
+use crate::from_int
+use crate::from_float
+
+// Expected strings below are the output of Python's json.dumps / repr for the same values.
+
+fn test_float_repr_matches_python() {
+    assert_eq(float_repr(100.0), "100.0")
+    assert_eq(float_repr(0.1), "0.1")
+    assert_eq(float_repr(1e16), "1e+16")
+    assert_eq(float_repr(0.000015), "1.5e-05")
+    assert_eq(float_repr(123456789.123), "123456789.123")
+    assert_eq(float_repr(1e22), "1e+22")
+    assert_eq(float_repr(0.0001), "0.0001")
+    assert_eq(float_repr(12345678901234567.0), "1.2345678901234568e+16")
+    assert_eq(float_repr(-3.0), "-3.0")
+    assert_eq(float_repr(0.1 + 0.2), "0.30000000000000004")
+    assert_eq(float_repr(0.0000001), "1e-07")
+    assert_eq(float_repr(0.0), "0.0")
+}
+
+fn test_quote_escapes_like_python() {
+    assert_eq(quote("h" + chr(233) + "\n\"", true), "\"h\\u00e9\\n\\\"\"")
+    assert_eq(quote("h" + chr(233), false), "\"h" + chr(233) + "\"")
+    assert_eq(quote(chr(128512) + " " + chr(1) + " /", true), "\"\\ud83d\\ude00 \\u0001 /\"")
+}
+
+fn sample() -> string {
+    "{\"b\": [1, 2.0, {\"x\": null}], \"a\": \"h\\u00e9\\n\\\"\", \"e\": [], \"o\": {}, \"t\": true}"
+}
+
+fn test_roundtrip_keeps_document_order_and_python_layout() {
+    match parse(sample()) {
+        Ok(doc) => assert_eq(dumps(doc, 0, false), sample()),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_indent_two_layout() {
+    let want = "{\n  \"b\": [\n    1,\n    2.0,\n    {\n      \"x\": null\n    }\n  ],\n  \"a\": \"h\\u00e9\\n\\\"\",\n  \"e\": [],\n  \"o\": {},\n  \"t\": true\n}"
+    match parse(sample()) {
+        Ok(doc) => assert_eq(dumps(doc, 2, false), want),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_sort_keys() {
+    let want = "{\n  \"a\": \"h\\u00e9\\n\\\"\",\n  \"b\": [\n    1,\n    2.0,\n    {\n      \"x\": null\n    }\n  ],\n  \"e\": [],\n  \"o\": {},\n  \"t\": true\n}"
+    match parse(sample()) {
+        Ok(doc) => assert_eq(dumps(doc, 2, true), want),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_unicode_kept_when_asked() {
+    match parse("[\"h\\u00e9\"]") {
+        Ok(doc) => assert_eq(dumps_unicode(doc, 0, false), "[\"h" + chr(233) + "\"]"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_surrogate_pairs_decode() {
+    match parse("\"\\ud83d\\ude00\"") {
+        Ok(doc) => assert_eq(dumps(doc, 0, false), "\"\\ud83d\\ude00\""),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_accessors() {
+    match parse("{\"z\": {\"n\": 2.5}, \"a\": [\"x\", \"y\"]}") {
+        Ok(doc) => {
+            let ks = keys(doc)
+            assert_eq(ks[0], "z")
+            assert_eq(ks[1], "a")
+            match get(doc, "z") {
+                Some(z) => match get(z, "n") {
+                    Some(n) => assert_eq(as_f64(n) ?? 0.0, 2.5),
+                    None => assert(false, "n"),
+                },
+                None => assert(false, "z"),
+            }
+            match get(doc, "a") {
+                Some(a) => match at(a, 1) {
+                    Some(y) => assert_eq(as_str(y) ?? "", "y"),
+                    None => assert(false, "a[1]"),
+                },
+                None => assert(false, "a"),
+            }
+        },
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_builders_keep_insertion_order() {
+    let doc = with(with(object(), "total", from_int(3)), "pct", from_float(50.0))
+    let doc2 = with(doc, "list", push(push(array(), from_str("a")), from_int(7)))
+    assert_eq(dumps(doc2, 0, false), "{\"total\": 3, \"pct\": 50.0, \"list\": [\"a\", 7]}")
+    // setting an existing key replaces it in place
+    let doc3 = with(doc2, "total", from_int(4))
+    assert_eq(dumps(doc3, 0, false), "{\"total\": 4, \"pct\": 50.0, \"list\": [\"a\", 7]}")
+}
+
+fn test_duplicate_key_keeps_first_position_last_value() {
+    match parse("{\"a\": 1, \"b\": 2, \"a\": 3}") {
+        Ok(doc) => assert_eq(dumps(doc, 0, false), "{\"a\": 3, \"b\": 2}"),
+        Err(e) => assert(false, e),
+    }
+}
+
+fn test_parse_errors() {
+    match parse("{\"a\": }") {
+        Ok(_) => assert(false, "expected an error"),
+        Err(e) => assert(e.contains("JSON parse error"), e),
+    }
+    match parse("[1, 2") {
+        Ok(_) => assert(false, "expected an error"),
+        Err(e) => assert(e.contains("unterminated array"), e),
+    }
+    match parse("1 2") {
+        Ok(_) => assert(false, "expected an error"),
+        Err(e) => assert(e.contains("trailing"), e),
+    }
+}
+
+fn test_large_ints_and_negative_numbers() {
+    match parse("[-12, 9007199254740993, 1e3, -0.5]") {
+        Ok(doc) => assert_eq(dumps(doc, 0, false), "[-12, 9007199254740993, 1000.0, -0.5]"),
+        Err(e) => assert(false, e),
+    }
+}

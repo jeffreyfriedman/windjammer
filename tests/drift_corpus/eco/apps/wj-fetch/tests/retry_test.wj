@@ -1,0 +1,57 @@
+use crate::domain::default_backoff
+use crate::domain::require_retry
+use crate::domain::retryable_status
+use std::strings
+use crate::domain::should_attempt
+use crate::domain::backoff_delay
+use crate::domain::should_retry_fetch
+use crate::domain::pause_ms_for_attempt
+
+fn test_retryable_status_includes_transient_codes() {
+    assert(retryable_status(429), "429 retryable")
+    assert(retryable_status(502), "502 retryable")
+    assert(retryable_status(503), "503 retryable")
+    assert(retryable_status(504), "504 retryable")
+}
+
+fn test_retryable_status_rejects_success_and_client_errors() {
+    assert(!retryable_status(200), "200 not retryable")
+    assert(!retryable_status(404), "404 not retryable")
+}
+
+fn test_should_attempt_respects_max() {
+    assert(should_attempt(0, 3), "first attempt")
+    assert(should_attempt(2, 3), "third attempt")
+    assert(!should_attempt(3, 3), "past max")
+}
+
+fn test_backoff_delay_grows_with_attempt() {
+    let backoff = default_backoff()
+    let d0 = backoff_delay(backoff, 0)
+    let d1 = backoff_delay(backoff, 1)
+    assert_gt(d1, d0)
+}
+
+fn test_should_retry_fetch_on_transient_status() {
+    assert(should_retry_fetch(503, 0, 3), "503 with attempts left")
+    assert(!should_retry_fetch(503, 2, 3), "503 on last attempt")
+    assert(!should_retry_fetch(404, 0, 3), "404 never retried")
+}
+
+fn test_pause_ms_for_attempt_uses_default_backoff() {
+    let pause = pause_ms_for_attempt(0)
+    let backoff = default_backoff()
+    assert_eq(pause, backoff_delay(backoff, 0))
+    assert_eq(pause_ms_for_attempt(1), backoff_delay(backoff, 1))
+}
+
+fn test_require_retry() {
+    match require_retry(503, 0, 3) {
+        Ok(code) => assert_eq(code, 503),
+        Err(_) => assert(false, "503 retry"),
+    }
+    match require_retry(404, 0, 3) {
+        Ok(_) => assert(false, "404 must Err"),
+        Err(msg) => assert(strings.contains(msg, "retry"), "mentions retry"),
+    }
+}

@@ -1,0 +1,41 @@
+use crate::domain::ProxyApp
+use crate::domain::ProxyConfig
+use crate::domain::ForwardResult
+
+fn test_stats_returns_log_count_and_rate_limit() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let _ = app.complete_proxy("GET", "/v1/a", "client-1", forward, 1000)
+    let _ = app.complete_proxy("GET", "/v1/b", "client-1", forward, 1001)
+    let reply = app.handle_local("GET", "/stats", "", "", "", 1002)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "\"log_count\":2")
+    assert_str_contains(reply.body, "\"rate_limit\":100")
+    assert_str_contains(reply.body, "\"window_ms\":60000")
+}
+
+fn test_stats_after_delete_shows_zero() {
+    let mut app = ProxyApp::new(default_config())
+    let forward = ForwardResult { status: 200, body: "ok" }
+    let _ = app.complete_proxy("GET", "/v1/a", "client-1", forward, 1000)
+    let _ = app.handle_local("DELETE", "/logs", "", "", "", 1001)
+    let reply = app.handle_local("GET", "/stats", "", "", "", 1002)
+    assert_str_contains(reply.body, "\"log_count\":0")
+}
+
+fn test_stats_empty_logs() {
+    let mut app = ProxyApp::new(default_config())
+    let reply = app.handle_local("GET", "/stats", "", "", "", 0)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "\"log_count\":0")
+}
+
+fn default_config() -> ProxyConfig {
+    ProxyConfig {
+        upstream: "http://127.0.0.1:9000",
+        strip_prefix: "",
+        rate_limit: 100,
+        window_ms: 60_000,
+        log_max: 0,
+    }
+}

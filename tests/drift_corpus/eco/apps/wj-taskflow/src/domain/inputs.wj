@@ -1,0 +1,52 @@
+/// Request bodies (parsed from JSON).
+pub struct RegisterInput {
+    pub username: string,
+    pub email: string,
+    pub password: string,
+}
+
+pub struct LoginInput {
+    pub username: string,
+    pub password: string,
+}
+
+pub struct ProjectInput {
+    pub name: string,
+    pub description: Option<string>,
+}
+
+pub struct MemberInput {
+    pub user_id: int,
+    pub role: string,
+}
+
+pub struct TaskInput {
+    pub title: string,
+    pub description: Option<string>,
+    pub priority: Option<string>,
+}
+
+pub struct TaskPatch {
+    pub title: Option<string>,
+    pub description: Option<string>,
+    pub status: Option<string>,
+    pub priority: Option<string>,
+}
+
+pub struct AssignInput {
+    pub user_id: int,
+}
+
+/// Response bodies.
+pub struct ErrorBody {
+    pub error: string,
+}
+
+pub struct OkBody {
+    pub ok: bool,
+}
+
+pub struct TokenBody {
+    pub token: string,
+    pub expires_in: int,
+}

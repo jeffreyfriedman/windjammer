@@ -1,0 +1,205 @@
+use std::http::*
+use std::strings
+use std::sync::{Arc, Mutex}
+
+use crate::adapters::forward::{forward_delete, forward_get, forward_head, forward_patch, forward_post, forward_put}
+use crate::domain::can_forward_method
+use crate::domain::ForwardResult
+use crate::domain::HttpReply
+use crate::domain::ProxyApp
+use crate::domain::ProxyConfig
+use crate::domain::join_upstream_url
+use crate::domain::stripped_path
+
+pub fn serve(config: ProxyConfig, port: int) -> Result<(), string> {
+    let app = ProxyApp::new(config)
+    let shared = Arc::new(Mutex::new(app))
+    let bind_addr = "0.0.0.0"
+    match server_serve(bind_addr, port, |req| dispatch(req, shared)) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
+fn dispatch(req: ServerRequest, state: Arc<Mutex<ProxyApp>>) -> ServerResponse {
+    let method = method_label(req.method)
+    let proxy_method = method_label(req.method)
+    let path = req.path
+    let body = req.body
+    let client_key = client_key_from_headers(req.headers)
+    let now_ms = 0
+    match state.lock() {
+        Ok(mut app) => {
+            if is_local_path(path) {
+                let reply = app.handle_local(method, path, body, client_key, "", now_ms)
+                return to_response(reply)
+            }
+            let cfg = app.config
+            let stripped = stripped_path(cfg.strip_prefix, path)
+            match join_upstream_url(cfg.upstream, stripped) {
+                Ok(upstream_url) => {
+                    match forward_method(req.method, upstream_url, body) {
+                        Ok(forward) => {
+                            let reply = app.complete_proxy(proxy_method, path, client_key, forward, now_ms)
+                            to_response(reply)
+                        },
+                        Err(err) => to_response(HttpReply {
+                            status: 502,
+                            body: err,
+                            extra_headers: "",
+                        }),
+                    }
+                },
+                Err(err) => to_response(HttpReply {
+                    status: 502,
+                    body: err,
+                    extra_headers: "",
+                }),
+            }
+        },
+        Err(_) => server_error("internal server error"),
+    }
+}
+
+fn is_local_path(path: string) -> bool {
+    if path == "/health" || path == "/health/" {
+        return true
+    }
+    if path == "/logs" || path == "/logs/" {
+        return true
+    }
+    if path == "/stats" || path == "/stats/" {
+        return true
+    }
+    false
+}
+
+fn forward_method(method: HttpMethod, url: string, body: string) -> Result<ForwardResult, string> {
+    let label = method_label(method)
+    if !can_forward_method(label) {
+        let label = method_label(method)
+        return Err("unsupported method: ${label}")
+    }
+    match method {
+        HttpMethod::GET => forward_get(url),
+        HttpMethod::POST => forward_post(url, body),
+        HttpMethod::PUT => forward_put(url, body),
+        HttpMethod::DELETE => forward_delete(url),
+        HttpMethod::PATCH => forward_patch(url, body),
+        HttpMethod::HEAD => forward_head(url),
+        _ => {
+            let label = method_label(method)
+            Err("unsupported method: ${label}")
+        },
+    }
+}
+
+fn client_key_from_headers(headers: Vec<(string, string)>) -> string {
+    for pair in headers {
+        if pair.0 == "X-Forwarded-For" {
+            return pair.1
+        }
+    }
+    "anonymous"
+}
+
+fn method_label(method: HttpMethod) -> string {
+    match method {
+        HttpMethod::GET => "GET",
+        HttpMethod::POST => "POST",
+        HttpMethod::PUT => "PUT",
+        HttpMethod::DELETE => "DELETE",
+        HttpMethod::PATCH => "PATCH",
+        HttpMethod::HEAD => "HEAD",
+        HttpMethod::OPTIONS => "OPTIONS",
+    }
+}
+
+fn to_response(reply: HttpReply) -> ServerResponse {
+    let mut resp = base_response(reply.status, reply.body)
+    resp = apply_extra_headers(resp, reply.extra_headers)
+    resp
+}
+
+fn apply_extra_headers(resp: ServerResponse, block: string) -> ServerResponse {
+    if strings_len(block) == 0 {
+        return resp
+    }
+    let lines = strings.split(block, "\n")
+    let mut i = 0
+    while i < lines.len() {
+        let line = strings.trim(lines[i])
+        if strings_len(line) == 0 {
+            i = i + 1
+            continue
+        }
+        match split_header_line(line) {
+            Some(pair) => {
+                resp = resp.header(pair.0, pair.1)
+            },
+            None => {},
+        }
+        i = i + 1
+    }
+    resp
+}
+
+fn split_header_line(line: string) -> Option<(string, string)> {
+    let colon = find_char(line, ":")
+    if colon < 0 {
+        return None
+    }
+    let name = strings.trim(strings.substring(line, 0, colon))
+    let value = strings.trim(strings.substring(line, colon + 1, strings.len(line)))
+    Some((name, value))
+}
+
+fn find_char(text: string, needle: string) -> int {
+    let mut i = 0
+    let n = strings.len(text)
+    while i < n {
+        if strings.substring(text, i, i + 1) == needle {
+            return i
+        }
+        i = i + 1
+    }
+    -1
+}
+
+fn strings_len(text: string) -> int {
+    strings.len(text)
+}
+
+fn base_response(status: u16, body: string) -> ServerResponse {
+    if status == 200 {
+        return ServerResponse::json(body)
+    }
+    if status == 400 {
+        return ServerResponse::bad_request(body)
+            .header("Content-Type", "application/json")
+    }
+    if status == 404 {
+        let code = 404
+        return ServerResponse::new(code, body)
+            .header("Content-Type", "application/json")
+    }
+    if status == 429 {
+        let code = 429
+        return ServerResponse::new(code, body)
+            .header("Content-Type", "application/json")
+    }
+    if status == 502 {
+        let code = 502
+        return ServerResponse::new(code, body)
+            .header("Content-Type", "application/json")
+    }
+    let code = status as int
+    ServerResponse::new(code, body)
+        .header("Content-Type", "application/json")
+}
+
+fn server_error(message: string) -> ServerResponse {
+    let status = 500
+    ServerResponse::new(status, message)
+        .header("Content-Type", "application/json")
+}

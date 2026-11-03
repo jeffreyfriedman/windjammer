@@ -1,0 +1,132 @@
+use crate::domain::AuthConfig
+use crate::domain::config_from_dotenv
+use crate::domain::config_from_toml
+
+fn test_config_defaults() {
+    let cfg = AuthConfig::defaults()
+    assert_eq(cfg.jwt_secret, "dev-secret")
+    assert_eq(cfg.jwt_ttl_secs, 3600)
+    assert_eq(cfg.tenant_slug, "default")
+    assert_eq(cfg.allowed_origins.len(), 1)
+    assert_eq(cfg.allowed_origins[0], "*")
+    assert_eq(cfg.rate_limit, 0)
+    assert_eq(cfg.window_ms, 60_000)
+    assert_eq(cfg.max_username_len, 64)
+    assert_eq(cfg.min_password_len, 8)
+    assert_eq(cfg.max_password_len, 128)
+    assert_eq(cfg.log_level, "info")
+}
+
+fn test_config_from_toml_overrides_defaults() {
+    let text = "jwt_secret = \"from-toml\"\njwt_ttl_secs = 7200\ncors_origin = \"https://app.example.com\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.jwt_secret, "from-toml")
+    assert_eq(cfg.jwt_ttl_secs, 7200)
+    assert_eq(cfg.allowed_origins.len(), 1)
+    assert_eq(cfg.allowed_origins[0], "https://app.example.com")
+}
+
+fn test_config_from_toml_partial_keeps_defaults() {
+    let text = "jwt_ttl_secs = 90\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.jwt_secret, "dev-secret")
+    assert_eq(cfg.jwt_ttl_secs, 90)
+    assert_eq(cfg.allowed_origins[0], "*")
+}
+
+fn test_config_from_toml_section_keys() {
+    let text = "[jwt]\nsecret = \"sectioned\"\nttl_secs = 120\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.jwt_secret, "sectioned")
+    assert_eq(cfg.jwt_ttl_secs, 120)
+}
+
+fn test_config_from_toml_rate_limit() {
+    let text = "rate_limit = 25\nwindow_ms = 30000\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.rate_limit, 25)
+    assert_eq(cfg.window_ms, 30000)
+}
+
+fn test_config_from_toml_validation_limits() {
+    let text = "max_username_len = 32\nmin_password_len = 10\nmax_password_len = 64\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.max_username_len, 32)
+    assert_eq(cfg.min_password_len, 10)
+    assert_eq(cfg.max_password_len, 64)
+}
+
+fn test_config_from_toml_tenant_slug() {
+    let text = "tenant_slug = \"acme\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.tenant_slug, "acme")
+    assert_eq(cfg.jwt_secret, "dev-secret")
+}
+
+fn test_config_from_toml_jwt_ttl_duration() {
+    let text = "jwt_ttl = \"2h\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.jwt_ttl_secs, 7200)
+}
+
+fn test_config_from_toml_jwt_section_ttl_duration() {
+    let text = "[jwt]\nsecret = \"sectioned\"\nttl = \"30m\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.jwt_secret, "sectioned")
+    assert_eq(cfg.jwt_ttl_secs, 1800)
+}
+
+fn test_config_from_toml_window_duration() {
+    let text = "window = \"2m\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.window_ms, 120_000)
+}
+
+fn test_config_from_dotenv_overrides_defaults() {
+    let text = "JWT_SECRET=from-dotenv\nJWT_TTL_SECS=7200\nCORS_ORIGIN=https://app.example.com\nTENANT_SLUG=acme\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.jwt_secret, "from-dotenv")
+    assert_eq(cfg.jwt_ttl_secs, 7200)
+    assert_eq(cfg.allowed_origins.len(), 1)
+    assert_eq(cfg.allowed_origins[0], "https://app.example.com")
+    assert_eq(cfg.tenant_slug, "acme")
+}
+
+fn test_config_from_dotenv_partial_keeps_defaults() {
+    let text = "JWT_TTL=2h\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.jwt_secret, "dev-secret")
+    assert_eq(cfg.jwt_ttl_secs, 7200)
+    assert_eq(cfg.tenant_slug, "default")
+}
+
+fn test_config_from_dotenv_rate_limit_and_window() {
+    let text = "RATE_LIMIT=10\nWINDOW=1m\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.rate_limit, 10)
+    assert_eq(cfg.window_ms, 60_000)
+}
+
+fn test_config_from_dotenv_skips_comments_and_blanks() {
+    let text = "# secret\n\nJWT_SECRET=commented-ok\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.jwt_secret, "commented-ok")
+}
+
+fn test_config_from_toml_log_level() {
+    let text = "log_level = \"debug\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.log_level, "debug")
+}
+
+fn test_config_from_toml_invalid_log_level_falls_back() {
+    let text = "log_level = \"nope\"\n"
+    let cfg = config_from_toml(text)
+    assert_eq(cfg.log_level, "info")
+}
+
+fn test_config_from_dotenv_log_level() {
+    let text = "LOG_LEVEL=warn\n"
+    let cfg = config_from_dotenv(text)
+    assert_eq(cfg.log_level, "warn")
+}

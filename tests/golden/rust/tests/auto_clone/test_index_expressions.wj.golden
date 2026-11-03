@@ -10,9 +10,9 @@ fn test_literal_index_auto_clone() {
 #[inline]
 fn test_variable_index_auto_clone() {
     let items = vec!["first".to_string(), "second".to_string(), "third".to_string()];
-    let idx = 1_i32;
-    let processed = process_item(&(((((items[(idx as usize)]))))));
-    assert!(items[(idx as usize)] == "second", "items[idx] should still be second");
+    let idx = 1_usize;
+    let processed = process_item(&items[idx]);
+    assert!(items[idx] == "second", "items[idx] should still be second");
     assert!(processed == "SECOND", "processed should be SECOND");
     println!("✓ Variable index auto-clone works");
 }

@@ -1,0 +1,70 @@
+// Fair release wall-clock vs `../rust_baseline` (same N / shapes).
+// Build: `../run_release.sh`
+
+use wj_sync::channel_sum_range
+use wj_sync::counter_get
+use wj_sync::counter_inc
+use wj_sync::counter_new
+use wj_sync::pool_shared_inbox_sum
+use wj_sync::shared_int
+use wj_sync::shared_int_add
+use wj_sync::shared_int_get
+use std::time
+
+fn main() {
+    let n_chan = 1_000_000
+    let t0 = time.utc_now().timestamp_millis()
+    let c = channel_sum_range(n_chan)
+    let chan_ms = time.utc_now().timestamp_millis() - t0
+    println(
+        "wj_channel_sum n={} count={} sum={} elapsed_ms={}",
+        n_chan,
+        c.0,
+        c.1,
+        chan_ms,
+    )
+
+    let n_shared = 1_000_000
+    let t1 = time.utc_now().timestamp_millis()
+    let mut s = shared_int(0)
+    let mut i: int = 0
+    while i < n_shared {
+        s = shared_int_add(s, 1)
+        i = i + 1
+    }
+    let shared_ms = time.utc_now().timestamp_millis() - t1
+    println(
+        "wj_shared_incs n={} value={} elapsed_ms={}",
+        n_shared,
+        shared_int_get(s),
+        shared_ms,
+    )
+
+    let n_counter = 10_000_000
+    let t1b = time.utc_now().timestamp_millis()
+    let ctr = counter_new(0)
+    let mut j: int = 0
+    while j < n_counter {
+        counter_inc(ctr)
+        j = j + 1
+    }
+    let counter_ms = time.utc_now().timestamp_millis() - t1b
+    println(
+        "wj_counter_incs n={} value={} elapsed_ms={}",
+        n_counter,
+        counter_get(ctr),
+        counter_ms,
+    )
+
+    let n_pool = 100_000
+    let t2 = time.utc_now().timestamp_millis()
+    let p = pool_shared_inbox_sum(4, n_pool)
+    let pool_ms = time.utc_now().timestamp_millis() - t2
+    println(
+        "wj_pool_shared_inbox n={} count={} sum={} elapsed_ms={}",
+        n_pool,
+        p.0,
+        p.1,
+        pool_ms,
+    )
+}

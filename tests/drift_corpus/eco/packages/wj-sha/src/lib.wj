@@ -1,0 +1,127 @@
+use std::crypto
+use std::strings
+
+/// SHA-256 hex digest of `text` (lowercase hex).
+/// Thin-wraps `std::crypto.sha256_hex`.
+pub fn hex(text: string) -> string {
+    crypto.sha256_hex(text)
+}
+
+/// True when `hex(text)` equals `expected_hex` (exact string match).
+pub fn verify(text: string, expected_hex: string) -> bool {
+    hex(text) == expected_hex
+}
+
+/// Strong ETag value: quoted SHA-256 hex digest of `text`.
+pub fn etag(text: string) -> string {
+    "\"${hex(text)}\""
+}
+
+/// True when `text` looks like a lowercase SHA-256 hex digest (64 hex chars).
+pub fn looks_like_sha256_hex(text: string) -> bool {
+    if strings.len(text) != 64 {
+        return false
+    }
+    for ch in strings.chars(text) {
+        if !is_hex_char(ch) {
+            return false
+        }
+    }
+    true
+}
+
+/// Canonical SHA-256 hex length (64).
+pub fn digest_hex_len() -> int {
+    64
+}
+
+/// Lowercase hex for comparisons (`ABCD` → `abcd`).
+pub fn normalize_hex(text: string) -> string {
+    strings.to_lower(text)
+}
+
+/// True when `etag_value` equals `etag(text)` (quoted digest).
+pub fn verify_etag(text: string, etag_value: string) -> bool {
+    etag(text) == etag_value
+}
+
+/// Case-insensitive hex digest equality (via `normalize_hex`).
+pub fn digest_equals(a: string, b: string) -> bool {
+    normalize_hex(a) == normalize_hex(b)
+}
+
+/// True when `value` is a quoted SHA-256 hex digest (ETag shape).
+pub fn is_etag(value: string) -> bool {
+    let n = strings.len(value)
+    if n < 3 {
+        return false
+    }
+    if !strings.starts_with(value, "\"") {
+        return false
+    }
+    if !strings.ends_with(value, "\"") {
+        return false
+    }
+    let inner = strings.substring(value, 1, n - 1)
+    looks_like_sha256_hex(inner)
+}
+
+/// SHA-256 hex digest of `text` in uppercase.
+pub fn hex_upper(text: string) -> string {
+    strings.to_upper(hex(text))
+}
+
+/// Accept a SHA-256 hex digest (any case), or `Err` when the shape is wrong.
+pub fn require_digest(text: string) -> Result<string, string> {
+    let normalized = normalize_hex(text)
+    if looks_like_sha256_hex(normalized) {
+        return Ok(normalized)
+    }
+    Err("invalid sha256 digest")
+}
+
+/// Alias of `hex`.
+pub fn digest_of(text: string) -> string {
+    hex(text)
+}
+
+/// True when `text` is a SHA-256 hex digest (any case).
+pub fn is_digest(text: string) -> bool {
+    looks_like_sha256_hex(normalize_hex(text))
+}
+
+/// `Ok` with the lowercase digest when `text` hashes to `expected_hex`.
+pub fn require_match(text: string, expected_hex: string) -> Result<string, string> {
+    if verify(text, expected_hex) {
+        return Ok(hex(text))
+    }
+    Err("digest mismatch")
+}
+
+/// True when `text` is an uppercase SHA-256 hex digest.
+pub fn is_upper_digest(text: string) -> bool {
+    if !is_digest(text) {
+        return false
+    }
+    text == strings.to_upper(text)
+}
+
+fn is_hex_char(ch: char) -> bool {
+    if ch == '0' { return true }
+    if ch == '1' { return true }
+    if ch == '2' { return true }
+    if ch == '3' { return true }
+    if ch == '4' { return true }
+    if ch == '5' { return true }
+    if ch == '6' { return true }
+    if ch == '7' { return true }
+    if ch == '8' { return true }
+    if ch == '9' { return true }
+    if ch == 'a' { return true }
+    if ch == 'b' { return true }
+    if ch == 'c' { return true }
+    if ch == 'd' { return true }
+    if ch == 'e' { return true }
+    if ch == 'f' { return true }
+    false
+}

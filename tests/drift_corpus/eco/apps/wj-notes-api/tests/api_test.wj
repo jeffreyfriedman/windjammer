@@ -1,0 +1,403 @@
+use crate::domain::NoteStore
+use crate::domain::NotesConfig
+use crate::domain::NotesApp
+use crate::domain::handle_request
+use crate::domain::format_access_log
+use crate::domain::gzip_decode_body
+use crate::domain::decode_note_export
+use std::strings
+
+fn default_config() -> NotesConfig {
+    NotesConfig {
+        allowed_origins: allowed_one(),
+        rate_limit: 100,
+        window_ms: 60_000,
+        max_title_len: 200,
+        max_body_len: 10_000,
+        log_level: "info",
+        public_base_url: "http://localhost:8080",
+    }
+}
+
+fn allowed_one() -> Vec<string> {
+    let mut out = Vec::new()
+    out.push("https://app.example.com")
+    out
+}
+
+fn test_get_notes_empty_returns_json_array() {
+    let store = NoteStore::new()
+    let reply = handle_request("GET", "/notes", "", store)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "[")
+}
+
+fn test_post_creates_note_with_201() {
+    let mut store = NoteStore::new()
+    let body = "{\"title\":\"hello\",\"body\":\"world\"}"
+    let reply = handle_request("POST", "/notes", body, store)
+    assert_eq(reply.status, 201)
+    assert_str_contains(reply.body, "hello")
+    assert_str_contains(reply.body, "world")
+    assert_str_contains(reply.content_type, "application/json")
+}
+
+fn test_post_sets_location_header() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"hello\",\"body\":\"world\"}",
+    )
+    assert_eq(reply.status, 201)
+    assert_str_contains(reply.extra_headers, "Location:")
+    assert_str_contains(reply.extra_headers, "http://localhost:8080/notes/1")
+}
+
+fn test_post_includes_uuid_and_created_at() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        1_700_000_000_000,
+        "{\"title\":\"hello\",\"body\":\"world\"}",
+    )
+    assert_eq(reply.status, 201)
+    assert_str_contains(reply.body, "\"uid\"")
+    assert_str_contains(reply.body, "\"created_at\"")
+    assert_str_contains(reply.body, "2023")
+}
+
+fn test_post_includes_slugified_title() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"Hello World!\",\"body\":\"body\"}",
+    )
+    assert_eq(reply.status, 201)
+    assert_str_contains(reply.body, "\"slug\":\"hello-world\"")
+}
+
+fn test_post_rejects_empty_title() {
+    let store = NoteStore::new()
+    let reply = handle_request("POST", "/notes", "{\"title\":\"\",\"body\":\"world\"}", store)
+    assert_eq(reply.status, 400)
+    assert_str_contains(reply.body, "title")
+}
+
+fn test_post_rejects_empty_body() {
+    let store = NoteStore::new()
+    let reply = handle_request("POST", "/notes", "{\"title\":\"hello\",\"body\":\"\"}", store)
+    assert_eq(reply.status, 400)
+    assert_str_contains(reply.body, "body")
+}
+
+fn test_post_rejects_title_over_max_len() {
+    let mut config = default_config()
+    config.max_title_len = 5
+    let mut app = NotesApp::new(config, NoteStore::new())
+    let reply = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"too-long\",\"body\":\"ok\"}",
+    )
+    assert_eq(reply.status, 400)
+    assert_str_contains(reply.body, "title")
+}
+
+fn test_health_sets_json_content_type() {
+    let store = NoteStore::new()
+    let reply = handle_request("GET", "/health", "", store)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.content_type, "application/json")
+}
+
+fn test_get_note_by_id() {
+    let mut store = NoteStore::new()
+    let _ = store.create("item", "detail", 200, 10_000, 0)
+    let reply = handle_request("GET", "/notes/1", "", store)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "item")
+    assert_str_contains(reply.body, "detail")
+}
+
+fn test_get_missing_note_returns_404() {
+    let store = NoteStore::new()
+    let reply = handle_request("GET", "/notes/99", "", store)
+    assert_eq(reply.status, 404)
+}
+
+fn test_put_updates_note() {
+    let mut store = NoteStore::new()
+    let _ = store.create("old", "x", 200, 10_000, 0)
+    let body = "{\"title\":\"new\",\"body\":\"y\"}"
+    let reply = handle_request("PUT", "/notes/1", body, store)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "new")
+    assert_str_contains(reply.body, "y")
+}
+
+fn test_delete_note_returns_204() {
+    let mut store = NoteStore::new()
+    let _ = store.create("gone", "z", 200, 10_000, 0)
+    let reply = handle_request("DELETE", "/notes/1", "", store)
+    assert_eq(reply.status, 204)
+    assert_eq(reply.body.len(), 0)
+}
+
+fn test_post_invalid_json_returns_400() {
+    let store = NoteStore::new()
+    let reply = handle_request("POST", "/notes", "{bad", store)
+    assert_eq(reply.status, 400)
+}
+
+fn test_unknown_path_returns_404() {
+    let store = NoteStore::new()
+    let reply = handle_request("GET", "/missing", "", store)
+    assert_eq(reply.status, 404)
+}
+
+fn test_health_returns_ok() {
+    let store = NoteStore::new()
+    let reply = handle_request("GET", "/health", "", store)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "ok")
+}
+
+fn test_router_matches_note_id() {
+    let mut store = NoteStore::new()
+    let _ = store.create("via-router", "body", 200, 10_000, 0)
+    let reply = handle_request("GET", "/notes/1", "", store)
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "via-router")
+}
+
+fn test_cors_origin_on_json_response() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/notes", "https://app.example.com", "", "client", 0, "")
+    assert_eq(reply.allow_origin, "https://app.example.com")
+}
+
+fn test_options_preflight_sets_cors_origin() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("OPTIONS", "/notes", "https://app.example.com", "", "", 0, "")
+    assert_eq(reply.status, 204)
+    assert_eq(reply.allow_origin, "https://app.example.com")
+}
+
+fn test_rate_limit_returns_429() {
+    let mut config = default_config()
+    config.rate_limit = 2
+    let mut app = NotesApp::new(config, NoteStore::new())
+    let _ = app.handle("GET", "/notes", "", "", "client-a", 1000, "")
+    let _ = app.handle("GET", "/notes", "", "", "client-a", 1000, "")
+    let third = app.handle("GET", "/notes", "", "", "client-a", 1000, "")
+    assert_eq(third.status, 429)
+    assert_str_contains(third.extra_headers, "Retry-After")
+}
+
+fn test_security_headers_on_response() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/notes", "", "", "client", 0, "")
+    assert_str_contains(reply.extra_headers, "X-Frame-Options")
+    assert_str_contains(reply.extra_headers, "X-Content-Type-Options")
+}
+
+fn test_format_access_log_line() {
+    let line = format_access_log("GET", "/health", 200)
+    assert_str_contains(line, "[notes]")
+    assert_str_contains(line, "GET")
+    assert_str_contains(line, "/health")
+    assert_str_contains(line, "200")
+    let err_line = format_access_log("POST", "/notes", 400)
+    assert_str_contains(err_line, "[notes]")
+    assert_str_contains(err_line, "400")
+}
+
+fn test_gzip_when_accepted() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/health", "", "gzip", "", 0, "")
+    assert_eq(reply.content_encoding, "gzip")
+    match gzip_decode_body(reply.body) {
+        Ok(plain) => assert_str_contains(plain, "ok"),
+        Err(_) => assert(false, "gzip decode"),
+    }
+}
+
+fn test_no_gzip_without_accept_encoding() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/health", "", "", "", 0, "")
+    assert_eq(reply.content_encoding, "")
+    assert_str_contains(reply.body, "ok")
+}
+
+fn test_welcome_page_uses_html_content_type() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/", "", "", "", 0, "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.content_type, "text/html")
+}
+
+fn test_welcome_page_uses_template() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/", "", "", "", 0, "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "<h1>")
+    assert_str_contains(reply.body, "wj-notes-api")
+    assert(!strings.contains(reply.body, "{{"), "placeholders filled")
+}
+
+fn test_list_notes_limit_query_param() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let _ = app.handle("POST", "/notes", "", "", "", 0, "{\"title\":\"t\",\"body\":\"b\"}")
+    let _ = app.handle("POST", "/notes", "", "", "", 0, "{\"title\":\"t\",\"body\":\"b\"}")
+    let _ = app.handle("POST", "/notes", "", "", "", 0, "{\"title\":\"t\",\"body\":\"b\"}")
+    let reply = app.handle("GET", "/notes?limit=2", "", "", "", 0, "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "\"id\":")
+    // HashMap list order is unstable — assert count, not specific ids.
+    let parts = strings.split(reply.body, "\"title\"")
+    assert_eq(parts.len(), 3)
+}
+
+fn test_list_notes_pretty_query_param() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let _ = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"hello\",\"body\":\"world\"}",
+    )
+    let compact = app.handle("GET", "/notes", "", "", "", 0, "")
+    let pretty = app.handle("GET", "/notes?pretty=1", "", "", "", 0, "")
+    assert_eq(compact.status, 200)
+    assert_eq(pretty.status, 200)
+    assert_str_contains(pretty.body, "\n")
+    assert(strings.len(pretty.body) > strings.len(compact.body), "pretty body longer")
+}
+
+fn test_list_notes_q_filters_by_regex() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let _ = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"alpha\",\"body\":\"one\"}",
+    )
+    let _ = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"beta\",\"body\":\"needle here\"}",
+    )
+    let reply = app.handle("GET", "/notes?q=needle", "", "", "", 0, "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.body, "beta")
+    assert(!strings.contains(reply.body, "alpha"), "unmatched note excluded")
+}
+
+fn test_list_notes_invalid_q_returns_400() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let reply = app.handle("GET", "/notes?q=(", "", "", "", 0, "")
+    assert_eq(reply.status, 400)
+    assert_str_contains(reply.body, "error")
+}
+
+fn test_get_note_sets_etag_header() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let _ = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"hello\",\"body\":\"world\"}",
+    )
+    let reply = app.handle_if_none_match("GET", "/notes/1", "", "", "", 0, "", "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.extra_headers, "ETag:")
+}
+
+fn test_get_note_if_none_match_returns_304() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let _ = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"hello\",\"body\":\"world\"}",
+    )
+    let first = app.handle_if_none_match("GET", "/notes/1", "", "", "", 0, "", "")
+    assert_eq(first.status, 200)
+    let etag = etag_value_from_headers(first.extra_headers)
+    assert(strings.len(etag) > 0, "etag required")
+    let second = app.handle_if_none_match("GET", "/notes/1", "", "", "", 0, "", etag)
+    assert_eq(second.status, 304)
+    assert_eq(second.body, "")
+    assert_str_contains(second.extra_headers, "ETag:")
+}
+
+fn test_get_note_encoding_base64() {
+    let mut app = NotesApp::new(default_config(), NoteStore::new())
+    let _ = app.handle(
+        "POST",
+        "/notes",
+        "",
+        "",
+        "",
+        0,
+        "{\"title\":\"hello\",\"body\":\"world\"}",
+    )
+    let reply = app.handle("GET", "/notes/1?encoding=base64", "", "", "", 0, "")
+    assert_eq(reply.status, 200)
+    assert_str_contains(reply.content_type, "text/plain")
+    assert(!strings.contains(reply.body, "\"title\""), "payload encoded")
+    match decode_note_export(reply.body) {
+        Ok(text) => {
+            assert_str_contains(text, "hello")
+            assert_str_contains(text, "world")
+        },
+        Err(_) => assert(false, "base64 decode"),
+    }
+}
+
+fn etag_value_from_headers(block: string) -> string {
+    let lines = strings.split(block, "\n")
+    let mut i = 0
+    while i < lines.len() {
+        let line = strings.trim(lines[i])
+        if strings.starts_with(line, "ETag:") {
+            return strings.trim(strings.substring(line, 5, strings.len(line)))
+        }
+        i = i + 1
+    }
+    ""
+}

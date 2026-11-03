@@ -1,0 +1,372 @@
+use std::json
+use std::strings
+
+/// Pretty-print JSON text; return the original text when parsing fails.
+pub fn pretty(text: string) -> string {
+    match json.parse(text) {
+        Ok(value) => {
+            match json.stringify_pretty(value) {
+                Ok(pretty_text) => pretty_text,
+                Err(_) => text,
+            }
+        },
+        Err(_) => text,
+    }
+}
+
+/// Compact (minify) JSON text; return the original text when parsing fails.
+pub fn compact(text: string) -> string {
+    match json.parse(text) {
+        Ok(value) => {
+            match json.stringify(value) {
+                Ok(compact_text) => compact_text,
+                Err(_) => text,
+            }
+        },
+        Err(_) => text,
+    }
+}
+
+/// True when `text` parses as JSON.
+pub fn is_valid(text: string) -> bool {
+    match json.parse(text) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+/// True when a dotted path resolves in the JSON document.
+pub fn path_exists(text: string, path: string) -> bool {
+    match path_get(text, path) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Compact JSON for the value at a dotted path (`user.name`, `nums.0`).
+pub fn path_get(text: string, path: string) -> Option<string> {
+    match json.parse(text) {
+        Ok(root) => {
+            match walk_path(root, path) {
+                Some(node) => {
+                    match json.stringify(node) {
+                        Ok(compact) => Some(compact),
+                        Err(_) => None,
+                    }
+                },
+                None => None,
+            }
+        },
+        Err(_) => None,
+    }
+}
+
+/// String leaf at a dotted path (None when missing or not a string).
+pub fn path_get_str(text: string, path: string) -> Option<string> {
+    match json.parse(text) {
+        Ok(root) => {
+            match walk_path(root, path) {
+                Some(node) => json.as_str(node),
+                None => None,
+            }
+        },
+        Err(_) => None,
+    }
+}
+
+/// Compact JSON at `path`, or `default` when missing / invalid.
+pub fn path_get_or(text: string, path: string, default: string) -> string {
+    match path_get(text, path) {
+        Some(v) => v,
+        None => default,
+    }
+}
+
+/// Compact JSON at `path`, or `Err` naming the missing path.
+pub fn path_require(text: string, path: string) -> Result<string, string> {
+    match path_get(text, path) {
+        Some(v) => Ok(v),
+        None => Err("missing json path: ${path}"),
+    }
+}
+
+/// True when valid JSON whose top-level value is an object.
+pub fn is_objectish(text: string) -> bool {
+    match json.parse(text) {
+        Ok(v) => {
+            match json.stringify(v) {
+                Ok(s) => strings.starts_with(strings.trim(s), "{"),
+                Err(_) => false,
+            }
+        },
+        Err(_) => false,
+    }
+}
+
+/// True when valid JSON whose top-level value is an array.
+pub fn is_arrayish(text: string) -> bool {
+    match json.parse(text) {
+        Ok(v) => {
+            match json.stringify(v) {
+                Ok(s) => strings.starts_with(strings.trim(s), "["),
+                Err(_) => false,
+            }
+        },
+        Err(_) => false,
+    }
+}
+
+/// True when trimmed text is the JSON `null` literal.
+pub fn is_nullish(text: string) -> bool {
+    strings.trim(text) == "null"
+}
+
+/// True when valid JSON whose top-level value is an empty object.
+pub fn is_empty_object(text: string) -> bool {
+    if !is_objectish(text) {
+        return false
+    }
+    compact(text) == "{}"
+}
+
+/// Accept `text` only when it is valid JSON.
+pub fn require_valid(text: string) -> Result<string, string> {
+    if is_valid(text) {
+        return Ok(text)
+    }
+    Err("invalid json")
+}
+
+/// True when valid JSON is an empty object or an empty array.
+pub fn is_empty_json(text: string) -> bool {
+    is_empty_object(text) || is_empty_array(text)
+}
+
+/// True when valid JSON whose top-level value is an empty array.
+pub fn is_empty_array(text: string) -> bool {
+    if !is_arrayish(text) {
+        return false
+    }
+    compact(text) == "[]"
+}
+
+/// Set JSON at a dotted object path (`user.name`). Creates intermediate objects.
+/// `value_text` is parsed as JSON. Array-index path segments are rejected.
+pub fn path_set(text: string, path: string, value_text: string) -> Result<string, string> {
+    if path.len() == 0 {
+        return Err("path_set requires a non-empty path")
+    }
+    match json.parse(text) {
+        Ok(root) => {
+            match json.parse(value_text) {
+                Ok(leaf) => {
+                    match apply_path_set(root, path, leaf) {
+                        Ok(updated) => json.stringify(updated),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn apply_path_set(node: Value, path: string, leaf: Value) -> Result<Value, string> {
+    match split_once(path, ".") {
+        Some(pair) => {
+            let head = pair.0
+            let rest = pair.1
+            if head.len() == 0 || rest.len() == 0 {
+                return Err("path_set path segments must be non-empty")
+            }
+            match parse_nonneg_int(head) {
+                Some(_) => return Err("path_set does not support array indices"),
+                None => {},
+            }
+            let mut out = ensure_object(node)
+            let child = match json.get(out, head) {
+                Some(existing) => existing,
+                None => json.object(),
+            }
+            match apply_path_set(child, rest, leaf) {
+                Ok(updated_child) => {
+                    match json.set(out, head, updated_child) {
+                        Ok(_) => Ok(out),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        None => {
+            match parse_nonneg_int(path) {
+                Some(_) => return Err("path_set does not support array indices"),
+                None => {},
+            }
+            let mut out = ensure_object(node)
+            match json.set(out, path, leaf) {
+                Ok(_) => Ok(out),
+                Err(e) => Err(e),
+            }
+        },
+    }
+}
+
+fn ensure_object(value: Value) -> Value {
+    if json.is_object(value) {
+        value
+    } else {
+        json.object()
+    }
+}
+
+fn split_once(text: string, sep: string) -> Option<(string, string)> {
+    let mut i = 0
+    while i < strings.len(text) {
+        let end = i + strings.len(sep)
+        if end <= strings.len(text) {
+            if strings.substring(text, i, end) == sep {
+                return Some((
+                    strings.substring(text, 0, i),
+                    strings.substring(text, end, strings.len(text)),
+                ))
+            }
+        }
+        i = i + 1
+    }
+    None
+}
+
+/// Deep-merge two JSON objects (text in / compact text out). Overlay wins on
+/// non-object conflicts; nested objects merge recursively.
+pub fn merge(base_text: string, overlay_text: string) -> Result<string, string> {
+    match json.parse(base_text) {
+        Ok(base) => {
+            match json.parse(overlay_text) {
+                Ok(overlay) => {
+                    match merge_values(base, overlay) {
+                        Ok(merged) => json.stringify(merged),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn merge_values(base: Value, overlay: Value) -> Result<Value, string> {
+    if !json.is_object(base) || !json.is_object(overlay) {
+        return Err("merge expects two JSON objects")
+    }
+    let mut out = base
+    let key_list = json.keys(overlay)
+    let mut i = 0
+    while i < key_list.len() {
+        let key = key_list[i]
+        match take_field(overlay, key) {
+            Some(incoming) => {
+                match take_field(out, key) {
+                    Some(existing) => {
+                        if json.is_object(existing) && json.is_object(incoming) {
+                            match merge_values(existing, incoming) {
+                                Ok(nested) => {
+                                    match json.set(out, key, nested) {
+                                        Ok(_) => {},
+                                        Err(e) => return Err(e),
+                                    }
+                                },
+                                Err(e) => return Err(e),
+                            }
+                        } else {
+                            match json.set(out, key, incoming) {
+                                Ok(_) => {},
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    },
+                    None => {
+                        match json.set(out, key, incoming) {
+                            Ok(_) => {},
+                            Err(e) => return Err(e),
+                        }
+                    },
+                }
+            },
+            None => {},
+        }
+        i = i + 1
+    }
+    Ok(out)
+}
+
+fn take_field(value: Value, key: string) -> Option<Value> {
+    json.get(value, key)
+}
+
+fn walk_path(root: Value, path: string) -> Option<Value> {
+    if path.len() == 0 {
+        return Some(root)
+    }
+    let parts = strings.split(path, ".")
+    let mut current = root
+    let mut i = 0
+    while i < parts.len() {
+        let seg = parts[i]
+        match child_at(current, seg) {
+            Some(next) => {
+                current = next
+            },
+            None => return None,
+        }
+        i = i + 1
+    }
+    Some(current)
+}
+
+fn child_at(value: Value, segment: string) -> Option<Value> {
+    match parse_nonneg_int(segment) {
+        Some(index) => {
+            let idx: usize = index as usize
+            json.get_index(value, idx)
+        },
+        None => json.get(value, segment),
+    }
+}
+
+/// Non-negative decimal integer (`0`, `12`). Rejects empty, non-digits, and
+/// leading zeros (`01`) except for plain `0`.
+pub fn parse_nonneg_int(text: string) -> Option<int> {
+    if text.len() == 0 {
+        return None
+    }
+    if text.len() > 1 && strings.starts_with(text, "0") {
+        return None
+    }
+    let mut total: int = 0
+    for ch in strings.chars(text) {
+        match char_to_digit(ch) {
+            Some(digit) => {
+                total = total * 10 + digit
+            },
+            None => return None,
+        }
+    }
+    Some(total)
+}
+
+fn char_to_digit(ch: char) -> Option<int> {
+    if ch == '0' { return Some(0) }
+    if ch == '1' { return Some(1) }
+    if ch == '2' { return Some(2) }
+    if ch == '3' { return Some(3) }
+    if ch == '4' { return Some(4) }
+    if ch == '5' { return Some(5) }
+    if ch == '6' { return Some(6) }
+    if ch == '7' { return Some(7) }
+    if ch == '8' { return Some(8) }
+    if ch == '9' { return Some(9) }
+    None
+}

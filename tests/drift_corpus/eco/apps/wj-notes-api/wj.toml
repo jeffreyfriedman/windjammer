@@ -1,0 +1,34 @@
+[package]
+name = "wj-notes-api"
+version = "0.1.0"
+edition = "2025"
+
+[dependencies]
+wj_router = { path = "../../packages/wj-router/build" }
+wj_cors = { path = "../../packages/wj-cors/build" }
+wj_headers = { path = "../../packages/wj-headers/build" }
+wj_rate_limit = { path = "../../packages/wj-rate-limit/build" }
+wj_validate = { path = "../../packages/wj-validate/build" }
+wj_mime = { path = "../../packages/wj-mime/build" }
+wj_dotenv = { path = "../../packages/wj-dotenv/build" }
+wj_config = { path = "../../packages/wj-config/build" }
+wj_toml = { path = "../../packages/wj-toml/build" }
+wj_log = { path = "../../packages/wj-log/build" }
+wj_duration = { path = "../../packages/wj-duration/build" }
+wj_compress = { path = "../../packages/wj-compress/build" }
+wj_template = { path = "../../packages/wj-template/build" }
+wj_querystring = { path = "../../packages/wj-querystring/build" }
+wj_uuid = { path = "../../packages/wj-uuid/build" }
+wj_timefmt = { path = "../../packages/wj-timefmt/build" }
+wj_inflect = { path = "../../packages/wj-inflect/build" }
+wj_sha = { path = "../../packages/wj-sha/build" }
+wj_json_util = { path = "../../packages/wj-json-util/build" }
+wj_base64 = { path = "../../packages/wj-base64/build" }
+wj_url = { path = "../../packages/wj-url/build" }
+wj_regex = { path = "../../packages/wj-regex/build" }
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true

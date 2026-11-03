@@ -15,6 +15,10 @@
 //! derives ownership from declared types, body usage, and registry call-site unification.
 
 use crate::analyzer::{AnalyzedFunction, FunctionSignature, OwnershipMode, SignatureRegistry};
+#[path = "constraint_gen/numeric.rs"]
+pub(crate) mod numeric;
+use numeric::{emit_numeric_class_constraint, is_index_source_method, is_int_literal_tree, literal_rule, literal_to_base_type};
+
 use crate::ir::constraints::{Constraint, ConstraintOrigin, ConstraintSet, ConstraintVar};
 use crate::ir::execution::{CallLocation, CallSite, ExecutionConstraint};
 use crate::ir::node::{
@@ -81,6 +85,21 @@ pub struct FunctionConstraints {
     pub taint_constraints: Vec<crate::ir::taint::TaintConstraint>,
     /// Execution mode constraints from `async`/`spawn` call prefixes (WJ-CONC-01).
     pub execution_constraints: Vec<ExecutionConstraint>,
+    /// Integer literals (by their own source position) and their constraint vars, so the solved
+    /// width can be published as the NUM-LITERAL-WIDTH fact.
+    pub literal_vars: Vec<((usize, usize), ConstraintVar)>,
+    /// Locals bound by exactly one pattern in the body (safe to publish by name).
+    pub single_binding_locals: Vec<String>,
+    /// Every binding of a local, each with its own variable (lexical scoping).
+    pub binding_vars: Vec<(String, ConstraintVar)>,
+    /// Values whose width the walk does not model (see `numeric::Unmodelled`).
+    pub unmodelled: numeric::Unmodelled,
+    /// NUM-USIZE index sources (`len()`, `count()`, by the call's source position) and their vars.
+    pub index_sources: Vec<((usize, usize), ConstraintVar)>,
+    /// NUM-USIZE index uses (`v[i]` operands).
+    pub index_uses: Vec<ConstraintVar>,
+    /// `v.push(x)`: (the argument's conversion key, the argument's var, the receiver's var).
+    pub element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -101,6 +120,23 @@ struct AstConstraintWalker<'a, 'ast> {
     registry: Option<&'a SignatureRegistry>,
     /// Struct field types for resolving `deps.writer` → `Writer` (not outer `AppDeps`).
     struct_field_types: Option<&'a HashMap<String, HashMap<String, Type>>>,
+    literal_vars: Vec<((usize, usize), ConstraintVar)>,
+    index_sources: Vec<((usize, usize), ConstraintVar)>,
+    index_uses: Vec<ConstraintVar>,
+    element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
+    /// Declared types of annotated locals (`let q: VecDeque<int> = ...`), for receiver classification.
+    local_decl_types: HashMap<String, BaseType>,
+    /// Names bound by `for v in a..b`.
+    range_loop_vars: std::collections::HashSet<String>,
+    /// How many times each name is bound by a pattern (shadowed names are not published as local facts).
+    bind_counts: HashMap<String, u32>,
+    /// Lexical scopes, innermost last: each `let`/`for`/pattern binding gets its own variable, so a
+    /// name rebound in a later scope (`for j in ..` then `let mut j = ..`) is a different class.
+    scopes: Vec<HashMap<String, ConstraintVar>>,
+    /// Every binding (name, its own var), in walk order.
+    binding_vars: Vec<(String, ConstraintVar)>,
+    /// Negated integer literals and loop bindings whose element type is not modelled.
+    numeric_unmodelled: numeric::Unmodelled,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -285,6 +321,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             execution_constraints: Vec::new(),
             registry,
             struct_field_types,
+            literal_vars: Vec::new(),
+            index_sources: Vec::new(),
+            index_uses: Vec::new(),
+            element_stores: Vec::new(),
+            local_decl_types: HashMap::new(),
+            range_loop_vars: std::collections::HashSet::new(),
+            bind_counts: HashMap::new(),
+            scopes: vec![HashMap::new()],
+            binding_vars: Vec::new(),
+            numeric_unmodelled: Default::default(),
         }
     }
 
@@ -490,6 +536,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Resolve or create a constraint var for a variable name.
     fn resolve_var(&mut self, name: &str) -> ConstraintVar {
+        if let Some(&v) = self.scopes.iter().rev().find_map(|s| s.get(name)) {
+            return v;
+        }
         if let Some(&v) = self.param_vars.get(name) {
             return v;
         }
@@ -614,17 +663,48 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Walk a nested block in its own lexical scope.
+    fn walk_scoped(&mut self, stmts: &[&'ast Statement<'ast>]) {
+        self.scopes.push(HashMap::new());
+        self.walk_statements(stmts);
+        self.scopes.pop();
+    }
+
+    /// [`Self::walk_block_value`] in its own lexical scope.
+    fn walk_scoped_block_value(&mut self, stmts: &[&'ast Statement<'ast>]) -> Vec<ConstraintVar> {
+        self.scopes.push(HashMap::new());
+        let out = self.walk_block_value(stmts);
+        self.scopes.pop();
+        out
+    }
+
+        /// A fresh variable for a new binding of `name` in the innermost scope.
+    fn bind_name(&mut self, name: &str) -> ConstraintVar {
+        *self.bind_counts.entry(name.to_string()).or_insert(0) += 1;
+        let v = self.cs.fresh_var();
+        if let Some(top) = self.scopes.last_mut() {
+            top.insert(name.to_string(), v);
+        }
+        self.local_vars.insert(name.to_string(), v);
+        self.binding_vars.push((name.to_string(), v));
+        v
+    }
+
     fn walk_statement(&mut self, stmt: &Statement<'ast>) {
         match stmt {
             Statement::Let {
                 pattern,
                 type_,
                 value,
-                mutable,
                 else_block,
                 ..
             } => {
                 let val_var = self.walk_expression(value);
+                if let (Pattern::Identifier(n) | Pattern::MutBinding(n), None) = (pattern, type_) {
+                    if let Some(b) = self.receiver_declared_base(value) {
+                        self.local_decl_types.insert(n.clone(), b);
+                    }
+                }
                 let bound_var = self.bind_pattern(pattern);
                 self.cs.add_because(Constraint::TypeEquals(bound_var, val_var), tagged("TY-UNIFY"));
                 if matches!(pattern, Pattern::Identifier(_) | Pattern::MutBinding(_)) {
@@ -635,16 +715,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
                 if let Some(ty) = type_ {
                     let base = parser_type_to_base_type(ty);
+                    if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
+                        self.local_decl_types.insert(n.clone(), base.clone());
+                    }
                     if base != BaseType::Inferred {
                         self.cs.add_because(Constraint::TypeIs(bound_var, base.clone()), tagged("NUM-DECLARED"));
                         emit_numeric_class_constraint(&mut self.cs, bound_var, &base);
-                    }
-                }
-                if *mutable {
-                    // Mutable local — solver may need to track mutability
-                    // for now, just ensure the var is in locals
-                    if let Pattern::Identifier(name) = pattern {
-                        self.local_vars.entry(name.clone()).or_insert(bound_var);
                     }
                 }
                 if let Some(else_stmts) = else_block {
@@ -710,9 +786,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
-                self.walk_statements(then_block);
+                self.walk_scoped(then_block);
                 if let Some(else_stmts) = else_block {
-                    self.walk_statements(else_stmts);
+                    self.walk_scoped(else_stmts);
                 }
             }
 
@@ -733,13 +809,30 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 body,
                 ..
             } => {
-                self.walk_expression(iterable);
-                self.bind_pattern(pattern);
+                self.scopes.push(HashMap::new());
+                if let Expression::Range { start, end, .. } = iterable {
+                    // `for i in a..b`: the loop variable has the bounds' integer type (NUM-MIXED), so a
+                    // literal compared with `i` inside the body takes that width.
+                    let s = self.walk_expression(start);
+                    let e = self.walk_expression(end);
+                    self.cs.add_because(Constraint::TypeEquals(s, e), tagged("TY-UNIFY"));
+                    self.cs.add_because(Constraint::IsNumeric(s), tagged("NUM-MIXED"));
+                    if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
+                        self.range_loop_vars.insert(n.clone());
+                    }
+                    let loop_var = self.bind_pattern(pattern);
+                    self.cs.add_because(Constraint::TypeEquals(loop_var, s), tagged("TY-UNIFY"));
+                } else {
+                    self.walk_expression(iterable);
+                    let loop_var = self.bind_pattern(pattern);
+                    self.type_loop_element(loop_var, iterable);
+                }
                 self.walk_statements(body);
+                self.scopes.pop();
             }
 
             Statement::Loop { body, .. } => {
-                self.walk_statements(body);
+                self.walk_scoped(body);
             }
 
             Statement::While {
@@ -747,11 +840,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
-                self.walk_statements(body);
+                self.walk_scoped(body);
             }
 
             Statement::Thread { body, .. } | Statement::Async { body, .. } => {
-                self.walk_statements(body);
+                self.walk_scoped(body);
             }
 
             Statement::Defer { statement, .. } => {
@@ -809,6 +902,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 Constraint::IsInteger(var),
                 origin("NUM-DEFAULT-INT", "unsuffixed integer literal: width from its uses, else int (i64)", location),
             );
+            if let Some(l) = location {
+                self.literal_vars.push(((l.line, l.column), var));
+            }
             return var;
         }
         let base = literal_to_base_type(value);
@@ -833,6 +929,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let l = self.walk_expression(left);
                 let r = self.walk_expression(right);
                 let result = self.cs.fresh_var();
+                // Constant folding prints `8 + 4 + 16` as one literal at the expression's position.
+                if is_arithmetic_op(op) && is_int_literal_tree(left) && is_int_literal_tree(right) {
+                    if let Some(loc) = expr.location() {
+                        self.literal_vars.push(((loc.line, loc.column), l));
+                    }
+                }
 
                 if is_comparison_op(op) {
                     // Comparisons: operands should be same type, result is bool
@@ -871,6 +973,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         self.cs.add_because(Constraint::TypeIs(result, BaseType::Bool), tagged("TY-BOOL"));
                     }
                     crate::parser::ast::operators::UnaryOp::Neg => {
+                        // Constant folding prints `-1` as one literal at the `-`: key the width there too.
+                        if let (Expression::Literal { value: Literal::Int(_), .. }, Some(l)) = (&**operand, expr.location()) {
+                            self.literal_vars.push(((l.line, l.column), inner));
+                            self.numeric_unmodelled.negated_literals.push(inner);
+                        }
                         self.cs.add_because(Constraint::TypeEquals(result, inner), tagged("TY-UNIFY"));
                         self.cs.add_because(Constraint::IsNumeric(inner), tagged("NUM-MIXED"));
                     }
@@ -900,6 +1007,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
                 if let Some(callee_name) = Self::extract_callee_name(function) {
                     self.call_targets.push(callee_name.clone());
+                    self.emit_variant_payload_types(&callee_name, &arg_vars, arguments);
 
                     if let Some(sig) = self
                         .resolve_free_callee_signature(&callee_name, arguments.len())
@@ -925,103 +1033,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 result
             }
 
-            Expression::MethodCall {
-                object,
-                arguments,
-                method,
-                ..
-            } => {
-                let receiver_type = self.receiver_type_name_for_method(object);
-                for (i, (_, arg)) in arguments.iter().enumerate() {
-                    let arg_in_payload = self.method_arg_is_owned_payload_store(
-                        method,
-                        receiver_type.as_deref(),
-                        i,
-                        arguments.len(),
-                    );
-                    self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
-                }
-                let obj_var = self.walk_expression(object);
-                self.emit_consuming_method_on_generic_param(object, method, obj_var);
-                let mut arg_vars = Vec::new();
-                for (_label, arg_expr) in arguments {
-                    arg_vars.push(self.walk_expression(arg_expr));
-                }
+            Expression::MethodCall { object, arguments, method, .. } => self.walk_method_call(expr, object, method, arguments),
 
-                // Signature-driven receiver ownership: `Type::method` self mode wins.
-                // Unresolved methods use qualified stdlib consensus (receiver type + registry).
-                let qualified = match &receiver_type {
-                    Some(ty) => format!("{}::{}", ty, method),
-                    None => {
-                        if let Some(receiver_name) = Self::extract_callee_name(object) {
-                            format!("{}::{}", receiver_name, method)
-                        } else {
-                            method.clone()
-                        }
-                    }
-                };
-                self.call_targets.push(qualified.clone());
-
-                let sig = self
-                    .resolve_callee_signature(&qualified, arguments.len())
-                    .or_else(|| {
-                        // Runtime-std `json::to_string` must not fall back to the first
-                        // `*::to_string` method-index hit (often MutBorrowed self).
-                        if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(
-                            &qualified,
-                        ) {
-                            None
-                        } else {
-                            self.resolve_callee_signature(method, arguments.len())
-                        }
-                    })
-                    .cloned();
-
-                let mut_self = sig.as_ref().is_some_and(|s| {
-                    s.has_self_receiver
-                        && s.param_ownership
-                            .first()
-                            .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
-                }) || (sig.is_none()
-                    && self.registry.is_some_and(|reg| {
-                        crate::analyzer::stdlib_method_traits::method_mutates_receiver_qualified(
-                            method,
-                            receiver_type.as_deref(),
-                            reg,
-                        )
-                    }));
-                if mut_self {
-                    self.emit_mutref_on_receiver_root(object);
-                }
-
-                let result = self.cs.fresh_var();
-
-                if let Some(sig) = sig.as_ref() {
-                    self.emit_call_site_constraints(sig, &arg_vars);
-                }
-                self.emit_call_result_type_constraints(result, sig.as_ref(), Some(method.as_str()));
-
-                let callee_effects = crate::ir::effects::effects_for_runtime_callee(&qualified);
-                if !callee_effects.is_empty() {
-                    self.cs.add_because(
-                        Constraint::HasEffects(obj_var, EffectSet::from_iter(callee_effects)),
-                        tagged("EFF-CALL"),
-                    );
-                }
-
-                self.emit_taint_for_call(&qualified, &self.analyzed.decl.name.clone());
-
-                self.cs.add_because(Constraint::EffectsUnion(result, vec![obj_var]), tagged("EFF-CALL"));
-                result
-            }
-
-            Expression::FieldAccess { object, .. } => {
-                self.emit_read_field_ref(object, expr);
-                let obj_var = self.walk_expression(object);
-                let field_var = self.cs.fresh_var();
-                let _ = obj_var;
-                field_var
-            }
+            Expression::FieldAccess { object, .. } => self.walk_field_access(object, expr),
 
             Expression::StructLiteral { fields, .. } => {
                 let result = self.cs.fresh_var();
@@ -1074,10 +1088,23 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
             Expression::Index { object, index, .. } => {
                 let obj_var = self.walk_expression(object);
-                let idx_var = self.walk_expression(index);
                 let _ = obj_var;
-                // Index is typically integer
+                // NUM-USIZE (ADR-0028): an index (or a slice bound) is an index use.
+                let idx_var = match index {
+                    Expression::Range { start, end, .. } => {
+                        let s = self.walk_expression(start);
+                        let e = self.walk_expression(end);
+                        self.cs.add_because(Constraint::TypeEquals(s, e), tagged("TY-UNIFY"));
+                        s
+                    }
+                    other => self.walk_expression(other),
+                };
                 self.cs.add_because(Constraint::IsNumeric(idx_var), tagged("NUM-INDEX"));
+                self.index_uses.push(idx_var);
+                self.cs.add_because(
+                    Constraint::PrefersUsize(idx_var),
+                    origin("NUM-USIZE", "an index: an index class unless a width is declared", &index.location()),
+                );
                 let result = self.cs.fresh_var();
                 result
             }
@@ -1167,11 +1194,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::Block { statements, .. } => {
-                let tails = self.walk_block_value(statements);
+                let tails = self.walk_scoped_block_value(statements);
                 let result = self.cs.fresh_var();
                 // A block's value is its tail (or the tails of its `if`/`match` branches): whatever
                 // the block's value is used for is required of each of them (`let c = if p { a } else { b }`).
                 for t in tails {
+                    self.cs.add_because(Constraint::TypeEquals(t, result), tagged("TY-UNIFY"));
                     self.cs.add_because(
                         Constraint::UsedAs(t, result),
                         origin("OWN-LATTICE", "value of a block or branch flows to the block's result", &None),
@@ -1194,9 +1222,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::If { condition, then_block, else_block, .. } => {
                 let cond_var = self.walk_expression(condition);
                 self.cs.add_because(Constraint::TypeIs(cond_var, BaseType::Bool), tagged("TY-BOOL"));
-                let mut out = self.walk_block_value(then_block);
+                let mut out = self.walk_scoped_block_value(then_block);
                 if let Some(else_stmts) = else_block {
-                    out.extend(self.walk_block_value(else_stmts));
+                    out.extend(self.walk_scoped_block_value(else_stmts));
                 }
                 out
             }
@@ -1222,7 +1250,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// Bind a pattern to a constraint var (handles identifier, tuple, etc).
     fn bind_pattern(&mut self, pattern: &Pattern<'ast>) -> ConstraintVar {
         match pattern {
-            Pattern::Identifier(name) | Pattern::MutBinding(name) => self.resolve_var(name),
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => self.bind_name(name),
             Pattern::Tuple(pats) => {
                 let var = self.cs.fresh_var();
                 for p in pats {
@@ -1452,6 +1480,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             },
             call_targets: self.call_targets,
             taint_constraints: self.taint_constraints,
+            single_binding_locals: self.bind_counts.iter().filter(|(_, c)| **c == 1).map(|(n, _)| n.clone()).collect(),
+            binding_vars: self.binding_vars,
+            unmodelled: self.numeric_unmodelled,
+            literal_vars: self.literal_vars,
+            index_sources: self.index_sources,
+            index_uses: self.index_uses,
+            element_stores: self.element_stores,
             execution_constraints: self.execution_constraints,
         }
     }
@@ -1480,65 +1515,9 @@ pub fn generate_constraints_with_fields(
     walker.finish()
 }
 
-/// Provenance rule for a literal's type constraint.
-fn literal_rule(value: &Literal) -> &'static str {
-    match value {
-        Literal::Int(_) => "NUM-DEFAULT-INT",
-        Literal::Float(_) => "NUM-DEFAULT-FLOAT",
-        Literal::IntSuffixed(..) => "NUM-LITERAL-SUFFIX",
-        _ => "NUM-LITERAL",
-    }
-}
-
-/// Map a literal value to its base type.
-fn literal_to_base_type(lit: &Literal) -> BaseType {
-    match lit {
-        // Unsuffixed integers in patterns: `int` (ADR-0015). Expressions use a soft class instead.
-        Literal::Int(_) => BaseType::I64,
-        Literal::IntSuffixed(_, suffix) => match suffix.as_str() {
-            "i8" => BaseType::I8,
-            "i16" => BaseType::I16,
-            "i32" => BaseType::I32,
-            "i64" => BaseType::I64,
-            "i128" => BaseType::I128,
-            "u8" => BaseType::U8,
-            "u16" => BaseType::U16,
-            "u32" => BaseType::U32,
-            "u64" => BaseType::U64,
-            "u128" => BaseType::U128,
-            "usize" => BaseType::U64,
-            "isize" => BaseType::I64,
-            _ => BaseType::I32,
-        },
-        Literal::Float(_) => BaseType::F64,
-        Literal::String(_) => BaseType::String,
-        Literal::Char(_) => BaseType::Char,
-        Literal::Bool(_) => BaseType::Bool,
-    }
-}
-
-/// Emit numeric class constraints based on base type.
-fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, base: &BaseType) {
-    match base {
-        BaseType::I8
-        | BaseType::I16
-        | BaseType::I32
-        | BaseType::I64
-        | BaseType::I128
-        | BaseType::U8
-        | BaseType::U16
-        | BaseType::U32
-        | BaseType::U64
-        | BaseType::U128 => {
-            cs.add_because(Constraint::IsInteger(var), tagged("NUM-CLASS"));
-            cs.add_because(Constraint::IsNumeric(var), tagged("NUM-CLASS"));
-        }
-        BaseType::F32 | BaseType::F64 => {
-            cs.add_because(Constraint::IsFloat(var), tagged("NUM-CLASS"));
-            cs.add_because(Constraint::IsNumeric(var), tagged("NUM-CLASS"));
-        }
-        _ => {}
-    }
+/// Runtime-std callee path (`json::to_string`): its method-index homonyms must not be guessed.
+fn callee_path_is_runtime_std(qualified: &str) -> bool {
+    crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(qualified)
 }
 
 fn is_arithmetic_op(op: &BinaryOp) -> bool {

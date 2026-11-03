@@ -1,0 +1,258 @@
+use std::collections::HashMap
+use std::strings
+
+/// Fixed-window limiter configuration.
+pub struct FixedWindow {
+    pub limit: int,
+    pub window_ms: int,
+}
+
+/// Per-key bucket state inside a fixed window.
+pub struct WindowBucket {
+    pub window_start_ms: int,
+    pub count: int,
+}
+
+/// Outcome of a rate-limit check.
+pub struct RateLimitResult {
+    pub allowed: bool,
+    pub limit: int,
+    pub remaining: int,
+    pub reset_at_ms: int,
+    pub retry_after_ms: int,
+}
+
+/// Build a fixed-window limiter (`limit` requests per `window_ms`).
+pub fn fixed_window(limit: int, window_ms: int) -> FixedWindow {
+    FixedWindow {
+        limit: limit,
+        window_ms: window_ms,
+    }
+}
+
+/// Empty bucket for a first check.
+pub fn empty_bucket() -> WindowBucket {
+    WindowBucket {
+        window_start_ms: 0,
+        count: 0,
+    }
+}
+
+/// Advance bucket state and return a limit decision.
+pub fn check_fixed_window(
+    lim: FixedWindow,
+    bucket: WindowBucket,
+    now_ms: int,
+) -> (WindowBucket, RateLimitResult) {
+    let window_start = window_start_for(now_ms, lim.window_ms)
+    let mut count = bucket.count
+    if bucket.window_start_ms != window_start {
+        count = 0
+    }
+    let reset_at = window_start + lim.window_ms
+    if count >= lim.limit {
+        let retry = reset_at - now_ms
+        let safe_retry = if retry < 0 { 0 } else { retry }
+        return (
+            WindowBucket {
+                window_start_ms: window_start,
+                count: count,
+            },
+            RateLimitResult {
+                allowed: false,
+                limit: lim.limit,
+                remaining: 0,
+                reset_at_ms: reset_at,
+                retry_after_ms: safe_retry,
+            },
+        )
+    }
+    let next_count = count + 1
+    let remaining = lim.limit - next_count
+    (
+        WindowBucket {
+            window_start_ms: window_start,
+            count: next_count,
+        },
+        RateLimitResult {
+            allowed: true,
+            limit: lim.limit,
+            remaining: remaining,
+            reset_at_ms: reset_at,
+            retry_after_ms: 0,
+        },
+    )
+}
+
+/// Inspect whether the next request would be allowed without consuming a slot.
+pub fn peek_fixed_window(
+    lim: FixedWindow,
+    bucket: WindowBucket,
+    now_ms: int,
+) -> RateLimitResult {
+    let window_start = window_start_for(now_ms, lim.window_ms)
+    let mut count = bucket.count
+    if bucket.window_start_ms != window_start {
+        count = 0
+    }
+    let reset_at = window_start + lim.window_ms
+    if count >= lim.limit {
+        let retry = reset_at - now_ms
+        let safe_retry = if retry < 0 { 0 } else { retry }
+        return RateLimitResult {
+            allowed: false,
+            limit: lim.limit,
+            remaining: 0,
+            reset_at_ms: reset_at,
+            retry_after_ms: safe_retry,
+        }
+    }
+    let remaining = lim.limit - count
+    RateLimitResult {
+        allowed: true,
+        limit: lim.limit,
+        remaining: remaining,
+        reset_at_ms: reset_at,
+        retry_after_ms: 0,
+    }
+}
+
+/// Check and update per-key state in `store`.
+pub fn check_key(
+    lim: FixedWindow,
+    store: HashMap<string, WindowBucket>,
+    key: string,
+    now_ms: int,
+) -> (HashMap<string, WindowBucket>, RateLimitResult) {
+    let mut out = store
+    let existing = empty_bucket()
+    let mut bucket = existing
+    match out.get(key) {
+        Some(b) => {
+            bucket = WindowBucket {
+                window_start_ms: b.window_start_ms,
+                count: b.count,
+            }
+        },
+        None => {},
+    }
+    let checked = check_fixed_window(lim, bucket, now_ms)
+    out.insert(key, checked.0)
+    (out, checked.1)
+}
+
+/// `Retry-After` header value (seconds, rounded up).
+pub fn retry_after_header(retry_after_ms: int) -> string {
+    let secs = ceil_div(retry_after_ms, 1000)
+    if secs < 1 {
+        return "Retry-After: 1"
+    }
+    "Retry-After: ${secs}"
+}
+
+/// Rate-limit headers as individual lines (for middleware adapters).
+pub fn rate_limit_header_lines(result: RateLimitResult) -> Vec<string> {
+    let mut lines = Vec::new()
+    lines.push("X-RateLimit-Limit: ${result.limit}")
+    lines.push("X-RateLimit-Remaining: ${result.remaining}")
+    lines.push("X-RateLimit-Reset: ${result.reset_at_ms}")
+    if !result.allowed {
+        lines.push(retry_after_header(result.retry_after_ms))
+    }
+    lines
+}
+
+/// Common rate-limit response headers (joined with newlines).
+pub fn rate_limit_headers(result: RateLimitResult) -> string {
+    let lines = rate_limit_header_lines(result)
+    let mut out = ""
+    let mut i = 0
+    while i < lines.len() {
+        if i == 0 {
+            out = lines[i]
+        } else {
+            out = "${out}\n${lines[i]}"
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// True when the rate-limit check allowed the request.
+pub fn is_allowed(result: RateLimitResult) -> bool {
+    result.allowed
+}
+
+/// True when the rate-limit check denied the request.
+pub fn is_denied(result: RateLimitResult) -> bool {
+    !result.allowed
+}
+
+/// How many slots the bucket has consumed in its current window.
+pub fn slots_used(bucket: WindowBucket) -> int {
+    bucket.count
+}
+
+/// Remaining slots reported by a check/peek result.
+pub fn remaining_slots(result: RateLimitResult) -> int {
+    result.remaining
+}
+
+/// How many slots remain before `limit` given current `bucket.count`.
+pub fn slots_remaining(lim: FixedWindow, bucket: WindowBucket) -> int {
+    let used = slots_used(bucket)
+    if used >= lim.limit {
+        return 0
+    }
+    lim.limit - used
+}
+
+/// Configured request limit for `lim`.
+pub fn limit_of(lim: FixedWindow) -> int {
+    lim.limit
+}
+
+/// Configured window length in milliseconds for `lim`.
+pub fn window_ms_of(lim: FixedWindow) -> int {
+    lim.window_ms
+}
+
+/// True when the bucket has never recorded a request.
+pub fn is_fresh_bucket(bucket: WindowBucket) -> bool {
+    bucket.count == 0 && bucket.window_start_ms == 0
+}
+
+pub fn retry_after_ms_of(result: RateLimitResult) -> int {
+    result.retry_after_ms
+}
+
+pub fn reset_at_ms_of(result: RateLimitResult) -> int {
+    result.reset_at_ms
+}
+
+/// Alias of `is_denied`.
+pub fn window_exhausted(result: RateLimitResult) -> bool {
+    is_denied(result)
+}
+
+/// True when both the limit and the window length are positive.
+pub fn is_positive_window(lim: FixedWindow) -> bool {
+    limit_of(lim) > 0 && window_ms_of(lim) > 0
+}
+
+fn window_start_for(now_ms: int, window_ms: int) -> int {
+    if window_ms <= 0 {
+        return now_ms
+    }
+    (now_ms / window_ms) * window_ms
+}
+
+fn ceil_div(num: int, den: int) -> int {
+    if den <= 0 {
+        return num
+    }
+    if num <= 0 {
+        return 0
+    }
+    (num + den - 1) / den
+}

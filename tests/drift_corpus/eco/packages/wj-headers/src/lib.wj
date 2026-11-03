@@ -1,0 +1,158 @@
+use std::strings
+
+/// Secure response header set (helmet-style defaults).
+pub struct SecurityHeaders {
+    pub content_type_options: string,
+    pub frame_options: string,
+    pub referrer_policy: string,
+    pub content_security_policy: string,
+    pub hsts_max_age_secs: int,
+}
+
+/// Sensible defaults for JSON/API services (HSTS disabled until TLS is configured).
+pub fn defaults() -> SecurityHeaders {
+    SecurityHeaders {
+        content_type_options: "nosniff",
+        frame_options: "DENY",
+        referrer_policy: "no-referrer",
+        content_security_policy: "default-src 'none'",
+        hsts_max_age_secs: 0,
+    }
+}
+
+/// Like `defaults`, but with HSTS enabled for the given max-age (seconds).
+pub fn defaults_with_hsts(max_age_secs: int) -> SecurityHeaders {
+    let mut h = defaults()
+    h.hsts_max_age_secs = max_age_secs
+    h
+}
+
+/// True when HSTS is enabled (`hsts_max_age_secs > 0`).
+pub fn hsts_enabled(headers: SecurityHeaders) -> bool {
+    headers.hsts_max_age_secs > 0
+}
+
+/// Security headers as individual lines (for HTTP adapters).
+pub fn security_header_lines(headers: SecurityHeaders) -> Vec<string> {
+    let mut lines = Vec::new()
+    lines.push("X-Content-Type-Options: ${headers.content_type_options}")
+    lines.push("X-Frame-Options: ${headers.frame_options}")
+    lines.push("Referrer-Policy: ${headers.referrer_policy}")
+    if strings.len(headers.content_security_policy) > 0 {
+        lines.push("Content-Security-Policy: ${headers.content_security_policy}")
+    }
+    if headers.hsts_max_age_secs > 0 {
+        lines.push(hsts(headers.hsts_max_age_secs))
+    }
+    lines
+}
+
+/// Render headers as `Name: value` lines separated by newlines.
+pub fn format_headers(headers: SecurityHeaders) -> string {
+    let lines = security_header_lines(headers)
+    let mut out = ""
+    let mut i = 0
+    while i < lines.len() {
+        if i == 0 {
+            out = lines[i]
+        } else {
+            out = "${out}\n${lines[i]}"
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// `Strict-Transport-Security` header line.
+pub fn hsts(max_age_secs: int) -> string {
+    "Strict-Transport-Security: max-age=${max_age_secs}"
+}
+
+/// `X-Content-Type-Options: nosniff`.
+pub fn nosniff() -> string {
+    "X-Content-Type-Options: nosniff"
+}
+
+/// `X-Frame-Options` with the given directive (`DENY`, `SAMEORIGIN`, …).
+pub fn frame_options(directive: string) -> string {
+    "X-Frame-Options: ${directive}"
+}
+
+/// `Referrer-Policy` header line.
+pub fn referrer_policy(policy: string) -> string {
+    "Referrer-Policy: ${policy}"
+}
+
+/// Number of header lines produced by `security_header_lines`.
+pub fn header_line_count(headers: SecurityHeaders) -> int {
+    let lines = security_header_lines(headers)
+    let mut n = 0
+    let mut i = 0
+    while i < lines.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+/// Return `headers` with `content_security_policy` set to `policy`.
+pub fn with_csp(headers: SecurityHeaders, policy: string) -> SecurityHeaders {
+    let mut out = headers
+    out.content_security_policy = policy
+    out
+}
+
+/// Clear Content-Security-Policy (omit CSP header line).
+pub fn without_csp(headers: SecurityHeaders) -> SecurityHeaders {
+    with_csp(headers, "")
+}
+
+/// Return `headers` with `frame_options` set to `directive`.
+pub fn with_frame_options(headers: SecurityHeaders, directive: string) -> SecurityHeaders {
+    let mut out = headers
+    out.frame_options = directive
+    out
+}
+
+/// Return `headers` with `referrer_policy` set.
+pub fn with_referrer(headers: SecurityHeaders, policy: string) -> SecurityHeaders {
+    let mut out = headers
+    out.referrer_policy = policy
+    out
+}
+
+/// Return `headers` with HSTS max-age set (`0` disables).
+pub fn with_hsts(headers: SecurityHeaders, max_age_secs: int) -> SecurityHeaders {
+    let mut out = headers
+    out.hsts_max_age_secs = max_age_secs
+    out
+}
+
+/// Disable HSTS (`hsts_max_age_secs = 0`).
+pub fn without_hsts(headers: SecurityHeaders) -> SecurityHeaders {
+    with_hsts(headers, 0)
+}
+
+pub fn referrer_of(headers: SecurityHeaders) -> string {
+    headers.referrer_policy
+}
+
+/// `X-Frame-Options` value accessor.
+pub fn frame_of(headers: SecurityHeaders) -> string {
+    headers.frame_options
+}
+
+/// `Content-Security-Policy` value accessor.
+pub fn csp_of(headers: SecurityHeaders) -> string {
+    headers.content_security_policy
+}
+
+/// Configured HSTS max-age in seconds (`0` when disabled).
+pub fn hsts_max_age_of(headers: SecurityHeaders) -> int {
+    headers.hsts_max_age_secs
+}
+
+/// `X-Content-Type-Options` value accessor.
+pub fn content_type_of(headers: SecurityHeaders) -> string {
+    headers.content_type_options
+}

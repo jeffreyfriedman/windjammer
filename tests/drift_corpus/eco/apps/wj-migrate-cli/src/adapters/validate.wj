@@ -1,0 +1,21 @@
+use wj_migrate::db_apply::discover_migrations
+use wj_migrate::validate_unique_versions
+
+/// Discover migrations and ensure version numbers are unique (no database).
+pub fn run_validate(dir: string) -> Result<int, string> {
+    match discover_migrations(dir) {
+        Ok(items) => {
+            let mut count = 0
+            let mut migrations = Vec::new()
+            for item in items {
+                count = count + 1
+                migrations.push(item)
+            }
+            match validate_unique_versions(migrations) {
+                Ok(_) => Ok(count),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}

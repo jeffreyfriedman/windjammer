@@ -258,6 +258,16 @@ pub fn run<T: Journalable>(name: &str, args: Vec<Json>, body: impl FnOnce() -> T
 
 /// One step of the running durable function: replayed from the journal, or run and journaled.
 pub fn step<T: Journalable>(callee: &str, call: impl FnOnce() -> T) -> T {
+    step_with(callee, call, false)
+}
+
+/// A step that only reads (time, random, environment, files): journaled lazily, flushed with the next step that writes
+/// outside the process or when the function returns (ADR-0021 E4b).
+pub fn step_read<T: Journalable>(callee: &str, call: impl FnOnce() -> T) -> T {
+    step_with(callee, call, true)
+}
+
+fn step_with<T: Journalable>(callee: &str, call: impl FnOnce() -> T, lazy: bool) -> T {
     let planned = STATE.with(|s| {
         let mut s = s.borrow_mut();
         if s.in_step > 0 || s.runs.is_empty() {
@@ -284,7 +294,12 @@ pub fn step<T: Journalable>(callee: &str, call: impl FnOnce() -> T) -> T {
     }
     STATE.with(|s| {
         let mut s = s.borrow_mut();
-        s.runs.last_mut().expect("durable run").record(idx, callee, value.to_json(), 0).unwrap_or_else(|m| die(&m));
+        let run = s.runs.last_mut().expect("durable run");
+        if lazy {
+            run.record_lazy(idx, callee, value.to_json(), 0);
+        } else {
+            run.record(idx, callee, value.to_json(), 0).unwrap_or_else(|m| die(&m));
+        }
         s.appended += 1;
     });
     if crash_after {

@@ -1,0 +1,14 @@
+// `let row = grid[r]` on a Vec<Vec<int>> parameter: the compiled backend declares `row: Vec<i64>` and
+// assigns `&grid[r]`.
+fn sum_row(grid: Vec<Vec<int>>, r: usize) -> int {
+    let row = grid[r]
+    let mut s = 0
+    for c in 0..row.len() {
+        s += row[c]
+    }
+    s
+}
+
+fn main() {
+    println("${sum_row([[1, 2, 3], [4, 5, 6]], 1)}")
+}

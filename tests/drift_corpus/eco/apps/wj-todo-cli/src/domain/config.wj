@@ -1,0 +1,56 @@
+use std::env
+use std::strings
+use wj_path::join_path
+
+pub struct TodoConfig {
+    pub file_name: string,
+    pub max_title_len: int,
+}
+
+impl TodoConfig {
+    pub fn defaults() -> TodoConfig {
+        TodoConfig {
+            file_name: "todos.txt",
+            max_title_len: 200,
+        }
+    }
+}
+
+pub fn config_from_env() -> TodoConfig {
+    let mut config = TodoConfig::defaults()
+    match env.get("TODO_FILE") {
+        Some(value) => config.file_name = value,
+        None => {},
+    }
+    match env.get("TODO_MAX_TITLE_LEN") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(limit) => config.max_title_len = limit,
+                None => {},
+            }
+        },
+        None => {},
+    }
+    config
+}
+
+/// Join cwd + relative file name (absolute names win).
+pub fn resolve_file_path(cwd: string, file_name: string) -> string {
+    join_path(cwd, file_name)
+}
+
+fn parse_positive_int(text: string) -> Option<int> {
+    let trimmed = strings.trim(text)
+    if strings.len(trimmed) == 0 {
+        return None
+    }
+    let mut i = 0
+    while i < strings.len(trimmed) {
+        let ch = strings.substring(trimmed, i, i + 1)
+        if ch < "0" || ch > "9" {
+            return None
+        }
+        i = i + 1
+    }
+    Some(strings.parse_i32(trimmed) as int)
+}

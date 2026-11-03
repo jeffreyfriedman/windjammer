@@ -1,0 +1,165 @@
+use std::strings
+
+/// CORS response header values for a successful allow.
+pub struct CorsHeaders {
+    pub allow_origin: string,
+    pub allow_methods: string,
+    pub allow_headers: string,
+}
+
+/// True when `origin` is listed in `allowed`, or `allowed` contains `*`.
+pub fn is_origin_allowed(origin: string, allowed: Vec<string>) -> bool {
+    let mut i = 0
+    while i < allowed.len() {
+        let entry = allowed[i]
+        if entry == "*" {
+            return true
+        }
+        if entry == origin {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Echoed allow-origin value, or `Err` when the origin is rejected.
+pub fn require_origin(origin: string, allowed: Vec<string>) -> Result<string, string> {
+    match allow_origin(origin, allowed) {
+        Some(v) => Ok(v),
+        None => Err("origin not allowed"),
+    }
+}
+
+/// `Access-Control-Allow-Origin` value: echoed origin, `*`, or `None` if rejected.
+pub fn allow_origin(origin: string, allowed: Vec<string>) -> Option<string> {
+    if !is_origin_allowed(origin, allowed) {
+        return None
+    }
+    let mut j = 0
+    while j < allowed.len() {
+        if allowed[j] == "*" {
+            return Some("*")
+        }
+        j = j + 1
+    }
+    Some(origin)
+}
+
+/// Preflight header set, or `None` when the origin is not allowed.
+pub fn preflight(
+    origin: string,
+    allowed: Vec<string>,
+    methods: string,
+    headers: string,
+) -> Option<CorsHeaders> {
+    match allow_origin(origin, allowed) {
+        Some(ao) => Some(CorsHeaders {
+            allow_origin: ao,
+            allow_methods: methods,
+            allow_headers: headers,
+        }),
+        None => None,
+    }
+}
+
+/// CORS response headers as individual lines (for HTTP adapters).
+pub fn cors_header_lines(headers: CorsHeaders) -> Vec<string> {
+    let mut lines = Vec::new()
+    lines.push("Access-Control-Allow-Origin: ${headers.allow_origin}")
+    lines.push("Access-Control-Allow-Methods: ${headers.allow_methods}")
+    lines.push("Access-Control-Allow-Headers: ${headers.allow_headers}")
+    lines
+}
+
+/// CORS response headers joined with newlines.
+pub fn format_cors_headers(headers: CorsHeaders) -> string {
+    let lines = cors_header_lines(headers)
+    let mut out = ""
+    let mut i = 0
+    while i < lines.len() {
+        if i == 0 {
+            out = lines[i]
+        } else {
+            out = "${out}\n${lines[i]}"
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// Default `Access-Control-Allow-Methods` value.
+pub fn default_allow_methods() -> string {
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+}
+
+/// Default `Access-Control-Allow-Headers` value.
+pub fn default_allow_headers() -> string {
+    "Content-Type,Authorization"
+}
+
+/// Preflight using `default_allow_methods` / `default_allow_headers`.
+pub fn preflight_defaults(origin: string, allowed: Vec<string>) -> Option<CorsHeaders> {
+    preflight(origin, allowed, default_allow_methods(), default_allow_headers())
+}
+
+/// True when `allowed` contains a `*` entry.
+pub fn allows_wildcard(allowed: Vec<string>) -> bool {
+    let mut i = 0
+    while i < allowed.len() {
+        if allowed[i] == "*" {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// True when `allow_origin` is the CORS wildcard `*`.
+pub fn is_wildcard_origin(allow_origin: string) -> bool {
+    allow_origin == "*"
+}
+
+/// Number of lines from `cors_header_lines`.
+pub fn cors_line_count(headers: CorsHeaders) -> int {
+    let lines = cors_header_lines(headers)
+    let mut n = 0
+    let mut i = 0
+    while i < lines.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+/// Number of entries in an allow-list (including `*`).
+pub fn allowed_origin_count(allowed: Vec<string>) -> int {
+    let mut n = 0
+    let mut i = 0
+    while i < allowed.len() {
+        n = n + 1
+        i = i + 1
+    }
+    n
+}
+
+pub fn is_empty_allow_list(allowed: Vec<string>) -> bool {
+    allowed_origin_count(allowed) == 0
+}
+
+pub fn has_origins(allowed: Vec<string>) -> bool {
+    !is_empty_allow_list(allowed)
+}
+
+/// Allow-list length when it has entries, otherwise `Err`.
+pub fn require_origins(allowed: Vec<string>) -> Result<int, string> {
+    if !has_origins(allowed) {
+        return Err("expected origins")
+    }
+    Ok(allowed_origin_count(allowed))
+}
+
+/// `Access-Control-Allow-Origin` value from a CORS header set.
+pub fn allow_origin_of(headers: CorsHeaders) -> string {
+    headers.allow_origin
+}

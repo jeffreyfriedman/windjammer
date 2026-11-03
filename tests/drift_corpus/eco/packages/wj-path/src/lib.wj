@@ -1,0 +1,284 @@
+use std::path
+use std::strings
+
+/// Join two path segments. If `right` is absolute, return `right`.
+/// Thin-wraps `std::path.join` (empty `right` keeps package normalize semantics).
+pub fn join_path(left: string, right: string) -> string {
+    if strings.len(right) == 0 {
+        return normalize(left)
+    }
+    path.join(left, right)
+}
+
+/// Collapse `.` and `..` segments. Absolute paths stay absolute.
+pub fn normalize(path: string) -> string {
+    if strings.len(path) == 0 {
+        return "."
+    }
+    let absolute = strings.starts_with(path, "/")
+    let parts = strings.split(path, "/")
+    let mut stack = Vec::new()
+    for part in parts {
+        if strings.len(part) == 0 {
+            continue
+        }
+        if part == "." {
+            continue
+        }
+        if part == ".." {
+            if stack.len() > 0 {
+                let last = stack[stack.len() - 1]
+                if last != ".." {
+                    let _ = stack.pop()
+                    continue
+                }
+            }
+            if !absolute {
+                stack.push("..")
+            }
+            continue
+        }
+        stack.push(part)
+    }
+    if stack.len() == 0 {
+        if absolute {
+            return "/"
+        }
+        return "."
+    }
+    let mut out = ""
+    let mut i = 0
+    while i < stack.len() {
+        if i == 0 {
+            if absolute {
+                out = "/${stack[i]}"
+            } else {
+                out = stack[i]
+            }
+        } else {
+            out = "${out}/${stack[i]}"
+        }
+        i = i + 1
+    }
+    out
+}
+
+/// Final path segment.
+/// Uses `std::path.file_name` when present; root `/` stays `/`.
+pub fn basename(p: string) -> string {
+    if p == "/" {
+        return "/"
+    }
+    match path.file_name(p) {
+        Some(n) => n,
+        None => {
+            let cleaned = strip_trailing_slashes(p)
+            match rfind_slash(cleaned) {
+                Some(idx) => strings.substring(cleaned, idx + 1, strings.len(cleaned)),
+                None => cleaned,
+            }
+        },
+    }
+}
+
+/// Parent directory of `path`.
+pub fn dirname(path: string) -> string {
+    if path == "/" {
+        return "/"
+    }
+    let cleaned = strip_trailing_slashes(path)
+    match rfind_slash(cleaned) {
+        Some(idx) => {
+            if idx == 0 {
+                return "/"
+            }
+            strings.substring(cleaned, 0, idx)
+        },
+        None => ".",
+    }
+}
+
+/// Extension including the leading `.`, or empty if none.
+pub fn extname(path: string) -> string {
+    let base = basename(path)
+    if base == "." || base == ".." {
+        return ""
+    }
+    match rfind_dot(base) {
+        Some(idx) => {
+            if idx == 0 {
+                return ""
+            }
+            strings.substring(base, idx, strings.len(base))
+        },
+        None => "",
+    }
+}
+
+/// True when `path` is absolute (leading `/`).
+pub fn is_absolute(path: string) -> bool {
+    strings.starts_with(path, "/")
+}
+
+/// Basename without the final extension (keeps compound stems like `archive.tar`).
+pub fn stem(path: string) -> string {
+    let base = basename(path)
+    let ext = extname(path)
+    if strings.len(ext) == 0 {
+        return base
+    }
+    strings.substring(base, 0, strings.len(base) - strings.len(ext))
+}
+
+/// File stem when it names a real file, otherwise `Err`.
+pub fn require_stem(path: string) -> Result<string, string> {
+    let name = stem(path)
+    if strings.len(name) == 0 || name == "." || name == ".." {
+        return Err("expected stem")
+    }
+    Ok(name)
+}
+
+/// Replace the final extension of `path` with `ext` (include the leading `.`).
+pub fn change_extension(path: string, ext: string) -> string {
+    let dir = dirname(path)
+    let base = stem(path)
+    let renamed = "${base}${ext}"
+    if dir == "." {
+        return renamed
+    }
+    if dir == "/" {
+        return "/${renamed}"
+    }
+    "${dir}/${renamed}"
+}
+
+/// Ensure `path` starts with `/` (empty becomes `/`).
+pub fn ensure_leading_slash(path: string) -> string {
+    if strings.len(path) == 0 {
+        return "/"
+    }
+    if is_absolute(path) {
+        return path
+    }
+    "/${path}"
+}
+
+/// Drop the final extension from `path` (dirname + stem).
+pub fn without_extension(path: string) -> string {
+    let dir = dirname(path)
+    let base = stem(path)
+    if dir == "." {
+        return base
+    }
+    if dir == "/" {
+        return "/${base}"
+    }
+    "${dir}/${base}"
+}
+
+/// Ensure `path` ends with `/` (empty becomes `/`).
+pub fn ensure_trailing_slash(path: string) -> string {
+    if strings.len(path) == 0 {
+        return "/"
+    }
+    if strings.ends_with(path, "/") {
+        return path
+    }
+    "${path}/"
+}
+
+/// Drop a single trailing `/` (root `/` and empty stay unchanged).
+pub fn without_trailing_slash(path: string) -> string {
+    if strings.len(path) == 0 {
+        return path
+    }
+    if path == "/" {
+        return path
+    }
+    if strings.ends_with(path, "/") {
+        return strings.substring(path, 0, strings.len(path) - 1)
+    }
+    path
+}
+
+/// True when `path` is `/` or empty (filesystem root / cwd root).
+pub fn is_root(path: string) -> bool {
+    path == "/" || strings.len(path) == 0
+}
+
+/// `Ok(path)` when `path` is `/` or empty, otherwise `Err`.
+pub fn require_root(path: string) -> Result<string, string> {
+    if is_root(path) {
+        return Ok(path)
+    }
+    Err("expected root")
+}
+
+pub fn has_trailing_slash(path: string) -> bool {
+    strings.len(path) > 0 && strings.ends_with(path, "/")
+}
+
+/// True when `path` is exactly `.` (current directory).
+pub fn is_dot(path: string) -> bool {
+    path == "."
+}
+
+/// True when `path` is exactly `..` (parent directory).
+pub fn is_dot_dot(path: string) -> bool {
+    path == ".."
+}
+
+/// True when `path` starts with `/`.
+pub fn has_leading_slash(path: string) -> bool {
+    strings.starts_with(path, "/")
+}
+
+/// True when the final segment is a dotfile (not `.` or `..`).
+pub fn is_hidden(path: string) -> bool {
+    let name = basename(path)
+    if is_dot(name) || is_dot_dot(name) {
+        return false
+    }
+    strings.starts_with(name, ".")
+}
+
+/// Ok(path) when the final segment is a dotfile, otherwise Err.
+pub fn require_hidden(path: string) -> Result<string, string> {
+    if is_hidden(path) {
+        return Ok(path)
+    }
+    Err("expected hidden")
+}
+
+fn strip_trailing_slashes(path: string) -> string {
+    let mut out = path
+    while strings.len(out) > 1 && strings.ends_with(out, "/") {
+        out = strings.substring(out, 0, strings.len(out) - 1)
+    }
+    out
+}
+
+fn rfind_slash(path: string) -> Option<int> {
+    let mut i = strings.len(path)
+    while i > 0 {
+        i = i - 1
+        let ch = strings.substring(path, i, i + 1)
+        if ch == "/" {
+            return Some(i)
+        }
+    }
+    None
+}
+
+fn rfind_dot(path: string) -> Option<int> {
+    let mut i = strings.len(path)
+    while i > 0 {
+        i = i - 1
+        let ch = strings.substring(path, i, i + 1)
+        if ch == "." {
+            return Some(i)
+        }
+    }
+    None
+}

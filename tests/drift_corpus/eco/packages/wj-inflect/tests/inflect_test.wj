@@ -1,0 +1,157 @@
+use crate::camel_case
+use crate::constant_case
+use crate::is_camel_case
+use crate::is_constant_case
+use crate::is_kebab_case
+use crate::is_pascal_case
+use crate::is_slug
+use crate::is_snake_case
+use crate::is_title_case
+use crate::is_blank
+use crate::kebab_case
+use crate::pascal_case
+use crate::slugify
+use crate::snake_case
+use crate::require_blank
+use crate::title_case
+use std::strings
+
+@test
+fn test_snake_from_camel() {
+    assert_eq(snake_case("helloWorld"), "hello_world")
+}
+
+@test
+fn test_snake_from_pascal() {
+    assert_eq(snake_case("HelloWorld"), "hello_world")
+}
+
+@test
+fn test_snake_already_snake() {
+    assert_eq(snake_case("hello_world"), "hello_world")
+}
+
+@test
+fn test_camel_from_snake() {
+    assert_eq(camel_case("hello_world"), "helloWorld")
+}
+
+@test
+fn test_pascal_from_snake() {
+    assert_eq(pascal_case("hello_world"), "HelloWorld")
+}
+
+@test
+fn test_slugify_spaces() {
+    assert_eq(slugify("Hello World!"), "hello-world")
+}
+
+@test
+fn test_slugify_collapse() {
+    assert_eq(slugify("foo---bar  baz"), "foo-bar-baz")
+}
+
+@test
+fn test_slugify_trim_hyphens() {
+    assert_eq(slugify("  --Hello--  "), "hello")
+}
+
+@test
+fn test_kebab_from_snake() {
+    assert_eq(kebab_case("hello_world"), "hello-world")
+}
+
+@test
+fn test_kebab_from_camel() {
+    assert_eq(kebab_case("helloWorld"), "hello-world")
+}
+
+@test
+fn test_kebab_from_pascal() {
+    assert_eq(kebab_case("HelloWorld"), "hello-world")
+}
+
+@test
+fn test_kebab_already_kebab() {
+    assert_eq(kebab_case("hello-world"), "hello-world")
+}
+
+@test
+fn test_title_case_from_snake() {
+    assert_eq(title_case("hello_world"), "Hello World")
+}
+
+@test
+fn test_title_case_from_kebab() {
+    assert_eq(title_case("hello-world"), "Hello World")
+}
+
+@test
+fn test_title_case_from_camel() {
+    assert_eq(title_case("helloWorld"), "Hello World")
+}
+
+@test
+fn test_constant_case() {
+    assert_eq(constant_case("helloWorld"), "HELLO_WORLD")
+    assert_eq(constant_case("hello-world"), "HELLO_WORLD")
+    assert_eq(constant_case("HelloWorld"), "HELLO_WORLD")
+}
+
+@test
+fn test_is_snake_case() {
+    assert(is_snake_case("hello_world"), "snake")
+    assert(is_snake_case("a"), "single")
+    assert(!is_snake_case("helloWorld"), "camel")
+    assert(!is_snake_case("hello-world"), "kebab")
+}
+
+@test
+fn test_is_kebab_case() {
+    assert(is_kebab_case("hello-world"), "kebab")
+    assert(is_kebab_case("a"), "single")
+    assert(!is_kebab_case("hello_world"), "snake")
+    assert(!is_kebab_case("HelloWorld"), "pascal")
+}
+
+@test
+fn test_is_constant_case() {
+    assert(is_constant_case("HELLO_WORLD"), "constant")
+    assert(is_constant_case("A"), "single")
+    assert(!is_constant_case("hello_world"), "snake lower")
+    assert(!is_constant_case("HELLO-WORLD"), "kebab upper")
+}
+
+@test
+fn test_is_camel_and_pascal_case() {
+    assert(is_camel_case("helloWorld"), "camel")
+    assert(is_camel_case("a"), "single lower")
+    assert(!is_camel_case("HelloWorld"), "pascal not camel")
+    assert(!is_camel_case("hello_world"), "snake not camel")
+    assert(is_pascal_case("HelloWorld"), "pascal")
+    assert(is_pascal_case("A"), "single upper")
+    assert(!is_pascal_case("helloWorld"), "camel not pascal")
+    assert(!is_pascal_case("Hello-World"), "kebab not pascal")
+}
+
+@test
+fn test_is_slug_and_is_title_case() {
+    assert(is_slug(slugify("Hello World!")), "slugified")
+    assert(is_slug("hello-world"), "kebab slug")
+    assert(!is_slug("Hello World"), "spaces")
+    assert(is_title_case(title_case("hello world")), "titled")
+    assert(is_title_case("Hello World"), "title")
+    assert(!is_title_case("hello world"), "lower")
+}
+
+@test
+fn test_require_blank() {
+    match require_blank("   ") {
+        Ok(s) => assert(is_blank(s), "blank"),
+        Err(_) => assert(false, "blank ok"),
+    }
+    match require_blank("a") {
+        Ok(_) => assert(false, "letter must Err"),
+        Err(msg) => assert(strings.contains(msg, "blank"), "mentions blank"),
+    }
+}

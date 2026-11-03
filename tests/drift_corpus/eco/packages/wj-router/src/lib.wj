@@ -1,0 +1,171 @@
+use std::collections::HashMap
+use std::strings
+
+/// Match `path` against a pattern with optional `:param` segments.
+/// Returns captured params on success, or `None` when the shape differs.
+pub fn match_route(pattern: string, path: string) -> Option<HashMap<string, string>> {
+    let pat_segs = split_segments(normalize_path(pattern))
+    let path_segs = split_segments(normalize_path(path))
+    if pat_segs.len() != path_segs.len() {
+        return None
+    }
+    let mut params = HashMap::new()
+    let mut i = 0
+    while i < pat_segs.len() {
+        let pat = pat_segs[i]
+        let seg = path_segs[i]
+        if strings.starts_with(pat, ":") {
+            let name = strings.substring(pat, 1, strings.len(pat))
+            if strings.len(name) == 0 {
+                return None
+            }
+            params.insert(name, seg)
+        } else {
+            if pat != seg {
+                return None
+            }
+        }
+        i = i + 1
+    }
+    Some(params)
+}
+
+/// True when `path` matches `pattern` (same rules as `match_route`).
+pub fn matches_route(pattern: string, path: string) -> bool {
+    match match_route(pattern, path) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+/// Param value for `name`, or `default` when missing / unmatched.
+pub fn param_or(params: HashMap<string, string>, name: string, default: string) -> string {
+    match params.get(name) {
+        Some(value) => value,
+        None => default,
+    }
+}
+
+/// True when `name` was captured in `params`.
+pub fn has_param(params: HashMap<string, string>, name: string) -> bool {
+    match params.get(name) {
+        Some(v) => {
+            let _keep = v
+            true
+        },
+        None => false,
+    }
+}
+
+/// Number of captured route params.
+pub fn param_count(params: HashMap<string, string>) -> int {
+    let mut n = 0
+    for (_k, _v) in params {
+        n = n + 1
+    }
+    n
+}
+
+/// True when `pattern` contains at least one `:param` segment.
+pub fn is_param_pattern(pattern: string) -> bool {
+    let segs = split_segments(normalize_path(pattern))
+    let mut i = 0
+    while i < segs.len() {
+        if strings.starts_with(segs[i], ":") {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+/// Names of captured route params (order not guaranteed).
+pub fn param_names(params: HashMap<string, string>) -> Vec<string> {
+    let mut out = Vec::new()
+    for (name, _value) in params {
+        out.push(name)
+    }
+    out
+}
+
+/// Look up a captured param, or `Err` naming the missing param.
+pub fn require_param(params: HashMap<string, string>, name: string) -> Result<string, string> {
+    match params.get(name) {
+        Some(value) => Ok(value),
+        None => Err("missing route param: ${name}"),
+    }
+}
+
+/// Match `pattern` against `path`, or return `fallback` when no match.
+pub fn match_or(pattern: string, path: string, fallback: HashMap<string, string>) -> HashMap<string, string> {
+    match match_route(pattern, path) {
+        Some(params) => params,
+        None => fallback,
+    }
+}
+
+/// First `:param` name in a route pattern, without the colon.
+pub fn first_param_name(pattern: string) -> Option<string> {
+    let segs = split_segments(normalize_path(pattern))
+    for seg in segs {
+        if strings.starts_with(seg, ":") && strings.len(seg) > 1 {
+            return Some(strings.substring(seg, 1, strings.len(seg)))
+        }
+    }
+    None
+}
+
+/// Match `pattern` against `path`, or `Err` when the path does not match.
+pub fn require_match(pattern: string, path: string) -> Result<HashMap<string, string>, string> {
+    match match_route(pattern, path) {
+        Some(params) => Ok(params),
+        None => Err("expected match"),
+    }
+}
+
+/// Count of `:param` segments in a route pattern.
+pub fn pattern_param_count(pattern: string) -> int {
+    let segs = split_segments(normalize_path(pattern))
+    let mut n = 0
+    for seg in segs {
+        if strings.starts_with(seg, ":") {
+            n = n + 1
+        }
+    }
+    n
+}
+
+fn normalize_path(path: string) -> string {
+    if strings.len(path) == 0 {
+        return "/"
+    }
+    if path == "/" {
+        return "/"
+    }
+    let mut out = path
+    while strings.len(out) > 1 && strings.ends_with(out, "/") {
+        out = strings.substring(out, 0, strings.len(out) - 1)
+    }
+    if !strings.starts_with(out, "/") {
+        out = "/${out}"
+    }
+    out
+}
+
+fn split_segments(path: string) -> Vec<string> {
+    let mut segs = Vec::new()
+    if path == "/" {
+        return segs
+    }
+    let body = strings.substring(path, 1, strings.len(path))
+    if strings.len(body) == 0 {
+        return segs
+    }
+    let parts = strings.split(body, "/")
+    for part in parts {
+        if strings.len(part) > 0 {
+            segs.push(part)
+        }
+    }
+    segs
+}

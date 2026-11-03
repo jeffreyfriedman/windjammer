@@ -1,0 +1,176 @@
+use std::env
+use std::strings
+
+pub struct ProxyConfig {
+    pub upstream: string,
+    pub strip_prefix: string,
+    pub rate_limit: int,
+    pub window_ms: int,
+    pub log_max: int,
+}
+
+impl ProxyConfig {
+    pub fn defaults() -> ProxyConfig {
+        ProxyConfig {
+            upstream: "http://127.0.0.1:9000",
+            strip_prefix: "",
+            rate_limit: 100,
+            window_ms: 60_000,
+            log_max: 1000,
+        }
+    }
+}
+
+pub fn config_from_env() -> ProxyConfig {
+    ProxyConfig {
+        upstream: upstream_from_env(),
+        strip_prefix: strip_prefix_from_env(),
+        rate_limit: rate_limit_from_env(),
+        window_ms: window_ms_from_env(),
+        log_max: log_max_from_env(),
+    }
+}
+
+pub fn port_from_env() -> int {
+    match env.get("PORT") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(port) => port,
+                None => 8088,
+            }
+        },
+        None => 8088,
+    }
+}
+
+/// Configured upstream base URL.
+pub fn upstream_of(cfg: ProxyConfig) -> string {
+    cfg.upstream
+}
+
+/// Configured per-window rate limit.
+pub fn rate_limit_of(cfg: ProxyConfig) -> int {
+    cfg.rate_limit
+}
+
+/// Configured request-log ring-buffer size.
+pub fn log_max_of(cfg: ProxyConfig) -> int {
+    cfg.log_max
+}
+
+/// Upstream URL when it is non-empty.
+pub fn require_upstream(cfg: ProxyConfig) -> Result<string, string> {
+    if strings.len(cfg.upstream) == 0 {
+        Err("expected upstream")
+    } else {
+        Ok(cfg.upstream)
+    }
+}
+
+/// Rate limit when it is at least 1.
+pub fn require_rate_limit(cfg: ProxyConfig) -> Result<int, string> {
+    if cfg.rate_limit < 1 {
+        Err("expected rate limit")
+    } else {
+        Ok(cfg.rate_limit)
+    }
+}
+
+fn upstream_from_env() -> string {
+    match env.get("PROXY_UPSTREAM") {
+        Some(value) => value,
+        None => "http://127.0.0.1:9000",
+    }
+}
+
+fn strip_prefix_from_env() -> string {
+    match env.get("PROXY_STRIP_PREFIX") {
+        Some(value) => value,
+        None => "",
+    }
+}
+
+fn rate_limit_from_env() -> int {
+    match env.get("PROXY_RATE_LIMIT") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 100,
+            }
+        },
+        None => 100,
+    }
+}
+
+fn window_ms_from_env() -> int {
+    match env.get("PROXY_WINDOW_MS") {
+        Some(value) => {
+            match parse_positive_int(value) {
+                Some(n) => n,
+                None => 60_000,
+            }
+        },
+        None => 60_000,
+    }
+}
+
+fn log_max_from_env() -> int {
+    match env.get("PROXY_LOG_MAX") {
+        Some(value) => {
+            match parse_non_negative_int(value) {
+                Some(n) => n,
+                None => 1000,
+            }
+        },
+        None => 1000,
+    }
+}
+
+fn parse_non_negative_int(text: string) -> Option<int> {
+    if text.len() == 0 {
+        return None
+    }
+    let mut total: int = 0
+    for ch in strings.chars(text) {
+        match char_to_digit(ch) {
+            Some(digit) => {
+                total = total * 10 + digit
+            },
+            None => return None,
+        }
+    }
+    Some(total)
+}
+
+fn parse_positive_int(text: string) -> Option<int> {
+    if text.len() == 0 {
+        return None
+    }
+    let mut total: int = 0
+    for ch in strings.chars(text) {
+        match char_to_digit(ch) {
+            Some(digit) => {
+                total = total * 10 + digit
+            },
+            None => return None,
+        }
+    }
+    if total < 1 {
+        return None
+    }
+    Some(total)
+}
+
+fn char_to_digit(ch: char) -> Option<int> {
+    if ch == '0' { return Some(0) }
+    if ch == '1' { return Some(1) }
+    if ch == '2' { return Some(2) }
+    if ch == '3' { return Some(3) }
+    if ch == '4' { return Some(4) }
+    if ch == '5' { return Some(5) }
+    if ch == '6' { return Some(6) }
+    if ch == '7' { return Some(7) }
+    if ch == '8' { return Some(8) }
+    if ch == '9' { return Some(9) }
+    None
+}
