@@ -19,19 +19,31 @@ fn is_text(t: &crate::parser::Type) -> bool {
     crate::codegen::rust::types::is_windjammer_text_type(t)
 }
 
+/// How a surface parameter is passed: `(value type, ownership, Rust formal is a shared reference)`.
+/// `string` is `&str`; `&T` / `&mut T` (generated for Rust `&T`, `&[T]`, `&mut T`) borrow a `T`.
+fn passing(t: &crate::parser::Type) -> (&crate::parser::Type, &'static str, bool) {
+    use crate::parser::Type;
+    match t {
+        Type::Reference(inner) => (inner, "Borrowed", true),
+        Type::MutableReference(inner) => (inner, "MutBorrowed", false),
+        _ if is_text(t) => (t, "Borrowed", true),
+        _ => (t, "Owned", false),
+    }
+}
+
 /// The metadata that describes `surface` to the ownership pipeline.
 pub(crate) fn surface_metadata(surface: &Surface) -> CrateMetadata {
     let mut meta = CrateMetadata::new();
     for f in &surface.fns {
-        let types: Vec<&crate::parser::Type> = f.parameters.iter().filter(|p| p.name != "self").map(|p| &p.type_).collect();
+        let passed: Vec<_> = f.parameters.iter().filter(|p| p.name != "self").map(|p| passing(&p.type_)).collect();
         let sig = FunctionSignature {
-            params: types.iter().map(|t| ModuleMetadata::serialize_type(t)).collect(),
+            params: passed.iter().map(|(t, _, _)| ModuleMetadata::serialize_type(t)).collect(),
             formal_params: Vec::new(),
             return_type: f.return_type.as_ref().map(ModuleMetadata::serialize_type),
             is_associated: false,
             parent_type: None,
-            param_ownership: types.iter().map(|t| if is_text(t) { "Borrowed" } else { "Owned" }.to_string()).collect(),
-            emitted_rust_ref_params: Some(types.iter().map(|t| is_text(t)).collect()),
+            param_ownership: passed.iter().map(|(_, o, _)| o.to_string()).collect(),
+            emitted_rust_ref_params: Some(passed.iter().map(|(_, _, r)| *r).collect()),
             string_ref_string_formal_params: None,
             forwarding_borrow_params: None,
             has_self_receiver: false,
@@ -82,5 +94,18 @@ mod tests {
         assert_eq!(back.param_types.len(), 3);
         assert_eq!(back.return_type, Some(crate::parser::Type::Custom("usize".into())));
         assert!(m.functions["g"].params.is_empty() && m.functions["g"].return_type.is_none());
+    }
+
+    #[test]
+    fn references_borrow_the_value_type() {
+        let s = rust_surface::parse_surface(
+            "demo",
+            PathBuf::from("rust/demo.wji"),
+            "pub fn f(a: &Vec<u8>, b: &mut Vec<i64>, c: Vec<string>)\n".to_string(),
+        );
+        let f = &surface_metadata(&s).functions["f"];
+        assert_eq!(f.param_ownership, ["Borrowed", "MutBorrowed", "Owned"]);
+        assert_eq!(f.emitted_rust_ref_params, Some(vec![true, false, false]));
+        assert!(!f.params[0].contains('&') && !f.params[1].contains('&'), "{:?}", f.params);
     }
 }

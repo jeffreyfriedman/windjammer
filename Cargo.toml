@@ -112,6 +112,8 @@ chrono = "0.4"
 # interpreter std modules (regex, crypto, csv, url): same crates the runtime uses
 regex = "1"
 sha2 = "0.10"
+# `wj rust-surface`: match crate versions against wj.toml requirements and Cargo.lock
+semver = "1"
 hmac = "0.12"
 subtle = "2.6"
 sha1 = "0.10"
@@ -245,6 +247,11 @@ path = "tests/project_gates_test.rs"
 [[test]]
 name = "rust_crate_interop"
 path = "tests/rust_crate_interop.rs"
+
+# ADR-0026 generator (wj rust-surface, cache surfaces, precedence, staleness, tracked-generated gate): cargo test --release --test rust_surface_generator
+[[test]]
+name = "rust_surface_generator"
+path = "tests/rust_surface_generator.rs"
 
 # Session-shared stdlib taint/effect tables equal the per-pipeline computation: cargo test --release --test stdlib_tables
 [[test]]

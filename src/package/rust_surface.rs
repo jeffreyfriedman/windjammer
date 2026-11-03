@@ -32,6 +32,10 @@ pub struct Surface {
     pub text: String,
     pub fns: Vec<&'static FunctionDecl<'static>>,
     pub problems: Vec<SurfaceProblem>,
+    /// The generator's header when the file was generated (cached or `--write` copy).
+    pub generated: Option<super::rust_surface_gen::Header>,
+    /// Functions the generator listed as skipped, with the reason.
+    pub skipped: Vec<(String, String)>,
 }
 
 impl Surface {
@@ -67,10 +71,18 @@ pub fn surface_path(manifest_dir: &Path, crate_name: &str) -> PathBuf {
     manifest_dir.join(SURFACE_DIR).join(format!("{crate_name}.{SURFACE_EXT}"))
 }
 
-/// Every surface file in the project at `manifest_dir` (inputs of `wj check`'s result cache), sorted.
+/// Every surface file in the project at `manifest_dir`, hand-written and cached, plus the lock files their
+/// staleness is judged against (inputs of `wj check`'s result cache), sorted.
 pub fn surface_files(manifest_dir: &Path) -> Vec<PathBuf> {
-    let Ok(rd) = std::fs::read_dir(manifest_dir.join(SURFACE_DIR)) else { return Vec::new() };
-    let mut v: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == SURFACE_EXT)).collect();
+    let is_surface = |p: &PathBuf| p.extension().is_some_and(|e| e == SURFACE_EXT);
+    let mut v: Vec<PathBuf> = std::fs::read_dir(manifest_dir.join(SURFACE_DIR)).map(|rd| rd.flatten().map(|e| e.path()).filter(is_surface).collect()).unwrap_or_default();
+    let cache = manifest_dir.join(".wj-cache").join(super::rust_surface_gen::cache::CACHE_SUBDIR);
+    if let Ok(rd) = std::fs::read_dir(cache) {
+        v.extend(rd.flatten().map(|e| e.path().join("surface.wji")).filter(|p| p.is_file()));
+    }
+    if !v.is_empty() {
+        v.extend(super::rust_surface_gen::locate::lock_files(manifest_dir, None));
+    }
     v.sort();
     v
 }
@@ -92,10 +104,12 @@ pub fn load(manifest_dir: &Path) -> RustCrates {
     }
     names.sort();
     names.dedup();
+    // precedence: a hand-written `rust/<crate>.wji` is source and wins over the generated cache copy
     let surfaces = names
         .iter()
         .filter_map(|n| {
-            let path = surface_path(manifest_dir, n);
+            let hand = surface_path(manifest_dir, n);
+            let path = if hand.is_file() { hand } else { super::rust_surface_gen::cache::surface_path(manifest_dir, n) };
             let text = std::fs::read_to_string(&path).ok()?;
             Some(parse_surface(n, path, text))
         })
@@ -157,7 +171,9 @@ pub fn parse_surface(crate_name: &str, path: PathBuf, text: String) -> Surface {
         }
         Err(e) => problems.push(SurfaceProblem { line: 0, message: format!("cannot parse the surface: {e}") }),
     }
-    Surface { crate_name: crate_name.to_string(), path, text, fns, problems }
+    let generated = super::rust_surface_gen::header(&text);
+    let skipped = if generated.is_some() { super::rust_surface_gen::skipped_in(&text) } else { Vec::new() };
+    Surface { crate_name: crate_name.to_string(), path, text, fns, problems, generated, skipped }
 }
 
 #[cfg(test)]

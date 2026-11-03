@@ -321,20 +321,12 @@ fn process_data() {
 ## Using a Rust crate
 
 Any crate on crates.io is one `wj.toml` line away. List it under `[dependencies]` exactly as you would in
-`Cargo.toml`, describe the functions you call in `rust/<crate>.wji`, and call them:
+`Cargo.toml` and call it:
 
 ```toml
 # wj.toml
 [dependencies]
 strsim = "0.11"
-```
-
-```windjammer
-// rust/strsim.wji: the part of the crate this project uses
-@pure
-pub fn levenshtein(a: string, b: string) -> usize
-@pure
-pub fn jaro(a: string, b: string) -> f64
 ```
 
 ```windjammer
@@ -346,11 +338,35 @@ fn main() {
 }
 ```
 
-The dependency line goes into the generated `Cargo.toml` unchanged; `wj check` checks every `strsim::` call
-against the surface (unknown function `WJ0050`, argument count `WJ0013`, literal types `WJ0003`); `string`
-parameters are passed as `&str`. `@pure` and `@uses(..)` state what a function does for the capability model;
-a crate function without them needs `ffi = ["strsim"]` under `[capabilities]`. Crate calls run compiled: `wj run`
-switches to the compiled path for them automatically. Design and roadmap: [ADR-0026](adr/0026-rust-crate-dependencies.md).
+`wj build` reads the crate's source (the version `Cargo.lock` locks) and generates its **signature surface**, the
+crate's functions in Windjammer types, into `.wj-cache/rust-surfaces/strsim/surface.wji`, with a one-line note.
+The cache is git-ignored and regenerated whenever the locked version changes, so nothing lands in your repository.
+`wj rust-surface strsim` does the same on demand and prints the surface; `wj check` points at that command when a
+crate has no surface yet (`W0014`).
+
+Every `strsim::` call is checked against the surface (unknown function `WJ0050`, argument count `WJ0013`, literal
+types `WJ0003`); `string` parameters are passed as `&str`. Functions whose Rust signature Windjammer cannot express
+yet (generic, trait-bound, returning a borrow, crate-defined types) are listed at the end of the surface as
+`// skipped <name>: <reason>`, and calling one says why.
+
+**Pinning and curating.** `wj rust-surface strsim --write` (optionally `--fn levenshtein --fn jaro`) writes an
+editable copy to `rust/strsim.wji`. That file is source: commit it, edit it, add hand-written declarations for
+skipped functions. A `rust/<crate>.wji` always takes precedence over the generated one, and if it carries the
+generator header `wj check` warns when `Cargo.lock` moves to another crate version (`W0015`).
+
+```windjammer
+// rust/strsim.wji: a pinned, curated surface
+@pure
+pub fn levenshtein(a: string, b: string) -> usize
+@pure
+pub fn jaro(a: string, b: string) -> f64
+```
+
+**Effects.** `@pure` and `@uses(..)` state what a function does for the capability model. Generated functions are
+`@pure` only for the small curated list of computation crates the generator ships; every other crate function needs
+`ffi = ["<crate>"]` under `[capabilities]` (effects are never guessed from names). Crate calls run compiled:
+`wj run` switches to the compiled path for them automatically. Design and roadmap:
+[ADR-0026](adr/0026-rust-crate-dependencies.md).
 
 ## Open design questions
 

@@ -13,6 +13,7 @@ mod front;
 pub mod locate;
 mod project;
 mod rust_calls;
+mod rust_surface_health;
 mod semantic;
 pub mod watch;
 
