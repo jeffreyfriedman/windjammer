@@ -1,5 +1,5 @@
-//! Check inputs that are not `.wj` sources, for the cache keys: the `.wj.meta` sidecars the numeric inference
-//! reads relative to the working directory (`<cwd>/<module>/<x>.wj.meta` and `<cwd>/.wj-cache/...`, see
+//! Check inputs that are not `.wj` sources, for the cache keys: the cached `.wj.meta` metadata the numeric inference
+//! reads relative to the working directory (`<cwd>/.wj-cache/<module>/<x>.wj.meta`, see
 //! `type_inference/float_inference/load_imported_metadata.rs`). Candidate paths come from top-level `use` paths,
 //! so they lie within `use_depth` directory levels of the working directory.
 
@@ -31,8 +31,9 @@ pub fn fingerprint(depth: usize) -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let mut files = Vec::new();
     let mut budget = WALK_BUDGET;
-    walk(&cwd, depth, &mut budget, &mut files)?;
+    // Only cache locations are read (colocated `.wj.meta` sidecars are ignored by the inference).
     walk(&cwd.join(".wj-cache"), depth + 1, &mut budget, &mut files)?;
+    walk(&crate::metadata::meta_cache_root(&cwd), depth + 1, &mut budget, &mut files)?;
     files.sort();
     files.dedup();
     let mut h = Sha256::new();

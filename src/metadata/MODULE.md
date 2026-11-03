@@ -1,7 +1,7 @@
 # src/metadata/
 
 ## Purpose
-Cross-file/cross-crate metadata (`.wj.meta`): serialized function signatures, struct fields and trait impls so later compilations can infer across module boundaries.
+Cross-file/cross-crate metadata (`.wj.meta`, cached under `.wj-cache/` or the global meta cache, never beside a source; see docs/metadata-data-model.md): serialized function signatures, struct fields and trait impls so later compilations can infer across module boundaries.
 
 ## Inputs/Outputs
 In: analyzed items. Out/In: JSON metadata files and loaders (`load_struct_field_types_from_file`, `meta_cache_path`).
@@ -9,6 +9,8 @@ In: analyzed items. Out/In: JSON metadata files and loaders (`load_struct_field_
 ## Invariants
 - Format changes must stay backward readable by `compiler`.
 - Loaders tolerate missing files.
+- A `.wj.meta` outside a cache location is a legacy sidecar: never read (only the embedded `stdlib_meta/` is trusted); `legacy_sidecars.rs` finds and removes them.
+- Nothing writes next to a source file (`tests/sidecar_hygiene_test.rs`).
 
 ## Owns
 Metadata schema, cache paths, signature filters.

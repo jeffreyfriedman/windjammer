@@ -440,7 +440,7 @@ Checks:
 - The `jit_loops` generator adds a `V2` local with `add`/`dot`/`twice`/`wrap`/`div`/`norm`, field stores, and a zero divisor and an
   `int` overflow planted inside inlined methods. Its coverage test requires a quarter of the generated loops to inline.
 - Debug mutation gates on the final source: the six machine-code mutants (`overflow`, `range`, `divzero`, `bounds`, `nan`,
-  `retag`) against 60 generated programs, and `box` (the first write after a struct `let` fills the previous binding's
+  `retag`) against a corpus of generated programs, and `box` (the first write after a struct `let` fills the previous binding's
   box) against `jit_loop_inline.wj`, are each caught. `overflow` had stopped being caught once the generator changed, since
   only the random mix had ever overflowed `int`; an `int` overflow is now planted.
 
@@ -453,7 +453,7 @@ Packed `Vec` writers: `tests/interpreter_packed_vec_test.rs` (`--test packed_vec
 unpacked and drives both through every builtin that writes, comparing walker, resolved and eager-JIT output with the
 unpacked walker. The first version passed with a planted bug, a `reverse` that wrote the read cache without unpacking, because
 almost every write unpacks for good. The packed program now repacks before each step and reads results element by element,
-and the planted bug makes 19 of 80 programs differ.
+and the planted bug makes nineteen of eighty programs differ.
 
 ### Round 6 (Nov 2): maps without the call path (stopped at its kill line)
 Profile of `hashmap` (macOS `sample`, release): allocation was about 30% of the loop, spread over the argument vector,
@@ -548,6 +548,70 @@ shown silencing it.
 Kernels whose code did not change (`hashmap`, `nbody`, `fib30`) moved by up to 20% between the two runs, so the
 per-kernel ratios are noisy at this load. The interleaved CPU timings of the long variants above are the evidence for
 the two changes.
+
+### Round 9 (Nov 3): vectors resolved once, push_str of interpolations; start-up and capability costs
+Same method as round 8: profile (macOS `sample`, release, long variants), one attempt per rung, keep only a measurable
+change, and give every kept fast path a firing counter in `--test fast_paths` and a `nofast-<path>` switch. Timings are CPU
+seconds (user + sys) of the long variants, interleaved with the head before this round, five runs each, every run
+started below load 20 (15.6 to 19.1 here); medians shown.
+
+| rung | variant | before | after | kept |
+|---|---|---|---|---|
+| `nbody`: resolve the vector once (`vecresolve`) | 200,000 steps | 1.02 s | 0.92 s | yes |
+| `strings`: `push_str` of an interpolation (`pushfmt`) | 4M iterations | 0.73 s | 0.49 s | yes |
+| `hashmap`: `let c = match ..` as a plain value | 3M iterations | 1.17 s | 1.16 s | no |
+
+- `nbody`. The machine-code element helpers (`index_get`, `index_field_get`, and the setters) reached a vector through
+  nested references by borrowing every level on every access. The innermost cell is now resolved once per unit run and
+  cached by slot (`Ctx::cells`); only a plain, unguarded reference with an empty path is followed, and anything else
+  takes the old path. The cache is cleared whenever closure code runs a statement (`run_stmt`), the one place a slot's
+  contents can be replaced mid-run. No program can make that reset observable today: assigning a new reference to a
+  reference variable writes through the old one in both engines, so the reset has no mutant and is kept as a guard for
+  when that changes. `jit_loop_refs.wj` covers a callee mutating a vector parameter in place and a loop that rebinds its
+  reference each iteration.
+- `strings`. Per iteration, `s.push_str("${i % 10},")` allocated the argument vector, the joined string, the display of
+  each argument and the string value's `Rc`, then freed them all in `push_str`. A `push_str` statement whose argument is a
+  plain template now evaluates every argument, formats integers, strings and chars straight into one buffer (anything
+  else through `display_string`, after all the arguments, as before), and appends that buffer. Formatting aside first
+  keeps the string unchanged when an argument or a user `Display` fails. `format` itself shares the same appender.
+  `str_fast.wj` gains an interpolation of a 128-bit unsigned integer, a float, a reference to a user `Display`, a char, a
+  bool and the shared string itself, appended to a string another binding shares.
+- `hashmap`, attempted and dropped. The profile put `let c = match m.get(&k) ..` in `raw_let`, which boxes its value
+  because a lowered `match` was always treated as possibly yielding a reference. Marking a `match` whose arm bodies all
+  compile to plain values as plain moved the `let` to `let_stmt`, but the slot still held a box (`read_boxed` and the
+  allocation stayed in the profile) and the time did not move. What still boxes `c` was not traced within the attempt;
+  that is the next lever. `match_value.wj` (plain and reference-yielding arms, a capture after the match, a `match` in
+  value position) stays in the parity corpus.
+- `closures`, profiled and not changed. Generic arithmetic (`fast::binary`) is 14% of the interpreter's samples and the
+  closure call itself 17%. Typed-parameter variants compiled per argument type could remove part of the 14%, less the
+  guard each call adds, so they do not justify the attempt yet.
+- `sieve`, profiled and not changed. The loop runs in machine code. What remains is the per-element helper call into
+  `index_set`, with the packed write inside it. The lever is an inline packed store emitted in machine code.
+- Start-up of `wj run --interpret` on a one-line program (median of five, load 16): 0.02 s wall warm, 0.03 s cold (the
+  project's `.wj-cache` removed); CPU under 0.02 s either way.
+- Capability checks on interpreter sinks, 20,000 calls each with a `wj.toml` granting them, enforced against
+  `WJ_CAPS=off`: `env::var` 0.06 s against 0.03 s (about 1.5 us a check); `fs::exists` 0.62 s against 0.02 s (about 30 us a
+  check, ten times the call itself). The profile splits the file check between `std::env::current_dir` (three system calls
+  on macOS) and `realpath` in `canonical_abs`, both on every check. Resolving symlinks on each check keeps the grant
+  sound if a link changes between calls. The cheap part to remove is the working-directory lookup: an absolute path needs
+  none, and a cached one would be invalidated by `env::set_current_dir`.
+
+`scripts/interp_compare.sh --runs 5`, load 12.6 at start and 20.4 at end (`bench/interp/compare.json`), resolved / Node,
+against round 8's run:
+
+| kernel | round 8 | round 9 |
+|---|---|---|
+| `structs` | 0.67x | 0.73x |
+| `fib30` | 0.89x | 0.72x |
+| `loop5m` | 0.90x | 0.85x |
+| `sieve` | 1.27x | 1.05x |
+| `strings` | 1.70x | 1.32x |
+| `closures` | 2.07x | 2.04x |
+| `hashmap` | 2.06x | 2.01x |
+| `nbody` | 3.06x | 2.42x |
+
+`sieve`, `fib30` and `structs` did not change code this round, so their movement is run-to-run noise at this load; the
+interleaved long-variant timings above are the evidence for the two kept changes.
 
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that

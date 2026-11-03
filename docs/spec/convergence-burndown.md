@@ -83,7 +83,7 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 
-The 321-program golden corpus did not contain `len() - 1` returned as `int`, an `int` loop variable compared with
+The golden corpus did not contain `len() - 1` returned as `int`, an `int` loop variable compared with
 `len()`, or a counter passed to a std `usize` formal and returned as `int` with a `-1` tail. The solver published a
 width for classes it could not decide. Rule added to `ir/numeric_facts.rs` (held classes): a class is not published
 when the solver recorded a type conflict in it, when a negated literal in it is unsigned, or when it contains a loop

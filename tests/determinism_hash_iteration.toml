@@ -8,7 +8,7 @@
 "src/analyzer/optimization_detectors/struct_mapping_detection.rs" = 1
 "src/analyzer/program_initialization.rs" = 2
 "src/analyzer/self_dispatch_for_loops.rs" = 1
-"src/analyzer/signature_registry.rs" = 26
+"src/analyzer/signature_registry.rs" = 25
 "src/analyzer/trait_analysis.rs" = 1
 "src/codegen/portable/env.rs" = 4
 "src/codegen/portable/flatten.rs" = 6
@@ -30,11 +30,10 @@
 "src/codegen/rust/statement_generation.rs" = 1
 "src/codegen/rust/stdlib_method_signatures.rs" = 2
 "src/codegen/rust/trait_derivation.rs" = 1
-"src/ir/constraint_gen.rs" = 1
 "src/ir/effects.rs" = 4
 "src/ir/explain/render.rs" = 1
 "src/ir/explain/report.rs" = 1
 "src/ir/node.rs" = 1
-"src/ir/pipeline.rs" = 5
+"src/ir/pipeline.rs" = 4
 "src/ir/shadow.rs" = 1
 "src/ir/solver.rs" = 1

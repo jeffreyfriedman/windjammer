@@ -1,0 +1,120 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "L",
+ "arm_name": "interpreted-first+sheet",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap = 0\n    let mut first = true\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let mut nk: Vec<int> = [k]\n            let mut nv: Vec<int> = [v]\n            let n: int = ks.len() as int\n            let mut i = 0\n            while i < n {\n                if ks[i as usize] != k {\n                    nk.push(ks[i as usize])\n                    nv.push(vs[i as usize])\n                }\n                i += 1\n            }\n            if nk.len() as int > cap {\n                println(\"evict ${nk[nk.len() - 1]}\")\n                nk.pop()\n                nv.pop()\n            }\n            ks = nk\n            vs = nv\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let n: int = ks.len() as int\n            let mut idx: int = -1\n            let mut i = 0\n            while i < n {\n                if ks[i as usize] == k { idx = i }\n                i += 1\n            }\n            if idx < 0 {\n                println(\"-1\")\n            } else {\n                let v = vs[idx as usize]\n                let mut nk: Vec<int> = [k]\n                let mut nv: Vec<int> = [v]\n                let mut j = 0\n                while j < n {\n                    if j != idx {\n                        nk.push(ks[j as usize])\n                        nv.push(vs[j as usize])\n                    }\n                    j += 1\n                }\n                ks = nk\n                vs = nv\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut i = 0\n                while i < ks.len() as int {\n                    if i > 0 { out = out + \" \" }\n                    out = out + \"${ks[i as usize]}\"\n                    i += 1\n                }\n                println(out)\n            }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut cap = 0\n    let mut first = true\n    let mut ks: Vec<int> = []\n    let mut vs: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 { continue }\n        if first {\n            cap = parts[0].parse::<int>().unwrap_or(1)\n            first = false\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"put\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let v = parts[2].parse::<int>().unwrap_or(0)\n            let mut nk: Vec<int> = [k]\n            let mut nv: Vec<int> = [v]\n            let n: int = ks.len() as int\n            let mut i = 0\n            while i < n {\n                if ks[i as usize] != k {\n                    nk.push(ks[i as usize])\n                    nv.push(vs[i as usize])\n                }\n                i += 1\n            }\n            if nk.len() as int > cap {\n                println(\"evict ${nk[nk.len() - 1]}\")\n                nk.pop()\n                nv.pop()\n            }\n            ks = nk\n            vs = nv\n        } else if cmd == \"get\" {\n            let k = parts[1].parse::<int>().unwrap_or(0)\n            let n: int = ks.len() as int\n            let mut idx: int = -1\n            let mut i = 0\n            while i < n {\n                if ks[i as usize] == k { idx = i }\n                i += 1\n            }\n            if idx < 0 {\n                println(\"-1\")\n            } else {\n                let v = vs[idx as usize]\n                let mut nk: Vec<int> = [k]\n                let mut nv: Vec<int> = [v]\n                let mut j = 0\n                while j < n {\n                    if j != idx {\n                        nk.push(ks[j as usize])\n                        nv.push(vs[j as usize])\n                    }\n                    j += 1\n                }\n                ks = nk\n                vs = nv\n                println(\"${v}\")\n            }\n        } else if cmd == \"keys\" {\n            if ks.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let mut out = \"\"\n                let mut i = 0\n                while i < ks.len() as int {\n                    if i > 0 { out = out + \" \" }\n                    out = out + \"${ks[i as usize]}\"\n                    i += 1\n                }\n                println(out)\n            }\n        }\n    }\n}\n",
+ "first_turn_input": 8208,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.071,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 50.6,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "original_final_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 0,
+  "status": "fail",
+  "total": 34
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "other_seconds": 8.46,
+ "pack_bytes": 1436,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-03T01:02:39",
+ "regraded": true,
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 9.462,
+ "tool_result_tokens_est": 55,
+ "tool_wait_seconds": 0.07,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7858,
+   "cache_write": 348,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8208,
+   "output": 3,
+   "result_chars": 191,
+   "turn": 1
+  },
+  {
+   "cache_read": 8206,
+   "cache_write": 1367,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9575,
+   "output": 189,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 9.462,
+  "cost_usd": 0.0223844,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache in `main.wj`. I ran only Example 1 under `wj run --interpret`, and it printed exactly the expected output. I didn't run Example 2, and I didn't run `wj check` or the compiled build.\n\nIt keeps keys in order from most to least recently used, with a parallel list of values. A `put` or a successful `get` rebuilds both lists with that key at the front. After a `put`, if there are ",
+  "subtype": "success",
+  "tokens_in": 17783,
+  "tokens_out": 1391,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 17.99
+}

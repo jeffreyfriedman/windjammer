@@ -11,6 +11,7 @@ use std::process
 use std::time::Instant
 use wj_cli_args::long_flag_value
 use wj_cli_args::long_flag_value_or
+use wj_json_doc::float_repr
 use wj_proc::capture
 use wj_proc::sh_in
 use wj_proc::quote
@@ -40,7 +41,7 @@ struct Result {
 // Python's repr of the (1, 5, 15) minute tuple
 fn load_tuple() -> string {
     let xs = load_avgs()
-    "(" + wj_json_doc::float_repr(xs[0]) + ", " + wj_json_doc::float_repr(xs[1]) + ", " + wj_json_doc::float_repr(xs[2]) + ")"
+    "(" + float_repr(xs[0]) + ", " + float_repr(xs[1]) + ", " + float_repr(xs[2]) + ")"
 }
 
 fn die(msg: string) {

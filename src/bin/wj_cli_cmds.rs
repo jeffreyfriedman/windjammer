@@ -46,6 +46,13 @@ fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&doctor::render_json(&report))?);
     } else {
         print!("{}", doctor::render_text(&report));
+        let legacy = windjammer::metadata::legacy_sidecars::find(&std::env::current_dir().unwrap_or_default());
+        if !legacy.is_empty() {
+            println!(
+                "note: {} legacy .wj.meta sidecar(s) next to sources are ignored and can be deleted: wj clean --sidecars",
+                legacy.len()
+            );
+        }
     }
     if !report.problems.is_empty() {
         std::process::exit(1);
@@ -392,8 +399,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
         Commands::Eject(a) => windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?,
-        Commands::Clean { all } => {
-            windjammer::cli::clean::execute(all)?;
+        Commands::Clean { all, sidecars } => {
+            windjammer::cli::clean::execute(all, sidecars)?;
         }
         Commands::Cache { action } => match action {
             CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,

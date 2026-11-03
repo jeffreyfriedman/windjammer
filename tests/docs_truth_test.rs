@@ -123,6 +123,12 @@ struct Scratch {
 }
 
 impl Scratch {
+    /// Add tables to the scratch repo's config (replacing it would drop the exclusions `new` installs).
+    fn append_config(&self, extra: &str) {
+        let cur = self.read("docs/docs-truth.toml");
+        self.write("docs/docs-truth.toml", &format!("{cur}\n{extra}"));
+    }
+
     fn new() -> Scratch {
         let s = Scratch { dir: tempfile::tempdir().unwrap() };
         s.write(
@@ -300,7 +306,7 @@ fn detects_dead_links_paths_and_ids() {
 #[test]
 fn rule_id_namespaces_are_pluggable() {
     let s = Scratch::new();
-    s.write("docs/docs-truth.toml", "[[rule_ids]]\nprefix = \"SPEC-\"\ndefs = \"docs/spec/**/*.md\"\n");
+    s.append_config("[[rule_ids]]\nprefix = \"SPEC-\"\ndefs = \"docs/spec/**/*.md\"\n");
     s.write("docs/a.md", "Per SPEC-OWN-01 the compiler decides.\n");
     assert_eq!(failures(&s.all()), 0, "inactive until defs exist");
     s.write("docs/spec/own.md", "## SPEC-OWN-01 Ownership\n");
@@ -322,7 +328,7 @@ fn detects_hand_typed_statistics_with_ratchet() {
     s.write("docs/a.md", "We pass 1,234 tests and 69 / 90 conformance programs.\n");
     let fs = s.all();
     assert!(has(&fs, "claims", "hand-typed statistic"));
-    s.write("docs/docs-truth.toml", "[baseline.claims]\n\"docs/a.md\" = 3\n");
+    s.append_config("[baseline.claims]\n\"docs/a.md\" = 3\n");
     assert_eq!(failures(&s.all()), 0, "baseline tolerates existing numbers");
     s.write("docs/a.md", "We pass 1,234 tests and 69 / 90 conformance programs and 55 keywords.\n");
     assert!(has(&s.all(), "claims", "baseline allows 3"), "a new hand-typed number must fail");

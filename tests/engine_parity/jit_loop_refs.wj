@@ -1,0 +1,41 @@
+// Element reads and writes in machine-code loops through vectors reached by reference: a parameter
+// the callee mutates in place, a reference bound afresh each iteration to one vector or another (a
+// statement the loop runs as closure code, after which the reference must be resolved again), and
+// both vectors read afterwards.
+struct P {
+    x: f64,
+    n: int,
+}
+
+fn bump(ps: Vec<P>, dx: f64) {
+    let mut i = 0
+    while i < ps.len() {
+        ps[i].x += dx
+        ps[i].n += 1
+        i += 1
+    }
+}
+
+fn main() {
+    let mut a: Vec<P> = Vec::new()
+    let mut b: Vec<P> = Vec::new()
+    let mut k = 0
+    while k < 4 {
+        a.push(P { x: k as f64, n: 0 })
+        b.push(P { x: 100.0, n: 0 })
+        k += 1
+    }
+    let mut s = 0
+    while s < 300 {
+        bump(a, 0.5)
+        s += 1
+    }
+    let mut j = 0
+    while j < 400 {
+        let r = if j < 200 { &mut a } else { &mut b }
+        r[j % 4].n += 1
+        r[(j + 1) % 4].x += 1.0
+        j += 1
+    }
+    println("${a[0].x} ${a[0].n} ${a[3].x} ${a[3].n} ${b[0].x} ${b[0].n} ${b[1].x} ${b[3].n}")
+}

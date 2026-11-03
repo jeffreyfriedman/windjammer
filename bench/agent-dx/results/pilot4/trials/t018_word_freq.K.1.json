@@ -1,0 +1,386 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "K",
+ "arm_name": "compiled-first+sheet",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:38:1\n   |\n38 |             b.1.cmp(a.1)\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:40:1\n   |\n40 |             a.0.cmp(b.0)",
+  "error[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0"
+ ],
+ "diagnostic_categories": {
+  "other": 2,
+  "syntax": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 3,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k: int = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        let mut cur = \"\"\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else {\n                if cur.len() > 0 {\n                    counts.entry(cur).and_modify(|x| *x += 1).or_insert(1)\n                    cur = \"\"\n                }\n            }\n        }\n        if cur.len() > 0 {\n            counts.entry(cur).and_modify(|x| *x += 1).or_insert(1)\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for (key, v) in counts {\n        items.push((key, v))\n    }\n    items.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)))\n    let mut i = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k: int = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        let mut cur = \"\"\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else {\n                if cur.len() > 0 {\n                    let n = counts.get(cur).unwrap_or(0)\n                    counts.insert(cur, n + 1)\n                    cur = \"\"\n                }\n            }\n        }\n        if cur.len() > 0 {\n            let n = counts.get(cur).unwrap_or(0)\n            counts.insert(cur, n + 1)\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for key in counts.keys() {\n        items.push((key, counts.get(key).unwrap_or(0)))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i: int = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_turn_input": 8060,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "categories": [
+    "other",
+    "syntax"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 2.782,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 2.993,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.007,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.043,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 7.161,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 1.986,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 1.986,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 16.708,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 2.28,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 9.355,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 4.344,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 8.9,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 40.9,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 20,
+ "other_seconds": 16.6,
+ "pack_bytes": 1436,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-03T01:02:12",
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 48.682,
+ "tool_result_tokens_est": 2150,
+ "tool_wait_seconds": 58.55,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7711,
+   "cache_write": 347,
+   "calls": [
+    "Write"
+   ],
+   "fresh": 2,
+   "input_total": 8060,
+   "output": 21,
+   "result_chars": 175,
+   "turn": 1
+  },
+  {
+   "cache_read": 8058,
+   "cache_write": 742,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8802,
+   "output": 16,
+   "result_chars": 1507,
+   "turn": 2
+  },
+  {
+   "cache_read": 8800,
+   "cache_write": 764,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9566,
+   "output": 3,
+   "result_chars": 727,
+   "turn": 3
+  },
+  {
+   "cache_read": 9564,
+   "cache_write": 579,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10145,
+   "output": 43,
+   "result_chars": 631,
+   "turn": 4
+  },
+  {
+   "cache_read": 10143,
+   "cache_write": 386,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10531,
+   "output": 8,
+   "result_chars": 1032,
+   "turn": 5
+  },
+  {
+   "cache_read": 10529,
+   "cache_write": 934,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11465,
+   "output": 3,
+   "result_chars": 130,
+   "turn": 6
+  },
+  {
+   "cache_read": 11463,
+   "cache_write": 382,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11847,
+   "output": 8,
+   "result_chars": 212,
+   "turn": 7
+  },
+  {
+   "cache_read": 11845,
+   "cache_write": 295,
+   "calls": [
+    "Read"
+   ],
+   "fresh": 2,
+   "input_total": 12142,
+   "output": 27,
+   "result_chars": 903,
+   "turn": 8
+  },
+  {
+   "cache_read": 12140,
+   "cache_write": 558,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12700,
+   "output": 7,
+   "result_chars": 842,
+   "turn": 9
+  },
+  {
+   "cache_read": 12698,
+   "cache_write": 1128,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13828,
+   "output": 37,
+   "result_chars": 26,
+   "turn": 10
+  },
+  {
+   "cache_read": 13826,
+   "cache_write": 153,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13981,
+   "output": 5,
+   "result_chars": 273,
+   "turn": 11
+  },
+  {
+   "cache_read": 13979,
+   "cache_write": 324,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14305,
+   "output": 2,
+   "result_chars": 72,
+   "turn": 12
+  },
+  {
+   "cache_read": 14303,
+   "cache_write": 310,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14615,
+   "output": 6,
+   "result_chars": 145,
+   "turn": 13
+  },
+  {
+   "cache_read": 14613,
+   "cache_write": 240,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14855,
+   "output": 16,
+   "result_chars": 95,
+   "turn": 14
+  },
+  {
+   "cache_read": 14853,
+   "cache_write": 137,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14992,
+   "output": 16,
+   "result_chars": 610,
+   "turn": 15
+  },
+  {
+   "cache_read": 14990,
+   "cache_write": 381,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 15373,
+   "output": 4,
+   "result_chars": 26,
+   "turn": 16
+  },
+  {
+   "cache_read": 15371,
+   "cache_write": 232,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 15605,
+   "output": 8,
+   "result_chars": 120,
+   "turn": 17
+  },
+  {
+   "cache_read": 15603,
+   "cache_write": 523,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 16128,
+   "output": 190,
+   "result_chars": 0,
+   "turn": 18
+  }
+ ],
+ "usage": {
+  "api_seconds": 48.682,
+  "cost_usd": 0.0975509,
+  "denied_commands": [
+   "cat > /tmp/p.txt <<'EOF'\nEOF\nwj docs sort_by_key"
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "`main.wj` now passes both examples when run with `wj run --compiled`, and `wj build main.wj` also succeeds. I haven't run any other inputs.\n\nThe odd output was a stale cached binary from an earlier build. It printed lines like `1: [5]` and went away after I edited `main.wj` and ran it again. If the grader hits the same stale cache, that could affect results.\n\nThe program reads K from the first lin",
+  "subtype": "success",
+  "tokens_in": 228940,
+  "tokens_out": 4177,
+  "turns": 21
+ },
+ "verify_calls": 10,
+ "verify_calls_to_green": 3,
+ "wall_seconds": 123.83
+}

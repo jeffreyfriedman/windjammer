@@ -28,6 +28,10 @@ const SNIPPETS: &[&str] = &[
     "fn h(v: Vec<int>) {\n    for i in v {\n        if i > 1 {\n            return\n        }\n    }\n}\n",
     "fn k() {\n    let r = foo.bar(1, 2).baz\n    let c = |a| a + 1\n}\n",
     "fn m(x: int) {\n    match x {\n        1 => 2,\n        _ => 3,\n    }\n}\n",
+    "fn r(s: string) -> string {\n    match s.find(\"x\") {\n        Some(q) => return s[0..q].to_string(),\n        None => return \"\",\n    }\n}\n",
+    "fn w(words: Vec<string>) {\n    let mut freq = HashMap::new()\n    for w in words {\n        freq.entry(w).and_modify(|c| *c += 1).or_insert(1)\n    }\n}\n",
+    "fn t() {\n    let h = move || {\n        let a = 1\n        a + 1\n    }\n    let g = |x| {\n        x * 2\n    }\n    'outer: for i in 0..3 {\n        'inner: while true {\n            break 'outer\n        }\n    }\n}\n",
+    "fn d(a: Option<int>) -> int {\n    let mut n = 0\n    match a {\n        Some(v) => n = v,\n        None => n = 1,\n    }\n    n\n}\n",
 ];
 
 #[test]
@@ -254,4 +258,49 @@ fn oracle_rejects_wrong_last_token() {
     let f = b.ident("f", Some(span_of("ab", 0)));
     let e = b.e(Expression::Call { function: f, arguments: vec![], location: None }, Some(span_of("ab", 0)));
     rejected("wrong-last-token", b.run(e, span_of("ab + cd", 0)));
+}
+
+// ---- desugared nodes: synthetic ones have no surface shape, real ones keep every check ----------------------
+
+/// Hides the parser's synthetic marks, as the oracle saw spans before desugared nodes were tracked.
+struct NoSyntheticMarks<'p>(&'p windjammer::parser_impl::Parser);
+impl SpanSource for NoSyntheticMarks<'_> {
+    fn expr(&self, e: &Expression) -> Option<NodeSpan> {
+        self.0.expr_span(e)
+    }
+    fn stmt(&self, s: &Statement) -> Option<NodeSpan> {
+        self.0.stmt_span(s)
+    }
+}
+
+fn parse_with_spans(src: &str) -> (windjammer::parser_impl::Parser, Program<'static>) {
+    let tokens = windjammer::lexer::Lexer::new(src).tokenize_with_locations();
+    let mut p = windjammer::parser_impl::Parser::new_with_source(tokens, "t.wj".into(), src.into());
+    p.enable_span_log();
+    let prog = p.parse().expect("parse");
+    (p, prog)
+}
+
+#[test]
+fn desugared_nil_coalesce_and_optional_chain_are_sound_and_the_skip_is_what_clears_them() {
+    for src in [
+        "fn f(a: Option<string>, n: Option<int>) -> string {\n    let s = a ?? make().to_string()\n    s\n}\n",
+        "fn g(a: Option<P>) {\n    let x = a?.name\n    let y = a?.len(1)\n}\n",
+    ] {
+        let (p, prog) = parse_with_spans(src);
+        let with_marks = check_program(src, &prog, &p);
+        assert!(with_marks.by_class.is_empty(), "{src}\n{}", classes(&with_marks).join("\n"));
+        let without = check_program(src, &prog, &NoSyntheticMarks(&p));
+        assert!(!without.by_class.is_empty(), "the synthetic marks must be what clears these shapes:\n{src}");
+    }
+}
+
+#[test]
+fn a_real_node_inside_a_synthetic_one_keeps_every_shape_check() {
+    // `make().to_string()` is the default of `??`: its own MethodCall must still end with `)`.
+    let src = "fn f(a: Option<string>) -> string {\n    a ?? make().to_string()\n}\n";
+    let (p, prog) = parse_with_spans(src);
+    let f = check_program(src, &prog, &p);
+    assert!(f.by_class.is_empty(), "{}", classes(&f).join("\n"));
+    assert!(f.nodes >= 5, "the default's call chain is visited ({} nodes)", f.nodes);
 }

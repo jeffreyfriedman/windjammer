@@ -1,0 +1,9 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut counts: HashMap<string, int> = HashMap::new()
+    let key = "a"
+    let n = counts.get(key).unwrap_or(0)
+    counts.insert(key, n + 1)
+    println("${counts.len()}")
+}

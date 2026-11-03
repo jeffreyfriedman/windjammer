@@ -225,3 +225,27 @@ before it replaces the current sheet; the size ratchet stays at 2 KB until then.
 Side finding fixed in this change: guide entries in `wj docs` were indexed by heading and first line only, so `wj docs stdin` found nothing and agents without the input tip
 spent 26 turns each searching. Guide sections now carry their 20 most frequent identifier words as search tags (`src/agent_index/docs_search.rs::section_keywords`; `wj docs stdin` now returns the section).
 A follow-up check of the no-input-tip arm with the fixed index (8 trials, `results/ablation-sc-docsfix/`, stopped by the permission-denial guard after agents probed with compound shell commands) did not remove the flailing: 19.9 turns and 24 docs calls per trial, 7 of 8 passing. Searching helps only when the agent asks for the right word, so the recipe stays in the sheet.
+
+## Pilot 4 (Nov 2026): is interpreted-first a competitive default?
+
+Compiler: `next/v0.50.0` e0ec926dc (diag hints R0-R3, usize class, resolved-engine fix, drift gate). Same 10 tasks, 3 trials per cell (30 per arm), 120 trials, $4.21, model sonnet.
+All arms get the same sheet minus its loop bullet (the loop comes from the prompt only). Machine load average 20-36 (mean 24-30), recorded per trial. Records: `bench/agent-dx/results/pilot4/`.
+
+| arm | loop | sheet | pass@1 | silent divergence | turns | tokens in | cost | wall s | tool-wait s |
+|---|---|---|---|---|---|---|---|---|---|
+| K (control) | compiled-first | 1.4 KB | 1.00 [1.00, 1.00] | 0.00 | 6.3 | 47.7k | $0.041 | 44.4 | 19.9 |
+| L | interpreted-first | 1.4 KB | 0.60 [0.33, 0.87] | 0.40 | 3.4 | 21.3k | $0.024 | 16.5 | 0.2 |
+| M | interpreted + one final build | 1.4 KB | 0.83 [0.63, 0.97] | 0.17 | 6.5 | 46.9k | $0.034 | 31.6 | 10.5 |
+| N | interpreted + one final build | v2, 0.67 KB | 0.97 [0.87, 1.00] | 0.00 | 7.3 | 48.8k | $0.042 | 34.7 | 12.0 |
+
+Paired differences versus K (task-clustered 95% CI): pass L -0.40 [-0.67, -0.17], M -0.17 [-0.37, 0.00], N -0.03 [-0.13, 0.00]; turns L -2.9 [-6.4, -0.3], M +0.2 [-2.9, 2.7], N +1.0 [-2.8, 4.2];
+wall seconds L -27.9 [-49.1, -11.7], M -12.7 [-32.7, 3.5], N -9.6 [-31.3, 5.5]. N versus M (same loop, v2 sheet versus sheet): pass +0.13 [-0.03, 0.33], silent divergence -0.17 [-0.37, -0.03].
+
+Decision against the rule (an interpreted arm within 5 points of compiled-first on pass and cheaper in turns and wall time):
+- **B / L, interpreted-first:** no. It is half the cost and a third of the wall time, and 40 points less correct: 40% of its programs run in the interpreter and are rejected by the compiled backend.
+- **C / M, interpreted plus final build, same sheet:** no. 17 points below the control with no turn saving; the one final build catches most divergences but the agent often cannot repair the failure within the loop.
+- **D / N, interpreted plus final build, v2 sheet:** within 5 points on pass (-0.03 [-0.13, 0.00]) with no divergence, wall time lower by a point estimate of 10 s that is not significant, turns and cost not lower. It does not meet the "cheaper" half of the rule, and the gain over M is a sheet effect that the data cannot separate from noise at this N.
+- **Recommendation:** do not make `wj run` interpret-by-default for agent sheets yet. Keep the compiled-first loop in the sheet; document interpreted-first as the fast inner loop for humans and for diagnosing, with a mandatory final `wj build`. Revisit when the divergence classes in `docs/drift/pilot4-findings.md` (collect element type, `let mut x = 0` width, `get(..).unwrap_or(..)` deref, `Box<dyn Trait>` parameters, `nth(r as usize)`) are fixed: they account for every remaining interpreted-green, compiled-red trial. Expected effect when they are gone: L approaches the 0.97-1.00 of N/K at half the wall time.
+- **v2 sheet:** not adopted. It matched the control in arm N but with the largest lint-leakage count (12 trials) because it drops the ownership bullet, and N-M is not significant.
+
+Harness finding: under load 25-35, 14/120 first compiled grades failed all vectors for programs that pass on a quiet re-run. The grader now retries a compiled failure once when the interpreter passes everything and records `first_compiled`; the pilot-4 records were corrected with `pilot-regrade` (every figure above is after correction). Earlier pilots used the same grader, so their compiled pass rates under load are lower bounds.
