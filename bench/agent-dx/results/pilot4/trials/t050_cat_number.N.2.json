@@ -20,7 +20,7 @@
  "docs_calls": 0,
  "final_build_calls": 2,
  "final_build_diag": [
-  "mismatched types\nerror[E0308]: mismatched types\n    --> main.rs:24:24\n     |\n  24 |             files.push(a);\n     |                   ---- ^ expected `String`, found `&String`\n     |                   |\n     |                   arguments to this method are incorrect\n     |\nnote: method defined here\n    --> /Users/"
+  "mismatched types\nerror[E0308]: mismatched types\n    --> main.rs:24:24\n     |\n  24 |             files.push(a);\n     |                   ---- ^ expected `String`, found `&String`\n     |                   |\n     |                   arguments to this method are incorrect\n     |\nnote: method defined here\n    --> <path>"
  ],
  "final_grade": {
   "categories": [
