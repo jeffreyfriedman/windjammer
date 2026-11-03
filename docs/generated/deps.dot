@@ -145,7 +145,7 @@ digraph deps {
   "cargo_toml" -> "config" [label="7"];
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="2"];
-  "check" -> "diagnostics" [label="20"];
+  "check" -> "diagnostics" [label="21"];
   "check" -> "fuzzy_matcher" [label="3"];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="15"];
@@ -153,7 +153,7 @@ digraph deps {
   "check" -> "linter" [label="1"];
   "check" -> "metadata" [label="1"];
   "check" -> "module_system" [label="3"];
-  "check" -> "package" [label="7"];
+  "check" -> "package" [label="9"];
   "check" -> "parser" [label="24"];
   "check" -> "resolve" [label="3"];
   "check" -> "source_map" [label="4"];
@@ -180,12 +180,13 @@ digraph deps {
   "cli" -> "ir" [label="6"];
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
-  "cli" -> "module_system" [label="6"];
-  "cli" -> "package" [label="5"];
+  "cli" -> "module_system" [label="8"];
+  "cli" -> "package" [label="9"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="6"];
   "cli" -> "test_runner" [label="1"];
+  "cli" -> "toolchain" [label="2"];
   "cli" -> "wjsl" [label="1"];
   "cli_commands" -> "build_utils" [label="1"];
   "cli_commands" -> "cargo_integration" [label="1"];
@@ -256,7 +257,7 @@ digraph deps {
   "compiler" -> "module_system" [label="2"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="94"];
+  "compiler" -> "parser" [label="96"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
