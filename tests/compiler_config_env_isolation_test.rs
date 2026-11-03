@@ -10,6 +10,8 @@ const ALLOWED: &[&str] = &[
     "src/cargo_cache/",
     "src/debug_env.rs",
     "src/test_runner/",
+    // the toolchain's single gateway to the process environment (pin and staleness switches)
+    "src/toolchain/env.rs",
     "src/error_statistics.rs",
     // Not compiler configuration: this is the interpreted *user program's* `std::env::var`
     // (stdlib semantics, same as fs/io there). It must read the real process environment.
