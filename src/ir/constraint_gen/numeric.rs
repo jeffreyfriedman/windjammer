@@ -13,6 +13,9 @@ pub struct Unmodelled {
     pub unknown_lengths: Vec<ConstraintVar>,
     /// A field read whose declared type the walk cannot see (another module's struct, a generic).
     pub unknown_fields: Vec<ConstraintVar>,
+    /// Locals bound to a borrow (`let r = &x`, `opt.unwrap_or(&d)`): they hold a reference, so no width is
+    /// published for the name (the class itself is still solved through the referent).
+    pub borrowed_bindings: Vec<String>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -445,4 +448,40 @@ mod tests {
         assert_eq!(fc.index_sources.len(), 1, "{:?}", fc.index_sources);
     }
 
+}
+
+/// `&x`, `&mut x`, or `opt.unwrap_or(&d)`: an initializer whose value is a reference.
+pub(super) fn is_borrow_initializer(e: &Expression<'_>) -> bool {
+    use crate::parser::ast::operators::UnaryOp;
+    match e {
+        Expression::Unary { op: UnaryOp::Ref | UnaryOp::MutRef, .. } => true,
+        Expression::MethodCall { method, arguments, .. } if method == "unwrap_or" => {
+            matches!(arguments.first(), Some((_, Expression::Unary { op: UnaryOp::Ref, .. })))
+        }
+        _ => false,
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// `Ok(x)` / `Err(x)` / `Some(x)` returned from a function with a declared `Result` / `Option`
+    /// return type: the local `x` has the declared payload type (`Ok(out)` under `-> Result<Vec<int>, _>`
+    /// types `out` as `Vec<int>`).
+    pub(super) fn type_wrapped_return_payload(&mut self, value: &Expression<'ast>) {
+        let Some(rt) = self.analyzed.decl.return_type.as_ref() else { return };
+        let Expression::Call { function, arguments, .. } = value else { return };
+        let (Expression::Identifier { name: ctor, .. }, [(_, Expression::Identifier { name, .. })]) = (&**function, arguments.as_slice()) else {
+            return;
+        };
+        let payload = match (parser_type_to_base_type(rt), ctor.as_str()) {
+            (BaseType::Result(t, _), "Ok") | (BaseType::Option(t), "Some") => *t,
+            (BaseType::Result(_, e), "Err") => *e,
+            _ => return,
+        };
+        if payload == BaseType::Inferred || matches!(payload, BaseType::TypeVar(_)) {
+            return;
+        }
+        let var = self.resolve_var(name);
+        self.cs.add_because(Constraint::TypeIs(var, payload.clone()), tagged("NUM-DECLARED"));
+        emit_numeric_class_constraint(&mut self.cs, var, &payload);
+    }
 }

@@ -270,6 +270,11 @@ Widths are decided by the numeric solver in principle (WP 8). Today four compone
 **Rule.** A declared type (`x: u8`, `-> i32`, a struct field type) is exact. It is never widened or narrowed.
 **Status.** Conforms.
 
+### NUM-FIELD-DECLARED
+**Rule.** A read of a struct field has the field's declared type, in any module, including fields of structs
+declared in another file of the project.
+**Status.** Conforms.
+
 ### NUM-LITERAL-SUFFIX
 **Rule.** A literal suffix (`5u8`, `1.5f32`) is exact.
 **Status.** Conforms.

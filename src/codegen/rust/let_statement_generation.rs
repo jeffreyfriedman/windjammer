@@ -819,7 +819,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // `.len()` while-counters already in `usize_variables` must not be
                 // demoted by `-> i32` return-width scan (cast at `return i` instead).
-                // `-> u32` still wins over usize for CLI/index loops.
+                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
                 let len_while_usize_counter =
                     var_name.is_some_and(|n| self.usize_variables.contains(n));
                 let u32_while_peer_counter = mutable
@@ -831,7 +831,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     || matches!(t, Type::Custom(ref w) if w == "u32")
                             })
                     });
-                let u32_return_scan_counter = mutable
+                let u32_return_scan_counter = mutable && solver_local_width.is_none() // a solver width owns the counter
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && (self.function_returns_u32_for_loop_scan()
                         || u32_while_peer_counter
@@ -871,7 +871,6 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if self.assignment_int_target_type.is_none() && self.solver_pins_int_literal_init_for(var_name, value) { self.stamp_solver_int_binding(var_name, value); }
                 // NUM-LOCAL-WIDTH (ADR-0028): a width the solver fixed for this local beats every paint above.
-                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
                 if self.assignment_int_target_type.is_none() && solver_local_width.is_none() && self.function_prefers_i32_coord_locals() {
                     // negative int literal inits stay WJ `int` (i64), even in i32 builders.
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
@@ -1096,6 +1095,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_float_target_type = prev_assign_float;
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                self.convert_usize_into_declared_int(&mut value_str, value, t);
                 let is_string_type = matches!(t, Type::String)
                     || matches!(t, Type::Custom(name) if name == "String" || name == "string");
 

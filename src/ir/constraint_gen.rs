@@ -129,7 +129,7 @@ struct AstConstraintWalker<'a, 'ast> {
     /// Names bound by `for v in a..b`.
     range_loop_vars: std::collections::HashSet<String>,
     /// How many times each name is bound by a pattern (shadowed names are not published as local facts).
-    bind_counts: HashMap<String, u32>,
+    bind_counts: std::collections::BTreeMap<String, u32>,
     /// Lexical scopes, innermost last: each `let`/`for`/pattern binding gets its own variable, so a
     /// name rebound in a later scope (`for j in ..` then `let mut j = ..`) is a different class.
     scopes: Vec<HashMap<String, ConstraintVar>>,
@@ -327,7 +327,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             element_stores: Vec::new(),
             local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
-            bind_counts: HashMap::new(),
+            bind_counts: std::collections::BTreeMap::new(),
             scopes: vec![HashMap::new()],
             binding_vars: Vec::new(),
             numeric_unmodelled: Default::default(),
@@ -648,6 +648,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Vec::new()
         };
+        if let Some(Statement::Expression { expr, .. }) = body.last().map(|s| &**s) {
+            self.type_wrapped_return_payload(expr);
+        }
         for val_var in tails {
             self.cs.add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
             self.cs.add_because(
@@ -706,6 +709,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     }
                 }
                 let bound_var = self.bind_pattern(pattern);
+                if let (Pattern::Identifier(n) | Pattern::MutBinding(n), None) = (pattern, type_) {
+                    if numeric::is_borrow_initializer(value) {
+                        self.numeric_unmodelled.borrowed_bindings.push(n.clone());
+                    }
+                }
                 self.cs.add_because(Constraint::TypeEquals(bound_var, val_var), tagged("TY-UNIFY"));
                 if matches!(pattern, Pattern::Identifier(_) | Pattern::MutBinding(_)) {
                     self.cs.add_because(
@@ -765,6 +773,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::Return { value, .. } => {
                 if let Some(val) = value {
                     let val_var = self.walk_expression(val);
+                    self.type_wrapped_return_payload(val);
                     self.cs
                         .add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
                     self.cs.add_because(

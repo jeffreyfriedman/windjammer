@@ -98,7 +98,9 @@ fn i32_return_while_len_counter_must_not_emit_usize() {
     let usize_style = combined.contains("let mut i: usize")
         || combined.contains("let mut best_idx: usize")
         || combined.contains(": usize = 0_usize")
-        || combined.contains(": usize = 1_usize");
+        || combined.contains(": usize = 1_usize")
+        // ADR-0028: the solver types an untyped counter that meets `len()` as usize.
+        || combined.contains("let mut i = 0_usize;");
     let i32_cast_style = combined.contains(" as usize") && combined.contains("while");
     assert!(
         usize_style || i32_cast_style,
