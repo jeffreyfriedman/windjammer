@@ -622,6 +622,30 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Generate the signature surface of a Rust crate dependency (ADR-0026) from its source
+    #[command(name = "rust-surface")]
+    RustSurface {
+        /// Crate name as in wj.toml `[dependencies]`
+        #[arg(value_name = "CRATE")]
+        crate_name: String,
+
+        /// Only these functions (repeatable); the cache copy always has every function
+        #[arg(long = "fn", value_name = "NAME", conflicts_with = "all_pub")]
+        functions: Vec<String>,
+
+        /// Every public free function that maps (the default)
+        #[arg(long)]
+        all_pub: bool,
+
+        /// Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one)
+        #[arg(long)]
+        write: bool,
+
+        /// Project directory (default: the current directory)
+        #[arg(long, value_name = "DIR")]
+        path: Option<PathBuf>,
+    },
+
     /// Explain an error code
     Explain {
         /// Error code to explain (e.g., WJ0001, E0425)

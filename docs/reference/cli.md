@@ -29,6 +29,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
 | `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
+| `wj rust-surface` | Generate the signature surface of a Rust crate dependency (ADR-0026) from its source |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -408,6 +409,22 @@ Usage: wj caps [OPTIONS] <ACTION> [PATH]
 | `<PATH>` | PATH |  | Project directory (default: the current directory) |
 | `--json` | JSON |  | Machine-readable JSON output (show) |
 
+## `wj rust-surface`
+
+Generate the signature surface of a Rust crate dependency (ADR-0026) from its source
+
+```text
+Usage: wj rust-surface [OPTIONS] <CRATE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CRATE_NAME>` | CRATE |  | Crate name as in wj.toml `[dependencies]` |
+| `--fn` | NAME |  | Only these functions (repeatable); the cache copy always has every function |
+| `--all-pub` | ALL_PUB |  | Every public free function that maps (the default) |
+| `--write` | WRITE |  | Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one) |
+| `--path` | DIR |  | Project directory (default: the current directory) |
+
 ## `wj explain`
 
 Explain an error code
@@ -484,6 +501,7 @@ Usage: wj clean [OPTIONS]
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `--all` | ALL |  | Also clean local target/ directories (deep clean) |
+| `--sidecars` | SIDECARS |  | Only remove legacy `*.wj.meta` sidecars next to sources under the current directory |
 
 ## `wj cache`
 
