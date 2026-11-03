@@ -596,6 +596,23 @@ started below load 20 (15.6 to 19.1 here); medians shown.
   sound if a link changes between calls. The cheap part to remove is the working-directory lookup: an absolute path needs
   none, and a cached one would be invalidated by `env::set_current_dir`.
 
+`scripts/interp_compare.sh --runs 5`, load 12.6 at start and 20.4 at end (`bench/interp/compare.json`), resolved / Node,
+against round 8's run:
+
+| kernel | round 8 | round 9 |
+|---|---|---|
+| `structs` | 0.67x | 0.73x |
+| `fib30` | 0.89x | 0.72x |
+| `loop5m` | 0.90x | 0.85x |
+| `sieve` | 1.27x | 1.05x |
+| `strings` | 1.70x | 1.32x |
+| `closures` | 2.07x | 2.04x |
+| `hashmap` | 2.06x | 2.01x |
+| `nbody` | 3.06x | 2.42x |
+
+`sieve`, `fib30` and `structs` did not change code this round, so their movement is run-to-run noise at this load; the
+interleaved long-variant timings above are the evidence for the two kept changes.
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to
