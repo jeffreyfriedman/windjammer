@@ -32,7 +32,6 @@ compiler_findings_batch3_test::copy_field_passed_as_call_argument_keeps_the_para
 # Drift findings (docs/drift/pilot4-findings.md): interpreted green, generated Rust rejected
 drift_repros_test::let_mut_zero_then_parse_typechecks
 drift_repros_test::map_get_unwrap_or_then_arithmetic_typechecks
-drift_repros_test::explicit_usize_cast_into_nth_is_kept
 
 # green4 triage (2026-11): failing before the C4 usize work (checked at 22d3fe8b2), still open.
 # Width, owner: numeric solver / convergence C4 (D-WIDTH-OWNERS; docs/spec/inference-divergences.md).
@@ -92,3 +91,4 @@ codegen::rust::string_utilities::tests::static_impl_borrowed_string_formal_liter
 ir::formal_predicates::tests::method_call_arg_index_accounts_for_self_layout
 ir::signature_bridge::tests::analyzer_borrowed_bare_string_formal_stays_owned_without_emission
 ir::signature_bridge::tests::free_fn_plain_string_borrows_at_call_site
+drift_repros_test::annotated_collect_of_split_into_vec_string_typechecks

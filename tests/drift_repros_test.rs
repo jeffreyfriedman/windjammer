@@ -87,3 +87,9 @@ fn mismatch_between_integer_widths_names_both_widths() {
 fn bare_unit_variant_pattern_in_nested_match_typechecks() {
     generated_rust_typechecks("bare_unit_pattern_nested.wj");
 }
+
+/// `let words: Vec<string> = line.split(" ").collect()` must not be emitted as `collect::<Vec<_>>()` (Vec<&str>).
+#[test]
+fn annotated_collect_of_split_into_vec_string_typechecks() {
+    generated_rust_typechecks("collect_annotated_let_split.wj");
+}

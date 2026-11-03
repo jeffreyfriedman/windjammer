@@ -228,7 +228,7 @@ fn main() {
             Ok(r) => strings.trim(r.stdout),
             Err(_) => "x",
         }
-        lock = "/tmp/wj-drift-corpus-${tag}.lock"
+        lock = env::var("DRIFT_LOCK").unwrap_or("/tmp/wj-drift-corpus-${tag}.lock")
         let got = sh("if mkdir ${quote(lock)} 2>/dev/null; then echo $PPID > ${quote(lock)}/pid; echo ok; else p=$(cat ${quote(lock)}/pid 2>/dev/null); if [ -n \"$p\" ] && kill -0 \"$p\" 2>/dev/null; then echo busy $p; else rm -rf ${quote(lock)}; mkdir ${quote(lock)} && echo $PPID > ${quote(lock)}/pid && echo ok; fi; fi")
         let verdict = match got {
             Ok(r) => strings.trim(r.stdout),
