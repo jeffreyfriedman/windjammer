@@ -143,7 +143,7 @@ Runs twice in `library_multipass::build_library_multipass` (before IR lowering a
 
 | Pass | What it decides | Guarded by |
 |---|---|---|
-| `promote_callees_from_bare_pass_callers` | a callee whose sibling-module callers pass bare bindings is demoted to `&` / `&mut` | 18 unit tests in the file, `tests/*cross_crate*`, `tests/*multipass*` |
+| `promote_callees_from_bare_pass_callers` | a callee whose sibling-module callers pass bare bindings is demoted to `&` / `&mut` | the unit tests in the file, `tests/*cross_crate*`, `tests/*multipass*` |
 | `restore_owned_field_forward_formals` | undo the demotion when the formal only forwards its fields into callees (moves need ownership) | unit tests; `http_adapter_owned_reply` style fixtures |
 | `restore_owned_string_formals_stored_in_payload` | undo when a `string` formal is stored in a constructed payload | unit tests |
 | `restore_owned_returned_formals` | undo when the whole binding is returned (`col_string(row, name) -> (Row, string)`) | unit tests |
@@ -159,7 +159,7 @@ disappear together when ownership is solved per SCC over the whole crate.
 
 | Ratchet | Before | After |
 |---|---|---|
-| identity corpus, compiled programs matching the oracle | 2 / 8 | 8 / 8 |
+| identity corpus, compiled programs matching the oracle | two of eight | all eight |
 | `get_signature_calls` (outside the registry) | 434 | 430 |
 | `get_signature_calls_by_file` (sum) | 463 | 459 |
 | `signature_fallback_calls` (sum) | 125 | 123 |
@@ -199,8 +199,8 @@ hand-computed expectation and the interpreter. Failures are ratcheted in `tests/
 Method, per pass: disable it, then compare four things:
 - the project gate;
 - the golden corpus;
-- the 465 multi-file tests of the `all` binary (names matching `multipass|cross_crate|cross_module|cross_file|bare_pass|returned|library|dogfood`);
-- the 18 unit tests of the module.
+- the multi-file tests of the `all` binary (names matching `multipass|cross_crate|cross_module|cross_file|bare_pass|returned|library|dogfood`);
+- the unit tests of the module.
 
 | Pass | With it disabled | Decision |
 |---|---|---|

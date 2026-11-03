@@ -25,6 +25,7 @@ mod new_templates;
 pub mod reduce;
 pub mod remove;
 pub mod run;
+pub mod rust_surface;
 pub mod run_dev;
 pub mod self_install;
 pub mod test;

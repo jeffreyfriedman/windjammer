@@ -11,6 +11,7 @@ use std::fs
 use std::regex
 use std::strings
 use wj_cli_args::long_flag_value_or
+use wj_table::pad_right
 
 const OUT_DIR: string = "tests/check_negative/mutants"
 const VERIFIED_DIR: string = "examples/verified"
@@ -530,7 +531,7 @@ fn main() {
             i = i + 1
         }
         total = total + n
-        println("${wj_table::pad_right(op, 28)} ${n}")
+        println("${pad_right(op, 28)} ${n}")
     }
     println("total ${total}")
 }
