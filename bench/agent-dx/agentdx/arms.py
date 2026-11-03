@@ -63,6 +63,11 @@ ARMS = {
     "Sd": {"name": "sheet-minus-len", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_len.md", "bash": "core+docs", "lang": "wj"},
     "Se": {"name": "sheet-minus-printing", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_printing.md", "bash": "core+docs", "lang": "wj"},
     "Sf": {"name": "sheet-minus-tools", "loop": "compiled-first", "pack_file": "ablation/sheet_minus_tools.md", "bash": "core", "lang": "wj"},
+    # pilot 4: loop mode with one sheet (loop instruction only in the prompt); N = same loop as M with the v2 sheet
+    "K": {"name": "compiled-first+sheet", "loop": "compiled-first", "pack_file": "pilot4/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
+    "L": {"name": "interpreted-first+sheet", "loop": "interpreted-first", "pack_file": "pilot4/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
+    "M": {"name": "interpreted+final-build+sheet", "loop": "interpreted-plus-build", "pack_file": "pilot4/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
+    "N": {"name": "interpreted+final-build+v2", "loop": "interpreted-plus-build", "pack_file": "pilot4/sheet_v2.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
     "R": {"name": "rust", "loop": "native-rust", "pack": False, "lang": "rust"},

@@ -41,3 +41,41 @@ def write_all():
     for name, text in render().items():
         with open(os.path.join(OUT_DIR, name), "w") as f:
             f.write(text)
+
+
+# ---- pilot 4: loop-mode comparison with one sheet. The loop instruction comes from the prompt only, so the sheet's own loop
+# bullet is removed from every arm; D additionally uses the v2 sheet (types, basics, input recipe, len cast).
+P4_DIR = os.path.join(PACKS_DIR, "pilot4")
+V2_KEEP = ("- Types:", "- No semicolons", "- Input:", "- `len()` is `usize`")
+
+
+def _bullets(text):
+    head, bullets, tail, seen_bullet = [], [], [], False
+    for ln in text.split("\n"):
+        if ln.startswith("- "):
+            bullets.append(ln); seen_bullet = True
+        elif not seen_bullet:
+            head.append(ln)
+        else:
+            tail.append(ln)
+    return head, bullets, tail
+
+
+def p4_render():
+    sheet = open(PACK_PATH).read()
+    head, bullets, tail = _bullets(sheet)
+    noloop = [b for b in bullets if not b.startswith("- `wj check FILE`")]
+    if len(noloop) != len(bullets) - 1:
+        raise ValueError("loop bullet not found exactly once")
+    v2 = [b for b in noloop if b.startswith(V2_KEEP)]
+    if len(v2) != len(V2_KEEP):
+        raise ValueError("v2 bullet groups missing")
+    return {"sheet_noloop.md": "\n".join(head + noloop + tail),
+            "sheet_v2.md": "\n".join(head + v2 + [""])}
+
+
+def p4_write():
+    os.makedirs(P4_DIR, exist_ok=True)
+    for name, text in p4_render().items():
+        with open(os.path.join(P4_DIR, name), "w") as f:
+            f.write(text)
