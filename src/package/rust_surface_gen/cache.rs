@@ -19,14 +19,14 @@ pub fn surface_path(manifest_dir: &Path, crate_name: &str) -> PathBuf {
 }
 
 /// The source of `crate_name` for the project at `manifest_dir`: the locked version (lock files of
-/// [`locate::lock_files`], `out_dir`'s first), else the newest local version `wj.toml` accepts. With
+/// [`locate::lock_files`], `out_dir`'s first), else the newest version `wj.toml` accepts in `vendor/` or the registry under `cargo_home`. With
 /// `download`, Cargo is asked when nothing is local.
-pub fn source_for(manifest_dir: &Path, crate_name: &str, out_dir: Option<&Path>, download: bool) -> Result<CrateSource, String> {
+pub fn source_for(manifest_dir: &Path, crate_name: &str, out_dir: Option<&Path>, cargo_home: Option<&Path>, download: bool) -> Result<CrateSource, String> {
     let entry = locate::dep_entry(manifest_dir, crate_name)
         .ok_or_else(|| format!("`{crate_name}` is not a [dependencies] entry of {}", manifest_dir.join("wj.toml").display()))?;
     let locks = locate::lock_files(manifest_dir, out_dir);
     let locked = locate::locked_version(&locks, &entry.package, entry.req.as_deref());
-    let dir = match locate::find_local(manifest_dir, &entry, locked.as_deref()) {
+    let dir = match locate::find_local(manifest_dir, &entry, locked.as_deref(), cargo_home) {
         Some(d) => d,
         None if download => locate::resolve_with_cargo(&manifest_dir.join(".wj-cache").join(CACHE_SUBDIR).join(".resolve"), &entry)?,
         None => {
@@ -59,14 +59,14 @@ pub fn write_if_changed(path: &Path, text: &str) -> Result<(), String> {
 /// Fresh means generated for the version that would be used, by this generator and pure list. Returns one
 /// line per crate generated or not generatable (nothing when everything was already fresh). Never downloads:
 /// a crate whose source is not local is reported with the command that fetches it.
-pub fn ensure(manifest_dir: &Path, out_dir: Option<&Path>) -> Vec<String> {
+pub fn ensure(manifest_dir: &Path, out_dir: Option<&Path>, cargo_home: Option<&Path>) -> Vec<String> {
     let crates = crate::package::rust_surface::load(manifest_dir);
     let mut notes = Vec::new();
     for name in &crates.names {
         if crate::package::rust_surface::surface_path(manifest_dir, name).is_file() {
             continue;
         }
-        let src = match source_for(manifest_dir, name, out_dir, false) {
+        let src = match source_for(manifest_dir, name, out_dir, cargo_home, false) {
             Ok(s) => s,
             Err(why) => {
                 if !surface_path(manifest_dir, name).is_file() {
