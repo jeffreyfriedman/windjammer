@@ -14,7 +14,7 @@ pub fn execute(path: &Path, crate_name: &str, only: &[String], write: bool) -> R
         bail!("no wj.toml found at or above {}", start.display());
     };
     let key = crate_name.replace('-', "_");
-    let src = cache::source_for(&root, &key, None, true).map_err(anyhow::Error::msg)?;
+    let src = cache::source_for(&root, &key, None, crate::toolchain::install::cargo_home().as_deref(), true).map_err(anyhow::Error::msg)?;
     let (g, cache_path) = cache::regenerate(&root, &src).map_err(anyhow::Error::msg)?;
     for name in only {
         if g.fns.iter().any(|f| f.name == *name) {

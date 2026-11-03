@@ -22,6 +22,7 @@ Windjammer (.wj) is a Rust-family language with inferred ownership. It is not in
 - JSON: `use std::json`; any struct converts: `json.to_string(v)`, `json.parse_string::<T>(text)` (no derive).
 - Printing `Option`/`Result`/`Vec` needs `${x:?}`. Sort `HashMap` keys before printing.
 - `wj check FILE`, `wj build FILE`, `wj run --compiled FILE` (input on stdin). `wj run --interpret` is instant but can accept code `wj build` rejects: finish with a build.
+- Rust crates: add `strsim = "0.11"` under `[dependencies]` in `wj.toml`, call `strsim::levenshtein(a, b)`; `wj rust-surface strsim` lists what is callable.
 - Unsure? `wj docs <terms>` searches the full reference, stdlib and verified examples; `wj explain <CODE>` explains an error code.
 
 ```windjammer
@@ -483,6 +484,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
 | `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
+| `wj rust-surface` | Generate the signature surface of a Rust crate dependency (ADR-0026) from its source |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -493,7 +495,11 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj cache path` | Print the shared (or --verify) Cargo target directory |
 | `wj cache status` | Show cache sizes and free disk |
 | `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) |
+| `wj cache warm` | Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm) |
 | `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations |
+| `wj version` | Show this wj's identity: version, commit, commit date, dirty flag, build profile, build date |
+| `wj doctor` | Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems) |
+| `wj install-dev` | Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup |
 | `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH |
 
 ### `wj new`
@@ -858,6 +864,22 @@ Usage: wj caps [OPTIONS] <ACTION> [PATH]
 | `<PATH>` | PATH |  | Project directory (default: the current directory) |
 | `--json` | JSON |  | Machine-readable JSON output (show) |
 
+### `wj rust-surface`
+
+Generate the signature surface of a Rust crate dependency (ADR-0026) from its source
+
+```text
+Usage: wj rust-surface [OPTIONS] <CRATE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CRATE_NAME>` | CRATE |  | Crate name as in wj.toml `[dependencies]` |
+| `--fn` | NAME |  | Only these functions (repeatable); the cache copy always has every function |
+| `--all-pub` | ALL_PUB |  | Every public free function that maps (the default) |
+| `--write` | WRITE |  | Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one) |
+| `--path` | DIR |  | Project directory (default: the current directory) |
+
 ### `wj explain`
 
 Explain an error code
@@ -975,6 +997,14 @@ Usage: wj cache prune [OPTIONS]
 |---|---|---|---|
 | `--aggressive` | AGGRESSIVE |  | Also clear debug incremental trees when reclaiming |
 
+### `wj cache warm`
+
+Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm)
+
+```text
+Usage: wj cache warm
+```
+
 ### `wj cache setup`
 
 Write env.sh / env.ps1 for bare `cargo` invocations
@@ -982,6 +1012,46 @@ Write env.sh / env.ps1 for bare `cargo` invocations
 ```text
 Usage: wj cache setup
 ```
+
+### `wj version`
+
+Show this wj's identity: version, commit, commit date, dirty flag, build profile, build date
+
+```text
+Usage: wj version [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--json` | JSON |  | Machine-readable output |
+
+### `wj doctor`
+
+Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems)
+
+```text
+Usage: wj doctor [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--json` | JSON |  | Machine-readable output |
+| `--expect-head` | EXPECT_HEAD |  | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) |
+
+### `wj install-dev`
+
+Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup
+
+```text
+Usage: wj install-dev [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--to` | PATH |  | Destination (default: $CARGO_HOME/bin/wj, else ~/.cargo/bin/wj) |
+| `--from` | PATH |  | Binary to install (default: the running wj) |
+| `--force` | FORCE |  | Install even if it is older than what is installed |
+| `--dry-run` | DRY_RUN |  | Print what would happen without writing anything |
 
 ### `wj self-install`
 

@@ -80,10 +80,9 @@ pub fn locked_version(locks: &[PathBuf], package: &str, req: Option<&str>) -> Op
     None
 }
 
-/// Unpacked registry sources (`$CARGO_HOME/registry/src/*`), sorted.
-fn registry_roots() -> Vec<PathBuf> {
-    let home = std::env::var_os("CARGO_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cargo")));
-    let Some(src) = home.map(|h| h.join("registry").join("src")) else { return Vec::new() };
+/// Unpacked registry sources (`<cargo home>/registry/src/*`), sorted. The driver passes Cargo's home in.
+fn registry_roots(cargo_home: Option<&Path>) -> Vec<PathBuf> {
+    let Some(src) = cargo_home.map(|h| h.join("registry").join("src")) else { return Vec::new() };
     let mut v: Vec<PathBuf> = std::fs::read_dir(src).map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default();
     v.sort();
     v
@@ -91,7 +90,7 @@ fn registry_roots() -> Vec<PathBuf> {
 
 /// Find the source of `entry` locally: a `path` dependency, `vendor/<package>`, or the registry. `exact` pins
 /// the version (from a lock file); otherwise the newest version the requirement accepts.
-pub fn find_local(manifest_dir: &Path, entry: &DepEntry, exact: Option<&str>) -> Option<PathBuf> {
+pub fn find_local(manifest_dir: &Path, entry: &DepEntry, exact: Option<&str>, cargo_home: Option<&Path>) -> Option<PathBuf> {
     if let Some(p) = &entry.path {
         return p.join("Cargo.toml").is_file().then(|| p.clone());
     }
@@ -108,7 +107,7 @@ pub fn find_local(manifest_dir: &Path, entry: &DepEntry, exact: Option<&str>) ->
     }
     let prefix = format!("{}-", entry.package);
     let mut best: Option<(semver::Version, PathBuf)> = None;
-    for root in registry_roots() {
+    for root in registry_roots(cargo_home) {
         let Ok(rd) = std::fs::read_dir(&root) else { continue };
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().to_string();

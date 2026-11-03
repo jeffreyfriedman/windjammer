@@ -10,13 +10,16 @@ use std::path::{Path, PathBuf};
 pub const KEEP_BACKUPS: usize = 5;
 
 pub fn default_dest() -> Result<PathBuf, String> {
+    Ok(cargo_home().ok_or("cannot determine the home directory")?.join("bin").join("wj"))
+}
+
+/// Cargo's home: `$CARGO_HOME`, else `~/.cargo` (also where `wj rust-surface` finds unpacked crate sources).
+pub fn cargo_home() -> Option<PathBuf> {
     if let Some(h) = super::env::get("CARGO_HOME").filter(|h| !h.is_empty()) {
-        return Ok(PathBuf::from(h).join("bin").join("wj"));
+        return Some(PathBuf::from(h));
     }
-    let home = super::env::get("HOME")
-        .or_else(|| super::env::get("USERPROFILE"))
-        .ok_or("cannot determine the home directory")?;
-    Ok(PathBuf::from(home).join(".cargo").join("bin").join("wj"))
+    let home = super::env::get("HOME").or_else(|| super::env::get("USERPROFILE"))?;
+    Some(PathBuf::from(home).join(".cargo"))
 }
 
 #[derive(Debug)]

@@ -80,7 +80,7 @@ pub fn execute(
     }
     // ADR-0026: Rust crates without a hand-written surface get a generated one in .wj-cache (one note line each)
     if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
-        for note in crate::package::rust_surface_gen::cache::ensure(&root, Some(output_dir)) {
+        for note in crate::package::rust_surface_gen::cache::ensure(&root, Some(output_dir), crate::toolchain::install::cargo_home().as_deref()) {
             if !quiet {
                 eprintln!("note: {note}");
             }
