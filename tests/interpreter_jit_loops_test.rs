@@ -341,7 +341,8 @@ fn every_machine_code_check_is_load_bearing() {
 /// in-place `match m.get(&k)` lookup (`mapget`) and `m.insert(k, x)` into a shared map (`mapins`), the rebinding of a
 /// reference variable by `r = &mut x` (`refwrite`: written through instead), and the machine-code loop's fresh
 /// resolution of a vector after closure code rebinds the reference to it (`vecstale`), and its in-place stores into
-/// a packed vector (`viewidx`: every element written at index 0).
+/// a packed vector (`viewidx`: every element written at index 0), and the compiled code's by-value passing of a parameter
+/// that is only reassigned (`paramassign`: always `&mut`).
 #[test]
 #[cfg(debug_assertions)]
 fn every_corpus_check_is_load_bearing() {
@@ -353,6 +354,7 @@ fn every_corpus_check_is_load_bearing() {
         ("refwrite", "vp_ref_rebind.wj"),
         ("vecstale", "vp_ref_rebind.wj"),
         ("viewidx", "packed_vecs.wj"),
+        ("paramassign", "vp_param_reassign.wj"),
     ] {
         let p = root.join(file);
         let base = run(&p, "walker", &[], &[]);

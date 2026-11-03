@@ -222,6 +222,10 @@ pub struct Interpreter {
     pub(crate) env_snapshot: Vec<(String, String)>,
     pub(crate) closure_counter: usize,
     pub(crate) mutating_analysis: HashSet<usize>,
+    /// Each module's parsed file, for the compiler's facts about it (`compiled_facts.rs`).
+    pub(crate) programs: HashMap<usize, &'static crate::parser::Program<'static>>,
+    /// The compiler's `&mut` parameters per module, computed on first use (`None`: analysis failed).
+    pub(crate) compiled_facts: HashMap<usize, Option<Rc<super::compiled_facts::MutRefParams>>>,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
     pub(crate) type_hint: Option<Type>,
     /// Expected type of one specific call expression (address, type); see `generics.rs`.
@@ -314,6 +318,8 @@ impl Interpreter {
             env_snapshot: Vec::new(),
             closure_counter: 0,
             mutating_analysis: HashSet::new(),
+            programs: HashMap::new(),
+            compiled_facts: HashMap::new(),
             type_hint: None,
             retained: Vec::new(),
             expected: None,

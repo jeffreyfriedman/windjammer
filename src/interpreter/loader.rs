@@ -168,6 +168,7 @@ impl Interpreter {
         let prog = self.retain_program(program);
         let id = self.new_module(name, file, Some(from));
         self.modules[from].children.insert(name.to_string(), id);
+        self.programs.insert(id, prog);
         self.register_items(id, &prog.items)?;
         Ok(Some(id))
     }
