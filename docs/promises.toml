@@ -792,3 +792,47 @@ statement = "Resource limits of a run: fuel, wall, output, calls, mem; exceeding
 [[promise]]
 id = "wj run --result-json"
 statement = "Write the exit status, effects used and resources used of a run to a JSON file"
+
+[[promise]]
+id = "wj cache warm"
+statement = "Build a tiny program once so the shared runtime cache is warm"
+
+[[promise]]
+id = "wj doctor"
+statement = "Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems)"
+
+[[promise]]
+id = "wj doctor --expect-head"
+statement = "Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate)"
+
+[[promise]]
+id = "wj doctor --json"
+statement = "Machine-readable output"
+
+[[promise]]
+id = "wj install-dev"
+statement = "Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup"
+
+[[promise]]
+id = "wj install-dev --dry-run"
+statement = "Print what would happen without writing anything"
+
+[[promise]]
+id = "wj install-dev --force"
+statement = "Install even if it is older than what is installed"
+
+[[promise]]
+id = "wj install-dev --from"
+statement = "Binary to install (default: the running wj)"
+
+[[promise]]
+id = "wj install-dev --to"
+statement = "Destination (default: $CARGO_HOME/bin/wj, else ~/.cargo/bin/wj)"
+
+[[promise]]
+id = "wj version"
+statement = "Show this wj's identity: version, commit, commit date, dirty flag, build profile, build date"
+
+[[promise]]
+id = "wj version --json"
+statement = "Machine-readable output"
