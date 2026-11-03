@@ -1,0 +1,11 @@
+// `let words: Vec<string> = line.split(" ").collect()`: the compiled backend emits `collect::<Vec<_>>()` into a
+// `Vec<String>` binding (rustc: expected Vec<String>, found Vec<&str>). Regressed by the collect-turbofish fix
+// (wj-chat, wj-find, wj-taskflow, wj-gitignore went red with it).
+fn count(line: string) -> int {
+    let words: Vec<string> = line.split(" ").collect()
+    words.len() as int
+}
+
+fn main() {
+    println("${count("a b c")}")
+}

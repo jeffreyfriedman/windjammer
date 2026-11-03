@@ -62,6 +62,21 @@ fn passed_count(text: string) -> int {
     n
 }
 
+// " (ran 42.3s)" from cargo's "finished in 42.3s": the seconds column also counts waiting for a build slot and
+// the build-directory lock, so a long step with a short run time was queueing, not slow
+fn ran_text(text: string) -> string {
+    for line in strings.split_lines(text) {
+        match line.find("finished in ") {
+            Some(i) => {
+                let rest = line[i + 12..].to_string()
+                return " (ran ${strings.trim(rest)})"
+            },
+            None => {},
+        }
+    }
+    ""
+}
+
 fn tail_lines(text: string, n: int) -> string {
     let lines = strings.split_lines(text)
     let mut start = 0
@@ -86,7 +101,7 @@ fn cargo_step(name: string, filter: string) -> Step {
             // a gate that ran zero tests proves nothing
             let ok = r.status == 0 && n > 0
             let detail = if ok { "" } else { tail_lines(r.stdout, 25) }
-            Step { name: name, cases: if n >= 0 { "${n}" } else { "?" }, verdict: if ok { "pass" } else if r.status == 0 { "FAIL (0 tests ran)" } else { "FAIL" }, secs: now() - t0, detail: detail }
+            Step { name: name, cases: if n >= 0 { "${n}${ran_text(r.stdout)}" } else { "?" }, verdict: if ok { "pass" } else if r.status == 0 { "FAIL (0 tests ran)" } else { "FAIL" }, secs: now() - t0, detail: detail }
         },
         Err(e) => Step { name: name, cases: "?", verdict: "FAIL", secs: now() - t0, detail: e },
     }

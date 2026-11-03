@@ -73,3 +73,13 @@ callee's declared type. The 263 ledger lines are deleted, the compiled baseline 
 
 None at `next/v0.50.0`: walker and resolved engine agree on every case of the corpus. Mutation check
 (`docs/drift/generator-audit.md`): with the bare-`None` fix removed, the corpus reports the divergence.
+
+## F. Regression from the collect fixes (found by the live record on 1dbf700b3)
+
+`wj-chat`, `wj-find`, `wj-taskflow` and `wj-gitignore` (and so 74 ecosystem test cases) fail to compile since the
+`collect::<Vec<string>>()` fix landed: `let words: Vec<string> = line.split(" ").collect()` is emitted as
+`collect::<Vec<_>>()` into a `Vec<String>` binding (rustc: expected `Vec<String>`, found `Vec<&str>`).
+Repro: `collect_annotated_let_split` (test `annotated_collect_of_split_into_vec_string_typechecks`). The interpreter is right.
+
+Also on this head: `nth_cast` is fixed (its ledger line is gone, the test passes); `vp_loop_exits` had lost its
+`.clone()` workaround (a lint cleanup elsewhere) and hit `nested_vec_index_by_value`, so it now indexes `grid[r][c]` directly.
