@@ -4479,6 +4479,7 @@ dependencies = [
  "rayon",
  "regex",
  "salsa",
+ "semver",
  "serde",
  "serde_json",
  "serde_path_to_error",

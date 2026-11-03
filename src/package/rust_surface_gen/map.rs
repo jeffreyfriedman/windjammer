@@ -15,21 +15,11 @@ const SCALARS: &[&str] = &["i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32
 
 /// Source text of a type, normalised (`& str`, `Vec < u8 >` become `&str`, `Vec<u8>`).
 pub fn show(t: &impl ToTokens) -> String {
-    let s = t.to_token_stream().to_string();
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == ' ' {
-            let prev = out.chars().last();
-            let next = chars.peek().copied();
-            let glue = |x: Option<char>| x.is_some_and(|x| matches!(x, '&' | '<' | '>' | '(' | ')' | '[' | ']' | ':' | ',' | '\''));
-            if (glue(prev) && prev != Some(',')) || (glue(next) && next != Some('\'')) {
-                continue;
-            }
-        }
-        out.push(c);
+    let mut s = t.to_token_stream().to_string();
+    for (from, to) in [(" :: ", "::"), (":: ", "::"), (" : ", ": "), ("& ", "&"), (" < ", "<"), ("< ", "<"), (" >", ">"), (" ,", ","), ("( ", "("), (" )", ")"), ("[ ", "["), (" ]", "]"), (" ;", ";")] {
+        s = s.replace(from, to);
     }
-    out
+    s
 }
 
 /// A parameter type, or why it cannot be declared.
