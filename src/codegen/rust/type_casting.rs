@@ -378,6 +378,10 @@ pub fn strip_erroneous_usize_suffix_for_non_usize_formal(
     if formal.is_some_and(type_is_usize) {
         return;
     }
+    // `x as usize` written in the source is the program, not a stale suffix (`chars().nth(r as usize)`).
+    if matches!(arg, Expression::Cast { type_, .. } if type_is_usize(type_)) {
+        return;
+    }
     if expression_must_not_usize_coerce(gen, arg, arg_str) {
         if let Some(base) = arg_str.strip_suffix(" as usize") {
             *arg_str = base.to_string();
@@ -595,6 +599,16 @@ pub fn cast_for_usize_binary_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A cast the user wrote (`nth(r as usize)`) is the program, not a stale suffix: never stripped.
+    #[test]
+    fn explicit_usize_cast_is_never_stripped() {
+        let r = Expression::Identifier { name: "r".into(), location: Default::default() };
+        let cast = Expression::Cast { expr: Box::leak(Box::new(r)), type_: Type::Custom("usize".into()), location: Default::default() };
+        let mut s = "r as usize".to_string();
+        strip_erroneous_usize_suffix_for_non_usize_formal(None, &cast, &mut s, None);
+        assert_eq!(s, "r as usize");
+    }
 
     #[test]
     fn int_literal_init_includes_zero_and_negative() {
