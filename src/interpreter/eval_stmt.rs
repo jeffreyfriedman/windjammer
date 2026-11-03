@@ -209,6 +209,23 @@ impl Interpreter {
         value: &'static Expression<'static>,
         op: Option<crate::parser::CompoundOp>,
     ) -> R<()> {
+        // `r = &mut x` on a variable holding a reference rebinds it, as Rust's reference assignment does;
+        // following the new reference would instead write x's value through the old one
+        // (test-only mutant `refwrite`, debug builds: write through)
+        let write_through = cfg!(debug_assertions) && self.jit_mutant.as_deref() == Some("refwrite");
+        if let (Expression::Identifier { name, .. }, Expression::Unary { op: crate::parser::UnaryOp::MutRef, .. }, None, false) =
+            (target, value, op, write_through)
+        {
+            if let Some(var) = self.lookup_var(name).filter(|v| matches!(&*v.borrow(), Value::Ref(p) if p.guard.is_none())) {
+                let rhs = self.eval_raw(value)?;
+                if matches!(rhs, Value::Ref(_)) {
+                    *var.borrow_mut() = rhs;
+                    return Ok(());
+                }
+                let place = self.resolve_place(target)?.ok_or_else(|| semantic("invalid left-hand side of assignment"))?;
+                return self.assign_to_place(target, place, rhs, op);
+            }
+        }
         let rhs = self.eval_keep_guard(value)?;
         if let Expression::Identifier { name, .. } = target {
             if name == "_" {

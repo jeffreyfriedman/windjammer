@@ -536,10 +536,13 @@ impl Lo<'_, '_> {
         let bits = self.to_bits(x.v, x.ty);
         let xt = self.k(code(x.ty));
         match t {
-            Target::Index(slot, _, i) => {
-                let a = [*slot as i64, code(i.ty)].map(|c| self.k(c));
-                self.call("index_set", rt::index_set as *const () as usize, &[a[0], i.v, a[1], bits, xt], false, true);
-            }
+            Target::Index(slot, _, i) => match rt::view_elem(x.ty) {
+                Some(size) => self.view_store(*slot, i, x, bits, size),
+                None => {
+                    let a = [*slot as i64, code(i.ty)].map(|c| self.k(c));
+                    self.call("index_set", rt::index_set as *const () as usize, &[a[0], i.v, a[1], bits, xt], false, true);
+                }
+            },
             Target::IndexField(slot, shape, i, f) => {
                 let hint = shape.fields.iter().position(|(n, _)| &**n == *f)?;
                 let id = shape.fields[hint].0.as_ptr() as i64;
@@ -554,6 +557,44 @@ impl Lo<'_, '_> {
             }
         }
         Some(())
+    }
+
+    /// `v[i] = x` into a packed vector: when the slot's view (`rt::View`, filled by an earlier `index_set`)
+    /// has this element type and `i` is in bounds, write the element's bits in place; else `index_set`.
+    fn view_store(&mut self, slot: usize, i: &Val, x: Val, bits: V, size: i64) {
+        let at = rt::VIEW_AT + (slot % rt::VIEWS * std::mem::size_of::<rt::View>()) as i32;
+        let flags = cranelift_codegen::ir::MemFlags::trusted();
+        let key = self.b.ins().load(types::I64, flags, self.ctx, at);
+        let ptr = self.b.ins().load(types::I64, flags, self.ctx, at + 8);
+        let len = self.b.ins().load(types::I64, flags, self.ctx, at + 16);
+        let same = self.b.ins().icmp_imm(IntCC::Equal, key, rt::view_key(slot, x.ty));
+        // unsigned: a negative index is out of bounds
+        let inside = self.b.ins().icmp(IntCC::UnsignedLessThan, i.v, len);
+        let hit = self.b.ins().band(same, inside);
+        let (fast, slow, join) = (self.b.create_block(), self.b.create_block(), self.b.create_block());
+        self.b.ins().brif(hit, fast, &[], slow, &[]);
+        self.b.switch_to_block(fast);
+        self.b.seal_block(fast);
+        // test-only mutant `viewidx` (debug builds): every element stored at index 0 (inside the vector)
+        let k = if mutant(self.it, "viewidx") { self.b.ins().iconst(types::I64, 0) } else { i.v };
+        let off = self.b.ins().imul_imm(k, size);
+        let addr = self.b.ins().iadd(ptr, off);
+        if size == 1 {
+            self.b.ins().istore8(flags, bits, addr, 0);
+        } else {
+            self.b.ins().store(flags, bits, addr, 0);
+        }
+        let n = self.b.ins().load(types::I64, flags, self.ctx, rt::VIEW_STORES);
+        let n = self.b.ins().iadd_imm(n, 1);
+        self.b.ins().store(flags, n, self.ctx, rt::VIEW_STORES);
+        self.b.ins().jump(join, &[]);
+        self.b.switch_to_block(slow);
+        self.b.seal_block(slow);
+        let a = [slot as i64, code(i.ty), code(x.ty)].map(|c| self.k(c));
+        self.call("index_set", rt::index_set as *const () as usize, &[a[0], i.v, a[1], bits, a[2]], false, true);
+        self.b.ins().jump(join, &[]);
+        self.b.switch_to_block(join);
+        self.b.seal_block(join);
     }
 
     /// `target = value` / `target op= value` (the walker evaluates the value first).

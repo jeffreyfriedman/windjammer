@@ -30,9 +30,43 @@ pub(crate) struct Ctx {
     /// is walked once per unit run instead of on every element access. Cleared before every closure-run
     /// statement, the only statements that can rebind a reference.
     pub(crate) cells: Vec<(i64, crate::interpreter::value::Slot)>,
+    /// Packed vectors machine code stores into without a call (`View`), by `slot % VIEWS`.
+    pub(crate) views: [View; VIEWS],
+    /// Stores machine code made through a view (added to `FastHits::packedstore` when the unit leaves).
+    pub(crate) view_stores: i64,
 }
 
+/// The storage of a packed vector a store reached (`index_set`): machine code checks `key` and `len`
+/// and writes the element at `ptr` itself. Valid until anything else could move, share or unpack that
+/// storage: closure code (`run_stmt`), `push`, or a store the packing does not take clears every view.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(crate) struct View {
+    /// `view_key(slot, element type)`; 0: empty.
+    pub(crate) key: i64,
+    pub(crate) ptr: i64,
+    pub(crate) len: i64,
+}
+
+pub(crate) const VIEWS: usize = 4;
 pub(crate) const FAIL: i32 = std::mem::offset_of!(Ctx, fail) as i32;
+pub(crate) const VIEW_AT: i32 = std::mem::offset_of!(Ctx, views) as i32;
+pub(crate) const VIEW_STORES: i32 = std::mem::offset_of!(Ctx, view_stores) as i32;
+
+/// The key of a view: the local's slot and the stored element type (never 0).
+pub(crate) fn view_key(slot: usize, t: Ty) -> i64 {
+    ((slot as i64 + 1) << 12) | super::kinds::code(t)
+}
+
+/// Element types machine code can store into a packed vector as their bits: a bool (one byte), an
+/// `i64` (the packing's own width, so no normalization) and a float.
+pub(crate) fn view_elem(t: Ty) -> Option<i64> {
+    match t {
+        Ty::Bool => Some(1),
+        Ty::Int(crate::interpreter::int::IntTy::I64) | Ty::Flt(_) => Some(8),
+        _ => None,
+    }
+}
 
 /// Run `f` with the local at `slot`; a `None` sets the failure flag.
 unsafe fn with_slot(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Value) -> Option<i64>) -> i64 {
@@ -203,17 +237,19 @@ pub(crate) unsafe extern "C" fn field_get(c: *mut Ctx, slot: i64, fp: i64, fl: i
 /// `v[i] = x`.
 pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i64, x: i64, xt: i64) -> i64 {
     // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
-    let direct_off = unsafe { (*(*c).it).fast_off("packedidx") };
-    let mut direct = false;
+    let (direct_off, view_off) = unsafe { ((*(*c).it).fast_off("packedidx"), (*(*c).it).fast_off("packedstore")) };
+    let mut direct = None;
     let r = unsafe {
         with_cell_mut(c, slot, |v| {
             let k = index(i, it)?;
             let t = from_code(xt)?;
             match v {
                 Value::Vec(xs) => {
-                    if !direct_off && packed_set(xs, k, x, t) {
-                        direct = true;
-                        return Some(0);
+                    if !direct_off {
+                        if let Some(view) = packed_set(xs, k, x, t) {
+                            direct = Some((t, view));
+                            return Some(0);
+                        }
                     }
                     if k >= xs.len() {
                         return None;
@@ -227,8 +263,17 @@ pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i6
             }
         })
     };
-    if direct {
-        unsafe { (*(*c).it).fast.packedidx += 1 };
+    // SAFETY: as above.
+    let ctx = unsafe { &mut *c };
+    match direct {
+        Some((t, (ptr, len))) => {
+            unsafe { (*ctx.it).fast.packedidx += 1 };
+            if !view_off && view_elem(t).is_some() {
+                ctx.views[slot as usize % VIEWS] = View { key: view_key(slot as usize, t), ptr, len };
+            }
+        }
+        // the element may have unpacked the vector or replaced its storage
+        None => ctx.views = Default::default(),
     }
     r
 }
@@ -263,6 +308,8 @@ pub(crate) unsafe extern "C" fn field_set(c: *mut Ctx, slot: i64, fp: i64, fl: i
 /// `v.push(x)`.
 pub(crate) unsafe extern "C" fn push(c: *mut Ctx, slot: i64, x: i64, xt: i64) -> i64 {
     // SAFETY: as in `with_slot`; the interpreter is not borrowed across the call below.
+    // a push may move a packed vector's storage
+    unsafe { (*c).views = Default::default() };
     let off = unsafe { (*(*c).it).fast_off("packed") };
     let mut packed = false;
     let r = unsafe {
@@ -327,10 +374,12 @@ pub(crate) unsafe extern "C" fn int_op(c: *mut Ctx, op: i64, a: i64, at: i64, b:
 pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     // SAFETY: as in `with_slot`; `plan`/`reg` outlive the call, `buf` has `nbuf` slots.
     let ctx = unsafe { &mut *c };
-    // closure code may replace what a slot holds (`Ctx::cells`): resolve again after it. Assigning a new
-    // reference to a reference variable writes through it today, so no corpus program can make a
-    // resolution stale; this keeps the cache safe if that changes.
-    ctx.cells.clear();
+    // closure code may rebind a reference the unit resolved (`r = &mut b`, `Ctx::cells`): resolve again after it
+    // (test-only mutant `vecstale`, debug builds: keep the stale resolution)
+    if !mutant(unsafe { &*ctx.it }, "vecstale") {
+        ctx.cells.clear();
+    }
+    ctx.views = Default::default();
     let (it, plan, reg, b) = unsafe { (&mut *ctx.it, &*ctx.plan, &*ctx.reg, ctx.base) };
     let buf = buf as *mut i64;
     let st = &plan.stmts[k as usize];
@@ -396,23 +445,32 @@ fn packed_get(xs: &crate::interpreter::vecbody::VecBody, k: usize, want: Ty) -> 
 /// `v[k] = x` written straight into a packed body when `x` (bits at type `xt`) has exactly the packing's
 /// type: then the walker's `retag` keeps `x` as it is and the plain replacement packs it. `false`: the
 /// element path decides (another type, a literal width to retag, an unpacked body).
-fn packed_set(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, k: usize, x: i64, xt: Ty) -> bool {
+/// Write a packed element in place; `Some`: the storage written (its data pointer and length).
+fn packed_set(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, k: usize, x: i64, xt: Ty) -> Option<(i64, i64)> {
     use crate::interpreter::vecbody::{Packed, VecBody};
     let fits = matches!((xs.packed(), xt), (Some(Packed::Bool(_)), Ty::Bool))
         || matches!((xs.packed(), xt), (Some(Packed::Int(_, t)), Ty::Int(w)) if *t == w)
         || matches!((xs.packed(), xt), (Some(Packed::Float(_, t)), Ty::Flt(w)) if *t == w);
     if !fits || k >= xs.len() {
-        return false;
+        return None;
     }
-    let VecBody::Packed(p, cache) = Rc::make_mut(xs) else { return false };
-    match (p, xt) {
-        (Packed::Bool(v), _) => v[k] = x != 0,
-        (Packed::Int(v, _), Ty::Int(t)) => v[k] = int_value(x, t) as i64,
-        (Packed::Float(v, _), _) => v[k] = f64::from_bits(x as u64),
-        _ => return false,
-    }
+    let VecBody::Packed(p, cache) = Rc::make_mut(xs) else { return None };
     cache.take();
-    true
+    Some(match (p, xt) {
+        (Packed::Bool(v), _) => {
+            v[k] = x != 0;
+            (v.as_mut_ptr() as i64, v.len() as i64)
+        }
+        (Packed::Int(v, _), Ty::Int(t)) => {
+            v[k] = int_value(x, t) as i64;
+            (v.as_mut_ptr() as i64, v.len() as i64)
+        }
+        (Packed::Float(v, _), _) => {
+            v[k] = f64::from_bits(x as u64);
+            (v.as_mut_ptr() as i64, v.len() as i64)
+        }
+        _ => return None,
+    })
 }
 
 /// The cell a local's value lives in when the local reaches it through plain references (no projection,

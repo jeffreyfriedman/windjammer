@@ -15,8 +15,8 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 /// (program, the fast paths it must take).
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
-    ("bench/interp/hashmap.wj", &["mapget", "mapins", "unboxed"]),
-    ("bench/interp/sieve.wj", &["packed", "packedidx"]),
+    ("bench/interp/hashmap.wj", &["mapget", "mapins", "unboxed", "matchval"]),
+    ("bench/interp/sieve.wj", &["packed", "packedidx", "packedstore"]),
     ("bench/interp/nbody.wj", &["vecresolve"]),
     ("bench/interp/strings.wj", &["pushfmt"]),
     ("bench/interp/closures.wj", &["closureenv", "closurescope"]),
@@ -25,6 +25,8 @@ const CASES: &[(&str, &[&str])] = &[
     ("tests/engine_parity/map_get_match.wj", &["mapget", "mapins", "unboxed"]),
     ("tests/engine_parity/option_arm_values.wj", &["mapget", "mapins"]),
     ("tests/engine_parity/packed_vecs.wj", &["packed"]),
+    ("tests/engine_parity/match_value.wj", &["matchval"]),
+    ("tests/engine_parity/method_place_args.wj", &["argcopy"]),
 ];
 
 struct Run {
