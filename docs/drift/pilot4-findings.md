@@ -4,7 +4,7 @@ Source: `bench/agent-dx/results/pilot4/` (arms L, M: interpreted-first and inter
 `next/v0.50.0` e0ec926dc plus harness changes, 2026-11-03). Format as in [findings.md](findings.md): the interpreter accepts and runs the
 program, the compiled backend's generated Rust is rejected (agents see `WJ0003`/`WJ0029`/`WJ0031`). Minimal programs are in
 [pilot4-repros/](pilot4-repros/) (interpreter output and the compiled diagnostic were checked on this build); they are not yet in
-`tests/drift_corpus/repros/` or `known_divergences.txt`: the drift owner should move them there. Counts are silent-divergence trials out of the 60.
+`tests/drift_corpus/repros/` or `known_divergences.txt`: the drift owner should move them there. Counts are silent-divergence trials among the 60 L and M trials.
 
 ## D. Findings
 
@@ -20,9 +20,9 @@ Two further compiled-only sites appeared (`last[k] = l` with `k`, `l` from loop 
 build: the nearest minimal form (`index_assign_loopvar`) compiles and agrees. They stay in the pilot records (`t003_prime_counts.L.1`, `t006_base_convert.L.2`).
 
 Direction and fix hints: all five are "interpreter green, compiled red" at compile time, so none corrupts output silently; the cost is a failed final build. 1 and 2 are the
-largest (11 of 60 trials). For 2 the diagnostic itself is a defect (identical type names on both sides): `diagnostics/rustc_text.rs` should keep the raw `i32`/`i64` pair when the
+largest (11/60 trials). For 2 the diagnostic itself is a defect (identical type names on both sides): `diagnostics/rustc_text.rs` should keep the raw `i32`/`i64` pair when the
 `wjify` spellings collide.
 
 ## E. Grading note (harness, not a drift finding)
-14 of 120 first compiled grades under machine load 25-35 failed all vectors for programs that pass on a quiet re-run (`wrong-output`, 0 passed). The harness now re-grades a
+14/120 first compiled grades under machine load 25-35 failed all vectors for programs that pass on a quiet re-run (`wrong-output`, 0 passed). The harness now re-grades a
 compiled failure once when the interpreter passes everything, and records the first result (`first_compiled`); the pilot-4 records were corrected with `pilot-regrade`.
