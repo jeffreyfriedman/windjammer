@@ -75,12 +75,8 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> HashSet<u32>
             held.extend(view.class(*v));
         }
     }
-    // The solver could not decide a class (two exact widths met): legacy.
-    for d in &result.diagnostics {
-        if d.kind == crate::ir::solver::DiagnosticKind::TypeError {
-            held.extend(d.vars.iter().filter_map(|v| view.class(*v)));
-        }
-    }
+    // The solver could not decide a class (two exact integer widths met): legacy.
+    held.extend(result.width_conflicts.iter().filter_map(|v| view.class(*v)));
     // A negated literal in an unsigned class, or a loop binding of unknown element width: legacy.
     for &v in &fc.unmodelled.negated_literals {
         if matches!(view.int_type(v), Some(BaseType::U8 | BaseType::U16 | BaseType::U32 | BaseType::U64 | BaseType::U128 | BaseType::Usize)) {
