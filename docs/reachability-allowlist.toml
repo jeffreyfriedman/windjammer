@@ -53,6 +53,7 @@
 "src/intrinsics/mod.rs" = 1
 "src/ir/capability_profiles.rs" = 5
 "src/ir/constraint_gen.rs" = 1
+"src/ir/effect_facts/sinks.rs" = 1 # all_paths: read by the sink audits (tests/effects_runtime_audit_test.rs, interpreter caps tests)
 "src/ir/effects.rs" = 1
 "src/ir/execution.rs" = 1
 "src/ir/numeric_bridge.rs" = 2

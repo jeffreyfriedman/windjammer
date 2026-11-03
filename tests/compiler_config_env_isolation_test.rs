@@ -10,6 +10,8 @@ const ALLOWED: &[&str] = &[
     "src/cargo_cache/",
     "src/debug_env.rs",
     "src/test_runner/",
+    // the toolchain's single gateway to the process environment (pin and staleness switches)
+    "src/toolchain/env.rs",
     "src/error_statistics.rs",
     // The toolchain's single gateway to the process environment (wj doctor, pin file, stale warning).
     "src/toolchain/env.rs",
