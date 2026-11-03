@@ -1,0 +1,17 @@
+# Curated Rust crates whose free functions are pure: no files, network, processes, environment, clock,
+# randomness or global state. `wj rust-surface` marks the mappable functions of a listed crate version
+# `@pure`; every other generated function has unknown authority and is `ffi(<crate>)` (ADR-0026 default-deny).
+#
+# Rules for an entry: read the crate source of the listed versions first and say what was checked in
+# `reviewed`; list only computation crates. Effects are never inferred from function or crate names, and
+# the generator still declines `@pure` when the crate source mentions an I/O module (see `pure.rs`).
+# Bump `version` whenever an entry changes; it is recorded in every generated surface header.
+version = 1
+
+[crates.strsim]
+versions = ">=0.10, <0.12"
+reviewed = "0.10.0, 0.11.1: string similarity metrics over &str and iterators; no std::fs/net/process/env/time, no statics"
+
+[crates.hex]
+versions = ">=0.4, <0.5"
+reviewed = "0.4.3: hex encoding and decoding of byte slices; no I/O, no statics"

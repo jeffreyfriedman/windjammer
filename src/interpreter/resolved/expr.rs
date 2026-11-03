@@ -137,7 +137,7 @@ fn boolish(e: E) -> bool {
     }
 }
 
-fn evals(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
+pub(super) fn evals(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
     list.into_iter().map(|e| Some(expr_eval(cx, e)?.code())).collect()
 }
 
@@ -309,14 +309,8 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             X::V(Box::new(move |it, b| {
                 it.mark(loc);
                 if let Some(pieces) = pieces.as_ref().filter(|_| !it.fast_off("fmt")) {
-                    // every argument first, then the displays (a user `Display` runs after them all)
-                    let vals = run_all(it, b, &cs[1..])?;
-                    let mut out = pieces[0].clone();
-                    for (v, piece) in vals.into_iter().zip(&pieces[1..]) {
-                        let v = crate::interpreter::place::deref_value(v)?;
-                        out.push_str(&it.display_string(&v)?);
-                        out.push_str(piece);
-                    }
+                    let mut out = String::new();
+                    super::strfast::append_plain(it, b, pieces, &cs[1..], &mut out)?;
                     it.fast.fmt += 1;
                     return Ok(Value::str(out));
                 }

@@ -25,7 +25,7 @@ None => None }` evaluated to `()` on a miss in the resolved engine) passed the p
 | nested matches (match as arm result, as `let` initialiser, as call argument, inside a binary expression, `Option<Option<_>>`) | none |
 | lookup misses (map get/remove, `first`/`last`/`pop` on empty, `find`/`position` without a match, string `find`, parse errors) used as values | only the fix's program (map get) |
 | shadowing (parameter, loop variable, match binding, retyping) | `33_shadow_and_blocks`, `77_shadowing_blocks` (scalar) |
-| early `return` of Option/Result/enum values from inside nested loops | partly (`return Some/None` in 37 programs, none nested in `while` inside `for`) |
+| early `return` of Option/Result/enum values from inside nested loops | partly (`return Some/None` in many programs, none nested in `while` inside `for`) |
 | captures of Option/enum/Vec values by closures; closures returning Option; closures in a Vec | `16`, `17`, `63`, `174` (scalar captures only) |
 | Option-typed struct fields read, rewritten and matched in loops | none |
 
@@ -55,8 +55,8 @@ backend. Seeds 1..200 found no walker/resolved divergence on the current engine;
 
 | Gate | Mutant | Result |
 |---|---|---|
-| differential corpus, walker vs resolved | remove the fix of the bare-`None` bug (`names.retain(..)` in `src/interpreter/resolved/matching.rs`) and rebuild | the ecosystem tests of `wj-config`, `wj-cookie`, `wj-dotenv` and `wj-toml` (12 tests, 24 rows with their panic-location rows) diverge: walker `pass`, resolved `fail` at the package's `get` helper. `vp_collection_misses` diverges too: walker `exit0`, resolved `exit101` |
-| differential corpus, compiled arm | none needed: the 14 repros of `docs/drift/findings.md` and 61 compiled-red ecosystem tests are real divergences the corpus reports until they are ledgered | each ledger line is `known`, not hidden |
+| differential corpus, walker vs resolved | remove the fix of the bare-`None` bug (`names.retain(..)` in `src/interpreter/resolved/matching.rs`) and rebuild | the ecosystem tests of `wj-config`, `wj-cookie`, `wj-dotenv` and `wj-toml` (a dozen tests, two dozen rows with their panic-location rows) diverge: walker `pass`, resolved `fail` at the package's `get` helper. `vp_collection_misses` diverges too: walker `exit0`, resolved `exit101` |
+| differential corpus, compiled arm | none needed: the fourteen repros of `docs/drift/findings.md` and the compiled-red ecosystem tests are real divergences the corpus reports until they are ledgered | each ledger line is `known`, not hidden |
 | drift budget (ledger) | `scripts/wj/drift_selftest.wj` plants a new, changed, vanished, grown and vacuous result | 11 of 11 checks, each fails the ledger comparer for its own reason |
 | `#runs` guard | a program that does not parse (an `option_binding_plus_literal.wj` with its first line joined to a comment) agreed with itself in all three modes and passed the corpus | found while recording; `<program>#runs` rows now fail such a program |
 | generator (`drift_gen.wj`), walker vs resolved | the bare-`None` fix removed again (kind `Option<int>` from a map lookup) | 32 of the 40 default programs diverge (walker exit 0, resolved exit 101 at the lookup), 64 rows; with the fix, 0 of 200 seeds |

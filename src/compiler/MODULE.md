@@ -4,7 +4,7 @@
 Driver-level orchestration of a build: parse, multi-pass analysis, codegen, cargo manifest generation, dependency resolution, incremental cache, library multipass.
 
 ## Inputs/Outputs
-In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` metadata, Cargo manifests.
+In: source paths, target, flags. Out: generated Rust/Go/JS files, `.wj.meta` metadata (in the analysis cache, not beside sources), Cargo manifests.
 
 ## Invariants
 - Owns the multi-pass loop; later passes re-run analysis with global signatures.

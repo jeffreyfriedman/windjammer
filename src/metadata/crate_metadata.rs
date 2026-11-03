@@ -92,18 +92,76 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
             return meta_cache_path_under_root(&project_root, relative);
         }
     }
-    source_file.with_extension("wj.meta")
+    // No manifest above the file: the analysis cache still never goes next to a source.
+    projectless_meta_path(source_file)
+}
+
+/// Directory holding analysis metadata for manifest-less trees: `wj-meta` under the OS temp dir (honours
+/// `TMPDIR`). It is a cache: losing it costs a cold build, never correctness.
+pub fn global_meta_cache_dir() -> PathBuf {
+    std::env::temp_dir().join("wj-meta")
+}
+
+/// The module root of a manifest-less tree. Climb out of module directories (a directory holding
+/// `mod.wj`, or one with a sibling `<name>.wj`), but stop at the nearest ancestor named `src` when that
+/// lies at or above the result. Otherwise the file's own directory.
+fn projectless_root(start: &Path) -> PathBuf {
+    let dir = if start.is_file() { start.parent().unwrap_or(start) } else { start };
+    let abs = dir.canonicalize().unwrap_or_else(|_| {
+        if dir.is_absolute() { dir.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(dir) }
+    });
+    let mut climbed = abs.clone();
+    loop {
+        let Some(parent) = climbed.parent().map(Path::to_path_buf) else { break };
+        let name = climbed.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        if climbed.join("mod.wj").exists() || parent.join(format!("{name}.wj")).exists() {
+            climbed = parent;
+        } else {
+            break;
+        }
+    }
+    match abs.ancestors().find(|a| a.file_name().is_some_and(|n| n == "src")) {
+        Some(src) if climbed.starts_with(src) => src.to_path_buf(),
+        _ => climbed,
+    }
+}
+
+fn projectless_cache_root(start: &Path) -> PathBuf {
+    use sha2::{Digest, Sha256};
+    let root = projectless_root(start);
+    let h = Sha256::digest(root.to_string_lossy().as_bytes());
+    let key: String = h.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    global_meta_cache_dir().join(key)
+}
+
+fn projectless_meta_path(source_file: &Path) -> PathBuf {
+    let root = projectless_root(source_file);
+    let abs = source_file.canonicalize().unwrap_or_else(|_| {
+        if source_file.is_absolute() { source_file.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(source_file) }
+    });
+    let rel = abs.strip_prefix(&root).map(Path::to_path_buf).unwrap_or_else(|_| PathBuf::from(abs.file_name().unwrap_or_default()));
+    let mut p = projectless_cache_root(source_file);
+    p.push(rel);
+    let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+    p.set_file_name(format!("{name}.meta"));
+    p
+}
+
+/// True when `path` is inside an analysis cache (a `.wj-cache` directory or the global meta cache).
+/// A `*.wj.meta` anywhere else is a legacy sidecar and is never read.
+pub fn is_cache_location(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == ".wj-cache") || path.starts_with(global_meta_cache_dir())
 }
 
 /// Get the `.wj-cache/` root for a given source root.
 ///
 /// Finds the project root (nearest `Cargo.toml`/`wj.toml`) and returns `<project>/.wj-cache/`.
-/// Falls back to placing `.wj-cache/` inside the given root if no project marker is found.
+/// Without a project marker it is a per-tree directory in the global meta cache (never inside the source tree).
 pub fn meta_cache_root(source_root: &Path) -> PathBuf {
     if let Some(project_root) = find_project_root(source_root) {
         project_root.join(".wj-cache")
     } else {
-        source_root.join(".wj-cache")
+        projectless_cache_root(source_root)
     }
 }
 
