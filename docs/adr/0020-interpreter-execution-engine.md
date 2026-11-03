@@ -613,6 +613,50 @@ against round 8's run:
 `sieve`, `fib30` and `structs` did not change code this round, so their movement is run-to-run noise at this load; the
 interleaved long-variant timings above are the evidence for the two kept changes.
 
+### Round 10 (Nov 3): reference assignment rebinds; packed stores in machine code; `let c = match` unboxed
+- Correctness first. `let mut r = &mut a; ...; r = &mut b` wrote b's value into a in both engines, so parity could
+  not see it; compiled Rust rebinds `r`. The walker's assignment followed the new reference (`eval_keep_guard`) and
+  wrote through the old one. An `r = &mut x` on a variable that holds a reference now rebinds the variable, and the
+  resolved engine leaves that statement to the walker. `vp_ref_rebind.wj` takes its expected output from the compiled
+  program (its row in `tests/drift_corpus/compiled_baseline.tsv` was recorded with `--compiled live`). It covers
+  vectors, structs, shared references, a reference chosen inside a function, a loop that runs in machine code, and a
+  reborrow. Debug mutant `refwrite` (write through again) is caught, and so is round 9's `vecstale`: the machine-code
+  loop's cached vector resolution after closure code rebinds the reference is now reachable, and the reset is
+  load-bearing.
+- `sieve`: the inline packed store. A machine-code `v[i] = x` called `index_set` for every element. When `index_set`
+  writes a packed vector in place, it now records that storage in the unit's context (`rt::View`: key, data pointer,
+  length, four entries by slot). Machine code compares the key (slot and element type), checks `i` against the length
+  (unsigned, so a negative index misses), and writes the bool, `i64` or float bits itself. On a miss it calls
+  `index_set`. The views are cleared by everything that could move, share or unpack that storage: closure code,
+  `push`, and a store the packing does not take. Counter `packedstore`, switch `nofast-packedstore`, and debug mutant
+  `viewidx` (every element written at index 0), which `packed_vecs.wj` catches. `jit_packed_store.wj` covers a push
+  that moves the storage, closure code replacing the vector, a copy another binding shares, an `i32` vector (helper
+  path) and an out-of-bounds store.
+- `hashmap`: what still boxed `c`. A trace of the compile fixpoint's box requests showed it: `m.insert(k, c + 1)` has
+  a place argument (`k`), so the call keeps a walker fallback for a user method that takes it by `&mut`, and that
+  island boxed every local named anywhere in the call. Now only the receiver and place arguments are boxed. Locals in
+  arguments the walker only reads, which hold no closure or call (`mapfast::simple`), are bound to copies when the
+  fallback runs (counter `argcopy`, switch `nofast-argcopy`). Together with round 9's plain `match` value (counter
+  `matchval`), `c` keeps a plain slot. `method_place_args.wj` covers read arguments next to place arguments, a
+  closure argument that mutates a captured local (still boxed), and an interpolated argument.
+
+CPU seconds of the long variants, the head before this round and this round interleaved, five runs each, every run
+started below load 20; medians:
+
+| rung | variant | before | after | load |
+|---|---|---|---|---|
+| packed store | `sieve`, 10M | 0.50 s | 0.31 s | 18.7 to 19.0 |
+| `let c = match` unboxed | `hashmap`, 3M iterations | 0.93 s | 0.74 s | 11.8 to 11.9 |
+
+Found while writing the compiled oracles (compiler side, not changed here):
+- An inferred-`&mut` parameter passed on as `&mut xs` generates `&mut &mut Vec` (E0596/lifetime errors).
+- A struct field of reference type has no lifetime in the generated Rust (E0106).
+- `*z += 1` on `let mut z = &mut n` fails `WJ0020` on this head.
+- A parameter the method only reassigns (`slot = f(slot)`) is passed by value in compiled code, but the interpreter
+  treats it as `&mut`, so the caller's variable changes only when interpreted. This is a second
+  interpreter-versus-compiled drift.
+- Passing an inferred-`&mut` integer parameter to a closure does not dereference it (E0308).
+
 ## Proposals beyond milestone 1 (as written in milestone 1; see steps 1-8 for where each stands)
 i. **Type-specialized unboxed slots.** Consume the solver's semantic facts (the single facts interface that
    `wt/convergence` is building for all backends; do not re-infer): when a local is known `i64`/`f64`/`bool`, compile it to
