@@ -15,6 +15,7 @@ pub mod effect_port;
 mod c_library;
 mod call;
 mod coerce;
+mod compiled_facts;
 mod defaults;
 pub mod deps;
 pub mod engine;

@@ -1,0 +1,65 @@
+// Value position: a parameter the body reassigns whole (`slot = twice(slot)`) is passed the way the
+// compiled code passes it. Code generation takes some such parameters by value (one also passed on to an
+// owned formal, one returned) and others by `&mut` (`slot = slot + 1`), so the caller's variable changes
+// exactly when it does in the compiled program. A compound assignment and a field write are `&mut` in both.
+struct P {
+    n: int,
+}
+
+fn twice(x: int) -> int {
+    x * 2
+}
+
+fn a_call(slot: int) {
+    slot = twice(slot)
+}
+
+fn b_arith(slot: int) {
+    slot = slot + 1
+}
+
+fn c_compound(slot: int) {
+    slot += 1
+}
+
+
+
+
+fn g_field(p: P) {
+    p.n = 7
+}
+
+
+
+fn j_read_after(slot: int) -> int {
+    slot = slot * 3
+    slot
+}
+
+impl P {
+    fn m_assign(self, slot: int) {
+        slot = twice(slot)
+        self.n += slot
+    }
+}
+
+fn main() {
+    let mut s = 5
+    a_call(s)
+    print("a ${s} ")
+    b_arith(s)
+    print("b ${s} ")
+    c_compound(s)
+    print("c ${s} ")
+    let mut v = [1, 2]
+    let mut p = P { n: 1 }
+    let mut t = "s"
+    g_field(p)
+    print("g ${p.n} ")
+    s = 2
+    let r = j_read_after(s)
+    print("j ${s} ${r} ")
+    s = 3
+    p.m_assign(s)
+    println("m ${s} ${p.n}")
+}
