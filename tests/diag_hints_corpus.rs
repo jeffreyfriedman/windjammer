@@ -54,6 +54,7 @@ fn header(line: &str) -> Option<(Option<String>, String)> {
 }
 
 fn blocks(sample: &str) -> Vec<Block> {
+    let truncated_tail = !sample.ends_with('\n');
     let mut out: Vec<Block> = Vec::new();
     for line in sample.lines() {
         if let Some((code, msg)) = header(line) {
@@ -64,6 +65,10 @@ fn blocks(sample: &str) -> Vec<Block> {
         }
     }
     // Samples were cut at a fixed length: a header that is a prefix of "could not compile" is noise.
+    // Samples were cut at a fixed length: a last header with no body and no newline is a fragment.
+    if truncated_tail && out.last().is_some_and(|b| b.text.is_empty() && b.msg.len() < 30) {
+        out.pop();
+    }
     out.retain(|b| !b.msg.starts_with("could not compile") && !b.msg.starts_with("aborting") && !(b.msg.len() < 17 && "could not compile".starts_with(b.msg.as_str())));
     out
 }
