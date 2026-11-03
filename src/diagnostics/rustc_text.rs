@@ -93,7 +93,11 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
                 (Some(e), Some(f)) => {
                     let (we, wf) = (wjify(&format!("`{e}`")), wjify(&format!("`{f}`")));
                     let (we, wf) = (we.trim_matches('`').to_string(), wf.trim_matches('`').to_string());
-                    let message = if we == wf {
+                    let numeric = |t: &str| t.starts_with(['i', 'u', 'f']) && t[1..].chars().all(|c| c.is_ascii_digit() || t.ends_with("size"));
+                    let message = if we == wf && e != f && numeric(e) && numeric(f) {
+                        // Both sides spell as `int`/`float`: keep the widths that tell them apart.
+                        format!("mismatched types: expected `{e}`, found `{f}`")
+                    } else if we == wf {
                         format!("mismatched types: expected {} `{we}`, found {} `{wf}`", ownership_word(e), ownership_word(f))
                     } else {
                         format!("mismatched types: expected `{we}`, found `{wf}`")
@@ -204,6 +208,11 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
             "WJ0034",
             "a trait cannot be used as a plain type".to_string(),
             Some("make the function generic over the trait (`fn f<T: Shape>(x: T)`), or store a `Box<dyn Shape>`"),
+        ),
+        Some("E0605") => t(
+            "WJ0020",
+            wjify(msg),
+            Some("`as` only converts between numbers, `char` and `bool`: for other types call a conversion (`.to_string()`, `.parse::<T>()`, `T::from(x)`) or build the value directly"),
         ),
         Some("E0606") | Some("E0604") => t(
             "WJ0020",
