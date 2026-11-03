@@ -110,7 +110,20 @@ def default_grader(task, ws, lang="wj"):
     if lang != "wj":   # native baselines: one toolchain, so no interpreted/compiled divergence
         g = G.grade(lang, task, ws, hidden=True)
         return {"compiled": g, "interp": g}
-    return {"compiled": G.grade("wj", task, ws, hidden=True), "interp": G.grade("wj-interp", task, ws, hidden=True)}
+    return pair_with_retry(lambda l: G.grade(l, task, ws, hidden=True))
+
+
+def pair_with_retry(grade):
+    """Compiled + interpreted grade. A compiled failure next to a fully passing interpreter run is re-graded once: under
+    heavy machine load a first compiled grade has been observed to fail all vectors for a program that passes on a
+    quiet re-run. The retry result is used and the first one is kept as `first_compiled` so the flake stays visible."""
+    comp, interp = grade("wj"), grade("wj-interp")
+    if comp["status"] != "pass" and interp["status"] == "pass":
+        again = grade("wj")
+        if again["status"] != comp["status"] or again["passed"] != comp["passed"]:
+            again["first_compiled"] = {"status": comp["status"], "passed": comp["passed"], "categories": comp["categories"]}
+            comp = again
+    return {"compiled": comp, "interp": interp}
 
 
 def error_excerpt(out, limit=600):
@@ -124,7 +137,10 @@ def error_excerpt(out, limit=600):
 
 
 def _slim(g):
-    return {"status": g["status"], "passed": g["passed"], "total": g["total"], "categories": g["categories"]}
+    r = {"status": g["status"], "passed": g["passed"], "total": g["total"], "categories": g["categories"]}
+    if g.get("first_compiled"):
+        r["first_compiled"] = g["first_compiled"]
+    return r
 
 
 def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=None):
