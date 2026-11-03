@@ -25,9 +25,9 @@ use wj_proc::quote
 
 const CORPUS: string = "tests/drift_corpus"
 const BASELINE: string = "tests/drift_corpus/compiled_baseline.tsv"
-const SCRATCH: string = "/tmp/wj-drift-live"
 
 struct Opts {
+    scratch: string,
     wj: string,
     out: string,
     compiled: string,
@@ -142,7 +142,7 @@ fn interp_tests(o: Opts, dir: string, engine: string) -> TestRun {
 
 fn live_tests(o: Opts, dir: string) -> TestRun {
     // a scratch copy: compiled runs write build trees next to the sources
-    let cmd = "cd ${SCRATCH}/${label(dir)} && ${wrapper()} ${quote(o.wj)} test --json"
+    let cmd = "cd ${o.scratch}/${label(dir)} && ${wrapper()} ${quote(o.wj)} test --json"
     match sh(cmd) {
         Ok(r) => parse_tests(label(dir), r.stdout),
         Err(_) => TestRun { ids: Vec::new(), outs: Vec::new() },
@@ -205,7 +205,7 @@ fn sorted_dirs(parent: string) -> Vec<string> {
 
 fn main() {
     let args = env::args()
-    let mut o = Opts { wj: args[1], out: args[2], compiled: "recorded", record: false, only: "" }
+    let mut o = Opts { scratch: "", wj: args[1], out: args[2], compiled: "recorded", record: false, only: "" }
     let mut i = 3
     while i < args.len() {
         if args[i] == "--compiled" {
@@ -220,8 +220,34 @@ fn main() {
         i += 1
     }
     let baseline = read_baseline()
+    let mut lock = ""
     if o.compiled == "live" {
-        let _ = sh("rm -rf ${SCRATCH} && mkdir -p ${SCRATCH} && cp -R ${CORPUS}/eco/. ${SCRATCH}/")
+        // one live run per worktree (it rewrites the baseline) and one scratch directory per run
+        let tag = match sh("printf %s \"$PWD\" | cksum | cut -d' ' -f1") {
+            Ok(r) => strings.trim(r.stdout),
+            Err(_) => "x",
+        }
+        lock = "/tmp/wj-drift-corpus-${tag}.lock"
+        let got = sh("if mkdir ${quote(lock)} 2>/dev/null; then echo $PPID > ${quote(lock)}/pid; echo ok; else p=$(cat ${quote(lock)}/pid 2>/dev/null); if [ -n \"$p\" ] && kill -0 \"$p\" 2>/dev/null; then echo busy $p; else rm -rf ${quote(lock)}; mkdir ${quote(lock)} && echo $PPID > ${quote(lock)}/pid && echo ok; fi; fi")
+        let verdict = match got {
+            Ok(r) => strings.trim(r.stdout),
+            Err(e) => e,
+        }
+        if verdict != "ok" {
+            println("another live drift run holds ${lock} (${verdict}); refusing to start")
+            process.exit(3)
+        }
+        o.scratch = match sh("mktemp -d /tmp/wj-drift-live.XXXXXX") {
+            Ok(r) => strings.trim(r.stdout),
+            Err(_) => "",
+        }
+        if o.scratch == "" {
+            let _ = sh("rm -rf ${quote(lock)}")
+            println("cannot create a scratch directory")
+            process.exit(2)
+        }
+        let _ = sh("cp -R ${CORPUS}/eco/. ${o.scratch}/")
+        println("  scratch: ${o.scratch}")
     }
     let mut out = ""
     let mut recorded = ""
@@ -310,7 +336,7 @@ fn main() {
         },
     }
     if o.compiled == "live" {
-        let _ = sh("rm -rf ${SCRATCH}")
+        let _ = sh("rm -rf ${quote(o.scratch)} ${quote(lock)}")
     }
     if o.record && o.compiled == "live" {
         if o.only != "" {

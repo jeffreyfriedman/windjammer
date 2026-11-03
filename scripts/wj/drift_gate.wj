@@ -22,9 +22,6 @@ use wj_table::add_row
 use wj_table::plain
 
 const LEDGER: string = "tests/drift_corpus/known_divergences.txt"
-const RESULTS: string = "/tmp/wj-drift-results.tsv"
-const GEN_RESULTS: string = "/tmp/wj-drift-gen.tsv"
-const BASE_COPY: string = "/tmp/wj-drift-base-ledger.txt"
 const MIN_CASES: string = "1300"
 
 struct Step {
@@ -107,8 +104,16 @@ fn wj_step(name: string, wj: string, args: string) -> Step {
 }
 
 fn corpus_step(wj: string, compiled: string) -> Step {
+    // every file of a run lives in a directory of its own, so concurrent gate runs cannot touch each other
+    let run_dir = match sh("mktemp -d /tmp/wj-drift-gate.XXXXXX") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-drift-gate",
+    }
+    let results = "${run_dir}/results.tsv"
+    let gen_results = "${run_dir}/gen.tsv"
+    let base_copy = "${run_dir}/base-ledger.txt"
     let t0 = now()
-    let run = sh("${wj} run --interpret scripts/wj/drift_corpus.wj ${wj} ${RESULTS} --compiled ${compiled} 2>&1")
+    let run = sh("${wj} run --interpret scripts/wj/drift_corpus.wj ${wj} ${results} --compiled ${compiled} 2>&1")
     let mut detail = ""
     let mut ok = true
     match run {
@@ -126,7 +131,7 @@ fn corpus_step(wj: string, compiled: string) -> Step {
     // generated value-kind x position programs: rows appended to the corpus rows
     if ok {
         let live = if compiled == "live" { "--run-compiled" } else { "" }
-        match sh("${wj} run --interpret scripts/wj/drift_gen.wj ${wj} /tmp/wj-drift-gen ${GEN_RESULTS} ${live} 2>&1 && cat ${GEN_RESULTS} >> ${RESULTS}") {
+        match sh("${wj} run --interpret scripts/wj/drift_gen.wj ${wj} ${run_dir}/gen ${gen_results} ${live} 2>&1 && cat ${gen_results} >> ${results}") {
             Ok(r) => {
                 if r.status != 0 {
                     ok = false
@@ -142,17 +147,17 @@ fn corpus_step(wj: string, compiled: string) -> Step {
     // the ledger may only shrink against the base ref's copy (absent there: the ledger is being introduced)
     let base_ref = env::var("DRIFT_BASE_REF").unwrap_or("next/v0.50.0")
     let mut base_arg = ""
-    match sh("git show ${base_ref}:${LEDGER} > ${BASE_COPY} 2>/dev/null") {
+    match sh("git show ${base_ref}:${LEDGER} > ${base_copy} 2>/dev/null") {
         Ok(r) => {
             if r.status == 0 {
-                base_arg = "--base-ledger ${BASE_COPY}"
+                base_arg = "--base-ledger ${base_copy}"
             }
         },
         Err(_) => {},
     }
     let mut cases = ""
     if ok {
-        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${RESULTS} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} 2>&1") {
+        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} 2>&1") {
             Ok(r) => {
                 let first = strings.split_lines(r.stdout)
                 if first.len() > 0 {
@@ -169,6 +174,7 @@ fn corpus_step(wj: string, compiled: string) -> Step {
             },
         }
     }
+    let _ = sh("rm -rf ${run_dir}")
     Step { name: "corpus (compiled: ${compiled})", cases: cases, verdict: if ok { "pass" } else { "FAIL" }, secs: now() - t0, detail: detail }
 }
 
