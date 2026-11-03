@@ -151,7 +151,7 @@ digraph deps {
   "check" -> "ir" [label="15"];
   "check" -> "lexer" [label="5"];
   "check" -> "linter" [label="1"];
-  "check" -> "metadata" [label="1"];
+  "check" -> "metadata" [label="2"];
   "check" -> "module_system" [label="3"];
   "check" -> "package" [label="7"];
   "check" -> "parser" [label="24"];
@@ -180,6 +180,7 @@ digraph deps {
   "cli" -> "ir" [label="6"];
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
+  "cli" -> "metadata" [label="1"];
   "cli" -> "module_system" [label="6"];
   "cli" -> "package" [label="5"];
   "cli" -> "parser" [label="5"];
