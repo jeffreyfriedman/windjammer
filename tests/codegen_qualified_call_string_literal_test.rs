@@ -150,8 +150,11 @@ pub fn render() {
     let src_dir = temp_dir.path().join("src");
     fs::create_dir_all(&src_dir).unwrap();
     fs::write(src_dir.join("game.wj"), game_source).unwrap();
-    // Place conflicting metadata in source dir so the compiler finds it
-    fs::write(src_dir.join("rendering_api.wj.meta"), conflicting_meta).unwrap();
+    // Place the conflicting metadata where the compiler reads analysis metadata: the project's cache
+    // (a `*.wj.meta` beside a source is a legacy sidecar and is ignored).
+    fs::write(temp_dir.path().join("wj.toml"), "[package]\nname = \"p\"\nversion = \"0.1.0\"\n").unwrap();
+    fs::create_dir_all(temp_dir.path().join(".wj-cache")).unwrap();
+    fs::write(temp_dir.path().join(".wj-cache/rendering_api.wj.meta"), conflicting_meta).unwrap();
 
     // Compile SINGLE FILE (not directory), which forces single-file path
     // that relies on metadata for cross-module signatures

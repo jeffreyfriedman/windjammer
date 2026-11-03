@@ -661,6 +661,10 @@ pub enum Commands {
         /// Also clean local target/ directories (deep clean)
         #[arg(long)]
         all: bool,
+
+        /// Only remove legacy `*.wj.meta` sidecars next to sources under the current directory
+        #[arg(long)]
+        sidecars: bool,
     },
 
     /// Manage the shared Cargo target cache (outside application repos)
