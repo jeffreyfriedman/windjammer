@@ -146,23 +146,13 @@ impl FloatInference {
                 }
 
                 // Try each candidate until we find one that exists.
-                // Check .wj-cache/ first, then fall back to colocated (legacy).
+                // Analysis metadata lives in the cache only; colocated sidecars are never read.
                 let mut found_metadata = false;
                 for candidate in &candidates {
-                    let cache_path = if let Some(ref root) = self.source_root {
+                    let full_meta_path = if let Some(ref root) = self.source_root {
                         crate::metadata::meta_cache_root(root).join(candidate)
                     } else {
                         std::path::PathBuf::from(".wj-cache").join(candidate)
-                    };
-                    let legacy_path = if let Some(ref root) = self.source_root {
-                        root.join(candidate)
-                    } else {
-                        candidate.clone()
-                    };
-                    let full_meta_path = if cache_path.exists() {
-                        cache_path
-                    } else {
-                        legacy_path
                     };
 
                     if let Ok(meta_json) = std::fs::read_to_string(&full_meta_path) {
