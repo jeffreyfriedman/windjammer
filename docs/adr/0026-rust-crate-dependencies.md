@@ -115,8 +115,9 @@ Hand-writing surfaces was the cost of option A. The generator removes it:
   the locked crate source and the generator; it never downloads (a crate that is not in the local registry gets a
   note naming `wj rust-surface <crate>`, which asks Cargo).
 - **Source of truth: the crate source, parsed with `syn`** (option b of the brief). Evidence:
-  rustdoc JSON needs `-Zunstable-options`, which stable rustc rejects (RUSTDOC_EVIDENCE); its `format_version` changes
-  between nightlies, so a parser pinned to one version breaks for users on another. The crate source is what
+  rustdoc JSON needs `-Zunstable-options`, which stable rustc rejects (rustc 1.98.0: "the option `Z` is only accepted
+  on the nightly compiler"; nightly 1.100.0 of 2026-09-01 documents strsim 0.11.1 in 2.2 s as `format_version` 61); the
+  format version changes between nightlies, so a parser pinned to one version breaks for users on another. The crate source is what
   Cargo already unpacked for the locked version (`~/.cargo/registry/src/*/<crate>-<version>`, `vendor/`, or a `path`
   dependency), parsing it costs milliseconds, works on stable and offline, and `syn` is already a dependency. Its
   limits are handled explicitly rather than guessed: `#[cfg]` is evaluated for the enabled features (defaults expanded

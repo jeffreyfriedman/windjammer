@@ -104,9 +104,19 @@ fn surface_gives_codegen_the_boundary_signature() {
 
 #[test]
 fn without_a_surface_the_build_still_fails_closed() {
-    // mutation guard: the surface is what removes the boundary error, not something else in this test setup
+    // mutation guard: the surface is what removes the boundary error, not something else in this test setup.
+    // `wj build` generates a surface from the crate source when it finds one; an empty Cargo home leaves none.
     let p = Project::new("", MAIN, None);
-    let (o, out) = p.transpile();
+    let empty_home = tempfile::TempDir::new().unwrap();
+    let out = p.root.join("out");
+    let o = Command::new(WJ)
+        .args(["build", ".", "-o", out.to_str().unwrap(), "--no-cargo"])
+        .current_dir(&p.root)
+        .env("NO_COLOR", "1")
+        .env("CARGO_HOME", empty_home.path())
+        .output()
+        .unwrap();
+    assert!(text(&o).contains("no signature surface for Rust crate `strsim`") && text(&o).contains("`wj rust-surface strsim`"), "{}", text(&o));
     let rs = std::fs::read_to_string(out.join("main.rs")).unwrap_or_default();
     assert!(!o.status.success() || rs.contains("missing boundary signature"), "{}\n{rs}", text(&o));
 }
