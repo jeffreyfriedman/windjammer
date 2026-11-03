@@ -91,4 +91,3 @@ codegen::rust::string_utilities::tests::static_impl_borrowed_string_formal_liter
 ir::formal_predicates::tests::method_call_arg_index_accounts_for_self_layout
 ir::signature_bridge::tests::analyzer_borrowed_bare_string_formal_stays_owned_without_emission
 ir::signature_bridge::tests::free_fn_plain_string_borrows_at_call_site
-drift_repros_test::annotated_collect_of_split_into_vec_string_typechecks
