@@ -93,7 +93,10 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
                 (Some(e), Some(f)) => {
                     let (we, wf) = (wjify(&format!("`{e}`")), wjify(&format!("`{f}`")));
                     let (we, wf) = (we.trim_matches('`').to_string(), wf.trim_matches('`').to_string());
-                    let message = if we == wf {
+                    let message = if we == wf && e != f {
+                        // two Rust spellings with one Windjammer name (`i32` / `i64` are both `int`): keep the raw pair
+                        format!("mismatched types: expected `{e}`, found `{f}` (both are `{we}` in Windjammer: the integer widths differ)")
+                    } else if we == wf {
                         format!("mismatched types: expected {} `{we}`, found {} `{wf}`", ownership_word(e), ownership_word(f))
                     } else {
                         format!("mismatched types: expected `{we}`, found `{wf}`")

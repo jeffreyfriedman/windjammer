@@ -9,14 +9,13 @@ use std::strings
 use wj_proc::sh
 use wj_proc::quote
 
-const DIR: string = "/tmp/wj-drift-selftest"
 
-fn run_ledger(wj: string, results: string, ledger: string, extra: string, envs: string) -> string {
-    let _ = sh("mkdir -p ${DIR}")
-    let _ = fs.write("${DIR}/r.tsv", results)
-    let _ = fs.write("${DIR}/l.txt", ledger)
-    let _ = fs.write("${DIR}/b.txt", "kept | walker=pass resolved=fail compiled=pass | old\n")
-    let cmd = "${envs} ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${DIR}/r.tsv ${DIR}/l.txt ${extra} 2>&1; echo \"exit=$?\""
+fn run_ledger(wj: string, dir: string, results: string, ledger: string, extra: string, envs: string) -> string {
+    let _ = sh("mkdir -p ${dir}")
+    let _ = fs.write("${dir}/r.tsv", results)
+    let _ = fs.write("${dir}/l.txt", ledger)
+    let _ = fs.write("${dir}/b.txt", "kept | walker=pass resolved=fail compiled=pass | old\n")
+    let cmd = "env -u DRIFT_ALLOW_GROWTH ${envs} ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${dir}/r.tsv ${dir}/l.txt ${extra} 2>&1; echo \"exit=$?\""
     match sh(cmd) {
         Ok(r) => r.stdout,
         Err(e) => "error ${e}",
@@ -29,6 +28,24 @@ fn run_probe(wj: string, engine: string) -> string {
         Ok(r) => r.stdout,
         Err(e) => "error ${e}",
     }
+}
+
+fn sh_out(cmd: string) -> string {
+    match sh(cmd) {
+        Ok(r) => r.stdout,
+        Err(e) => "error ${e}",
+    }
+}
+
+// the `scratch: DIR` line of a live run's output, or ""
+fn scratch_of(out: string) -> string {
+    for line in strings.split_lines(out) {
+        let t = strings.trim(line)
+        if strings.starts_with(t, "scratch: ") {
+            return strings.replace(t, "scratch: ", "")
+        }
+    }
+    ""
 }
 
 struct Check {
@@ -52,27 +69,57 @@ fn verdict(c: Check) -> string {
 fn main() {
     let args = env::args()
     let wj = if args.len() > 1 { args[1] } else { "wj" }
+    let dir = match sh("mktemp -d /tmp/wj-drift-selftest.XXXXXX") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-drift-selftest",
+    }
     let agree = "a\tpass\tpass\tpass\nb\texit0:3:7\texit0:3:7\tskip\n"
     let split = "a\tpass\tpass\tpass\nb\tpass\tfail\tpass\n"
     let sig = "b | walker=pass resolved=fail compiled=pass | planted\n"
     let mut checks: Vec<Check> = Vec::new()
-    checks.push(Check { name: "agreement passes", out: run_ledger(wj, agree, "", "", ""), exit: 0, needle: "0 divergent" })
-    checks.push(Check { name: "skip is not a divergence", out: run_ledger(wj, "a\tpass\tpass\tskip\n", "", "", ""), exit: 0, needle: "" })
-    checks.push(Check { name: "a new divergence fails", out: run_ledger(wj, split, "", "", ""), exit: 1, needle: "new       b" })
-    checks.push(Check { name: "a ledgered divergence passes", out: run_ledger(wj, split, sig, "", ""), exit: 0, needle: "1 divergent" })
-    checks.push(Check { name: "a changed divergence fails", out: run_ledger(wj, "a\tpass\tpass\tpass\nb\tfail\tpass\tpass\n", sig, "", ""), exit: 1, needle: "changed   b" })
-    checks.push(Check { name: "a vanished divergence fails", out: run_ledger(wj, agree, sig, "", ""), exit: 1, needle: "stale     b" })
-    checks.push(Check { name: "an entry without a case fails", out: run_ledger(wj, agree, "zz | walker=a resolved=b compiled=c | x\n", "", ""), exit: 1, needle: "not in the corpus" })
-    checks.push(Check { name: "too few cases fail", out: run_ledger(wj, agree, "", "--min-cases 5", ""), exit: 1, needle: "vacuous" })
-    checks.push(Check { name: "an empty run fails", out: run_ledger(wj, "", "", "--min-cases 1", ""), exit: 1, needle: "vacuous" })
+    checks.push(Check { name: "agreement passes", out: run_ledger(wj, dir, agree, "", "", ""), exit: 0, needle: "0 divergent" })
+    checks.push(Check { name: "skip is not a divergence", out: run_ledger(wj, dir, "a\tpass\tpass\tskip\n", "", "", ""), exit: 0, needle: "" })
+    checks.push(Check { name: "a new divergence fails", out: run_ledger(wj, dir, split, "", "", ""), exit: 1, needle: "new       b" })
+    checks.push(Check { name: "a ledgered divergence passes", out: run_ledger(wj, dir, split, sig, "", ""), exit: 0, needle: "1 divergent" })
+    checks.push(Check { name: "a changed divergence fails", out: run_ledger(wj, dir, "a\tpass\tpass\tpass\nb\tfail\tpass\tpass\n", sig, "", ""), exit: 1, needle: "changed   b" })
+    checks.push(Check { name: "a vanished divergence fails", out: run_ledger(wj, dir, agree, sig, "", ""), exit: 1, needle: "stale     b" })
+    checks.push(Check { name: "an entry without a case fails", out: run_ledger(wj, dir, agree, "zz | walker=a resolved=b compiled=c | x\n", "", ""), exit: 1, needle: "not in the corpus" })
+    checks.push(Check { name: "too few cases fail", out: run_ledger(wj, dir, agree, "", "--min-cases 5", ""), exit: 1, needle: "vacuous" })
+    checks.push(Check { name: "an empty run fails", out: run_ledger(wj, dir, "", "", "--min-cases 1", ""), exit: 1, needle: "vacuous" })
     let grown = "kept | walker=pass resolved=fail compiled=pass | old\nb | walker=pass resolved=fail compiled=pass | planted\n"
     let split2 = "kept\tpass\tfail\tpass\nb\tpass\tfail\tpass\n"
-    checks.push(Check { name: "ledger growth fails", out: run_ledger(wj, split2, grown, "--base-ledger ${DIR}/b.txt", ""), exit: 1, needle: "grew      b" })
-    checks.push(Check { name: "growth can be recorded", out: run_ledger(wj, split2, grown, "--base-ledger ${DIR}/b.txt", "DRIFT_ALLOW_GROWTH=1"), exit: 0, needle: "" })
+    checks.push(Check { name: "ledger growth fails", out: run_ledger(wj, dir, split2, grown, "--base-ledger ${dir}/b.txt", ""), exit: 1, needle: "grew      b" })
+    checks.push(Check { name: "growth can be recorded", out: run_ledger(wj, dir, split2, grown, "--base-ledger ${dir}/b.txt", "DRIFT_ALLOW_GROWTH=1"), exit: 0, needle: "" })
     // WJ_TEST_ENGINE must really switch engines: the probe passes under the walker and fails under the
     // resolved engine, or the corpus would compare an engine with itself
     checks.push(Check { name: "the walker runs the engine probe", out: run_probe(wj, "walker"), exit: 0, needle: "1 passed" })
     checks.push(Check { name: "the resolved engine runs the engine probe", out: run_probe(wj, "resolved"), exit: 1, needle: "1 failed" })
+    // live runs: one scratch directory per run, removed on exit, and one live run per worktree at a time
+    let live = "${quote(wj)} run --interpret scripts/wj/drift_corpus.wj ${quote(wj)} ${dir}/o.tsv --compiled live --only zzz-no-such-case"
+    let tag = match sh("printf %s \"$PWD\" | cksum | cut -d' ' -f1") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "x",
+    }
+    let lock = "/tmp/wj-drift-corpus-${tag}.lock"
+    // a lock held by a live process refuses the run, and the refused run touches nothing
+    // the holder is this very process ($PPID of the shell), alive for the whole check
+    let _ = sh("rm -rf ${lock}; mkdir ${lock}; echo $PPID > ${lock}/pid")
+    checks.push(Check { name: "a live run refuses to start while the lock is held", out: sh_out("${live} 2>&1; echo \"exit=$?\""), exit: 1, needle: "holds" })
+    let _ = sh("rm -rf ${lock}")
+    // a stale lock (dead pid) is taken over; the scratch directory is gone afterwards
+    let _ = sh("mkdir ${lock}; echo 999999 > ${lock}/pid")
+    let first = sh_out("${live} 2>&1; echo \"exit=$?\"")
+    checks.push(Check { name: "a stale lock is taken over", out: first, exit: 0, needle: "scratch: /tmp/wj-drift-live." })
+    let second = sh_out("${live} 2>&1; echo \"exit=$?\"")
+    checks.push(Check { name: "two runs use different scratch directories", out: if scratch_of(first) != scratch_of(second) && scratch_of(first) != "" { "exit=0" } else { "same scratch ${scratch_of(first)}" }, exit: 0, needle: "" })
+    checks.push(Check { name: "the scratch directory is removed on exit", out: sh_out("ls -d ${scratch_of(first)} 2>&1; echo \"exit=$?\""), exit: 1, needle: "No such file" })
+    // two simultaneous runs: each either runs alone or is refused, never both in one directory
+    let both = sh_out("(${live} > ${dir}/a.out 2>&1; echo $? >> ${dir}/a.out) & (${live} > ${dir}/b.out 2>&1; echo $? >> ${dir}/b.out) & wait; cat ${dir}/a.out ${dir}/b.out")
+    let sa = scratch_of(sh_out("cat ${dir}/a.out"))
+    let sb = scratch_of(sh_out("cat ${dir}/b.out"))
+    checks.push(Check { name: "simultaneous live runs never share a scratch directory", out: if sa != "" && sa == sb { "shared ${sa}" } else { "exit=0" }, exit: 0, needle: "" })
+    let _ = both
+    let _ = sh("rm -rf ${dir}")
     let mut bad = 0
     for c in checks {
         let v = verdict(c)

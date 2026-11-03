@@ -38,6 +38,18 @@ interpreted runs with `tests/drift_corpus/compiled_baseline.tsv`, recorded with
 `wj run scripts/wj/drift_corpus.wj BIN OUT --compiled live --record` (and re-checked in CI with `--compiled live`).
 A test missing from the baseline is `absent` and therefore a divergence: record the baseline when the corpus changes.
 
+## The generated programs
+
+`scripts/wj/drift_gen.wj` writes seeded programs (default seeds 1..40) whose cells put a value of one kind
+(`Option<int>`, `Option<int>` from a map lookup, `Result`, an enum with unit/tuple/struct variants, `Option<string>`)
+in one value position (match arm result, return, return from a loop, closure, struct field, nested match, shadowing,
+`Vec` element, if-expression, bool match), on a hit and on a miss. Every integer literal goes through `num(..)`, so
+literal typing is not what the grid probes. Oracles: the walker for the resolved engine (`gen/seed-N`: stdout and exit
+status), and rustc for the compiled backend (`gen/seed-N#rustc`: the generated Rust must type-check; `--run-compiled`
+also runs it). The rows join the corpus rows, so the same ledger applies. `DRIFT_GEN_BARE=1` switches on bare
+unit-variant patterns (a known divergence, `repros/bare_unit_pattern_in_let_match.wj`). Seeds beyond the default:
+`wj run scripts/wj/drift_gen.wj BIN DIR OUT.tsv --seeds 41..400`.
+
 ## The drift budget
 
 `tests/drift_corpus/known_divergences.txt` lists the divergences we know about: `case | walker=A resolved=B

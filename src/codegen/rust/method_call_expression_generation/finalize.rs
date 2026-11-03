@@ -1549,10 +1549,10 @@ impl<'ast> CodeGenerator<'ast> {
         // Generate turbofish if present, or infer for collect() from return type
         let mut collect_adapter = String::new();
         let turbofish = if let Some(types) = type_args {
-            let type_strs: Vec<String> = types.iter().map(|t| self.type_to_rust(t)).collect();
-            format!("::<{}>", type_strs.join(", "))
+            collect_adapter = self.explicit_collect_adapter(object, method, receiver_type_name.as_deref(), types);
+            format!("::<{}>", types.iter().map(|t| self.type_to_rust(t)).collect::<Vec<_>>().join(", "))
         } else if method == "collect" && !self.receiver_defines_method(receiver_type_name.as_deref(), "collect") {
-            let (adapter, turbo) = self.compute_collect_lowering(object);
+            let (adapter, turbo) = self.compute_collect_lowering(object, None);
             collect_adapter = adapter;
             turbo
         } else {

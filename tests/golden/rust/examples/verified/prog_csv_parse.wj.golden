@@ -8,7 +8,7 @@ struct Row {
 
 #[inline]
 fn parse_line(line: &str) -> Result<Row, String> {
-    let f: Vec<String> = line.split(",").map(|s| s.to_string()).map(|s| s.to_string()).collect::<Vec<String>>();
+    let f: Vec<String> = line.split(",").map(|s| s.to_string()).collect::<Vec<_>>();
     if f.len() != 3_usize {
         return Err(String::from("wrong field count"));
     }

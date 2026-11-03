@@ -182,6 +182,25 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// When `variant` is an unqualified enum variant matching `scrutinee_ty`, emit `Enum::Variant`.
+    /// `Enum::Variant` when exactly one user enum declares a variant of this name. A scrutinee whose type is
+    /// not known (a `match` over a `match`) still resolves a bare unit-variant pattern, as the interpreter does.
+    fn unique_enum_variant_key(&self, variant: &str) -> Option<String> {
+        if matches!(variant, "Some" | "None" | "Ok" | "Err") {
+            return None;
+        }
+        let suffix = format!("::{variant}");
+        let mut found = self
+            .enum_variant_types
+            .keys()
+            .chain(self.enum_variant_struct_fields.keys())
+            .filter(|k| k.ends_with(&suffix));
+        let first = found.next()?;
+        if found.any(|k| k != first) {
+            return None;
+        }
+        Some(first.clone())
+    }
+
     fn qualify_enum_variant_path(&self, variant: &str, scrutinee_ty: Option<&Type>) -> String {
         if variant.contains("::") {
             return variant.to_string();
@@ -199,7 +218,7 @@ impl<'ast> CodeGenerator<'ast> {
             return variant.to_string();
         }
         let Some(ty) = scrutinee_ty else {
-            return variant.to_string();
+            return self.unique_enum_variant_key(variant).unwrap_or_else(|| variant.to_string());
         };
         let inner = match ty {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -219,7 +238,7 @@ impl<'ast> CodeGenerator<'ast> {
             return variant.to_string();
         }
         let Some(key) = self.enum_pattern_registry_key(variant, inner) else {
-            return variant.to_string();
+            return self.unique_enum_variant_key(variant).unwrap_or_else(|| variant.to_string());
         };
         // Only rewrite when this is a known user enum variant — never invent
         // `u8::TAG_NULL` / primitive associated paths for const patterns.
