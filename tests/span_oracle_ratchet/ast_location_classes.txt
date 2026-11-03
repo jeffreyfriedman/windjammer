@@ -16,16 +16,13 @@ siblings-out-of-order:Call 195
 siblings-out-of-order:MethodCall 42
 siblings-out-of-order:StructLiteral 18
 start-not-first-child:Call 128
-wrong-first-token:Block 84
+wrong-first-token:Block 21
 wrong-first-token:Break 5
 wrong-first-token:Closure 54
-wrong-first-token:For 4
 wrong-first-token:Identifier 104
 wrong-first-token:Literal 25
-wrong-first-token:Loop 2
 wrong-first-token:MacroInvocation 37
 wrong-first-token:StructLiteral 7
-wrong-first-token:While 2
 wrong-last-token:Block 6
 wrong-last-token:Call 84
 wrong-last-token:Identifier 96
