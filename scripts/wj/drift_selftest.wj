@@ -69,6 +69,10 @@ fn verdict(c: Check) -> string {
 fn main() {
     let args = env::args()
     let wj = if args.len() > 1 { args[1] } else { "wj" }
+    if strings.contains(wj, "/") && !strings.starts_with(wj, "/") {
+        println("drift selftest: pass the wj binary as an absolute path (got `${wj}`): the checks run from other directories")
+        process.exit(2)
+    }
     let dir = match sh("mktemp -d /tmp/wj-drift-selftest.XXXXXX") {
         Ok(r) => strings.trim(r.stdout),
         Err(_) => "/tmp/wj-drift-selftest",
@@ -94,13 +98,19 @@ fn main() {
     // resolved engine, or the corpus would compare an engine with itself
     checks.push(Check { name: "the walker runs the engine probe", out: run_probe(wj, "walker"), exit: 0, needle: "1 passed" })
     checks.push(Check { name: "the resolved engine runs the engine probe", out: run_probe(wj, "resolved"), exit: 1, needle: "1 failed" })
+    // the gate resolves its binary to an absolute path and links the ecosystem packages itself, or says why not
+    let gate = "${quote(wj)} run --interpret scripts/wj/drift_gate.wj"
+    let rel = sh_out("ln -sf ${quote(wj)} ${dir}/wjlink; ${gate} --wj ${dir}/../$(basename ${dir})/wjlink --check-env 2>&1; echo \"exit=$?\"")
+    checks.push(Check { name: "the gate accepts a path with .. and prints it absolute", out: rel, exit: 0, needle: "wj: /" })
+    let rel2 = sh_out("cd ${dir} && ln -sf ${quote(wj)} wjlink && cd - > /dev/null && ${gate} --wj ${dir}/wjlink --check-env 2>&1; echo \"exit=$?\"")
+    checks.push(Check { name: "the gate resolves the binary", out: rel2, exit: 0, needle: "wj: " })
+    checks.push(Check { name: "the gate refuses a binary that does not exist", out: sh_out("${gate} --wj target/release/no-such-wj --check-env 2>&1; echo \"exit=$?\""), exit: 1, needle: "not an executable" })
+    checks.push(Check { name: "the gate links the ecosystem from WJ_ECOSYSTEM", out: sh_out("mkdir -p ${dir}/eco/packages; WJ_ECOSYSTEM=${dir}/eco DRIFT_ECO_LINK=${dir}/eco-link ${gate} --wj ${quote(wj)} --check-env 2>&1; ls ${dir}/eco-link/packages > /dev/null 2>&1 && echo linked-ok; echo \"exit=$?\""), exit: 0, needle: "linked-ok" })
+    checks.push(Check { name: "the gate explains a missing ecosystem", out: sh_out("env -u WJ_ECOSYSTEM DRIFT_ECO_LINK=${dir}/no-link-here/x ${gate} --wj ${quote(wj)} --check-env 2>&1; echo \"exit=$?\""), exit: 1, needle: "not linked" })
     // live runs: one scratch directory per run, removed on exit, and one live run per worktree at a time
-    let live = "${quote(wj)} run --interpret scripts/wj/drift_corpus.wj ${quote(wj)} ${dir}/o.tsv --compiled live --only zzz-no-such-case"
-    let tag = match sh("printf %s \"$PWD\" | cksum | cut -d' ' -f1") {
-        Ok(r) => strings.trim(r.stdout),
-        Err(_) => "x",
-    }
-    let lock = "/tmp/wj-drift-corpus-${tag}.lock"
+    let live = "DRIFT_LOCK=${dir}/lock ${quote(wj)} run --interpret scripts/wj/drift_corpus.wj ${quote(wj)} ${dir}/o.tsv --compiled live --only zzz-no-such-case"
+    // a lock of its own: the checks must never touch the lock of a real live run
+    let lock = "${dir}/lock"
     // a lock held by a live process refuses the run, and the refused run touches nothing
     // the holder is this very process ($PPID of the shell), alive for the whole check
     let _ = sh("rm -rf ${lock}; mkdir ${lock}; echo $PPID > ${lock}/pid")

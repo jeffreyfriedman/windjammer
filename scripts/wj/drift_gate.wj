@@ -1,6 +1,6 @@
 // The drift gate: one command that fails when the interpreter and the compiled output disagree.
 //
-//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--compiled recorded|live|skip]
+//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--check-env] [--compiled recorded|live|skip]
 //
 // Steps (docs/testing/DRIFT.md):
 //   selftest   the ledger comparer and the corpus tokens, against planted divergences
@@ -17,6 +17,7 @@ use std::env
 use std::process
 use std::strings
 use wj_proc::sh
+use wj_proc::quote
 use wj_table::new
 use wj_table::add_row
 use wj_table::plain
@@ -178,9 +179,43 @@ fn corpus_step(wj: string, compiled: string) -> Step {
     Step { name: "corpus (compiled: ${compiled})", cases: cases, verdict: if ok { "pass" } else { "FAIL" }, secs: now() - t0, detail: detail }
 }
 
+// The gate runs programs from scratch and probe directories, so the binary must be named absolutely: a
+// relative path is resolved against the repository root (where the gate runs), a bare name through PATH.
+// Err(message) when it names no executable.
+fn absolute_wj(wj: string) -> Result<string, string> {
+    let cmd = "case ${quote(wj)} in /*) p=${quote(wj)};; */*) p=\"$PWD/${wj}\";; *) p=$(command -v ${quote(wj)});; esac; if [ -n \"$p\" ] && [ -x \"$p\" ] && [ ! -d \"$p\" ]; then echo \"$p\"; else echo; fi"
+    match sh(cmd) {
+        Ok(r) => {
+            let p = strings.trim(r.stdout)
+            if p == "" { Err("wj binary `${wj}` is not an executable file (build it, or pass --wj /absolute/path/to/wj)") } else { Ok(p) }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+// The scripts import the ecosystem packages through `windjammer-ecosystem/` at the repository root (without it
+// `wj check` reports WJ0044 on their externs). Create the link from WJ_ECOSYSTEM or a sibling checkout when it
+// is missing; Err(message) when there is nothing to link to. DRIFT_ECO_LINK renames the link (tests).
+fn ensure_ecosystem() -> Result<string, string> {
+    let link = env::var("DRIFT_ECO_LINK").unwrap_or("windjammer-ecosystem")
+    let cmd = "if [ -e ${quote(link)} ]; then echo present; exit 0; fi; for c in \"$WJ_ECOSYSTEM\" ../windjammer-ecosystem; do if [ -n \"$c\" ] && [ -d \"$c/packages\" ]; then ln -s \"$(cd \"$c\" && pwd)\" ${quote(link)} && echo linked; exit 0; fi; done; echo missing"
+    match sh(cmd) {
+        Ok(r) => {
+            let v = strings.trim(r.stdout)
+            if v == "missing" || v == "" {
+                Err("the ecosystem packages are not linked: put a windjammer-ecosystem checkout at ${link} (or set WJ_ECOSYSTEM to one), or keep it next to this repository")
+            } else {
+                Ok(v)
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
 fn main() {
     let args = env::args()
     let mut wj = env::var("WJ").unwrap_or("target/release/wj")
+    let mut check_env = false
     let mut fast = false
     let mut compiled = "recorded"
     let mut i = 1
@@ -188,6 +223,8 @@ fn main() {
         if args[i] == "--wj" {
             wj = args[i + 1]
             i += 1
+        } else if args[i] == "--check-env" {
+            check_env = true
         } else if args[i] == "--fast" {
             fast = true
         } else if args[i] == "--compiled" {
@@ -195,6 +232,28 @@ fn main() {
             i += 1
         }
         i += 1
+    }
+    match absolute_wj(wj) {
+        Ok(p) => wj = p,
+        Err(m) => {
+            println("drift gate: ${m}")
+            process.exit(2)
+        },
+    }
+    match ensure_ecosystem() {
+        Ok(v) => {
+            if check_env {
+                println("ecosystem: ${v}")
+            }
+        },
+        Err(m) => {
+            println("drift gate: ${m}")
+            process.exit(2)
+        },
+    }
+    if check_env {
+        println("wj: ${wj}")
+        return
     }
     let mut steps: Vec<Step> = Vec::new()
     steps.push(wj_step("selftest", wj, "scripts/wj/drift_selftest.wj ${wj}"))
