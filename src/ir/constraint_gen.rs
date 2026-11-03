@@ -648,6 +648,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Vec::new()
         };
+        if let Some(Statement::Expression { expr, .. }) = body.last().map(|s| &**s) {
+            self.type_wrapped_return_payload(expr);
+        }
         for val_var in tails {
             self.cs.add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
             self.cs.add_because(
@@ -770,6 +773,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::Return { value, .. } => {
                 if let Some(val) = value {
                     let val_var = self.walk_expression(val);
+                    self.type_wrapped_return_payload(val);
                     self.cs
                         .add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
                     self.cs.add_because(

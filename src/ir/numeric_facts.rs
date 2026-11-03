@@ -228,4 +228,12 @@ mod tests {
         let g = facts("pub fn g(o: Option<u32>) -> u32 {\n    let c = o.unwrap_or(&0)\n    c\n}\n", "g");
         assert!(g.solver_local_widths.get("c").is_none(), "{:?}", g.solver_local_widths);
     }
+
+    /// The same push when the Vec is returned inside `Ok(..)`: the declared payload types the Vec.
+    #[test]
+    fn usize_counter_pushed_into_int_vec_returned_in_ok_is_converted() {
+        let f = facts("pub fn f(lines: Vec<string>) -> Result<Vec<int>, string> {\n    let mut out = Vec::new()\n    let mut i = 0\n    while i < lines.len() {\n        out.push(i + 1)\n        i = i + 1\n    }\n    Ok(out)\n}\n", "f");
+        assert_eq!(f.solver_local_widths.get("i"), Some(&BaseType::Usize));
+        assert_eq!(f.usize_conversions.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?}", f.usize_conversions);
+    }
 }
