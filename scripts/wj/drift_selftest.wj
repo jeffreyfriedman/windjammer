@@ -15,7 +15,7 @@ fn run_ledger(wj: string, dir: string, results: string, ledger: string, extra: s
     let _ = fs.write("${dir}/r.tsv", results)
     let _ = fs.write("${dir}/l.txt", ledger)
     let _ = fs.write("${dir}/b.txt", "kept | walker=pass resolved=fail compiled=pass | old\n")
-    let cmd = "${envs} ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${dir}/r.tsv ${dir}/l.txt ${extra} 2>&1; echo \"exit=$?\""
+    let cmd = "env -u DRIFT_ALLOW_GROWTH ${envs} ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${dir}/r.tsv ${dir}/l.txt ${extra} 2>&1; echo \"exit=$?\""
     match sh(cmd) {
         Ok(r) => r.stdout,
         Err(e) => "error ${e}",
