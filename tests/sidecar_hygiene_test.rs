@@ -164,24 +164,35 @@ fn stray_detector_reports_a_planted_file() {
 
 #[test]
 fn legacy_sidecar_is_never_read() {
-    // A poisoned sidecar next to a source must not change the output.
-    let build = |poison: bool| {
+    // A poisoned sidecar next to a source must not change the output. The poison claims `util::label`
+    // takes an owned string, which (if read) makes the call site emit `"abc".to_string()`; the real
+    // analysis borrows. The oracle is the clean build, and the poison is proven live by the cache control below (single-file builds consult peer metadata).
+    let build = |poison: Option<&Path>| {
         let d = project(true);
+        std::fs::write(d.path().join("src/util.wj"), "pub fn label(s: string) -> int {\n    s.len()\n}\n").unwrap();
+        std::fs::write(d.path().join("src/main.wj"), "use crate::util\n\nfn main() {\n    let n = util::label(\"abc\")\n    println(\"${n}\")\n}\n").unwrap();
         let cache = tempfile::tempdir().unwrap();
-        if poison {
-            let meta = r#"{"module_path":"util","functions":{"inc":{"params":["Int"],"return_type":"Int","is_associated":false,"parent_type":null,"param_ownership":["Owned"],"has_self_receiver":false}},"structs":{},"trait_impls":{},"copy_structs":[],"version":"0.0.0"}"#;
-            std::fs::write(d.path().join("src/util.wj.meta"), meta).unwrap();
-            std::fs::write(d.path().join("src/main.wj.meta"), "garbage").unwrap();
+        let mut planted = None;
+        if let Some(rel) = poison {
+            let meta = r#"{"module_path":"util","functions":{"label":{"params":["String"],"return_type":"Int","is_associated":false,"parent_type":null,"param_ownership":["Owned"],"has_self_receiver":false}},"structs":{},"trait_impls":{},"copy_structs":[],"version":"0.0.0"}"#;
+            let dest = d.path().join(rel);
+            std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            std::fs::write(&dest, meta).unwrap();
+            planted = Some(dest);
         }
-        let o = wj(d.path(), cache.path(), &["build", "src", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
+        let o = wj(d.path(), cache.path(), &["build", "src/main.wj", "--no-cargo", "--no-lint", "--quiet", "-o", "out"]);
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-        let s = std::fs::read_to_string(d.path().join("out/main.rs")).unwrap();
-        let sidecar_untouched = !poison || std::fs::read_to_string(d.path().join("src/main.wj.meta")).unwrap() == "garbage";
-        (s, sidecar_untouched)
+        let rs = std::fs::read_to_string(d.path().join("out/main.rs")).unwrap();
+        let untouched = planted.map(|p| std::fs::read_to_string(p).unwrap().starts_with("{\"module_path\":\"util\"")).unwrap_or(true);
+        (rs, untouched)
     };
-    let (clean, _) = build(false);
-    let (poisoned, untouched) = build(true);
-    assert_eq!(clean, poisoned);
+    let (clean, _) = build(None);
+    // Control: the same poison in a cache location IS read, so a differing result is detectable at all.
+    let (cached, _) = build(Some(Path::new(".wj-cache/util.wj.meta")));
+    assert_ne!(clean, cached, "poison is inert even in the cache; the gate would be vacuous");
+    // The legacy location must behave exactly like no poison.
+    let (legacy, untouched) = build(Some(Path::new("src/util.wj.meta")));
+    assert_eq!(clean, legacy, "a sidecar next to a source influenced the build");
     assert!(untouched, "a legacy sidecar must be left alone by build, not rewritten");
 }
 
