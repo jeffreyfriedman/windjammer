@@ -630,7 +630,7 @@ What changed. (1) `Grant::check` keeps a decision cache for `fs.read`: a resourc
 
 Mutation checks. Without the generation bump on writes, `cache/read-then-swap-in-a-link` (a program renames a link over a path it has just read, then reads it again) fails the escape corpus; without the 50 ms expiry, `a_link_swapped_behind_the_programs_back_is_noticed_within_the_cache_ttl` fails. The 16 `bound/*` and 6 `run_inherit` cases stay byte-identical.
 
-Open: record on the non-sink workload is 1.5 to 2 points over its gate in this window; the cost is a fixed per-run setup, to be profiled next. The cache does not help `fs.write` checks (each write starts a new generation by design).
+Open: record on the non-sink workload is 1.5 to 2 points over its gate in this window; the cost is a fixed per-run setup, to be profiled next. The benchmark script `scripts/wj/bench_effects_overhead.wj` now builds and starts under `wj run --compiled` (with the packages it imports copied clean; the shared ecosystem checkout carries stale `gen/Cargo.toml` files that point at an older embedded runtime and collide in the lockfile), but a compiled script runs with its build directory as the working directory, so the workloads' repository-relative paths do not resolve and the measurement stops at the first run. Until that is fixed the figures above come from a small Python harness that runs the same arms (not in the repository). The cache does not help `fs.write` checks (each write starts a new generation by design).
 
 ### E4 status (2026-10-26): implemented on the interpreter, gates measured (cost provisional)
 
