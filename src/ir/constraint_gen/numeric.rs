@@ -13,6 +13,9 @@ pub struct Unmodelled {
     pub unknown_lengths: Vec<ConstraintVar>,
     /// A field read whose declared type the walk cannot see (another module's struct, a generic).
     pub unknown_fields: Vec<ConstraintVar>,
+    /// Locals bound to a borrow (`let r = &x`, `opt.unwrap_or(&d)`): they hold a reference, so no width is
+    /// published for the name (the class itself is still solved through the referent).
+    pub borrowed_bindings: Vec<String>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -445,4 +448,16 @@ mod tests {
         assert_eq!(fc.index_sources.len(), 1, "{:?}", fc.index_sources);
     }
 
+}
+
+/// `&x`, `&mut x`, or `opt.unwrap_or(&d)`: an initializer whose value is a reference.
+pub(super) fn is_borrow_initializer(e: &Expression<'_>) -> bool {
+    use crate::parser::ast::operators::UnaryOp;
+    match e {
+        Expression::Unary { op: UnaryOp::Ref | UnaryOp::MutRef, .. } => true,
+        Expression::MethodCall { method, arguments, .. } if method == "unwrap_or" => {
+            matches!(arguments.first(), Some((_, Expression::Unary { op: UnaryOp::Ref, .. })))
+        }
+        _ => false,
+    }
 }
