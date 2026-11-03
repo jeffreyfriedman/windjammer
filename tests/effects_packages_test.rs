@@ -4,6 +4,9 @@
 //! an escalation until `wj caps approve`, and at run time a call is attributed to the package that contains it
 //! (closures to where they are written), unless the dependency was *handed* a capability value.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -13,15 +16,27 @@ fn wj(args: &[&str], dir: &Path) -> (i32, String) {
     (out.status.code().unwrap_or(-1), text)
 }
 
+/// The `app/` directory of a fixture; the scratch root is removed when this drops.
+struct App {
+    app: PathBuf,
+    _root: Scratch,
+}
+
+impl std::ops::Deref for App {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.app
+    }
+}
+
 /// A fresh fixture: `app/` depending on `json5/` (path dependency), plus `app/data/ok.txt` and `secret.txt`.
-fn fixture(app_caps: &str, dep_lib: &str, app_main: &str) -> PathBuf {
+fn fixture(app_caps: &str, dep_lib: &str, app_main: &str) -> App {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let root = std::env::temp_dir().join(format!("wj_pkgs_{}_{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
+    let root = Scratch::new("pkgs");
     let _ = std::fs::remove_dir_all(&root);
     for d in ["app/src", "app/data", "json5/src"] {
         std::fs::create_dir_all(root.join(d)).unwrap();
     }
-    let root = std::fs::canonicalize(&root).unwrap();
     let w = |p: &str, t: &str| std::fs::write(root.join(p), t).unwrap();
     w("app/wj.toml", &format!("[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\njson5 = {{ path = \"../json5\" }}\n\n{app_caps}"));
     w("json5/wj.toml", "[package]\nname = \"json5\"\nversion = \"0.2.0\"\n");
@@ -29,7 +44,8 @@ fn fixture(app_caps: &str, dep_lib: &str, app_main: &str) -> PathBuf {
     w("app/src/main.wj", app_main);
     w("app/data/ok.txt", "ok-text");
     w("app/secret.txt", "TOP-SECRET");
-    root.join("app")
+    let app = root.join("app");
+    App { app, _root: root }
 }
 
 const LIB_READS: &str = "use std::fs\npub fn load(path: string) -> string {\n    fs::read_to_string(path).unwrap_or(\"\")\n}\npub fn size(s: string) -> int {\n    s.len()\n}\n";

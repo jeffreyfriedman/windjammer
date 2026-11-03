@@ -10,6 +10,9 @@
 //! The Rust program itself is compiled and run only with `WJ_EFFECTS_COMPILED=1` (it builds the runtime crate:
 //! about 40 s warm, much longer cold).
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -21,13 +24,12 @@ fn text(o: &Output) -> String {
     format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
 }
 
-fn project(main: &str, caps: &str) -> PathBuf {
+fn project(main: &str, caps: &str) -> Scratch {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let root = std::env::temp_dir().join(format!("wj_compiled_{}_{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
+    let root = Scratch::new("compiled");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::create_dir_all(root.join("data")).unwrap();
-    let root = std::fs::canonicalize(&root).unwrap();
     std::fs::write(root.join("wj.toml"), format!("[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n{caps}")).unwrap();
     std::fs::write(root.join("src/main.wj"), main).unwrap();
     std::fs::write(root.join("data/a.txt"), "hello-from-data").unwrap();

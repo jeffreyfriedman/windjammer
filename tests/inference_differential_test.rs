@@ -13,6 +13,9 @@
 
 //! consumes: tests/inference_corpus/*.wj
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -450,8 +453,8 @@ fn renders_consistently(p: &Program) -> bool {
     true
 }
 
-fn work_dir(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("wj_infer_{}_{}", name, std::process::id()));
+fn work_dir(name: &str) -> Scratch {
+    let d = Scratch::new("infer");
     let _ = std::fs::remove_dir_all(&d);
     d
 }
