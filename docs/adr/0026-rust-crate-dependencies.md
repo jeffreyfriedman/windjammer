@@ -169,7 +169,7 @@ Hand-writing surfaces was the cost of option A. The generator removes it:
 1. Done: `wj check` warns (`W0014`) for calls into crates without a surface. Next: an error once `wj build` has had
    a chance to generate (today the build already fails closed on such calls).
 2. Done: the generator (section "Generator"). Next on this rung: measure the 80% criterion on five popular small
-   crates (strsim 0.11.1 maps 8 of its 14 top-level functions, the rest being generic or returning a crate error type; hex maps 0 of 5 because its API is generic over `AsRef<[u8]>`,
+   crates (in strsim 0.11.1 every `&str` function maps, while the `generic_*` family and `hamming` (crate error type) are skipped; hex maps none because its whole API is generic over `AsRef<[u8]>`,
    the case that motivates the next item), then monomorphise common bounds (`T: AsRef<str>`, `AsRef<[u8]>`,
    `impl Into<String>`) to `string` / `&Vec<u8>` and add an owned-string parameter form so `String` parameters map.
 3. Host-bridge shims generated from surfaces (scalars and strings, ADR-0023's ABI), so surfaced crates run
