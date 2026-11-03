@@ -36,6 +36,15 @@ pub fn execute(all: bool) -> Result<()> {
     Ok(())
 }
 
+/// `wj clean --sidecars`: delete legacy `*.wj.meta` files next to sources under `root`.
+pub fn remove_sidecars(root: &Path) {
+    let removed = crate::metadata::legacy_sidecars::remove(root);
+    for p in &removed {
+        println!("  {} {}", "removed".green(), p.display());
+    }
+    println!("  {} {} legacy sidecar(s) removed", "done".green().bold(), removed.len());
+}
+
 /// Temp dirs younger than this are left alone (another process may be using them).
 const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(2 * 60 * 60);
 
