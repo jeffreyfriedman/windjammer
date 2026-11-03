@@ -820,6 +820,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // `.len()` while-counters already in `usize_variables` must not be
                 // demoted by `-> i32` return-width scan (cast at `return i` instead).
                 // `-> u32` still wins over usize for CLI/index loops.
+                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
                 let len_while_usize_counter =
                     var_name.is_some_and(|n| self.usize_variables.contains(n));
                 let u32_while_peer_counter = mutable
@@ -831,7 +832,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     || matches!(t, Type::Custom(ref w) if w == "u32")
                             })
                     });
+                // A solver width (NUM-LOCAL-WIDTH) owns the counter: the `-> u32` scan paint would retype
+                // the literal while the stamped local stays usize, dropping the casts at its index uses.
                 let u32_return_scan_counter = mutable
+                    && solver_local_width.is_none()
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && (self.function_returns_u32_for_loop_scan()
                         || u32_while_peer_counter
@@ -871,7 +875,6 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if self.assignment_int_target_type.is_none() && self.solver_pins_int_literal_init_for(var_name, value) { self.stamp_solver_int_binding(var_name, value); }
                 // NUM-LOCAL-WIDTH (ADR-0028): a width the solver fixed for this local beats every paint above.
-                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
                 if self.assignment_int_target_type.is_none() && solver_local_width.is_none() && self.function_prefers_i32_coord_locals() {
                     // negative int literal inits stay WJ `int` (i64), even in i32 builders.
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
