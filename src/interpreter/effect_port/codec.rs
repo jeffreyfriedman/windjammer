@@ -152,7 +152,8 @@ mod tests {
     fn rt(v: Value) {
         let j = encode(&v).unwrap();
         let back = decode(&serde_json::from_str(&super::super::log::canon(&j)).unwrap()).unwrap();
-        assert_eq!(format!("{v:?}"), format!("{back:?}"), "round trip of {j}");
+        // compare the encodings: the in-memory forms of a type name differ (`Static` against `Shared`) without meaning anything
+        assert_eq!(encode(&back).unwrap(), j, "round trip of {j}");
     }
 
     #[test]

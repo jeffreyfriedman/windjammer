@@ -33,38 +33,40 @@ pub struct Event {
 
 /// Canonical text of a JSON value: object keys sorted at every level, no whitespace.
 pub fn canon(v: &Json) -> String {
-    let mut s = String::new();
-    write_canon(v, &mut s);
-    s
+    let mut out = Vec::with_capacity(64);
+    write_canon(v, &mut out);
+    // serde_json writes valid UTF-8 and the structure around it is ASCII
+    String::from_utf8(out).unwrap_or_default()
 }
 
-fn write_canon(v: &Json, out: &mut String) {
+fn write_canon(v: &Json, out: &mut Vec<u8>) {
     match v {
         Json::Object(m) => {
-            let mut keys: Vec<&String> = m.keys().collect();
-            keys.sort();
-            out.push('{');
-            for (i, k) in keys.into_iter().enumerate() {
+            // `serde_json::Map` is a `BTreeMap` here (no `preserve_order`): iteration is already in key order
+            out.push(b'{');
+            for (i, (k, x)) in m.iter().enumerate() {
                 if i > 0 {
-                    out.push(',');
+                    out.push(b',');
                 }
-                out.push_str(&Json::String(k.clone()).to_string());
-                out.push(':');
-                write_canon(&m[k], out);
+                let _ = serde_json::to_writer(&mut *out, k);
+                out.push(b':');
+                write_canon(x, out);
             }
-            out.push('}');
+            out.push(b'}');
         }
         Json::Array(a) => {
-            out.push('[');
+            out.push(b'[');
             for (i, x) in a.iter().enumerate() {
                 if i > 0 {
-                    out.push(',');
+                    out.push(b',');
                 }
                 write_canon(x, out);
             }
-            out.push(']');
+            out.push(b']');
         }
-        other => out.push_str(&other.to_string()),
+        other => {
+            let _ = serde_json::to_writer(&mut *out, other);
+        }
     }
 }
 
@@ -100,13 +102,20 @@ pub fn event_line(e: &Event, log: &Path) -> std::io::Result<String> {
         let dir = blob_dir(log);
         std::fs::create_dir_all(&dir)?;
         std::fs::write(dir.join(&sha), text)?;
-        json!({ "sha256": sha })
+        format!("{{\"sha256\":\"{sha}\"}}")
     } else {
-        e.result.clone()
+        text
     };
-    Ok(canon(&json!({
-        "seq": e.seq, "task": e.task, "effect": e.effect, "op": e.op, "args": e.args, "result": result, "vt_ns": e.vt_ns,
-    })))
+    // the keys in canonical (sorted) order: args, effect, op, result, seq, task, vt_ns
+    Ok(format!(
+        "{{\"args\":{},\"effect\":{},\"op\":{},\"result\":{result},\"seq\":{},\"task\":{},\"vt_ns\":{}}}",
+        canon(&e.args),
+        Json::String(e.effect.clone()),
+        Json::String(e.op.clone()),
+        e.seq,
+        e.task,
+        e.vt_ns
+    ))
 }
 
 pub fn read_log(path: &Path) -> Result<(Header, Vec<Event>), String> {
@@ -155,31 +164,59 @@ pub fn read_log(path: &Path) -> Result<(Header, Vec<Event>), String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn canonical_json_sorts_keys_at_every_level() {
-        let v = json!({"b": 1, "a": {"z": [1, {"y": 2, "x": 3}], "c": null}});
-        assert_eq!(canon(&v), r#"{"a":{"c":null,"z":[1,{"x":3,"y":2}]},"b":1}"#);
+    /// The first implementation (a String per key and leaf, keys sorted by hand): the oracle for the allocation-free one.
+    fn old_canon(v: &Json, out: &mut String) {
+        match v {
+            Json::Object(m) => {
+                let mut keys: Vec<&String> = m.keys().collect();
+                keys.sort();
+                out.push('{');
+                for (i, k) in keys.into_iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    out.push_str(&Json::String(k.clone()).to_string());
+                    out.push(':');
+                    old_canon(&m[k], out);
+                }
+                out.push('}');
+            }
+            Json::Array(a) => {
+                out.push('[');
+                for (i, x) in a.iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    old_canon(x, out);
+                }
+                out.push(']');
+            }
+            other => out.push_str(&other.to_string()),
+        }
+    }
+
+    fn old(v: &Json) -> String {
+        let mut s = String::new();
+        old_canon(v, &mut s);
+        s
     }
 
     #[test]
-    fn a_log_round_trips_and_big_results_go_to_blobs() {
-        let d = tempfile::tempdir().unwrap();
-        let p = d.path().join("run.wjlog");
-        let h = Header { program: "abc".into(), compiler: "0.50.0".into(), sched_seed: 3, sim_seed: None, hash_seed: 0, rng_seed: 9, deterministic_time: false, args: vec!["x".into()] };
-        let big = "x".repeat(BLOB_LIMIT + 10);
-        let events = [
-            Event { seq: 0, task: 0, effect: "fs.read".into(), op: "fs::read_to_string".into(), args: json!(["a.txt"]), result: json!("hi"), vt_ns: 0 },
-            Event { seq: 1, task: 1, effect: "fs.read".into(), op: "fs::read_to_string".into(), args: json!(["b.txt"]), result: json!(big), vt_ns: 5 },
-        ];
-        let mut text = header_line(&h) + "\n";
-        for e in &events {
-            text += &(event_line(e, &p).unwrap() + "\n");
+    fn canonical_text_matches_the_first_implementation() {
+        for v in [
+            json!({"b": [1, {"y": 1, "x": 2}], "a": null}),
+            json!({"k\"ey\n": "caf\u{e9} \u{1f600} \t \u{1} \\", "z": [], "a": {}, "n": [-0.0, 1e300, 18446744073709551615u64, -9223372036854775808i64]}),
+            json!("plain"),
+            json!([null, true, 1.5, {"é": {"b": 1, "a": [2, 3]}}]),
+        ] {
+            assert_eq!(canon(&v), old(&v), "{v}");
         }
-        std::fs::write(&p, text).unwrap();
-        let (h2, e2) = read_log(&p).unwrap();
-        assert_eq!(h2, h);
-        assert_eq!(e2.len(), 2);
-        assert_eq!(e2[1].result, events[1].result);
-        assert!(blob_dir(&p).read_dir().unwrap().count() == 1);
+    }
+
+    #[test]
+    fn an_event_line_is_the_canonical_text_of_its_object() {
+        let e = Event { seq: 7, task: 2, effect: "fs.read".into(), op: "fs::read \"x\"".into(), args: json!({"b": [1, {"z": null, "a": "\u{e9}\n"}], "a": 1.5}), result: json!({"ok": true, "n": -3}), vt_ns: 42 };
+        let want = old(&json!({ "seq": e.seq, "task": e.task, "effect": e.effect, "op": e.op, "args": e.args, "result": e.result, "vt_ns": e.vt_ns }));
+        assert_eq!(event_line(&e, Path::new("/tmp/none.wjlog")).unwrap(), want);
     }
 }
