@@ -3,8 +3,8 @@
 Source: `bench/agent-dx/results/pilot4/` (arms L, M: interpreted-first and interpreted plus one final `wj build`, 60 trials, compiler built from
 `next/v0.50.0` e0ec926dc plus harness changes, 2026-11-03). Format as in [findings.md](findings.md): the interpreter accepts and runs the
 program, the compiled backend's generated Rust is rejected (agents see `WJ0003`/`WJ0029`/`WJ0031`). Minimal programs are in
-[pilot4-repros/](pilot4-repros/) (interpreter output and the compiled diagnostic were checked on this build); they are not yet in
-`tests/drift_corpus/repros/` or `known_divergences.txt`: the drift owner should move them there. Counts are silent-divergence trials among the 60 L and M trials.
+[tests/drift_corpus/repros/](../../tests/drift_corpus/repros/) (interpreter output and the compiled diagnostic were checked on this build); they now live in
+`tests/drift_corpus/repros/` and `known_divergences.txt`, and as failing tests in `tests/drift_repros_test.rs`. Counts are silent-divergence trials among the 60 L and M trials.
 
 ## D. Findings
 
