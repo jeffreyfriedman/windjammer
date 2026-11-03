@@ -1,0 +1,72 @@
+// `let x = match ..` whose arms yield plain values (a literal, `*v`, arithmetic) next to arms that
+// yield a binding, which may be a reference: the value is copied or shared as the walker does.
+use std::collections::HashMap
+
+struct Acc {
+    n: int,
+}
+
+fn pick(xs: Vec<int>, i: int) -> int {
+    let got = match xs.get(i as usize) {
+        Some(v) => *v * 2,
+        None => -1,
+    }
+    got + 1
+}
+
+fn main() {
+    let mut m: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < 50 {
+        let k = i % 7
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+    let mut c = match m.get(&3) {
+        Some(v) => *v + 100,
+        None => 0,
+    }
+    c += 1
+    println("${m.get(&3).unwrap()} ${c}")
+
+    // the bound value is captured by a closure after the match
+    let base = match m.get(&4) {
+        Some(v) => *v,
+        None => 0,
+    }
+    let add = |x: int| x + base
+    println("${add(5)}")
+
+    // an arm that yields its binding (by reference through a vector of structs)
+    let mut accs: Vec<Acc> = Vec::new()
+    accs.push(Acc { n: 1 })
+    accs.push(Acc { n: 2 })
+    let mut j = 0
+    while j < 3 {
+        let a = match accs.get(1) {
+            Some(x) => x,
+            None => &accs[0],
+        }
+        println("${a.n}")
+        accs[1].n += 10
+        j += 1
+    }
+    println("${pick(vec![3, 4], 1)} ${pick(vec![3, 4], 9)}")
+
+    // a match in tail position yields the function's value
+    let mut s = 0
+    let mut q = 0
+    while q < 5 {
+        s += match q % 3 {
+            0 => 1,
+            1 => q * 10,
+            _ => -2,
+        }
+        q += 1
+    }
+    println("${s}")
+}

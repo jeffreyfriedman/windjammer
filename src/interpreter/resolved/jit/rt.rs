@@ -26,6 +26,10 @@ pub(crate) struct Ctx {
     pub(crate) reg: *const crate::interpreter::resolved::osr::Reg,
     /// What a closure-run statement raised (the unit then leaves after it).
     pub(crate) raised: Option<crate::interpreter::error::Ctl>,
+    /// Locals reached through references, resolved to the cell that holds their value (`with_cell`): the chain
+    /// is walked once per unit run instead of on every element access. Cleared before every closure-run
+    /// statement, the only statements that can rebind a reference.
+    pub(crate) cells: Vec<(i64, crate::interpreter::value::Slot)>,
 }
 
 pub(crate) const FAIL: i32 = std::mem::offset_of!(Ctx, fail) as i32;
@@ -152,9 +156,9 @@ pub(crate) unsafe extern "C" fn index_get(c: *mut Ctx, slot: i64, i: i64, it: i6
     let direct_off = unsafe { (*(*c).it).fast_off("packedidx") };
     let mut direct = false;
     let r = unsafe {
-        with_slot(c, slot, |v| {
+        with_cell(c, slot, |v| {
             let (k, want) = (index(i, it)?, from_code(want)?);
-            peek(v, |v| match v {
+            match v {
                 Value::Vec(xs) if off_by_one => bits(&xs.get_value(k).or_else(|| xs.get_value(xs.len().checked_sub(1)?))?, want),
                 Value::Vec(xs) => match packed_get(xs, k, want).filter(|_| !direct_off) {
                     Some(r) => {
@@ -164,7 +168,7 @@ pub(crate) unsafe extern "C" fn index_get(c: *mut Ctx, slot: i64, i: i64, it: i6
                     None => bits(&xs.get_value(k)?, want),
                 },
                 _ => None,
-            })
+            }
         })
     };
     if direct {
@@ -176,12 +180,12 @@ pub(crate) unsafe extern "C" fn index_get(c: *mut Ctx, slot: i64, i: i64, it: i6
 /// `v[i].f`.
 pub(crate) unsafe extern "C" fn index_field_get(c: *mut Ctx, slot: i64, i: i64, it: i64, fp: i64, fl: i64, hint: i64, id: i64, want: i64) -> i64 {
     unsafe {
-        with_slot(c, slot, |v| {
+        with_cell(c, slot, |v| {
             let (k, want, f) = (index(i, it)?, from_code(want)?, FieldRef::new(fp, fl, hint, id));
-            peek(v, |v| match v {
+            match v {
                 Value::Vec(xs) => bits(field(xs.get(k)?, f)?, want),
                 _ => None,
-            })
+            }
         })
     }
 }
@@ -202,10 +206,10 @@ pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i6
     let direct_off = unsafe { (*(*c).it).fast_off("packedidx") };
     let mut direct = false;
     let r = unsafe {
-        with_slot(c, slot, |v| {
+        with_cell_mut(c, slot, |v| {
             let k = index(i, it)?;
             let t = from_code(xt)?;
-            poke(v, |v| match v {
+            match v {
                 Value::Vec(xs) => {
                     if !direct_off && packed_set(xs, k, x, t) {
                         direct = true;
@@ -220,7 +224,7 @@ pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i6
                     Some(0)
                 }
                 _ => None,
-            })
+            }
         })
     };
     if direct {
@@ -232,13 +236,13 @@ pub(crate) unsafe extern "C" fn index_set(c: *mut Ctx, slot: i64, i: i64, it: i6
 /// `v[i].f = x`.
 pub(crate) unsafe extern "C" fn index_field_set(c: *mut Ctx, slot: i64, i: i64, it: i64, fp: i64, fl: i64, hint: i64, id: i64, x: i64, xt: i64) -> i64 {
     unsafe {
-        with_slot(c, slot, |v| {
+        with_cell_mut(c, slot, |v| {
             let (k, f) = (index(i, it)?, FieldRef::new(fp, fl, hint, id));
-            poke(v, |v| match v {
+            match v {
                 // the field must exist before anything is made unique (as `descend` checks it)
                 Value::Vec(xs) if k < xs.len() && field(&xs[k], f).is_some() => store(field_mut(&mut Rc::make_mut(xs)[k], f)?, x, xt),
                 _ => None,
-            })
+            }
         })
     }
 }
@@ -323,6 +327,10 @@ pub(crate) unsafe extern "C" fn int_op(c: *mut Ctx, op: i64, a: i64, at: i64, b:
 pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     // SAFETY: as in `with_slot`; `plan`/`reg` outlive the call, `buf` has `nbuf` slots.
     let ctx = unsafe { &mut *c };
+    // closure code may replace what a slot holds (`Ctx::cells`): resolve again after it. Assigning a new
+    // reference to a reference variable writes through it today, so no corpus program can make a
+    // resolution stale; this keeps the cache safe if that changes.
+    ctx.cells.clear();
     let (it, plan, reg, b) = unsafe { (&mut *ctx.it, &*ctx.plan, &*ctx.reg, ctx.base) };
     let buf = buf as *mut i64;
     let st = &plan.stmts[k as usize];
@@ -405,4 +413,72 @@ fn packed_set(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, k: usize, x: i6
     }
     cache.take();
     true
+}
+
+/// The cell a local's value lives in when the local reaches it through plain references (no projection,
+/// no lock guard), resolved once per unit run; `None`: the local holds its value directly, or the chain
+/// has a projection (the element path walks it as before).
+unsafe fn local_cell(c: *mut Ctx, slot: i64) -> Option<crate::interpreter::value::Slot> {
+    // SAFETY: as in `with_slot`.
+    let ctx = unsafe { &mut *c };
+    if let Some((_, cell)) = ctx.cells.iter().find(|(s, _)| *s == slot) {
+        return Some(cell.clone());
+    }
+    let it = unsafe { &*ctx.it };
+    if it.fast_off("vecresolve") {
+        return None;
+    }
+    let Value::Ref(p) = it.rstack.get(ctx.base + slot as usize)? else { return None };
+    if !p.path.is_empty() || p.guard.is_some() {
+        return None;
+    }
+    let mut cell = p.slot.clone();
+    loop {
+        let next = match &*cell.try_borrow().ok()? {
+            Value::Ref(q) if q.path.is_empty() && q.guard.is_none() => q.slot.clone(),
+            Value::Ref(_) => return None,
+            _ => break,
+        };
+        cell = next;
+    }
+    ctx.cells.push((slot, cell.clone()));
+    Some(cell)
+}
+
+/// `with_slot` for a read of a local that may sit behind references: through its resolved cell when it has one.
+unsafe fn with_cell(c: *mut Ctx, slot: i64, f: impl FnOnce(&Value) -> Option<i64>) -> i64 {
+    match unsafe { local_cell(c, slot) } {
+        Some(cell) => {
+            // SAFETY: as in `with_slot`.
+            let ctx = unsafe { &mut *c };
+            unsafe { (*ctx.it).fast.vecresolve += 1 };
+            match cell.try_borrow().ok().and_then(|g| f(&g)) {
+                Some(x) => x,
+                None => {
+                    ctx.fail = 1;
+                    0
+                }
+            }
+        }
+        None => unsafe { with_slot(c, slot, |v| peek(v, f)) },
+    }
+}
+
+/// `with_slot` for a write through a local that may sit behind references (see `with_cell`).
+unsafe fn with_cell_mut(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Value) -> Option<i64>) -> i64 {
+    match unsafe { local_cell(c, slot) } {
+        Some(cell) => {
+            // SAFETY: as in `with_slot`.
+            let ctx = unsafe { &mut *c };
+            unsafe { (*ctx.it).fast.vecresolve += 1 };
+            match cell.try_borrow_mut().ok().and_then(|mut g| f(&mut g)) {
+                Some(x) => x,
+                None => {
+                    ctx.fail = 1;
+                    0
+                }
+            }
+        }
+        None => unsafe { with_slot(c, slot, |v| poke(v, f)) },
+    }
 }
