@@ -394,6 +394,15 @@ impl CodeGenerator<'_> {
                     };
                 }
 
+                // Text splitters yield borrowed `&str` pieces.
+                if matches!(method.as_str(), "split" | "rsplit" | "split_whitespace" | "split_terminator" | "lines")
+                    && self.infer_expression_type(object).is_some_and(|t| {
+                        crate::codegen::rust::types::is_windjammer_text_type(peel_type_reference(&t))
+                    })
+                {
+                    return Some(Type::Reference(Box::new(Type::Custom("str".to_string()))));
+                }
+
                 if let Some(item) = self
                     .lookup_method_function_signature_for_iterator_item(object, method)
                     .and_then(|sig| {
@@ -455,13 +464,29 @@ impl CodeGenerator<'_> {
             })
     }
 
+    /// Adapter for `collect::<T>()` with a written target: `.map(|s| s.to_string())` when `&str` pieces are collected into
+    /// owned strings, empty otherwise.
+    pub(in crate::codegen::rust) fn explicit_collect_adapter(
+        &self,
+        collect_receiver: &Expression,
+        method: &str,
+        receiver_type_name: Option<&str>,
+        targets: &[Type],
+    ) -> String {
+        if method != "collect" || targets.len() != 1 || self.receiver_defines_method(receiver_type_name, "collect") {
+            return String::new();
+        }
+        self.compute_collect_lowering(collect_receiver, Some(&targets[0])).0
+    }
+
     /// Type-directed `.collect()` lowering: adapter suffix (`.copied()`, etc.) and turbofish.
     pub(in crate::codegen::rust) fn compute_collect_lowering(
         &self,
         collect_receiver: &Expression,
+        explicit_target: Option<&Type>,
     ) -> (String, String) {
         let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver);
-        let target_ty = self.collect_target_type.as_ref().or_else(|| {
+        let target_ty = explicit_target.or(self.collect_target_type.as_ref()).or_else(|| {
             self.current_function_return_type
                 .as_ref()
                 .filter(|t| type_is_collect_turbofish_target(t))
@@ -474,7 +499,9 @@ impl CodeGenerator<'_> {
             (Some(iter), Some(target))
                 if iterator_collect_should_use_inferred_vec(iter, target) =>
             {
-                (String::new(), "::<Vec<_>>".to_string())
+                // A written `collect::<Vec<string>>()` owns its pieces; an inferred target lets the consumer coerce.
+                let adapter = if explicit_target.is_some() { ".map(|s| s.to_string())" } else { "" };
+                (adapter.to_string(), "::<Vec<_>>".to_string())
             }
             (Some(iter), Some(target)) if iterator_item_needs_owned_adapter(iter, target) => {
                 let adapter = if crate::codegen::rust::type_analysis_pure::is_copy_type(
