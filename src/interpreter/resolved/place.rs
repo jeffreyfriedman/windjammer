@@ -104,6 +104,10 @@ pub(super) fn assign(cx: &mut Cx, target: E, value: E, op: Option<CompoundOp>) -
         Expression::FieldAccess { .. } | Expression::Index { .. } | Expression::Unary { op: UnaryOp::Deref, .. } => false,
         _ => return None,
     };
+    // `r = &mut x` rebinds a variable holding a reference: the walker's `exec_assign` (an island)
+    if ident && op.is_none() && matches!(value, Expression::Unary { op: UnaryOp::MutRef, .. }) {
+        return None;
+    }
     // the walker evaluates the right side first (`eval_keep_guard`), then resolves the target
     let rhs = expr_arg(cx, value)?.code();
     let mut pc = PlaceCode::default();

@@ -43,6 +43,7 @@ resolved, with and without eager machine-code loops) because it lives in `tests/
 | `vp_collection_misses` | map `get`/`remove`/`contains_key` misses, `first`/`last`/`pop` on empty, `find`/`position` misses, string `find`, `parse` failures, `and_then`/`map`/`unwrap_or` on them, lookups in a loop |
 | `vp_shadowing` | parameter, loop variable (nested), match binding, retyping, block value, closure parameter |
 | `vp_loop_exits` | `return` of enum/Option/Result from nested `while`/`for`/`loop`, labelled `break`/`continue`, `break <value>` |
+| `vp_ref_rebind` | `r = &mut b` on a variable holding a reference (vectors, structs, a loop that may run in machine code, after a reborrow), shared references rebound, a reference chosen inside a function |
 | `vp_closure_captures` | captured `Option`/enum/`Vec`, closures returning Option, closures called through their bindings, a captured name shadowed later |
 | `vp_option_fields` | Option fields read in methods, rewritten each iteration, matched inside loops, `ok_or`, `map` |
 

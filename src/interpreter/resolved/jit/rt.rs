@@ -327,10 +327,11 @@ pub(crate) unsafe extern "C" fn int_op(c: *mut Ctx, op: i64, a: i64, at: i64, b:
 pub(crate) unsafe extern "C" fn run_stmt(c: *mut Ctx, buf: i64, k: i64) -> i64 {
     // SAFETY: as in `with_slot`; `plan`/`reg` outlive the call, `buf` has `nbuf` slots.
     let ctx = unsafe { &mut *c };
-    // closure code may replace what a slot holds (`Ctx::cells`): resolve again after it. Assigning a new
-    // reference to a reference variable writes through it today, so no corpus program can make a
-    // resolution stale; this keeps the cache safe if that changes.
-    ctx.cells.clear();
+    // closure code may rebind a reference the unit resolved (`r = &mut b`, `Ctx::cells`): resolve again after it
+    // (test-only mutant `vecstale`, debug builds: keep the stale resolution)
+    if !mutant(unsafe { &*ctx.it }, "vecstale") {
+        ctx.cells.clear();
+    }
     let (it, plan, reg, b) = unsafe { (&mut *ctx.it, &*ctx.plan, &*ctx.reg, ctx.base) };
     let buf = buf as *mut i64;
     let st = &plan.stmts[k as usize];

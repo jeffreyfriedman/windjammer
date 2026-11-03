@@ -1407,3 +1407,4 @@ apps/wj-proxy::tests/url_join_test.wj::test_join_upstream_appends_path	pass
 apps/wj-proxy::tests/url_join_test.wj::test_join_upstream_trims_trailing_slash_on_base	pass	
 apps/wj-proxy::tests/url_join_test.wj::test_join_upstream_root_path	pass	
 apps/wj-proxy::tests/url_join_test.wj::test_join_upstream_rejects_empty_base	pass	
+tests/engine_parity/vp_ref_rebind.wj	exit0:97:101093170	
