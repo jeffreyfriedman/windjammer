@@ -1,0 +1,49 @@
+// Machine-code stores straight into packed vectors, and everything that must stop them: a push that
+// may move the storage, closure code that replaces the vector, a copy another binding shares, an
+// element type the packing does not take as is, and an index outside the vector.
+fn main() {
+    let mut flags: Vec<bool> = Vec::new()
+    let mut ns: Vec<int> = Vec::new()
+    let mut fs: Vec<f64> = Vec::new()
+    let mut small: Vec<i32> = Vec::new()
+    let mut k = 0
+    while k < 8 {
+        flags.push(false)
+        ns.push(0)
+        fs.push(0.5)
+        small.push(0)
+        k += 1
+    }
+    let keep = flags
+    let mut other: Vec<bool> = Vec::new()
+    while other.len() < 9 {
+        other.push(true)
+    }
+    let mut j = 0
+    while j < 200 {
+        flags[j % 8] = j % 3 == 0
+        ns[(j * 5) % 8] = ns[(j * 5) % 8] + j
+        fs[j % 8] = fs[j % 8] * 1.5
+        small[j % 8] = small[j % 8] + 1
+        if j % 40 == 39 {
+            flags.push(true)
+            ns.push(j)
+        }
+        if j == 120 {
+            flags = other
+        }
+        flags[j % 2] = j % 2 == 1
+        j += 1
+    }
+    let mut s = 0
+    for n in ns {
+        s += n
+    }
+    println("${flags.len()} ${flags[0]} ${flags[1]} ${keep[0]} ${keep[3]} ${ns.len()} ${s} ${fs[1]} ${small[7]}")
+    let mut q = 0
+    while q < 20 {
+        ns[q] = q
+        q += 1
+    }
+    println("unreachable ${ns[0]}")
+}
