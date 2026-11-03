@@ -1096,6 +1096,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_float_target_type = prev_assign_float;
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);
+                self.convert_usize_into_declared_int(&mut value_str, value, t);
                 let is_string_type = matches!(t, Type::String)
                     || matches!(t, Type::Custom(name) if name == "String" || name == "string");
 
