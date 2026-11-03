@@ -499,8 +499,12 @@ impl CodeGenerator<'_> {
             (Some(iter), Some(target))
                 if iterator_collect_should_use_inferred_vec(iter, target) =>
             {
-                // A written `collect::<Vec<string>>()` owns its pieces; an inferred target lets the consumer coerce.
-                let adapter = if explicit_target.is_some() { ".map(|s| s.to_string())" } else { "" };
+                // A declared target (`collect::<Vec<string>>()` or `let w: Vec<string> = ..collect()`) owns its
+                // pieces; only a target inferred from context lets the consumer coerce per element.
+                // (a preceding `.map(..)` already produced the items: its closure decides their type).
+                let mapped = matches!(collect_receiver, Expression::MethodCall { method, .. } if matches!(method.as_str(), "map" | "filter_map" | "flat_map"));
+                let declared = !mapped && (explicit_target.is_some() || self.collect_target_type.is_some());
+                let adapter = if declared { ".map(|s| s.to_string())" } else { "" };
                 (adapter.to_string(), "::<Vec<_>>".to_string())
             }
             (Some(iter), Some(target)) if iterator_item_needs_owned_adapter(iter, target) => {
