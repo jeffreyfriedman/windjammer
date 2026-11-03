@@ -14,6 +14,7 @@
 // compiled run (a build-slot gate); DRIFT_BASE_REF (default next/v0.50.0) names the ref the ledger may only
 // shrink against. Exit status 1 when any step fails.
 use std::env
+use std::fs
 use std::process
 use std::strings
 use wj_proc::sh
@@ -178,6 +179,18 @@ fn corpus_step(wj: string, compiled: string) -> Step {
     Step { name: "corpus (compiled: ${compiled})", cases: cases, verdict: if ok { "pass" } else { "FAIL" }, secs: now() - t0, detail: detail }
 }
 
+/// The binary to test as an absolute path: a bare name (`wj`) is looked up on PATH by the shell, a path
+/// is made absolute against the current directory and must exist.
+fn resolve_wj(wj: string) -> Result<string, string> {
+    if !strings.contains(wj, "/") || strings.starts_with(wj, "/") {
+        return Ok(wj)
+    }
+    match fs::canonicalize(wj) {
+        Ok(p) => Ok(p),
+        Err(_) => Err("no wj binary at `${wj}` (relative to the current directory); pass --wj with its path or set WJ"),
+    }
+}
+
 fn main() {
     let args = env::args()
     let mut wj = env::var("WJ").unwrap_or("target/release/wj")
@@ -195,6 +208,14 @@ fn main() {
             i += 1
         }
         i += 1
+    }
+    // the corpus step runs programs from scratch directories: a relative binary path would resolve there
+    wj = match resolve_wj(wj) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln("drift gate: ${e}")
+            process::exit(1)
+        }
     }
     let mut steps: Vec<Step> = Vec::new()
     steps.push(wj_step("selftest", wj, "scripts/wj/drift_selftest.wj ${wj}"))
