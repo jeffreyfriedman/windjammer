@@ -13,7 +13,7 @@ class Ablation(unittest.TestCase):
             self.assertEqual(open(os.path.join(ablate.OUT_DIR, name)).read(), text, f"{name} is stale: run agentdx.ablate.write_all()")
 
     def test_each_arm_drops_exactly_one_bullet(self):
-        full = open(arms.PACK_PATH).read().split("\n")
+        full = open(os.path.join(ablate.OUT_DIR, "sheet_full.md")).read().split("\n")
         for arm, (name, _) in ablate.GROUPS.items():
             pack = open(arms.pack_path(arm)).read().split("\n")
             self.assertEqual(len(full) - len(pack), 1, arm)
@@ -21,7 +21,7 @@ class Ablation(unittest.TestCase):
             self.assertTrue(arms.ARMS[arm]["pack_file"].endswith(f"minus_{name}.md"))
 
     def test_control_is_the_default_sheet_and_all_arms_share_prompt_and_loop(self):
-        self.assertEqual(open(arms.pack_path("S")).read(), open(arms.PACK_PATH).read())
+        self.assertEqual(open(arms.pack_path("S")).read(), open(os.path.join(ablate.OUT_DIR, "sheet_full.md")).read())
         self.assertLessEqual(len(open(arms.PACK_PATH).read().encode()), 2048)
         self.assertEqual(len({arms.prompt(T, a) for a in ["S", "B"] + list(ablate.GROUPS)}), 1)
 
