@@ -1,0 +1,13 @@
+use std::fs
+// write-heavy durable workload: every step writes a file, so every journal line is flushed before the next step
+durable fn run(n: int) -> int {
+    let mut done = 0
+    let mut i = 0
+    while i < n {
+        let ok = fs::write("durable_write.out", "x")
+        if ok.is_ok() { done += 1 }
+        i += 1
+    }
+    done
+}
+fn main() { println("${run(3000)}") }

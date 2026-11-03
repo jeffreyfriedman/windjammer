@@ -32,12 +32,6 @@ pub(super) struct Env<'a> {
 }
 
 impl PlaceCode {
-    /// Compile `e` as the walker's `eval` of it.
-    pub(super) fn add_eval(&mut self, cx: &mut Cx, e: E) -> Option<()> {
-        let c = expr_eval(cx, e)?.code();
-        self.evals.push((addr(e), c));
-        Some(())
-    }
     pub(super) fn env(&self, b: usize) -> Env<'_> {
         Env { pc: self, b }
     }

@@ -83,7 +83,15 @@ struct ReadCache {
     /// The thread that uses this grant; another thread using it turns its cache off for good.
     owner: u64,
     disabled: bool,
+    /// When the cached decisions were last known to be fresh; older than `CACHE_TTL` they are dropped, which bounds how long a
+    /// change made behind the program's back (another process swapping a link) can go unnoticed.
+    stamp: Option<std::time::Instant>,
 }
+
+const CACHE_TTL: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// The working directory, looked up once per generation (`set_current_dir` is an `env.write`, which starts a new one).
+static CWD: std::sync::Mutex<Option<(u64, PathBuf)>> = std::sync::Mutex::new(None);
 
 static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static CACHE_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -308,9 +316,11 @@ impl Grant {
             }
             if !c.disabled {
                 let now = GENERATION.load(Relaxed);
-                if c.generation != now {
+                let fresh = c.stamp.is_some_and(|t| t.elapsed() < CACHE_TTL);
+                if c.generation != now || !fresh {
                     c.allowed.clear();
                     c.generation = now;
+                    c.stamp = Some(std::time::Instant::now());
                 }
                 if c.allowed.contains(res) {
                     return Ok(());
@@ -380,7 +390,7 @@ impl Grant {
         };
         let ok = match kind {
             EffectKind::FsRead | EffectKind::FsWrite => {
-                let p = m::canonical_abs(res, &Self::cwd());
+                let p = m::canonical_abs(res, &Self::base_for(res));
                 let inside = |pat: &String| {
                     m::path_matches_cached(pat, &p, &self.root, &mut |prefix, base| {
                         self.prefix_cache.lock().unwrap_or_else(|e| e.into_inner()).entry(prefix.to_string()).or_insert_with(|| m::canonical_abs(prefix, base)).clone()
@@ -421,7 +431,30 @@ impl Grant {
     }
 
     fn cwd() -> PathBuf {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
+        use std::sync::atomic::Ordering::Relaxed;
+        let direct = || std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+        if CACHE_OFF.load(Relaxed) {
+            return direct();
+        }
+        let now = GENERATION.load(Relaxed);
+        let mut slot = CWD.lock().unwrap_or_else(|e| e.into_inner());
+        match slot.as_ref() {
+            Some((g, p)) if *g == now => p.clone(),
+            _ => {
+                let p = direct();
+                *slot = Some((now, p.clone()));
+                p
+            }
+        }
+    }
+
+    /// The base a resource is resolved against: an absolute path needs no working directory.
+    fn base_for(res: &str) -> PathBuf {
+        if res.starts_with('/') {
+            PathBuf::from("/")
+        } else {
+            Self::cwd()
+        }
     }
 
     fn display_resource(&self, kind: &EffectKind, res: &str) -> String {

@@ -248,10 +248,6 @@ impl Interpreter {
         self.port = Some(std::cell::RefCell::new(port));
     }
 
-    pub fn port_header(&self) -> Option<Header> {
-        self.port.as_ref().map(|p| p.borrow().header.clone())
-    }
-
     /// Raise a divergence found after the last sink call, and flush a recording.
     pub fn finish_port(&mut self) -> Result<(), RuntimeError> {
         match &self.port {
@@ -373,7 +369,7 @@ mod tests {
 
     /// Primitives that read something that can differ between two runs of one program.
     const SOURCES: &[&str] = &[
-        "SystemTime::now()", "Instant::now()", "from_entropy", "OsRng", "thread_rng", "io::stdin()", "env::var(", "env::vars(", "env::current_dir",
+        "SystemTime::now()", "Instant::now()", "from_entropy", "OsRng", "thread_rng", "io::stdin()", concat!("env::", "var("), "env::vars(", "env::current_dir",
         "env::temp_dir", "process::id()", "bcrypt::hash(", "getrandom", "std::net::", "TcpStream", "TcpListener", "UdpSocket",
     ];
 
@@ -387,7 +383,7 @@ mod tests {
         ("builtins/std_sys.rs", "process::id()", "OBSERVED process::pid"),
         ("builtins/std_runtime_gaps.rs", "env::current_dir", "OBSERVED path::current_dir"),
         ("builtins/std_cap.rs", "env::current_dir", "absolutizing a grant scope; the result is a check, never a program value"),
-        ("builtins/std_fns.rs", "env::var(", "host_var, reached only through env:: sinks (routed)"),
+        ("builtins/std_fns.rs", concat!("env::", "var("), "host_var, reached only through env:: sinks (routed)"),
         ("builtins/std_fns.rs", "env::current_dir", "OBSERVED env::current_dir"),
         ("builtins/std_fns.rs", "io::stdin()", "io::read_line / io::read_to_string are routed sinks; Stdin.read_line is stdin_line()"),
         ("builtins/std_fns.rs", "SystemTime::now()", "dead helper `now`, unused"),
@@ -405,6 +401,10 @@ mod tests {
         ("builtins/std_http_server.rs", "TcpListener", "http::serve* are HANDLE_SINKS: refused under the port"),
         ("builtins/std_http_server.rs", "TcpStream", "http::serve* are HANDLE_SINKS: refused under the port"),
         ("caps.rs", "env::current_dir", "resolving the project directory for the grant"),
+        ("engine.rs", "env::vars(", "a doc comment on `set_env_snapshot`; the snapshot is the runner's and `env::vars()` reads it through the port"),
+        ("limits.rs", "Instant::now()", "the start of the wall-clock limit: a resource limit the program cannot read"),
+        ("runner.rs", "env::vars(", "the one read of the process environment, handed to the interpreter as the snapshot `env::vars()` returns"),
+        ("sched.rs", "Instant::now()", "accounting for real sleeps in the scheduler (slept_ns), not a reading the program can see"),
         ("runner.rs", "env::current_dir", "locating the entry file"),
         ("runner.rs", "env::temp_dir", "the simulated world's temp directory when no scratch directory could be made; the program sees the world's"),
         ("runner.rs", "OsRng", "choosing the seed that --record puts in the header"),
