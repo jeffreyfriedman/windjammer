@@ -71,6 +71,8 @@ pub struct EmittedCall {
     /// True for `recv.method(..)`: the receiver is not among `args`.
     pub is_method: bool,
     pub args: Vec<EmittedArg>,
+    /// A method call's receiver when it is a bare variable (`n.advance()`, not `n.clone().advance()`).
+    pub receiver: Option<EmittedArg>,
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +91,8 @@ pub struct EmittedFn {
     pub calls: Vec<EmittedCall>,
     /// `x.clone()` receivers by variable name.
     pub clones: HashMap<String, usize>,
+    /// Whole reassignments `name = ..`: `(seq, name)`, at the position after the right side.
+    pub assigns: Vec<(usize, String)>,
     /// Every use of a plain variable: `(seq, name, loop_depth)`.
     pub uses: Vec<(usize, String, usize)>,
     /// Loop depth at which each variable was declared (parameters are 0).
@@ -99,6 +103,8 @@ pub struct EmittedFn {
 #[derive(Debug, Clone, Default)]
 pub struct EmittedFile {
     pub fns: HashMap<String, EmittedFn>,
+    /// Types the emitted Rust derives `Copy` for (a move of one is a copy).
+    pub copy_types: std::collections::HashSet<String>,
 }
 
 /// Parse emitted Rust. Returns `None` if it is not valid Rust syntax.
@@ -110,6 +116,11 @@ pub fn parse_emitted(src: &str) -> Option<EmittedFile> {
             syn::Item::Fn(f) => {
                 let name = f.sig.ident.to_string();
                 out.fns.insert(name.clone(), analyze_fn(&name, &f.sig, &f.block));
+            }
+            syn::Item::Struct(syn::ItemStruct { attrs, ident, .. }) | syn::Item::Enum(syn::ItemEnum { attrs, ident, .. })
+                if attrs.iter().any(derives_copy) =>
+            {
+                out.copy_types.insert(ident.to_string());
             }
             syn::Item::Impl(imp) => {
                 let ty = imp.self_ty.to_token_stream().to_string().replace(' ', "");
@@ -125,6 +136,11 @@ pub fn parse_emitted(src: &str) -> Option<EmittedFile> {
         }
     }
     Some(out)
+}
+
+/// `#[derive(.., Copy, ..)]`.
+fn derives_copy(a: &syn::Attribute) -> bool {
+    a.path().is_ident("derive") && a.meta.to_token_stream().to_string().split(|c: char| !c.is_alphanumeric()).any(|w| w == "Copy")
 }
 
 fn mode_of_type(ty: &syn::Type) -> EmittedMode {
@@ -245,6 +261,16 @@ impl<'a> BodyVisitor<'a> {
         is_method: bool,
         args: &syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>,
     ) {
+        self.record_call_on(callee, is_method, args, None);
+    }
+
+    fn record_call_on(
+        &mut self,
+        callee: String,
+        is_method: bool,
+        args: &syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>,
+        receiver: Option<EmittedArg>,
+    ) {
         let mut eargs = Vec::new();
         for a in args {
             let (form, root) = classify_arg(a);
@@ -260,6 +286,7 @@ impl<'a> BodyVisitor<'a> {
             callee,
             is_method,
             args: eargs,
+            receiver,
         });
     }
 }
@@ -318,7 +345,28 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
             }
         }
         self.visit_expr(&m.receiver);
-        self.record_call(m.method.to_string(), true, &m.args);
+        let receiver = match &*m.receiver {
+            syn::Expr::Path(p) if p.path.segments.len() == 1 => Some(EmittedArg {
+                form: ArgForm::Bare,
+                root: Some(p.path.segments[0].ident.to_string()),
+                seq: self.seq,
+                loop_depth: self.loop_depth,
+            }),
+            _ => None,
+        };
+        self.record_call_on(m.method.to_string(), true, &m.args, receiver);
+    }
+
+    fn visit_expr_assign(&mut self, a: &'ast syn::ExprAssign) {
+        // the right side runs first; the target is (re)initialized, not read
+        self.visit_expr(&a.right);
+        match &*a.left {
+            syn::Expr::Path(p) if p.path.segments.len() == 1 => {
+                self.seq += 1;
+                self.f.assigns.push((self.seq, p.path.segments[0].ident.to_string()));
+            }
+            left => self.visit_expr(left),
+        }
     }
 
     fn visit_expr_path(&mut self, p: &'ast syn::ExprPath) {

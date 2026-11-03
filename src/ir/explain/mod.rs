@@ -8,6 +8,7 @@
 
 pub mod calls;
 pub mod emitted;
+pub mod moves;
 pub mod params;
 pub mod render;
 pub mod report;

@@ -6,7 +6,7 @@ use super::report::{CallArgReport, CallReport, Finding};
 
 /// Find the emitted callee for a call: free function / `Type::method` path by name, or a
 /// method call by its (unique) method name.
-fn find_callee<'a>(file: &'a EmittedFile, callee: &str, is_method: bool) -> Option<&'a EmittedFn> {
+pub(super) fn find_callee<'a>(file: &'a EmittedFile, callee: &str, is_method: bool) -> Option<&'a EmittedFn> {
     if !is_method {
         return file
             .fns
