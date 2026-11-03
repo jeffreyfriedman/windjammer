@@ -96,27 +96,41 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
     projectless_meta_path(source_file)
 }
 
-/// Directory holding analysis metadata for sources that have no `wj.toml`/`Cargo.toml` above them.
-/// `WJ_META_CACHE_DIR` overrides the default `<windjammer cache root>/meta`.
-pub fn global_meta_cache_dir() -> PathBuf {
-    match std::env::var_os("WJ_META_CACHE_DIR") {
-        Some(d) if !d.is_empty() => PathBuf::from(d),
-        _ => crate::cargo_cache::cache_root().join("meta"),
-    }
+static GLOBAL_META_CACHE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Driver hook: where analysis metadata goes for sources with no `wj.toml`/`Cargo.toml` above them.
+/// Core code reads no environment; `wj` passes `WJ_META_CACHE_DIR` or `<cache root>/meta`.
+pub fn set_global_meta_cache_dir(dir: PathBuf) {
+    let _ = GLOBAL_META_CACHE_DIR.set(dir);
 }
 
-/// The module root of a manifest-less tree: the nearest ancestor named `src`, else the directory itself.
+/// Directory holding analysis metadata for manifest-less trees (default: a `wj-meta` dir under the OS temp dir).
+pub fn global_meta_cache_dir() -> PathBuf {
+    GLOBAL_META_CACHE_DIR.get().cloned().unwrap_or_else(|| std::env::temp_dir().join("wj-meta"))
+}
+
+/// The module root of a manifest-less tree. Climb out of module directories (a directory holding
+/// `mod.wj`, or one with a sibling `<name>.wj`), but stop at the nearest ancestor named `src` when that
+/// lies at or above the result. Otherwise the file's own directory.
 fn projectless_root(start: &Path) -> PathBuf {
     let dir = if start.is_file() { start.parent().unwrap_or(start) } else { start };
     let abs = dir.canonicalize().unwrap_or_else(|_| {
         if dir.is_absolute() { dir.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(dir) }
     });
-    for a in abs.ancestors() {
-        if a.file_name().is_some_and(|n| n == "src") {
-            return a.to_path_buf();
+    let mut climbed = abs.clone();
+    loop {
+        let Some(parent) = climbed.parent().map(Path::to_path_buf) else { break };
+        let name = climbed.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        if climbed.join("mod.wj").exists() || parent.join(format!("{name}.wj")).exists() {
+            climbed = parent;
+        } else {
+            break;
         }
     }
-    abs
+    match abs.ancestors().find(|a| a.file_name().is_some_and(|n| n == "src")) {
+        Some(src) if climbed.starts_with(src) => src.to_path_buf(),
+        _ => climbed,
+    }
 }
 
 fn projectless_cache_root(start: &Path) -> PathBuf {

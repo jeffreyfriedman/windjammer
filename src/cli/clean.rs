@@ -2,7 +2,11 @@ use anyhow::Result;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 
-pub fn execute(all: bool) -> Result<()> {
+pub fn execute(all: bool, sidecars: bool) -> Result<()> {
+    if sidecars {
+        remove_sidecars(&std::env::current_dir()?);
+        return Ok(());
+    }
     println!("{}", "Cleaning Windjammer build artifacts...".cyan().bold());
     println!();
 
@@ -37,7 +41,7 @@ pub fn execute(all: bool) -> Result<()> {
 }
 
 /// `wj clean --sidecars`: delete legacy `*.wj.meta` files next to sources under `root`.
-pub fn remove_sidecars(root: &Path) {
+fn remove_sidecars(root: &Path) {
     let removed = crate::metadata::legacy_sidecars::remove(root);
     for p in &removed {
         println!("  {} {}", "removed".green(), p.display());
