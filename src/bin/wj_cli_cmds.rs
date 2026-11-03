@@ -382,6 +382,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::ExplainOwnership { file, function, json } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
         Commands::ExplainEffects { path, function, json } => windjammer::cli::explain_effects::execute(&path, function.as_deref(), json)?,
         Commands::Caps { action, path, json } => windjammer::cli::caps::execute(&action, path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), json)?,
+        Commands::RustSurface { crate_name, functions, all_pub: _, write, path } => {
+            windjammer::cli::rust_surface::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), &crate_name, &functions, write)?
+        }
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;
