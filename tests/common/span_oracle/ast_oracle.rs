@@ -153,6 +153,22 @@ impl<'a> Ctx<'a> {
         &self.src[r.0..r.1]
     }
 
+    /// A labelled loop (`'outer: for ..`) starts at its label; the loop keyword follows it.
+    fn past_label(&self, r: Option<ByteRange>) -> Option<ByteRange> {
+        let r = r?;
+        let t = self.slice(r);
+        if !t.starts_with('\'') {
+            return Some(r);
+        }
+        match t.find(':') {
+            Some(i) => {
+                let rest = &t[i + 1..];
+                Some((r.0 + i + 1 + (rest.len() - rest.trim_start().len()), r.1))
+            }
+            None => Some(r),
+        }
+    }
+
     fn starts(&self, f: &mut Findings, kind: &str, r: Option<ByteRange>, opts: &[&str]) {
         if self.skip_shape.get() {
             return;
@@ -426,9 +442,9 @@ impl<'a> Ctx<'a> {
             Return { .. } => self.starts(f, kind, me, &["return"]),
             If { .. } => self.starts(f, kind, me, &["if"]),
             Match { .. } => self.starts(f, kind, me, &["match", "if", "while"]),
-            For { .. } => self.starts(f, kind, me, &["for"]),
-            Loop { .. } => self.starts(f, kind, me, &["loop", "while"]),
-            While { .. } => self.starts(f, kind, me, &["while"]),
+            For { .. } => self.starts(f, kind, self.past_label(me), &["for"]),
+            Loop { .. } => self.starts(f, kind, self.past_label(me), &["loop", "while"]),
+            While { .. } => self.starts(f, kind, self.past_label(me), &["while"]),
             Thread { .. } => self.starts(f, kind, me, &["thread"]),
             Async { .. } => self.starts(f, kind, me, &["async"]),
             Defer { .. } => self.starts(f, kind, me, &["defer"]),
