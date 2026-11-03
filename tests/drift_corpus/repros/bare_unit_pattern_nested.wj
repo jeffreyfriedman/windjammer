@@ -1,0 +1,31 @@
+// A bare unit-variant name as a pattern in a match whose scrutinee is itself a match: the compiled backend
+// emits a binding named `A` (rustc E0170) instead of the variant.
+enum S {
+    A,
+    B(int),
+}
+
+fn make(n: int) -> S {
+    if n > 0 { S::B(n) } else { S::A }
+}
+
+fn code(s: S) -> int {
+    match s {
+        S::A => 0,
+        S::B(n) => n,
+    }
+}
+
+fn twice(n: int) -> int {
+    code(match match make(n) {
+        A => S::A,
+        S::B(a) => S::B(a + 1),
+    } {
+        A => S::A,
+        S::B(a) => S::B(a + 1),
+    })
+}
+
+fn main() {
+    println("${twice(5)} ${twice(0)}")
+}
