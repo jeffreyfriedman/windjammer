@@ -1,7 +1,7 @@
 //! A cached `<file>.wj.meta` is stale analysis output, not a source of truth. With a deliberately stale
 //! entry in the cache (written for an older version of the same source), `wj build` and
 //! `wj explain-ownership` must answer exactly as they do with no cache at all. The cache lives in
-//! `WJ_META_CACHE_DIR` (these projects have no manifest), never next to the source.
+//! `$TMPDIR/wj-meta` (these projects have no manifest), never next to the source.
 
 use std::path::Path;
 use std::process::Command;
@@ -12,7 +12,9 @@ const V1: &str = "fn f(v: Vec<int>) -> Vec<int> {\n    v\n}\n\nfn main() {\n    
 const V2: &str = "fn f(v: Vec<int>) -> int {\n    v.len()\n}\n\nfn main() {\n    let data = [1, 2, 3]\n    let n = f(data)\n    println(\"${n}\")\n}\n";
 
 fn cache_of(dir: &Path) -> std::path::PathBuf {
-    dir.join("meta-cache")
+    let c = dir.join("meta-cache");
+    std::fs::create_dir_all(&c).unwrap();
+    c
 }
 
 fn find_meta(dir: &Path) -> std::path::PathBuf {
@@ -30,7 +32,7 @@ fn find_meta(dir: &Path) -> std::path::PathBuf {
 fn build(dir: &Path, file: &str) -> String {
     let out = dir.join("out");
     let o = Command::new(WJ)
-        .env("WJ_META_CACHE_DIR", cache_of(dir))
+        .env("TMPDIR", cache_of(dir))
         .args(["build", file, "--no-cargo", "--no-lint", "--quiet", "-o"])
         .arg(&out)
         .current_dir(dir)
@@ -41,7 +43,7 @@ fn build(dir: &Path, file: &str) -> String {
 }
 
 fn explain(dir: &Path, file: &str) -> String {
-    let o = Command::new(WJ).env("WJ_META_CACHE_DIR", cache_of(dir)).args(["explain-ownership", file, "--json"]).current_dir(dir).output().unwrap();
+    let o = Command::new(WJ).env("TMPDIR", cache_of(dir)).args(["explain-ownership", file, "--json"]).current_dir(dir).output().unwrap();
     assert!(o.status.success(), "explain failed: {}", String::from_utf8_lossy(&o.stderr));
     String::from_utf8_lossy(&o.stdout).replace(&dir.display().to_string(), "<dir>")
 }

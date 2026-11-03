@@ -96,17 +96,10 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
     projectless_meta_path(source_file)
 }
 
-static GLOBAL_META_CACHE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-
-/// Driver hook: where analysis metadata goes for sources with no `wj.toml`/`Cargo.toml` above them.
-/// Core code reads no environment; `wj` passes `WJ_META_CACHE_DIR` or `<cache root>/meta`.
-pub fn set_global_meta_cache_dir(dir: PathBuf) {
-    let _ = GLOBAL_META_CACHE_DIR.set(dir);
-}
-
-/// Directory holding analysis metadata for manifest-less trees (default: a `wj-meta` dir under the OS temp dir).
+/// Directory holding analysis metadata for manifest-less trees: `wj-meta` under the OS temp dir (honours
+/// `TMPDIR`). It is a cache: losing it costs a cold build, never correctness.
 pub fn global_meta_cache_dir() -> PathBuf {
-    GLOBAL_META_CACHE_DIR.get().cloned().unwrap_or_else(|| std::env::temp_dir().join("wj-meta"))
+    std::env::temp_dir().join("wj-meta")
 }
 
 /// The module root of a manifest-less tree. Climb out of module directories (a directory holding

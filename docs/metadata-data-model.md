@@ -17,9 +17,8 @@ compilations read it to infer across file and crate boundaries.
 Never next to a source file.
 
 - Project with `wj.toml` or `Cargo.toml`: `<project>/.wj-cache/<path under src>.wj.meta` (git-ignored).
-- No manifest above the source: `<cache root>/meta/<hash of the module root>/<path>.wj.meta`, where the
-  cache root is the Windjammer cache directory (the `wj` driver passes `WJ_META_CACHE_DIR` or
-  `<cache root>/meta` to the library; core code reads no environment) and the module root is found by
+- No manifest above the source: `<temp dir>/wj-meta/<hash of the module root>/<path>.wj.meta` (the OS temp
+  dir, honouring `TMPDIR`; it is a cache, so losing it costs a cold build, never correctness), where the module root is found by
   climbing out of module directories (a directory with `mod.wj`, or with a sibling `<name>.wj`), stopping
   at the nearest ancestor named `src`, else the file's directory.
 

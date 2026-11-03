@@ -109,7 +109,7 @@ fn project(with_manifest: bool) -> tempfile::TempDir {
 }
 
 fn wj(dir: &Path, cache: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(WJ).args(args).current_dir(dir).env("WJ_META_CACHE_DIR", cache).output().unwrap()
+    Command::new(WJ).args(args).current_dir(dir).env("TMPDIR", cache).output().unwrap()
 }
 
 fn assert_no_strays(with_manifest: bool) {
