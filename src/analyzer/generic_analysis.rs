@@ -28,12 +28,15 @@ impl<'ast> Analyzer<'ast> {
                     let second = chars.next().unwrap();
                     first.is_uppercase() && second.is_ascii_digit()
                 } else {
-                    false
+                    name.starts_with("Box<dyn ")
                 }
             }
             // impl Trait parameters (e.g., `item: impl Describable`) should always be Owned.
             // Borrowing would change from `impl Trait` to `&impl Trait`, breaking trait dispatch.
             Type::ImplTrait(_) => true,
+            // `Box<dyn Trait>` is passed by value so the caller's `Box::new(T)` coerces to the trait object;
+            // `&Box<dyn Trait>` does not accept `&Box<T>`.
+            Type::Parameterized(name, args) if name == "Box" && args.iter().any(|a| matches!(a, Type::TraitObject(_))) => true,
             _ => false,
         }
     }

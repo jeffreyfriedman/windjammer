@@ -8,7 +8,7 @@
 //   fast-paths every fast path fires on its programs (a silent fallback is invisible to parity)
 //   jit-loops  generated loop programs: walker == resolved == no-jit
 //   packed-vec packed vectors == boxed vectors
-//   corpus     ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
+//   corpus     (plus 40 generated value-kind x position programs, drift_gen.wj) ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
 //              divergence is in tests/drift_corpus/known_divergences.txt (a shrink-only ledger)
 // `--fast` skips the cargo steps (selftest and corpus only). WJ_CARGO_WRAPPER prefixes every cargo and
 // compiled run (a build-slot gate); DRIFT_BASE_REF (default next/v0.50.0) names the ref the ledger may only
@@ -23,8 +23,9 @@ use wj_table::plain
 
 const LEDGER: string = "tests/drift_corpus/known_divergences.txt"
 const RESULTS: string = "/tmp/wj-drift-results.tsv"
+const GEN_RESULTS: string = "/tmp/wj-drift-gen.tsv"
 const BASE_COPY: string = "/tmp/wj-drift-base-ledger.txt"
-const MIN_CASES: string = "1200"
+const MIN_CASES: string = "1300"
 
 struct Step {
     name: string,
@@ -121,6 +122,22 @@ fn corpus_step(wj: string, compiled: string) -> Step {
             ok = false
             detail = e
         },
+    }
+    // generated value-kind x position programs: rows appended to the corpus rows
+    if ok {
+        let live = if compiled == "live" { "--run-compiled" } else { "" }
+        match sh("${wj} run --interpret scripts/wj/drift_gen.wj ${wj} /tmp/wj-drift-gen ${GEN_RESULTS} ${live} 2>&1 && cat ${GEN_RESULTS} >> ${RESULTS}") {
+            Ok(r) => {
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
     }
     // the ledger may only shrink against the base ref's copy (absent there: the ledger is being introduced)
     let base_ref = env::var("DRIFT_BASE_REF").unwrap_or("next/v0.50.0")

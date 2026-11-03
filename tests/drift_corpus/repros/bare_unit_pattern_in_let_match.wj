@@ -1,0 +1,26 @@
+// A bare unit-variant name as a pattern in a match that rebuilds the enum: the compiled backend emits a
+// binding named `A` (rustc E0170) instead of the variant.
+enum S {
+    A,
+    B(int),
+}
+
+fn make(n: int) -> S {
+    if n > 0 { S::B(n) } else { S::A }
+}
+
+fn code(s: S) -> int {
+    match s {
+        S::A => 0,
+        S::B(n) => n,
+    }
+}
+
+fn main() {
+    let x: S = make(5)
+    let y: S = match x {
+        A => S::A,
+        S::B(a) => S::B(a + 1),
+    }
+    println("${code(y)}")
+}
