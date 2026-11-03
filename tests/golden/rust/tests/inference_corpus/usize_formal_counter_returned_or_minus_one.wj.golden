@@ -1,0 +1,22 @@
+#[inline]
+fn at(xs: &Vec<i64>, i: usize) -> i64 {
+    xs[i]
+}
+
+fn main() {
+    println!("{} {}", find(&vec![4_i64, 5_i64, 6_i64], 5_i64), find(&vec![4_i64], 9_i64));
+}
+
+#[inline]
+fn find(xs: &Vec<i64>, needle: i64) -> i64 {
+    let mut i = 0_usize;
+    let n = xs.len();
+    while i < n {
+        if at(xs, i) == needle {
+            return i as i64;
+        }
+        i += 1;
+    }
+    -1_i64
+}
+

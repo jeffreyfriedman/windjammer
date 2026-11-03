@@ -3,7 +3,84 @@
 
 use super::*;
 
+/// Values the numeric facts must not publish a width for: a negated literal cannot be unsigned, and
+/// a loop over a collection whose element type is not declared binds a value of unknown width.
+#[derive(Debug, Default, Clone)]
+pub struct Unmodelled {
+    pub negated_literals: Vec<ConstraintVar>,
+    pub loop_bindings: Vec<ConstraintVar>,
+    /// `x.len()` on a receiver of unknown type: its width (usize, or a user type's `int`) is unknown.
+    pub unknown_lengths: Vec<ConstraintVar>,
+    /// A field read whose declared type the walk cannot see (another module's struct, a generic).
+    pub unknown_fields: Vec<ConstraintVar>,
+}
+
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A field read has the field's declared type; a field whose type the walk cannot see is unmodelled.
+    pub(super) fn walk_field_access(&mut self, object: &'ast Expression<'ast>, expr: &Expression<'ast>) -> ConstraintVar {
+        self.emit_read_field_ref(object, expr);
+        let obj_var = self.walk_expression(object);
+        let field_var = self.cs.fresh_var();
+        let _ = obj_var;
+        let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+        match crate::ir::expr_static_type::declared_type_of(expr, &self.analyzed.decl, fields)
+            .or_else(|| self.local_struct_field_type(object, expr, fields))
+            .map(|ty| parser_type_to_base_type(&ty))
+            .filter(|b| *b != BaseType::Inferred)
+        {
+            Some(base) => {
+                self.cs.add_because(
+                    Constraint::TypeIs(field_var, base.clone()),
+                    origin("NUM-FIELD-DECLARED", "a field read has the field's declared type", &expr.location()),
+                );
+                emit_numeric_class_constraint(&mut self.cs, field_var, &base);
+            }
+            None => self.numeric_unmodelled.unknown_fields.push(field_var),
+        }
+        field_var
+    }
+
+    /// `b.n` where `b` is a local bound to a struct literal (or an annotated struct local).
+    fn local_struct_field_type(
+        &self,
+        object: &Expression<'ast>,
+        expr: &Expression<'ast>,
+        fields: &HashMap<String, HashMap<String, Type>>,
+    ) -> Option<Type> {
+        let (Expression::Identifier { name, .. }, Expression::FieldAccess { field, .. }) = (object, expr) else { return None };
+        let Some(BaseType::Custom(s)) = self.local_decl_types.get(name) else { return None };
+        crate::type_inference::struct_field_registry::lookup_struct_field_map(fields, s, &HashMap::new(), &HashMap::new())
+            .and_then(|f| f.get(field.as_str()))
+            .cloned()
+    }
+
+    /// `for x in v` over a declared `Vec<T>` / array binds a `T`; any other loop binding is unmodelled.
+    pub(super) fn type_loop_element(&mut self, loop_var: ConstraintVar, iterable: &'ast Expression<'ast>) {
+        let source = match iterable {
+            Expression::Unary { operand, .. } => *operand,
+            Expression::MethodCall { object, method, arguments, .. }
+                if arguments.is_empty() && matches!(method.as_str(), "iter" | "into_iter" | "iter_mut") =>
+            {
+                *object
+            }
+            other => other,
+        };
+        let elem = match self.receiver_declared_base(source) {
+            Some(BaseType::Vec(e) | BaseType::Array(e, _)) => Some(*e),
+            _ => None,
+        };
+        match elem.filter(|e| *e != BaseType::Inferred && !matches!(e, BaseType::TypeVar(_))) {
+            Some(e) => {
+                self.cs.add_because(
+                    Constraint::TypeIs(loop_var, e.clone()),
+                    origin("NUM-ELEMENT", "a loop over a declared collection binds its element type", &iterable.location()),
+                );
+                emit_numeric_class_constraint(&mut self.cs, loop_var, &e);
+            }
+            None => self.numeric_unmodelled.loop_bindings.push(loop_var),
+        }
+    }
+
     /// NUM-FIELD-DECLARED: the arguments of a tuple-variant constructor (`Val::Int(-1)`) have the
     /// variant's declared payload types.
     pub(super) fn emit_variant_payload_types(
@@ -63,6 +140,23 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     .find(|p| &p.name == name)
                     .map(|p| parser_type_to_base_type(&p.type_))
             }),
+            // `let b = Box { .. }`: the struct.
+            Expression::StructLiteral { name, .. } => Some(BaseType::Custom(name.clone())),
+            // `let parts = pieces(text)`: the callee's declared return type.
+            Expression::Call { function, arguments, .. } => {
+                let name = Self::extract_callee_name(function)?;
+                let sig = self.resolve_free_callee_signature(&name, arguments.len())?;
+                sig.return_type.as_ref().map(parser_type_to_base_type).filter(|b| *b != BaseType::Inferred)
+            }
+            // `let parts = strings.split(text, "-")`: a module function's declared return type.
+            Expression::MethodCall { object, method, arguments, .. } => {
+                let Expression::Identifier { name, .. } = &**object else { return None };
+                if self.param_vars.contains_key(name) || self.scopes.iter().any(|s| s.contains_key(name)) {
+                    return None;
+                }
+                let sig = self.resolve_callee_signature(&format!("{}::{}", name, method), arguments.len())?;
+                sig.return_type.as_ref().map(parser_type_to_base_type).filter(|b| *b != BaseType::Inferred)
+            }
             other => {
                 let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
                 crate::ir::expr_static_type::declared_type_of(other, &self.analyzed.decl, fields)
@@ -186,6 +280,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             sig.as_ref().filter(|_| !seq_index && !index_source),
             Some(method.as_str()),
         );
+        if arguments.is_empty() && is_index_source_method(method) && !index_source && receiver_type.is_none() {
+            self.numeric_unmodelled.unknown_lengths.push(result);
+        }
         if index_source {
             if let Some(l) = expr.location() {
                 self.index_sources.push(((l.line, l.column), result));
