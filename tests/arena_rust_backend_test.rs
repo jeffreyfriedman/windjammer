@@ -3,6 +3,9 @@
 //! windjammer-runtime and print their independent `// expect:` lines; an escaping program is rejected
 //! by `wj build` with WJ0160 before any Rust is emitted. Slow (builds the runtime once per target dir).
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -13,16 +16,14 @@ fn expected(src: &str) -> String {
         .collect()
 }
 
-fn work(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("wj-arena-rust-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn work(tag: &str) -> Scratch {
+    Scratch::new(&format!("arena-rust-{tag}"))
 }
 
 fn shared_target() -> PathBuf {
     std::env::var_os("WJ_ARENA_TEST_TARGET")
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("wj-arena-rust-target"))
+        .unwrap_or_else(|| scratch::shared_cache_dir("arena-rust-target"))
 }
 
 fn build_and_run(src_path: &Path) -> String {

@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 exec python3 - "$@" <<'PY'
-import json, os, resource, shutil, statistics, subprocess, sys, tempfile
+import atexit, json, os, resource, shutil, signal, statistics, subprocess, sys, tempfile
 
 args = sys.argv[1:]
 if not args or args[0].startswith("-"):
@@ -29,6 +29,15 @@ only = opt("--only")
 bench = "bench/interp"
 kernels = sorted(f[:-3] for f in os.listdir(bench) if f.endswith(".wj") and (only is None or f[:-3] == only))
 work = tempfile.mkdtemp(prefix="wj-interp-compare-")
+# Removed on normal exit, error exit and SIGINT/SIGTERM (WJ_KEEP_TMP=1 keeps it for debugging).
+def _cleanup():
+    if os.environ.get("WJ_KEEP_TMP") == "1":
+        print(f"WJ_KEEP_TMP=1: keeping {work}", file=sys.stderr)
+    else:
+        shutil.rmtree(work, ignore_errors=True)
+atexit.register(_cleanup)
+for _sig in (signal.SIGINT, signal.SIGTERM):
+    signal.signal(_sig, lambda *_: sys.exit(130))
 
 def cpu(cmd, cwd=None):
     """Median child CPU seconds over `runs`, and the stdout of the first run (None on failure)."""

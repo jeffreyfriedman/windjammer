@@ -109,6 +109,10 @@ pub fn eval_program(wj: &Path, p: &Program, b: Backend, support: &Support, work_
                 Some(d) => Err(format!("seed {seed}: {d}\n{}", judge(b.name(), &exp, &got).unwrap_or_default())),
             }
         });
+        // Each cell can hold a compiled project; drop it as soon as it is judged (the whole corpus is ~660 MB).
+        if std::env::var("WJ_KEEP_TMP").map_or(true, |v| v != "1") {
+            let _ = std::fs::remove_dir_all(&work);
+        }
         if let Err(e) = step {
             result = Err(e);
             break;

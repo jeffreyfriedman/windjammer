@@ -53,6 +53,9 @@ fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
                 legacy.len()
             );
         }
+        if let Some(note) = windjammer::cli::tmp_janitor::doctor_note() {
+            println!("{note}");
+        }
     }
     if !report.problems.is_empty() {
         std::process::exit(1);
@@ -399,8 +402,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Errors { path, code, severity } => windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?,
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
         Commands::Eject(a) => windjammer::cli::eject::execute(&a.path, &a.output, &a.target, a.library, a.module_file)?,
-        Commands::Clean { all, sidecars } => {
-            windjammer::cli::clean::execute(all, sidecars)?;
+        Commands::Clean { all, sidecars, tmp, older_than_hours, yes } => {
+            windjammer::cli::clean::execute(all, sidecars, tmp, older_than_hours, yes)?;
         }
         Commands::Cache { action } => match action {
             CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,

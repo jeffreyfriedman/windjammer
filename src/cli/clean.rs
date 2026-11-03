@@ -2,7 +2,10 @@ use anyhow::Result;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 
-pub fn execute(all: bool, sidecars: bool) -> Result<()> {
+pub fn execute(all: bool, sidecars: bool, tmp: bool, older_than_hours: u64, yes: bool) -> Result<()> {
+    if tmp {
+        return super::tmp_janitor::run(older_than_hours, yes);
+    }
     if sidecars {
         remove_sidecars(&std::env::current_dir()?);
         return Ok(());

@@ -1,0 +1,25 @@
+# Shrink-only allowlist for tests/tmp_hygiene_test.rs: path<TAB>count of leak-prone temp uses.
+# Counting rule: `std::env::temp_dir()` in tests/**/*.rs (outside tests/common/scratch.rs), and `/tmp/wj` or
+# `mktemp` without a trap/atexit in scripts/**. New code uses tests/common/scratch.rs (Scratch::new).
+# Entries here either clean up by hand (pre/post remove_dir_all), keep dirs on purpose, or exercise temp_dir() itself.
+# Interpreted Windjammer scripts have no signal handlers: they clean at the end of a normal run; interrupted
+# runs are covered by `wj clean --tmp`.
+scripts/wj/arena_bench.wj	1
+scripts/wj/bench_effects_overhead.wj	2
+scripts/wj/check_negative_oracle.wj	1
+scripts/wj/diagnostics_leak_report.wj	1
+scripts/wj/drift_corpus.wj	2
+scripts/wj/drift_gate.wj	2
+scripts/wj/drift_selftest.wj	3
+scripts/wj/interpreter_project_bench.wj	1
+scripts/wj/port_gates.wj	2
+scripts/wj/rust_parity_run.wj	1
+tests/bug_module_file_output_must_not_import_tmp_sibling_rs_test.rs	1
+tests/bug_some_wrap_auto_clone_test.rs	1
+tests/constructor_type_inference_test.rs	1
+tests/crate_internal_not_extern_test.rs	1
+tests/cross_crate_string_literal_test.rs	1
+tests/cross_module_extern_unsafe_test.rs	1
+tests/effects_scratch_test.rs	1
+tests/interpreter_projects_test.rs	2
+tests/string_literal_method_call_test.rs	1

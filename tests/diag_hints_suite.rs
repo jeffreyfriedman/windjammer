@@ -5,6 +5,9 @@
 //! from a small Rust program (never hand-written strings), so the hint logic is checked against what
 //! rustc really says. Run: `cargo test --release --test diag_hints_suite`.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use windjammer::diagnostics::rustc_map::{self, SourceCache};
 use windjammer::diagnostics::{Applicability, Diagnostic};
 use windjammer::error_mapper::{DiagnosticLevel, ErrorMapper};
@@ -13,7 +16,7 @@ use windjammer::source_map::SourceMap;
 /// Compile `rs` with rustc and return the cargo-style JSON lines for its diagnostics.
 fn rustc_json(rs: &str) -> String {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!("wj-hints-{}-{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
+    let dir = Scratch::new("hints");
     std::fs::create_dir_all(&dir).unwrap();
     let f = dir.join("main.rs");
     std::fs::write(&f, rs).unwrap();
@@ -205,7 +208,7 @@ fn regex_like_rustc_code(t: &str) -> bool {
 /// The fix is attached only when its target text is found exactly once on the mapped `.wj` line.
 #[test]
 fn fix_is_machine_checkable_when_the_wj_line_contains_the_expression() {
-    let dir = std::env::temp_dir().join(format!("wj-hints-fix-{}", std::process::id()));
+    let dir = Scratch::new("hints-fix");
     std::fs::create_dir_all(&dir).unwrap();
     let wj = dir.join("main.wj");
     std::fs::write(&wj, "fn take(s: string) {}\nfn main() {\n    let a = \"x\"\n    take(a)\n}\n").unwrap();

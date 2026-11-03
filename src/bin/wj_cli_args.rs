@@ -689,6 +689,18 @@ pub enum Commands {
         /// Only remove legacy `*.wj.meta` sidecars next to sources under the current directory
         #[arg(long)]
         sidecars: bool,
+
+        /// Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes)
+        #[arg(long)]
+        tmp: bool,
+
+        /// With --tmp: only directories older than this many hours
+        #[arg(long, default_value_t = 6)]
+        older_than_hours: u64,
+
+        /// With --tmp: actually delete (default is a dry run)
+        #[arg(long)]
+        yes: bool,
     },
 
     /// Manage the shared Cargo target cache (outside application repos)

@@ -18,7 +18,7 @@ args=(--no-shuffle --baseline skip --timeout 900 -j 1)
 for f in "${files[@]}"; do args+=(--file "$f"); done
 [ -n "${MUTANTS_RE:-}" ] && args+=(--re "$MUTANTS_RE")
 [ "${MUTANTS_IN_PLACE:-0}" = 1 ] && args+=(--in-place)
-out="$(mktemp -d)"
+out="$(mktemp -d)"; trap 'rm -rf "$out"' EXIT INT TERM
 cargo mutants "${args[@]}" --output "$out" -- --release --test all -- \
   promise_registry_test:: fmt_fix_semantics_test:: check_build_differential_test:: installed_binary_smoke_test:: || true
 mkdir -p docs/generated
