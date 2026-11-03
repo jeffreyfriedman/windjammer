@@ -157,7 +157,8 @@ fn run_program(o: Opts, file: string, mode: string) -> Outcome {
     }
     match sh(cmd) {
         Ok(r) => {
-            let loc = if mode == "compiled" || r.status == 0 { "" } else { loc_of(r.stderr) }
+            let no_loc = mode == "compiled" || r.status == 0
+            let loc = if no_loc { "" } else { loc_of(r.stderr) }
             Outcome { token: "exit${r.status}:${checksum(r.stdout)}", loc: loc }
         },
         Err(e) => Outcome { token: "error", loc: "" },

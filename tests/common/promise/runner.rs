@@ -50,8 +50,10 @@ pub fn run_wj(sb: &Sandbox, cwd: &Path, args: &[String], stdin: Option<&str>, ex
     }
 }
 
+/// `{w}` scratch dir, `{bin_dir}` directory holding the installed `wj` under test, `{root}` the compiler checkout.
 fn subst(s: &str, w: &Path) -> String {
-    s.replace("{w}", w.to_str().unwrap())
+    let bin_dir = std::env::var("WJ_PROMISE_BIN_DIR").unwrap_or_default();
+    s.replace("{w}", w.to_str().unwrap()).replace("{bin_dir}", &bin_dir).replace("{root}", env!("CARGO_MANIFEST_DIR"))
 }
 
 /// Extra environment for cases that need the host toolchain (cargo/rustc) on PATH.
@@ -70,6 +72,7 @@ fn toolchain_env(case: &Case) -> Vec<(&'static str, String)> {
 
 /// Runs one case; `Err` explains which expectation failed.
 pub fn run_case(sb: &Sandbox, case: &Case) -> Result<(), String> {
+    std::env::set_var("WJ_PROMISE_BIN_DIR", sb.bin.parent().unwrap());
     let dir = tempfile::TempDir::new().unwrap();
     let w = dir.path().canonicalize().unwrap();
     for (rel, text) in &case.files {
@@ -80,6 +83,8 @@ pub fn run_case(sb: &Sandbox, case: &Case) -> Result<(), String> {
     let tmpdir = w.join(".tmp");
     std::fs::create_dir_all(&tmpdir).unwrap();
     env.push(("TMPDIR", tmpdir.to_string_lossy().into_owned()));
+    let case_env: Vec<(String, String)> = case.env.iter().map(|(k, v)| (k.clone(), subst(v, &w))).collect();
+    let env: Vec<(&str, String)> = env.into_iter().chain(case_env.iter().map(|(k, v)| (k.as_str(), v.clone()))).collect();
     for step in &case.setup {
         let args: Vec<String> = step.iter().map(|a| subst(a, &w)).collect();
         let r = run_wj(sb, &w, &args, None, &env);
@@ -87,7 +92,7 @@ pub fn run_case(sb: &Sandbox, case: &Case) -> Result<(), String> {
             return Err(format!("setup `wj {}` exited {:?}\n{}{}", args.join(" "), r.code, r.stdout, r.stderr));
         }
     }
-    let cwd = case.cwd.as_ref().map(|c| w.join(c)).unwrap_or_else(|| w.clone());
+    let cwd = case.cwd.as_ref().map(|c| w.join(subst(c, &w))).unwrap_or_else(|| w.clone());
     let args: Vec<String> = case.args.iter().map(|a| subst(a, &w)).collect();
     let r = run_wj(sb, &cwd, &args, case.stdin.as_deref(), &env);
     let ctx = || format!("`wj {}` exit {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}", case.args.join(" "), r.code, r.stdout, r.stderr);

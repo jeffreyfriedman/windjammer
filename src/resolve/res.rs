@@ -49,7 +49,7 @@ pub enum CallKind {
 }
 
 /// Identity of an expression node (address in the parser arena; stable while the AST lives).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ExprKey(pub usize);
 
 /// One resolved call site.
