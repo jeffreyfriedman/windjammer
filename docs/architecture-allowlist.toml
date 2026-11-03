@@ -177,7 +177,7 @@
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2159
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
-"src/codegen/rust/statement_generation.rs" = 2458
+"src/codegen/rust/statement_generation.rs" = 2447
 "src/codegen/rust/stdlib_method_traits.rs" = 2437
 "src/codegen/rust/string_utilities.rs" = 2044
 "src/compiler/multipass_bare_pass_demotion.rs" = 4065
@@ -195,7 +195,7 @@
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
 "src/cli_project_build.rs::build_project_single_crate" = 456
-"src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 643
+"src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 642
 "src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1229
 "src/codegen/rust/block_generation.rs::generate_block" = 307
 "src/codegen/rust/block_generation.rs::generate_block_expr" = 503

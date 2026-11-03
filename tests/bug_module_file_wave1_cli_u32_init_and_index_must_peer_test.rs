@@ -47,9 +47,11 @@ fn module_file_u32_return_index_loop_must_not_emit_0_usize_or_bare_i_plus_1() {
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("MultiFile lib.rs:\n{rs}");
     let bad_init = rs.contains("u32 = 0_usize") || rs.contains(": u32 = 0_usize");
-    // Bare `args[i + 1]` or wrong-precedence `i + 1 as usize` (must be `(i + 1) as usize`).
-    let bad_index = rs.contains("args[i + 1]")
-        || rs.contains("args[i+1]")
+    // Bare `args[i + 1]` over a non-usize `i`, or wrong-precedence `i + 1 as usize` (must be
+    // `(i + 1) as usize`). ADR-0028 types the counter usize (it meets `len()` and the index), so a
+    // bare index is then correct.
+    let usize_counter = rs.contains("let mut i = 0_usize;");
+    let bad_index = (!usize_counter && (rs.contains("args[i + 1]") || rs.contains("args[i+1]")))
         || rs.contains("i + 1 as usize")
         || rs.contains("i+1 as usize");
     assert!(

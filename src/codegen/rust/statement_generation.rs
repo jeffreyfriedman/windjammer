@@ -2274,17 +2274,6 @@ impl<'ast> CodeGenerator<'ast> {
         !matches!(ok.as_ref(), Type::Reference(_) | Type::MutableReference(_))
     }
 
-    fn assignment_cast_target_for_type(ty: &Type) -> Option<String> {
-        match Self::peel_option_result_payload(ty) {
-            Type::Int => Some("int".to_string()),
-            Type::Custom(name) if name == "int" || name == "i64" => Some("int".to_string()),
-            Type::Custom(name) if name == "i32" => Some("i32".to_string()),
-            Type::Custom(name) if name == "usize" => Some("usize".to_string()),
-            Type::Int32 => Some("i32".to_string()),
-            _ => None,
-        }
-    }
-
     pub(in crate::codegen::rust) fn returns_option_owned_type(&self) -> bool {
         match &self.current_function_return_type {
             Some(Type::Option(inner_type)) => {

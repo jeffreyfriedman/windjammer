@@ -613,6 +613,7 @@ impl<'ast> CodeGenerator<'ast> {
                             body_str = rewritten;
                         }
                     }
+                    self.cast_usize_arm_to_return_int(&mut body_str, main_arm.body);
                     output.push_str(&self.indent());
                     output.push_str(&body_str);
                     output.push_str(";\n");
@@ -1297,8 +1298,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let mut arm_str = self.generate_expression(arm.body);
             self.in_void_block = old_void_block;
-
-
+            self.cast_usize_arm_to_return_int(&mut arm_str, arm.body);
             self.in_match_arm_needing_string = old_in_match_arm;
 
             // `Some(value.clone())` does not end with `.clone()` — still rewrite

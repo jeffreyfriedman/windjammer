@@ -1148,16 +1148,11 @@ pub fn json_string_field(body: string, key: string) -> string {
         let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
         let generated = codegen.generate_program(&program, &analyzed);
         eprintln!("GENERATED:\n{generated}");
-        assert!(
-            generated.contains("j < (n as i64)")
-                || generated.contains("j < (n) as i64")
-                || generated.contains("(n as i64)"),
-            "expected n cast near j compare. Got:\n{generated}"
-        );
-        assert!(
-            generated.contains("substring(body, j as usize")
-                || generated.contains("substring(body, (j as usize)"),
-            "expected j cast for substring. Got:\n{generated}"
-        );
+        // The counters meet only `strings.len` (usize) and `strings.substring`'s usize formals, so the
+        // numeric solver gives them one width, usize (ADR-0028): no cast is needed at the compare or the
+        // call. (Earlier expectation: an i64 counter cast at both sites.)
+        assert!(generated.contains("let mut i = 0_usize;"), "counter is usize. Got:\n{generated}");
+        assert!(generated.contains("while j < n {"), "same-width compare, no cast. Got:\n{generated}");
+        assert!(!generated.contains(" as i32"), "no narrowing cast. Got:\n{generated}");
     }
 }

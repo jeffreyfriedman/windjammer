@@ -63,7 +63,9 @@ fn while_lit_bound_substring_int_must_unify_usize() {
     );
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    let bad_bound = generated.contains("64_usize") && generated.contains("i < 64_usize");
+    // A usize bound is wrong only against a non-usize `i`. ADR-0028 types the whole class
+    // (`i`, `0`, `64`) usize because it meets substring's usize formals.
+    let bad_bound = generated.contains("i < 64_usize") && !generated.contains("let mut i = 0_usize;");
     assert!(
         !bad_bound,
         "RED P3.679: while i < 64 must not emit 64_usize against i32 i:\n{generated}"

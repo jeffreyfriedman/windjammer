@@ -649,8 +649,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-
-
+        self.cast_usize_to_assignment_target(&mut value_str, value, target);
         output.push_str(&value_str);
 
         self.in_expression_context = old_expr_ctx;

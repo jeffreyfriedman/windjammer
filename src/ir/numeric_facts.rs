@@ -12,7 +12,7 @@ use crate::ir::constraints::ConstraintVar;
 use crate::ir::node::IrFunction;
 use crate::ir::safety_type::BaseType;
 use crate::ir::solver::{is_integer_type, SolverResult};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 /// Where a NUM-USIZE-TO-INT conversion goes: the expression's source position and its kind (a
 /// binary expression and the token after it can share a position).
@@ -36,7 +36,7 @@ pub fn conversion_key(e: &crate::parser::Expression<'_>) -> Option<ConversionKey
 
 struct View<'a> {
     result: &'a SolverResult,
-    held: HashSet<u32>,
+    held: BTreeSet<u32>,
 }
 
 impl View<'_> {
@@ -59,9 +59,9 @@ impl View<'_> {
 }
 
 /// Classes whose widths stay with the legacy deciders for now (see module docs).
-fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> HashSet<u32> {
-    let view = View { result, held: HashSet::new() };
-    let mut held = HashSet::new();
+fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32> {
+    let view = View { result, held: BTreeSet::new() };
+    let mut held = BTreeSet::new();
     for &v in &fc.index_uses {
         if view.int_type(v) != Some(BaseType::Usize) {
             held.extend(view.class(v));
@@ -69,8 +69,10 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> HashSet<u32>
     }
     // A name the walk met without a binding (a constant, a global, a closure parameter) is not named
     // by the facts; with lexical scoping every `let`/`for` binding has its own variable.
-    let bound: HashSet<&str> = fc.binding_vars.iter().map(|(n, _)| n.as_str()).collect();
-    for (name, v) in &fc.var_map.locals {
+    let bound: BTreeSet<&str> = fc.binding_vars.iter().map(|(n, _)| n.as_str()).collect();
+    // Sorted: iteration order must not depend on the hash map (codegen determinism).
+    let sorted_locals: std::collections::BTreeMap<String, ConstraintVar> = fc.var_map.locals.clone().into_iter().collect();
+    for (name, v) in &sorted_locals {
         if !bound.contains(name.as_str()) {
             held.extend(view.class(*v));
         }
@@ -124,6 +126,9 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
     }
     // NUM-LOCAL-WIDTH: a name all of whose bindings the solver fixed to one width.
     for (name, widths) in binding_widths(fc, &view) {
+        if fc.unmodelled.borrowed_bindings.contains(&name) {
+            continue;
+        }
         let ws: Vec<Option<BaseType>> = widths.iter().map(|(v, _)| view.published(*v)).collect();
         if let Some(Some(w)) = ws.first() {
             if ws.iter().all(|x| x.as_ref() == Some(w)) {
@@ -211,5 +216,24 @@ mod tests {
     fn rebound_name_with_two_widths_is_held() {
         let f = facts("pub fn f(n: i32, v: Vec<int>) -> i32 {\n    let x = n + 1\n    let mut k = 0\n    while k < v.len() {\n        k = k + 1\n    }\n    let x = k\n    n\n}\n", "f");
         assert!(f.solver_local_widths.get("x").is_none(), "{:?}", f.solver_local_widths);
+    }
+
+    /// A local bound to a borrow (`&i`, `opt.unwrap_or(&0)`) holds a reference, not an integer: the
+    /// solver publishes no width for it, so the backend keeps its reference type (and the deref at its use).
+    #[test]
+    fn borrowed_binding_has_no_local_width() {
+        let f = facts("pub fn f(items: Vec<i32>) -> i32 {\n    let i = 1\n    let ri = &i\n    let n = items[i]\n    n\n}\n", "f");
+        assert!(f.solver_local_widths.get("ri").is_none(), "{:?}", f.solver_local_widths);
+        assert_eq!(f.solver_local_widths.get("i"), Some(&BaseType::Usize));
+        let g = facts("pub fn g(o: Option<u32>) -> u32 {\n    let c = o.unwrap_or(&0)\n    c\n}\n", "g");
+        assert!(g.solver_local_widths.get("c").is_none(), "{:?}", g.solver_local_widths);
+    }
+
+    /// The same push when the Vec is returned inside `Ok(..)`: the declared payload types the Vec.
+    #[test]
+    fn usize_counter_pushed_into_int_vec_returned_in_ok_is_converted() {
+        let f = facts("pub fn f(lines: Vec<string>) -> Result<Vec<int>, string> {\n    let mut out = Vec::new()\n    let mut i = 0\n    while i < lines.len() {\n        out.push(i + 1)\n        i = i + 1\n    }\n    Ok(out)\n}\n", "f");
+        assert_eq!(f.solver_local_widths.get("i"), Some(&BaseType::Usize));
+        assert_eq!(f.usize_conversions.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?}", f.usize_conversions);
     }
 }
