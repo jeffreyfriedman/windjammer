@@ -60,7 +60,7 @@ ports), each scored 1 to 5.
 | `spec_check.sh` | shell | 99 | 5 x 2 | rule tables, sorting, generated markdown |
 | `diagnostics-leak-report.sh` | shell + embedded Python | 60 | 4 x 3 | JSON diagnostics, cargo JSON stream, table |
 | `coverage_report.py` | Python | 80 | 4 x 4 | llvm-cov JSON, ratchet, ordered JSON output |
-| `gen-check-mutants.py` | Python | 173 | 5 x 3 | regex and string surgery on 132 programs |
+| `gen-check-mutants.py` | Python | 173 | 5 x 3 | regex and string surgery on the committed mutant corpus |
 | `regen_vectors.py` | Python | 19 | 3 x 5 | files, child processes, seeds |
 | `rust_parity/report.py` | Python | 15 | 3 x 5 | JSON in, markdown table out |
 | `rust_parity/run.py` | Python | 136 | 4 x 2 | rustc, timing, statistics, JSON |
@@ -164,7 +164,7 @@ ratios as the order of magnitude and the absolute numbers as upper bounds.
 | `spec_check` | 9.39 s | shell | 0.25 s | 5 | 0.03x |
 | `sync_version` | 0.53 s | shell | 0.38 s | 5 | 0.72x |
 
-The per-case rows are reproduced by the command above; the ones worth singling out: `spec_check` on the committed 276-rule specification took 8.46 s as shell and 0.17 s as the port, `gen_check_mutants` on the 132-program corpus took 0.15 s as Python and 0.58 s as the port, and the two benchmarks that time child processes (`interp_bench`, `bench_effects_overhead`) spend their time in the children, so original and port agree to the 10 ms resolution of `time -p`.
+The per-case rows are reproduced by the command above; the ones worth singling out: `spec_check` on the committed 276-rule specification took 8.46 s as shell and 0.17 s as the port, `gen_check_mutants` on the committed mutant corpus took 0.15 s as Python and 0.58 s as the port, and the two benchmarks that time child processes (`interp_bench`, `bench_effects_overhead`) spend their time in the children, so original and port agree to the 10 ms resolution of `time -p`.
 
 Startup, an empty program: `python3 -c pass` and `wj run hello.wj` each cost 0.01 to 0.05 CPU seconds here (`bash -c :` rounds to 0.00); the interpreter starts as fast as the Python it replaces, and a script that does real work is bounded by its children, not by the language.
 
@@ -172,7 +172,7 @@ Startup, an empty program: `python3 -c pass` and `wj run hello.wj` each cost 0.0
 
 * Scripts that mostly drive children (benchmarks, `cargo`, `rustc`, `git`) cost the same in either language: the child dominates.
 * Scripts that do text work in the shell (`spec_check`, `check_versions`, `check_test_ratchet`, `check_negative_oracle`, `sync_version`) are faster as Windjammer, because the shell versions fork `grep`, `sed`, `awk` and `cut` per line.
-* The one slower port is the string-surgery script `gen_check_mutants` (about 4x Python on 132 programs, 0.6 s): per-operator regex and `s[a..b]` slicing in the tree-walking interpreter against CPython's tuned string code. It is a candidate for the interpreter-speed work, not for a fallback; 0.6 s is well inside the budget of a script that runs when the corpus changes.
+* The one slower port is the string-surgery script `gen_check_mutants` (about 4x Python on the committed mutant corpus, 0.6 s): per-operator regex and `s[a..b]` slicing in the tree-walking interpreter against CPython's tuned string code. It is a candidate for the interpreter-speed work, not for a fallback; 0.6 s is well inside the budget of a script that runs when the corpus changes.
 * The measurement machine was shared (load average 55 to 140), so the CPU-time columns are the honest comparison; wall time was not recorded.
 
 ## Developer experience

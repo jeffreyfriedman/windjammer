@@ -134,14 +134,18 @@ impl Parser {
 
             if is_assignment || is_control_flow {
                 // Parse as statement (assignment or break/continue/return)
-                let stmt = self.parse_statement()?;
-                // Wrap in block expression
-                let block = self.alloc_expr(Expression::Block {
-                    statements: vec![stmt],
-                    is_unsafe: false,
-                    location: self.current_location(),
+                // The wrapper block covers exactly the arm's statement (it has no braces of its own), so its span
+                // starts here and not at the enclosing `match`.
+                self.span_enter();
+                let block = self.parse_statement().map(|stmt| {
+                    self.alloc_synthetic(Expression::Block {
+                        statements: vec![stmt],
+                        is_unsafe: false,
+                        location: self.current_location(),
+                    })
                 });
-                (block, false)
+                self.span_exit();
+                (block?, false)
             } else {
                 // Parse as expression
                 (self.parse_expression()?, false)
@@ -241,14 +245,7 @@ impl Parser {
         // Parse closure body - can be either an expression or a block
         let body = if self.current_token() == &Token::LBrace {
             // Block closure: |x| { statements }
-            self.advance();
-            let statements = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            self.alloc_expr(Expression::Block {
-                statements,
-                is_unsafe: false,
-                location: self.current_location(),
-            })
+            self.parse_closure_block_body()?
         } else {
             // Expression closure: |x| expr
             // Check if this looks like a compound assignment (e.g., *c += 1)
@@ -271,12 +268,17 @@ impl Parser {
             if is_compound_assign {
                 // Reset and parse as a statement
                 self.rewind(checkpoint);
-                let stmt = self.parse_statement()?;
-                self.alloc_expr(Expression::Block {
-                    statements: vec![stmt],
-                    is_unsafe: false,
-                    location: self.current_location(),
-                })
+                // brace-less wrapper: it covers just the statement (see `parse_match_arm_body`)
+                self.span_enter();
+                let block = self.parse_statement().map(|stmt| {
+                    self.alloc_synthetic(Expression::Block {
+                        statements: vec![stmt],
+                        is_unsafe: false,
+                        location: self.current_location(),
+                    })
+                });
+                self.span_exit();
+                block?
             } else {
                 // Reset and parse as a normal expression
                 self.rewind(checkpoint);
@@ -291,6 +293,21 @@ impl Parser {
         }))
     }
 
+    /// `{ statements }` of a closure: the block's span starts at its `{` (not at `move` or `|params|`).
+    fn parse_closure_block_body(&mut self) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let block = self.closure_block_body_inner();
+        self.span_exit();
+        block
+    }
+
+    fn closure_block_body_inner(&mut self) -> Result<&'static Expression<'static>, String> {
+        self.advance();
+        let statements = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+        Ok(self.alloc_expr(Expression::Block { statements, is_unsafe: false, location: self.current_location() }))
+    }
+
     pub(in crate::parser) fn parse_primary_closure_or(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
@@ -300,14 +317,7 @@ impl Parser {
         // Parse closure body - can be either an expression or a block
         let body = if self.current_token() == &Token::LBrace {
             // Block closure: || { statements }
-            self.advance();
-            let statements = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            self.alloc_expr(Expression::Block {
-                statements,
-                is_unsafe: false,
-                location: self.current_location(),
-            })
+            self.parse_closure_block_body()?
         } else {
             // Expression closure: || expr
             self.parse_expression()?

@@ -334,3 +334,34 @@ class Regrade(unittest.TestCase):
     def test_compiled_build_and_copy_are_serialised(self):
         from agentdx import runners
         self.assertTrue(hasattr(runners, "_BUILD_LOCK"))
+
+
+class GradeRetry(unittest.TestCase):
+    def mk(self, seq):
+        calls = {"wj": 0}
+        def grade(lang):
+            if lang == "wj-interp":
+                return {"status": "pass", "passed": 3, "total": 3, "categories": []}
+            r = seq[min(calls["wj"], len(seq) - 1)]; calls["wj"] += 1
+            return {"status": r, "passed": 3 if r == "pass" else 0, "total": 3, "categories": [] if r == "pass" else ["wrong-output"]}
+        return grade, calls
+
+    def test_flaky_compiled_failure_is_retried_and_flagged(self):
+        g, calls = self.mk(["fail", "pass"])
+        r = pilot.pair_with_retry(g)
+        self.assertEqual(r["compiled"]["status"], "pass"); self.assertEqual(r["compiled"]["first_compiled"]["status"], "fail")
+        self.assertEqual(calls["wj"], 2)
+        self.assertEqual(pilot._slim(r["compiled"])["first_compiled"]["passed"], 0)
+
+    def test_real_failures_stay_failures_and_passes_are_not_regraded(self):
+        g, calls = self.mk(["fail", "fail"])
+        self.assertEqual(pilot.pair_with_retry(g)["compiled"]["status"], "fail")
+        g, calls = self.mk(["pass"])
+        pilot.pair_with_retry(g); self.assertEqual(calls["wj"], 1)
+
+    def test_no_retry_when_the_interpreter_also_fails(self):
+        calls = {"n": 0}
+        def grade(lang):
+            calls["n"] += 1
+            return {"status": "fail", "passed": 0, "total": 1, "categories": []}
+        pilot.pair_with_retry(grade); self.assertEqual(calls["n"], 2)

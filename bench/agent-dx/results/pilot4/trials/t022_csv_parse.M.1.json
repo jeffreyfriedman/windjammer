@@ -1,0 +1,123 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "M",
+ "arm_name": "interpreted+final-build+sheet",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let cs: Vec<char> = line.chars().collect()\n        let n: int = cs.len() as int\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let mut i: int = 0\n        while i < n {\n            let c = cs[i as usize]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && cs[(i + 1) as usize] == '\"' {\n                        cur = cur + \"\\\"\"\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur = cur + c.to_string()\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let mut out = \"\"\n        let mut k: int = 0\n        let m: int = fields.len() as int\n        while k < m {\n            if k > 0 { out = out + \"|\" }\n            out = out + \"[\" + fields[k as usize] + \"]\"\n            k += 1\n        }\n        println(\"${m}: ${out}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let cs: Vec<char> = line.chars().collect()\n        let n: int = cs.len() as int\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let mut i: int = 0\n        while i < n {\n            let c = cs[i as usize]\n            if inq {\n                if c == '\"' {\n                    if i + 1 < n && cs[(i + 1) as usize] == '\"' {\n                        cur = cur + \"\\\"\"\n                        i += 1\n                    } else {\n                        inq = false\n                    }\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur = cur + c.to_string()\n            }\n            i += 1\n        }\n        fields.push(cur)\n        let mut out = \"\"\n        let mut k: int = 0\n        let m: int = fields.len() as int\n        while k < m {\n            if k > 0 { out = out + \"|\" }\n            out = out + \"[\" + fields[k as usize] + \"]\"\n            k += 1\n        }\n        println(\"${m}: ${out}\")\n    }\n}\n",
+ "first_turn_input": 8205,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.032,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 7.75,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 17.6,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 3.43,
+ "pack_bytes": 1436,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-03T01:07:43",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 8.425,
+ "tool_result_tokens_est": 98,
+ "tool_wait_seconds": 7.78,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7855,
+   "cache_write": 348,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8205,
+   "output": 5,
+   "result_chars": 224,
+   "turn": 1
+  },
+  {
+   "cache_read": 8203,
+   "cache_write": 939,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9144,
+   "output": 16,
+   "result_chars": 118,
+   "turn": 2
+  },
+  {
+   "cache_read": 9142,
+   "cache_write": 143,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9287,
+   "output": 188,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 8.425,
+  "cost_usd": 0.018272,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written and parses the CSV records as specified.\n\nI ran it in the interpreter on a small input. It had an empty line, a `,` line, a doubled-quote field and a quoted field with a comma. The output was correct for all of them. I didn't run the two examples exactly as given, and I didn't test any other inputs. `wj build main.wj` also succeeded.\n\nThe program reads each line character by c",
+  "subtype": "success",
+  "tokens_in": 26636,
+  "tokens_out": 1002,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 19.64
+}

@@ -6,7 +6,7 @@
 
 /// Decode one non-null cell. `type_name` is the PostgreSQL type name (`INT4`, `NUMERIC`, `TEXT[]`, ...).
 /// Returns `None` when the bytes do not fit the type (the caller reports that as an error).
-pub fn decode_binary(type_name: &str, b: &[u8]) -> Option<String> {
+pub(crate) fn decode_binary(type_name: &str, b: &[u8]) -> Option<String> {
     if let Some(elem) = type_name.strip_suffix("[]") {
         let _ = elem;
         return decode_array(b);

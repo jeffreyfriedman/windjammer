@@ -85,6 +85,9 @@ pub struct Case {
     /// build of the runtime, minutes: runs only with WJ_PROMISES_CARGO=1).
     #[serde(default)]
     pub needs: Option<String>,
+    /// Extra environment for the run (values take the same `{w}`, `{bin_dir}` and `{root}` placeholders as args).
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
     /// Known-broken promise: the case documents the promised behavior and is expected to FAIL
     /// (the bug). It does not count as coverage; when it starts passing the gate asks to drop `xfail`.
     #[serde(default)]

@@ -8,7 +8,7 @@ enum Found {
 fn locate(grid: Vec<Vec<int>>, want: int) -> Found {
     let mut r = 0
     while r < grid.len() {
-        let row = grid[r].clone()
+        let row = grid[r]
         for c in 0..row.len() {
             if row[c] == want {
                 return Found::At(r as int * 10 + c as int)
