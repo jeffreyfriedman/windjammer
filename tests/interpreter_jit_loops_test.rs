@@ -338,12 +338,22 @@ fn every_machine_code_check_is_load_bearing() {
 
 /// Mutation gate (debug builds) on the corpus programs written for checks the generator does not reach:
 /// the box the first write after a struct `let` makes for its closures (`box`), and the closure engine's
-/// in-place `match m.get(&k)` lookup (`mapget`) and `m.insert(k, x)` into a shared map (`mapins`).
+/// in-place `match m.get(&k)` lookup (`mapget`) and `m.insert(k, x)` into a shared map (`mapins`), the rebinding of a
+/// reference variable by `r = &mut x` (`refwrite`: written through instead), and the machine-code loop's fresh
+/// resolution of a vector after closure code rebinds the reference to it (`vecstale`), and its in-place stores into
+/// a packed vector (`viewidx`: every element written at index 0).
 #[test]
 #[cfg(debug_assertions)]
 fn every_corpus_check_is_load_bearing() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/engine_parity");
-    for (m, file) in [("box", "jit_loop_inline.wj"), ("mapget", "map_get_match.wj"), ("mapins", "map_get_match.wj")] {
+    for (m, file) in [
+        ("box", "jit_loop_inline.wj"),
+        ("mapget", "map_get_match.wj"),
+        ("mapins", "map_get_match.wj"),
+        ("refwrite", "vp_ref_rebind.wj"),
+        ("vecstale", "vp_ref_rebind.wj"),
+        ("viewidx", "packed_vecs.wj"),
+    ] {
         let p = root.join(file);
         let base = run(&p, "walker", &[], &[]);
         assert_eq!(run(&p, "resolved", &[], &[("WJ_JIT_LOOP_HOT", "0")]), base, "{file} differs without a mutant");

@@ -1,0 +1,55 @@
+// A method call the resolved engine leaves to the walker because an argument is a place a user method
+// may take by `&mut`: the receiver and place arguments are shared with the walker, other arguments
+// it only reads (a local in arithmetic, a field, an interpolation) are read from copies, and an
+// argument holding a closure still sees the locals themselves.
+struct Acc {
+    total: int,
+}
+
+impl Acc {
+    fn add(self, slot: int, amount: int) {
+        slot += amount
+        self.total += amount
+    }
+
+    fn apply(self, slot: int, f: fn(int) -> int) {
+        slot += 1
+        self.total += f(slot)
+    }
+
+    fn note(self, label: string, n: int) {
+        self.total += n + label.len() as int
+    }
+}
+
+struct P {
+    x: int,
+}
+
+fn main() {
+    let mut acc = Acc { total: 0 }
+    let mut slot = 1
+    let mut c = 10
+    let p = P { x: 5 }
+    let mut i = 0
+    while i < 4 {
+        acc.add(slot, c + i)
+        acc.add(slot, p.x)
+        c += 1
+        i += 1
+    }
+    println("${acc.total} ${slot} ${c}")
+    let mut seen = 0
+    acc.apply(slot, |v| {
+        seen += 1
+        v * 2 + c
+    })
+    println("${acc.total} ${slot} ${seen}")
+    let name = "abc"
+    acc.note("${name}-${c}", c)
+    println("${acc.total}")
+    let mut keys: Vec<int> = Vec::new()
+    let k = 3
+    keys.insert(0, k + c)
+    println("${keys[0]}")
+}

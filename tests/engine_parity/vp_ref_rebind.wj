@@ -1,0 +1,68 @@
+// Value position: a new reference assigned to a variable holding one (`r = &mut b`) rebinds the
+// variable, as compiled Rust does; the old referent keeps its value. Vectors, scalars behind shared
+// references, structs, a reference chosen in a function, a rebinding inside a loop (which may run in
+// machine code), and a reborrow.
+struct P {
+    n: int,
+}
+
+fn pick(a: Vec<int>, b: Vec<int>, first: bool) -> int {
+    let mut r = &a
+    if !first {
+        r = &b
+    }
+    r[0]
+}
+
+fn main() {
+    let mut a = [1, 2]
+    let mut b = [10, 20]
+    let mut r = &mut a
+    r[0] += 100
+    r = &mut b
+    r[1] += 5
+    println("mut: ${a[0]} ${a[1]} ${b[0]} ${b[1]}")
+
+    let x = 1
+    let y = 2
+    let mut s = &x
+    println("shared: ${*s}")
+    s = &y
+    println("shared: ${*s} ${x} ${y}")
+
+    let mut p = P { n: 1 }
+    let mut q = P { n: 2 }
+    let mut rp = &mut p
+    rp.n += 10
+    rp = &mut q
+    rp.n += 20
+    println("struct: ${p.n} ${q.n}")
+
+    let e = [7]
+    let f = [8]
+    println("pick: ${pick(e, f, true)} ${pick(e, f, false)}")
+
+    let mut g = [0, 0, 0]
+    let mut h = [0, 0, 0]
+    let mut i = 0
+    let mut w = &mut g
+    while i < 6 {
+        w[i % 3] += 1
+        if i == 2 {
+            w = &mut h
+        }
+        i += 1
+    }
+    println("loop: ${g[0]} ${g[1]} ${g[2]} ${h[0]} ${h[1]} ${h[2]}")
+
+    let mut m = [5]
+    let mut n = [6]
+    let mut outer = &mut m
+    {
+        let inner = &mut *outer
+        inner[0] += 1
+    }
+    outer = &mut n
+    outer[0] += 1
+    println("reborrow: ${m[0]} ${n[0]}")
+}

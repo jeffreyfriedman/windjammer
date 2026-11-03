@@ -1414,3 +1414,4 @@ tests/engine_parity/vp_nested_matches.wj	exit0:91:735208628
 tests/engine_parity/vp_option_fields.wj	exit0:83:426708712	
 tests/engine_parity/vp_result_values.wj	exit0:105:696378321	
 tests/engine_parity/vp_shadowing.wj	exit0:63:249324170	
+tests/engine_parity/vp_ref_rebind.wj	exit0:97:101093170	

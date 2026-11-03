@@ -58,7 +58,16 @@ pub(super) fn method_call(
     // the walker's whole-expression path, for a user method taking a place argument by `&mut`
     let fallback = match (&recv, place_args) {
         (_, false) => None,
-        (Recv::Local(_), true) => Some(Island::new(cx, &format!("{:?}", whole))),
+        (Recv::Local(_), true) => {
+            // the receiver and place arguments may be taken by `&mut`: boxed. Other arguments the walker
+            // only reads when none holds a closure or a call: they keep their slots
+            let (places, reads): (Vec<E>, Vec<E>) = arguments.iter().map(|(_, a)| *a).partition(|a| Interpreter::is_place_expr(a));
+            if !cx.it.fast_off("argcopy") && reads.iter().all(|a| super::mapfast::simple(a)) {
+                Some(Island::with_copies(cx, &format!("{object:?} {places:?}"), &format!("{reads:?}")))
+            } else {
+                Some(Island::new(cx, &format!("{:?}", whole)))
+            }
+        }
         (Recv::Value(_), true) => return None,
     };
     let args: Vec<X> = arguments.iter().map(|(_, a)| expr_arg(cx, a)).collect::<Option<_>>()?;
