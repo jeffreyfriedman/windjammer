@@ -66,18 +66,51 @@ pub struct Grant {
     root: PathBuf,
     /// Canonical form of each pattern's literal prefix (patterns do not change, so symlink resolution is done once).
     prefix_cache: std::sync::Mutex<std::collections::HashMap<String, PathBuf>>,
+    /// Resources whose `fs.read` was allowed, valid while no operation that can change what a path means has run (see `ReadCache`).
+    read_cache: std::sync::Mutex<ReadCache>,
+}
+
+/// Decisions for `fs.read` of a resource, so a loop that reads the same path does not resolve its symlinks on every call.
+///
+/// A cached decision is only as good as the file system it was made against. It is dropped when the program does anything that
+/// could change what a path resolves to: every granted `fs.write` and `env.write` (a rename, a new link, `set_current_dir`)
+/// bumps `GENERATION`, and every granted `process` or `ffi` use (code outside the gate that may change files at any time) or a
+/// second thread using the gate turns the cache off for the rest of the run. Denials are never cached.
+#[derive(Debug, Default)]
+struct ReadCache {
+    generation: u64,
+    allowed: std::collections::HashSet<String>,
+    /// The thread that uses this grant; another thread using it turns its cache off for good.
+    owner: u64,
+    disabled: bool,
+}
+
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CACHE_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static NEXT_TID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+thread_local! {
+    static TID: u64 = NEXT_TID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Forget that a process or foreign call has run, and every cached decision (the escape tests start each case from here).
+#[doc(hidden)]
+pub fn reset_decision_cache() {
+    use std::sync::atomic::Ordering::Relaxed;
+    CACHE_OFF.store(false, Relaxed);
+    GENERATION.fetch_add(1, Relaxed);
 }
 
 impl Clone for Grant {
     fn clone(&self) -> Grant {
-        Grant { allow: self.allow.clone(), deny: self.deny.clone(), root: self.root.clone(), prefix_cache: Default::default() }
+        Grant { allow: self.allow.clone(), deny: self.deny.clone(), root: self.root.clone(), prefix_cache: Default::default(), read_cache: Default::default() }
     }
 }
 
 impl Grant {
     /// Nothing but the default-granted determinism effects.
     pub fn sandbox(root: &Path) -> Grant {
-        Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: m::lexical_abs(".", root_base(root).as_path()), prefix_cache: Default::default() }
+        Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: m::lexical_abs(".", root_base(root).as_path()), prefix_cache: Default::default(), read_cache: Default::default() }
     }
 
     /// Everything allowed (a trusted run).
@@ -102,6 +135,7 @@ impl Grant {
     }
 
     pub fn allow(&mut self, kind: EffectKind, pattern: &str) {
+        self.forget_decisions();
         if pattern == "*" || (pattern == "**" && matches!(kind, EffectKind::FsRead | EffectKind::FsWrite)) {
             self.allow.insert(kind, Scope::Any);
             return;
@@ -118,6 +152,7 @@ impl Grant {
 
     /// Grant exactly what a lock-file reference names: `kind` (no resource), `kind(resource)`, `kind(*)` (any resource).
     pub fn allow_ref(&mut self, r: &str) {
+        self.forget_decisions();
         let (name, res) = match r.split_once('(') {
             Some((n, rest)) => (n, Some(rest.trim_end_matches(')'))),
             None => (r, None),
@@ -132,14 +167,17 @@ impl Grant {
 
     /// Mention `kind` with an empty pattern list: declared, but nothing is allowed yet (`fs.read = []`).
     pub fn declare_empty(&mut self, kind: EffectKind) {
+        self.forget_decisions();
         self.allow.entry(kind).or_insert_with(|| Scope::Only(Vec::new()));
     }
 
     pub fn allow_all(&mut self, kind: EffectKind) {
+        self.forget_decisions();
         self.allow.insert(kind, Scope::Any);
     }
 
     pub fn deny(&mut self, kind: EffectKind) {
+        self.forget_decisions();
         self.deny.insert(kind);
     }
 
@@ -151,7 +189,7 @@ impl Grant {
     /// covers. `patterns` empty = the whole of this grant's scope for `kind` (`cap::net()`); anything this grant does
     /// not cover is refused, so narrowing can never widen.
     pub fn derive_scope(&self, kind: &EffectKind, patterns: Option<&[String]>) -> Result<Grant, Denial> {
-        let mut out = Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: self.root.clone(), prefix_cache: Default::default() };
+        let mut out = Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: self.root.clone(), prefix_cache: Default::default(), read_cache: Default::default() };
         let Some(scope) = self.allow.get(kind) else {
             return match self.check(kind, None) {
                 Err(d) => Err(d),
@@ -197,11 +235,13 @@ impl Grant {
 
     /// Forget everything this grant says about `kind` (a read-only value drops `fs.write`).
     pub fn drop_scope(&mut self, kind: &EffectKind) {
+        self.forget_decisions();
         self.allow.remove(kind);
     }
 
     /// Add the scopes of `other` (used to assemble a value that carries both `fs.read` and `fs.write`).
     pub fn absorb(&mut self, other: Grant) {
+        self.forget_decisions();
         for (k, s) in other.allow {
             self.allow.entry(k).or_insert(s);
         }
@@ -255,6 +295,55 @@ impl Grant {
 
     /// Check one use of `kind` on `resource` (the raw argument: a path, URL/address, variable name, program).
     pub fn check(&self, kind: &EffectKind, resource: Option<&str>) -> Result<(), Denial> {
+        use std::sync::atomic::Ordering::Relaxed;
+        let cacheable_read = matches!((kind, resource), (EffectKind::FsRead, Some(_))) && !CACHE_OFF.load(Relaxed);
+        if cacheable_read {
+            let res = resource.unwrap_or("");
+            let me = TID.with(|t| *t);
+            let mut c = self.read_cache.lock().unwrap_or_else(|e| e.into_inner());
+            if c.owner == 0 {
+                c.owner = me;
+            } else if c.owner != me {
+                c.disabled = true;
+            }
+            if !c.disabled {
+                let now = GENERATION.load(Relaxed);
+                if c.generation != now {
+                    c.allowed.clear();
+                    c.generation = now;
+                }
+                if c.allowed.contains(res) {
+                    return Ok(());
+                }
+            }
+        }
+        let decision = self.check_uncached(kind, resource);
+        if decision.is_ok() {
+            match kind {
+                // the action that follows this check may change what a path resolves to
+                EffectKind::FsWrite | EffectKind::EnvWrite => {
+                    GENERATION.fetch_add(1, Relaxed);
+                }
+                EffectKind::Process | EffectKind::Ffi => CACHE_OFF.store(true, Relaxed),
+                EffectKind::FsRead if cacheable_read => {
+                    let mut c = self.read_cache.lock().unwrap_or_else(|e| e.into_inner());
+                    if !c.disabled && c.generation == GENERATION.load(Relaxed) {
+                        c.allowed.insert(resource.unwrap_or("").to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+        decision
+    }
+
+    fn forget_decisions(&mut self) {
+        if let Ok(c) = self.read_cache.get_mut() {
+            c.allowed.clear();
+        }
+    }
+
+    fn check_uncached(&self, kind: &EffectKind, resource: Option<&str>) -> Result<(), Denial> {
         // standard devices are the console / the entropy source, not files (`fs::read_to_string("/dev/stdin")`)
         if let (EffectKind::FsRead | EffectKind::FsWrite, Some(res)) = (kind, resource) {
             match device_effect(kind, res) {
