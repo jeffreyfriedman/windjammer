@@ -1,0 +1,161 @@
+# Acceptance cases for `wj version`, `wj doctor`, `wj install-dev`, `wj cache warm` (tests/promise_registry_test.rs).
+# `{bin_dir}` is the directory of the installed wj under test, `{root}` the compiler checkout.
+# Healthy-machine environment used below: the installed wj alone on PATH, a clock before its commit date (so it can
+# never be "stale"), and an existing shared cache root.
+
+[[case]]
+name = "version prints the build identity"
+polarity = "positive"
+args = ["version"]
+stdout_has = ["wj ", "(commit ", ", built "]
+
+[[case]]
+name = "version --json prints every identity field as JSON"
+polarity = "positive"
+args = ["version", "--json"]
+json = true
+stdout_has = ["\"commit\"", "\"commit_date\"", "\"dirty\"", "\"profile\"", "\"build_date\""]
+
+[[case]]
+name = "version rejects unknown flags"
+polarity = "negative"
+args = ["version", "--bogus"]
+exit = 2
+
+[[case]]
+name = "doctor passes on a healthy machine"
+polarity = "positive"
+files = { "cache/cargo-target/shared/keep" = "" }
+env = { PATH = "{bin_dir}", WJ_TOOLCHAIN_NOW = "1", WJ_CARGO_TARGET_ROOT = "{w}/cache" }
+args = ["doctor"]
+stdout_has = ["wj on PATH:", "no problems found"]
+
+[[case]]
+name = "doctor with no wj on PATH reports the problem and exits 1"
+polarity = "negative"
+args = ["doctor"]
+exit = 1
+stdout_has = ["no `wj` found on PATH", "fix:"]
+
+[[case]]
+name = "doctor --json reports a healthy machine as ok"
+polarity = "positive"
+files = { "cache/cargo-target/shared/keep" = "" }
+env = { PATH = "{bin_dir}", WJ_TOOLCHAIN_NOW = "1", WJ_CARGO_TARGET_ROOT = "{w}/cache" }
+args = ["doctor", "--json"]
+json = true
+stdout_has = ["\"ok\": true", "\"binaries\""]
+
+[[case]]
+name = "doctor --json lists problems with their fixes and exits 1"
+polarity = "negative"
+args = ["doctor", "--json"]
+exit = 1
+stdout_has = ["\"ok\": false", "\"kind\": \"missing\"", "\"fix\""]
+
+[[case]]
+name = "doctor --expect-head accepts a wj built from the checkout HEAD"
+polarity = "positive"
+cwd = "{root}"
+env = { PATH = "{bin_dir}:/usr/bin:/bin" }
+args = ["doctor", "--expect-head"]
+stdout_has = ["is built from HEAD"]
+
+[[case]]
+name = "doctor --expect-head refuses outside a compiler checkout"
+polarity = "negative"
+env = { PATH = "{bin_dir}:/usr/bin:/bin" }
+args = ["doctor", "--expect-head"]
+exit = 1
+stderr_has = ["not inside a windjammer checkout"]
+
+[[case]]
+name = "install-dev installs the running wj and verifies it"
+polarity = "positive"
+args = ["install-dev", "--to", "{w}/dest/wj"]
+creates = ["dest/wj"]
+stdout_has = ["installed wj "]
+
+[[case]]
+name = "install-dev rejects unknown flags"
+polarity = "negative"
+args = ["install-dev", "--bogus"]
+exit = 2
+
+[[case]]
+name = "install-dev --to chooses the destination"
+polarity = "positive"
+args = ["install-dev", "--to", "{w}/elsewhere/bin/wj"]
+creates = ["elsewhere/bin/wj"]
+
+[[case]]
+name = "install-dev --to an impossible destination fails without leaving files"
+polarity = "negative"
+files = { "blocked" = "a file, not a directory" }
+args = ["install-dev", "--to", "{w}/blocked/wj"]
+exit = 1
+stderr_has = ["error:"]
+
+[[case]]
+name = "install-dev --from installs another build"
+polarity = "positive"
+args = ["install-dev", "--from", "{bin_dir}/wj", "--to", "{w}/dest/wj"]
+creates = ["dest/wj"]
+
+[[case]]
+name = "install-dev --from a binary that cannot run installs nothing"
+polarity = "negative"
+files = { "fake" = "not a program" }
+args = ["install-dev", "--from", "{w}/fake", "--to", "{w}/dest/wj"]
+exit = 1
+stderr_has = ["cannot run"]
+absent = ["dest/wj"]
+
+[[case]]
+name = "install-dev --force reinstalls over an existing install"
+polarity = "positive"
+setup = [["install-dev", "--to", "{w}/dest/wj"]]
+args = ["install-dev", "--to", "{w}/dest/wj", "--force"]
+stdout_has = ["already holds this build"]
+
+[[case]]
+name = "install-dev --force does not bypass the verification of a broken binary"
+polarity = "negative"
+files = { "fake" = "not a program" }
+args = ["install-dev", "--force", "--from", "{w}/fake", "--to", "{w}/dest/wj"]
+exit = 1
+absent = ["dest/wj"]
+
+[[case]]
+name = "install-dev --dry-run writes nothing"
+polarity = "positive"
+args = ["install-dev", "--dry-run", "--to", "{w}/dest/wj"]
+stdout_has = ["would install"]
+absent = ["dest/wj"]
+
+[[case]]
+name = "install-dev --dry-run still validates the source"
+polarity = "negative"
+files = { "fake" = "not a program" }
+args = ["install-dev", "--dry-run", "--from", "{w}/fake", "--to", "{w}/dest/wj"]
+exit = 1
+stderr_has = ["cannot run"]
+
+[[case]]
+name = "cache warm builds a program once so later builds start warm"
+polarity = "positive"
+needs = "cargo"
+args = ["cache", "warm"]
+stdout_has = ["runtime cache ready"]
+
+[[case]]
+name = "cache warm rejects unknown flags"
+polarity = "negative"
+args = ["cache", "warm", "--bogus"]
+exit = 2
+
+[[case]]
+name = "version --json takes no positional arguments"
+polarity = "negative"
+args = ["version", "--json", "extra"]
+exit = 2

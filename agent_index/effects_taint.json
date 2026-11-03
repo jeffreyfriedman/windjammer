@@ -183,6 +183,14 @@
     },
     {
       "source_kind": "EnvironmentVariable",
+      "var": "env::home_dir"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
+      "var": "std::env::home_dir"
+    },
+    {
+      "source_kind": "EnvironmentVariable",
       "var": "env::var"
     },
     {
@@ -196,6 +204,14 @@
     {
       "source_kind": "EnvironmentVariable",
       "var": "std::env::vars"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::canonicalize"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::canonicalize"
     },
     {
       "source_kind": "FileContents",
@@ -220,6 +236,14 @@
     {
       "source_kind": "FileContents",
       "var": "std::fs::is_file"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "fs::metadata"
+    },
+    {
+      "source_kind": "FileContents",
+      "var": "std::fs::metadata"
     },
     {
       "source_kind": "FileContents",

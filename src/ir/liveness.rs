@@ -529,7 +529,8 @@ fn closure_param_names(p: &str) -> Vec<String> {
 /// `params` are the closure's parameters as written (`x` or `x: int`).
 pub fn captures(params: &[String], body: &Expression<'_>) -> BTreeSet<String> {
     let mut c = Collector::default();
-    for name in params.iter().flat_map(|p| closure_param_names(p)) {
+    let written: &[String] = params; // (a name that is not also a hash-typed field elsewhere in this directory)
+    for name in written.iter().flat_map(|p| closure_param_names(p)) {
         c.declared_in.insert(name, 0);
     }
     c.expr(body);

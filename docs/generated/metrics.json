@@ -2,18 +2,18 @@
   "_generated": "GENERATED FILE - DO NOT EDIT. Regenerate: scripts/docs_gen.sh. CI-measured numbers go in docs/generated/measured.json.",
   "metrics": {
     "adr.count": 29,
-    "cli.subcommands": 38,
+    "cli.subcommands": 37,
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
-    "errors.codes_total": 68,
+    "errors.codes_total": 66,
     "interpreter.features_supported": 44,
     "interpreter.features_unsupported": 0,
     "intrinsics.count": 13,
     "lexer.keywords": 44,
     "lints.w_codes": 7,
     "stdlib.files": 43,
-    "tests.rust_files": 1976,
+    "tests.rust_files": 1975,
     "tests.wj_programs": 1769
   }
 }

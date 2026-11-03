@@ -1,7 +1,9 @@
 // `format` templates of bare `{}`s and `s.push_str(x)` statements, which the resolved engine does
 // without the generic call: escaped and lone braces, a user `Display` (run after every argument is
 // evaluated), arguments with side effects, a string another binding shares, a string a closure
-// captures, a char argument, and a panic while an argument is evaluated (its location).
+// captures, a char argument, a `push_str` of an interpolation of every kind of value (an unsigned
+// 128-bit integer, a float, a reference to a user `Display`, a char, a bool) into a shared string, and
+// a panic while an argument is evaluated (its location).
 struct P {
     x: int,
 }
@@ -42,6 +44,13 @@ fn main() {
     let get = || c.len()
     c.push_str("tured")
     println("${c} ${get()}")
+    let mut w = "w"
+    let alias = w
+    let big: u128 = 18446744073709551615 as u128 + 1
+    let f = 2.5
+    let r = &p
+    w.push_str("${big}/${f}/${r}/${'c'}/${true}/${-3}/${alias}")
+    println("${w} ${alias}")
     let mut z = String::new()
     let mut k = 5
     while k > -2 {
