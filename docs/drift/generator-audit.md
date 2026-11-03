@@ -46,9 +46,10 @@ resolved, with and without eager machine-code loops) because it lives in `tests/
 | `vp_closure_captures` | captured `Option`/enum/`Vec`, closures returning Option, closures called through their bindings, a captured name shadowed later |
 | `vp_option_fields` | Option fields read in methods, rewritten each iteration, matched inside loops, `ok_or`, `map` |
 
-Not generated: a generator of value-position programs is the next rung (a grammar over the cross product of
-value kind x position, with the walker as oracle for the resolved engine and rustc for both). The hand-written
-set is the seed corpus for it.
+The generator (`scripts/wj/drift_gen.wj`, docs/testing/DRIFT.md) is that rung: the cross product of five value kinds
+and ten positions, hit and miss, seeded; the walker is the oracle for the resolved engine and rustc for the compiled
+backend. Seeds 1..200 found no walker/resolved divergence on the current engine; rustc flagged one compiled-side defect
+(a bare unit-variant pattern in a value-position match, now `repros/bare_unit_pattern_in_let_match.wj`).
 
 ## Mutation checks
 
@@ -58,3 +59,4 @@ set is the seed corpus for it.
 | differential corpus, compiled arm | none needed: the 14 repros of `docs/drift/findings.md` and 61 compiled-red ecosystem tests are real divergences the corpus reports until they are ledgered | each ledger line is `known`, not hidden |
 | drift budget (ledger) | `scripts/wj/drift_selftest.wj` plants a new, changed, vanished, grown and vacuous result | 11 of 11 checks, each fails the ledger comparer for its own reason |
 | `#runs` guard | a program that does not parse (an `option_binding_plus_literal.wj` with its first line joined to a comment) agreed with itself in all three modes and passed the corpus | found while recording; `<program>#runs` rows now fail such a program |
+| generator (`drift_gen.wj`), walker vs resolved | the bare-`None` fix removed again (kind `Option<int>` from a map lookup) | 32 of the 40 default programs diverge (walker exit 0, resolved exit 101 at the lookup), 64 rows; with the fix, 0 of 200 seeds |
