@@ -20,14 +20,30 @@ struct Case {
 }
 
 const CASES: &[Case] = &[
+    // `let idx: int = v.len()` now compiles (the compiler lowers the cast), so R1 uses shapes rustc still rejects.
     Case {
-        name: "r1_len_into_int",
+        name: "r1_len_into_int_tuple_slot",
         // A plain `let idx: int = v.len()` is converted by the solver (NUM-USIZE-TO-INT); a `len()` inside a
         // tuple slot is not yet, so rustc still rejects it and the hint must reach the user.
         src: "fn main() {\n    let v: Vec<int> = [1, 2, 3]\n    let pair: (int, int) = (v.len(), 0)\n    println(\"${pair.0}\")\n}\n",
+
         code: "WJ0003",
         line: 3,
         hint: &["as int"],
+    },
+    Case {
+        name: "r1_int_into_nth",
+        src: "fn main() {\n    let digits = \"12345\"\n    let r: int = 2\n    let c = digits.chars().nth(r)\n    println(\"${digits.len()}\")\n}\n",
+        code: "WJ0003",
+        line: 4,
+        hint: &["expected `uint`, found `int`", "as uint"],
+    },
+    Case {
+        name: "r1_let_mut_zero_then_parse",
+        src: "fn main() {\n    let line = \" 5 \"\n    let mut k = 0\n    k = line.trim().parse::<int>().unwrap_or(0)\n    println(\"${k}\")\n}\n",
+        code: "WJ0003",
+        line: 4,
+        hint: &["expected `i32`, found `i64`", "let mut k: int = 0"],
     },
     Case {
         name: "r2_char_for_string",

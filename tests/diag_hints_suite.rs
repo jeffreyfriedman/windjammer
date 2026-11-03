@@ -138,6 +138,24 @@ fn collect_message_names_the_items() {
     assert!(all_text(&d).contains("add `.map(|s| s.to_string())` before `.collect()`"));
 }
 
+/// Pilot-4 defect: both sides printed as `int` ("expected an owned `int`, found an owned `int`").
+#[test]
+fn int_width_mismatch_keeps_the_distinguishing_spellings() {
+    let d = first("fn main() { let mut k: i32 = 0; let n: i64 = 5; k = n; println!(\"{}\", k); }\n");
+    assert_eq!(d.code, "WJ0003");
+    assert_eq!(d.message, "mismatched types: expected `i32`, found `i64`", "{}", d.message);
+    let t = all_text(&d);
+    assert!(t.contains("let mut k: int = 0"), "{t}");
+    assert!(!t.contains("owned `int`"), "{t}");
+}
+
+#[test]
+fn non_primitive_cast_is_classified() {
+    let d = first("struct P(i64);\nfn main() { let p = P(1); let n = p as i64; }\n");
+    assert_ne!(d.code, "WJ0099", "{}", all_text(&d));
+    assert!(all_text(&d).contains("`as` only converts"), "{}", all_text(&d));
+}
+
 #[test]
 fn int_into_float_says_cast() {
     let d = first("fn f(n: f64) {}\nfn main() { let k: i64 = 3; f(k); }\n");
