@@ -38,6 +38,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0026](0026-rust-crate-dependencies.md) | First-class Rust crate dependencies (wj.toml, signature surfaces, effects) | Proposed |
 | [0027](0027-typed-json-derive.md) | Typed JSON for structs and enums (one data model, two engines) | Proposed |
 | [0028](0028-usize-class-in-the-numeric-solver.md) | An index class (`usize`) in the numeric solver | Accepted |
+| [0029](0029-int-at-the-surface.md) | `int` at the surface; rustc types the literals | Proposed |
 <!-- wj:end -->
 
 ## Template
