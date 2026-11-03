@@ -1,0 +1,105 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "L",
+ "arm_name": "interpreted-first+sheet",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let mut pending_quote = false\n        for c in line.chars() {\n            if inq {\n                if pending_quote {\n                    if c == '\"' {\n                        cur = cur + \"\\\"\"\n                        pending_quote = false\n                    } else {\n                        inq = false\n                        pending_quote = false\n                        if c == ',' {\n                            fields.push(cur)\n                            cur = \"\"\n                        } else {\n                            cur = cur + c.to_string()\n                        }\n                    }\n                } else if c == '\"' {\n                    pending_quote = true\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur = cur + c.to_string()\n            }\n        }\n        fields.push(cur)\n        let mut out = \"\"\n        let mut i = 0\n        for f in fields {\n            if i > 0 {\n                out = out + \"|\"\n            }\n            out = out + \"[\" + f + \"]\"\n            i += 1\n        }\n        println(\"${i}: ${out}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let mut fields: Vec<string> = []\n        let mut cur = \"\"\n        let mut inq = false\n        let mut pending_quote = false\n        for c in line.chars() {\n            if inq {\n                if pending_quote {\n                    if c == '\"' {\n                        cur = cur + \"\\\"\"\n                        pending_quote = false\n                    } else {\n                        inq = false\n                        pending_quote = false\n                        if c == ',' {\n                            fields.push(cur)\n                            cur = \"\"\n                        } else {\n                            cur = cur + c.to_string()\n                        }\n                    }\n                } else if c == '\"' {\n                    pending_quote = true\n                } else {\n                    cur = cur + c.to_string()\n                }\n            } else if c == '\"' {\n                inq = true\n            } else if c == ',' {\n                fields.push(cur)\n                cur = \"\"\n            } else {\n                cur = cur + c.to_string()\n            }\n        }\n        fields.push(cur)\n        let mut out = \"\"\n        let mut i = 0\n        for f in fields {\n            if i > 0 {\n                out = out + \"|\"\n            }\n            out = out + \"[\" + f + \"]\"\n            i += 1\n        }\n        println(\"${i}: ${out}\")\n    }\n}\n",
+ "first_turn_input": 8186,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.057,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 16.6,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 5.99,
+ "pack_bytes": 1436,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-03T00:57:59",
+ "schema": 2,
+ "task": "t022_csv_parse",
+ "thinking_seconds": 6.933,
+ "tool_result_tokens_est": 68,
+ "tool_wait_seconds": 0.06,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6705,
+   "cache_write": 1479,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8186,
+   "output": 3,
+   "result_chars": 239,
+   "turn": 1
+  },
+  {
+   "cache_read": 8184,
+   "cache_write": 933,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9119,
+   "output": 157,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 6.933,
+  "cost_usd": 0.020014900000000002,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote `main.wj`. I ran it in the interpreter on both examples combined into one input, and its output matched the expected output for both.\n\nI didn't run `wj build`, as instructed, so the compiled path is untested.\n\nThe parser reads each line character by character and tracks whether it is inside quotes. A doubled `\"\"` inside quotes becomes a literal `\"`. An empty line gives one empty field. Oth",
+  "subtype": "success",
+  "tokens_in": 17305,
+  "tokens_out": 887,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 12.98
+}

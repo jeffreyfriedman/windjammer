@@ -1,0 +1,1272 @@
+{
+ "n_trials": 120,
+ "arms": {
+  "pass": {
+   "K": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "L": [
+    0.6,
+    0.3333333333333333,
+    0.8666666666666667
+   ],
+   "M": [
+    0.8333333333333334,
+    0.6333333333333333,
+    0.9666666666666667
+   ],
+   "N": [
+    0.9666666666666667,
+    0.8666666666666667,
+    1.0
+   ]
+  },
+  "verify": {
+   "K": [
+    2.533333333333333,
+    1.2666666666666666,
+    4.266666666666667
+   ],
+   "L": [
+    1.4666666666666666,
+    1.1333333333333333,
+    1.8666666666666667
+   ],
+   "M": [
+    3.8,
+    2.8,
+    4.966666666666667
+   ],
+   "N": [
+    3.3666666666666667,
+    2.5,
+    4.366666666666666
+   ]
+  },
+  "to_green": {
+   "K": [
+    1.9310344827586208,
+    1.206896551724138,
+    2.966666666666667
+   ],
+   "L": [
+    1.0588235294117647,
+    1.0,
+    1.2352941176470589
+   ],
+   "M": [
+    2.64,
+    1.5555555555555556,
+    4.0476190476190474
+   ],
+   "N": [
+    2.3448275862068964,
+    1.4137931034482758,
+    3.3703703703703702
+   ]
+  },
+  "turns": {
+   "K": [
+    6.3,
+    3.7333333333333334,
+    9.833333333333334
+   ],
+   "L": [
+    3.433333333333333,
+    3.1,
+    3.8
+   ],
+   "M": [
+    6.533333333333333,
+    4.966666666666667,
+    8.433333333333334
+   ],
+   "N": [
+    7.333333333333333,
+    5.733333333333333,
+    9.1
+   ]
+  },
+  "tok_in": {
+   "K": [
+    47739.03333333333,
+    23689.933333333334,
+    82359.96666666666
+   ],
+   "L": [
+    21269.866666666665,
+    18538.0,
+    24309.933333333334
+   ],
+   "M": [
+    46877.2,
+    35390.36666666667,
+    60023.23333333333
+   ],
+   "N": [
+    48838.26666666667,
+    34820.36666666667,
+    67444.03333333334
+   ]
+  },
+  "tok_out": {
+   "K": [
+    1987.4666666666667,
+    1395.5666666666666,
+    2699.733333333333
+   ],
+   "L": [
+    1333.0333333333333,
+    1051.1666666666667,
+    1670.5
+   ],
+   "M": [
+    1675.8,
+    1335.5666666666666,
+    2053.733333333333
+   ],
+   "N": [
+    1948.2,
+    1399.0,
+    2608.766666666667
+   ]
+  },
+  "cost": {
+   "K": [
+    0.040688973333333336,
+    0.02826682,
+    0.05669531666666667
+   ],
+   "L": [
+    0.023779423333333334,
+    0.01970175,
+    0.028385996666666666
+   ],
+   "M": [
+    0.03407487666666666,
+    0.02697356,
+    0.04173375333333333
+   ],
+   "N": [
+    0.041938123333333334,
+    0.02968761666666667,
+    0.05666152000000001
+   ]
+  },
+  "wall": {
+   "K": [
+    44.369,
+    28.277666666666665,
+    65.387
+   ],
+   "L": [
+    16.487000000000002,
+    14.127666666666666,
+    19.197
+   ],
+   "M": [
+    31.620333333333335,
+    26.869666666666667,
+    36.659
+   ],
+   "N": [
+    34.74033333333333,
+    27.538,
+    43.559999999999995
+   ]
+  },
+  "think": {
+   "K": [
+    15.746933333333335,
+    10.403166666666667,
+    22.9737
+   ],
+   "L": [
+    9.950233333333333,
+    8.238233333333334,
+    11.8983
+   ],
+   "M": [
+    14.053533333333332,
+    11.269133333333334,
+    16.8538
+   ],
+   "N": [
+    15.126,
+    11.323033333333333,
+    19.737333333333332
+   ]
+  },
+  "tool": {
+   "K": [
+    19.89,
+    9.447000000000001,
+    34.598333333333336
+   ],
+   "L": [
+    0.16299999999999998,
+    0.08066666666666666,
+    0.28
+   ],
+   "M": [
+    10.482333333333333,
+    7.173333333333333,
+    14.565
+   ],
+   "N": [
+    12.025666666666666,
+    8.553333333333333,
+    16.247333333333334
+   ]
+  },
+  "denied": {
+   "K": [
+    0.4666666666666667,
+    0.1,
+    0.9333333333333333
+   ],
+   "L": [
+    0.03333333333333333,
+    0.0,
+    0.13333333333333333
+   ],
+   "M": [
+    0.16666666666666666,
+    0.03333333333333333,
+    0.36666666666666664
+   ],
+   "N": [
+    0.16666666666666666,
+    0.0,
+    0.4
+   ]
+  },
+  "capden": {
+   "K": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "L": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "M": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "N": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "load": {
+   "K": [
+    30.276666666666664,
+    24.7,
+    35.57666666666667
+   ],
+   "L": [
+    29.583333333333332,
+    24.236666666666668,
+    35.96333333333334
+   ],
+   "M": [
+    29.676666666666666,
+    24.69,
+    35.36333333333334
+   ],
+   "N": [
+    24.540000000000003,
+    19.78666666666667,
+    29.666666666666668
+   ]
+  },
+  "silent": {
+   "K": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "L": [
+    0.4,
+    0.13333333333333333,
+    0.6666666666666666
+   ],
+   "M": [
+    0.16666666666666666,
+    0.03333333333333333,
+    0.36666666666666664
+   ],
+   "N": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "diffs": {
+  "pass": {
+   "K-L": [
+    0.4,
+    0.1333333333333333,
+    0.6666666666666667
+   ],
+   "K-M": [
+    0.16666666666666663,
+    0.0,
+    0.3666666666666667
+   ],
+   "K-N": [
+    0.033333333333333326,
+    0.0,
+    0.1333333333333333
+   ],
+   "L-M": [
+    -0.2333333333333334,
+    -0.5333333333333334,
+    0.03333333333333344
+   ],
+   "L-N": [
+    -0.3666666666666667,
+    -0.6666666666666667,
+    -0.06666666666666665
+   ],
+   "M-N": [
+    -0.1333333333333333,
+    -0.3666666666666667,
+    0.06666666666666665
+   ]
+  },
+  "verify": {
+   "K-L": [
+    1.0666666666666667,
+    -0.2333333333333334,
+    2.8000000000000003
+   ],
+   "K-M": [
+    -1.2666666666666666,
+    -2.6666666666666665,
+    0.3666666666666667
+   ],
+   "K-N": [
+    -0.8333333333333335,
+    -2.2,
+    0.7999999999999998
+   ],
+   "L-M": [
+    -2.333333333333333,
+    -3.533333333333333,
+    -1.3666666666666667
+   ],
+   "L-N": [
+    -1.9000000000000001,
+    -2.9333333333333327,
+    -1.0333333333333334
+   ],
+   "M-N": [
+    0.4333333333333331,
+    -0.9999999999999996,
+    1.9
+   ]
+  },
+  "to_green": {
+   "K-L": [
+    0.3759590792838874,
+    -0.09659090909090917,
+    1.0
+   ],
+   "K-M": [
+    -0.7089655172413794,
+    -1.9333333333333331,
+    0.3267195767195765
+   ],
+   "K-N": [
+    -0.4137931034482756,
+    -1.6551724137931034,
+    0.6551724137931032
+   ],
+   "L-M": [
+    -1.0411764705882354,
+    -2.5137254901960784,
+    -0.18181818181818188
+   ],
+   "L-N": [
+    -1.0281329923273657,
+    -2.349282296650718,
+    -0.09974424552429673
+   ],
+   "M-N": [
+    0.29517241379310377,
+    -1.202380952380952,
+    2.007957559681697
+   ]
+  },
+  "turns": {
+   "K-L": [
+    2.8666666666666667,
+    0.30000000000000027,
+    6.6
+   ],
+   "K-M": [
+    -0.2333333333333334,
+    -2.7666666666666666,
+    2.8
+   ],
+   "K-N": [
+    -1.0333333333333332,
+    -4.233333333333333,
+    2.8666666666666663
+   ],
+   "L-M": [
+    -3.1,
+    -5.1,
+    -1.5333333333333328
+   ],
+   "L-N": [
+    -3.9,
+    -5.633333333333334,
+    -2.2333333333333334
+   ],
+   "M-N": [
+    -0.7999999999999998,
+    -3.166666666666667,
+    1.666666666666667
+   ]
+  },
+  "tok_in": {
+   "K-L": [
+    26469.166666666668,
+    2352.3333333333358,
+    61760.9
+   ],
+   "K-M": [
+    861.8333333333358,
+    -24941.900000000005,
+    32518.566666666673
+   ],
+   "K-N": [
+    -1099.2333333333372,
+    -30687.533333333326,
+    36684.83333333333
+   ],
+   "L-M": [
+    -25607.333333333332,
+    -40241.466666666674,
+    -13338.8
+   ],
+   "L-N": [
+    -27568.400000000005,
+    -45427.73333333333,
+    -13370.266666666666
+   ],
+   "M-N": [
+    -1961.066666666673,
+    -24371.1,
+    17331.36666666667
+   ]
+  },
+  "tok_out": {
+   "K-L": [
+    654.4333333333334,
+    98.5666666666666,
+    1476.6000000000001
+   ],
+   "K-M": [
+    311.66666666666674,
+    -222.73333333333335,
+    976.2666666666667
+   ],
+   "K-N": [
+    39.26666666666665,
+    -669.6333333333334,
+    875.6000000000001
+   ],
+   "L-M": [
+    -342.76666666666665,
+    -698.4333333333332,
+    -66.10000000000014
+   ],
+   "L-N": [
+    -615.1666666666667,
+    -1035.9333333333336,
+    -270.63333333333344
+   ],
+   "M-N": [
+    -272.4000000000001,
+    -792.3000000000002,
+    197.43333333333317
+   ]
+  },
+  "cost": {
+   "K-L": [
+    0.016909550000000002,
+    0.004482783333333334,
+    0.03416010666666667
+   ],
+   "K-M": [
+    0.006614096666666673,
+    -0.005744880000000001,
+    0.021199480000000007
+   ],
+   "K-N": [
+    -0.0012491499999999975,
+    -0.018401976666666667,
+    0.018044043333333336
+   ],
+   "L-M": [
+    -0.01029545333333333,
+    -0.0186651,
+    -0.0036465266666666704
+   ],
+   "L-N": [
+    -0.0181587,
+    -0.02969782333333334,
+    -0.00893490666666667
+   ],
+   "M-N": [
+    -0.00786324666666667,
+    -0.021918739999999992,
+    0.004519216666666669
+   ]
+  },
+  "wall": {
+   "K-L": [
+    27.881999999999998,
+    11.504333333333332,
+    49.483666666666664
+   ],
+   "K-M": [
+    12.748666666666665,
+    -3.4796666666666667,
+    33.358999999999995
+   ],
+   "K-N": [
+    9.628666666666668,
+    -5.561333333333337,
+    30.753999999999998
+   ],
+   "L-M": [
+    -15.133333333333333,
+    -20.558000000000007,
+    -9.924000000000003
+   ],
+   "L-N": [
+    -18.25333333333333,
+    -26.175333333333334,
+    -11.634333333333334
+   ],
+   "M-N": [
+    -3.1199999999999974,
+    -12.567333333333334,
+    5.35133333333334
+   ]
+  },
+  "think": {
+   "K-L": [
+    5.796700000000001,
+    0.20243333333333347,
+    13.736533333333337
+   ],
+   "K-M": [
+    1.6934000000000022,
+    -3.8233666666666686,
+    8.488666666666667
+   ],
+   "K-N": [
+    0.6209333333333351,
+    -5.8196666666666665,
+    8.891033333333333
+   ],
+   "L-M": [
+    -4.103299999999999,
+    -7.187033333333334,
+    -1.3470666666666684
+   ],
+   "L-N": [
+    -5.175766666666666,
+    -8.8855,
+    -2.1380333333333343
+   ],
+   "M-N": [
+    -1.0724666666666671,
+    -5.538966666666667,
+    2.870700000000001
+   ]
+  },
+  "tool": {
+   "K-L": [
+    19.727,
+    9.005666666666666,
+    34.875
+   ],
+   "K-M": [
+    9.407666666666668,
+    -1.4609999999999985,
+    23.462
+   ],
+   "K-N": [
+    7.8643333333333345,
+    -1.8826666666666672,
+    22.58566666666667
+   ],
+   "L-M": [
+    -10.319333333333333,
+    -14.151,
+    -7.065666666666666
+   ],
+   "L-N": [
+    -11.862666666666666,
+    -16.05033333333333,
+    -8.365333333333334
+   ],
+   "M-N": [
+    -1.543333333333333,
+    -6.445333333333332,
+    3.839333333333334
+   ]
+  },
+  "denied": {
+   "K-L": [
+    0.43333333333333335,
+    0.09999999999999999,
+    0.9666666666666667
+   ],
+   "K-M": [
+    0.30000000000000004,
+    -0.06666666666666667,
+    0.8333333333333334
+   ],
+   "K-N": [
+    0.30000000000000004,
+    -0.06666666666666668,
+    0.8333333333333334
+   ],
+   "L-M": [
+    -0.13333333333333333,
+    -0.36666666666666664,
+    0.03333333333333333
+   ],
+   "L-N": [
+    -0.13333333333333333,
+    -0.36666666666666664,
+    0.03333333333333334
+   ],
+   "M-N": [
+    0.0,
+    -0.2666666666666667,
+    0.23333333333333334
+   ]
+  },
+  "capden": {
+   "K-L": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "K-M": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "K-N": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "L-M": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "L-N": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "M-N": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "load": {
+   "K-L": [
+    0.6933333333333316,
+    -8.48,
+    9.206666666666663
+   ],
+   "K-M": [
+    0.5999999999999979,
+    -8.390000000000004,
+    8.890000000000004
+   ],
+   "K-N": [
+    5.736666666666661,
+    -1.5566666666666649,
+    12.976666666666667
+   ],
+   "L-M": [
+    -0.09333333333333371,
+    -7.453333333333337,
+    7.143333333333331
+   ],
+   "L-N": [
+    5.0433333333333294,
+    -3.0599999999999987,
+    12.566666666666666
+   ],
+   "M-N": [
+    5.136666666666663,
+    -2.8199999999999967,
+    12.66
+   ]
+  },
+  "silent": {
+   "K-L": [
+    -0.4,
+    -0.6666666666666666,
+    -0.13333333333333333
+   ],
+   "K-M": [
+    -0.16666666666666666,
+    -0.36666666666666664,
+    0.0
+   ],
+   "K-N": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "L-M": [
+    0.23333333333333336,
+    -0.033333333333333354,
+    0.5333333333333333
+   ],
+   "L-N": [
+    0.4,
+    0.16666666666666666,
+    0.6666666666666666
+   ],
+   "M-N": [
+    0.16666666666666666,
+    0.0,
+    0.36666666666666664
+   ]
+  }
+ },
+ "friction": [
+  {
+   "id": "type-mismatch",
+   "title": "type mismatch (often int/float, string/&str)",
+   "fix_kind": "diagnostic text",
+   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+   "wasted_calls": 66,
+   "est_tokens": 470107,
+   "example": "error[WJ0003]: mismatched types: expected `int`, found `uint`\n  --> main.wj:6:22\n  |\n6 |     let mut cnt: Vec<int> = []",
+   "arms": [
+    "K",
+    "L",
+    "M",
+    "N"
+   ],
+   "n_trials": 27,
+   "n_tasks": 7,
+   "rank": 1,
+   "priority": "P0"
+  },
+  {
+   "id": "collect-type",
+   "title": "collect/iterator element type mismatch in generated Rust",
+   "fix_kind": "codegen",
+   "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
+   "wasted_calls": 20,
+   "est_tokens": 141367,
+   "example": "error[WJ0029]: cannot collect `&str` items into `Vec<std::string::string>`\n  --> main.wj:18:59\n   |\n18 |         let parts = line.split_whitespace().collect::<Vec<string>>()",
+   "arms": [
+    "K",
+    "L",
+    "M"
+   ],
+   "n_trials": 15,
+   "n_tasks": 4,
+   "rank": 2,
+   "priority": "P0"
+  },
+  {
+   "id": "silent-divergence",
+   "title": "interpreted run passed but compiled grade failed (silent divergence)",
+   "fix_kind": "interpreter / check parity",
+   "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+   "wasted_calls": 20,
+   "est_tokens": 138325,
+   "example": "",
+   "arms": [
+    "L",
+    "M"
+   ],
+   "n_trials": 17,
+   "n_tasks": 6,
+   "rank": 3,
+   "priority": "P0"
+  },
+  {
+   "id": "lint-leakage",
+   "title": "Rust-leakage lint rejected idiomatic-looking code",
+   "fix_kind": "lint rule",
+   "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
+   "wasted_calls": 15,
+   "est_tokens": 101988,
+   "example": "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:35:44\n  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead\n  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (t",
+   "arms": [
+    "K",
+    "L",
+    "N"
+   ],
+   "n_trials": 15,
+   "n_tasks": 6,
+   "rank": 4,
+   "priority": "P1"
+  },
+  {
+   "id": "rustc-leak",
+   "title": "raw rustc/cargo error surfaced from generated code",
+   "fix_kind": "codegen / diagnostic mapping",
+   "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+   "wasted_calls": 9,
+   "est_tokens": 61700,
+   "example": "error[E0605]: non-primitive cast: `()` as `u8`\n  --> main.rs:39:30\n   |\n39 |               let _ = out.push({\nFor more information about this error, try `rustc --explain E0605`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuil",
+   "arms": [
+    "L",
+    "M"
+   ],
+   "n_trials": 5,
+   "n_tasks": 2,
+   "rank": 5,
+   "priority": "P1"
+  },
+  {
+   "id": "int-width",
+   "title": "untyped integer literal emitted as i32 and mixed with int (i64)",
+   "fix_kind": "codegen (literal defaulting) + pack tip",
+   "fix_location": "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'",
+   "wasted_calls": 6,
+   "est_tokens": 40222,
+   "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:18:17\n   |\n14 |     let mut l = -1_i64;\n   |                 ------ expected due to this value\n...\n18 |             l = i;\n   |                 ^ expected `i64`, found `i32`\n\n",
+   "arms": [
+    "L",
+    "M"
+   ],
+   "n_trials": 6,
+   "n_tasks": 3,
+   "rank": 6,
+   "priority": "P1"
+  },
+  {
+   "id": "method-parity",
+   "title": "method accepted by the interpreter is missing on the compiled path",
+   "fix_kind": "stdlib parity / check",
+   "fix_location": "`wj check` must reject what rustc will (R5 check-vs-build gate); alias or implement the std method; `wj docs` entry",
+   "wasted_calls": 2,
+   "est_tokens": 14926,
+   "example": "error[E0599]: no method named `file_name` found for reference `&dyn Shape` in the current scope\n   --> main.rs:137:74\n    |\n137 |     windjammer_runtime::io::println(&format!(\"{} corners={} area2={}\", s.file_name(), s.corners(), d));\nFor more information about this error, try `rustc --explain E0599`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: C",
+   "arms": [
+    "M"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 7,
+   "priority": "P1"
+  },
+  {
+   "id": "other:error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+   "title": "unclassified failure: error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 2,
+   "est_tokens": 14169,
+   "example": "error[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0",
+   "arms": [
+    "K"
+   ],
+   "n_trials": 2,
+   "n_tasks": 1,
+   "rank": 8,
+   "priority": "P1"
+  },
+  {
+   "id": "other:error[WJ0007]: value `X` is used after it was moved",
+   "title": "unclassified failure: error[WJ0007]: value `X` is used after it was moved",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 1,
+   "est_tokens": 7084,
+   "example": "error[WJ0007]: value `t` is used after it was moved\n  --> main.wj:94:13\n   |\n94 |     let mut t = Tree { keys: [], left: [], right: [], root: -1, out: [] }",
+   "arms": [
+    "K"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 9,
+   "priority": "P2"
+  },
+  {
+   "id": "other:= note: ADR-N: Windjammer has no macros; the `X` forms become errors in a future release",
+   "title": "unclassified failure: = note: ADR-N: Windjammer has no macros; the `X` forms become errors in a future release",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 1,
+   "est_tokens": 6772,
+   "example": "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{:>6}\\t{}\", c, line)` with `println(\"${c:>6}\\t${line}\")` (or run `wj fix`)\n  = suggestion: println(\"${c:>6}\\t${line}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"cat: {}: No such file\", n)` with `println(\"cat: ${n}: No such file\")` (or run `wj fix`)\n  = suggestion: println(\"cat: ${n}: No such file\")\n",
+   "arms": [
+    "N"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 10,
+   "priority": "P2"
+  }
+ ],
+ "aps": {},
+ "attribution": {
+  "K": {
+   "first_turn_input": 8168.9,
+   "pack_tokens": 410.2857142857143,
+   "tool_result_tokens": 850.1,
+   "docs_calls": 0.23333333333333334,
+   "mcp_calls": 0.0,
+   "tokens_in": 47739.03333333333,
+   "turns": 6.3
+  },
+  "L": {
+   "first_turn_input": 8218.9,
+   "pack_tokens": 410.2857142857143,
+   "tool_result_tokens": 111.36666666666666,
+   "docs_calls": 0.06666666666666667,
+   "mcp_calls": 0.0,
+   "tokens_in": 21269.866666666665,
+   "turns": 3.433333333333333
+  },
+  "M": {
+   "first_turn_input": 8237.9,
+   "pack_tokens": 410.2857142857143,
+   "tool_result_tokens": 546.6,
+   "docs_calls": 0.0,
+   "mcp_calls": 0.0,
+   "tokens_in": 46877.2,
+   "turns": 6.533333333333333
+  },
+  "N": {
+   "first_turn_input": 7888.9,
+   "pack_tokens": 190.0,
+   "tool_result_tokens": 1143.0333333333333,
+   "docs_calls": 0.0,
+   "mcp_calls": 0.0,
+   "tokens_in": 48838.26666666667,
+   "turns": 7.333333333333333
+  }
+ },
+ "friction_by_arm": {
+  "K": [
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 18,
+    "est_tokens": 127519,
+    "example": "error[WJ0003]: mismatched types: expected `int`, found `uint`\n  --> main.wj:6:22\n  |\n6 |     let mut cnt: Vec<int> = []",
+    "arms": [
+     "K"
+    ],
+    "n_trials": 7,
+    "n_tasks": 3,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "collect-type",
+    "title": "collect/iterator element type mismatch in generated Rust",
+    "fix_kind": "codegen",
+    "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
+    "wasted_calls": 4,
+    "est_tokens": 28338,
+    "example": "error[WJ0029]: cannot collect `&str` items into `Vec<std::string::string>`\n  --> main.wj:18:59\n   |\n18 |         let parts = line.split_whitespace().collect::<Vec<string>>()",
+    "arms": [
+     "K"
+    ],
+    "n_trials": 4,
+    "n_tasks": 2,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "lint-leakage",
+    "title": "Rust-leakage lint rejected idiomatic-looking code",
+    "fix_kind": "lint rule",
+    "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
+    "wasted_calls": 2,
+    "est_tokens": 14169,
+    "example": "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:35:44\n  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead\n  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (t",
+    "arms": [
+     "K"
+    ],
+    "n_trials": 2,
+    "n_tasks": 1,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+    "title": "unclassified failure: error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 2,
+    "est_tokens": 14169,
+    "example": "error[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:6:16\n  |\n6 |     let mut k: int = 0",
+    "arms": [
+     "K"
+    ],
+    "n_trials": 2,
+    "n_tasks": 1,
+    "rank": 4,
+    "priority": "P1"
+   },
+   {
+    "id": "other:error[WJ0007]: value `X` is used after it was moved",
+    "title": "unclassified failure: error[WJ0007]: value `X` is used after it was moved",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 1,
+    "est_tokens": 7084,
+    "example": "error[WJ0007]: value `t` is used after it was moved\n  --> main.wj:94:13\n   |\n94 |     let mut t = Tree { keys: [], left: [], right: [], root: -1, out: [] }",
+    "arms": [
+     "K"
+    ],
+    "n_trials": 1,
+    "n_tasks": 1,
+    "rank": 5,
+    "priority": "P1"
+   }
+  ],
+  "L": [
+   {
+    "id": "silent-divergence",
+    "title": "interpreted run passed but compiled grade failed (silent divergence)",
+    "fix_kind": "interpreter / check parity",
+    "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+    "wasted_calls": 12,
+    "est_tokens": 78621,
+    "example": "",
+    "arms": [
+     "L"
+    ],
+    "n_trials": 12,
+    "n_tasks": 6,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "collect-type",
+    "title": "collect/iterator element type mismatch in generated Rust",
+    "fix_kind": "codegen",
+    "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
+    "wasted_calls": 7,
+    "est_tokens": 45862,
+    "example": "a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`\nerror[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`\n    --> main.rs:22:55\n     |\n  22 |         let parts = line.split_whitespace().collect::<Vec<String>>();\n     |                                             -------   ^^^^^^^^^^^ va",
+    "arms": [
+     "L"
+    ],
+    "n_trials": 7,
+    "n_tasks": 4,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "rustc-leak",
+    "title": "raw rustc/cargo error surfaced from generated code",
+    "fix_kind": "codegen / diagnostic mapping",
+    "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+    "wasted_calls": 6,
+    "est_tokens": 39311,
+    "example": "type `i64` cannot be dereferenced\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:22:60\n   |\n22 |                         let _ = counts.insert(cur.clone(), *n + 1_i64);\n   |                                                            ^^ can't be dereferenced\n\n",
+    "arms": [
+     "L"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "int-width",
+    "title": "untyped integer literal emitted as i32 and mixed with int (i64)",
+    "fix_kind": "codegen (literal defaulting) + pack tip",
+    "fix_location": "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'",
+    "wasted_calls": 5,
+    "est_tokens": 32759,
+    "example": "mismatched types\nerror[E0308]: mismatched types\n   --> main.rs:39:49\n    |\n 39 |             let _ = out.push(digits.chars().nth(d).unwrap_or('0'));\n    |                                             --- ^ expected `usize`, found `i64`\n    |                                             |\n    |                         ",
+    "arms": [
+     "L"
+    ],
+    "n_trials": 5,
+    "n_tasks": 2,
+    "rank": 4,
+    "priority": "P1"
+   },
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 2,
+    "est_tokens": 13104,
+    "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:37:19\n   |\n37 |         last[k] = l;\n   |         -------   ^ expected `i64`, found `usize`\n   |         |\n   |         expected due to the type of this binding\n\n",
+    "arms": [
+     "L"
+    ],
+    "n_trials": 2,
+    "n_tasks": 2,
+    "rank": 5,
+    "priority": "P1"
+   }
+  ],
+  "M": [
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 26,
+    "est_tokens": 194038,
+    "example": "error[E0308]: mismatched types\n  --> main.rs:17:17\n   |\n13 |     let mut l = -1_i64;\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 4 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 4 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 4 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuilding Windjammer project f",
+    "arms": [
+     "M"
+    ],
+    "n_trials": 9,
+    "n_tasks": 5,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "collect-type",
+    "title": "collect/iterator element type mismatch in generated Rust",
+    "fix_kind": "codegen",
+    "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
+    "wasted_calls": 9,
+    "est_tokens": 67167,
+    "example": "error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`\n    --> main.rs:30:55\n     |\n  30 |         let parts = line.split_whitespace().collect::<Vec<String>>();\nFor more information about this error, try `rustc --explain E0277`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo buil",
+    "arms": [
+     "M"
+    ],
+    "n_trials": 4,
+    "n_tasks": 3,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "silent-divergence",
+    "title": "interpreted run passed but compiled grade failed (silent divergence)",
+    "fix_kind": "interpreter / check parity",
+    "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+    "wasted_calls": 8,
+    "est_tokens": 59704,
+    "example": "",
+    "arms": [
+     "M"
+    ],
+    "n_trials": 5,
+    "n_tasks": 4,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "rustc-leak",
+    "title": "raw rustc/cargo error surfaced from generated code",
+    "fix_kind": "codegen / diagnostic mapping",
+    "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+    "wasted_calls": 3,
+    "est_tokens": 22389,
+    "example": "error[E0605]: non-primitive cast: `()` as `u8`\n  --> main.rs:39:30\n   |\n39 |               let _ = out.push({\nFor more information about this error, try `rustc --explain E0605`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuil",
+    "arms": [
+     "M"
+    ],
+    "n_trials": 2,
+    "n_tasks": 2,
+    "rank": 4,
+    "priority": "P1"
+   },
+   {
+    "id": "method-parity",
+    "title": "method accepted by the interpreter is missing on the compiled path",
+    "fix_kind": "stdlib parity / check",
+    "fix_location": "`wj check` must reject what rustc will (R5 check-vs-build gate); alias or implement the std method; `wj docs` entry",
+    "wasted_calls": 2,
+    "est_tokens": 14926,
+    "example": "error[E0599]: no method named `file_name` found for reference `&dyn Shape` in the current scope\n   --> main.rs:137:74\n    |\n137 |     windjammer_runtime::io::println(&format!(\"{} corners={} area2={}\", s.file_name(), s.corners(), d));\nFor more information about this error, try `rustc --explain E0599`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: C",
+    "arms": [
+     "M"
+    ],
+    "n_trials": 1,
+    "n_tasks": 1,
+    "rank": 5,
+    "priority": "P1"
+   }
+  ],
+  "N": [
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 20,
+    "est_tokens": 135446,
+    "example": "error[E0308]: mismatched types\n  --> main.rs:21:5\n   |\n19 | fn digit_char(d: i64) -> String {\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: Cargo build failed\nBuilding Windjammer ",
+    "arms": [
+     "N"
+    ],
+    "n_trials": 9,
+    "n_tasks": 5,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "lint-leakage",
+    "title": "Rust-leakage lint rejected idiomatic-looking code",
+    "fix_kind": "lint rule",
+    "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
+    "wasted_calls": 12,
+    "est_tokens": 81268,
+    "example": "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:35:44\n  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead\n  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`\n  (error in `wj build`)\nerror[W0002]: explicit .unwrap() call\n  --> <ws>/main.wj:23:47\n   |\nerror[W0002]: explicit .unwrap() call\n  --> <ws>",
+    "arms": [
+     "N"
+    ],
+    "n_trials": 12,
+    "n_tasks": 6,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "other:= note: ADR-N: Windjammer has no macros; the `X` forms become errors in a future release",
+    "title": "unclassified failure: = note: ADR-N: Windjammer has no macros; the `X` forms become errors in a future release",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 1,
+    "est_tokens": 6772,
+    "example": "  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"{:>6}\\t{}\", c, line)` with `println(\"${c:>6}\\t${line}\")` (or run `wj fix`)\n  = suggestion: println(\"${c:>6}\\t${line}\")\n\n  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release\n  = help: replace `println(\"cat: {}: No such file\", n)` with `println(\"cat: ${n}: No such file\")` (or run `wj fix`)\n  = suggestion: println(\"cat: ${n}: No such file\")\n",
+    "arms": [
+     "N"
+    ],
+    "n_trials": 1,
+    "n_tasks": 1,
+    "rank": 3,
+    "priority": "P0"
+   }
+  ]
+ }
+}

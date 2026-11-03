@@ -20,6 +20,7 @@ METRICS = [  # key, label, extractor(trial) -> number|None
     ("tool", "tool-wait seconds (wj commands)", lambda t: t["tool_wait_seconds"]),
     ("denied", "harness permission denials (should be 0)", lambda t: t["usage"].get("permission_denials")),
     ("capden", "capability denials seen (WJ004x)", lambda t: t.get("capability_denials")),
+    ("load", "machine load average during the trial", lambda t: t.get("load_avg")),
     ("silent", "silent divergence (interp pass, compiled fail)", lambda t: 1.0 if t["divergence"]["silent"] else 0.0),
 ]
 
@@ -146,7 +147,7 @@ def build_report(trials, n_boot=2000, prev=None):
             schema = (e["first_turn_input"] - t_["first_turn_input"]) - (e["pack_tokens"] - t_["pack_tokens"])
             js["mcp_schema_tokens"] = schema
             md += ["", f"MCP tool-schema tokens (3 exposed tools): about {schema:.0f} per turn-1 context."]
-    ctrl = "B" if "B" in arms else "S"
+    ctrl = next((c for c in ("B", "S", "K") if c in arms), "S")
     if ctrl in arms and len(arms) > 1:
         md += ["", f"## Paired differences versus control {ctrl} (task-clustered 95% CI)", "",
                "| metric | " + " | ".join(f"{a} - {ctrl}" for a in arms if a != ctrl) + " |", "|---|" + "---|" * (len(arms) - 1)]
@@ -154,6 +155,15 @@ def build_report(trials, n_boot=2000, prev=None):
             d = by_arm_task(trials, fn)
             cells = [_fmt(stats.paired_diff_ci(d[a], d[ctrl], n_boot), 3 if key in ("pass", "silent", "cost") else 1) for a in arms if a != ctrl]
             md.append(f"| {label} | " + " | ".join(cells) + " |")
+    if len(arms) > 1:
+        md += ["", "## Top friction by arm (ranked by estimated tokens wasted; Windjammer arms)", ""]
+        js["friction_by_arm"] = {}
+        for a in arms:
+            ta = [t for t in trials if t["arm"] == a and t.get("lang", "wj") == "wj"]
+            fr = friction.build(ta)[:5] if ta else []
+            js["friction_by_arm"][a] = fr
+            md.append(f"**{a} {ARMS[a]['name']}**")
+            md += [""] + ([f"{i}. {it['title']} (`{it['id']}`): {it['n_trials']} trials, {it['wasted_calls']} calls, fix: {it['fix_location']}" for i, it in enumerate(fr, 1)] or ["(none)"]) + [""]
     viol = sum(t["mode_violations"] for t in trials)
     md += ["", f"Mode violations (agent used the other arm's loop commands): {viol}.", "", "## Friction list (ranked by estimated tokens wasted)", "",
            "| # | pri | friction | fix kind | fix location | trials | tasks | wasted calls | est. tokens |", "|---|---|---|---|---|---|---|---|---|"]

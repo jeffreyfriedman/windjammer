@@ -1,0 +1,207 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "N",
+ "arm_name": "interpreted+final-build+v2",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error[E0308]: mismatched types\n    --> main.rs:64:50\n     |\n  64 | ...                   if !bal.contains_key(p[1]) {\nerror[E0308]: mismatched types\n    --> main.rs:67:54\n     |\n  67 | ...                   if !bal.contains_key(p[2]) {\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 2 warnings emitted\nErro",
+  "error[E0308]: mismatched types\n    --> main.rs:64:50\n     |\n  64 | ...                   if !bal.contains_key(p[1]) {\nerror[E0308]: mismatched types\n    --> main.rs:67:54\n     |\n  67 | ...                   if !bal.contains_key(p[2]) {\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 2 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 2 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 2 warnings emitted\nErro"
+ ],
+ "diagnostic_categories": {
+  "other": 2,
+  "type-mismatch": 2
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 3,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut bal: HashMap<string, int> = HashMap::new()\n    let mut names: Vec<string> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|x| x.to_string()).collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0].clone()\n        if cmd == \"open\" && p.len() >= 3 {\n            let a: int = p[2].parse::<int>().unwrap_or(0)\n            if a < 0 {\n                println(\"error: invalid amount\")\n            } else if bal.contains_key(p[1]) {\n                println(\"error: duplicate account\")\n            } else {\n                bal.insert(p[1].clone(), a)\n                names.push(p[1].clone())\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            if bal.contains_key(p[1]) {\n                println(\"{}\", bal[p[1]])\n            } else {\n                println(\"error: unknown account {}\", p[1])\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let a: int = p[2].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !bal.contains_key(p[1]) {\n                println(\"error: unknown account {}\", p[1])\n            } else {\n                let cur: int = bal[p[1]]\n                if cmd == \"deposit\" {\n                    bal.insert(p[1].clone(), cur + a)\n                    println(\"ok\")\n                } else if cur < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    bal.insert(p[1].clone(), cur - a)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let a: int = p[3].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !bal.contains_key(p[1]) {\n                println(\"error: unknown account {}\", p[1])\n            } else if !bal.contains_key(p[2]) {\n                println(\"error: unknown account {}\", p[2])\n            } else if p[1] == p[2] {\n                println(\"error: same account\")\n            } else {\n                let f: int = bal[p[1]]\n                let t: int = bal[p[2]]\n                if f < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    bal.insert(p[1].clone(), f - a)\n                    bal.insert(p[2].clone(), t + a)\n                    println(\"ok\")\n                }\n            }\n        }\n    }\n    names.sort()\n    for n in names {\n        println(\"{} {}\", n, bal[n])\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut bal: HashMap<string, int> = HashMap::new()\n    let mut names: Vec<string> = []\n    for line in text.lines() {\n        let p: Vec<string> = line.split_whitespace().map(|x| x.to_string()).collect()\n        if p.len() == 0 {\n            continue\n        }\n        let cmd = p[0].clone()\n        if cmd == \"open\" && p.len() >= 3 {\n            let a: int = p[2].parse::<int>().unwrap_or(0)\n            if a < 0 {\n                println(\"error: invalid amount\")\n            } else if bal.contains_key(&p[1]) {\n                println(\"error: duplicate account\")\n            } else {\n                bal.insert(p[1].clone(), a)\n                names.push(p[1].clone())\n                println(\"ok\")\n            }\n        } else if cmd == \"balance\" && p.len() >= 2 {\n            if bal.contains_key(&p[1]) {\n                println(\"{}\", bal[&p[1]])\n            } else {\n                println(\"error: unknown account {}\", p[1])\n            }\n        } else if (cmd == \"deposit\" || cmd == \"withdraw\") && p.len() >= 3 {\n            let a: int = p[2].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !bal.contains_key(&p[1]) {\n                println(\"error: unknown account {}\", p[1])\n            } else {\n                let cur: int = bal[&p[1]]\n                if cmd == \"deposit\" {\n                    bal.insert(p[1].clone(), cur + a)\n                    println(\"ok\")\n                } else if cur < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    bal.insert(p[1].clone(), cur - a)\n                    println(\"ok\")\n                }\n            }\n        } else if cmd == \"transfer\" && p.len() >= 4 {\n            let a: int = p[3].parse::<int>().unwrap_or(0)\n            if a <= 0 {\n                println(\"error: invalid amount\")\n            } else if !bal.contains_key(&p[1]) {\n                println(\"error: unknown account {}\", p[1])\n            } else if !bal.contains_key(&p[2]) {\n                println(\"error: unknown account {}\", p[2])\n            } else if p[1] == p[2] {\n                println(\"error: same account\")\n            } else {\n                let f: int = bal[&p[1]]\n                let t: int = bal[&p[2]]\n                if f < a {\n                    println(\"error: insufficient funds\")\n                } else {\n                    bal.insert(p[1].clone(), f - a)\n                    bal.insert(p[2].clone(), t + a)\n                    println(\"ok\")\n                }\n            }\n        }\n    }\n    names.sort()\n    for n in names {\n        println(\"{} {}\", n, bal[&n])\n    }\n}\n",
+ "first_turn_input": 8054,
+ "interp_grade": {
+  "categories": [],
+  "passed": 33,
+  "status": "pass",
+  "total": 33
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.168,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 15.081,
+   "verb": "build"
+  },
+  {
+   "categories": [
+    "other",
+    "type-mismatch"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 2.275,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 5.02,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.317,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 33.9,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 9,
+ "other_seconds": 21.13,
+ "pack_bytes": 665,
+ "pack_file": "sheet_v2.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-03T01:01:58",
+ "schema": 2,
+ "task": "t030_bank_ledger",
+ "thinking_seconds": 23.261,
+ "tool_result_tokens_est": 2414,
+ "tool_wait_seconds": 22.86,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7703,
+   "cache_write": 349,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8054,
+   "output": 6,
+   "result_chars": 5308,
+   "turn": 1
+  },
+  {
+   "cache_read": 8052,
+   "cache_write": 3709,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11763,
+   "output": 25,
+   "result_chars": 152,
+   "turn": 2
+  },
+  {
+   "cache_read": 11761,
+   "cache_write": 171,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11934,
+   "output": 16,
+   "result_chars": 1748,
+   "turn": 3
+  },
+  {
+   "cache_read": 11932,
+   "cache_write": 758,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12692,
+   "output": 8,
+   "result_chars": 727,
+   "turn": 4
+  },
+  {
+   "cache_read": 12690,
+   "cache_write": 479,
+   "calls": [
+    "Edit",
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13171,
+   "output": 4,
+   "result_chars": 447,
+   "turn": 5
+  },
+  {
+   "cache_read": 13169,
+   "cache_write": 710,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13881,
+   "output": 3,
+   "result_chars": 66,
+   "turn": 6
+  },
+  {
+   "cache_read": 13879,
+   "cache_write": 223,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 14104,
+   "output": 294,
+   "result_chars": 0,
+   "turn": 7
+  }
+ ],
+ "usage": {
+  "api_seconds": 23.261,
+  "cost_usd": 0.05930260000000001,
+  "denied_commands": [
+   "cd . && sed -i '' 's/contains_key(&/contains_key(/; s/bal\\[&/bal[/' main.wj 2>&1 | head -2; wj build main.wj 2>&1 | grep -A8 -m3 \"^error\""
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "`main.wj` is written and compiles with `wj build`. The first build failed on `contains_key(&\u2026)` and `bal[&\u2026]`. I dropped the `&` in those spots and the rebuild showed no errors.\n\nI tested it under the interpreter only on short hand-made inputs, not the two task examples verbatim. An Example 1-style run printed the expected `ok`, balance, error and final account lines. A `same account` check and an",
+  "subtype": "success",
+  "tokens_in": 85599,
+  "tokens_out": 2576,
+  "turns": 10
+ },
+ "verify_calls": 5,
+ "verify_calls_to_green": 4,
+ "wall_seconds": 67.25
+}

@@ -1,0 +1,144 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "L",
+ "arm_name": "interpreted-first+sheet",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:13:17\n   |\n 7 |     let mut k = 0_i32;\n   |                 ----- expected due to this value\n...\n13 |             k = line.trim().parse::<i64>().unwrap_or(0_i64);\n   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `i32`, found `i64`",
+  "type `i64` cannot be dereferenced\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:23:56\n   |\n23 |                     let _ = counts.insert(cur.clone(), *n + 1_i64);\n   |                                                        ^^ can't be dereferenced\n\n",
+  "type `i64` cannot be dereferenced\nerror[E0614]: type `i64` cannot be dereferenced\n  --> main.rs:30:40\n   |\n30 |             let _ = counts.insert(cur, *n + 1_i64);\n   |                                        ^^ can't be dereferenced\n\n"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 36
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        let mut cur = \"\"\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else {\n                if cur.len() > 0 {\n                    let n = counts.get(cur).unwrap_or(0)\n                    counts.insert(cur, n + 1)\n                    cur = \"\"\n                }\n            }\n        }\n        if cur.len() > 0 {\n            let n = counts.get(cur).unwrap_or(0)\n            counts.insert(cur, n + 1)\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for key in counts.keys() {\n        items.push((key, counts.get(key).unwrap_or(0)))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n            continue\n        }\n        let mut cur = \"\"\n        for c in line.chars() {\n            if c.is_ascii_alphanumeric() {\n                cur = cur + c.to_ascii_lowercase().to_string()\n            } else {\n                if cur.len() > 0 {\n                    let n = counts.get(cur).unwrap_or(0)\n                    counts.insert(cur, n + 1)\n                    cur = \"\"\n                }\n            }\n        }\n        if cur.len() > 0 {\n            let n = counts.get(cur).unwrap_or(0)\n            counts.insert(cur, n + 1)\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for key in counts.keys() {\n        items.push((key, counts.get(key).unwrap_or(0)))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_turn_input": 8110,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.068,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.029,
+   "verb": "check"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 36.4,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "original_final_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 0,
+  "status": "fail",
+  "total": 36
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "other_seconds": 3.06,
+ "pack_bytes": 1436,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": false,
+ "recorded_at": "2026-11-03T01:16:19",
+ "regraded": true,
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 8.659,
+ "tool_result_tokens_est": 123,
+ "tool_wait_seconds": 0.1,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 7761,
+   "cache_write": 347,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8110,
+   "output": 17,
+   "result_chars": 186,
+   "turn": 1
+  },
+  {
+   "cache_read": 8108,
+   "cache_write": 871,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8981,
+   "output": 17,
+   "result_chars": 245,
+   "turn": 2
+  },
+  {
+   "cache_read": 8979,
+   "cache_write": 213,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9194,
+   "output": 137,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 8.659,
+  "cost_usd": 0.0173308,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It passes `wj check` with no errors or warnings. Example 1 (`the 3`, `and 1`) came out right in the interpreter. I didn't run Example 2 or any other inputs, and I didn't do a compiled build.\n\nIt reads K from the first line, counts lower-cased alphanumeric words from the rest, and prints the top K by count descending, then word ascending.",
+  "subtype": "success",
+  "tokens_in": 26285,
+  "tokens_out": 911,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 11.82
+}
