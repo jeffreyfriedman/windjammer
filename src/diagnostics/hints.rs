@@ -127,7 +127,11 @@ pub fn mismatch(expected: &str, found: &str) -> Option<Hint> {
     if (is_int(e) && is_int(f) || is_float(e) && is_float(f)) && e != f {
         let n = cast_name(e);
         return hint(
-            format!("`{}` and `{}` are different widths: convert with `as {n}`", wj(f), wj(e)),
+            if is_int(e) {
+                format!("`{f}` and `{e}` are different integer widths: give the variable an explicit type (`let mut k: int = 0`), or convert with `as {n}`")
+            } else {
+                format!("`{f}` and `{e}` are different float widths: convert with `as {n}`")
+            },
             wrap(&format!("convert with `as {n}`"), "", &format!(" as {n}")),
         );
     }
