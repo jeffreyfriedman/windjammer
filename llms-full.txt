@@ -956,6 +956,7 @@ Usage: wj clean [OPTIONS]
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `--all` | ALL |  | Also clean local target/ directories (deep clean) |
+| `--sidecars` | SIDECARS |  | Only remove legacy `*.wj.meta` sidecars next to sources under the current directory |
 
 ### `wj cache`
 
