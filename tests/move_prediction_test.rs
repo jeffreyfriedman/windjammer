@@ -20,7 +20,7 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn self_by_value_receiver_used_again_is_reported() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drift_corpus/repros/self_by_value_reuse.wj");
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/self_by_value_reuse.wj");
     let d = windjammer::check::moves::predicted_moves(&p);
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, "WJ0007");
@@ -42,6 +42,6 @@ fn predictions_across_the_corpora() {
             hits.push(format!("{} {}", f.strip_prefix(root).unwrap_or(f).display(), d.len()));
         }
     }
-    let expected: &[&str] = &["tests/drift_corpus/repros/self_by_value_reuse.wj 1"];
+    let expected: &[&str] = &["tests/move_prediction/self_by_value_reuse.wj 1"];
     assert_eq!(hits, expected, "{} files scanned", files.len());
 }
