@@ -16,7 +16,7 @@ const WJ: &str = env!("CARGO_BIN_EXE_wj");
 const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/structs.wj", &["inline"]),
     ("bench/interp/hashmap.wj", &["mapget", "mapins", "unboxed"]),
-    ("bench/interp/sieve.wj", &["packed", "packedidx"]),
+    ("bench/interp/sieve.wj", &["packed", "packedidx", "packedstore"]),
     ("bench/interp/nbody.wj", &["vecresolve"]),
     ("bench/interp/strings.wj", &["pushfmt"]),
     ("bench/interp/closures.wj", &["closureenv", "closurescope"]),

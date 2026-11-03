@@ -544,6 +544,8 @@ pub(crate) struct FastHits {
     pub(crate) vecresolve: u64,
     /// `s.push_str` of an interpolated string formatted straight into one buffer.
     pub(crate) pushfmt: u64,
+    /// Machine-code stores written straight into a packed vector's storage (a `View`).
+    pub(crate) packedstore: u64,
 }
 
 impl Interpreter {

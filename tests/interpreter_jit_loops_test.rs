@@ -340,7 +340,8 @@ fn every_machine_code_check_is_load_bearing() {
 /// the box the first write after a struct `let` makes for its closures (`box`), and the closure engine's
 /// in-place `match m.get(&k)` lookup (`mapget`) and `m.insert(k, x)` into a shared map (`mapins`), the rebinding of a
 /// reference variable by `r = &mut x` (`refwrite`: written through instead), and the machine-code loop's fresh
-/// resolution of a vector after closure code rebinds the reference to it (`vecstale`).
+/// resolution of a vector after closure code rebinds the reference to it (`vecstale`), and its in-place stores into
+/// a packed vector (`viewidx`: every element written at index 0).
 #[test]
 #[cfg(debug_assertions)]
 fn every_corpus_check_is_load_bearing() {
@@ -351,6 +352,7 @@ fn every_corpus_check_is_load_bearing() {
         ("mapins", "map_get_match.wj"),
         ("refwrite", "vp_ref_rebind.wj"),
         ("vecstale", "vp_ref_rebind.wj"),
+        ("viewidx", "packed_vecs.wj"),
     ] {
         let p = root.join(file);
         let base = run(&p, "walker", &[], &[]);
