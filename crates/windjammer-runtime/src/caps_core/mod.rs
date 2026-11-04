@@ -5,8 +5,10 @@
 //! check). There is no second implementation of path, host or name matching to drift; the conformance vectors
 //! in `tests/effects/vectors.json` pin the behaviour for the ports that cannot share Rust (Go, JS).
 //!
-//! Only `std` is used here, so the file builds in both crates without new dependencies.
+//! Only `std` is used here (and `libc` for the descriptor-relative calls of `fdio`, a dependency of both crates on unix).
 
+#[cfg(unix)]
+pub mod fdio;
 pub mod grant;
 pub mod kind;
 pub mod scope_match;

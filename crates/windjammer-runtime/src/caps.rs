@@ -89,6 +89,49 @@ pub fn open_read(p: impl AsRef<Path>) -> std::io::Result<std::fs::File> {
     }
 }
 
+/// Open a file for writing (create and truncate, or append) and decide on its parent directory's descriptor, not on the name
+/// (see `Grant::open_write`). Without an installed grant this opens by name.
+pub fn open_write(p: impl AsRef<Path>, append: bool) -> std::io::Result<std::fs::File> {
+    let name = p.as_ref();
+    let by_name = || {
+        let mut o = std::fs::OpenOptions::new();
+        o.write(true).create(true);
+        if append {
+            o.append(true);
+        } else {
+            o.truncate(true);
+        }
+        o.open(name)
+    };
+    let grant = if BYPASS.with(|b| b.get()) > 0 { None } else { GRANT.get() };
+    let Some(g) = grant else { return by_name() };
+    match g.open_write(&name.to_string_lossy(), append) {
+        Ok(Some(f)) => Ok(f),
+        Ok(None) => by_name(),
+        Err(crate::caps_core::grant::OpenError::Io(e)) => Err(e),
+        Err(crate::caps_core::grant::OpenError::Denied(d)) => fault(d),
+    }
+}
+
+/// `mkdir`, `unlink` or `rmdir` of one name, decided on its parent directory's descriptor (see `Grant::entry_op`).
+pub fn entry_op(p: impl AsRef<Path>, op: crate::caps_core::grant::EntryOp) -> std::io::Result<()> {
+    use crate::caps_core::grant::EntryOp;
+    let name = p.as_ref();
+    let by_name = || match op {
+        EntryOp::MakeDir => std::fs::create_dir(name),
+        EntryOp::RemoveFile => std::fs::remove_file(name),
+        EntryOp::RemoveDir => std::fs::remove_dir(name),
+    };
+    let grant = if BYPASS.with(|b| b.get()) > 0 { None } else { GRANT.get() };
+    let Some(g) = grant else { return by_name() };
+    match g.entry_op(&name.to_string_lossy(), op) {
+        Ok(Some(())) => Ok(()),
+        Ok(None) => by_name(),
+        Err(crate::caps_core::grant::OpenError::Io(e)) => Err(e),
+        Err(crate::caps_core::grant::OpenError::Denied(d)) => fault(d),
+    }
+}
+
 pub fn fs_read(p: impl AsRef<Path>) {
     check(&EffectKind::FsRead, Some(&p.as_ref().to_string_lossy()));
 }

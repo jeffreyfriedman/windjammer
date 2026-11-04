@@ -126,6 +126,9 @@ js-sys = { version = "0.3", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 
 # Platform-specific dependencies
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
 

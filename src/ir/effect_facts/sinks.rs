@@ -189,6 +189,9 @@ pub static DYNAMIC_SINKS: &[&str] = &["mcp::call"];
 /// runs before them. Each one must call `cap_open_read` (and the compiled runtime's `caps::open_read`) for its file.
 pub const FD_VERIFIED_READS: &[&str] = &["fs::read_to_string", "fs::read", "fs::read_bytes"];
 
+/// File writes that decide on the parent directory's descriptor (`Grant::open_write`, `Grant::entry_op`): no check by name runs before them.
+pub const FD_VERIFIED_WRITES: &[&str] = &["fs::write", "fs::append", "fs::write_string", "fs::write_bytes", "fs::create_dir", "fs::remove_file", "fs::remove_dir"];
+
 pub fn mcp_effect_name(server: Option<&str>, tool: Option<&str>) -> String {
     match (server, tool) {
         (Some(s), Some(t)) => format!("mcp.{s}.{t}"),
