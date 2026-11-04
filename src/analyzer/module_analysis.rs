@@ -147,6 +147,9 @@ impl<'ast> Analyzer<'ast> {
                     self.trait_definitions
                         .insert(decl.name.clone(), decl.clone());
                 }
+                Item::Const { name, type_, .. } | Item::Static { name, type_, .. } => {
+                    std::sync::Arc::make_mut(&mut self.module_const_types).insert(name.clone(), type_.clone());
+                }
                 _ => {}
             }
         }

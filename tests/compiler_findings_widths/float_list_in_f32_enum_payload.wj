@@ -1,0 +1,12 @@
+pub enum Shape {
+    Points(Vec<f32>),
+    Empty,
+}
+
+pub fn test_points() {
+    let s = Shape::Points([1.5, 2.0])
+    match s {
+        Shape::Points(p) => assert(p.len() == 2, "len"),
+        Shape::Empty => assert(false, "points"),
+    }
+}

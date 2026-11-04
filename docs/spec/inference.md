@@ -304,7 +304,10 @@ integer solver defaults to `i32`. `let big = 3000000000` emits `3000000000_i32` 
 ### NUM-DEFAULT-FLOAT
 **Rule (ADR-0015 section 1).** A float class with no constraint is `float` (f64).
 **Status.** Diverges (D-NUM-DEFAULT): the unified solver says `f64`, the legacy float solver emits `f32`
-(`let a = 2.5` emits `2.5_f32`), so the two disagree with each other as well as with the ADR.
+(`let a = 2.5` emits `2.5_f32`), so the two disagree with each other as well as with the ADR. An unsuffixed float
+literal is a float class in the solver (like an integer literal): when a use fixes its width (an `f32` parameter,
+field, payload or operand, a returned accumulator) the solver publishes that width and the backend prints it; a class
+with no such use is still printed by the legacy float path.
 
 ### NUM-INDEX
 **Rule (ADR-0015 section 1).** Indexing accepts `int` and `len()` returns `int`, converting through a checked
@@ -323,6 +326,14 @@ source or use is `usize` (a solved width, published as a fact); with an exact wi
 **Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index
 source whose class resolved to `W` is emitted `(v.len() as W)`; a `usize` class pushed into a `Vec<W>` is converted at
 the argument. The solver places these conversions (`IrFunction::usize_conversions`); the backend prints them.
+
+### NUM-STD-SIG
+**Rule (ADR-0029, option C stage C1).** A method of a Rust core type (`Vec`, `VecDeque`, `HashMap`, `BTreeMap`,
+`HashSet`, `BTreeSet`, `Option`, `Result`, `String`, `f32`, `f64`) has the signature declared in `std/rust_core.wji`,
+instantiated for the receiver's static type (and a turbofish): `counts.get(k).unwrap_or(0)` on a `HashMap<string, int>`
+is an `int`, `line.parse::<int>().unwrap_or(0)` is an `int`, `x.min(1.0)` on an `f32` takes an `f32`. A `usize`
+parameter is an index use and a `usize` result an index source (NUM-USIZE).
+**Status.** Conforms for receivers whose static type is declared (parameters, annotated or typed initializers, fields).
 
 ### NUM-MIXED
 **Rule (ADR-0015 section 2).** Mixed-width arithmetic requires an explicit conversion (`int(x)`, `float(x)`). The compiler

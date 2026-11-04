@@ -1,0 +1,11 @@
+const SIZE: i32 = 64
+
+fn put(x: i32) {
+}
+
+pub fn build() {
+    let base = SIZE
+    for d in -1..1 {
+        put(base + d)
+    }
+}
