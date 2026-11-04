@@ -81,6 +81,34 @@ does now.
 - Cost: the generator runs on every interpreted single-file run that passes `wj check`. On `bench/interp/structs.wj` it
   adds about 20 ms of CPU (0.01 to 0.03 s user; 0.02 to 0.05 s wall).
 
+## Second slice (landed): classes b, c and d, in `wj check`
+
+- **What is predicted:**
+  - b: a bare variable passed to a parameter the emitted callee takes by value;
+  - b': `let w = v`;
+  - d: `let w = v.f` followed by a use of `v` as a whole;
+  - c: any of these inside a loop that does not declare `v`.
+  - Each needs a type the emitted code spells and that is known to move (`String`, collections, `Box`/`Rc`/`Arc`,
+    non-`Copy` structs of the file, `Option` of those).
+- **Where it runs:** in `wj check`'s per-file analysis phase, so the check memo keeps it. The interpreted-run gate
+  reports it as one more check error.
+- **What the scan found first, and the rules that removed it:**
+  - A method name was matched to a user method of the same name (`HashMap::get` taken for a user `get`). Method
+    callees are now resolved by the receiver's spelled type.
+  - A use on another arm of an `if`/`match`, or behind a `return`, `break` or `continue`, was counted as a later use
+    (`return parse_alias(&trimmed, expr)` followed by more code). The emitted reader now records branch paths and
+    exits.
+  - Uses inside a closure were counted as uses inside the loop around it.
+- **Precision:**
+  - The scan over `examples/` and `tests/` reports the five fixtures in `tests/move_prediction/`.
+  - It also reports two programs rustc rejects with E0382 on their generated code: `tests/error_system/test_ownership.wj`,
+    an ownership-error fixture, and `tests/inference_corpus/string_literal_move_then_use.wj`, the compiler defect
+    D-CLONE-STRLIT, where the compiler emits no clone where one is needed.
+  - The ecosystem files of the drift corpus have no prediction.
+  - `tests/engine_parity/map_get_match.wj` copied a map with `let snapshot = m` and used `m` afterwards. Its compiled
+    build already failed on that line; it now copies explicitly.
+- **Recall check:** the auto-cloned shapes (`tests/move_prediction/accepted/`) build, and nothing is reported for them.
+
 ## Kill criteria
 
 - **Any false positive** (a program the compiled build accepts that the prediction refuses) that one revision of the
