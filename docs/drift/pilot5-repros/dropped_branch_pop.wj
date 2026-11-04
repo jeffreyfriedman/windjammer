@@ -1,0 +1,10 @@
+fn main() {
+    let mut st: Vec<string> = ["a", "b"]
+    let flag = true
+    if flag {
+        st.pop()
+    } else {
+        st.push("c")
+    }
+    println("${st.len()}")
+}

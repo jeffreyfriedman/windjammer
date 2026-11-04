@@ -1,0 +1,163 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "W",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error: bad width"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:33:27\n   |\n 9 |     let mut cur = String::new();\n   |                   ------------- expected due to this value\n...\n33 |                     cur = w;\n   |                           ^ expected `String`, found `&str`\n   |\nhelp: try using a conversion metho",
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:41:31\n   |\n 9 |     let mut cur = String::new();\n   |                   ------------- expected due to this value\n...\n41 |                         cur = w;\n   |                               ^ expected `String`, found `&str`\n   |\nhelp: try using a conversi"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 38
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut ok = false\n    let mut cur = \"\"\n    let mut cur_len = 0\n    for line in text.lines() {\n        if first {\n            first = false\n            let t = line.trim()\n            match t.parse::<int>() {\n                Ok(n) => {\n                    if n > 0 {\n                        width = n\n                        ok = true\n                    }\n                }\n                Err(_) => {}\n            }\n            if !ok {\n                println(\"error: bad width\")\n                std::process::exit(1)\n            }\n        } else {\n            for w in line.split_whitespace() {\n                let wl: int = w.len() as int\n                if cur_len == 0 {\n                    cur = w\n                    cur_len = wl\n                } else if cur_len + 1 + wl <= width {\n                    cur = \"${cur} ${w}\"\n                    cur_len = cur_len + 1 + wl\n                } else {\n                    println(cur)\n                    cur = w\n                    cur_len = wl\n                }\n            }\n        }\n    }\n    if !ok {\n        println(\"error: bad width\")\n        std::process::exit(1)\n    }\n    if cur_len > 0 {\n        println(cur)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut ok = false\n    let mut cur = \"\"\n    let mut cur_len = 0\n    for line in text.lines() {\n        if first {\n            first = false\n            let t = line.trim()\n            match t.parse::<int>() {\n                Ok(n) => {\n                    if n > 0 {\n                        width = n\n                        ok = true\n                    }\n                }\n                Err(_) => {}\n            }\n            if !ok {\n                println(\"error: bad width\")\n                std::process::exit(1)\n            }\n        } else {\n            for w in line.split_whitespace() {\n                let wl: int = w.len() as int\n                if cur_len == 0 {\n                    cur = w\n                    cur_len = wl\n                } else if cur_len + 1 + wl <= width {\n                    cur = \"${cur} ${w}\"\n                    cur_len = cur_len + 1 + wl\n                } else {\n                    println(cur)\n                    cur = w\n                    cur_len = wl\n                }\n            }\n        }\n    }\n    if !ok {\n        println(\"error: bad width\")\n        std::process::exit(1)\n    }\n    if cur_len > 0 {\n        println(cur)\n    }\n}\n",
+ "first_turn_input": 8268,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.092,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.094,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 0.79,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 26.9,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "original_final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "first_compiled": {
+   "categories": [
+    "wrong-output"
+   ],
+   "passed": 0,
+   "status": "fail"
+  },
+  "passed": 0,
+  "status": "build_error",
+  "total": 38
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "other_seconds": 3.54,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": false,
+ "recorded_at": "2026-11-04T00:25:02",
+ "regraded": true,
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 9.622,
+ "tool_result_tokens_est": 352,
+ "tool_wait_seconds": 0.98,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6780,
+   "cache_write": 1486,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8268,
+   "output": 5,
+   "result_chars": 227,
+   "turn": 1
+  },
+  {
+   "cache_read": 8266,
+   "cache_write": 942,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9210,
+   "output": 16,
+   "result_chars": 1006,
+   "turn": 2
+  },
+  {
+   "cache_read": 9208,
+   "cache_write": 568,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9778,
+   "output": 278,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 9.622,
+  "cost_usd": 0.0253514,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written. It passes Example 2 under `wj run --interpret`, and `wj build main.wj` succeeds.\n\nI ran two checks: Example 2 gives `abcdefgh` / `ij k`, and a first line of `x` prints `error: bad width` and exits with status 1. I did not run Example 1 or any other input, such as empty text or tab-separated words.\n\nThe program reads the first line as the width and rejects anything that isn't ",
+  "subtype": "success",
+  "tokens_in": 27256,
+  "tokens_out": 1093,
+  "turns": 4
+ },
+ "verify_calls": 3,
+ "verify_calls_to_green": 3,
+ "wall_seconds": 14.14
+}
