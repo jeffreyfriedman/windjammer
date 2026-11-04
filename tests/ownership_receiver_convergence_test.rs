@@ -332,3 +332,54 @@ impl Server {
     );
     assert!(rs.contains("fn admit(&mut self"), "expected `&mut self`:\n{rs}");
 }
+
+/// A read-only method that reads a non-Copy field into a local (`let rows = self.rows`) borrows the receiver;
+/// a mutating caller of it stays `&mut self` (only consuming `self` itself makes a receiver owned).
+#[test]
+fn read_only_method_reading_a_non_copy_field_borrows() {
+    let rs = single_file(
+        r#"pub struct Journal {
+    pub rows: Vec<string>,
+    pub cleared: int,
+}
+
+impl Journal {
+    fn count_rows(self) -> int {
+        let rows = self.rows
+        let mut n = 0
+        for _r in rows {
+            n = n + 1
+        }
+        n
+    }
+
+    fn clear(self) {
+        while self.rows.len() > 0 {
+            let _ = self.rows.pop()
+            self.cleared = self.cleared + 1
+        }
+    }
+
+    pub fn handle(self, wipe: bool) -> int {
+        if wipe {
+            self.clear()
+            return 0
+        }
+        self.count_rows()
+    }
+}
+
+pub struct Host {
+    pub journal: Journal,
+}
+
+impl Host {
+    pub fn serve(self) -> int {
+        self.journal.handle(false) + self.journal.handle(true)
+    }
+}
+"#,
+    );
+    assert!(rs.contains("fn count_rows(&self"), "expected `&self`:\n{rs}");
+    assert!(rs.contains("fn handle(&mut self"), "expected `&mut self`:\n{rs}");
+}
