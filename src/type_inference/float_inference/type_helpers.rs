@@ -408,7 +408,11 @@ impl FloatInference {
             out
         };
 
-        if let Some((params, _)) = self.function_signatures.get(&qualified).cloned() {
+        if let Some((params, _)) = self
+            .module_qualified_method_key(&receiver_type, method)
+            .and_then(|k| self.function_signatures.get(&k).cloned())
+            .or_else(|| self.function_signatures.get(&qualified).cloned())
+        {
             return Some(substitute(params));
         }
 
@@ -595,5 +599,24 @@ impl FloatInference {
         }
 
         None
+    }
+}
+
+impl FloatInference {
+    /// C3 type identity: `{module}::{Type}::{method}` for a bare receiver type. The type is the one this
+    /// file's module defines, else the only module that defines it; with several candidates and none
+    /// local the key is unknown (never a guess between same-name types).
+    fn module_qualified_method_key(&self, receiver_type: &Type, method: &str) -> Option<String> {
+        let Type::Custom(name) = receiver_type else { return None };
+        let base = name.split('<').next().unwrap_or(name);
+        let defining = self.struct_defining_module_paths.get(base)?;
+        let module = if defining.contains(&self.current_file_module_path) {
+            &self.current_file_module_path
+        } else if defining.len() == 1 {
+            &defining[0]
+        } else {
+            return None;
+        };
+        (!module.is_empty()).then(|| format!("{}::{base}::{method}", module.join("::")))
     }
 }
