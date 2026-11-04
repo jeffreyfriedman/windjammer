@@ -77,8 +77,13 @@ pub(super) fn struct_literal(cx: &mut Cx, name: &'static str, fields: &'static [
         if it.hot.is_none() {
             if let Some(p) = plan_cell.get_or_init(|| plan(it, name, fields)) {
                 let mut out = Vec::with_capacity(p.order.len());
+                // run the field expressions in the order they are written, then lay the values out in declaration order
+                let mut vals: Vec<Option<Value>> = Vec::with_capacity(codes.len());
+                for c in codes.iter() {
+                    vals.push(Some(c(it, b)?));
+                }
                 for (i, src) in p.order.iter().enumerate() {
-                    let v = (codes[*src])(it, b)?;
+                    let v = vals[*src].take().unwrap_or(Value::Unit);
                     let v = match (&v, p.ints[i]) {
                         (Value::Int(_, t), Some(w)) if *t == w => v,
                         _ => it.coerce(v, &p.types[i].1)?,

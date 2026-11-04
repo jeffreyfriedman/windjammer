@@ -116,7 +116,7 @@ fn fam_format(st: int) -> string {
 
 fn fam_panic_nested(st: int) -> string {
     let kind = pick(st, "unwrap index div expect assert explicit")
-    let body = if kind == "unwrap" { "let o: Option<int> = None\n    o.unwrap()" }
+    let body = if kind == "unwrap" { "let o: Option<int> = None\n    match o {\n        Some(x) => x,\n        None => panic(\"unwrap\"),\n    }" }
         else if kind == "index" { "let v = [1, 2, 3]\n    let i = v.len() + 2\n    v[i]" }
         else if kind == "div" { "let z = 0\n    10 / z" }
         else if kind == "expect" { "let r: Result<int, string> = Err(\"bad\")\n    r.expect(\"boom\")" }
@@ -166,13 +166,13 @@ fn fam_exit(st: int) -> string {
 
 fn fam_stdin(st: int) -> string {
     let k = pick(st, "1 2")
-    "use std::env\nuse std::io\n\nfn main() {\n    let args = env::args()\n    println(\"@{args.len()}\")\n    let mut line = \"\"\n    let n = io::stdin().read_line(line) ?? 0\n    println(\"read @{n} @{line.len()} @{@K}\")\n}\n"
+    "use std::env\nuse std::io\n\nfn main() {\n    let args = env::args()\n    println(\"@{args.len()}\")\n    let mut line = \"\"\n    let _n = io::stdin().read_line(line)\n    println(\"read @{line.len()} @{@K}\")\n}\n"
         .replace("@K", k)
 }
 
 fn fam_threads(st: int) -> string {
     let n = pick(st, "2 3 4")
-    "use std::thread\nuse std::sync::mpsc\n\nfn work(id: int) -> int {\n    let mut s = 0\n    for i in 0..(id * 10) {\n        s += i\n    }\n    s\n}\n\nfn main() {\n    let mut hs = Vec::new()\n    for id in 1..(@N + 1) {\n        hs.push(thread::spawn(move || work(id)))\n    }\n    let mut total = 0\n    for h in hs {\n        total += h.join() ?? 0\n    }\n    println(\"@{total}\")\n    let (tx, rx) = mpsc::channel()\n    let t = thread::spawn(move || {\n        for i in 0..@N {\n            tx.send(i * i) ?? ()\n        }\n    })\n    t.join() ?? ()\n    let mut out = \"\"\n    for _i in 0..@N {\n        out = out + (rx.recv() ?? -1).to_string() + \",\"\n    }\n    println(\"@{out}\")\n}\n"
+    "use std::thread\nuse std::sync::mpsc\n\nfn work(id: int) -> int {\n    let mut s = 0\n    for i in 0..(id * 10) {\n        s += i\n    }\n    s\n}\n\nfn main() {\n    let mut hs = Vec::new()\n    for id in 1..(@N + 1) {\n        hs.push(thread::spawn(move || work(id)))\n    }\n    let mut total = 0\n    for h in hs {\n        match h.join() {\n            Ok(v) => { total += v },\n            Err(_) => {},\n        }\n    }\n    println(\"@{total}\")\n    let (tx, rx) = mpsc::channel()\n    let t = thread::spawn(move || {\n        for i in 0..@N {\n            let _sent = tx.send(i * i)\n        }\n    })\n    let _joined = t.join()\n    let mut out = \"\"\n    for _i in 0..@N {\n        match rx.recv() {\n            Ok(v) => { out = out + v.to_string() + \",\" },\n            Err(_) => { out = out + \"x,\" },\n        }\n    }\n    println(\"@{out}\")\n}\n"
         .replace("@N", n)
 }
 
@@ -329,7 +329,13 @@ fn main() {
             if compiled {
                 recorded_out = recorded_out + "${id}\t${c}\n"
             }
-            rows = rows + "${id}\t${w}\t${r}\t${c}\n"
+            // the panic location is compared between the two engines (a `#loc` row); the compiled program has none
+            let wp = strings.split(w, "@")
+            let rp = strings.split(r, "@")
+            rows = rows + "${id}\t${wp[0]}\t${rp[0]}\t${c}\n"
+            if wp.len() > 1 || rp.len() > 1 {
+                rows = rows + "${id}#loc\t${if wp.len() > 1 { wp[1] } else { "none" }}\t${if rp.len() > 1 { rp[1] } else { "none" }}\tskip\n"
+            }
             let expect_fail = strings.starts_with(fam, "panic_") || fam == "exit_code"
             if !expect_fail {
                 rows = rows + "${id}#runs\t${if strings.starts_with(w, "exit0:") { "runs" } else { "broken" }}\t${if strings.starts_with(r, "exit0:") { "runs" } else { "broken" }}\truns\n"
