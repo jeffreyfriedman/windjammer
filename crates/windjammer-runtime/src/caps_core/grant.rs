@@ -14,6 +14,14 @@ pub enum Scope {
     Only(Vec<String>),
 }
 
+/// One directory-entry operation decided on its parent directory (`Grant::entry_op`).
+#[derive(Debug, Clone, Copy)]
+pub enum EntryOp {
+    MakeDir,
+    RemoveFile,
+    RemoveDir,
+}
+
 /// Why `Grant::open_read` did not return a file.
 #[derive(Debug)]
 pub enum OpenError {
@@ -21,31 +29,16 @@ pub enum OpenError {
     Io(std::io::Error),
 }
 
-/// The canonical path of an open file, from the descriptor (macOS `F_GETPATH`, Linux `/proc/self/fd`).
+#[cfg(unix)]
+use super::fdio;
+
+/// The canonical path of an open file, from its descriptor; none where the platform cannot say.
 fn path_of_open_file(f: &std::fs::File) -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     {
-        use std::os::fd::AsRawFd;
-        use std::os::unix::ffi::OsStrExt;
-        extern "C" {
-            fn fcntl(fd: i32, cmd: i32, ...) -> i32;
-        }
-        const F_GETPATH: i32 = 50;
-        let mut buf = [0u8; 1024];
-        // SAFETY: F_GETPATH writes a NUL-terminated path of at most PATH_MAX (1024) bytes into the buffer
-        let r = unsafe { fcntl(f.as_raw_fd(), F_GETPATH, buf.as_mut_ptr()) };
-        if r < 0 {
-            return None;
-        }
-        let n = buf.iter().position(|&b| b == 0)?;
-        return Some(PathBuf::from(std::ffi::OsStr::from_bytes(&buf[..n])));
+        fdio::path_of_open_file(f)
     }
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::fd::AsRawFd;
-        return std::fs::read_link(format!("/proc/self/fd/{}", f.as_raw_fd())).ok();
-    }
-    #[allow(unreachable_code)]
+    #[cfg(not(unix))]
     {
         let _ = f;
         None
@@ -415,6 +408,75 @@ impl Grant {
             None => self.check(&EffectKind::FsRead, Some(res)).map_err(OpenError::Denied)?,
         }
         Ok(file)
+    }
+
+    /// Open `res` for writing (create and truncate, or append) after deciding on the **parent directory** it lives in: the
+    /// directory is opened first, its canonical path comes from the descriptor, `parent/name` is checked, and the file is opened
+    /// relative to that same descriptor with `O_NOFOLLOW` (see `fdio`). A name that is a link is followed by hand and checked
+    /// again. `Ok(None)` means the caller writes by name (a device such as `/dev/stdout`, or a platform without descriptor paths).
+    /// An `Io` error is the operation's own error; nothing was written.
+    pub fn open_write(&self, res: &str, append: bool) -> Result<Option<std::fs::File>, OpenError> {
+        #[cfg(unix)]
+        {
+            self.checked_parent(res, true, &mut |p| fdio::open_for_write(p, append))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = append;
+            self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+            Ok(None)
+        }
+    }
+
+    /// `mkdir`, `unlink` and `rmdir` of one name, decided on the parent directory like `open_write`. `Ok(None)`: do it by name.
+    pub fn entry_op(&self, res: &str, op: EntryOp) -> Result<Option<()>, OpenError> {
+        #[cfg(unix)]
+        {
+            self.checked_parent(res, false, &mut |p| match op {
+                EntryOp::MakeDir => fdio::make_dir(p),
+                EntryOp::RemoveFile => fdio::unlink(p, false),
+                EntryOp::RemoveDir => fdio::unlink(p, true),
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = op;
+            self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+            Ok(None)
+        }
+    }
+
+    #[cfg(unix)]
+    fn checked_parent<T>(&self, res: &str, follow_last: bool, op: &mut dyn FnMut(&fdio::Parent) -> std::io::Result<T>) -> Result<Option<T>, OpenError> {
+        use std::sync::atomic::Ordering::Relaxed;
+        if device_effect(&EffectKind::FsWrite, res).is_some() {
+            self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+            return Ok(None);
+        }
+        let mut lex = m::lexical_abs(res, &Self::base_for(res));
+        for _ in 0..40 {
+            let parent = match fdio::open_parent(&lex) {
+                Ok(p) => p,
+                // the parent cannot be opened (missing, not a directory): the name decides, then the caller sees the error
+                Err(e) => {
+                    self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+                    return Err(OpenError::Io(e));
+                }
+            };
+            let target = parent.canon.join(&parent.name);
+            self.check_with(&EffectKind::FsWrite, Some(res), Some(target.clone())).map_err(OpenError::Denied)?;
+            // like any granted write: what a path means may change from here on
+            GENERATION.fetch_add(1, Relaxed);
+            match op(&parent) {
+                Ok(v) => return Ok(Some(v)),
+                Err(e) if follow_last && fdio::is_symlink_loop(&e) => {
+                    let link = std::fs::read_link(&target).map_err(OpenError::Io)?;
+                    lex = m::lexical_abs(&link.to_string_lossy(), &parent.canon);
+                }
+                Err(e) => return Err(OpenError::Io(e)),
+            }
+        }
+        Err(OpenError::Io(std::io::Error::from_raw_os_error(libc::ELOOP)))
     }
 
     fn forget_decisions(&mut self) {

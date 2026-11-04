@@ -349,11 +349,6 @@ pub struct TestSpec {
     pub durable_sites: Vec<(PathBuf, usize, usize)>,
 }
 
-/// Run the given tests (each against a fresh interpreter, files loaded once per test).
-pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
-    run_specs_simulated(specs, None)
-}
-
 /// `wj test --simulate`: every test runs in the seeded world (ADR-0021 E3). With a seed range a test passes only if it passes
 /// under every seed; the first failing seed ends that test's run and is named in the message with the command that reproduces it.
 pub fn run_specs_simulated(specs: Vec<TestSpec>, sim: Option<SimRun>) -> Vec<TestResult> {
