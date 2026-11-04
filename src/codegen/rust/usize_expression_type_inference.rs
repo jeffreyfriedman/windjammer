@@ -940,6 +940,10 @@ impl<'ast> CodeGenerator<'ast> {
         if self.solver_operand_width(expr).is_some() {
             return;
         }
+        // `None` is not an integer: a `-> Option<i32>` tail of `None` is never cast (`None as i32`).
+        if matches!(expr, Expression::Identifier { name, .. } if name == "None") {
+            return;
+        }
         // Peel Result/Option so `-> Result<i32, E>` still narrows returned ints.
         let to = match Self::peel_option_result_payload(ret) {
             Type::Int32 => IntType::I32,

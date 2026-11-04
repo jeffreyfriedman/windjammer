@@ -1,0 +1,53 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct Key {
+    pub n: i64,
+}
+
+
+
+
+
+
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+
+struct Node {
+    pub key: Key,
+    pub up: Key,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+
+struct Table {
+    pub nodes: Vec<Node>,
+}
+
+impl Table {
+#[inline]
+pub fn find(&self, key: Key) -> Option<Node> {
+        for nd in &self.nodes {
+            if nd.key.n == key.n {
+                return Some(nd.clone());
+            }
+        }
+        None
+}
+}
+
+#[inline]
+pub fn up_of(table: &Table, child: Node) -> Option<Node> {
+    table.find(child.up)
+}
+
+fn main() {
+    let t = Table { nodes: vec![Node { key: Key { n: 1_i64 }, up: Key { n: 0_i64 } }, Node { key: Key { n: 7_i64 }, up: Key { n: 1_i64 } }] };
+    let c = Node { key: Key { n: 9_i64 }, up: Key { n: 7_i64 } };
+    match up_of(&t, c) {
+        Some(p) => println!("{}", p.key.n),
+        None => println!("none"),
+    }
+}
+

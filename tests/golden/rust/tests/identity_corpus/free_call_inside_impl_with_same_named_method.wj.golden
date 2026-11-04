@@ -1,0 +1,36 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct Counter {
+    pub total: i64,
+}
+
+
+
+
+
+
+
+
+
+impl Counter {
+#[inline]
+pub fn triple(&self, slot: usize) -> usize {
+        slot + 1_usize
+}
+#[inline]
+pub fn run(&mut self, v: i64) -> i64 {
+        self.total += triple(v);
+        self.total
+}
+}
+
+#[inline]
+pub fn triple(v: i64) -> i64 {
+    v * 3_i64
+}
+
+fn main() {
+    let mut c = Counter { total: 1_i64 };
+    println!("{}", c.run(4_i64));
+}
+
