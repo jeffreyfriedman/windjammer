@@ -430,11 +430,6 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
-                    // P3.660: SharedMap aliases are map handles, not Vec/Store.
-                    && base != "SharedMap"
-                    && base != "SharedMapSI"
-                    && !base.ends_with("SharedMap")
-                    && !base.ends_with("SharedMapSI")
             });
             let owned_copy_or_custom_get = receiver_rt.is_some_and(|rt| {
                 let base = rt.split('<').next().unwrap_or(rt);
@@ -443,10 +438,6 @@ impl<'ast> CodeGenerator<'ast> {
                     || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
-                    || base == "SharedMap"
-                    || base == "SharedMapSI"
-                    || base.ends_with("SharedMap")
-                    || base.ends_with("SharedMapSI")
                 {
                     return false;
                 }
