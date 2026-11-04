@@ -157,6 +157,13 @@ impl<'ast> CodeGenerator<'ast> {
             && !args.is_empty()
             && matches!(&args[0], Expression::MacroInvocation { name: macro_name, .. } if macro_name == "format");
 
+        // The arguments of a print/format macro are values (`${if c { a } else { b }}`): their branches
+        // produce the value instead of being statements ending in `;`.
+        let args_are_values = matches!(name, "println" | "eprintln" | "print" | "eprint" | "format");
+        let prev_expression_ctx = self.in_expression_context;
+        if args_are_values {
+            self.in_expression_context = true;
+        }
         let arg_strs: Vec<String> = if should_flatten {
             // Flatten format! macro arguments into the print macro
             if let Expression::MacroInvocation {
@@ -201,6 +208,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         };
 
+        self.in_expression_context = prev_expression_ctx;
         self.coerce_string_literals_to_owned = prev_coerce;
         self.in_match_arm_needing_string = prev_match_arm;
         self.suppress_string_conversion.set(prev_suppress);

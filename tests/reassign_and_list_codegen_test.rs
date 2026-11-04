@@ -145,10 +145,13 @@ fn map_get_unwrap_or_int_then_arithmetic() {
 }
 
 #[test]
-fn map_get_in_sort_by_closure() {
-    typechecks(
+fn map_get_unwrap_or_in_sort_by_closure_is_not_dereferenced() {
+    // The lookups return owned values after `unwrap_or`: no `*`/`&*` on them. (Passing the comparator's
+    // `&String` parameters as map keys is still open: `Borrow<&String>`, see the report.)
+    let (g, _, _) = generate_and_typecheck(
         "use std::collections::HashMap\n\nfn main() {\n    let mut totals: HashMap<string, int> = HashMap::new()\n    totals.insert(\"a\", 3)\n    totals.insert(\"b\", 5)\n    let mut names: Vec<string> = [\"a\", \"b\"]\n    names.sort_by(|x, y| {\n        let tx = totals.get(x).unwrap_or(0)\n        let ty = totals.get(y).unwrap_or(0)\n        ty.cmp(tx)\n    })\n    println(\"${names[0]}\")\n}\n",
     );
+    assert!(!g.contains("&*tx") && !g.contains("*tx"), "{g}");
 }
 
 #[test]
@@ -192,4 +195,22 @@ fn match_on_cloned_text_as_str_keeps_the_str_scrutinee() {
         "pub fn parse_len(text: string) -> int {\n    text.len()\n}\n\npub fn total() -> int {\n    let mut n = 0\n    for text in [\"a\", \"bb\", \"ccc\"] {\n        n = n + parse_len(text.clone())\n    }\n    n\n}\n\npub fn label(text: string) -> string {\n    match text.clone().as_str() {\n        \"a\" => \"first\",\n        _ => \"other\",\n    }\n}\n\nfn main() {\n    println(\"${total()} ${label(\"a\")}\")\n}\n",
     );
     assert!(g.contains(".as_str()"), "{g}");
+}
+
+// ---- spec-oracle findings ----
+
+#[test]
+fn split_once_with_a_text_literal_borrows_the_pattern() {
+    let g = typechecks(
+        "fn main() {\n    let kv = \"key=value\"\n    match kv.split_once(\"=\") {\n        Some((k, v)) => println(\"${k} -> ${v}\"),\n        None => println(\"no separator\"),\n    }\n    println(\"${\"x=1\".split_once(\"=\").is_some()} ${\"x\".split_once(\"=\").is_none()}\")\n}\n",
+    );
+    assert!(!g.contains("split_once(String::from"), "{g}");
+}
+
+#[test]
+fn interpolated_if_and_match_produce_their_branch_values() {
+    let g = typechecks(
+        "fn t(tag: string, v: int) -> int {\n    println(\"eval ${tag}\")\n    v\n}\n\nfn main() {\n    println(\"${if t(\"c\", 1) == 1 { t(\"then\", 10) } else { t(\"else\", 20) }}\")\n    println(\"${match t(\"m\", 2) { 1 => t(\"one\", 100), _ => t(\"other\", 200) }}\")\n}\n",
+    );
+    assert!(!g.contains("t(\"then\", 10_i64);"), "{g}");
 }

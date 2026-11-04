@@ -3,6 +3,7 @@ use windjammer_runtime::test::*;
 use windjammer_runtime::http;
 use windjammer_runtime::http::HttpMethod;
 use windjammer_runtime::http::Response;
+use windjammer_runtime::http::ClientRequest;
 use windjammer_runtime::http::Request;
 use windjammer_runtime::http::ServerResponse;
 use windjammer_runtime::http::Router;

@@ -510,3 +510,9 @@ path = "tests/http_request_builder_test.rs"
 [[test]]
 name = "std_runtime_parity"
 path = "tests/std_runtime_parity_test.rs"
+
+# Constant overflow / division by zero build and panic at run time (SPEC-NUM-002..006)
+#   cargo test --release --test compiled_constant_panics
+[[test]]
+name = "compiled_constant_panics"
+path = "tests/compiled_constant_panics_test.rs"
