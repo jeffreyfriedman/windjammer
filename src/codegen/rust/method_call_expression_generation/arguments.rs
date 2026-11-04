@@ -873,7 +873,7 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = coerced.trim_start_matches('&').to_string();
                         }
-                        return coerced;
+                        return self.copy_if_read_again(arg_to_generate, coerced); // CLONE-USE-AFTER-MOVE
                     }
                     debug_assert!(
                         false,
