@@ -162,7 +162,15 @@ fn read_after(f: &EmittedFn, var: &str, seq: usize, depth: usize, counts: impl F
     if f.uses.iter().any(|(s, n, _)| n == var && *s > seq && *s < limit && counts(*s) && reached(*s)) {
         return Some(false);
     }
-    let in_loop = depth > f.decl_depth.get(var).copied().unwrap_or(0);
+    // the binding in force at the move: the last one before it (a parameter's is depth 0)
+    let decl = f
+        .bindings
+        .iter()
+        .filter(|(s, n)| n == var && *s < seq)
+        .map(|(s, _)| *s)
+        .max()
+        .map_or(0, |s| f.binding_depth.get(&s).copied().unwrap_or(0));
+    let in_loop = depth > decl;
     (in_loop && rebound.is_none() && !f.exits.iter().any(|e| *e >= seq)).then_some(true)
 }
 
