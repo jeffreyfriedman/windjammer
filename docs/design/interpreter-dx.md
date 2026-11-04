@@ -1,5 +1,5 @@
 ---
-status: living
+status: current
 last_verified: 61d60bde8
 ---
 # Interpreter DX: cost, ergonomics, speed
@@ -7,7 +7,7 @@ last_verified: 61d60bde8
 Measured first, changed second. Each item gets one attempt, and the table below records its effect. The driver is
 `scripts/wj/dx_measure.wj`:
 
-```
+```text
 wj run --interpret scripts/wj/dx_measure.wj -- <absolute wj binary> --runs 7
 ```
 
@@ -37,4 +37,29 @@ Warm runs are dominated by process start. Cold runs pay the check and the analys
 
 ## Changes and deltas
 
-(Filled in per item as it lands.)
+**Cost 1: lints once, compact for agents.**
+- An interpreted run printed every error-level lint twice: once in the pre-run lint report, then again from the
+  check gate. Now the check gate alone prints it, with the source line and caret.
+- When stderr is not a terminal (an agent or a tool reading it), warnings are grouped one line per lint code, with
+  up to four locations and the first help. A terminal keeps the full form.
+- Paths in the check gate's output are relative to the current directory.
+
+**Ergonomics 1: panics show the source line and the Windjammer call chain.**
+- The head stays Rust-shaped (`thread 'main' panicked at main.wj:2:11:` and the message), so tools that compare it
+  with compiled output keep working.
+- Below `stack backtrace:` there is now the failing line with a caret, and one line naming the chain:
+  `in `pick`, called from `total` at main.wj:9:18, called from `main` at main.wj:17:21`.
+- A call is now located at its callee in both engines (the token after the callee's name). Before, it was the token after the call's
+  closing parenthesis, so a backtrace could name the next statement's line.
+
+| measure | baseline | after |
+|---|---|---|
+| stderr bytes, all runs | 108,153 | 27,687 (-74%) |
+| estimated stderr tokens per run | 113 | 28 |
+| largest single run | 19,263 bytes | 6,568 bytes |
+| diagnostic headlines | 310 | 101 |
+| runs that wrote to stderr | 47 | 44 (the three fewer: a move-prediction refinement, ADR-0030) |
+| start-up, one-line program, run cold | 60 / 40 ms | 50 / 40 ms (load 6 to 8; within noise) |
+| start-up, t011 solution, run cold | 100 / 80 ms | 70 / 60 ms (load 6 to 8; within noise) |
+
+The start-up rows changed no code; the lower load explains them.

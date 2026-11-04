@@ -360,7 +360,8 @@ fn normalize_stderr(s: &str) -> String {
         }
         // build-time lint diagnostics (`wj run --interpret` reports what `wj build` would) are not
         // program output; the compiled binary's stderr never contains them
-        if line.starts_with("warning: ") || line.starts_with("  --> ") || line.starts_with("  = ") {
+        // (one line per lint code, `warning[W0008] ...`, when stderr is not a terminal)
+        if line.starts_with("warning: ") || line.starts_with("warning[W") || line.starts_with("  --> ") || line.starts_with("  = ") {
             continue;
         }
         if line.starts_with("thread 'main'") {

@@ -123,7 +123,7 @@ fn output_cost(wj: string, scratch: string) {
             if e > 0 {
                 s.with_err += 1
                 for line in strings.split_lines(text) {
-                    if strings.starts_with(line, "error") || strings.starts_with(line, "warning") || strings.starts_with(line, "thread") {
+                    if headline(line) {
                         kinds.push(line)
                     }
                 }
@@ -134,7 +134,11 @@ fn output_cost(wj: string, scratch: string) {
     println("output cost: ${s.runs} interpreted runs of pilot-4 drafts, ${s.with_err} wrote to stderr")
     println("  stderr bytes: total ${sum(errs)}, median ${median(errs)} (all runs), max ${max_of(errs)}")
     println("  stdout bytes: total ${sum(s.out)}")
-    println("  estimated stderr tokens per run (bytes / 4): ${sum(errs) / (4 * s.runs.max(1))}")
+    let mut per_run = 0
+    if s.runs > 0 {
+        per_run = sum(errs) / (4 * s.runs)
+    }
+    println("  estimated stderr tokens per run (bytes / 4): ${per_run}")
     println("  diagnostic headlines: ${kinds.len()}; by kind (count):")
     let mut counts: Vec<(string, int)> = Vec::new()
     for k in kinds {
@@ -143,7 +147,8 @@ fn output_cost(wj: string, scratch: string) {
         let mut j = 0
         while j < counts.len() {
             if counts[j].0 == key {
-                counts[j] = (key, counts[j].1 + 1)
+                let seen = counts[j].1
+                counts[j] = (key, seen + 1)
                 found = true
             }
             j += 1
@@ -155,6 +160,16 @@ fn output_cost(wj: string, scratch: string) {
     for (k, n) in counts {
         println("    ${n}  ${k}")
     }
+}
+
+/// A diagnostic's or a panic's first line.
+fn headline(line: string) -> bool {
+    for p in ["error", "warning", "thread"] {
+        if strings.starts_with(line, p) {
+            return true
+        }
+    }
+    false
 }
 
 fn max_of(xs: Vec<int>) -> int {
@@ -177,15 +192,18 @@ fn time_median(command: string, prep: string, runs: int) -> string {
         if prep.len() > 0 {
             let _ = sh(prep)
         }
-        match sh("/usr/bin/time -p sh -c " + quote(command + " >/dev/null 2>&1") + " 2>&1") {
+        let quiet = "${command} >/dev/null 2>&1"
+        match sh("/usr/bin/time -p sh -c ${quote(quiet)} 2>&1") {
             Ok(o) => {
                 let mut c = 0.0
-                for line in strings.split_lines(o.stdout + o.stderr) {
+                let both = "${o.stdout}${o.stderr}"
+                for line in strings.split_lines(both) {
                     let parts = strings.split_whitespace(line)
                     if parts.len() == 2 && (parts[0] == "user" || parts[0] == "sys") {
                         c += parts[1].parse::<f64>().unwrap_or(0.0)
                     } else if parts.len() == 2 && parts[0] == "real" {
-                        wall.push((parts[1].parse::<f64>().unwrap_or(0.0) * 1000.0) as int)
+                        let secs = parts[1].parse::<f64>().unwrap_or(0.0)
+                        wall.push((secs * 1000.0) as int)
                     }
                 }
                 cpu.push((c * 1000.0) as int)
@@ -216,12 +234,16 @@ fn speed(wj: string, scratch: string, runs: int) {
 
 fn main() {
     let args = env::args()
-    if args.len() < 2 || !strings.starts_with(args[1], "/") {
+    let absolute = args.len() >= 2 && strings.starts_with(args[1], "/")
+    if !absolute {
         eprintln("usage: wj run --interpret scripts/wj/dx_measure.wj -- <absolute wj binary> [--runs N]")
         std::process::exit(2)
     }
     let wj = args[1]
-    let runs = if args.len() > 3 && args[2] == "--runs" { args[3].parse::<int>().unwrap_or(5) } else { 5 }
+    let mut runs = 5
+    if args.len() > 3 && args[2] == "--runs" {
+        runs = args[3].parse::<int>().unwrap_or(5)
+    }
     let scratch = strings.trim(match sh("mktemp -d /tmp/wj-dx.XXXXXX") {
         Ok(o) => o.stdout,
         Err(_) => "/tmp/wj-dx",

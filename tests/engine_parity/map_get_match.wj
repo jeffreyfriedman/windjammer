@@ -78,28 +78,29 @@ fn main() {
         z += 1
     }
     println("${m.len()} ${hits} ${misses} ${lit} ${px} ${miss} ${s} ${caught}")
-    // inserts into a map another binding shares (a copy, which keeps its entries), by reference and
-    // literal keys, a replaced value, an insert whose value is the block's (the generic call)
-    let snapshot = m.clone()
+    // inserts into a map another binding shares (the moved-from `m` still holds the storage in the
+    // interpreter, so the first insert copies), by reference and literal keys, a replaced value, an
+    // insert whose value is the block's (the generic call)
+    let mut snap = m
     let mut w = 0
     while w < 300 {
         let kk = w * 3
-        m.insert(kk, w)
-        m.insert(&kk, w + 1)
+        snap.insert(kk, w)
+        snap.insert(&kk, w + 1)
         names.insert("c", P { x: w })
         w += 1
     }
-    m.insert(-1, 5)
-    let old = { m.insert(-1, 6) }
+    snap.insert(-1, 5)
+    let old = { snap.insert(-1, 6) }
     let got = match old {
         Some(o) => o,
         None => 0,
     }
-    println("${m.len()} ${snapshot.len()} ${got} ${names.len()} ${match snapshot.get(&3) { Some(v) => *v, None => -1 }}")
+    println("${snap.len()} ${got} ${names.len()} ${match snap.get(&3) { Some(v) => *v, None => -1 }}")
     let mut t = 0
     let mut r = 0
     while r < 2000 {
-        t += match m.get(&r) {
+        t += match snap.get(&r) {
             Some(v) => 100 / (*v - *v),
             None => 1,
         }

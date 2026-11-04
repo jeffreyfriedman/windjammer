@@ -392,7 +392,9 @@ fn cast(cx: &mut Cx, inner: E, ty: &'static Type, loc: Loc) -> Option<X> {
 }
 
 fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc: Loc) -> Option<X> {
-    let Expression::Identifier { name, .. } = function else { return None };
+    let Expression::Identifier { name, location: callee, .. } = function else { return None };
+    // a call is located at its callee's name, as the walker marks it (a backtrace's call site)
+    let loc = callee.as_ref().or(loc);
     if arguments.iter().any(|(label, _)| label.is_some()) {
         return None;
     }

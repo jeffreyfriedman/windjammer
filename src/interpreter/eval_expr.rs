@@ -193,7 +193,9 @@ impl Interpreter {
             },
 
             Expression::Call { function, arguments, location } => {
-                self.mark(location.as_ref());
+                // located at the callee's name (the call's own location is the token after its `)`): a
+                // backtrace names the line of the call
+                self.mark(expr_loc(function).or(location.as_ref()));
                 let expected = self.take_expected(e);
                 self.eval_call(function, arguments, expected)
             }
