@@ -1,0 +1,16 @@
+// spec: SPEC-EXEC-012
+// expect: eval c
+// expect: eval then
+// expect: 10
+// expect: eval m
+// expect: eval other
+// expect: 200
+fn t(tag: string, v: int) -> int {
+    println("eval ${tag}")
+    v
+}
+
+fn main() {
+    println("${if t("c", 1) == 1 { t("then", 10) } else { t("else", 20) }}")
+    println("${match t("m", 2) { 1 => t("one", 100), _ => t("other", 200) }}")
+}
