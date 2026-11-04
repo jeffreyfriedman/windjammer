@@ -105,6 +105,8 @@ pub struct EmittedFn {
     /// Names bound by a pattern (`let`, `for`, `match` arms, closure parameters): `(seq, name)`. A later use
     /// of the name may be the new binding.
     pub bindings: Vec<(usize, String)>,
+    /// Loop depth of each binding in `bindings`, by its position.
+    pub binding_depth: HashMap<usize, usize>,
     /// Positions of `return`, `break` and `continue` (a move right before leaving is not used again).
     pub exits: Vec<usize>,
     /// The branch path of every position that is a use or a move: `(branch node, arm)` pairs from the
@@ -383,6 +385,7 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
             self.f.decl_depth.insert(name.clone(), self.loop_depth);
             self.seq += 1;
             self.f.bindings.push((self.seq, name.clone()));
+            self.f.binding_depth.insert(self.seq, self.loop_depth);
             self.f.lets.push(EmittedLet {
                 name,
                 width,
@@ -447,6 +450,7 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
     fn visit_pat_ident(&mut self, p: &'ast syn::PatIdent) {
         self.seq += 1;
         self.f.bindings.push((self.seq, p.ident.to_string()));
+        self.f.binding_depth.insert(self.seq, self.loop_depth);
         syn::visit::visit_pat_ident(self, p);
     }
 

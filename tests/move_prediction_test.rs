@@ -76,3 +76,45 @@ fn predictions_across_the_corpora() {
     ];
     assert_eq!(hits, expected, "{} files scanned", files.len());
 }
+
+/// Real agent programs: the Windjammer drafts of agent pilot 4 (first and final source of every trial). A
+/// prediction on one must be confirmed against the compiled build and pinned here.
+#[test]
+fn predictions_on_agent_drafts() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut trials = Vec::new();
+    wj_json(&root.join("bench/agent-dx/results/pilot4/trials"), &mut trials);
+    trials.sort();
+    let dir = std::env::temp_dir().join(format!("wj-move-drafts-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut hits = Vec::new();
+    let mut n = 0;
+    for t in &trials {
+        let doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(t).unwrap()).unwrap();
+        if doc["lang"] != "wj" {
+            continue;
+        }
+        for key in ["first_source", "final_source"] {
+            let Some(src) = doc[key].as_str().filter(|s| !s.is_empty()) else { continue };
+            let f = dir.join("main.wj");
+            std::fs::write(&f, src).unwrap();
+            n += 1;
+            if !windjammer::check::moves::predicted_moves(&f).is_empty() {
+                hits.push(format!("{} {key}", t.file_name().unwrap().to_string_lossy()));
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    let expected: &[&str] = &[];
+    assert!(n > 100, "only {n} drafts");
+    assert_eq!(hits, expected, "{n} drafts scanned");
+}
+
+fn wj_json(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        if e.path().extension().is_some_and(|x| x == "json") {
+            out.push(e.path());
+        }
+    }
+}
