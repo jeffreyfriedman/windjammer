@@ -2,7 +2,7 @@
 
 use crate::analyzer::SignatureRegistry;
 use crate::codegen::rust::CodeGenerator;
-use crate::parser::{Expression, Literal, Statement, Type};
+use crate::parser::{Expression, Literal, Statement, Type, UnaryOp};
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
@@ -466,7 +466,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 &self.signature_registry,
                             ) =>
                         {
-                            return Some((**inner).clone());
+                            return Some(self.option_adapter_payload(expr, inner));
                         }
                         Type::Result(ok, _)
                             if crate::codegen::rust::stdlib_method_traits::result_owned_self_method(
@@ -1090,5 +1090,20 @@ impl<'ast> CodeGenerator<'ast> {
                 | Expression::Cast { .. }
                 | Expression::Index { .. }
         )
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Payload type of an owned-self `Option` adapter. `opt_ref.unwrap_or(d)` on `Option<&Copy>` is lowered
+    /// to `.copied().unwrap_or(d)` (idiom_lowering): the result is the owned value, so a binding of it is
+    /// not a reference and must not be dereferenced again.
+    fn option_adapter_payload(&self, call: &Expression<'ast>, payload: &Type) -> Type {
+        if let (Expression::MethodCall { method, arguments, .. }, Type::Reference(pointee)) = (call, payload) {
+            let by_ref_default = matches!(arguments.first(), Some((_, Expression::Unary { op: UnaryOp::Ref, .. })));
+            if method == "unwrap_or" && arguments.len() == 1 && !by_ref_default && self.is_type_copy(pointee) {
+                return (**pointee).clone();
+            }
+        }
+        payload.clone()
     }
 }

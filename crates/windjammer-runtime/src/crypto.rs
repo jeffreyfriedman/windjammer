@@ -146,8 +146,25 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Base64 encode bytes (Windjammer `std::crypto::base64_encode_bytes`).
+pub fn base64_encode_bytes(data: &[u8]) -> String {
+    base64_encode(data)
+}
+
+/// Base64 decode to bytes (Windjammer `std::crypto::base64_decode_bytes`).
+pub fn base64_decode_bytes(s: &str) -> Result<Vec<u8>, String> {
+    base64_decode(s)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn base64_bytes_round_trip() {
+        assert_eq!(super::base64_encode_bytes(&[1, 2, 3]), "AQID");
+        assert_eq!(super::base64_decode_bytes("AQID").unwrap(), vec![1u8, 2, 3]);
+        assert!(super::base64_decode_bytes("!!").is_err());
+    }
+
     use super::*;
 
     #[test]
