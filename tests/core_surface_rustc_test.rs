@@ -15,7 +15,7 @@
 //! the declared parameter types and binds the result at the declared result type. rustc must accept the file.
 
 use windjammer::parser::Type;
-use windjammer::typing::core_surface;
+use windjammer::typing::core_surface::CoreSurface;
 
 /// Rust spelling of a surface type with the generics instantiated. `by_ref` instantiates the element as `&i64`
 /// (`Option::copied` / `cloned`, whose receiver is `Option<&T>`).
@@ -34,6 +34,9 @@ fn rust(t: &Type, by_ref: bool) -> String {
             "string" | "String" => "String".into(),
             other => other.to_string(),
         },
+        // `&str` and `&String` are one Windjammer type; `&str` is what the String methods return and what
+        // a `String`-keyed map accepts.
+        Type::Reference(x) if matches!(**x, Type::String) => "&str".into(),
         Type::Reference(x) => format!("&{}", rust(x, by_ref)),
         Type::MutableReference(x) => format!("&mut {}", rust(x, by_ref)),
         Type::Option(x) => format!("Option<{}>", rust(x, by_ref)),
@@ -57,10 +60,11 @@ fn receiver(type_name: &str, generics: &[String], by_ref: bool) -> String {
 #[test]
 fn every_core_surface_entry_typechecks_in_rustc() {
     let mut src = String::from("#![allow(unused, clippy::all)]\nuse std::collections::*;\nfn arg<A>() -> A { unimplemented!() }\n");
-    let entries = core_surface::entries();
+    let surface = CoreSurface::parse();
+    let entries = surface.entries();
     assert!(!entries.is_empty());
     for (i, (ty, method)) in entries.iter().enumerate() {
-        let (generics, method_generics, params, ret) = core_surface::declared(ty, method).unwrap();
+        let (generics, method_generics, params, ret) = surface.declared(ty, method).unwrap();
         // `copied` / `cloned` turn an `Option<&T>` into an `Option<T>`: the receiver holds references.
         let by_ref = ty == "Option" && matches!(method.as_str(), "copied" | "cloned");
         let recv = receiver(ty, &generics, by_ref);

@@ -135,6 +135,10 @@ struct AstConstraintWalker<'a, 'ast> {
     scopes: Vec<HashMap<String, ConstraintVar>>,
     /// Every binding (name, its own var), in walk order.
     binding_vars: Vec<(String, ConstraintVar)>,
+    /// Static (parser) types of bindings, by their variable: the annotation, or the type of the initializer
+    /// (option C stage C1: receiver types for the typed core surface).
+    var_static_types: HashMap<ConstraintVar, Type>,
+    core_surface: Option<&'a crate::typing::core_surface::CoreSurface>,
     /// Negated integer literals and loop bindings whose element type is not modelled.
     numeric_unmodelled: numeric::Unmodelled,
 }
@@ -329,6 +333,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: std::collections::BTreeMap::new(),
             scopes: vec![HashMap::new()],
+            var_static_types: HashMap::new(),
+            core_surface: None,
             binding_vars: Vec::new(),
             numeric_unmodelled: Default::default(),
         }
@@ -547,6 +553,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
         let v = self.cs.fresh_var();
         self.local_vars.insert(name.to_string(), v);
+        self.type_module_constant(name, v);
         v
     }
 
@@ -708,12 +715,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         self.local_decl_types.insert(n.clone(), b);
                     }
                 }
+                let static_ty = type_.clone().or_else(|| self.static_type(value));
                 let bound_var = self.bind_pattern(pattern);
-                if let (Pattern::Identifier(n) | Pattern::MutBinding(n), None) = (pattern, type_) {
-                    if numeric::is_borrow_initializer(value) {
-                        self.numeric_unmodelled.borrowed_bindings.push(n.clone());
-                    }
-                }
+                self.record_let_binding_types(pattern, type_.as_ref(), value, bound_var, static_ty);
                 self.cs.add_because(Constraint::TypeEquals(bound_var, val_var), tagged("TY-UNIFY"));
                 if matches!(pattern, Pattern::Identifier(_) | Pattern::MutBinding(_)) {
                     self.cs.add_because(
@@ -915,6 +919,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.literal_vars.push(((l.line, l.column), var));
             }
             return var;
+        }
+        if let Literal::Float(_) = value {
+            return self.walk_float_literal(var, location);
         }
         let base = literal_to_base_type(value);
         self.cs.add_because(
@@ -1516,7 +1523,19 @@ pub fn generate_constraints_with_fields(
     registry: Option<&SignatureRegistry>,
     struct_field_types: Option<&HashMap<String, HashMap<String, Type>>>,
 ) -> FunctionConstraints {
+    generate_constraints_typed(analyzed, registry, struct_field_types, None)
+}
+
+/// Like [`generate_constraints_with_fields`], with the typed Rust core surface (option C stage C1) that types
+/// core-type method arguments and results.
+pub fn generate_constraints_typed(
+    analyzed: &AnalyzedFunction<'_>,
+    registry: Option<&SignatureRegistry>,
+    struct_field_types: Option<&HashMap<String, HashMap<String, Type>>>,
+    core_surface: Option<&crate::typing::core_surface::CoreSurface>,
+) -> FunctionConstraints {
     let mut walker = AstConstraintWalker::new(analyzed, registry, struct_field_types);
+    walker.core_surface = core_surface;
     walker.walk_body();
     walker.emit_return_field_consumption_constraints();
     walker.emit_clone_constraints();
