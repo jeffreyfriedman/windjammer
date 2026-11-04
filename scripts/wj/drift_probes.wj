@@ -348,7 +348,17 @@ fn main() {
         }
     }
     if record_path != "" && compiled {
-        let _ = fs.write(record_path, recorded_out)
+        // a partial run (--only) replaces only its own lines of the record
+        let mut kept = ""
+        if only != "" {
+            for line in strings.split_lines(fs.read_to_string(record_path).unwrap_or("")) {
+                let id = strings.split(line, "\t")[0]
+                if id != "" && !strings.contains(id, only) {
+                    kept = kept + line + "\n"
+                }
+            }
+        }
+        let _ = fs.write(record_path, kept + recorded_out)
     }
     match fs.write(out, rows) {
         Ok(_) => println("  ${strings.split(families(), " ").len()} probe families, seeds ${lo}..${hi}"),
