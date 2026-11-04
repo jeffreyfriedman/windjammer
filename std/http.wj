@@ -138,6 +138,35 @@ impl Response {
     }
 }
 
+// Request with options: `http.request("GET", url).header(k, v).timeout_secs(5).send()`
+
+struct ClientRequest {
+    // Private: wraps the method, url, headers, body and timeout
+}
+
+fn request(method: string, url: string) -> ClientRequest {
+    // Implementation wraps: reqwest::Client::builder().timeout(..).build()?.request(method, url)
+    ClientRequest {}
+}
+
+impl ClientRequest {
+    fn header(self, key: string, value: string) -> ClientRequest {
+        self
+    }
+
+    fn body(self, body: string) -> ClientRequest {
+        self
+    }
+
+    fn timeout_secs(self, secs: int) -> ClientRequest {
+        self
+    }
+
+    fn send(self) -> Result<Response, string> {
+        Err("HTTP client requires reqwest (auto-added)")
+    }
+}
+
 // Request Builder Methods
 
 impl RequestBuilder {
