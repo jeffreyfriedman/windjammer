@@ -211,7 +211,6 @@ impl<'ast> Analyzer<'ast> {
     ) -> Result<AnalyzedFunction<'ast>, String> {
         let mut inferred_ownership = HashMap::new();
 
-        // Check if this is a game decorator function
         let is_game_decorator = func.decorators.iter().any(|d| {
             matches!(
                 d.name.as_str(),
