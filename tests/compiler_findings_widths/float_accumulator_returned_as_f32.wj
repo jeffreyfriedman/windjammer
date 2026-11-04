@@ -1,0 +1,10 @@
+pub fn estimate(a: bool, b: bool) -> f32 {
+    let mut total = 0.0
+    if a {
+        total = total + 0.2
+    }
+    if b {
+        total = total + 0.15
+    }
+    total
+}
