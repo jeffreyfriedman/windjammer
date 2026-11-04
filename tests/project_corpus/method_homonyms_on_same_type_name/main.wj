@@ -1,0 +1,13 @@
+// Two modules each define a type `Bag` with a method `put` of different shape: in `shapes2d` it takes
+// an `f32` and mutates the receiver (implicit `self`), in `shapes3d` it takes no argument. Each call must use its own
+// type's signature (type identity is module-qualified, never the bare type name). Expected by hand:
+// two puts in each module.
+// expect: 2 2
+mod shapes2d
+mod shapes3d
+
+fn main() {
+    let a = shapes2d::bag::filled()
+    let b = shapes3d::bag::filled()
+    println("${a.count} ${b.count}")
+}

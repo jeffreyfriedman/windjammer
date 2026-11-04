@@ -112,7 +112,8 @@ fn merge_function_return_types(
     contrib: &DeclarationStubContribution,
 ) {
     for (name, sig) in &contrib.float_signatures {
-        if !contrib.module_path.is_empty() && !name.contains("::") {
+        // Free functions (`take`) and this file's impl methods (`Bag::put`) both get the module path.
+        if !contrib.module_path.is_empty() {
             global.insert(format!("{}::{name}", contrib.module_path), sig.clone());
         }
         if ambiguous.contains(name) {

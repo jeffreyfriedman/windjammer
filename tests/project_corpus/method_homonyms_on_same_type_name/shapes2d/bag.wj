@@ -1,0 +1,22 @@
+pub struct Bag {
+    pub count: i32,
+    pub total: f32,
+}
+
+impl Bag {
+    pub fn new() -> Bag {
+        Bag { count: 0, total: 0.0 }
+    }
+
+    pub fn put(x: f32) {
+        self.count = self.count + 1
+        self.total = self.total + x
+    }
+}
+
+pub fn filled() -> Bag {
+    let mut b = Bag::new()
+    b.put(-1.0)
+    b.put(2.5)
+    b
+}
