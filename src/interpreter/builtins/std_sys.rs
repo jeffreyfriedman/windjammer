@@ -12,6 +12,35 @@ fn s(v: &str) -> Value {
     Value::str(v.to_string())
 }
 
+/// Write `data` to `path` (create and truncate, or append) under the capability gate: the decision is made on the parent
+/// directory's descriptor and the file is opened relative to it (`Grant::open_write`); without a gate the write is by name.
+pub(super) fn write_gated(it: &mut Interpreter, path: &str, data: &[u8], append: bool) -> R<std::io::Result<()>> {
+    use crate::interpreter::caps::WriteOpen;
+    use std::io::Write;
+    Ok(match it.cap_open_write(path, append)? {
+        WriteOpen::File(mut f) => f.write_all(data),
+        WriteOpen::Failed(e) => Err(e),
+        WriteOpen::Done => Ok(()),
+        WriteOpen::ByName if append => std::fs::OpenOptions::new().append(true).create(true).open(path).and_then(|mut f| f.write_all(data)),
+        WriteOpen::ByName => std::fs::write(path, data),
+    })
+}
+
+/// `create_dir`, `remove_file` or `remove_dir` of one name under the capability gate (see `write_gated`).
+pub(super) fn entry_gated(it: &mut Interpreter, path: &str, op: crate::ir::effect_facts::grant::EntryOp) -> R<std::io::Result<()>> {
+    use crate::interpreter::caps::WriteOpen;
+    use crate::ir::effect_facts::grant::EntryOp;
+    Ok(match it.cap_entry_op(path, op)? {
+        WriteOpen::Done | WriteOpen::File(_) => Ok(()),
+        WriteOpen::Failed(e) => Err(e),
+        WriteOpen::ByName => match op {
+            EntryOp::MakeDir => std::fs::create_dir(path),
+            EntryOp::RemoveFile => std::fs::remove_file(path),
+            EntryOp::RemoveDir => std::fs::remove_dir(path),
+        },
+    })
+}
+
 fn unit_res(r: std::io::Result<()>) -> R {
     Ok(match r {
         Ok(()) => Value::ok(Value::Unit),
@@ -152,14 +181,24 @@ fn register_fs(r: &mut Registry) {
     });
     r.func("fs::write_bytes", |it, a| {
         let data = bytes_of(it, arg(&a, 1, "write_bytes")?)?;
-        unit_res(std::fs::write(arg_str(&a, 0, "write_bytes")?.as_str(), data))
+        let path = arg_str(&a, 0, "write_bytes")?;
+        let r = write_gated(it, path.as_str(), &data, false)?;
+        unit_res(r)
     });
     r.func("fs::copy", |_, a| {
         unit_res(std::fs::copy(arg_str(&a, 0, "copy")?.as_str(), arg_str(&a, 1, "copy")?.as_str()).map(|_| ()))
     });
     r.func("fs::rename", |_, a| unit_res(std::fs::rename(arg_str(&a, 0, "rename")?.as_str(), arg_str(&a, 1, "rename")?.as_str())));
-    r.func("fs::create_dir", |_, a| unit_res(std::fs::create_dir(arg_str(&a, 0, "create_dir")?.as_str())));
-    r.func("fs::remove_dir", |_, a| unit_res(std::fs::remove_dir(arg_str(&a, 0, "remove_dir")?.as_str())));
+    r.func("fs::create_dir", |it, a| {
+        let path = arg_str(&a, 0, "create_dir")?;
+        let r = entry_gated(it, path.as_str(), crate::ir::effect_facts::grant::EntryOp::MakeDir)?;
+        unit_res(r)
+    });
+    r.func("fs::remove_dir", |it, a| {
+        let path = arg_str(&a, 0, "remove_dir")?;
+        let r = entry_gated(it, path.as_str(), crate::ir::effect_facts::grant::EntryOp::RemoveDir)?;
+        unit_res(r)
+    });
     r.func("fs::remove_dir_all", |_, a| unit_res(std::fs::remove_dir_all(arg_str(&a, 0, "remove_dir_all")?.as_str())));
     r.func("fs::read_dir", |_, a| {
         let rd = match std::fs::read_dir(arg_str(&a, 0, "read_dir")?.as_str()) {
