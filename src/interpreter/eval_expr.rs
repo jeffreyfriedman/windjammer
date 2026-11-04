@@ -468,6 +468,23 @@ impl Interpreter {
         fields: &'static [(String, &'static Expression<'static>)],
         env: &mut dyn super::place::PlaceEnv,
     ) -> R {
+        // field expressions run in the order they are written (as rustc does), whatever the declaration order is
+        if fields.len() > 1 && !matches!(name, "RangeFrom" | "std::ops::RangeFrom") {
+            let mut vals = Vec::with_capacity(fields.len());
+            for (_, ex) in fields {
+                vals.push((*ex as *const Expression<'static>, env.eval(self, ex)?));
+            }
+            return self.eval_struct_literal_in_order(name, fields, &mut super::place::Evaluated { inner: env, vals });
+        }
+        self.eval_struct_literal_in_order(name, fields, env)
+    }
+
+    fn eval_struct_literal_in_order(
+        &mut self,
+        name: &'static str,
+        fields: &'static [(String, &'static Expression<'static>)],
+        env: &mut dyn super::place::PlaceEnv,
+    ) -> R {
         if matches!(name, "RangeFrom" | "std::ops::RangeFrom") && !self.structs.contains_key("RangeFrom") {
             // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
             return match fields {
