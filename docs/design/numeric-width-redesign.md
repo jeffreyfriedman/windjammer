@@ -1,6 +1,6 @@
 ---
 status: current
-last_verified: e0ec926dc
+last_verified: b77ea8a63
 ---
 # Numeric widths: removing the legacy deciders instead of modelling their knowledge
 
@@ -25,6 +25,9 @@ inference. It is worth doing (option C), but widths should not wait for it.
 
 Recommendation: **B + D2** ("int at the surface, rustc types the literals"), staged so each step deletes a legacy
 decider, followed by **C** as the long-term owner of every other type fact. Option A is stopped.
+
+**Owner decision (2026-11-03):** `usize` stays a language type, so B is not taken and D2 is not adopted; option C is
+the width path. Section 7 is the staged plan; sections 4-5 are kept as the record of the review.
 
 ## 1. Evidence: what the current path costs
 
@@ -356,3 +359,67 @@ and the fix the agent reaches for (`as usize`) is the Rust idiom ADR-0014 retire
 correct in both engines. Under D2 the only new diagnostic is "annotate this binding" (`let x: float = 2.0`), with an
 exact span and a machine-applicable fix. The width errors that remain are about widths the program declared
 (`u32` field, `f32` vertex), which is the honest place for them.
+
+## 7. Option C, staged: one type owner over declared signatures
+
+**Owner decision (2026-11-03).** `usize` stays a first-class, explicit Windjammer type; removing or hiding a language
+feature to avoid inference is rejected. Option B is therefore not taken, and D2 (rustc types the literals) is not
+adopted: the S0 experiment (branch `wt/c4-exp`, kept as evidence) did not meet the confirmation bar of section 5. The default-int question
+stays open. Widths converge through option C: one type owner whose types the numeric solver, codegen and ownership all
+read. ADR-0029 (Proposed) records this.
+
+**What the owner reads.** Every input is declared, so the checker runs in check mode almost everywhere and
+synthesises only at `let` and in closures:
+
+| source | what it declares | today |
+|---|---|---|
+| function and method signatures | parameter and result types (mandatory) | `analyzer` signature registry |
+| struct and enum declarations | field and payload types, in any module | `type_inference::struct_field_registry` |
+| `std/**/*.wj` | the Windjammer std surface (44 files) | parsed for the interpreter and `wj check` |
+| `rust/<crate>.wji` | Rust crate functions in Windjammer types (ADR-0026) | generated from crate source by `wj rust-surface` (`syn`) |
+| `std/rust_core.wji` | methods of `Vec`, `VecDeque`, `HashMap`, `BTreeMap`, `HashSet`, `BTreeSet`, `Option`, `Result`, `String`, and the `f32` / `f64` math methods (an argument and the result take the receiver's width) | **new in C1** |
+| `std/enumerable.wj` | the enumerable methods (`group_by`, `count_by`, ...) | `stdlib_surface::enumerable` |
+
+The `.wji` format and the surface generator already map Rust types to Windjammer types; the core surface uses the
+same format (traits named after the Rust type, its parameters as generics, a method's own generics filled by a
+turbofish). `usize` in a surface parameter is an index slot and in a result an index source, as ADR-0028 defines them.
+
+**Stages.** Each stage deletes code and is measured on four meters: `D-WIDTH-OWNERS` (gate 3, 58 at the start),
+the width-ratcheted tests in `.config/known-test-failures.txt` (12 at the start), golden rustc rejects (gate 2, may only
+fall) and the compiled ecosystem gate (`scripts/ecosystem_width_gate.wj` plus the health sweep, all green).
+
+| stage | adds | deletes | exit |
+|---|---|---|---|
+| C1 | `std/rust_core.wji` + `typing::core_surface` (instantiation, turbofish); the numeric solver types core-type method arguments and results from it, with a static typer for receivers (declarations, initializers, the surface) | the solver's hand lists: `std_sequence_index_method` (the index-taking method names) and `receiver_is_std_collection` (which receivers have a `usize` length); the registry's name-based guess for core-type methods (a homonym) | rustc agrees with every surface entry (test); meters do not rise; the drift repros that need a core-method type pass |
+| C2 | `typing::check`: per-function bidirectional typing over the same inputs, results keyed by node id on the IR (ADR-0017), report-only; a ratchet of untyped expressions over the corpus; oracle: the emitted Rust with the checker's types written as ascriptions must still be accepted by rustc | nothing yet (the solver's `static_type` moves into it) | untyped expressions fall each step; checker and rustc disagree on fewer than 1% of corpus expressions |
+| C3 | the numeric solver reads the checker for receivers, elements, closure parameters, cross-module fields | the unmodelled categories of `numeric_facts::held_classes` (loop bindings, unknown lengths, unknown fields), `ir/expr_static_type.rs`, `ir/receiver_type.rs`, then each legacy width decider (W2-W12) whose class the solver now always publishes, one per step | `D-WIDTH-OWNERS` falls every step; a decider is deleted only when its "never fires" trace over goldens, drift corpus and ecosystem is empty |
+| C4 | codegen reads node types | `infer_expression_type` (333 call sites) file by file, `match_binding_type_inference.rs` (433), `type_name_inference.rs` (339), the type guesses in `usize_expression_type_inference.rs` (1158) and `int_promotion_type_inference.rs` (2183) | call sites fall every step; goldens unchanged or rustc-accepted |
+| C5 | ownership reads receiver types | the receiver guesses behind O4/O6 | ownership ratchets fall |
+
+**Kill criterion, per stage.** Stop and redesign when a stage cannot delete what it lists without a new rustc reject
+in the goldens or a red ecosystem target, or when (from C2 on) checker and rustc disagree on more than 1% of corpus
+expressions. A deletion step that turns a "never fires" claim into a real regression (as the W5 deletion did) is
+reverted on the spot and the trace is widened to the drift and ecosystem corpora before the next attempt.
+
+**C1 result.** Recorded in section 7.1 when the stage lands.
+
+### 7.2 Floats: a float class, like the index class
+
+Compiling a large multi-module program (350 rustc errors at `b77ea8a63`) showed 79 `expected f32, found f64` errors
+and about 16 E0277 float-operator errors: float widths were never part of C4. The solver typed every unsuffixed float
+literal as an exact `f64`, so an `f32` field, parameter or payload next to a literal was a type conflict the solver
+could not resolve, and the legacy float collector decided alone. The cause is the same as for `usize`: a literal is a
+class whose width comes from its uses.
+
+| piece | rule | where |
+|---|---|---|
+| float class | an unsuffixed float literal is `IsFloat` (soft), unifying with its uses; with no use that fixes a width it defaults to `float` (f64) and stays with the legacy path | `ir/constraint_gen.rs` (`walk_literal`) |
+| publication | a float literal whose class a use fixed (not defaulted, not held) is published as NUM-LITERAL-WIDTH | `ir/numeric_facts.rs` (`published_float`) |
+| printing | the backend prints a published float width before any legacy float decision | `codegen/rust/solver_widths.rs` (`solver_float_literal`) |
+| typed std | `f32` / `f64` math methods (`min`, `max`, `clamp`, `powf`, `atan2`, ...) take and return the receiver's width | `std/rust_core.wji` |
+
+Still open (each a ratcheted test in `tests/compiler_findings_widths_test.rs`): a literal operand of a user operator
+impl (`p * 0.5` with `impl Mul<f32> for P`) needs the operator's declared `rhs` type; literals inside a list in an
+`f32` payload (`Points(vec![1.5, 2.0])`) and float tuples destructured from a list need element types of collection
+literals (C2: the checker types collection literals bidirectionally). The legacy float collector
+(`type_inference/float_inference/`) is deleted in C3 once no float class it decides is left unpublished.
