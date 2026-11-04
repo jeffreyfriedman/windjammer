@@ -127,17 +127,13 @@ impl OptLevel {
     }
 }
 
-/// Environment switch set by `wj build --unchecked-arithmetic`.
-pub const UNCHECKED_ARITHMETIC_ENV: &str = "WJ_UNCHECKED_ARITHMETIC";
-
 impl WjConfig {
     /// The `[profile.release]` block of the generated `Cargo.toml`. Overflow checks are on unless the
     /// project (`[build] overflow_checks = false`, `[profile.release] overflow-checks = false`) or the
     /// command line (`--unchecked-arithmetic`) turns them off: a release binary panics on overflow exactly
     /// like a debug build and the interpreter (SPEC-NUM-002).
-    pub fn release_profile_section(&self) -> String {
-        let flag = std::env::var_os(UNCHECKED_ARITHMETIC_ENV).is_some_and(|v| v != "0")
-            .then_some(false);
+    pub fn release_profile_section(&self, unchecked_arithmetic: bool) -> String {
+        let flag = unchecked_arithmetic.then_some(false);
         let checks = flag.or(self.build.overflow_checks).or(self.profile.release.overflow_checks).unwrap_or(true);
         self.profile.release.render(checks)
     }
