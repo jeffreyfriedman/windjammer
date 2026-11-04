@@ -46,9 +46,45 @@ method-call result widths, struct field widths, closure parameters.
 | O1 | `analyzer/parameter_analysis.rs` precedence chain (steps 0a-9) | ~1500 | OWN-* solver rules (OWN-CONSUMING-METHOD, OWN-RETURNED, OWN-STORED, OWN-READ-FIELD, OWN-CALL-FORMAL exist) | replaced-but-still-present as OWN-ANALYZER-SEED | D-OWN-STAGES |
 | O2 | `analyzer/string_optimization.rs` + `generator.rs::str_ref_optimizable_param` (text demotion) | ~1500 | OWN-STR-REF decided by use (solver-owned only when the trail shows the solver moved it; pub free-fn lock excluded) | replaced-but-still-present | D-OWN-STAGES |
 | O3 | `compiler/multipass_bare_pass_demotion.rs`, `codegen/rust/signature_promotion.rs` (registry `restore_*`/`promote_*` passes) | 4674 + 4519 | C3 DefId registry + solver fixed point | untouched here; owned by the C3 agent (wt/convergence-c3) | D-OWN-STAGES |
-| O4 | `codegen/rust/function_formal_parameter_generation.rs` body-walking demotion heuristics | ~3000 | solver param modes | untouched | D-OWN-STAGES |
+| O4 | `codegen/rust/function_formal_parameter_generation.rs` body-walking demotion heuristics | ~3000 | solver param modes | receivers: replaced (`ir_self_receiver` spells the IR mode; the `self` arms behind it no longer fire outside trait impls and are the next deletion); field-move walk deleted (analyzer fact `field_moved_parameters`) | D-OWN-STAGES |
 | O5 | `auto_clone.rs` + codegen `.clone()` surgery (`maybe_auto_clone`, ~147 sites in ir_call_site, 46 generator) | 2211 + sites | C6 liveness clone facts (owned by the C6 agent, wt/convergence-c6) | in progress elsewhere | D-CLONE-OUTSIDE-SOLVER, D-CLONE-LASTUSE |
 | O6 | `find_signature_ending_with` callers (~13 sites) and bare-name fallbacks | -- | module-qualified lookup (C3) | one site fixed (`global_signature_for_function` tries module path first); rest owned by C3 agent | D-OWN-STAGES |
+
+### Where receiver and parameter ownership is decided today (wt/ownership-recv, 2026-11-04)
+
+Every stage below writes a mode for `self` or a parameter; later stages override earlier ones. `wj explain-ownership`
+shows the stages as `analyzer= solver= ir= emitted=`.
+
+| stage | file / function | decides | shapes it got wrong |
+|---|---|---|---|
+| A1 analyzer, receivers | `analyzer/function_analysis.rs::infer_self_ownership_*` + `resolve_impl_self_receiver_ownership`, fed by `self_return_and_consumption.rs` (`function_matches_on_self`, `match_arms_consume_bound_values`, `function_body_moves_non_copy_self_fields`), `self_mutating_calls.rs`, `self_field_mutation.rs` | `self` seed (OWN-ANALYZER-SEED) | read-only `match self` with bindings made Owned (text concat counted as a move) |
+| A2 analyzer, parameters | `analyzer/parameter_analysis.rs::infer_parameter_ownership` steps 0a-9, `passthrough_inference.rs` (2.5b `param_projects_non_copy_field_into_call_arg`, step 7 passthrough) | parameter seed | Copy field projected into a call; read-only param of a type from another module |
+| A3 analyzer, traits | `analyzer/trait_analysis.rs::infer_trait_self_receiver`, `upgrade_trait_method_self_receiver` | join of impl receivers for `analyzed_trait_methods` (only impls seen in the same compilation) | impl in another module mutating through a field |
+| S1 IR constraints | `ir/constraint_gen.rs` (OWN-MUT-ASSIGN `detect_mutation_target`, OWN-MUT-ANALYZER, OWN-RETURNED, seeds) and `constraint_gen/numeric.rs` (method calls: OWN-MUT-RECEIVER via `ir/receiver_type.rs`) | solver input | `self.items[n].step(x)`: receiver type of an indexed element was unknown, so the `&mut self` callee was never resolved |
+| S2 solver | `ir/solver.rs` (join, only rises) + `ir/pipeline.rs::lower_to_ir` (`retain_mutated_mutref` post-step) | IR mode | - |
+| C1 codegen, explicit `self` | `codegen/rust/function_formal_parameter_generation.rs::collect_additional_formal_parameter_strings` (Owned/Ref/Mut/Inferred hint arms, ~600 lines of `self` branches), helpers in `function_self_helpers.rs` (`owned_self_receiver`, `self_field_partial_move_needs_owned_receiver`, `self_receiver_upgrades`) and `codegen/rust/self_analysis.rs` (`function_consumes_self`, `function_modifies_self`, a 2000-line copy of the analyzer's walks without the registry) | emitted receiver | `lb(self.items, ..)` into a *borrowed* formal counted as a field move, overriding IR `&mut` with owned `self` |
+| C2 codegen, implicit `self` | `codegen/rust/function_implicit_self_generation.rs::extend_implicit_self_parameters` | emitted receiver | same overrides as C1 |
+| C3 codegen, traits | `codegen/rust/item_generation.rs::generate_trait_with_analysis` (analyzer join overrode even a declared `&mut self`; undeclared defaulted to `&self`), `function_self_helpers.rs::get_effective_self_ownership` (impl follows the trait) | trait + impl receivers | undeclared bodyless receiver guessed before the impls were seen |
+| C4 codegen, trait impl post | `function_formal_parameter_post.rs` (std traits `Iterator::next` etc. -> `&mut self`) | emitted receiver | - |
+| R registry/metadata | `codegen/rust/function_self_helpers.rs::record_self_receiver_upgrade`, `function_generation_prepare.rs` (`promote_*`, `get_param_ownership_for_registration`), `compiler/multipass_bare_pass_demotion.rs` (O3) | what callers see | - |
+
+### C5 receiver step (wt/ownership-recv): what moved and what is left
+
+- Receivers outside trait impls are spelled from the IR mode (`function_self_helpers.rs::ir_self_receiver`); the
+  analyzer seed and the solver decide. Goldens changed in 8 programs: read-only or snapshot methods that codegen had
+  made owned (`with_port(self) -> Config`, `multiply(self, ..) -> Mat4`) now borrow (`&self`, field clones where a
+  non-Copy field is copied into the result). This is the plan's D-SELF-VS-PARAM choice (SELF-GETTER wins); it raised
+  `D-CLONE-OUTSIDE-SOLVER` by the clones of those snapshot methods, which C6 should own as CLONE-BORROWED-TO-OWNED.
+- Trait receivers: a declared `&self`/`&mut self` is the receiver of the trait and every impl; an undeclared
+  bodyless one is W0016 (warning; 67 such declarations in this repo's corpora and more downstream, so making it an
+  error is an owner decision with a `wj fix` migration). Undeclared ones still take the join of the impls the
+  compilation sees, never a name.
+- Next deletions: the `param.name == "self"` arms of `collect_additional_formal_parameter_strings` and
+  `extend_implicit_self_parameters` that only run without IR, then `codegen/rust/self_analysis.rs` copies of the
+  analyzer walks; analyzer A1 rules move to SELF-* solver constraints (consumes/moves/returns self) so the seed can go.
+- Open cases filed as project_corpus programs: `vec_element_moved_then_reused` (cross-module method call does not
+  convert a literal for an owned `String` formal; listed in `project_rejects.txt`), `param_rebound_then_compared`
+  and `use_imported_homonym_by_value` (pass here; the larger-project failures they stand for did not reproduce).
 
 ## Deletion order
 
@@ -80,6 +116,9 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | ADR-0028 step 3: NUM-USIZE-TO-INT, variant payloads, tail-cast helper | aa0bbcebe | 50 | ~150 | 60 -> 58; narrowing casts 12 -> 11; rustc rejects 93 -> 91 |
 | ADR-0028: lexical scoping (per-binding vars) | c1df05cfb | 0 | ~70 | 58 -> 58 (no corpus program shadows a width-carrying name) |
 | ADR-0028: delete five never-firing W5 sites | 3c6a01667 | 106 | 1 | 58 -> 58 |
+| C5 receivers from the IR (`ir_self_receiver`), indexed receiver types, W0016 | cbe50d47c | 0 | ~160 | D-OWN-STAGES 21 -> 9; D-CLONE-OUTSIDE-SOLVER 14 -> 18 (snapshot methods clone fields) |
+| C5 field-move fact replaces the codegen walk | cbe50d47c, 24fe5083b | ~180 | ~70 | (same measurement) |
+| C5 self owned only when self is consumed (seed rule; field reads clone) | af2a31ce9 + next | 6 | 4 | ecosystem width gate 6/9 -> 9/9; ratchet: 3 batch3 ownership tests leave (48 -> 45 entries owned by C3/C5/C6) |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 

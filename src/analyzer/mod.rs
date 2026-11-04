@@ -14,6 +14,7 @@ pub(crate) use spawn_capture::param_captured_by_spawned_closure;
 mod cache_locality;
 pub(crate) mod nested_mod_items;
 pub(crate) mod field_enum_borrow;
+mod field_moves;
 mod forbidden_patterns;
 mod function_analysis;
 mod generic_analysis;
@@ -81,6 +82,10 @@ pub struct AnalyzedFunction<'ast> {
     pub field_extract_parameters: HashSet<String>,
     /// Parameters mutated via direct field/identifier assignment (not method-call-only).
     pub field_mutated_parameters: HashSet<String>,
+    /// Parameters a non-Copy field (or element) of which is moved out by value (`let b = p.bytes`,
+    /// `take(p.items)`, `return p.name`). Copy projections and text `let`s are reads, not moves. One
+    /// fact for the analyzer seed and codegen (C5: codegen no longer re-walks the body for it).
+    pub field_moved_parameters: HashSet<String>,
     /// Legacy: auto-clone analysis. Superseded by IR solver when `IrCutoverConfig.clones` is true.
     pub auto_clone_analysis: AutoCloneAnalysis,
     pub clone_optimizations: Vec<CloneOptimization>,

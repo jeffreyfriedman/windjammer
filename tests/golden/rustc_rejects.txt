@@ -86,7 +86,7 @@ tests/test_cases_basic.wj | error[E0433]: cannot find module or crate `windjamme
 tests/type_alias_test.wj | error[E0308]: mismatched types
 tests/type_registry_imports_test.wj | wj build failed
 tests/use_crate_path_test.wj | error[E0432]: unresolved import `crate::ffi`
-tests/vec_index_local_var.wj | error[E0382]: use of partially moved value: `node`
+tests/vec_index_local_var.wj | error[E0382]: borrow of partially moved value: `node`
 tests/vec_new_then_method.wj | error[E0282]: type annotations needed
 tests/vec_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/wjsl_let_mut_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope

@@ -73,7 +73,7 @@ fn normalize(&mut self) {
 
 impl Mat4 {
 #[inline]
-fn multiply(self, other: Mat4) -> Mat4 {
+fn multiply(&self, other: Mat4) -> Mat4 {
         Mat4 { m00: self.m00 * other.m00, m01: self.m01 * other.m01, m02: self.m02 * other.m02, m03: self.m03 * other.m03 }
 }
 }

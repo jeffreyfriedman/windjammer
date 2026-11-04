@@ -6,7 +6,35 @@ use crate::parser::*;
 
 use super::CodeGenerator;
 
+/// A receiver the source declares (`&self` / `&mut self`): the contract of a trait method and its impls (W0016).
+pub(super) fn declared_receiver(param: &Parameter) -> Option<&'static str> {
+    match param.ownership {
+        _ if param.name != "self" => None,
+        OwnershipHint::Ref => Some("&self"),
+        OwnershipHint::Mut => Some("&mut self"),
+        _ => None,
+    }
+}
+
 impl<'ast> CodeGenerator<'ast> {
+    /// The receiver the IR solver decided (ADR-0001: one ownership owner; convergence C5). Codegen
+    /// only spells it: `Owned` becomes `mut self` when the body writes through `self`. `None` in trait
+    /// impls (the trait declaration decides) and when the function has no IR.
+    pub(super) fn ir_self_receiver(&mut self, func: &FunctionDecl) -> Option<&'static str> {
+        if self.in_trait_impl {
+            return None;
+        }
+        let receiver = match self.ir_param_ownership_definitive("self")? {
+            OwnershipMode::Borrowed => "&self",
+            OwnershipMode::MutBorrowed => "&mut self",
+            OwnershipMode::Owned if self.function_modifies_self_or_derived(func) => "mut self",
+            OwnershipMode::Owned => "self",
+        };
+        self.sync_self_borrow_tracking_from_emitted_params(&[receiver.to_string()]);
+        self.record_self_receiver_upgrade(&func.name, None, receiver);
+        Some(receiver)
+    }
+
     pub(super) fn method_returns_impl_struct(&self, func: &FunctionDecl) -> bool {
         use crate::parser::Type;
         let returns_self_type = match &func.return_type {
@@ -400,7 +428,13 @@ impl<'ast> CodeGenerator<'ast> {
                         .and_then(|key| self.analyzed_trait_methods.get(key))
                 });
                 if let Some(trait_method) = methods.and_then(|m| m.get(func_name)) {
-                    if let Some(ownership) = trait_method.inferred_ownership.get("self").copied() {
+                    // The trait's declared receiver is the contract (W0016).
+                    match trait_method.decl.parameters.first().and_then(declared_receiver) {
+                        Some("&self") => return Some(OwnershipMode::Borrowed),
+                        Some(_) => return Some(OwnershipMode::MutBorrowed),
+                        None => {}
+                    }
+                    if let Some(ownership)= trait_method.inferred_ownership.get("self").copied() {
                         return Some(ownership);
                     }
                     if let Some(reg_own) =

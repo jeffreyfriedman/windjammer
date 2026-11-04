@@ -73,6 +73,7 @@ impl<'ast> RustLeakageLinter<'ast> {
         }
         self.check_trailing_returns(program);
         self.check_missing_values(program);
+        self.check_trait_receivers(program);
         for m in super::mixed_int_width::mixed_widths(program) {
             self.collector.add(LintDiagnostic {
                 lint_name: "W0013".to_string(),
@@ -82,6 +83,22 @@ impl<'ast> RustLeakageLinter<'ast> {
                 location: to_source_location(m.location, &self.default_file),
                 help: Some(format!("convert one side explicitly, e.g. `{}(x)`", m.right)),
                 note: Some("ADR-0015: explicit widths are never silently widened or narrowed".to_string()),
+                suggestion: None,
+            });
+        }
+    }
+
+    /// W0016: a bodyless trait method must declare `&self` or `&mut self` (no body to infer it from).
+    fn check_trait_receivers(&mut self, program: &Program<'ast>) {
+        for u in super::trait_receiver::undeclared_receivers(program) {
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0016".to_string(),
+                category: LintCategory::Correctness,
+                level: LintLevel::Warning,
+                message: format!("trait method `{}` has no body and does not declare its receiver", u.method),
+                location: to_source_location(u.location, &self.default_file),
+                help: Some("write `&self` when no implementation changes `self`, `&mut self` when one does".to_string()),
+                note: Some("`self` alone is inferred from a body; implementations follow the trait's declared receiver".to_string()),
                 suggestion: None,
             });
         }
