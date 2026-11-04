@@ -1,0 +1,9 @@
+// spec: SPEC-NUM-021
+// mode: panic
+// expect: before
+// expect-error: overflow
+fn main() {
+    let s = "64".parse::<int>().unwrap_or(0)
+    println("before")
+    println("${1 << s}")
+}

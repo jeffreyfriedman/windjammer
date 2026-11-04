@@ -1,0 +1,56 @@
+// spec: SPEC-EXEC-010
+// expect: eval a
+// expect: eval b
+// expect: eval c
+// expect: 123
+// expect: eval x
+// expect: eval y
+// expect: eval z
+// expect: 7
+// expect: eval b
+// expect: eval a
+// expect: 1 2
+// expect: eval e0
+// expect: eval e1
+// expect: eval e2
+// expect: 3
+// expect: eval l
+// expect: false
+// expect: eval l
+// expect: true
+// expect: eval c
+// expect: eval then
+// expect: 10
+// expect: eval p
+// expect: eval q
+// expect: eval r
+// expect: 1
+fn t(tag: string, v: int) -> int {
+    println("eval ${tag}")
+    v
+}
+
+fn three(a: int, b: int, c: int) -> int {
+    a * 100 + b * 10 + c
+}
+
+struct S {
+    a: int,
+    b: int,
+}
+
+fn main() {
+    println("${three(t("a", 1), t("b", 2), t("c", 3))}")
+    println("${t("x", 1) + t("y", 2) * t("z", 3)}")
+    let s = S { b: t("b", 2), a: t("a", 1) }
+    println("${s.a} ${s.b}")
+    let arr = [t("e0", 0), t("e1", 1), t("e2", 2)]
+    println("${arr.len()}")
+    let ok = t("l", 0) == 1 && t("r", 1) == 1
+    println("${ok}")
+    let ok2 = t("l", 1) == 1 || t("r", 1) == 1
+    println("${ok2}")
+    let picked = if t("c", 1) == 1 { t("then", 10) } else { t("else", 20) }
+    println("${picked}")
+    println("${t("p", 5) - t("q", 3) - t("r", 1)}")
+}
