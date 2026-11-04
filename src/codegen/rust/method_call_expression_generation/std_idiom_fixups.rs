@@ -65,6 +65,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        // `strings.chars(t).collect()`: the runtime returns the pieces as a `Vec`, which is
+        // not an iterator; the interpreter's value is.
+        if method == "collect" && args.is_empty() {
+            if let Expression::MethodCall { object: module, method: producer, .. } = object {
+                if matches!(&**module, Expression::Identifier { name, .. } if name == "strings")
+                    && matches!(producer.as_str(), "chars" | "split" | "split_lines" | "split_whitespace")
+                    && !obj_str.ends_with(".into_iter()")
+                {
+                    obj_str.push_str(".into_iter()");
+                }
+            }
+        }
         let inferred_receiver_ty = self.infer_expression_type(object);
         // Direct iteration: `v.map(f)` / `v.filter(p)` on a collection is `v.iter().map(f)` in Rust
         // (`.iter()` is never written in Windjammer). Only names a Vec/slice/map/set does not define.

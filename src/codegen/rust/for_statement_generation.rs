@@ -361,7 +361,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut borrowed_bindings_added: Vec<String> = Vec::new();
         // Any `&iterable` loop tracks borrowed bindings (also after `copy_element_by_value`);
         // P3.646: `values()`/`keys()` always yield `&V`. `&str` slice items never deref.
-        let (yields_str_slices, str_slice_shadowed) = self.shadow_str_slice_loop_vars(iterable, pattern);
+        let (yields_str_slices, str_slice_shadowed, str_slice_vars) = self.shadow_str_slice_loop_vars(iterable, pattern);
         let tracks_borrowed_loop_var = !use_copied_for_copy_elems
             && !yields_str_slices
             && (is_map_shared_ref_iter || !by_value_owned_iter)
@@ -550,7 +550,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
 
-        self.inferred_borrowed_params.extend(str_slice_shadowed);
+        self.restore_str_slice_loop(str_slice_shadowed, &str_slice_vars);
         if is_borrowed_iterator {
             for var in &borrowed_bindings_added {
                 self.borrowed_iterator_vars.remove(var);
