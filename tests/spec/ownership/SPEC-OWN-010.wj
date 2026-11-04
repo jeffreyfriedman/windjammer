@@ -1,0 +1,43 @@
+// spec: SPEC-OWN-010
+// expect: inner
+// expect: drop c
+// expect: consume t
+// expect: drop t
+// expect: drop ignored
+// expect: drop b
+// expect: end
+// expect: drop kept
+// expect: drop a2
+// expect: drop a
+struct G {
+    name: string,
+}
+
+impl Drop for G {
+    fn drop(self) {
+        println("drop ${self.name}")
+    }
+}
+
+fn make(name: string) -> G {
+    G { name: name }
+}
+
+fn consume(g: G) {
+    println("consume ${g.name}")
+}
+
+fn main() {
+    let a = make("a")
+    let b = make("b")
+    {
+        let c = make("c")
+        println("inner")
+    }
+    consume(make("t"))
+    let a = make("a2")
+    let _ = make("ignored")
+    let _keep = make("kept")
+    drop(b)
+    println("end")
+}

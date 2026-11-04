@@ -1,4 +1,4 @@
-# spec-oracle compiled results recorded with: wj 0.50.0 (commit b77ea8a6365c 2026-11-03, clean, release, built 2026-11-04T04:18:56Z)
+# spec-oracle compiled results recorded with: wj 0.50.0 (commit 4a4bd7a43150 2026-11-04, clean, debug, built 2026-11-04T08:05:47Z)
 spec::arguments/SPEC-ARGS-001	ok
 spec::arguments/SPEC-ARGS-002	ok
 spec::arguments/SPEC-ARGS-003	ok
@@ -40,6 +40,9 @@ spec::execution/SPEC-EXEC-005	ok
 spec::execution/SPEC-EXEC-006	ok
 spec::execution/SPEC-EXEC-007	ok
 spec::execution/SPEC-EXEC-009	ok
+spec::execution/SPEC-EXEC-010	ok
+spec::execution/SPEC-EXEC-011	ok
+spec::execution/SPEC-EXEC-012	build-fail
 spec::expressions/SPEC-EXPR-001	ok
 spec::expressions/SPEC-EXPR-002	ok
 spec::expressions/SPEC-EXPR-003	ok
@@ -57,6 +60,7 @@ spec::expressions/SPEC-EXPR-014	ok
 spec::expressions/SPEC-EXPR-015	ok
 spec::expressions/SPEC-EXPR-016	ok
 spec::expressions/SPEC-EXPR-018	ok
+spec::expressions/SPEC-EXPR-019	ok
 spec::grammar/SPEC-GRAM-002	ok
 spec::grammar/SPEC-GRAM-003	ok
 spec::grammar/SPEC-GRAM-004	ok
@@ -120,6 +124,16 @@ spec::numeric/SPEC-NUM-014	ok
 spec::numeric/SPEC-NUM-015	ok
 spec::numeric/SPEC-NUM-016	ok
 spec::numeric/SPEC-NUM-017	build-fail
+spec::numeric/SPEC-NUM-018	ok
+spec::numeric/SPEC-NUM-019	ok
+spec::numeric/SPEC-NUM-020	ok
+spec::numeric/SPEC-NUM-021	ok
+spec::numeric/SPEC-NUM-022	ok
+spec::numeric/SPEC-NUM-023	ok
+spec::numeric/SPEC-NUM-024	ok
+spec::numeric/SPEC-NUM-025	build-fail
+spec::numeric/SPEC-NUM-026	build-fail
+spec::numeric/SPEC-NUM-027	ok
 spec::optionals/SPEC-OPT-001	ok
 spec::optionals/SPEC-OPT-002	ok
 spec::optionals/SPEC-OPT-003	ok
@@ -133,6 +147,9 @@ spec::ownership/SPEC-OWN-005	ok
 spec::ownership/SPEC-OWN-006	ok
 spec::ownership/SPEC-OWN-007	ok
 spec::ownership/SPEC-OWN-008	ok
+spec::ownership/SPEC-OWN-010	ok
+spec::ownership/SPEC-OWN-011	ok
+spec::ownership/SPEC-OWN-012	ok
 spec::patterns/SPEC-PAT-001	ok
 spec::patterns/SPEC-PAT-002	ok
 spec::patterns/SPEC-PAT-003	ok
@@ -175,6 +192,12 @@ spec::strings/SPEC-STR-008	ok
 spec::strings/SPEC-STR-009	ok
 spec::strings/SPEC-STR-010	ok
 spec::strings/SPEC-STR-011	ok
+spec::strings/SPEC-STR-012	ok
+spec::strings/SPEC-STR-013	ok
+spec::strings/SPEC-STR-014	ok
+spec::strings/SPEC-STR-015	ok
+spec::strings/SPEC-STR-016	ok
+spec::strings/SPEC-STR-017	build-fail
 spec::trailing-blocks/SPEC-BLOCK-001	ok
 spec::trailing-blocks/SPEC-BLOCK-002	ok
 spec::trailing-blocks/SPEC-BLOCK-003	ok
