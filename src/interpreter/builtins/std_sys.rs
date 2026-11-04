@@ -135,8 +135,17 @@ pub fn register(r: &mut Registry) {
 }
 
 fn register_fs(r: &mut Registry) {
-    r.func("fs::read", |_, a| {
-        Ok(match std::fs::read(arg_str(&a, 0, "read")?.as_str()) {
+    r.func("fs::read", |it, a| {
+        let p = arg_str(&a, 0, "read")?;
+        let read = match it.cap_open_read(p.as_str())? {
+            Some(mut f) => {
+                use std::io::Read;
+                let mut b = Vec::new();
+                f.read_to_end(&mut b).map(|_| b)
+            }
+            None => std::fs::read(p.as_str()),
+        };
+        Ok(match read {
             Ok(b) => Value::ok(bytes_value(&b)),
             Err(e) => Value::err(Value::str(e.to_string())),
         })

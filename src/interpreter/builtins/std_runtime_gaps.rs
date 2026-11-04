@@ -229,8 +229,17 @@ fn register_misc(r: &mut Registry) {
         }
     });
 
-    r.func("fs::read_bytes", |_, a| {
-        Ok(match std::fs::read(arg_str(&a, 0, "read_bytes")?.as_str()) {
+    r.func("fs::read_bytes", |it, a| {
+        let p = arg_str(&a, 0, "read_bytes")?;
+        let read = match it.cap_open_read(p.as_str())? {
+            Some(mut f) => {
+                use std::io::Read;
+                let mut b = Vec::new();
+                f.read_to_end(&mut b).map(|_| b)
+            }
+            None => std::fs::read(p.as_str()),
+        };
+        Ok(match read {
             Ok(b) => Value::ok(bytes_value(&b)),
             Err(e) => Value::err(s(&e.to_string())),
         })

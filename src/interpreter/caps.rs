@@ -321,6 +321,13 @@ impl Interpreter {
                 Res::Arg(n) => Some(arg_text(args.get(n))),
                 Res::CmdArg(n) => Some(crate::ir::effect_facts::scope_match::parse_command(&arg_text(args.get(n))).0),
             };
+            // the file reads that open the path themselves decide on the open file (`cap_open_read`), not on the name
+            if u.effect == EffectKind::FsRead && sinks::FD_VERIFIED_READS.contains(&sinks::canonical(path).as_str()) {
+                if let Some(g) = self.caps.as_mut() {
+                    g.seen.insert(EffectKind::FsRead);
+                }
+                continue;
+            }
             self.cap_decide(&u.effect, resource.as_deref())?;
         }
         Ok(())
@@ -346,6 +353,14 @@ impl Interpreter {
             return Ok(());
         }
         if let Err(d) = gate.grant_for(package.as_deref()).check(effect, resource) {
+            return self.cap_denied(d, package);
+        }
+        Ok(())
+    }
+
+    /// A denial from the grant: stop (enforce) or warn once (the local profile / warn mode).
+    fn cap_denied(&mut self, d: crate::ir::effect_facts::Denial, package: Option<String>) -> R<()> {
+        let Some(gate) = self.caps.as_mut() else { return Ok(()) };
             let who = package.as_deref().map(|p| format!(" (dependency `{p}`)")).unwrap_or_default();
             let text = if gate.local_profile && gate.for_tests {
                 format!(
@@ -375,8 +390,32 @@ impl Interpreter {
                     }
                 }
             }
-        }
         Ok(())
+    }
+
+    /// Open a file for reading under the gate and decide on the path of the open file, not on the name (a name can be re-pointed
+    /// between a check and an open, an open file cannot). `Some(file)` is the checked handle: read from it. `None` means no gate
+    /// applies or the name could not be opened (after the name was allowed): the caller reads by name and gets its own I/O error.
+    pub(crate) fn cap_open_read(&mut self, path: &str) -> R<Option<std::fs::File>> {
+        if self.caps.is_none() {
+            return Ok(None);
+        }
+        let package = self.cap_package();
+        let Some(gate) = self.caps.as_mut() else { return Ok(None) };
+        if !gate.seen.contains(&EffectKind::FsRead) {
+            gate.seen.insert(EffectKind::FsRead);
+        }
+        if gate.bypass > 0 {
+            return Ok(None);
+        }
+        match gate.grant_for(package.as_deref()).open_read(path) {
+            Ok(f) => Ok(Some(f)),
+            Err(crate::ir::effect_facts::grant::OpenError::Io(_)) => Ok(None),
+            Err(crate::ir::effect_facts::grant::OpenError::Denied(d)) => {
+                self.cap_denied(d, package)?;
+                Ok(None)
+            }
+        }
     }
 }
 

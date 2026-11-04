@@ -26,6 +26,12 @@ pub fn register(r: &mut Registry) {
     gate!("caps::env_read", EffectKind::EnvRead);
     gate!("caps::env_write", EffectKind::EnvWrite);
     gate!("caps::process", EffectKind::Process);
+    // the compiled runtime opens the file itself and returns the handle; an interpreted bridge only asks whether the open file is allowed
+    r.func("caps::open_read", |it, a| {
+        let path = arg_str(&a, 0, "open_read")?;
+        it.cap_open_read(path.as_str())?;
+        Ok(Value::Unit)
+    });
     r.func("caps::env_read_all", |it, _| ask(it, EffectKind::EnvRead, Some("*")));
     r.func("caps::db_open", |it, a| {
         let url = arg_str(&a, 0, "db_open")?;
