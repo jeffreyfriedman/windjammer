@@ -12,7 +12,8 @@ use std::path::Path;
 pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
     let Ok(source) = std::fs::read_to_string(path) else { return Vec::new() };
     let file = path.to_string_lossy().to_string();
-    let Ok(program) = crate::interpreter::loader::parse_source(&source, &file) else { return Vec::new() };
+    let tokens = crate::lexer::Lexer::new(&source).tokenize_with_locations();
+    let Ok(program) = crate::parser::Parser::new_with_source(tokens, file.clone(), source.clone()).parse() else { return Vec::new() };
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust(&program).ok()));
