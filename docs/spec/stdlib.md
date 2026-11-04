@@ -6,6 +6,8 @@ Part of the [Windjammer language specification](README.md). Rule IDs are checked
 
 **Modules under `std/` (index checked against the directory):** `async`, `basic_test`, `cap`, `cli`, `collections`, `compress`, `compute`, `config`, `crypto`, `csv`, `db`, `dialog`, `encoding`, `enumerable`, `env`, `fs`, `http`, `json`, `jwt`, `log`, `map`, `math`, `mcp`, `mime`, `net`, `path`, `process`, `random`, `regex`, `runtime`, `storage`, `strings`, `subprocess`, `sync`, `test`, `test_simple`, `testing`, `time`, `url`, `uuid`, `yaml`.
 
+**Interface files under `std/`:** `rust_core.wji` declares the methods of the Rust core types programs call (`Vec`, `VecDeque`, `HashMap`, `BTreeMap`, `HashSet`, `BTreeSet`, `Option`, `Result`, `String`, and every integer and float type) in Windjammer types; it is not a module. The compiler types those calls from it (NUM-STD-SIG in `docs/spec/inference.md`).
+
 Portable core (conformance-covered): `Vec`, `HashMap`, `HashSet`, `Option`, `Result`, `string` methods, iterator adaptors, `std::math`, `std::process::exit`, `std::time` (monotonic), `std::fs` round trip. Everything else (`http`, `db`, `crypto`, `jwt`, `ui`-adjacent modules, ...) is Rust-backend only.
 
 ## Vec

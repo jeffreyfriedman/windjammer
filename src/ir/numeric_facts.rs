@@ -124,8 +124,17 @@ fn binding_widths(fc: &FunctionConstraints, view: &View<'_>) -> std::collections
 pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFunction) {
     let held = held_classes(fc, result);
     let view = View { result, held };
+    // A literal receiver of a numeric method (`2.pow(10)`) needs a width even when its class is defaulted.
+    let receiver_classes: BTreeSet<u32> =
+        fc.unmodelled.literal_receivers.iter().filter_map(|v| view.class(*v)).filter(|c| !view.held.contains(c)).collect();
     for (key, var) in &fc.literal_vars {
-        if let Some(base) = view.published(*var).or_else(|| view.published_float(*var)) {
+        let at_default = || {
+            view.class(*var)
+                .filter(|c| receiver_classes.contains(c))
+                .and_then(|_| result.types.get(var.0 as usize).cloned().flatten())
+                .filter(|t| matches!(t, BaseType::I64 | BaseType::F64))
+        };
+        if let Some(base) = view.published(*var).or_else(|| view.published_float(*var)).or_else(at_default) {
             ir_fn.literal_widths.insert(*key, base);
         }
     }

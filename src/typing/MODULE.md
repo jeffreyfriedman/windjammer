@@ -3,7 +3,7 @@
 ## Purpose
 The single owner of static types (option C, `docs/design/numeric-width-redesign.md` section 7). Stage C1 holds the
 typed surface of the Rust core types (`std/rust_core.wji`): `Vec`, `VecDeque`, `HashMap`, `BTreeMap`, `HashSet`,
-`BTreeSet`, `Option`, `Result`, `String`, and the `f32` / `f64` math methods.
+`BTreeSet`, `Option`, `Result`, `String`, and the methods of every integer and float type (`Integer<T>`, `Float<T>`: `T` is the receiver's own type).
 
 ## Inputs/Outputs
 In: a receiver's static type, a method name, a turbofish. Out: the instantiated parameter and result types.
