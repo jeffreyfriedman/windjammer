@@ -26,7 +26,7 @@ impl Finder {
             if self.diagonal {
                 let mut k = 0
                 while k < 4 {
-                    let delta = if k == 0 || k == 3 { -1 } else { 1 }
+                    let delta = if k == 0 { -1 } else if k == 3 { -1 } else { 1 }
                     let next = base + delta
                     if self.grid.open(next) {
                         return Some(next)
