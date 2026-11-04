@@ -29,8 +29,9 @@ pub fn read_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
 
 /// Write to file (accepts bytes or strings)
 pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(), String> {
-    crate::caps::fs_write(&path);
-    std::fs::write(path, contents).map_err(|e| e.to_string())
+    use std::io::Write;
+    let mut f = crate::caps::open_write(path, false).map_err(|e| e.to_string())?;
+    f.write_all(contents.as_ref()).map_err(|e| e.to_string())
 }
 
 /// Write bytes to a file
@@ -91,14 +92,12 @@ pub fn metadata<P: AsRef<Path>>(path: P) -> Result<Metadata, String> {
 /// Append to a file, creating it when missing (accepts bytes or strings)
 pub fn append<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(), String> {
     use std::io::Write;
-    crate::caps::fs_write(&path);
-    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path).map_err(|e| e.to_string())?;
+    let mut f = crate::caps::open_write(path, true).map_err(|e| e.to_string())?;
     f.write_all(contents.as_ref()).map_err(|e| e.to_string())
 }
 
 /// Write string to file (helper for common case)
 pub fn write_string<P: AsRef<Path>>(path: P, contents: &str) -> Result<(), String> {
-    crate::caps::fs_write(&path);
     write(path, contents.as_bytes())
 }
 
@@ -122,8 +121,7 @@ pub fn is_dir<P: AsRef<Path>>(path: P) -> bool {
 
 /// Create a directory
 pub fn create_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    crate::caps::fs_write(&path);
-    std::fs::create_dir(path).map_err(|e| e.to_string())
+    crate::caps::entry_op(path, crate::caps_core::grant::EntryOp::MakeDir).map_err(|e| e.to_string())
 }
 
 /// Create a directory and all parent directories
@@ -134,14 +132,12 @@ pub fn create_dir_all<P: AsRef<Path>>(path: P) -> Result<(), String> {
 
 /// Remove a file
 pub fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    crate::caps::fs_write(&path);
-    std::fs::remove_file(path).map_err(|e| e.to_string())
+    crate::caps::entry_op(path, crate::caps_core::grant::EntryOp::RemoveFile).map_err(|e| e.to_string())
 }
 
 /// Remove a directory
 pub fn remove_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    crate::caps::fs_write(&path);
-    std::fs::remove_dir(path).map_err(|e| e.to_string())
+    crate::caps::entry_op(path, crate::caps_core::grant::EntryOp::RemoveDir).map_err(|e| e.to_string())
 }
 
 /// Remove a directory and all its contents

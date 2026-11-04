@@ -54,8 +54,24 @@ fn is_handle_sink(path: &str) -> bool {
     HANDLE_SINKS.iter().any(|h| path.ends_with(h))
 }
 
+thread_local! {
+    /// `routed` per builtin path, decided once: the answer depends on the path alone, and the check ran on every builtin call.
+    static ROUTES: std::cell::RefCell<std::collections::HashMap<String, bool, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>> = Default::default();
+}
+
 /// Does `path` go through the port?
 pub fn routed(path: &str) -> bool {
+    ROUTES.with(|c| {
+        if let Some(&r) = c.borrow().get(path) {
+            return r;
+        }
+        let r = routed_by_rules(path);
+        c.borrow_mut().insert(path.to_string(), r);
+        r
+    })
+}
+
+fn routed_by_rules(path: &str) -> bool {
     if path.ends_with("mcp::call") {
         return true;
     }
@@ -441,6 +457,14 @@ mod tests {
         let stale: Vec<_> = covered.difference(&found).collect();
         assert!(new.is_empty(), "host reads the effect port does not see (route them through effect_port or justify them in COVERED): {new:?}");
         assert!(stale.is_empty(), "COVERED lists reads that no longer exist: {stale:?}");
+    }
+
+    #[test]
+    fn the_cached_routing_answers_like_the_rules() {
+        for p in crate::ir::effect_facts::sinks::all_paths().chain(["HashMap::new", "Rc::new", "process::pid", "mcp::call", "std::fs::read_to_string", "io::stdin", "cap::fs"]) {
+            assert_eq!(super::routed(p), super::routed_by_rules(p), "{p}");
+            assert_eq!(super::routed(p), super::routed_by_rules(p), "{p} (second call, from the cache)");
+        }
     }
 
     #[test]

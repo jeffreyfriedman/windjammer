@@ -75,6 +75,7 @@ impl Project {
         p
     }
 
+    #[cfg(test)]
     pub fn without_files(&self, drop: &[&str]) -> Project {
         let mut p = self.clone();
         for d in drop {
