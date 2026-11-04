@@ -1269,6 +1269,13 @@ impl<'ast> CodeGenerator<'ast> {
 
         let base_expr = format!("{}[{}]", obj_str, final_idx);
 
+        // CLONE-BORROWED-TO-OWNED: an owned element read is decided by the IR fact alone.
+        if !self.generating_assignment_target {
+            if let Some(clone) = self.element_read_clone(expr_to_generate) {
+                return if clone { format!("{base_expr}.clone()") } else { base_expr };
+            }
+        }
+
         // Owned call-site formals: clone non-Copy / Custom index elements (E0507). Empty WJ
         // std stubs (`Row {}`) may be misclassified Copy while runtime types are Clone-only.
         // skip when this Index is only an intermediate object for FieldAccess
