@@ -230,6 +230,9 @@ captured parameter (D-CLOS-OVEROWN): `v` above is inferred `Vec<i64>` although t
 Captures come from the liveness layer (`ir::liveness::captures`); a closure whose captured non-Copy binding is read
 after the closure's statement (`ir::liveness::read_after`) borrows instead of moving, because `move` would be E0382
 (`self.order.retain(|x| *x != k); self.order.push(k)`).
+Escape fact: a closure stays in its function only in a known `Fn`/`FnMut` slot of its callee; a `FnOnce` slot
+(`thread::spawn`) or a callee whose closure parameter is unknown may keep it ('static), so it keeps `move` (a Copy
+capture is copied).
 
 ### CLOS-MUT-CAPTURE
 **Rule.** A closure that mutates a captured variable needs the variable and the closure binding to be mutable.
