@@ -11,9 +11,63 @@
 
 use super::CodeGenerator;
 use crate::parser::{Statement, Type};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+/// The C6 facts the Rust backend reads for the function being emitted (all from `crate::ir`).
+#[derive(Default)]
+pub(crate) struct CloneFacts {
+    /// MOVE-LAST-USE: reads that are the last use of a plain binding (`liveness::last_moves`).
+    pub(crate) last_use_nodes: BTreeSet<usize>,
+    /// CLONE-USE-AFTER-MOVE: per statement, bindings read after it (`liveness::read_after`).
+    pub(crate) read_after: BTreeMap<usize, BTreeSet<String>>,
+    /// The statements being emitted (innermost last) and their re-read reads (`liveness::reread_in`).
+    pub(crate) stmt_stack: Vec<usize>,
+    pub(crate) reread_stack: Vec<BTreeSet<usize>>,
+    /// Parameters and plain `let` / loop bindings (`liveness::plain_bindings`).
+    pub(crate) plain_bindings: BTreeSet<String>,
+    /// `let xs = [..]` bindings emitted as `Vec` (ADR-0014), whatever their recorded type says.
+    pub(crate) list_literal_locals: BTreeSet<String>,
+    /// CLONE-BORROWED-TO-OWNED: returned parameter fields, the borrowed ones, element reads (`clone_facts`).
+    pub(crate) returned_fields: BTreeMap<usize, String>,
+    pub(crate) clone_sites: BTreeMap<usize, String>,
+    pub(crate) element_reads: BTreeMap<usize, String>,
+}
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Load the facts for `func` (called once per function from the codegen environment setup).
+    pub(in crate::codegen::rust) fn load_clone_facts(&mut self, func: &crate::parser::FunctionDecl<'_>) {
+        let entry: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
+        let always_move = self.config.liveness_mutation_always_move;
+        let ir = self.current_ir_function.as_ref();
+        self.clone_facts = CloneFacts {
+            last_use_nodes: crate::ir::liveness::last_moves(&entry, &func.body, always_move),
+            read_after: crate::ir::liveness::read_after(&entry, &func.body, always_move),
+            plain_bindings: crate::ir::liveness::plain_bindings(&entry, &func.body),
+            returned_fields: ir.map(|f| f.returned_fields.clone()).unwrap_or_default(),
+            clone_sites: ir.map(|f| f.clone_sites.clone()).unwrap_or_default(),
+            element_reads: ir.map(|f| f.element_reads.clone()).unwrap_or_default(),
+            ..CloneFacts::default()
+        };
+    }
+
+    /// An owned `self` receiver (`n.advance()` with `fn advance(self)`) that is read again is copied.
+    pub(in crate::codegen::rust) fn copy_consumed_receiver(&self, object: &crate::parser::Expression<'_>, method: &str, obj_str: String) -> String {
+        if !matches!(object, crate::parser::Expression::Identifier { .. }) {
+            return obj_str;
+        }
+        let qualified = self.infer_expression_type(object).as_ref().and_then(Self::type_to_name).map(|tn| format!("{tn}::{method}"));
+        let consumes = qualified.as_ref().is_some_and(|q| {
+            self.get_signature_with_global(q).is_some_and(|sig| {
+                sig.has_self_receiver && matches!(self.effective_method_self_ownership(q, sig), crate::analyzer::OwnershipMode::Owned)
+            })
+        });
+        if consumes {
+            self.copy_if_read_again(object, obj_str)
+        } else {
+            obj_str
+        }
+    }
+
     /// The binding is an owned value (not a Rust reference) in the emitted function.
     fn binding_emits_owned_value(&self, name: &str) -> bool {
         let is_ref = |t: &Type| matches!(t, Type::Reference(_) | Type::MutableReference(_));
@@ -37,21 +91,73 @@ impl<'ast> CodeGenerator<'ast> {
     /// not Copy. `None` outside the domain.
     pub(in crate::codegen::rust) fn returned_field_clone(&self, expr: &crate::parser::Expression<'_>) -> Option<bool> {
         let node = crate::ir::numeric_defaults::node_id(expr);
-        self.returned_fields.0.get(&node)?;
+        self.clone_facts.returned_fields.get(&node)?;
         let copy = self.infer_expression_type(expr).as_ref().is_some_and(|t| self.is_type_copy(t));
-        Some(self.returned_fields.1.contains_key(&node) && !copy)
+        Some(self.clone_facts.clone_sites.contains_key(&node) && !copy)
     }
 
     /// CLONE-BORROWED-TO-OWNED for elements: `Some(clone?)` when `expr` is an owned element read
     /// (the IR fact's domain): clone unless the element type is known to be Copy.
     pub(in crate::codegen::rust) fn element_read_clone(&self, expr: &crate::parser::Expression<'_>) -> Option<bool> {
-        self.element_reads.get(&crate::ir::numeric_defaults::node_id(expr))?;
+        self.clone_facts.element_reads.get(&crate::ir::numeric_defaults::node_id(expr))?;
         let copy = self.infer_expression_type(expr).as_ref().is_some_and(|t| self.is_type_copy(t));
         Some(!copy)
     }
 
+    /// CLONE-USE-AFTER-MOVE (C6): `expr` is a bare plain binding emitted as a move (`emitted` is just
+    /// its name) of a known non-Copy owned value that is read again (later in the statement, after
+    /// it, or in the next loop iteration; `ir::liveness`): the move copies instead. Everything else
+    /// passes through unchanged. With the liveness mutation (nothing read again) this never fires.
+    pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        let crate::parser::Expression::Identifier { name, .. } = expr else { return emitted };
+        if emitted != *name || self.auto_clone_analysis.is_none() || !self.clone_facts.plain_bindings.contains(name) {
+            return emitted;
+        }
+        // A value without `Clone` (a runtime handle, a struct holding a channel end) cannot be
+        // copied: that use stays a move, and `wj check` reports it (WJ0007).
+        if !self.binding_emits_owned_value(name) || !self.binding_known_non_copy(name) || self.binding_is_runtime_non_clone(name) {
+            return emitted;
+        }
+        let ty = self.current_function_params.iter().find(|p| p.name == *name).map(|p| p.type_.clone());
+        if !ty.or_else(|| self.local_var_types.get(name).cloned()).is_some_and(|t| self.type_known_clone(&t, 0)) {
+            return emitted;
+        }
+        let node = crate::ir::numeric_defaults::node_id(expr);
+        let again_in_stmt = self.clone_facts.reread_stack.last().is_some_and(|r| r.contains(&node));
+        let again_after = match self.clone_facts.stmt_stack.last() {
+            Some(stmt) => self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)),
+            None => false,
+        };
+        if again_in_stmt || again_after {
+            format!("{name}.clone()")
+        } else {
+            emitted
+        }
+    }
+
+    /// `ty` implements `Clone` in the emitted Rust: no field (transitively, through the program's
+    /// structs) is a type the derive rules leave without `Clone` (`type_precludes_auto_debug_clone`).
+    fn type_known_clone(&self, ty: &Type, depth: u8) -> bool {
+        if self.type_precludes_auto_debug_clone(ty) {
+            return false;
+        }
+        let base = match ty {
+            Type::Custom(n) | Type::Parameterized(n, _) => n.as_str(),
+            _ => return true,
+        };
+        let leaf = base.rsplit("::").next().unwrap_or(base);
+        match self.lookup_struct_field_types(leaf) {
+            Some(fields) if depth < 4 => fields.values().all(|t| self.type_known_clone(t, depth + 1)),
+            _ => true,
+        }
+    }
+
     /// The binding's type is known and not Copy (a `&T` binding is Copy).
     pub(in crate::codegen::rust) fn binding_known_non_copy(&self, name: &str) -> bool {
+        // A `let xs = [..]` list literal is a `Vec` even where the local type records an array.
+        if self.clone_facts.list_literal_locals.contains(name) {
+            return true;
+        }
         let ty = self
             .current_function_params
             .iter()
@@ -66,8 +172,8 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// CLONE-USE-AFTER-MOVE: `name` is read after the statement being emitted (no fact: assume so).
     pub(in crate::codegen::rust) fn read_after_current_statement(&self, name: &str) -> bool {
-        match self.read_after.1.last() {
-            Some(stmt) => self.read_after.0.get(stmt).is_none_or(|names| names.contains(name)),
+        match self.clone_facts.stmt_stack.last() {
+            Some(stmt) => self.clone_facts.read_after.get(stmt).is_none_or(|names| names.contains(name)),
             None => true,
         }
     }
@@ -77,9 +183,10 @@ impl<'ast> CodeGenerator<'ast> {
         &mut self,
         stmt: &Statement<'_>,
     ) -> HashSet<String> {
-        self.read_after.1.push(stmt as *const Statement<'_> as *const () as usize);
+        self.clone_facts.stmt_stack.push(stmt as *const Statement<'_> as *const () as usize);
+        self.clone_facts.reread_stack.push(crate::ir::liveness::reread_in(stmt));
         let dying: HashSet<String> = if self.auto_clone_analysis.is_some() {
-            crate::ir::liveness::dying_in(stmt, &self.last_use_nodes)
+            crate::ir::liveness::dying_in(stmt, &self.clone_facts.last_use_nodes)
                 .into_iter()
                 .filter(|n| self.binding_emits_owned_value(n))
                 .collect()
@@ -96,7 +203,8 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(in crate::codegen::rust) fn exit_statement_liveness(&mut self, outer: HashSet<String>) {
-        self.read_after.1.pop();
+        self.clone_facts.stmt_stack.pop();
+        self.clone_facts.reread_stack.pop();
         if let Some(a) = self.auto_clone_analysis.as_mut() {
             a.dying_here = outer;
         }

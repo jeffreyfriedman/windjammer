@@ -18,32 +18,19 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-#[test]
-fn self_by_value_receiver_used_again_is_reported() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj");
-    let d = windjammer::check::moves::predicted_moves(&p);
-    assert_eq!(d.len(), 1, "{d:?}");
-    assert_eq!(d[0].code, "WJ0007");
-    assert!(d[0].message.contains("`n`") && d[0].message.contains("Node::advance"), "{}", d[0].message);
-}
-
-/// Class b, and c (the same move inside a loop), each rejected by rustc with E0382 on the generated code.
-#[test]
-fn moves_into_owning_parameters_are_reported() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/diagnostics_oracle/check");
-    let d = windjammer::check::moves::predicted_moves(&root.join("wj0007_arg_move_reuse.wj"));
-    assert_eq!(d.len(), 1, "{d:?}");
-    assert!(d[0].message.contains("`xs` is used after the call to `wrap` moved it"), "{}", d[0].message);
-    let d = windjammer::check::moves::predicted_moves(&root.join("wj0007_arg_move_in_loop.wj"));
-    assert_eq!(d.len(), 1, "{d:?}");
-    assert!(d[0].message.contains("in every iteration of the loop"), "{}", d[0].message);
-}
-
 /// The compiler clones where a moved value is used again; those programs build and nothing is reported.
 #[test]
 fn moves_the_compiler_turns_into_clones_are_not_reported() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/accepted");
-    for f in ["let_copy_auto_cloned.wj", "field_auto_cloned.wj"] {
+    // C6: the moves WJ0007 used to predict (receiver by value, owning argument, inside a loop) are
+    // now copies the compiler decides from liveness, so these programs build and nothing is reported.
+    for f in [
+        "let_copy_auto_cloned.wj",
+        "field_auto_cloned.wj",
+        "arg_move_reuse.wj",
+        "arg_move_in_loop.wj",
+        "self_by_value_reuse.wj",
+    ] {
         let d = windjammer::check::moves::predicted_moves(&root.join(f));
         assert!(d.is_empty(), "{f}: {d:?}");
     }
@@ -64,16 +51,10 @@ fn predictions_across_the_corpora() {
             hits.push(format!("{} {}", f.strip_prefix(root).unwrap_or(f).display(), d.len()));
         }
     }
-    // each confirmed with rustc on the generated code (E0382): `test_ownership` is an ownership-error
-    // fixture, `string_literal_move_then_use` is the compiler defect D-CLONE-STRLIT (no clone where the
-    // interpreter's copy is expected)
-    let expected: &[&str] = &[
-        "tests/diagnostics_oracle/check/wj0007_arg_move_in_loop.wj 1",
-        "tests/diagnostics_oracle/check/wj0007_arg_move_reuse.wj 1",
-        "tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj 1",
-        "tests/error_system/test_ownership.wj 1",
-        "tests/inference_corpus/string_literal_move_then_use.wj 1",
-    ];
+    // each confirmed with rustc on the generated code (E0382). Since C6 the compiler copies a moved
+    // value that is read again (`string_literal_move_then_use`, `test_ownership` and the former WJ0007
+    // fixtures now build), so no single-file corpus program is predicted to fail.
+    let expected: &[&str] = &[];
     assert_eq!(hits, expected, "{} files scanned", files.len());
 }
 

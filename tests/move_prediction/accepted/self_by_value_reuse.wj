@@ -1,0 +1,22 @@
+// Not reported: `n.advance()` takes `self` by value and `n` is read afterwards; the compiler copies the
+// receiver (C6 CLONE-USE-AFTER-MOVE), so the build succeeds.
+struct Node {
+    label: string,
+    next: Option<int>,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { label: self.label, next: self.next }
+    }
+
+    fn peek(self) -> Option<int> {
+        self.next
+    }
+}
+
+fn main() {
+    let n = Node { label: "a", next: Some(4) }
+    let moved = n.advance()
+    println("${moved.label} ${n.peek().is_some()}")
+}
