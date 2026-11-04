@@ -104,6 +104,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.returned_fields = self.current_ir_function.as_ref().map(|f| (f.returned_fields.clone(), f.clone_sites.clone())).unwrap_or_default();
 
         self.current_function_params = func.parameters.clone();
+        self.current_field_moved_params = analyzed.field_moved_parameters.clone();
         self.current_function_name = Some(func.name.to_string());
         // Combine inline bounds (<T: Foo>) and where clause for trait resolution
         let mut all_bounds: Vec<(String, Vec<String>)> = func
@@ -1032,7 +1033,7 @@ impl<'ast> CodeGenerator<'ast> {
                     &param.name,
                     func,
                 ) && !self
-                    .param_has_field_or_index_move_binding(func.body.as_slice(), &param.name);
+                    .param_has_field_or_index_move_binding(&param.name);
                 if !field_proj_only {
                     continue;
                 }
@@ -1046,7 +1047,7 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             // Field moves (`let bytes = key.bytes`) need owned formals — do not promote.
-            if self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name) {
+            if self.param_has_field_or_index_move_binding(&param.name) {
                 self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
@@ -1111,9 +1112,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                     && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
                     // P3.582: returning/moving `param.field` is not readonly projection.
-                    && !self.param_has_field_or_index_move_binding(
-                        func.body.as_slice(),
-                        &param.name,
+                    && !self.param_has_field_or_index_move_binding(&param.name,
                     )
                     && !(analyzed.mutated_parameters.contains(&param.name)
                         && !analyzed.returned_parameters.contains(&param.name))
@@ -1194,7 +1193,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                 && !self.is_public_owned_non_copy_formal_api(param, func)
-                && !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
+                && !self.param_has_field_or_index_move_binding(&param.name)
                 && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
                 && !self.param_only_used_as_owned_custom_method_receiver(
                     func.body.as_slice(),
@@ -1426,7 +1425,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             !self.param_only_used_via_field_or_index_projection(func.body.as_slice(), &other.name)
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &other.name)
-                || self.param_has_field_or_index_move_binding(func.body.as_slice(), &other.name)
+                || self.param_has_field_or_index_move_binding(&other.name)
         })
     }
 
@@ -9822,185 +9821,10 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    /// True when a `let` binding moves a field off `param` (`let bytes = key.bytes`).
-    pub(in crate::codegen::rust) fn param_has_field_or_index_move_binding(
-        &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-    ) -> bool {
-        body.iter()
-            .any(|stmt| self.stmt_has_field_move_binding(stmt, param_name))
-    }
-
-    fn stmt_has_field_move_binding(&self, stmt: &Statement<'ast>, param_name: &str) -> bool {
-        match stmt {
-            // Text/Copy field lets are readable from `&T` (clone/copy) — do not treat
-            // as Owned-forcing moves.
-            Statement::Let { value, .. } => {
-                Self::expr_is_field_move_from_param(param_name, value)
-                    && !self.expr_field_move_is_copy_or_text(param_name, value)
-            }
-            // P3.582: `fn consume(csr) { csr.neighbors }` / `return csr.offsets`.
-            Statement::Return {
-                value: Some(expr), ..
-            }
-            | Statement::Expression { expr, .. } => {
-                Self::expr_is_field_move_from_param(param_name, expr)
-            }
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                then_block
-                    .iter()
-                    .any(|s| self.stmt_has_field_move_binding(s, param_name))
-                    || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.stmt_has_field_move_binding(s, param_name))
-                    })
-            }
-            Statement::While { body, .. }
-            | Statement::For { body, .. }
-            | Statement::Loop { body, .. } => body
-                .iter()
-                .any(|s| self.stmt_has_field_move_binding(s, param_name)),
-            Statement::Match { arms, .. } => arms
-                .iter()
-                .any(|arm| Self::expr_is_field_move_from_param(param_name, &arm.body)),
-            _ => false,
-        }
-    }
-
-    fn expr_is_field_move_from_param(param_name: &str, expr: &Expression<'ast>) -> bool {
-        Self::expr_has_field_move_from_param(param_name, expr, true)
-    }
-
-    /// Resolve whether a field/index move chain from `param` lands on Copy or text.
-    fn expr_field_move_is_copy_or_text(&self, param_name: &str, expr: &Expression<'ast>) -> bool {
-        let Some(param_ty) = self
-            .current_function_params
-            .iter()
-            .find(|p| p.name == param_name)
-            .map(|p| p.type_.clone())
-        else {
-            return false;
-        };
-        self.codegen_infer_projected_field_type(param_name, &param_ty, expr)
-            .is_some_and(|ty| {
-                crate::codegen::rust::types::is_windjammer_text_type(&ty) || self.is_type_copy(&ty)
-            })
-    }
-
-    fn codegen_infer_projected_field_type(
-        &self,
-        param_name: &str,
-        param_type: &Type,
-        expr: &Expression<'ast>,
-    ) -> Option<Type> {
-        match expr {
-            Expression::FieldAccess { object, field, .. } => {
-                let base_ty = if matches!(
-                    &**object,
-                    Expression::Identifier { name, .. } if name == param_name
-                ) {
-                    param_type.clone()
-                } else {
-                    self.codegen_infer_projected_field_type(param_name, param_type, object)?
-                };
-                let type_name = match &base_ty {
-                    Type::Custom(n) => n.as_str(),
-                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                        match inner.as_ref() {
-                            Type::Custom(n) => n.as_str(),
-                            _ => return None,
-                        }
-                    }
-                    _ => return None,
-                };
-                self.lookup_struct_field_types(type_name)?
-                    .get(field.as_str())
-                    .cloned()
-            }
-            Expression::Index { object, .. } => {
-                let base_ty = if matches!(
-                    &**object,
-                    Expression::Identifier { name, .. } if name == param_name
-                ) {
-                    param_type.clone()
-                } else {
-                    self.codegen_infer_projected_field_type(param_name, param_type, object)?
-                };
-                match &base_ty {
-                    Type::Vec(inner) => Some((**inner).clone()),
-                    Type::Array(inner, _) => Some((**inner).clone()),
-                    Type::Parameterized(name, args) if name == "Vec" && args.len() == 1 => {
-                        Some(args[0].clone())
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// `value_position`: field used as a value (return/let/call arg) → move.
-    /// Place position (method/index receiver, binary/unary operand) → borrow.
-    fn expr_has_field_move_from_param(
-        param_name: &str,
-        expr: &Expression<'ast>,
-        value_position: bool,
-    ) -> bool {
-        match expr {
-            Expression::FieldAccess { object, .. } => {
-                if value_position {
-                    matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
-                        || Self::expr_has_field_move_from_param(param_name, object, true)
-                } else {
-                    false
-                }
-            }
-            Expression::Index { object, index, .. } => {
-                Self::expr_has_field_move_from_param(param_name, object, false)
-                    || Self::expr_has_field_move_from_param(param_name, index, true)
-            }
-            // P3.583: `decode_records(self.bytes)` / `replay_to_lsn(self.path, …)`.
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, arg)| Self::expr_has_field_move_from_param(param_name, arg, true)),
-            Expression::MethodCall {
-                object, arguments, ..
-            } => {
-                Self::expr_has_field_move_from_param(param_name, object, false)
-                    || arguments
-                        .iter()
-                        .any(|(_, arg)| Self::expr_has_field_move_from_param(param_name, arg, true))
-            }
-            Expression::StructLiteral { fields, .. } => fields
-                .iter()
-                .any(|(_, v)| Self::expr_has_field_move_from_param(param_name, v, true)),
-            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
-                .iter()
-                .any(|e| Self::expr_has_field_move_from_param(param_name, e, true)),
-            Expression::Binary { left, right, .. } => {
-                Self::expr_has_field_move_from_param(param_name, left, false)
-                    || Self::expr_has_field_move_from_param(param_name, right, false)
-            }
-            Expression::ChannelSend { value, .. } => {
-                Self::expr_has_field_move_from_param(param_name, value, true)
-            }
-            Expression::Unary { operand, .. } => {
-                Self::expr_has_field_move_from_param(param_name, operand, false)
-            }
-            Expression::TryOp { expr: operand, .. }
-            | Expression::Await { expr: operand, .. }
-            | Expression::Cast { expr: operand, .. }
-            | Expression::AsyncCall { expr: operand, .. }
-            | Expression::SpawnCall { expr: operand, .. } => {
-                Self::expr_has_field_move_from_param(param_name, operand, true)
-            }
-            _ => false,
-        }
+    /// The analyzer's `field_moved_parameters` fact: a non-Copy field or element of `param_name` is
+    /// moved out by value. Codegen reads the fact; it does not re-walk the body (C5).
+    pub(in crate::codegen::rust) fn param_has_field_or_index_move_binding(&self, param_name: &str) -> bool {
+        self.current_field_moved_params.contains(param_name)
     }
 
     /// True when field-method calls on a Custom param are not real `&mut` mutations

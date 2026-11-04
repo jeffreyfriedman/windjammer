@@ -1,0 +1,10 @@
+// A text binding moved into a `vec![..]` call argument is read again afterwards: the compiler clones it
+// at the move (no use-after-move error). Expected by hand: two rows recorded, then the id itself.
+// expect: 2 p7
+mod repo
+
+fn main() {
+    let mut r = repo::Repo { rows: Vec::new() }
+    let got = r.flag_and_get("p7", "on")
+    println("${r.rows.len()} ${got}")
+}

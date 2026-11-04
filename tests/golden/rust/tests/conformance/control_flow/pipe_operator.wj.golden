@@ -18,11 +18,11 @@ fn new(n: i64) -> Counter {
         Counter { n }
 }
 #[inline]
-fn add(self, k: i64) -> Counter {
+fn add(&self, k: i64) -> Counter {
         Counter { n: self.n + k }
 }
 #[inline]
-fn double(self) -> Counter {
+fn double(&self) -> Counter {
         Counter { n: self.n * 2_i64 }
 }
 #[inline]

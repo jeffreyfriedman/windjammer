@@ -111,6 +111,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) method_return_types: std::collections::HashMap<String, Type>,
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>,
+    /// Analyzer fact for the function being generated (`AnalyzedFunction::field_moved_parameters`).
+    pub(crate) current_field_moved_params: std::collections::HashSet<String>,
     pub(crate) current_function_name: Option<String>,
     pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
@@ -662,6 +664,7 @@ impl<'ast> CodeGenerator<'ast> {
             usize_struct_fields: std::collections::HashMap::new(),
             method_return_types: std::collections::HashMap::new(),
             current_function_params: Vec::new(),
+            current_field_moved_params: std::collections::HashSet::new(),
             current_function_name: None,
             current_function_type_bounds: Vec::new(),
             current_function_return_type: None,

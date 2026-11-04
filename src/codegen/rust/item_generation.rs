@@ -722,6 +722,15 @@ impl<'ast> CodeGenerator<'ast> {
                 .parameters
                 .iter()
                 .map(|param| {
+                    // A declared receiver (`&self` / `&mut self`) is the trait's contract (W0016):
+                    // no analysis of impls or defaults overrides it.
+                    if param.name == "self" {
+                        match param.ownership {
+                            OwnershipHint::Ref => return "&self".to_string(),
+                            OwnershipHint::Mut => return "&mut self".to_string(),
+                            _ => {}
+                        }
+                    }
                     // THE WINDJAMMER WAY:
                     // Use the analyzed ownership from the analyzer, which has inferred
                     // the most permissive signature needed based on ALL implementations!
