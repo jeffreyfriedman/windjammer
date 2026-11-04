@@ -4,7 +4,7 @@
 //! A program with no duplicate names pays one empty-set check; its keys are the plain names, as before.
 
 use super::engine::{Import, Interpreter};
-use crate::parser::{Item, Program};
+use crate::parser::Item;
 use std::collections::{HashMap, HashSet};
 
 /// The name a type prints as: the last segment of its key.
@@ -58,10 +58,6 @@ impl Interpreter {
         let (names, decls) = duplicate_declarations(files);
         self.dup_types.extend(names);
         self.dup_decls.extend(decls);
-    }
-
-    pub(crate) fn note_duplicate_types_of(&mut self, program: &Program<'_>) {
-        self.note_duplicate_types(&[(String::new(), &program.items)]);
     }
 
     /// `a::b` for module `m` (empty for the program root).
