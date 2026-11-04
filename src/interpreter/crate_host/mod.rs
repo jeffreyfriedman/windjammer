@@ -1,0 +1,247 @@
+//! Calls into Rust crate dependencies from the interpreter (ADR-0031).
+//!
+//! `cli::crate_host_build` builds, once per set of surfaced crates, a small host binary (`gen.rs`) and hands its
+//! path and signature table to the run; this module spawns it on the first crate call and keeps it for the run
+//! (`process.rs`). A call `strsim::levenshtein(a, b)` is, in order: the capability gate (the surface's `@pure` /
+//! `@uses(..)`, otherwise `ffi(<crate>)`, before anything is sent), the effect port (record logs the call and its
+//! result; replay answers from the log and never starts the host; simulate runs `@pure` functions and answers
+//! the others from an explicit stub), then the call itself: arguments encoded by their surface types (`wire.rs`),
+//! one request, one reply, `&mut` arguments written back. A crate panic is an interpreter panic naming the
+//! function; a host that dies mid-call is an error naming the function and how it died.
+
+pub mod gen;
+pub mod process;
+pub mod sig;
+pub mod stub;
+pub mod wire;
+
+use super::effect_port::Kind;
+use super::engine::Interpreter;
+use super::error::{panic_ctl, semantic, Ctl, ErrorKind, RuntimeError};
+use super::value::Value;
+use crate::ir::effect_facts::EffectKind;
+use crate::parser::{Expression, UnaryOp};
+use serde_json::Value as Json;
+use sig::{CrateFnSig, Pass, WireTy};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::rc::Rc;
+
+type R = Result<Value, Ctl>;
+
+/// The crate functions one host serves, and the host itself (not started until the first call).
+pub struct CrateHost {
+    sigs: HashMap<String, CrateFnSig>,
+    crates: Vec<String>,
+    process: RefCell<process::HostProcess>,
+    /// `--simulate` answers for functions that are not `@pure`: `crate::fn` -> result (effect-log JSON).
+    stubs: HashMap<String, Json>,
+}
+
+impl CrateHost {
+    pub fn new(exe: PathBuf, key: String, sigs: Vec<CrateFnSig>) -> CrateHost {
+        let mut crates: Vec<String> = sigs.iter().map(|s| s.krate.clone()).collect();
+        crates.sort();
+        crates.dedup();
+        CrateHost {
+            sigs: sigs.into_iter().map(|s| (s.path(), s)).collect(),
+            crates,
+            process: RefCell::new(process::HostProcess::new(exe, key)),
+            stubs: HashMap::new(),
+        }
+    }
+
+    /// Simulation stubs (`fixtures/rust_stubs.json`: `{ "crate::fn": <result> }`).
+    pub fn with_stubs(mut self, stubs: HashMap<String, Json>) -> CrateHost {
+        self.stubs = stubs;
+        self
+    }
+
+    pub fn serves(&self, path: &str) -> bool {
+        self.sigs.contains_key(path)
+    }
+
+    pub fn serves_crate(&self, name: &str) -> bool {
+        self.crates.iter().any(|c| c == name)
+    }
+
+    /// Calls sent to the host process so far (replayed calls are not sent).
+    pub fn calls_sent(&self) -> u64 {
+        self.process.borrow().calls
+    }
+}
+
+fn fail(kind: ErrorKind, msg: String) -> Ctl {
+    Ctl::Err(Box::new(RuntimeError::new(kind, msg)))
+}
+
+impl Interpreter {
+    /// Attach the crate host before loading the program, so the preflight knows which crate calls run here.
+    pub fn attach_crate_host(&mut self, h: CrateHost) {
+        self.crate_host = Some(Rc::new(h));
+    }
+
+    /// Is `path` (`strsim::levenshtein`) a crate function the attached host serves?
+    pub(crate) fn is_crate_fn(&self, path: &str) -> bool {
+        self.crate_host.as_ref().is_some_and(|h| h.serves(path))
+    }
+
+    /// Arguments of a crate call: a `&mut` parameter gets the place of its argument (written as `v` or `&mut v`,
+    /// as the compiled build borrows it), every other argument its value.
+    pub(crate) fn eval_crate_args(&mut self, path: &str, arguments: &'static [(Option<String>, &'static Expression<'static>)]) -> Result<Vec<Value>, Ctl> {
+        let host = self.crate_host.clone().expect("eval_crate_args without a crate host");
+        let sig = &host.sigs[path];
+        let mut out = Vec::with_capacity(arguments.len());
+        for (i, (_, a)) in arguments.iter().enumerate() {
+            let inner = match a {
+                Expression::Unary { op: UnaryOp::MutRef, operand, .. } => *operand,
+                _ => *a,
+            };
+            if sig.params.get(i).is_some_and(|(_, p, _)| *p == Pass::BorrowMut) {
+                if let Some(p) = self.resolve_place(inner)? {
+                    out.push(Value::Ref(Box::new(p)));
+                    continue;
+                }
+            }
+            out.push(self.eval(inner)?);
+        }
+        Ok(out)
+    }
+
+    /// A call into a surfaced crate function: gate, port, host.
+    pub(crate) fn call_crate_fn(&mut self, path: &str, args: Vec<Value>) -> R {
+        let host = self.crate_host.clone().expect("call_crate_fn without a crate host");
+        let sig = host.sigs[path].clone();
+        match &sig.effects {
+            None => self.cap_decide(&EffectKind::Ffi, Some(&sig.krate))?,
+            Some(ks) => {
+                for k in ks {
+                    self.cap_decide(k, None)?;
+                }
+            }
+        }
+        if self.limits.is_some() && sig.effects.as_ref().is_none_or(|k| !k.is_empty()) {
+            self.limit_call()?;
+        }
+        if args.len() != sig.params.len() {
+            return Err(semantic(format!("`{path}` takes {} arguments, got {}", sig.params.len(), args.len())));
+        }
+        let mut places = Vec::new();
+        let mut plain = Vec::with_capacity(args.len());
+        for (a, (_, pass, _)) in args.into_iter().zip(&sig.params) {
+            if *pass == Pass::BorrowMut {
+                places.push(a.clone());
+            }
+            plain.push(super::place::deref_value(a)?);
+        }
+        let result = match self.port_kind() {
+            None => self.crate_call_live(&host, &sig, &plain)?,
+            Some(Kind::Simulate) => self.crate_call_simulated(&host, &sig, &plain)?,
+            Some(_) => {
+                let (h, s) = (host.clone(), sig.clone());
+                let mut live = |it: &mut Interpreter, a: &[Value]| it.crate_call_live(&h, &s, a);
+                self.port_call_with("ffi", path, &plain, &mut live)?
+            }
+        };
+        self.crate_copy_out(&sig, &places, result)
+    }
+
+    /// Split `(result, &mut values..)` and write the values back to the argument places.
+    fn crate_copy_out(&mut self, sig: &CrateFnSig, places: &[Value], result: Value) -> R {
+        if places.is_empty() {
+            return Ok(result);
+        }
+        let items = result.items().to_vec();
+        let Some((ret, outs)) = items.split_first() else {
+            return Err(semantic(format!("`{}`: the crate host did not return its `&mut` arguments", sig.path())));
+        };
+        for (place, v) in places.iter().zip(outs) {
+            match place {
+                Value::Ref(p) => p.write(v.clone())?,
+                other => return Err(semantic(format!("`{}`: a `&mut` argument must be a place, found {}", sig.path(), other.type_name()))),
+            }
+        }
+        Ok(ret.clone())
+    }
+
+    /// The call itself. With `&mut` parameters the value is the tuple `(result, mut_args..)`.
+    fn crate_call_live(&mut self, host: &CrateHost, sig: &CrateFnSig, args: &[Value]) -> R {
+        let path = sig.path();
+        let mut req = Vec::new();
+        wire::encode(&Value::str(path.clone()), &WireTy::Str, &mut req).map_err(|m| semantic(m))?;
+        for (a, (name, _, t)) in args.iter().zip(&sig.params) {
+            wire::encode(a, t, &mut req).map_err(|m| semantic(format!("`{path}`: argument `{name}`: {m}")))?;
+        }
+        // the crate writes to the same stdout as the program: keep the order the compiled program has
+        self.flush();
+        let reply = host.process.borrow_mut().call(&req);
+        let body = match reply {
+            Ok(process::Reply::Values(b)) => b,
+            Ok(process::Reply::Panic(m)) => return Err(panic_ctl(format!("Rust crate function `{path}` {m}"))),
+            Ok(process::Reply::Rejected(m)) => return Err(semantic(format!("the crate host rejected `{path}`: {m}"))),
+            Err(process::Failure::Start(m)) => return Err(fail(ErrorKind::Semantic, m)),
+            Err(process::Failure::Died(status)) => return Err(died(&path, status)),
+        };
+        let mut inp = &body[..];
+        let n = u32::from_le_bytes(inp.get(..4).and_then(|b| b.try_into().ok()).ok_or_else(|| semantic(format!("`{path}`: empty reply")))?);
+        inp = &inp[4..];
+        let ret = wire::decode(&mut inp, &sig.ret).map_err(|m| semantic(format!("`{path}`: {m}")))?;
+        let muts: Vec<&WireTy> = sig.params.iter().filter(|(_, p, _)| *p == Pass::BorrowMut).map(|(_, _, t)| t).collect();
+        if n as usize != 1 + muts.len() {
+            return Err(semantic(format!("`{path}`: the crate host sent {n} values, expected {}", 1 + muts.len())));
+        }
+        if muts.is_empty() {
+            return Ok(ret);
+        }
+        let mut all = vec![ret];
+        for t in muts {
+            all.push(wire::decode(&mut inp, t).map_err(|m| semantic(format!("`{path}`: {m}")))?);
+        }
+        Ok(Value::tuple(all))
+    }
+
+    /// `--simulate`: a `@pure` function is a function of its arguments and runs; anything else needs a stub.
+    fn crate_call_simulated(&mut self, host: &CrateHost, sig: &CrateFnSig, args: &[Value]) -> R {
+        if sig.effects.as_ref().is_some_and(|k| k.is_empty()) {
+            return self.crate_call_live(host, sig, args);
+        }
+        let path = sig.path();
+        match host.stubs.get(&path) {
+            Some(j) => stub::value(j, &sig.ret).map_err(|m| semantic(format!("fixtures/rust_stubs.json, `{path}`: {m}"))),
+            None => Err(fail(
+                ErrorKind::Unsupported,
+                format!(
+                    "`{path}` calls into Rust crate `{}` (effect ffi({})), which the simulated world does not run: declare it `@pure` in its surface if it only computes from its arguments, or give its result in fixtures/rust_stubs.json (`{{ \"{path}\": ... }}`)",
+                    sig.krate, sig.krate
+                ),
+            )),
+        }
+    }
+}
+
+fn died(path: &str, status: Option<std::process::ExitStatus>) -> Ctl {
+    let how = match status {
+        Some(s) if s.code().is_some() => {
+            // the crate ended the process (`std::process::exit`): the compiled program would exit with that code
+            return fail(ErrorKind::Exit(s.code().unwrap_or(1)), String::new());
+        }
+        Some(s) => signal_text(&s),
+        None => "for an unknown reason".to_string(),
+    };
+    fail(ErrorKind::Panic, format!("the Rust crate host died during `{path}` ({how})"))
+}
+
+#[cfg(unix)]
+fn signal_text(s: &std::process::ExitStatus) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    match s.signal() {
+        Some(n) => format!("killed by signal {n}"),
+        None => s.to_string(),
+    }
+}
+
+#[cfg(not(unix))]
+fn signal_text(s: &std::process::ExitStatus) -> String {
+    s.to_string()
+}

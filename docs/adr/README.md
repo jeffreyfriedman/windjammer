@@ -40,6 +40,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0028](0028-usize-class-in-the-numeric-solver.md) | An index class (`usize`) in the numeric solver | Accepted |
 | [0029](0029-int-at-the-surface.md) | One type owner for widths; `usize` stays a language type | Proposed |
 | [0030](0030-interpreter-rejects-what-rustc-rejects.md) | The interpreter refuses what the compiled build refuses, from the generated Rust | Proposed |
+| [0031](0031-interpreter-crate-host.md) | The interpreter calls Rust crates through a cached crate host process | Proposed |
 <!-- wj:end -->
 
 ## Template

@@ -239,18 +239,25 @@ fn explain_effects_lists_the_crate() {
 // ---- interpreter ----
 
 #[test]
-fn interpreter_names_the_crate_call_and_exits_2() {
+fn interpreter_runs_surfaced_crate_calls() {
+    // ADR-0031: the crate host serves surfaced functions (was: preflight `deps.rust_crate`, exit 2)
     let p = Project::new("", MAIN, Some(SURFACE));
+    let o = p.wj(&["run", "--interpret"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(out.contains("distance 3") && out.contains("jaro 0.944"), "{}", text(&o));
+}
+
+#[test]
+fn interpreter_names_a_crate_call_it_cannot_carry_and_exits_2() {
+    // a surface type the crate host cannot carry keeps the preflight report, naming the call
+    let surface = "pub fn levenshtein(a: string, b: string) -> usize\npub fn tally(m: HashMap<string, int>) -> usize\n";
+    let main = "use strsim\nuse std::collections::HashMap\n\nfn main() {\n    let m: HashMap<string, int> = HashMap::new()\n    println(\"${strsim::tally(m)}\")\n}\n";
+    let p = Project::new("", main, Some(surface));
     let o = p.wj(&["run", "--interpret"]);
     assert_eq!(o.status.code(), Some(2), "{}", text(&o));
     let t = text(&o);
-    assert!(
-        t.contains("not interpreted yet: call into Rust crate dependency `strsim` (`strsim::levenshtein`) [deps.rust_crate]"),
-        "{t}"
-    );
-    // the preflight reports the resolver's call location, which today is where the call's statement ends (the
-    // start of the next statement, line 7): a known resolver-location gap shared by every preflight message
-    assert!(t.contains("main.wj:6:") || t.contains("main.wj:7:"), "{t}");
+    assert!(t.contains("not interpreted yet: call into Rust crate dependency `strsim` (`strsim::tally`) [deps.rust_crate]"), "{t}");
 }
 
 // ---- wj eject ----

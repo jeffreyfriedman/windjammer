@@ -49,7 +49,14 @@ module in it is loaded, like the compiled build); a loose script loads the modul
 **Dependencies.** `wj.toml` `[dependencies]` with `path` or `git` (ADR-0010 option A) are resolved by `package::graph`: a
 Windjammer package (it has `wj.toml` or `.wj` sources) is loaded as source and mounted as a crate (`use textkit::banner`); git
 dependencies are cloned once into the wj cache and pinned in `wj.lock` (written on first resolution; later upstream commits are not
-picked up until the lock entry is removed). Rust-crate dependencies are reached through `extern fn` and the host bridge.
+picked up until the lock entry is removed). Rust-crate dependencies with a signature surface (ADR-0026) are called through the crate host (below); hand-written Rust is reached through `extern fn` and the host bridge.
+
+**Rust crates via the crate host (ADR-0031).** A call such as `strsim::levenshtein(a, b)` into a `wj.toml` crate whose surface declares
+the function runs interpreted: the first run builds a small host binary for the crates the program names (cached by crate versions
+and surfaces, one shared cargo target directory), later runs spawn it on the first crate call and speak to it over a pipe. Integers,
+floats, `bool`, `char`, `string`, `Vec`, `Option`, `Result`, tuples and `&`/`&mut` of them cross; a crate panic is an interpreter panic
+naming the function; `--record`/`--replay` log crate calls (replay never starts the host); `--simulate` runs `@pure` functions and
+answers the others from `fixtures/rust_stubs.json`; the capability gate (`ffi = ["<crate>"]`) runs before the call.
 
 **Rust code via the host bridge (ADR-0023).** When a project declares `extern fn`s and has hand-written Rust in `src/` or next to `wj.toml`
 (`ffi.rs`; the compiled build links it when the `extern fn`s are declared in a library module such as `native.wj`, not in `main.wj`), `wj run` compiles that Rust once into a cached dynamic library with one

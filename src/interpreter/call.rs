@@ -234,7 +234,7 @@ impl Interpreter {
                 if let Some(v) = self.builtins.constant(name) {
                     return Ok(v);
                 }
-                if self.builtins.has_function(name) {
+                if self.builtins.has_function(name) || self.is_crate_fn(name) {
                     return Ok(Value::Func(Rc::new(Callable::Path(Rc::from(name)))));
                 }
                 if let Some(p) = self.std_import_member(name, false) {
@@ -430,6 +430,10 @@ impl Interpreter {
                 self.make_tuple_struct(&n, args)
             }
             Some(Resolved::Builtin(p)) => {
+                if self.crate_host.is_some() && self.is_crate_fn(&p) {
+                    let args = self.eval_crate_args(&p, arguments)?;
+                    return self.call_crate_fn(&p, args); // ADR-0031
+                }
                 let args = self.eval_args(arguments, None, false)?;
                 if p.ends_with("json::parse_string") && self.type_hint.is_none() {
                     self.type_hint = targs.first().cloned().or(expected);
@@ -442,6 +446,10 @@ impl Interpreter {
                 self.call_value(&f, args)
             }
             None => {
+                if self.crate_host.is_some() && self.is_crate_fn(name) {
+                    let args = self.eval_crate_args(name, arguments)?;
+                    return self.call_crate_fn(name, args); // `strsim::levenshtein(..)` with no `use`
+                }
                 let args = self.eval_args(arguments, None, false)?;
                 // `Trait::method(x, ..)` / `Type::method(x)` on builtin types: dispatch on first argument
                 if segs.len() >= 2 {
@@ -511,6 +519,9 @@ impl Interpreter {
     }
 
     pub(crate) fn call_builtin_fn(&mut self, path: &str, args: Vec<Value>) -> R {
+        if self.crate_host.is_some() && self.is_crate_fn(path) {
+            return self.call_crate_fn(path, args); // ADR-0031: a surfaced Rust crate function
+        }
         if self.caps.is_some() {
             self.cap_gate(path, &args)?;
         }
