@@ -25,8 +25,8 @@ its ledger line stale: delete the line.
 an expected output that the oracle compares, and how many of those ran in all three modes). 284 spec cases in 27 areas;
 219 are comparable (the others check parse errors, `wj check` results, effect reports, simulations and replays, which
 have no stdout to compare across engines and stay with `tests/spec_conformance_test.rs`); all 219 ran in all three
-modes (100%). Walker and resolved engine agree with the spec on all 219. The compiled backend builds and agrees on 181;
-38 do not build (listed below, one ledger line each).
+modes (100%). Walker and resolved engine agree with the spec on all 219. The compiled backend builds and agrees on 185;
+34 do not build (listed below, one ledger line each).
 
 | Area | Cases | Compared | Compiled builds |
 |---|---|---|---|
@@ -46,13 +46,13 @@ modes (100%). Walker and resolved engine agree with the spec on all 219. The com
 | items | 11 | 10 | 7 |
 | lexical | 16 | 15 | 15 |
 | modules | 5 | 4 | 4 |
-| numeric | 27 | 26 | 18 |
+| numeric | 27 | 26 | 21 |
 | optionals | 6 | 5 | 3 |
 | ownership | 11 | 11 | 11 |
 | patterns | 10 | 10 | 9 |
 | pipe | 7 | 6 | 6 |
 | statements | 11 | 10 | 9 |
-| stdlib | 5 | 5 | 2 |
+| stdlib | 5 | 5 | 3 |
 | strings | 17 | 17 | 16 |
 | trailing-blocks | 4 | 3 | 3 |
 | traits | 9 | 9 | 7 |
@@ -65,25 +65,28 @@ operations, format specifiers, Debug and pretty-Debug output, evaluation order, 
 shadowing, assignment, fields, early return, loops, `Option::take`, collections, closures). Of the 23 added cases 19
 agree in all three modes and four (`NUM-025`, `NUM-026`, `EXEC-012`, `STR-017`) expose compiled-backend build failures.
 
+## Closed since the first record
+
+After the typed integer and float core surface landed (`wt/c4-optc`), `SPEC-NUM-001` (negated minimum literal),
+`SPEC-NUM-025` and `SPEC-NUM-026` (numeric methods on literal receivers, `min`/`max`/`clamp`, `rotate_left`) and
+`SPEC-STD-005` build and agree compiled; their ledger lines are gone (38 -> 34). `SPEC-NUM-017` now fails at the class-B
+overflow lint instead of the literal width.
+
 ## Compiled backend does not build these spec cases
 
 ### A. Integer literal and method-argument widths (rustc sees `i32` where the spec type is `int`)
 
 | Case | rustc says |
 |---|---|
-| `numeric/SPEC-NUM-001` | `let small = -9223372036854775807 - 1` is emitted as `-9223372036854775808_i32`: literal out of range for `i32` |
-| `numeric/SPEC-NUM-017` | the same family: a negated minimum literal typed `i32` |
-| `numeric/SPEC-NUM-025` | a numeric method on a literal receiver (`(-7).abs()`, `2.pow(10)`, `7.div_euclid(-2)`): E0689 ambiguous numeric type; `pow` passes an `i64` exponent where rustc wants `u32` |
-| `numeric/SPEC-NUM-026` | `10.min(3)` is emitted as `10_i64.min(3_i32)`; `rotate_left(3)` as `3_usize` (rustc wants `u32`); `ten.min(three)` as `ten.min((three as i32))` |
 | `collections/SPEC-COLL-004` | `unique_by(\|x\| x % 2)`: `i32` element against `i64` literal |
-| `stdlib/SPEC-STD-003`, `stdlib/SPEC-STD-005` | `i32` against `i64` in arithmetic; `abs()` on an ambiguous literal |
+| `stdlib/SPEC-STD-003` | `i32` against `i64` in arithmetic |
 | `statements/SPEC-STMT-009`, `items/SPEC-ITEM-006`, `items/SPEC-ITEM-011`, `expressions/SPEC-EXPR-011` | `i32` / `i64` mixed in arithmetic or arguments |
 | `intrinsics/SPEC-INTR-007` | `usize` expected, `i32` found |
 | `grammar/SPEC-GRAM-006` | `Vec<i64>` collected from an iterator of `usize` |
 
 ### B. A statically known panic is a compile error in rustc
 
-`numeric/SPEC-NUM-002` (`i64::MAX + 1`), `SPEC-NUM-003` (`u8::MAX + 1`), `SPEC-NUM-004` (`3u32 - 5`), `SPEC-NUM-006`
+`numeric/SPEC-NUM-002` (`i64::MAX + 1`), `SPEC-NUM-017` (`-m` of the minimum value), `SPEC-NUM-003` (`u8::MAX + 1`), `SPEC-NUM-004` (`3u32 - 5`), `SPEC-NUM-006`
 (`10 % 0`): rustc's deny-by-default `arithmetic_overflow` and `unconditional_panic` lints reject the generated
 program ("this arithmetic operation will overflow"). The spec says these panic at run time with exit status 101.
 The new `SPEC-NUM-021` and `SPEC-NUM-023` hide the operand behind a `parse` call and pass in all three modes, which
