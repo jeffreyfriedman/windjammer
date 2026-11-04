@@ -6,6 +6,9 @@
 //! * Go: `std/runtime/go/wj_std.go` (run with go, when installed).
 //! A port that disagrees on any case fails here, so Go and JS cannot drift from the Rust model.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use windjammer::ir::effect_facts::{EffectKind, Grant};
@@ -64,7 +67,7 @@ fn javascript_runtime_agrees_with_the_vectors() {
         eprintln!("node not installed: skipping the JavaScript vectors");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("wj_vec_js_{}", std::process::id()));
+    let dir = Scratch::new("vec_js");
     std::fs::create_dir_all(&dir).unwrap();
     for f in ["wj_core.mjs", "wj_std.mjs"] {
         std::fs::copy(root().join("std/runtime/js").join(f), dir.join(f)).unwrap();
@@ -98,7 +101,7 @@ fn go_runtime_agrees_with_the_vectors() {
         eprintln!("go not installed: skipping the Go vectors");
         return;
     }
-    let dir = std::env::temp_dir().join(format!("wj_vec_go_{}", std::process::id()));
+    let dir = Scratch::new("vec_go");
     std::fs::create_dir_all(&dir).unwrap();
     for f in ["wj_core.go", "wj_std.go"] {
         std::fs::copy(root().join("std/runtime/go").join(f), dir.join(f)).unwrap();

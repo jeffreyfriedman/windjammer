@@ -6,6 +6,9 @@
 #[path = "common/conformance/mod.rs"]
 mod conformance;
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use conformance::backends::{compile_and_run, Backend, Outcome};
 use std::path::{Path, PathBuf};
 
@@ -13,11 +16,8 @@ fn wj() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
-fn work(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("wj-arena-be-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn work(tag: &str) -> Scratch {
+    Scratch::new(&format!("arena-be-{tag}"))
 }
 
 fn expected(src: &str) -> Vec<String> {

@@ -68,6 +68,10 @@ ARMS = {
     "L": {"name": "interpreted-first+sheet", "loop": "interpreted-first", "pack_file": "pilot4/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
     "M": {"name": "interpreted+final-build+sheet", "loop": "interpreted-plus-build", "pack_file": "pilot4/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
     "N": {"name": "interpreted+final-build+v2", "loop": "interpreted-plus-build", "pack_file": "pilot4/sheet_v2.md", "bash": "core+docs", "lang": "wj"},
+    # pilot 5: new task set, the adopted sheet minus its loop bullet; loop from the prompt only
+    "U": {"name": "compiled-first", "loop": "compiled-first", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
+    "V": {"name": "interpreted-first", "loop": "interpreted-first", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
+    "W": {"name": "interpreted+final-build", "loop": "interpreted-plus-build", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
     "R": {"name": "rust", "loop": "native-rust", "pack": False, "lang": "rust"},
@@ -92,7 +96,7 @@ def head(lang):
             "in the current directory. The program reads standard input (and command-line arguments / files in the "
             f"current directory when the task says so) and writes to standard output exactly as specified; it is graded "
             f"on hidden tests with {grader}. Create and edit files with the Write/Edit tools; the only shell "
-            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`). "
+            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`; shell variables such as `$?` are not available, so a command that fails ends its output with `[exit N]`). "
             "Stop when you believe it is correct for all inputs.\n\n")
 
 

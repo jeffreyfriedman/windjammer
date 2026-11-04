@@ -13,12 +13,12 @@ pub fn new(value: i32) -> Node {
 #[inline]
 pub fn direct_access(mut self, index: usize) -> Node {
         let children = self.children.unwrap();
-        (&children[index]).clone()
+        children[index].clone()
 }
 #[inline]
 pub fn through_self(mut self, index: usize) -> Node {
         let children_ref = self.children.unwrap();
-        (&children_ref[index]).clone()
+        children_ref[index].clone()
 }
 }
 

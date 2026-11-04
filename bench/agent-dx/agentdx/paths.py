@@ -2,7 +2,7 @@
 import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TASKS = os.path.join(ROOT, "tasks")
+TASKS = os.environ.get("AGENTDX_TASKS_DIR") or os.path.join(ROOT, "tasks")   # second task set: AGENTDX_TASKS_DIR=<repo>/bench/agent-dx/tasks_set2
 SOLUTIONS = os.path.join(ROOT, "solutions")
 TRANSCRIPTS = os.path.join(ROOT, "transcripts")
 RESULTS = os.path.join(ROOT, "results")

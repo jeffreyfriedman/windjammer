@@ -1,0 +1,70 @@
+use std::fs
+use std::process
+
+fn fail() {
+    println("error")
+    process::exit(1)
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let ls: Vec<string> = text.lines().collect()
+    if ls.len() == 0 { fail() }
+    let hp: Vec<string> = ls[0].split(" ").collect()
+    if hp.len() != 2 { fail() }
+    let r = hp[0].parse::<int>().unwrap_or(0)
+    let c = hp[1].parse::<int>().unwrap_or(0)
+    if r < 1 || r > 20 || c < 1 || c > 20 { fail() }
+    if (ls.len() as int) < r + 1 { fail() }
+    let mut m: Vec<Vec<int>> = []
+    let mut i = 1
+    while i <= r {
+        let parts: Vec<string> = ls[i as usize].split(" ").collect()
+        if (parts.len() as int) != c { fail() }
+        let mut row: Vec<int> = []
+        for p in parts {
+            match p.parse::<int>() {
+                Ok(v) => { row.push(v) }
+                Err(_) => { fail() }
+            }
+        }
+        m.push(row)
+        i += 1
+    }
+    let mut out: Vec<string> = []
+    let mut top = 0
+    let mut bot = r - 1
+    let mut lef = 0
+    let mut rig = c - 1
+    while top <= bot && lef <= rig {
+        let mut j = lef
+        while j <= rig {
+            out.push("${m[top as usize][j as usize]}")
+            j += 1
+        }
+        top += 1
+        let mut k = top
+        while k <= bot {
+            out.push("${m[k as usize][rig as usize]}")
+            k += 1
+        }
+        rig -= 1
+        if top <= bot {
+            let mut j2 = rig
+            while j2 >= lef {
+                out.push("${m[bot as usize][j2 as usize]}")
+                j2 -= 1
+            }
+            bot -= 1
+        }
+        if lef <= rig {
+            let mut k2 = bot
+            while k2 >= top {
+                out.push("${m[k2 as usize][lef as usize]}")
+                k2 -= 1
+            }
+            lef += 1
+        }
+    }
+    println("${out.join(" ")}")
+}

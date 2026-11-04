@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-01-01 2024-03-01\n2000-02-28 2000-03-01\n",
+  "stdout": "60 Monday\n2 Monday\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2023-12-31 2023-12-31\nnope\n",
+  "stdout": "0 Sunday\ninvalid\n"
+ }
+]
