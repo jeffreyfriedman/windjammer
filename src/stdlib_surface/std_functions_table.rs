@@ -25,7 +25,7 @@ pub static STD_FUNCTIONS: &[(&str, &[&str])] = &[
     ("mcp", &["call", "get_bool", "get_float", "get_int", "get_ints", "get_items", "get_raw", "get_string", "get_strings", "quote"]),
     ("mime", &["from_extension", "from_filename", "from_path", "is_application", "is_audio", "is_image", "is_text", "is_video"]),
     ("net", &["download", "get", "get_async", "post", "post_async", "upload"]),
-    ("path", &["as_os_str", "canonicalize", "components", "current_dir", "exists", "extension", "file_name", "file_name_path", "file_stem", "fn", "from_str", "glob_match", "has_extension", "is_absolute", "is_dir", "is_file", "is_relative", "join", "join_path", "new", "parent", "strip_prefix", "to_string", "to_string_lossy"]),
+    ("path", &["as_os_str", "canonicalize", "components", "current_dir", "exists", "extension", "file_name", "file_name_path", "file_stem", "from_str", "glob_match", "has_extension", "is_absolute", "is_dir", "is_file", "is_relative", "join", "join_path", "new", "parent", "strip_prefix", "to_string", "to_string_lossy"]),
     ("process", &["execute", "exit", "pid", "run", "run_inherit", "run_with_args", "run_with_output", "spawn"]),
     ("random", &["alphanumeric", "ascii", "bool", "bool_with_probability", "bytes", "choice", "float", "float_range", "int_range", "random", "range", "range_inclusive", "sample", "seeded", "shuffle"]),
     ("regex", &["compile", "compile_case_insensitive", "compile_with_flags", "escape", "find", "find_all", "find_all_compiled", "find_compiled", "is_match", "is_match_compiled", "new", "replace", "replace_all", "replace_all_compiled", "replace_compiled", "split"]),
