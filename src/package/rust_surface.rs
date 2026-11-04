@@ -57,7 +57,7 @@ impl RustCrates {
         self.surfaces.iter().find(|s| s.crate_name == crate_name)
     }
 
-    pub fn is_rust_crate(&self, name: &str) -> bool {
+    pub(crate) fn is_rust_crate(&self, name: &str) -> bool {
         self.names.iter().any(|n| n == name)
     }
 
