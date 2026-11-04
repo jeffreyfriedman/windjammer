@@ -415,7 +415,7 @@ reverted on the spot and the trace is widened to the drift and ecosystem corpora
 
 Deleted: the solver's hand lists `std_sequence_index_method` (which methods take an index) and
 `receiver_is_std_collection` (which receivers have a `usize` length), and the registry's name-based signature guess
-for core-type methods. Added: `std/rust_core.wji` (124 method entries including the float methods), `src/typing/`, the
+for core-type methods. Added: `std/rust_core.wji` (158 method entries including the integer and float methods), `src/typing/`, the
 receiver typer in `ir/constraint_gen/numeric.rs`.
 
 `D-WIDTH-OWNERS` did not move: it compares the solver's verdict for named locals with the emitted width, and the
@@ -426,6 +426,17 @@ fall, and the hand lists are gone.
 Root cause of the regression found by compiling a large program (`for d in -1..1` printed `-1_i64` next to an
 `i32` constant): the lexical-scoping step of C4 holds every class that names an unbound name, and a module constant
 was unbound to the solver; the legacy path then took over. Module constants now carry their declared type.
+
+**C1, numeric methods.** The surface also declares `Integer<T>` and `Float<T>` (for every integer and float type):
+`pow`, `checked_pow`, `wrapping_pow` and `saturating_pow` take a `u32` exponent, `rotate_*` and the `*_shl` / `*_shr`
+methods a `u32` amount, `powi` an `i32`; `min`, `max`, `clamp`, `abs`, `signum`, `div_euclid`, the `checked_*`,
+`wrapping_*` and `saturating_*` operations take and return the receiver's own type `T`. A numeric-method call joins `T`
+arguments and results to the receiver's class, also when the receiver is a literal (`10.min(3)` is one class); a literal
+receiver's class is published even at its default, since rustc cannot infer it (E0689). A folded literal expression
+(`-9223372036854775807 - 1`) carries the NUM-DEFAULT-INT verdict at its own position. Of the 13 spec cases in class A
+of `docs/drift/spec-findings.md`, `SPEC-NUM-001`, `SPEC-NUM-025`, `SPEC-NUM-026` and `SPEC-STD-005` now build and print
+their expected output; `SPEC-NUM-017` builds its widths and is left with the class-B overflow lint. The other eight
+need closure parameter types, collection-literal element types and type aliases (C2). Golden rustc rejects fall 90 -> 88 (`basics_arithmetic`, `numbers_min_max_abs`).
 
 ### 7.2 Floats: a float class, like the index class
 
@@ -447,3 +458,8 @@ impl (`p * 0.5` with `impl Mul<f32> for P`) needs the operator's declared `rhs` 
 `f32` payload (`Points(vec![1.5, 2.0])`) and float tuples destructured from a list need element types of collection
 literals (C2: the checker types collection literals bidirectionally). The legacy float collector
 (`type_inference/float_inference/`) is deleted in C3 once no float class it decides is left unpublished.
+
+Open, ratcheted: a float literal passed to a Rust crate function whose `rust/<crate>.wji` surface declares an `f32`
+parameter (`shapes::half(3.0)`) is still printed `3.0_f64`. The crate surface reaches codegen as crate metadata, but the
+registry the IR pipeline solves with in a project build does not hold those signatures (an inline module with the same
+signature is typed correctly). The fix is to give the IR the crate-wide registry, as C2 plans for every declared signature.

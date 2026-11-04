@@ -67,16 +67,19 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         let (generics, method_generics, params, ret) = surface.declared(ty, method).unwrap();
         // `copied` / `cloned` turn an `Option<&T>` into an `Option<T>`: the receiver holds references.
         let by_ref = ty == "Option" && matches!(method.as_str(), "copied" | "cloned");
-        let recv = receiver(ty, &generics, by_ref);
+        // `Integer<T>` and `Float<T>` are the numeric types themselves (checked on `i64` and `f64`).
+        let recv = match ty.as_str() {
+            "Integer" => "i64".to_string(),
+            "Float" => "f64".to_string(),
+            _ => receiver(ty, &generics, by_ref),
+        };
         let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
         let turbofish = if method_generics.is_empty() { String::new() } else { "::<i64>".to_string() };
         // The result: the declared type, except a method generic's error type is rustc's (`F::Err`).
         let ret_ty = ret.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into());
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
-        src.push_str(&format!(
-            "fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}); }}\n",
-            args.join(", ")
-        ));
+        let line = format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}); }}\n", args.join(", "));
+        src.push_str(&if ty == "Float" { line.replace("i64", "f64") } else { line });
     }
     let dir = tempfile::TempDir::new().unwrap();
     let file = dir.path().join("surface.rs");

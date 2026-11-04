@@ -110,6 +110,12 @@ impl<'ast> CodeGenerator<'ast> {
         self.solver_operand_width(left).is_some_and(|l| self.solver_operand_width(right) == Some(l))
     }
 
+    /// NUM-STD-SIG: a numeric method whose receiver and argument widths the solver fixed (`u.rotate_left(3)` takes a
+    /// `u32`, `ten.min(three)` is one class) needs no formal-driven cast at the argument.
+    pub(in crate::codegen::rust) fn solver_typed_numeric_call(&self, receiver: Option<&Expression<'ast>>, arg: &Expression<'ast>) -> bool {
+        receiver.is_some_and(|r| self.solver_operand_width(r).is_some()) && self.solver_operand_width(arg).is_some()
+    }
+
     /// Width of an integer operand as the solver fixed it, when every part of it has a fact:
     /// literals, published locals, `len()`-like index sources that stay `usize`, casts, and
     /// arithmetic over operands of one width. `None` hands the decision to the legacy path.

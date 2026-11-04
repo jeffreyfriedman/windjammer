@@ -1,0 +1,10 @@
+fn main() {
+    let ten: int = 10
+    let three: int = 3
+    let neg: int = -1
+    let zero: int = 0
+    println("${ten.min(three)} ${ten.max(three)} ${neg.clamp(zero, 5)} ${ten.clamp(zero, 5)}")
+    println("${10.min(3)} ${10.max(3)} ${(-1).clamp(0, 5)} ${9.clamp(0, 5)}")
+    let u: u8 = 0b1011_0001
+    println("${u.rotate_left(3)} ${u.rotate_right(3)} ${u.swap_bytes()}")
+}

@@ -1,0 +1,8 @@
+fn main() {
+    println("${(-7).abs()} ${(-7).signum()} ${2.pow(10)} ${(-2).pow(3)}")
+    println("${(-7).div_euclid(2)} ${(-7).rem_euclid(2)} ${7.div_euclid(-2)} ${7.rem_euclid(-2)}")
+    println("${7.abs_diff(10)} ${10.abs_diff(7)}")
+    let two: int = 2
+    let minus_two: int = -2
+    println("${two.pow(10)} ${minus_two.pow(3)} ${minus_two.pow(2)}")
+}

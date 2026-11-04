@@ -329,9 +329,9 @@ the argument. The solver places these conversions (`IrFunction::usize_conversion
 
 ### NUM-STD-SIG
 **Rule (ADR-0029, option C stage C1).** A method of a Rust core type (`Vec`, `VecDeque`, `HashMap`, `BTreeMap`,
-`HashSet`, `BTreeSet`, `Option`, `Result`, `String`, `f32`, `f64`) has the signature declared in `std/rust_core.wji`,
+`HashSet`, `BTreeSet`, `Option`, `Result`, `String`, every integer and float type) has the signature declared in `std/rust_core.wji`,
 instantiated for the receiver's static type (and a turbofish): `counts.get(k).unwrap_or(0)` on a `HashMap<string, int>`
-is an `int`, `line.parse::<int>().unwrap_or(0)` is an `int`, `x.min(1.0)` on an `f32` takes an `f32`. A `usize`
+is an `int`, `line.parse::<int>().unwrap_or(0)` is an `int`, `x.min(1.0)` on an `f32` takes an `f32`, `2.pow(10)` takes a `u32` exponent and `10.min(3)` is one class (a numeric method's `T` is the receiver's own type, also for a literal receiver). A `usize`
 parameter is an index use and a `usize` result an index source (NUM-USIZE).
 **Status.** Conforms for receivers whose static type is declared (parameters, annotated or typed initializers, fields).
 
