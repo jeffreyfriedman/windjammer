@@ -7,14 +7,14 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | from \ to | analyzer | auto_clone | auto_fix | build_utils | cargo_cache | cargo_integration | cargo_toml | check | cli_args | cli_execution | cli_project_build | codegen | compilation_error_handling | compiler | compiler_config | compiler_database | component_analyzer | config | debug_env | decorator_registry | diagnostics | ejector | embedded_assets | error | error_catalog | error_codes | error_handling | error_mapper | errors | file_compilation_pipeline | file_compiler | formatter | fuzzy_matcher | inference | interpreter | intrinsics | ir | lexer | linter | metadata | module_system | optimizer | output_generation | package | parser | parser_impl | project_paths | reduce | resolve | rust_integration_tests | source_map | stdlib_scanner | stdlib_surface | syntax_highlighter | test_module_gate | test_runner | test_utils | toolchain | type_classification | type_display | type_inference | typing | wjsl |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **agent_index** (tooling) | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | | | | | |
-| **analyzer** (ownership) | | 2 | | | | | | | | | | 28! | | | | | | | 5 | | | | 2 | | | | | | | | | | | | | | 12! | 7 | | 1! | | | | | 125 | | | | | | | 2 | 1 | | | | 1 | | 34 | | 1 | | |
+| **analyzer** (ownership) | | 2 | | | | | | | | | | 28! | | | | | | | 5 | | | | 2 | | | | | | | | | | | | | | 12! | 7 | | 1! | | | | | 127 | | | | | | | 2 | 1 | | | | 1 | | 34 | | 1 | | |
 | **auto_clone** (ownership) | 15 | | | | | | | | | | | 3! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 34 | | | | | | | | | | | | | | 1 | | | | |
 | **auto_clone_tests** (ownership) | 23 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | 27 | | | | | | | | | | | | 1! | | | | | | |
 | **build_utils** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 4 | | | | | | 1 | | | 2 | | | | | 1 | 1 | | | | | | | |
 | **cargo_integration** (driver) | | | | | 2 | | 4 | | | | | | | | 2 | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | 1 | | | | | | | |
 | **cargo_toml** (driver) | | | | | 1 | | | | | | | | | 1 | 5 | | | 7 | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
-| **check** (tooling) | 2 | | | | | | | | | | | 1 | | | | | | | | | 22 | | | | | | | | | | | | 3 | | | 2 | 17 | 6 | 1 | 2 | 3 | | | 9 | 25 | | | | 3 | | 4 | | 2 | | 1 | | | | 3 | | | | |
-| **cli** (driver) | | | 1 | 1 | 24 | | 4 | 11 | | | | 7 | | 3 | 3 | | | 3 | 1 | | 17 | 2 | 4 | | | | | 8 | | | | 1 | | | 11 | 2 | 6 | 4 | 5 | 1 | 8 | | | 9 | 5 | | | 1 | | | 6 | | | | | 1 | | 2 | | | | | 1 |
+| **check** (tooling) | 2 | | | | | | | | | | | 1 | | | | | | | | | 23 | | | | | | | | | | | | 4 | | | 2 | 17 | 6 | 1 | 2 | 3 | | | 9 | 26 | | | | 3 | | 5 | | 3 | | 1 | | | | 3 | | | | |
+| **cli** (driver) | | | 1 | 1 | 25 | | 5 | 11 | | | | 7 | | 3 | 3 | | | 4 | 1 | | 17 | 2 | 4 | | | | | 8 | | | | 1 | | | 16 | 2 | 6 | 4 | 5 | 1 | 8 | | | 15 | 5 | | | 1 | | | 6 | | | | | 1 | | 3 | | | | | 1 |
 | **cli_commands** (driver) | | | | 1 | | 1 | | | 1 | 1 | 3 | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | 1 | | | | | | | 1 | | | | | | | | | | | 1 | | | | | | | |
 | **cli_execution** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | 2 | | | | | | | | | | | | | | | | | | | | | | | | |
 | **cli_output** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | |
@@ -38,11 +38,11 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | **file_compiler** (driver) | 1 | | | | | | | | | | | 1 | 1 | | 3 | | | | | | | | 2 | | | | | | | 1 | | | | | | | 1 | 1 | | | | 1 | | | 1 | | | | | | | | | | | | | | | | | | |
 | **ide_analysis** (tooling) | 1 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | 1 | 1 | 1 | | | | | 4 | | | | | | | | | | | | | | | 1 | | | |
 | **inference** (types) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 6 | | | | | | | | | | | | 1 | | | | | | |
-| **interpreter** (tooling) | 2 | | | | | | | | | | | 1 | | | | | | | | | | | | 2 | | | | | | | | | | | | 3! | 33 | 4 | | | 8 | | | 1 | 122 | | | | 13 | | 14 | | 1 | | 1 | | | | | 1 | | | |
+| **interpreter** (tooling) | 2 | | | | | | | | | | | 1 | | | | | | | | | | | | 2 | | | | | | | | | | | | 3! | 36 | 4 | | | 8 | | | 2 | 124 | | | | 13 | | 14 | | 1 | | 1 | | | | | 2 | | | |
 | **intrinsics** (tooling) | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | | | |
 | **ir** (ir) | 51 | 1 | | | | | | | | | | 51! | | 1! | | | | | | | | | | | | | | | | | | | | | | | | 22 | | | | | | | 88 | | | | 9 | | 5 | | | | | | | | 30 | 3 | 7 | 8 | |
 | **lexer** (syntax) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1! | | | | |
-| **linter** (tooling) | 4 | 1 | | | | | | | | | | | | | | | | | | | | | | 3 | | | | | | | | | | | | 1! | | 4 | | | | | | | 28 | | | | | | 4 | | | | | | | | 1 | | | | |
+| **linter** (tooling) | 4 | 1 | | | | | | | | | | | | | | | | | | | | | | 3 | | | | | | | | | | | | 1! | | 5 | | | | | | | 31 | | | | | | 5 | | | | | | | | 1 | | | | |
 | **metadata** (tooling) | 29 | | | | | | | | | | | 5 | | 5! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 19 | | | | | | | | | | | | | | 2 | | | | |
 | **module_system** (resolve) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | 1 | | | | | | 2 | | | | | | | | |
 | **output_generation** (driver) | 1 | | | | | | 1 | | | | | 4 | | | | | 1 | 1 | | | | | | | | | | | | | 1 | | | 1 | | | 5 | | | 4 | | 2 | | | 1 | | 1 | | | | | | | | | | | | | | | | |
