@@ -60,7 +60,7 @@ does now.
    - e. borrow conflicts, which need lifetimes of references in the generated code. This one may not fit the approach:
      the alternative is item 6.
 6. **Exact fallback (measured, not adopted):** `rustc --emit=metadata` on the generated crate. It is exact for every
-   class, but takes about 1 s or more per program. It may suit `wj check --deep` or a background check, not every run.
+   class, but takes about 1 s or more per program. It may suit a planned deep mode of `wj check` or a background check, not every run.
 
 ## First slice (landed)
 
@@ -87,7 +87,7 @@ does now.
   class cannot remove means that class is dropped. The interpreter then keeps running such programs, and the drift
   ledger keeps them.
 - **Cost:** more than 50 ms added to the start-up of a small single-file run, or more than 10% of `wj check` time on the
-  ecosystem, means the prediction moves behind the check cache, or behind `wj check --deep` only.
+  ecosystem, means the prediction moves behind the check cache, or behind a planned deep mode of `wj check` only.
 - **Coverage:** if after classes a-d the drift ledger's ownership rows and pilot 4's ownership-shaped failures are not
   at least halved, stop extending this approach and evaluate the rustc metadata check (item 6) as the default instead.
 

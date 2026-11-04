@@ -113,11 +113,8 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
     let blocks = |d: &crate::diagnostics::Diagnostic| {
         d.severity == crate::diagnostics::Severity::Error && (lints_block || !is_lint(&d.code))
     };
-    let mut blocking: Vec<&crate::diagnostics::Diagnostic> = checked.report.diagnostics.iter().filter(|d| blocks(d)).collect();
-    // what rustc would reject that the front end does not see: uses after a move (WJ0007), predicted from
-    // the generated Rust of a single-file program
-    let moved = if blocking.is_empty() && path.is_file() { check::moves::predicted_moves(path) } else { Vec::new() };
-    blocking.extend(moved.iter());
+    // uses after a move (WJ0007) are among them: `wj check` predicts them from the generated Rust (ADR-0030)
+    let blocking: Vec<&crate::diagnostics::Diagnostic> = checked.report.diagnostics.iter().filter(|d| blocks(d)).collect();
     let errors = blocking.len();
     if errors == 0 {
         return Ok(());

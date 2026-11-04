@@ -78,9 +78,9 @@ fn main() {
         z += 1
     }
     println("${m.len()} ${hits} ${misses} ${lit} ${px} ${miss} ${s} ${caught}")
-    // inserts into a map another binding shares (the copy keeps its entries), by reference and
+    // inserts into a map another binding shares (a copy, which keeps its entries), by reference and
     // literal keys, a replaced value, an insert whose value is the block's (the generic call)
-    let snapshot = m
+    let snapshot = m.clone()
     let mut w = 0
     while w < 300 {
         let kk = w * 3
