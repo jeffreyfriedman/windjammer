@@ -16,6 +16,11 @@ pub struct Unmodelled {
     /// Locals bound to a borrow (`let r = &x`, `opt.unwrap_or(&d)`): they hold a reference, so no width is
     /// published for the name (the class itself is still solved through the referent).
     pub borrowed_bindings: Vec<String>,
+    /// Unbound names that are module constants with a declared type: modelled (not held as unknown names).
+    pub declared_constants: Vec<String>,
+    /// Receivers of a numeric method that are literals (`2.pow(10)`, `(-7).abs()`): rustc cannot infer their width
+    /// (E0689), so their class is published even at its default (`int` / `float`).
+    pub literal_receivers: Vec<ConstraintVar>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -104,31 +109,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 origin("NUM-FIELD-DECLARED", format!("payload {} of `{}` is declared {:?}", i, callee, base), &a.location()),
             );
             emit_numeric_class_constraint(&mut self.cs, v, &base);
-        }
-    }
-
-    /// `v.get(i)` / `q.remove(i)` / `v.swap(i, j)` on a declared `Vec`, array or `VecDeque`: every
-    /// argument is an index (ADR-0028 NUM-USIZE).
-    fn std_sequence_index_method(&self, object: &Expression<'ast>, method: &str) -> bool {
-        if !matches!(method, "get" | "get_mut" | "remove" | "swap" | "truncate" | "split_off" | "swap_remove") {
-            return false;
-        }
-        match self.receiver_declared_base(object) {
-            Some(BaseType::Vec(_) | BaseType::Array(..)) => true,
-            Some(BaseType::Custom(n)) => crate::type_classification::type_name_leaf(&n) == "VecDeque",
-            _ => false,
-        }
-    }
-
-    /// The receiver is a declared std collection or string (its `len()` is Rust's `usize`).
-    fn receiver_is_std_collection(&self, object: &Expression<'ast>) -> bool {
-        match self.receiver_declared_base(object) {
-            Some(BaseType::Vec(_) | BaseType::Array(..) | BaseType::HashMap(..) | BaseType::String) => true,
-            Some(BaseType::Custom(n)) => matches!(
-                crate::type_classification::type_name_leaf(&n),
-                "VecDeque" | "HashSet" | "BTreeMap" | "BTreeSet" | "HashMap"
-            ),
-            _ => false,
         }
     }
 
@@ -241,49 +221,25 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
         let result = self.cs.fresh_var();
 
-        // NUM-USIZE (ADR-0028): `v.get(i)`, `q.remove(i)` on a std sequence take an index; a
-        // same-named signature of another type (a homonym) must not type the argument.
-        let seq_index = self.std_sequence_index_method(object, method);
+        // Option C stage C1: a method of a Rust core type is typed by `std/rust_core.wji` (index slots,
+        // lengths, element and payload types); a same-named registry signature is a homonym and is not used.
+        let surface = self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
+            || self.emit_core_surface_constraints(expr, object, method, arguments, &arg_vars, result);
         if method == "push" && arguments.len() == 1 {
             if let Some(key) = crate::ir::numeric_facts::conversion_key(arguments[0].1) {
                 self.element_stores.push((key, arg_vars[0], obj_var));
             }
         }
-        if seq_index {
-            for (&v, (_, a)) in arg_vars.iter().zip(arguments.iter()) {
-                self.index_uses.push(v);
-                self.cs.add_because(
-                    Constraint::IsNumeric(v),
-                    origin("NUM-INDEX", format!("argument of `.{}()` on a sequence is an index", method), &a.location()),
-                );
-                self.cs.add_because(
-                    Constraint::PrefersUsize(v),
-                    origin("NUM-USIZE", format!("argument of `.{}()` on a sequence is an index", method), &a.location()),
-                );
-            }
-        }
-        if let Some(sig) = sig.as_ref().filter(|_| !seq_index) {
+        if let Some(sig) = sig.as_ref().filter(|_| !surface) {
             self.emit_call_site_constraints(sig, &arg_vars);
         }
-        // NUM-USIZE (ADR-0028): a length or count (no user signature, or a std one returning
-        // `usize`) is an index source: soft `usize`, so a declared width in its class wins and
-        // the source is converted at the site.
-        let declared_ret = sig
-            .as_ref()
-            .filter(|_| !self.receiver_is_std_collection(object))
-            .and_then(|s| s.return_type.as_ref())
-            .map(parser_type_to_base_type);
-        // An unresolved receiver may be a user type with its own `len`: only a declared std collection
-        // or a signature that returns `usize` makes the call an index source.
-        let index_source = arguments.is_empty()
-            && is_index_source_method(method)
-            && (self.receiver_is_std_collection(object) || declared_ret == Some(BaseType::Usize));
-        self.emit_call_result_type_constraints(
-            result,
-            sig.as_ref().filter(|_| !seq_index && !index_source),
-            Some(method.as_str()),
-        );
-        if arguments.is_empty() && is_index_source_method(method) && !index_source && receiver_type.is_none() {
+        // NUM-USIZE (ADR-0028): a length or count whose user signature returns `usize` is an index source
+        // (core-type lengths are typed by the surface above). An unresolved receiver may be a user type
+        // with its own `len`: its width is unknown.
+        let declared_ret = sig.as_ref().filter(|_| !surface).and_then(|s| s.return_type.as_ref()).map(parser_type_to_base_type);
+        let index_source = !surface && arguments.is_empty() && is_index_source_method(method) && declared_ret == Some(BaseType::Usize);
+        self.emit_call_result_type_constraints(result, sig.as_ref().filter(|_| !surface && !index_source), Some(method.as_str()));
+        if arguments.is_empty() && is_index_source_method(method) && !surface && !index_source && receiver_type.is_none() {
             self.numeric_unmodelled.unknown_lengths.push(result);
         }
         if index_source {
@@ -410,7 +366,7 @@ mod tests {
     fn solved_local(source: &str, fn_name: &str, local: &str) -> Option<BaseType> {
         let analyzed = analyze_source(source);
         let af = analyzed.iter().find(|f| f.decl.name == fn_name).unwrap();
-        let fc = generate_constraints(af, None);
+        let fc = generate_constraints_typed(af, None, None, Some(&crate::typing::core_surface::CoreSurface::parse()));
         let r = crate::ir::solver::Solver::new(&fc.constraints).solve(&fc.constraints);
         let v = fc.var_map.locals[local];
         r.types[v.0 as usize].clone()
@@ -444,7 +400,7 @@ mod tests {
     #[test]
     fn len_call_is_recorded_as_an_index_source() {
         let analyzed = analyze_source("pub fn f(v: Vec<string>) -> bool {\n    let mut i = 0\n    while i < v.len() {\n        i = i + 1\n    }\n    true\n}\n");
-        let fc = generate_constraints(&analyzed[0], None);
+        let fc = generate_constraints_typed(&analyzed[0], None, None, Some(&crate::typing::core_surface::CoreSurface::parse()));
         assert_eq!(fc.index_sources.len(), 1, "{:?}", fc.index_sources);
     }
 
@@ -483,5 +439,232 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let var = self.resolve_var(name);
         self.cs.add_because(Constraint::TypeIs(var, payload.clone()), tagged("NUM-DECLARED"));
         emit_numeric_class_constraint(&mut self.cs, var, &payload);
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// The variable a name is bound to here, without creating one.
+    fn bound_var(&self, name: &str) -> Option<ConstraintVar> {
+        self.scopes.iter().rev().find_map(|s| s.get(name)).or_else(|| self.param_vars.get(name)).copied()
+    }
+
+    /// The static type of an expression, from declarations and the typed core surface (option C, stage C1).
+    /// `None` when a part of it is not declared: callers then keep their previous behaviour.
+    pub(super) fn static_type(&self, expr: &Expression<'ast>) -> Option<Type> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                let var = self.bound_var(name);
+                if let Some(t) = var.and_then(|v| self.var_static_types.get(&v)) {
+                    return Some(t.clone());
+                }
+                if var.is_some() && !self.param_vars.contains_key(name.as_str()) {
+                    return None;
+                }
+                self.analyzed.decl.parameters.iter().find(|p| &p.name == name).map(|p| p.type_.clone())
+            }
+            Expression::Literal { value: Literal::String(_), .. } => Some(Type::String),
+            Expression::Unary { op: crate::parser::ast::operators::UnaryOp::Ref, operand, .. } => {
+                self.static_type(operand).map(|t| Type::Reference(Box::new(t)))
+            }
+            Expression::StructLiteral { name, .. } => Some(Type::Custom(name.clone())),
+            Expression::MethodCall { object, method, type_args, arguments, .. } => {
+                // `strings.split(text, "-")`: a module function's declared return type.
+                if let Expression::Identifier { name, .. } = &**object {
+                    if self.bound_var(name).is_none() && !self.analyzed.decl.parameters.iter().any(|p| &p.name == name) {
+                        let sig = self.resolve_callee_signature(&format!("{}::{}", name, method), arguments.len())?;
+                        return sig.return_type.clone();
+                    }
+                }
+                let receiver = self.static_type(object)?;
+                let sig = self.core_surface?.method_signature(&receiver, method, type_args.as_deref().unwrap_or(&[]))?;
+                sig.ret.filter(|t| !contains_generic(t))
+            }
+            Expression::Call { function, arguments, .. } => {
+                let name = Self::extract_callee_name(function)?;
+                self.resolve_free_callee_signature(&name, arguments.len())?.return_type.clone()
+            }
+            other => {
+                let fields = self.struct_field_types.unwrap_or_else(|| empty_struct_field_types());
+                crate::ir::expr_static_type::declared_type_of(other, &self.analyzed.decl, fields)
+            }
+        }
+    }
+
+    /// Option C stage C1: a method of a Rust core type, typed by `std/rust_core.wji`. A `usize` parameter is an
+    /// index use and a `usize` result an index source (soft, ADR-0028); another numeric type is exact.
+    /// Returns whether the surface typed the call (the registry's name-based signature is then not consulted).
+    pub(super) fn emit_core_surface_constraints(
+        &mut self,
+        expr: &Expression<'ast>,
+        object: &'ast Expression<'ast>,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        arg_vars: &[ConstraintVar],
+        result: ConstraintVar,
+    ) -> bool {
+        let Expression::MethodCall { type_args, .. } = expr else { return false };
+        let Some(receiver) = self.static_type(object) else { return false };
+        let turbofish = type_args.as_deref().unwrap_or(&[]);
+        let Some(sig) = self.core_surface.and_then(|s| s.method_signature(&receiver, method, turbofish)) else { return false };
+        if sig.params.len() != arguments.len() {
+            return false;
+        }
+        for ((param, &v), (_, a)) in sig.params.iter().zip(arg_vars).zip(arguments) {
+            match numeric_base(param) {
+                Some(BaseType::Usize) => {
+                    self.index_uses.push(v);
+                    self.cs.add_because(Constraint::IsNumeric(v), origin("NUM-INDEX", format!("argument of `.{}()` is an index", method), &a.location()));
+                    self.cs.add_because(Constraint::PrefersUsize(v), origin("NUM-USIZE", format!("argument of `.{}()` is an index", method), &a.location()));
+                }
+                Some(base) => {
+                    self.cs.add_because(Constraint::TypeIs(v, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` takes `{}` here", method, crate::type_display::format_wj_type(param)), &a.location()));
+                    emit_numeric_class_constraint(&mut self.cs, v, &base);
+                }
+                None => {}
+            }
+        }
+        match sig.ret.as_ref().and_then(numeric_base) {
+            Some(BaseType::Usize) => {
+                if let Some(l) = expr.location() {
+                    self.index_sources.push(((l.line, l.column), result));
+                }
+                self.cs.add_because(
+                    Constraint::PrefersUsize(result),
+                    origin("NUM-USIZE", format!("`.{}()` is a length: an index class unless a width is declared", method), &expr.location()),
+                );
+            }
+            Some(base) => {
+                self.cs.add_because(Constraint::TypeIs(result, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` returns a number of the receiver's type", method), &expr.location()));
+                emit_numeric_class_constraint(&mut self.cs, result, &base);
+            }
+            None => {}
+        }
+        true
+    }
+}
+
+/// The integer or float width a (reference to a) numeric type names; `None` for every other type.
+fn numeric_base(t: &Type) -> Option<BaseType> {
+    let b = crate::ir::node::parser_type_to_base_type(t);
+    matches!(
+        b,
+        BaseType::I8 | BaseType::I16 | BaseType::I32 | BaseType::I64 | BaseType::I128 | BaseType::U8 | BaseType::U16
+            | BaseType::U32 | BaseType::U64 | BaseType::U128 | BaseType::Usize | BaseType::Isize | BaseType::F32 | BaseType::F64
+    )
+    .then_some(b)
+}
+
+fn contains_generic(t: &Type) -> bool {
+    match t {
+        Type::Generic(_) => true,
+        Type::Reference(x) | Type::MutableReference(x) | Type::Option(x) | Type::Vec(x) | Type::Array(x, _) => contains_generic(x),
+        Type::Result(a, b) => contains_generic(a) || contains_generic(b),
+        Type::Parameterized(_, xs) | Type::Tuple(xs) => xs.iter().any(contains_generic),
+        _ => false,
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A module `const` / `static` has its declared type (`const SIZE: i32`): the class is modelled.
+    pub(super) fn type_module_constant(&mut self, name: &str, v: ConstraintVar) {
+        let Some(ty) = self.analyzed.module_const_types.get(name) else { return };
+        let base = parser_type_to_base_type(ty);
+        if base != BaseType::Inferred {
+            self.cs.add_because(Constraint::TypeIs(v, base.clone()), tagged("NUM-DECLARED"));
+            emit_numeric_class_constraint(&mut self.cs, v, &base);
+            self.numeric_unmodelled.declared_constants.push(name.to_string());
+        }
+    }
+
+    /// The float class (like the integer class): an unsuffixed float literal takes the width its uses require
+    /// (`f32` field, parameter, payload, operand), else `float` (f64).
+    pub(super) fn walk_float_literal(&mut self, var: ConstraintVar, location: &crate::parser::SourceLocation) -> ConstraintVar {
+        self.cs.add_because(
+            Constraint::IsFloat(var),
+            origin("NUM-DEFAULT-FLOAT", "unsuffixed float literal: width from its uses, else float (f64)", location),
+        );
+        if let Some(l) = location {
+            self.literal_vars.push(((l.line, l.column), var));
+        }
+        var
+    }
+
+    /// A `let` binding's static type (for the typed core surface) and whether it holds a borrow.
+    pub(super) fn record_let_binding_types(
+        &mut self,
+        pattern: &Pattern<'ast>,
+        declared: Option<&Type>,
+        value: &Expression<'ast>,
+        bound_var: ConstraintVar,
+        static_ty: Option<Type>,
+    ) {
+        let (Pattern::Identifier(n) | Pattern::MutBinding(n)) = pattern else { return };
+        if let Some(t) = static_ty {
+            self.var_static_types.insert(bound_var, t);
+        }
+        if declared.is_none() && is_borrow_initializer(value) {
+            self.numeric_unmodelled.borrowed_bindings.push(n.clone());
+        }
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A method of the integer or float numeric surface (`Integer<T>` / `Float<T>` in `std/rust_core.wji`) on a
+    /// receiver that is a number: a declared numeric type or a numeric literal (`10.min(3)`, `2.pow(10)`). An
+    /// argument or result of type `T` joins the receiver's class; other numeric types are exact (`pow` takes a
+    /// `u32`). Returns whether the call was typed this way.
+    pub(super) fn emit_numeric_method_constraints(
+        &mut self,
+        object: &'ast Expression<'ast>,
+        obj_var: ConstraintVar,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        arg_vars: &[ConstraintVar],
+        result: ConstraintVar,
+    ) -> bool {
+        let float = match self.static_type(object).as_ref().map(crate::ir::node::parser_type_to_base_type) {
+            Some(BaseType::F32 | BaseType::F64) => true,
+            Some(b) if crate::ir::solver::is_integer_type(&b) => false,
+            Some(_) => return false,
+            None if is_int_literal_tree(object) => false,
+            None if is_float_literal_tree(object) => true,
+            None => return false,
+        };
+        if is_int_literal_tree(object) || is_float_literal_tree(object) {
+            self.numeric_unmodelled.literal_receivers.push(obj_var);
+        }
+        let Some((params, ret)) = self.core_surface.and_then(|s| s.numeric_method(float, method)) else { return false };
+        if params.len() != arguments.len() {
+            return false;
+        }
+        let same = |t: &Type| crate::typing::core_surface::is_receiver_type(t);
+        for ((param, &v), (_, a)) in params.iter().zip(arg_vars).zip(arguments) {
+            if same(param) {
+                self.cs.add_because(Constraint::TypeEquals(v, obj_var), origin("NUM-STD-SIG", format!("`.{}()` takes the receiver's type", method), &a.location()));
+            } else if let Some(base) = numeric_base(param) {
+                self.cs.add_because(Constraint::TypeIs(v, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` takes `{}` here", method, crate::type_display::format_wj_type(param)), &a.location()));
+                emit_numeric_class_constraint(&mut self.cs, v, &base);
+            }
+        }
+        match ret.as_ref() {
+            Some(t) if same(t) => self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG")),
+            Some(t) => {
+                if let Some(base) = numeric_base(t) {
+                    self.cs.add_because(Constraint::TypeIs(result, base.clone()), tagged("NUM-STD-SIG"));
+                    emit_numeric_class_constraint(&mut self.cs, result, &base);
+                }
+            }
+            None => {}
+        }
+        true
+    }
+}
+
+/// A float literal, possibly negated.
+fn is_float_literal_tree(e: &Expression<'_>) -> bool {
+    match e {
+        Expression::Literal { value: Literal::Float(_), .. } => true,
+        Expression::Unary { op: crate::parser::ast::operators::UnaryOp::Neg, operand, .. } => is_float_literal_tree(operand),
+        _ => false,
     }
 }

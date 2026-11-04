@@ -338,7 +338,8 @@ impl Interpreter {
             self.has_host_fn(name) || c_sigs.iter().find(|s| s.name == name).is_some_and(super::c_library::callable)
         };
         let std_fn = |path: &str| self.builtins.has_function(path);
-        super::preflight::check(&all, &resolved, &rust_crates, &bridged, &std_fn)?;
+        let crate_fn = |path: &str| self.is_crate_fn(path);
+        super::preflight::check(&all, &resolved, &rust_crates, &crate_fn, &bridged, &std_fn)?;
         self.finish_registration()
     }
 

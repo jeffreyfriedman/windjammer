@@ -1,0 +1,17 @@
+// Two modules define `list_items`; the one imported here takes `deps` by value (it hands it back), the
+// other only reads it. The unqualified call must use the imported callee's signature (no `&deps`).
+// Expected by hand: 2 items for "t", then the returned deps still counts 7.
+// expect: 2 7
+// expect: 7
+mod deps
+mod usecase
+mod report
+
+use crate::usecase::list_items
+
+fn main() {
+    let d = deps::Deps { n: 7 }
+    let r = list_items(d, "t")
+    println("${r.count} ${r.deps.n}")
+    println(report::total(r.deps))
+}

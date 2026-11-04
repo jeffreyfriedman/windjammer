@@ -1,0 +1,35 @@
+// spec: SPEC-STR-016
+// expect: [Héllo Wörld] [Héllo Wörld  ] [  Héllo Wörld]
+// expect:   HÉLLO WÖRLD     héllo wörld  
+// expect: STRASSE 7 6
+// expect: 4 [a] [] [b] []
+// expect: 2 one two
+// expect: abcabcabc a+b+c bba
+// expect: true true true true
+// expect: olléh
+// expect: true true true
+// expect: 3 [a] [b] [c]
+fn main() {
+    let s = "  Héllo Wörld  "
+    println("[${s.trim()}] [${s.trim_start()}] [${s.trim_end()}]")
+    println("${s.to_uppercase()} ${s.to_lowercase()}")
+    let sharp = "straße"
+    println("${sharp.to_uppercase()} ${sharp.len()} ${sharp.chars().count()}")
+    let csv = "a,,b,"
+    let parts: Vec<string> = csv.split(",").collect()
+    println("${parts.len()} [${parts[0]}] [${parts[1]}] [${parts[2]}] [${parts[3]}]")
+    let words: Vec<string> = "  one   two  ".split_whitespace().collect()
+    println("${words.len()} ${words[0]} ${words[1]}")
+    println("${"abc".repeat(3)} ${"a-b-c".replace("-", "+")} ${"aaa".replacen("a", "b", 2)}")
+    let apple = "apple"
+    let banana = "banana"
+    let zebra = "Zebra"
+    let acute = "é"
+    let zed = "z"
+    println("${apple < banana} ${zebra < apple} ${acute > zed} ${apple == "apple"}")
+    let rev: string = "héllo".chars().rev().collect()
+    println("${rev}")
+    println("${"héllo".starts_with("hé")} ${"héllo".ends_with("lo")} ${"héllo".contains("él")}")
+    let lines: Vec<string> = "a\nb\r\nc\n".lines().collect()
+    println("${lines.len()} [${lines[0]}] [${lines[1]}] [${lines[2]}]")
+}

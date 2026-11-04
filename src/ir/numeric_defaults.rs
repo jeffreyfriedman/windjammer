@@ -245,6 +245,15 @@ impl Walker {
 
     /// Visit `e`, whose value joins class `sink`.
     fn expr(&mut self, e: &Expression<'_>, sink: usize) {
+        // Constant folding prints `-9223372036854775807 - 1` as one literal at the operator's position: that key
+        // carries the class's verdict too.
+        if matches!(e, Expression::Binary { .. } | Expression::Unary { op: UnaryOp::Neg, .. }) && is_int_literal_arith(e) {
+            if let Some(k) = literal_key(e) {
+                let c = self.c.fresh();
+                self.c.literals.push((k, c));
+                self.c.union(c, sink);
+            }
+        }
         match e {
             Expression::Literal { value, .. } => match value {
                 Literal::Int(_) => {
@@ -557,5 +566,17 @@ mod tests {
         let src2 = "fn g() -> i32 {\n let x = 4\n return x\n}\n";
         let (lits2, _) = literals_in(src2, "g");
         assert_eq!(lits2, vec!["4:?"]);
+    }
+}
+
+/// Integer literals combined with arithmetic and negation only (what constant folding folds to one literal).
+fn is_int_literal_arith(e: &Expression<'_>) -> bool {
+    match e {
+        Expression::Literal { value: Literal::Int(_), .. } => true,
+        Expression::Unary { op: UnaryOp::Neg, operand, .. } => is_int_literal_arith(operand),
+        Expression::Binary { left, op, right, .. } => {
+            matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul) && is_int_literal_arith(left) && is_int_literal_arith(right)
+        }
+        _ => false,
     }
 }

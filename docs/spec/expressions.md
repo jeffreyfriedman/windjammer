@@ -383,3 +383,54 @@ Output:
 3 2 2 2
 ```
 
+
+## Shadowing
+
+**SPEC-EXPR-019** A `let` binding shadows an earlier one of the same name for the rest of its block, may change the type, never affects closures that captured the earlier binding, and the earlier binding is back after the block ends.
+
+<!-- example: tests/spec/expressions/SPEC-EXPR-019.wj -->
+```windjammer
+fn main() {
+    let x = 1
+    let x = x + 1
+    {
+        let x = x * 10
+        println("inner ${x}")
+    }
+    println("outer ${x}")
+    let x = "now a string ${x}"
+    println("${x}")
+    let f = || x.len()
+    let x = 0
+    println("${f()} ${x}")
+    let mut total = 0
+    for i in 0..3 {
+        let total2 = total + i
+        total = total2
+        let i = i * 100
+        total += i
+    }
+    println("${total}")
+    let v = Some(5)
+    let v = match v {
+        Some(v) => v + 1,
+        None => 0,
+    }
+    println("${v}")
+    if let Some(v) = Some(7) {
+        println("if-let ${v}")
+    }
+    println("after ${v}")
+}
+```
+Output:
+```text
+inner 20
+outer 2
+now a string 2
+14 0
+303
+6
+if-let 7
+after 6
+```

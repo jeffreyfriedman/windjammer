@@ -140,8 +140,7 @@ impl<'ast> Analyzer<'ast> {
         let consumes_self = if has_multi_recursive {
             false
         } else {
-            body_moves_fields
-                || self.function_moves_self_into_return(func)
+            self.function_moves_self_into_return(func)
                 || (!snapshot_factory
                     && (returns_self
                         || self.function_body_consumes_bare_self(func)
@@ -180,16 +179,16 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl<'ast>,
         modifies_fields: bool,
         _returns_self: bool,
-        body_moves_fields: bool,
+        _body_moves_fields: bool,
         consumes_self: bool,
         calls_mutating: bool,
         calls_owned_on_self: bool,
     ) -> OwnershipMode {
         // In-place mutation → &mut self, not owned self — including `returns self` builders
         // (`append_edge`: mutates `self.buffer` then returns `self`).
-        // Skip when the method calls another method with owned `self` (evaluate → evaluate_node)
-        // or moves non-Copy fields out of `self`.
-        if (modifies_fields || calls_mutating) && !body_moves_fields && !calls_owned_on_self {
+        // Skip when the method calls another method with owned `self` (evaluate → evaluate_node).
+        // A non-Copy field read out of a mutated `self` is cloned at the read (C5: the receiver stays `&mut`).
+        if (modifies_fields || calls_mutating) && !calls_owned_on_self {
             return OwnershipMode::MutBorrowed;
         }
 
@@ -211,7 +210,6 @@ impl<'ast> Analyzer<'ast> {
     ) -> Result<AnalyzedFunction<'ast>, String> {
         let mut inferred_ownership = HashMap::new();
 
-        // Check if this is a game decorator function
         let is_game_decorator = func.decorators.iter().any(|d| {
             matches!(
                 d.name.as_str(),
@@ -235,8 +233,7 @@ impl<'ast> Analyzer<'ast> {
                 self.function_body_moves_non_copy_self_fields(func, Some(registry));
             let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-            let consumes_self = body_moves_fields
-                || self.function_moves_self_into_return(func)
+            let consumes_self = self.function_moves_self_into_return(func)
                 || (!snapshot_factory
                     && (returns_self
                         || self.function_body_consumes_bare_self(func)
@@ -353,13 +350,10 @@ impl<'ast> Analyzer<'ast> {
                             let modifies_fields = self
                                 .function_modifies_self_fields_with_registry(func, Some(registry));
                             let returns_self = self.function_returns_self(func);
-                            let body_moves_fields =
-                                self.function_body_moves_non_copy_self_fields(func, Some(registry));
                             let snapshot_factory =
                                 self.function_returns_new_instance_from_self_fields(func);
 
-                            let consumes_self = body_moves_fields
-                                || self.function_moves_self_into_return(func)
+                            let consumes_self = self.function_moves_self_into_return(func)
                                 || (!snapshot_factory
                                     && (returns_self
                                         || self.function_body_consumes_bare_self(func)
@@ -843,6 +837,7 @@ impl<'ast> Analyzer<'ast> {
             returned_parameters,
             field_extract_parameters,
             field_mutated_parameters,
+            field_moved_parameters: self.field_moved_parameters(func),
             auto_clone_analysis,
             clone_optimizations,
             struct_mapping_optimizations,
@@ -854,7 +849,7 @@ impl<'ast> Analyzer<'ast> {
             cow_optimizations,
             cache_locality,
             str_ref_optimizable_params,
-            module_path: Vec::new(),
+            module_path: Vec::new(), module_const_types: self.module_const_types.clone(),
         })
     }
 

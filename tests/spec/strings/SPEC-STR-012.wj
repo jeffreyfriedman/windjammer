@@ -1,0 +1,20 @@
+// spec: SPEC-STR-012
+// expect: 14 12
+// expect: h|hé|llo, wörld| wörld
+// expect: 8 true 12
+// expect: 2 1 9
+// expect: false true
+fn main() {
+    let s = "héllo, wörld"
+    println("${s.len()} ${s.chars().count()}")
+    println("${s[0..1]}|${s[..3]}|${s[3..]}|${s[7..]}")
+    println("${s.find("wö").unwrap_or(99)} ${s.find("z").is_none()} ${s.rfind("l").unwrap_or(99)}")
+    let mut idx: Vec<int> = Vec::new()
+    for (i, c) in s.char_indices() {
+        if !c.is_ascii() {
+            idx.push(i as int)
+        }
+    }
+    println("${idx.len()} ${idx[0]} ${idx[1]}")
+    println("${s.is_char_boundary(2)} ${s.is_char_boundary(1)}")
+}

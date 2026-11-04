@@ -1,0 +1,35 @@
+// spec: SPEC-NUM-027
+// expect: 42 -42 7
+// expect: true true true true
+// expect: true 255 true
+// expect: 9223372036854775807 true
+// expect: 3.5 1000 0.5 true
+// expect: true true
+// expect: err invalid digit found in string
+// expect: err cannot parse integer from empty string
+// expect: err number too large to fit in target type
+// expect: err invalid float literal
+fn main() {
+    println("${"42".parse::<int>().unwrap_or(-1)} ${"-42".parse::<int>().unwrap_or(-1)} ${"+7".parse::<int>().unwrap_or(-1)}")
+    println("${" 5".parse::<int>().is_err()} ${"5 ".parse::<int>().is_err()} ${"".parse::<int>().is_err()} ${"1_000".parse::<int>().is_err()}")
+    println("${"256".parse::<u8>().is_err()} ${"255".parse::<u8>().unwrap_or(0)} ${"-1".parse::<u8>().is_err()}")
+    println("${"9223372036854775807".parse::<int>().unwrap_or(0)} ${"9223372036854775808".parse::<int>().is_err()}")
+    println("${"3.5".parse::<float>().unwrap_or(0.0)} ${"1e3".parse::<float>().unwrap_or(0.0)} ${".5".parse::<float>().unwrap_or(0.0)} ${"abc".parse::<float>().is_err()}")
+    println("${"true".parse::<bool>().unwrap_or(false)} ${"True".parse::<bool>().is_err()}")
+    match "12x".parse::<int>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match "".parse::<int>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match "300".parse::<u8>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match "x".parse::<float>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+}

@@ -1,0 +1,7 @@
+error[WJ0002]: cannot find function `index_of` in `std::strings`
+  --> unknown_std_function.wj:5:22
+  |
+5 |     let at = strings.index_of("a:b", ":")
+  |                      ^^^^^^^^ not a function of std::strings
+  = help: `wj docs strings` lists the functions of std::strings
+  = explain: wj explain WJ0002

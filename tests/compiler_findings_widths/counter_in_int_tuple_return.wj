@@ -1,0 +1,15 @@
+use std::strings
+
+/// `level` is only incremented and later passed to substring, so it is inferred usize; the tuple says int.
+pub fn heading(line: string) -> (int, string) {
+    let mut level = 0
+    for ch in strings.chars(line) {
+        if ch == '#' {
+            level = level + 1
+        } else {
+            break
+        }
+    }
+    let rest = strings.substring(line, level, strings.len(line))
+    (level, rest)
+}

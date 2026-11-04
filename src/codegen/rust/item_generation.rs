@@ -722,8 +722,8 @@ impl<'ast> CodeGenerator<'ast> {
                 .parameters
                 .iter()
                 .map(|param| {
-                    // THE WINDJAMMER WAY:
-                    // Use the analyzed ownership from the analyzer, which has inferred
+                    if let Some(r) = super::function_self_helpers::declared_receiver(param) { return r.to_string(); }
+                    // THE WINDJAMMER WAY: use the analyzer's ownership, which has inferred
                     // the most permissive signature needed based on ALL implementations!
                     let ownership = if let Some(analyzed) = analyzed_method {
                         // Has default implementation OR global cross-file analysis - use analyzer's inferred ownership

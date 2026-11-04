@@ -92,7 +92,8 @@ fn registry_roots(cargo_home: Option<&Path>) -> Vec<PathBuf> {
 /// the version (from a lock file); otherwise the newest version the requirement accepts.
 pub fn find_local(manifest_dir: &Path, entry: &DepEntry, exact: Option<&str>, cargo_home: Option<&Path>) -> Option<PathBuf> {
     if let Some(p) = &entry.path {
-        return p.join("Cargo.toml").is_file().then(|| p.clone());
+        let rust = p.join("Cargo.toml").is_file() && !crate::package::graph::is_windjammer_path_dep(p);
+        return rust.then(|| p.clone());
     }
     let req = entry.req.as_deref().and_then(|r| semver::VersionReq::parse(r).ok());
     let accepts = |v: &semver::Version| match exact {

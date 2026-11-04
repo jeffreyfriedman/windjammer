@@ -64,12 +64,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) cow_optimizations: std::collections::HashSet<String>, // Variables that can use Cow
     // AUTO-CLONE: Track where to automatically insert clones
     pub(crate) auto_clone_analysis: Option<crate::auto_clone::AutoCloneAnalysis>,
-    // Global monotonic counter mirroring auto_clone::build_usage_map's counter.
-    // Used for needs_clone() lookups to match indices in clone_sites.
+    // Global monotonic counter mirroring auto_clone::build_usage_map's counter (needs_clone() lookups into clone_sites).
     pub(crate) current_statement_idx: usize,
     pub(crate) auto_clone_counter: usize,
-    // Local index within the current block (0-based enumerate index).
-    // Used by variable_is_only_field_accessed and other block-relative analyses.
+    // Local index within the current block (0-based; variable_is_only_field_accessed and other block-relative analyses).
     pub(crate) current_block_local_idx: usize,
     // OPTION TAKE/REPLACE: Block-local indices of statements to skip because
     // they were folded into a preceding `.take()` or `.replace()`.
@@ -104,13 +102,12 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_impl_generic_type_params: Vec<String>,
     pub(crate) in_impl_block: bool, // true if currently generating code for an impl block
     // USIZE DETECTION: Track which struct fields have type usize (for auto-casting)
-    pub(crate) usize_struct_fields:
-        std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
-    // METHOD RETURN TYPES: Track which methods return usize (for auto-casting in comparisons)
-    // Maps method name -> return type. Used by infer_expression_type for MethodCall.
+    pub(crate) usize_struct_fields: std::collections::HashMap<String, std::collections::HashSet<String>>, // Struct name -> usize field names
+    // METHOD RETURN TYPES: method name -> return type (usize auto-casts; infer_expression_type for MethodCall).
     pub(crate) method_return_types: std::collections::HashMap<String, Type>,
     // FUNCTION CONTEXT: Track current function parameters for compound assignment optimization
     pub(crate) current_function_params: Vec<crate::parser::Parameter<'ast>>,
+    pub(crate) current_field_moved_params: std::collections::HashSet<String>,
     pub(crate) current_function_name: Option<String>,
     pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
@@ -668,6 +665,7 @@ impl<'ast> CodeGenerator<'ast> {
             usize_struct_fields: std::collections::HashMap::new(),
             method_return_types: std::collections::HashMap::new(),
             current_function_params: Vec::new(),
+            current_field_moved_params: std::collections::HashSet::new(),
             current_function_name: None,
             current_function_type_bounds: Vec::new(),
             current_function_return_type: None,

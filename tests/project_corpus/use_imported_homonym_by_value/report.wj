@@ -1,0 +1,9 @@
+use crate::deps::Deps
+
+pub fn list_items(deps: Deps, tenant: string) -> int {
+    if tenant == "t" { deps.n } else { 0 }
+}
+
+pub fn total(deps: Deps) -> int {
+    list_items(deps, "t")
+}
