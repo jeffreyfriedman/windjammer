@@ -116,6 +116,7 @@ pub fn run(cli: Cli) -> Result<()> {
             path,
             output,
             release,
+            unchecked_arithmetic,
             target,
             defer_drop,
             defer_drop_threshold,
@@ -139,6 +140,9 @@ pub fn run(cli: Cli) -> Result<()> {
         } => {
             // TODO: Pass defer_drop config to compiler
             let _ = (defer_drop, defer_drop_threshold);
+            if unchecked_arithmetic {
+                std::env::set_var(windjammer::config::UNCHECKED_ARITHMETIC_ENV, "1");
+            }
             windjammer::cli::build::execute(
                 &path,
                 output.as_deref(),

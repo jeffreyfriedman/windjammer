@@ -13078,6 +13078,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// list literal returned from a `Vec` function is a `Vec`).
     fn set_return_type_and_list_positions(&mut self, func: &FunctionDecl<'ast>) {
         self.current_function_return_type = func.return_type.clone();
+        self.idiom.text_option_locals.clear();
         self.idiom.return_position_list_literals = match func.return_type.as_ref() {
             Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                 && crate::type_classification::type_is_vec_container(t) =>

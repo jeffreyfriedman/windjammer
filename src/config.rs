@@ -48,6 +48,10 @@ pub struct WjConfig {
     #[serde(default)]
     pub profile: ProfileSection,
 
+    /// `[build]`: code generation switches (`overflow_checks = false` opts hot code out of checked arithmetic).
+    #[serde(default)]
+    pub build: BuildSection,
+
     /// Backend configuration for WASM proxy (optional)
     #[serde(default)]
     pub backend: Option<BackendConfig>,
@@ -56,6 +60,14 @@ pub struct WjConfig {
     /// Declares which side-effects this application is allowed to perform.
     #[serde(default)]
     pub app_capabilities: Option<AppCapabilities>,
+}
+
+/// `[build]` section in `wj.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BuildSection {
+    /// Integer arithmetic panics on overflow in release builds too (the spec). `false` turns it off.
+    #[serde(default)]
+    pub overflow_checks: Option<bool>,
 }
 
 /// `[profile.*]` section in `wj.toml`.
@@ -75,6 +87,8 @@ pub struct ReleaseProfile {
     pub lto: bool,
     #[serde(default, rename = "codegen-units")]
     pub codegen_units: Option<u32>,
+    #[serde(default, rename = "overflow-checks")]
+    pub overflow_checks: Option<bool>,
 }
 
 impl Default for ReleaseProfile {
@@ -83,6 +97,7 @@ impl Default for ReleaseProfile {
             opt_level: default_opt_level(),
             lto: default_lto_true(),
             codegen_units: None,
+            overflow_checks: None,
         }
     }
 }
@@ -112,13 +127,34 @@ impl OptLevel {
     }
 }
 
+/// Environment switch set by `wj build --unchecked-arithmetic`.
+pub const UNCHECKED_ARITHMETIC_ENV: &str = "WJ_UNCHECKED_ARITHMETIC";
+
+impl WjConfig {
+    /// The `[profile.release]` block of the generated `Cargo.toml`. Overflow checks are on unless the
+    /// project (`[build] overflow_checks = false`, `[profile.release] overflow-checks = false`) or the
+    /// command line (`--unchecked-arithmetic`) turns them off: a release binary panics on overflow exactly
+    /// like a debug build and the interpreter (SPEC-NUM-002).
+    pub fn release_profile_section(&self) -> String {
+        let flag = std::env::var_os(UNCHECKED_ARITHMETIC_ENV).is_some_and(|v| v != "0")
+            .then_some(false);
+        let checks = flag.or(self.build.overflow_checks).or(self.profile.release.overflow_checks).unwrap_or(true);
+        self.profile.release.render(checks)
+    }
+}
+
 impl ReleaseProfile {
-    /// Render a `[profile.release]` block for generated Cargo.toml.
+    /// Render a `[profile.release]` block (overflow checks on).
     pub fn to_cargo_toml_section(&self) -> String {
+        self.render(self.overflow_checks.unwrap_or(true))
+    }
+
+    fn render(&self, overflow_checks: bool) -> String {
         let mut lines = vec![
             "[profile.release]".to_string(),
             format!("opt-level = {}", self.opt_level.to_toml_value()),
             format!("lto = {}", self.lto),
+            format!("overflow-checks = {overflow_checks}"),
         ];
         if let Some(units) = self.codegen_units {
             lines.push(format!("codegen-units = {}", units));

@@ -214,3 +214,19 @@ fn interpolated_if_and_match_produce_their_branch_values() {
     );
     assert!(!g.contains("t(\"then\", 10_i64);"), "{g}");
 }
+
+#[test]
+fn copied_on_an_option_of_string_slices_is_the_identity() {
+    let g = typechecks(
+        "fn first_word(s: string) -> bool {\n    let w = s.split(\" \").next()\n    let x = w.copied()\n    match x {\n        Some(t) => t == \"ab\",\n        None => false,\n    }\n}\n\nfn second(s: string) -> bool {\n    match s.split(\" \").last().cloned() {\n        Some(t) => t == \"cde\",\n        None => false,\n    }\n}\n\nfn main() {\n    println(\"${first_word(\"ab cd\")} ${second(\"ab cde\")}\")\n}\n",
+    );
+    assert!(!g.contains(".copied()") && !g.contains(".cloned()"), "{g}");
+}
+
+#[test]
+fn method_call_inside_interpolation_makes_the_binding_mutable() {
+    let g = typechecks(
+        "struct Counter { n: int }\nimpl Counter {\n    fn bump(self) -> int {\n        self.n = self.n + 1\n        self.n\n    }\n    fn get(self) -> int {\n        self.n\n    }\n}\nstruct Wrap { c: Counter }\nimpl Wrap {\n    fn go(self) -> int {\n        self.c.bump()\n    }\n}\nfn main() {\n    let w = Wrap { c: Counter { n: 0 } }\n    println(\"${w.go()}\")\n    let c = Counter { n: 0 }\n    println(\"${c.get()}\")\n}\n",
+    );
+    assert!(g.contains("let mut w") && g.contains("let c ="), "{g}");
+}
