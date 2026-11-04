@@ -1,0 +1,11 @@
+// spec: SPEC-STR-017
+// expect: key -> value
+// expect: true true
+fn main() {
+    let kv = "key=value"
+    match kv.split_once("=") {
+        Some((k, v)) => println("${k} -> ${v}"),
+        None => println("no separator"),
+    }
+    println("${"x=1".split_once("=").is_some()} ${"x".split_once("=").is_none()}")
+}

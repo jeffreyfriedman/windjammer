@@ -1,0 +1,32 @@
+// spec: SPEC-STR-014
+// expect: [   42] [42   ] [ 42  ] [   42] [00042] [-0042] [+42]
+// expect: [ab    ] [    ab] [  ab  ] [**ab***] [abc] [abc     ]
+// expect: [3.14] [   3.142] [2] [4] [0.12] [-0001.50] [1.000]
+// expect: [ff] [FF] [0xff] [11111111] [0b11111111] [377] [0o377] [ff]
+// expect: [1.234567e6] [1.2e-4] [2.55e2]
+// expect: [  true] [  x  ] [  é]
+fn main() {
+    let n = 42
+    let neg = -42
+    println("[${n:5}] [${n:<5}] [${n:^5}] [${n:>5}] [${n:05}] [${neg:05}] [${n:+}]")
+    let s = "ab"
+    let long = "abcdef"
+    println("[${s:6}] [${s:>6}] [${s:^6}] [${s:*^7}] [${long:.3}] [${long:8.3}]")
+    let pi = 3.14159
+    let half = 2.5
+    let odd = 3.5
+    let eighth = 0.125
+    let neg_f = -1.5
+    let one = 1.0
+    println("[${pi:.2}] [${pi:8.3}] [${half:.0}] [${odd:.0}] [${eighth:.2}] [${neg_f:08.2}] [${one:.3}]")
+    let big = 255
+    let small: i8 = -1
+    println("[${big:x}] [${big:X}] [${big:#x}] [${big:08b}] [${big:#b}] [${big:o}] [${big:#o}] [${small:x}]")
+    let e1 = 1234567.0
+    let e2 = 0.00012
+    println("[${e1:e}] [${e2:e}] [${big:e}]")
+    let t = true
+    let ch = 'x'
+    let acc = "é"
+    println("[${t:>6}] [${ch:^5}] [${acc:>3}]")
+}

@@ -164,7 +164,7 @@ digraph deps {
   "check" -> "type_classification" [label="3"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="19"];
+  "cli" -> "cargo_cache" [label="24"];
   "cli" -> "cargo_toml" [label="4"];
   "cli" -> "check" [label="11"];
   "cli" -> "codegen" [label="7"];
@@ -223,15 +223,15 @@ digraph deps {
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
   "codegen" -> "component_analyzer" [label="2"];
-  "codegen" -> "debug_env" [label="9"];
+  "codegen" -> "debug_env" [label="7"];
   "codegen" -> "decorator_registry" [label="3"];
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="389"];
+  "codegen" -> "ir" [label="390"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="675"];
+  "codegen" -> "parser" [label="674"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
@@ -338,7 +338,7 @@ digraph deps {
   "interpreter" -> "codegen" [label="1"];
   "interpreter" -> "error" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "ir" [label="25"];
+  "interpreter" -> "ir" [label="33"];
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];

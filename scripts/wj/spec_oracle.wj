@@ -1,0 +1,434 @@
+// The language spec as an oracle: every tests/spec case that carries an expected output runs under the tree walker,
+// the resolved engine and the compiled backend, and each mode is judged against the spec's own `// expect:` lines.
+//
+//   wj run scripts/wj/spec_oracle.wj <wj-binary> <out.tsv> [--compiled recorded|live|skip] [--record] [--report] [--only SUBSTR]
+//
+// Rows (drift_ledger.wj format): `spec::<area>/<SPEC-ID> <TAB> walker <TAB> resolved <TAB> compiled`, where a mode's
+// token is `ok` (it matches the spec: stdout lines and exit status for `mode: run`, exit status and the
+// `expect-error:` substring for `mode: panic`) or `bad:exit<N>:<bytes>:<checksum>` (it does not), `skip` or `absent`.
+// A case whose modes disagree is a divergence; a case where every mode is `bad` contradicts the spec (the
+// `// xfail: Q-NNN` cases are left out: the spec test already requires them to fail).
+// Compiled results come from tests/spec_oracle/compiled_baseline.tsv (`recorded`, the default), or are built now
+// (`live`; `--record` rewrites the baseline): every case is transpiled with `wj build --no-cargo`, all of them are
+// compiled by ONE `cargo build --keep-going` of a scratch workspace with one bin per case (dev profile, as
+// `wj run --compiled`: overflow checks on), and each binary runs on its own. WJ_CARGO_WRAPPER prefixes that single
+// cargo build (a build-slot gate). `--report` prints the coverage table: cases per spec area and the share run in all modes.
+// Cases that cannot be compared by output (effects, check-*, parse-*, simulate, replay, manifests, profiles) are
+// counted but not run here: the in-process spec test (tests/spec_conformance_test.rs) owns them.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+const SPEC: string = "tests/spec"
+const BASELINE: string = "tests/spec_oracle/compiled_baseline.tsv"
+
+struct Case {
+    id: string,
+    area: string,
+    file: string,
+    mode: string,
+    expect: Vec<string>,
+    expect_error: string,
+    expect_exit: int,
+    xfail: bool,
+    comparable: bool,
+}
+
+fn checksum(s: string) -> string {
+    let mut h = 17
+    for b in s.as_bytes() {
+        h = (h * 31 + (b as int)) % 1000000007
+    }
+    "${s.len()}:${h}"
+}
+
+fn wrapper() -> string {
+    env::var("WJ_CARGO_WRAPPER").unwrap_or("")
+}
+
+// value of a `// key: value` header line, or None
+fn header_value(line: string, key: string) -> Option<string> {
+    let prefix = "// ${key}:"
+    if strings.starts_with(line, prefix) {
+        let rest = line[prefix.len()..].to_string()
+        if strings.starts_with(rest, " ") {
+            return Some(rest[1..].to_string())
+        }
+        return Some(rest)
+    }
+    None
+}
+
+fn parse_case(root: string, file: string) -> Case {
+    let rel = strings.replace(file, "${root}/", "")
+    let parts = strings.split(rel, "/")
+    let area = if parts.len() > 1 { parts[0] } else { "" }
+    let base = parts[parts.len() - 1]
+    let stem = strings.replace(base, ".wj", "")
+    let mut c = Case { id: "spec::${area}/${stem}", area: area, file: file, mode: "run", expect: Vec::new(), expect_error: "", expect_exit: -1, xfail: false, comparable: true }
+    for line in strings.split_lines(fs.read_to_string(file).unwrap_or("")) {
+        if !strings.starts_with(line, "//") {
+            break
+        }
+        match header_value(line, "mode") {
+            Some(v) => { c.mode = strings.trim(v) },
+            None => {},
+        }
+        match header_value(line, "expect") {
+            Some(v) => { c.expect.push(v) },
+            None => {},
+        }
+        match header_value(line, "expect-error") {
+            Some(v) => { c.expect_error = v },
+            None => {},
+        }
+        match header_value(line, "expect-exit") {
+            Some(v) => { c.expect_exit = strings.trim(v).parse::<int>().unwrap_or(-1) },
+            None => {},
+        }
+        if strings.starts_with(line, "// xfail:") {
+            c.xfail = true
+        }
+        if strings.starts_with(line, "// manifest:") || strings.starts_with(line, "// profile:") || strings.starts_with(line, "// seed:") || strings.starts_with(line, "// faults:") {
+            c.comparable = false
+        }
+    }
+    if c.mode != "run" && c.mode != "panic" {
+        c.comparable = false
+    }
+    if c.mode == "panic" && c.expect_exit < 0 {
+        c.expect_exit = 101
+    }
+    if c.mode == "run" && c.expect_exit < 0 {
+        c.expect_exit = 0
+    }
+    c
+}
+
+fn collect(dir: string, out: Vec<string>) -> Vec<string> {
+    let mut acc = out
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            let mut names: Vec<string> = Vec::new()
+            for e in entries {
+                names.push(e.path())
+            }
+            names.sort()
+            for p in names {
+                if fs.is_dir(p) {
+                    acc = collect(p, acc)
+                } else if strings.ends_with(p, ".wj") {
+                    acc.push(p)
+                }
+            }
+        },
+        Err(_) => {},
+    }
+    acc
+}
+
+// the judgement of one finished run against the case's expectation
+fn judge(c: Case, status: int, stdout: string, stderr: string) -> string {
+    let mut ok = status == c.expect_exit
+    if ok && c.mode == "run" {
+        let want = strings.join(c.expect, "\n")
+        ok = strings.trim_end(stdout) == strings.trim_end(want)
+    }
+    if ok && c.mode == "panic" && c.expect_error != "" {
+        ok = strings.contains(stderr, c.expect_error) || strings.contains(stdout, c.expect_error)
+    }
+    if ok {
+        return "ok"
+    }
+    "bad:exit${status}:${checksum(stdout)}"
+}
+
+fn bin_name(c: Case) -> string {
+    strings.replace(strings.replace(c.id, "/", "_"), "::", "_")
+}
+
+fn run_interp(wj: string, c: Case, mode: string) -> string {
+    let cmd = "${quote(wj)} run --interpret --no-lint --deterministic-time --engine ${mode} ${quote(c.file)} < /dev/null"
+    match sh(cmd) {
+        Ok(r) => judge(c, r.status, r.stdout, r.stderr),
+        Err(_) => "error",
+    }
+}
+
+// `[dependencies]` lines of a generated Cargo.toml
+fn dep_lines(manifest: string) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut inside = false
+    for line in strings.split_lines(fs.read_to_string(manifest).unwrap_or("")) {
+        if strings.starts_with(line, "[") {
+            inside = line == "[dependencies]"
+        } else if inside && strings.trim(line) != "" {
+            out.push(line)
+        }
+    }
+    out
+}
+
+// Compile every case in one cargo build and run each binary: rows `bin name <TAB> judged token`.
+fn compile_all(wj: string, cases: Vec<Case>, scratch: string) -> Vec<string> {
+    let ws = "${scratch}/ws"
+    let _ = sh("mkdir -p ${quote(ws)}")
+    let mut deps: Vec<string> = Vec::new()
+    let mut bins = ""
+    let mut tokens: Vec<string> = Vec::new()
+    let mut built: Vec<bool> = Vec::new()
+    for c in cases {
+        let n = bin_name(c)
+        let dir = "${scratch}/${n}"
+        let ok = match sh("mkdir -p ${quote(dir)} && cp ${quote(c.file)} ${quote(dir)}/case.wj && ${quote(wj)} build --no-cargo --no-lint -o ${quote(dir)}/b ${quote(dir)}/case.wj") {
+            Ok(r) => r.status == 0 && fs.exists("${dir}/b/case.rs"),
+            Err(_) => false,
+        }
+        built.push(ok)
+        if ok {
+            for d in dep_lines("${dir}/b/Cargo.toml") {
+                if !deps.contains(d) {
+                    deps.push(d)
+                }
+            }
+            bins = bins + "[[bin]]\nname = \"${n}\"\npath = \"${dir}/b/case.rs\"\n\n"
+        }
+    }
+    let manifest = "[package]\nname = \"spec-oracle\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n\n[dependencies]\n" + strings.join(deps, "\n") + "\n\n" + bins
+    let _ = fs.write("${ws}/Cargo.toml", manifest)
+    println("  compiling ${cases.len()} cases in one cargo build")
+    let build = "cd ${quote(ws)} && ${wrapper()} env CARGO_TARGET_DIR=${quote(ws)}/target CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_CODEGEN_UNITS=256 CARGO_PROFILE_DEV_LTO=off cargo build --keep-going --quiet > ${quote(ws)}/build.log 2>&1; true"
+    let _ = sh(build)
+    let mut i = 0
+    while i < cases.len() {
+        let c = cases[i]
+        let n = bin_name(c)
+        let exe = "${ws}/target/debug/${n}"
+        if !built[i] || !fs.exists(exe) {
+            tokens.push("${n}\tbuild-fail")
+        } else {
+            match sh("cd ${quote(scratch)} && ${quote(exe)} < /dev/null") {
+                Ok(r) => { tokens.push("${n}\t${judge(c, r.status, r.stdout, r.stderr)}") },
+                Err(_) => { tokens.push("${n}\terror") },
+            }
+        }
+        i += 1
+    }
+    tokens
+}
+
+fn token_of(rows: Vec<string>, n: string) -> string {
+    for r in rows {
+        let f = strings.split(r, "\t")
+        if f.len() == 2 && f[0] == n {
+            return f[1]
+        }
+    }
+    "absent"
+}
+
+fn read_baseline() -> Vec<string> {
+    let mut rows = Vec::new()
+    for line in strings.split_lines(fs.read_to_string(BASELINE).unwrap_or("")) {
+        if line != "" && !strings.starts_with(line, "#") {
+            rows.push(line)
+        }
+    }
+    rows
+}
+
+fn baseline_for(rows: Vec<string>, id: string) -> string {
+    for r in rows {
+        let f = strings.split(r, "\t")
+        if f.len() >= 2 && f[0] == id {
+            return f[1]
+        }
+    }
+    "absent"
+}
+
+fn pad(s: string, n: int) -> string {
+    let mut out = s
+    while (out.len() as int) < n {
+        out = out + " "
+    }
+    out
+}
+
+// Planted outputs: the judge must accept the right answer and reject a wrong line, a wrong exit status, a missing
+// panic message and an extra line (a gate that cannot fail proves nothing). Exit status 1 when it cannot.
+fn selftest() -> bool {
+    let run_case = Case { id: "t", area: "t", file: "t", mode: "run", expect: ["a", "b"], expect_error: "", expect_exit: 0, xfail: false, comparable: true }
+    let panic_case = Case { id: "t", area: "t", file: "t", mode: "panic", expect: ["x"], expect_error: "overflow", expect_exit: 101, xfail: false, comparable: true }
+    let mut ok = true
+    let checks = [
+        judge(run_case, 0, "a\nb\n", "") == "ok",
+        judge(run_case, 0, "a\nc\n", "") != "ok",
+        judge(run_case, 1, "a\nb\n", "") != "ok",
+        judge(run_case, 0, "a\nb\nextra\n", "") != "ok",
+        judge(run_case, 0, "a\n", "") != "ok",
+        judge(panic_case, 101, "x\n", "panicked: attempt to add with overflow") == "ok",
+        judge(panic_case, 101, "x\n", "panicked: other") != "ok",
+        judge(panic_case, 0, "x\n", "overflow") != "ok",
+    ]
+    let mut i = 0
+    while i < checks.len() {
+        if !checks[i] {
+            println("spec-oracle selftest: check ${i} failed")
+            ok = false
+        }
+        i += 1
+    }
+    ok
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() >= 2 && args[1] == "--selftest" {
+        if selftest() {
+            println("spec-oracle selftest: 8 planted outputs judged correctly")
+            return
+        }
+        process.exit(1)
+    }
+    if args.len() < 3 {
+        println("usage: spec_oracle.wj <wj-binary> <out.tsv> [--compiled recorded|live|skip] [--record] [--report] [--only SUBSTR]")
+        process.exit(2)
+    }
+    let wj = args[1]
+    let out_path = args[2]
+    let mut compiled = "recorded"
+    let mut record = false
+    let mut report = false
+    let mut only = ""
+    let mut i = 3
+    while i < args.len() {
+        if args[i] == "--compiled" {
+            compiled = args[i + 1]
+            i += 1
+        } else if args[i] == "--record" {
+            record = true
+        } else if args[i] == "--report" {
+            report = true
+        } else if args[i] == "--only" {
+            only = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    let scratch = match sh("mktemp -d /tmp/wj-spec-oracle.XXXXXX") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-spec-oracle",
+    }
+    let baseline = read_baseline()
+    let mut out = ""
+    let mut recorded = ""
+    let mut areas: Vec<string> = Vec::new()
+    let mut total: Vec<int> = Vec::new()
+    let mut cmp: Vec<int> = Vec::new()
+    let mut all3: Vec<int> = Vec::new()
+    let mut diverge: Vec<string> = Vec::new()
+    let mut cases: Vec<Case> = Vec::new()
+    let mut case_area: Vec<int> = Vec::new()
+    for f in collect(SPEC, Vec::new()) {
+        let c = parse_case(SPEC, f)
+        let mut idx = -1
+        let mut k = 0
+        while k < areas.len() {
+            if areas[k] == c.area {
+                idx = k
+            }
+            k += 1
+        }
+        if idx < 0 {
+            areas.push(c.area)
+            total.push(0)
+            cmp.push(0)
+            all3.push(0)
+            idx = (areas.len() - 1) as int
+        }
+        total[idx as usize] = total[idx as usize] + 1
+        if !c.comparable || c.xfail || !strings.contains(c.id, only) {
+            continue
+        }
+        cmp[idx as usize] = cmp[idx as usize] + 1
+        cases.push(c)
+        case_area.push(idx)
+    }
+    let live_rows = if compiled == "live" { compile_all(wj, cases, scratch) } else { Vec::new() }
+    let mut ci = 0
+    while ci < cases.len() {
+        let c = cases[ci]
+        let idx = case_area[ci] as usize
+        ci += 1
+        let w = run_interp(wj, c, "walker")
+        let r = run_interp(wj, c, "resolved")
+        let comp = if compiled == "skip" {
+            "skip"
+        } else if compiled == "live" {
+            token_of(live_rows, bin_name(c))
+        } else {
+            baseline_for(baseline, c.id)
+        }
+        if compiled == "live" {
+            recorded = recorded + "${c.id}\t${comp}\n"
+        }
+        out = out + "${c.id}\t${w}\t${r}\t${comp}\n"
+        if comp != "skip" && comp != "absent" {
+            all3[idx] = all3[idx] + 1
+        }
+        if w != "ok" || r != "ok" || (comp != "ok" && comp != "skip" && comp != "absent") {
+            diverge.push("${c.id}  walker=${w} resolved=${r} compiled=${comp}")
+        }
+    }
+    match fs.write(out_path, out) {
+        Ok(_) => {},
+        Err(e) => {
+            println("cannot write ${out_path}: ${e}")
+            process.exit(2)
+        },
+    }
+    if record && compiled == "live" {
+        let ver = match sh("${quote(wj)} --version") {
+            Ok(r) => strings.trim(r.stdout),
+            Err(_) => "unknown",
+        }
+        let mut body = "# spec-oracle compiled results recorded with: ${ver}\n" + recorded
+        if only != "" {
+            let mut kept = ""
+            for line in read_baseline() {
+                let id = strings.split(line, "\t")[0]
+                if !strings.contains(id, only) {
+                    kept = kept + line + "\n"
+                }
+            }
+            body = "# spec-oracle compiled results recorded with: ${ver}\n" + kept + recorded
+        }
+        let _ = fs.write(BASELINE, body)
+        println("  recorded ${BASELINE}")
+    }
+    let _ = sh("rm -rf ${quote(scratch)}")
+    if report {
+        println("area            cases  comparable  run in all three modes")
+        let mut t = 0
+        let mut tc = 0
+        let mut ta = 0
+        let mut j = 0
+        while j < areas.len() {
+            println("${pad(areas[j], 15)} ${pad("${total[j]}", 6)} ${pad("${cmp[j]}", 11)} ${all3[j]}")
+            t += total[j]
+            tc += cmp[j]
+            ta += all3[j]
+            j += 1
+        }
+        let pct = if tc > 0 { ta * 100 / tc } else { 0 }
+        println("total           ${pad("${t}", 6)} ${pad("${tc}", 11)} ${ta} (${pct}% of comparable)")
+    }
+    println("spec-oracle: ${out.len()} bytes of rows, ${diverge.len()} case(s) where a mode departs from the spec")
+    for d in diverge {
+        println("  ${d}")
+    }
+}
