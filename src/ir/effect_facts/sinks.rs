@@ -94,6 +94,8 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("http::patch", &[u(NetConnect, P0)]),
     ("http::delete", &[u(NetConnect, P0)]),
     ("http::head", &[u(NetConnect, P0)]),
+    // `request(method, url)`: the url is argument 1
+    ("http::request", &[u(NetConnect, Res::Arg(1))]),
     ("http::serve", &[u(NetListen, P0)]),
     ("http::serve_fn", &[u(NetListen, P0)]),
     ("http::server_serve", &[u(NetListen, P0)]),
