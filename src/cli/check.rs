@@ -113,22 +113,29 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
     let blocks = |d: &crate::diagnostics::Diagnostic| {
         d.severity == crate::diagnostics::Severity::Error && (lints_block || !is_lint(&d.code))
     };
-    let mut blocking: Vec<&crate::diagnostics::Diagnostic> = checked.report.diagnostics.iter().filter(|d| blocks(d)).collect();
-    // what rustc would reject that the front end does not see: uses after a move (WJ0007), predicted from
-    // the generated Rust of a single-file program
-    let moved = if blocking.is_empty() && path.is_file() { check::moves::predicted_moves(path) } else { Vec::new() };
-    blocking.extend(moved.iter());
+    // uses after a move (WJ0007) are among them: `wj check` predicts them from the generated Rust (ADR-0030)
+    let blocking: Vec<&crate::diagnostics::Diagnostic> = checked.report.diagnostics.iter().filter(|d| blocks(d)).collect();
     let errors = blocking.len();
     if errors == 0 {
         return Ok(());
     }
-    let source_of = |f: &str| checked.sources.get(f).cloned().or_else(|| std::fs::read_to_string(f).ok());
+    // paths relative to the current directory: shorter for people and agents (sources looked up either way)
+    let cwd = std::env::current_dir().ok().map(|d| d.to_string_lossy().to_string() + "/");
+    let short = |f: &str| cwd.as_deref().and_then(|c| f.strip_prefix(c)).unwrap_or(f).to_string();
+    let source_of = |f: &str| {
+        let full = cwd.as_deref().map(|c| format!("{c}{f}"));
+        checked.sources.get(f).or_else(|| full.as_deref().and_then(|g| checked.sources.get(g))).cloned().or_else(|| std::fs::read_to_string(f).ok())
+    };
     for d in blocking {
-        eprintln!("{}", render::render(d, &source_of));
+        let mut d = d.clone();
+        for sp in d.primary_span.iter_mut().chain(d.secondary_spans.iter_mut()) {
+            sp.file = short(&sp.file);
+        }
+        eprintln!("{}", render::render(&d, &source_of));
     }
     anyhow::bail!(
         "not running {}: `wj check` reports {} error(s); the interpreter runs only programs the compiler accepts",
-        path.display(),
+        short(&path.display().to_string()),
         errors
     )
 }

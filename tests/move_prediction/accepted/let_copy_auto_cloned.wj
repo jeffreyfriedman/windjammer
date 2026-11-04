@@ -1,0 +1,10 @@
+// Not reported: the compiler clones `n` for `let m = n` because `n` is used again, so the build succeeds.
+struct Node {
+    label: string,
+}
+
+fn main() {
+    let n = Node { label: "a" }
+    let m = n
+    println("${m.label} ${n.label}")
+}
