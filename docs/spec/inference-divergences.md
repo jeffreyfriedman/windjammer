@@ -78,6 +78,8 @@ println("${s} ${t}")      // rustc E0382: borrow of moved value `s`
 `auto_clone` records `string_literal_vars` as "references, `.clone()` is a no-op", but codegen emits
 `let s: String = String::from("str")`. Fix direction: STR-LITERAL says a literal is a `string` value, so the
 exemption must go (or the binding must be emitted `&'static str`).
+**Fixed (C6, 2026-11).** The liveness-driven reuse copy (`copy_if_read_again`) emits `let t = s.clone()` because `s`
+is read again; the corpus program builds and matches the interpreter.
 
 ## D-CLONE-REDUNDANT Clone then borrow (S2)
 `fn label(self, prefix: string) -> string { prefix + self.name }` emits `prefix + &self.name.clone()`: the clone is

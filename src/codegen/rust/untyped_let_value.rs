@@ -17,6 +17,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let s = self.generate_expression(value);
         self.coerce_string_literals_to_owned = prev;
-        s
+        // CLONE-USE-AFTER-MOVE: `let t = s` with `s` read again copies `s`.
+        self.copy_if_read_again(value, s)
     }
 }

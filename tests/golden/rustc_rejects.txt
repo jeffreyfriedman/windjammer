@@ -56,7 +56,6 @@ tests/imported_type_qualified_call.wj | error[E0432]: unresolved import `crate::
 tests/inference_corpus/closure_len_width.wj | error[E0308]: mismatched types
 tests/inference_corpus/closure_mut_capture.wj | error[E0596]: cannot borrow `*v` as mutable, as it is behind a `&` reference
 tests/inference_corpus/pin_ref_vec.wj | error[E0308]: mismatched types
-tests/inference_corpus/string_literal_move_then_use.wj | error[E0382]: borrow of moved value: `s`
 tests/inline_mod_extern_fn_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/input_keyboard_test.wj | wj build failed
 tests/int_inference_backward_propagation_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
