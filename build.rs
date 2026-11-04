@@ -1,3 +1,5 @@
+#[path = "build_support/identity_key.rs"]
+mod identity_key;
 #[path = "build_support/test_modules.rs"]
 mod test_modules;
 
@@ -184,7 +186,17 @@ fn emit_toolchain_identity() {
     let commit_ts: i64 = git_output(&["log", "-1", "--format=%ct"]).and_then(|s| s.parse().ok()).unwrap_or(0);
     let dirty = git_output(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into());
-    let key = format!("{hash} {dirty} {profile}");
+    // Uncommitted changes are part of the identity: two dirty builds of one commit are different binaries.
+    let diff = if dirty { git_output(&["diff", "HEAD"]).unwrap_or_default() } else { String::new() };
+    let untracked: Vec<(String, Vec<u8>)> = git_output(&["ls-files", "--others", "--exclude-standard", "--", "src", "std", "build.rs", "Cargo.toml"])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|f| {
+            let root = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+            Some((f.to_string(), std::fs::read(Path::new(&root).join(f)).ok()?))
+        })
+        .collect();
+    let key = identity_key::identity_key(&hash, dirty, identity_key::dirty_digest(&diff, &untracked), &profile);
     let stamp = Path::new(&std::env::var("OUT_DIR").unwrap_or_else(|_| "target".into())).join("toolchain_identity.stamp");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
