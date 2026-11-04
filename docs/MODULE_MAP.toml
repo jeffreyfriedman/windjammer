@@ -288,7 +288,7 @@ known_violations = ["intrinsics"]
 layer = "ir"
 owner_stage = "typed IR construction and IR-level solvers (stage 5)"
 module_md = "src/ir/MODULE.md"
-allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
+allowed_imports = ["analyzer", "typing", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
 known_violations = ["codegen", "compiler"]
 
 [modules.lexer]
@@ -486,6 +486,13 @@ owner_stage = "legacy numeric/type inference (stage 3)"
 module_md = "src/type_inference/MODULE.md"
 allowed_imports = ["compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "lexer", "module_system", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_registry", "stdlib_surface"]
 known_violations = ["analyzer", "codegen", "metadata"]
+
+[modules.typing]
+layer = "types"
+owner_stage = "the type owner (option C; stage C1: typed Rust core surface)"
+module_md = "src/typing/MODULE.md"
+allowed_imports = ["lexer", "parser", "parser_impl", "type_classification"]
+known_violations = []
 
 [modules.type_registry]
 layer = "resolve"
