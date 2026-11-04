@@ -13,6 +13,10 @@ impl<'ast> CodeGenerator<'ast> {
         value: &'ast Expression<'ast>,
         location: &Option<crate::source_map::Location>,
     ) -> String {
+        // ADR-0014: `let xs = [..]` holds a `Vec`, not a Copy array (CLONE-USE-AFTER-MOVE needs this).
+        if let (true, Pattern::Identifier(n) | Pattern::MutBinding(n)) = (self.array_literal_as_list, pattern) {
+            self.clone_facts.list_literal_locals.insert(n.clone());
+        }
         // A let-bound closure that never leaves the function borrows its captures.
         self.idiom.next_closure_borrows_captures = matches!(value, Expression::Closure { .. })
             && matches!(pattern, Pattern::Identifier(n) | Pattern::MutBinding(n)

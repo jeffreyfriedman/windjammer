@@ -32,6 +32,8 @@ struct Mention {
     /// Loop nesting path (ids of enclosing loops) at the mention.
     loop_depth_id: usize,
     in_closure: bool,
+    /// The loop the binding read here was declared in (`usize::MAX`: unknown), as of this read.
+    decl: usize,
 }
 
 #[derive(Default)]
@@ -94,7 +96,8 @@ impl Collector {
                 src.insert(name.to_string());
             }
         }
-        let m = Mention { node, branch: self.branch_now, seq: self.seq, loop_depth_id: self.current_loop(), in_closure: self.closure_depth > 0 };
+        let decl = self.declared_in.get(name).copied().unwrap_or(usize::MAX);
+        let m = Mention { node, branch: self.branch_now, seq: self.seq, loop_depth_id: self.current_loop(), in_closure: self.closure_depth > 0, decl };
         self.mentions.entry(name.to_string()).or_default().push(m);
     }
 
@@ -140,6 +143,14 @@ impl Collector {
         self.branch_now = self.branch_paths.len() - 1;
         f(self);
         self.branch_now = outer;
+    }
+
+    /// A mention on path `a` runs whenever one on path `b` does (`a` is a prefix of `b`).
+    fn unconditional_at(&self, a: usize, b: usize) -> bool {
+        let empty = Vec::new();
+        let pa = self.branch_paths.get(a).unwrap_or(&empty);
+        let pb = self.branch_paths.get(b).unwrap_or(&empty);
+        pa.len() <= pb.len() && pa.iter().zip(pb).all(|(x, y)| x == y)
     }
 
     fn new_group(&mut self) -> usize {
@@ -197,8 +208,10 @@ impl Collector {
             let start = self.seq;
             self.stmt(s);
             let mut binds = Vec::new();
-            if let Statement::Let { pattern, .. } = s {
-                pattern_names(pattern, &mut binds);
+            match s {
+                Statement::Let { pattern, .. } => pattern_names(pattern, &mut binds),
+                Statement::Assignment { target: Expression::Identifier { name, .. }, .. } => binds.push(name.clone()),
+                _ => {}
             }
             self.spans.push(Span {
                 node: stmt_id(s),
@@ -220,7 +233,10 @@ impl Collector {
                     self.stmts(b);
                 }
                 self.declare_pattern(pattern);
-                self.derive(pattern, &src);
+                // `let a = v` moves (or copies) `v` into `a`; it does not borrow it.
+                if !matches!(value, Expression::Identifier { .. }) {
+                    self.derive(pattern, &src);
+                }
                 if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
                     self.let_bound.insert(n.clone());
                 }
@@ -228,7 +244,11 @@ impl Collector {
             Statement::Const { value, .. } | Statement::Static { value, .. } => self.expr(value),
             Statement::Assignment { target, value, .. } => {
                 self.expr(value);
-                self.expr(target);
+                match target {
+                    // `x = v` rebinds `x`; it is not a read of the old value (`t = insert(t, v)`).
+                    Expression::Identifier { name, .. } => self.mention(name, None),
+                    _ => self.expr(target),
+                }
             }
             Statement::Return { value, .. } => {
                 if let Some(v) = value {
@@ -263,6 +283,10 @@ impl Collector {
                 self.enter_loop();
                 self.declare_pattern(pattern);
                 self.derive(pattern, &src);
+                // A by-value loop variable is an owned value too (the backend filters references).
+                if let Pattern::Identifier(n) | Pattern::MutBinding(n) = pattern {
+                    self.let_bound.insert(n.clone());
+                }
                 self.stmts(body);
                 self.exit_loop();
             }
@@ -446,6 +470,24 @@ fn last_reads(c: &Collector, owned_only: bool) -> Vec<Mention> {
     out
 }
 
+/// Reads inside `stmt` followed by another read of the same binding inside `stmt` (by node): a
+/// move at such a read must copy, the later read still needs the value (CLONE-USE-AFTER-MOVE).
+pub fn reread_in(stmt: &Statement<'_>) -> BTreeSet<usize> {
+    let mut c = Collector::default();
+    c.stmt(stmt);
+    let mut out = BTreeSet::new();
+    for ms in c.mentions.values() {
+        let reads: Vec<usize> = ms.iter().filter_map(|m| m.node).collect();
+        out.extend(reads.iter().take(reads.len().saturating_sub(1)).copied());
+    }
+    out
+}
+
+/// Bindings that are owned values in every backend: parameters and plain `let` bindings.
+pub fn plain_bindings(entry: &[&str], body: &[&Statement<'_>]) -> BTreeSet<String> {
+    collect(entry, body).let_bound
+}
+
 /// Bindings read exactly once inside `stmt`, where that read is their last use (`last` is the
 /// result of [`last_moves`] for the enclosing function). A consumer emitting `stmt` may move them.
 pub fn dying_in(stmt: &Statement<'_>, last: &BTreeSet<usize>) -> BTreeSet<String> {
@@ -484,12 +526,27 @@ pub fn read_after(entry: &[&str], body: &[&Statement<'_>], always_move: bool) ->
                     .find(|_| true)
                     .is_some_and(|m| m.node.is_some());
             let decl = c.declared_in.get(name).copied().unwrap_or(0);
+            // A read in the loop of a binding declared outside it (as of that read: shadowing
+            // `for r in ..` after the loop declares a different `r`).
             let carried = sp.loops.iter().any(|l| {
-                let outlives = decl != *l && !c.loop_inside(decl, *l);
                 let (lo, hi) = c.loop_ranges.get(l).copied().unwrap_or((0, 0));
-                outlives && ms.iter().any(|m| m.node.is_some() && m.seq >= lo && m.seq <= hi)
+                // `rx = got.0` later in the same pass of the loop body (not under a branch the
+                // statement is not under) overwrites the value before the next iteration reads it.
+                let overwritten = ms
+                    .iter()
+                    .filter(|m| m.seq > sp.end && m.seq <= hi && !c.exclusive(m.branch, sp.branch))
+                    .find(|_| true)
+                    .is_some_and(|m| m.node.is_none() && c.unconditional_at(m.branch, sp.branch));
+                !overwritten
+                    && ms.iter().any(|m| {
+                        let d = if m.decl == usize::MAX { decl } else { m.decl };
+                        m.node.is_some() && m.seq >= lo && m.seq <= hi && d != *l && !c.loop_inside(d, *l)
+                    })
             });
             // A binding derived from `name` (a closure capturing it, a borrow) read later keeps it live.
+            // A statement that rebinds `name` ends the old value: nothing after it, not even the next
+            // iteration (`t = insert(t, v)` in a loop), reads that value.
+            let carried = carried && !rebound_here;
             if later || carried || (!rebound_here && borrowed_by_later_live_binding(&c, name, sp.end)) {
                 names.insert(name.clone());
             }
@@ -789,6 +846,43 @@ mod tests {
             .unwrap();
         let u = user_clones(&decl.body);
         assert_eq!((u.get("r"), u.get("a")), (Some(&2), Some(&1)));
+    }
+
+    #[test]
+    fn reread_in_marks_every_read_but_the_last_of_a_statement() {
+        let src = "fn f(a: Vec<int>, b: Vec<int>) -> int { 1 }\nfn main() {\n let v = vec![1]\n let n = f(v, v)\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(reread_in(decl.body[1]).len(), 1, "the first `v` is read again in the same statement");
+        assert!(plain_bindings(&[], &decl.body).contains("v"));
+    }
+
+    #[test]
+    fn a_value_overwritten_later_in_the_loop_body_is_not_carried() {
+        let src = "fn take(v: Vec<int>) -> Vec<int> { v }\nfn main() {\n let mut v = vec![1]\n while true {\n  let w = take(v)\n  v = w\n }\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(lexer.tokenize_with_locations())));
+        let program = Box::leak(Box::new(parser.parse().expect("parse")));
+        let decl = program
+            .items
+            .iter()
+            .find_map(|i| match i {
+                crate::parser::Item::Function { decl, .. } if decl.name == "main" => Some(decl),
+                _ => None,
+            })
+            .unwrap();
+        let ra = read_after(&[], &decl.body, false);
+        let Statement::While { body, .. } = decl.body[1] else { panic!() };
+        assert!(!ra.get(&stmt_id(body[0])).is_some_and(|s| s.contains("v")), "v is rebound before the next iteration");
     }
 
     #[test]

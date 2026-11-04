@@ -395,13 +395,8 @@ pub struct CodeGenerator<'ast> {
     /// Per-function IR data, populated when the IR pipeline runs alongside legacy codegen.
     /// When set and a cutover flag is enabled, the corresponding codegen reads from here.
     pub(crate) current_ir_function: Option<crate::ir::IrFunction>,
-    /// MOVE-LAST-USE fact (`ir::liveness::last_moves`) for the function being emitted.
-    pub(crate) last_use_nodes: std::collections::BTreeSet<usize>,
-    /// CLONE-USE-AFTER-MOVE fact (`ir::liveness::read_after`) and the statement being emitted.
-    /// CLONE-BORROWED-TO-OWNED fact (`IrFunction::returned_fields` / `clone_sites`).
-    pub(crate) returned_fields: (std::collections::BTreeMap<usize, String>, std::collections::BTreeMap<usize, String>),
-    pub(crate) element_reads: std::collections::BTreeMap<usize, String>,
-    pub(crate) read_after: (std::collections::BTreeMap<usize, std::collections::BTreeSet<String>>, Vec<usize>),
+    /// C6 clone facts for the function being emitted (`move_at_last_use.rs`).
+    pub(crate) clone_facts: super::move_at_last_use::CloneFacts,
     /// Full IR module (all functions), set when cutover is active. Functions are looked up
     /// by name when codegen begins processing each AnalyzedFunction.
     pub(crate) ir_module_functions: Vec<crate::ir::IrFunction>,
@@ -773,10 +768,7 @@ impl<'ast> CodeGenerator<'ast> {
             ir_cutover: IrCutoverConfig::production(),
             config: crate::compiler_config::CompilerConfig::default(),
             current_ir_function: None,
-            last_use_nodes: std::collections::BTreeSet::new(),
-            read_after: Default::default(),
-            returned_fields: Default::default(),
-            element_reads: Default::default(),
+            clone_facts: Default::default(),
             ir_module_functions: Vec::new(),
             ir_module: None,
             boundary_signature_errors: std::cell::RefCell::new(Vec::new()),
