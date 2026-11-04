@@ -1,0 +1,40 @@
+// A user method named `find` (a std collection name) that returns an element found by a loop over
+// `self.nodes`: the call `table.find(child.up)` must use this method's signature, not the std one's
+// argument borrowing. Expected by hand: the node whose key is 7.
+// expect: 7
+struct Key {
+    pub n: int,
+}
+
+struct Node {
+    pub key: Key,
+    pub up: Key,
+}
+
+struct Table {
+    pub nodes: Vec<Node>,
+}
+
+impl Table {
+    pub fn find(self, key: Key) -> Option<Node> {
+        for nd in self.nodes {
+            if nd.key.n == key.n {
+                return Some(nd)
+            }
+        }
+        None
+    }
+}
+
+pub fn up_of(table: Table, child: Node) -> Option<Node> {
+    table.find(child.up)
+}
+
+fn main() {
+    let t = Table { nodes: [Node { key: Key { n: 1 }, up: Key { n: 0 } }, Node { key: Key { n: 7 }, up: Key { n: 1 } }] }
+    let c = Node { key: Key { n: 9 }, up: Key { n: 7 } }
+    match up_of(t, c) {
+        Some(p) => println("${p.key.n}"),
+        None => println("none"),
+    }
+}
