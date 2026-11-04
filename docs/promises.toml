@@ -22,6 +22,11 @@ source = "README.md"
 quote = "`wj build --no-cargo FILE` writes out the Rust"
 
 [[promise]]
+id = "feature interpreter-matches-compiled"
+source = "docs/testing/INTERPRETER_CONTRACT.md"
+quote = "its standard output, its exit status and the source location of"
+
+[[promise]]
 id = "feature interpret-instant"
 source = "README.md"
 quote = "`wj run` starts a whole multi-module project in milliseconds"
