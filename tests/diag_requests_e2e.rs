@@ -9,6 +9,9 @@
 //! The expected line is the line of the offending expression in the `.wj` source (the oracle).
 //! Run: `CARGO_BUILD_JOBS=2 cargo test --release --test diag_requests_e2e`.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::process::Command;
 
 struct Case {
@@ -69,14 +72,13 @@ const CASES: &[Case] = &[
 ];
 
 fn run_case(c: &Case) -> (String, i32) {
-    let dir = std::env::temp_dir().join(format!("wj-e2e-{}-{}", std::process::id(), c.name));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("e2e");
     let f = dir.join("main.wj");
     std::fs::write(&f, c.src).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args(["run", "--compiled"])
         .arg(&f)
-        .env("WJ_CARGO_TARGET_ROOT", std::env::temp_dir().join(format!("wj-e2e-target-{}", std::process::id())))
+        .env("WJ_CARGO_TARGET_ROOT", scratch::shared_cache_dir("e2e-target"))
         .output()
         .unwrap();
     let _ = std::fs::remove_dir_all(&dir);
@@ -112,6 +114,5 @@ fn rustc_rejections_reach_the_user_as_windjammer_diagnostics() {
             bad.push(format!("{}: {}\n---- stderr ----\n{err}", c.name, why.join("; ")));
         }
     }
-    let _ = std::fs::remove_dir_all(std::env::temp_dir().join(format!("wj-e2e-target-{}", std::process::id())));
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

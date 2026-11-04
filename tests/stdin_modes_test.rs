@@ -2,15 +2,16 @@
 //! `io::stdin().read_line(line)` must fill `line` (compiled: `&mut line`, never a clone), and the free
 //! functions `io::read_line()` / `io::read_to_string(io::stdin())` exist in the interpreter.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
 
-fn dir(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("wj-stdin-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn dir(name: &str) -> Scratch {
+    Scratch::new(&format!("stdin-{name}"))
 }
 
 fn run_interp(src: &str, name: &str, input: &str) -> String {

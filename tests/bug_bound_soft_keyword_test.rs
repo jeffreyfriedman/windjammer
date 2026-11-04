@@ -4,17 +4,20 @@
 //! elsewhere it should be a normal identifier so SQL binder code can say
 //! `Ok(bound) =>` naturally.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
 
-fn write_temp_wj(src: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("wj_bound_ident_{}", std::process::id()));
+fn write_temp_wj(src: &str) -> (Scratch, PathBuf) {
+    let dir = Scratch::new("bound_ident");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let path = dir.join("bound_ident.wj");
     fs::write(&path, src).expect("write wj");
-    path
+    (dir, path)
 }
 
 fn wj_bin() -> PathBuf {
@@ -29,7 +32,7 @@ fn wj_bin() -> PathBuf {
 /// Soft-keyword gap: pattern binding named `bound` should parse as an identifier.
 #[test]
 fn bound_pattern_binding_should_parse_as_identifier() {
-    let path = write_temp_wj(
+    let (_guard, path) = write_temp_wj(
         r#"
 pub fn pick(x: Option<i64>) -> i64 {
     match x {
@@ -61,7 +64,7 @@ pub fn pick(x: Option<i64>) -> i64 {
 /// Soft-keyword gap: function parameter named `bound` should parse.
 #[test]
 fn bound_parameter_name_should_parse_as_identifier() {
-    let path = write_temp_wj(
+    let (_guard, path) = write_temp_wj(
         r#"
 pub fn use_bound(bound: i64) -> i64 {
     bound

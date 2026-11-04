@@ -2,6 +2,9 @@
 //! `linter::lint_text`. Gate: the interpreter path reports the same codes the shared function returns,
 //! and every verified-corpus program is clean under it.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::PathBuf;
 use std::process::Command;
 use windjammer::linter::lint_text;
@@ -19,8 +22,7 @@ fn shared_lint_set_reports_leakage_and_style() {
 }
 
 fn run_interpreter(src: &str) -> std::process::Output {
-    let dir = std::env::temp_dir().join(format!("wj-lintmodes-{}-{}", std::process::id(), src.len()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new(&format!("lintmodes-{}", src.len()));
     let f = dir.join("t.wj");
     std::fs::write(&f, src).unwrap();
     Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&f).output().unwrap()

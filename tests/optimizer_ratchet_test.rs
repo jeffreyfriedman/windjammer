@@ -3,6 +3,9 @@
 //! output of `wj build` (which includes the optimizer) and compares with the
 //! checked-in baseline. Lower the baseline when you improve; never raise it.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -36,7 +39,7 @@ fn count(code: &str) -> BTreeMap<&'static str, usize> {
 }
 
 fn corpus_counts() -> BTreeMap<&'static str, usize> {
-    let tmp = std::env::temp_dir().join(format!("wj-opt-ratchet-{}", std::process::id()));
+    let tmp = Scratch::new("opt-ratchet");
     let mut files: Vec<PathBuf> = std::fs::read_dir(corpus_dir())
         .unwrap()
         .flatten()

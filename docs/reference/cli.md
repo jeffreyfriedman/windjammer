@@ -502,6 +502,9 @@ Usage: wj clean [OPTIONS]
 |---|---|---|---|
 | `--all` | ALL |  | Also clean local target/ directories (deep clean) |
 | `--sidecars` | SIDECARS |  | Only remove legacy `*.wj.meta` sidecars next to sources under the current directory |
+| `--tmp` | TMP |  | Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes) |
+| `--older-than-hours` | OLDER_THAN_HOURS | 6 | With --tmp: only directories older than this many hours |
+| `--yes` | YES |  | With --tmp: actually delete (default is a dry run) |
 
 ## `wj cache`
 

@@ -1,7 +1,7 @@
 # src/cli/
 
 ## Purpose
-Subcommand implementations of the `wj` binary: build, run, test, check (in-process parse + lint + transpile, `--json` report; no cargo for `.wj` input), fmt, lint, reduce (test-case reducer, `src/reduce/`), errors (non-interactive diagnostics browser over `wj check`), new, add/remove, update, cache, clean, self-install, JSON diagnostics.
+Subcommand implementations of the `wj` binary: build, run, test, check (in-process parse + lint + transpile, `--json` report; no cargo for `.wj` input), fmt, lint, reduce (test-case reducer, `src/reduce/`), errors (non-interactive diagnostics browser over `wj check`), new, add/remove, update, cache, clean (`tmp_janitor.rs`: `wj clean --tmp` removes stale `wj-*` scratch dirs, dry run unless `--yes`; gate: tests/tmp_hygiene_test.rs), self-install, JSON diagnostics.
 
 ## Inputs/Outputs
 In: parsed CLI args. Out: process side effects and exit status.

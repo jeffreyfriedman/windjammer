@@ -11,6 +11,9 @@
 //!   data/ok.txt  data/sub/deep.txt  data/link -> ../outside  data/flink -> ../outside/secret.txt
 //!   data2/x.txt  outside/secret.txt  secret.txt  out/a.txt  out/olink -> ../outside  src/main.wj  wj.toml
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::PathBuf;
 use windjammer::interpreter::caps::{CapGate, CapMode};
 use windjammer::interpreter::runner::{exit_code_for, with_big_stack};
@@ -258,15 +261,14 @@ fn cases() -> Vec<Case> {
     v
 }
 
-fn fixture() -> PathBuf {
+fn fixture() -> Scratch {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let root = std::env::temp_dir().join(format!("wj_escape_{}_{}", std::process::id(), n));
+    let root = Scratch::new("escape");
     let _ = std::fs::remove_dir_all(&root);
     for d in ["data/sub", "data2", "outside", "out", "src"] {
         std::fs::create_dir_all(root.join(d)).unwrap();
     }
-    let root = std::fs::canonicalize(&root).unwrap();
     let w = |p: &str, t: &str| std::fs::write(root.join(p), t).unwrap();
     w("data/ok.txt", "ok");
     w("data/sub/deep.txt", "deep");
@@ -291,13 +293,13 @@ fn fixture() -> PathBuf {
     root
 }
 
-fn run_case(c: &Case) -> (i32, String, String, PathBuf) {
+fn run_case(c: &Case) -> (i32, String, String, Scratch) {
     windjammer::ir::effect_facts::reset_decision_cache();
     let root = fixture();
     let subst = |s: &str| s.replace("$ROOT", &root.display().to_string());
     let program = format!("{}\nfn main() {{\n    {}\n}}\n", c.uses, subst(c.body));
     let grant = subst(c.grant);
-    let r2 = root.clone();
+    let r2 = root.to_path_buf();
     let (code, out, err) = with_big_stack(move || {
         let mut lexer = windjammer::lexer::Lexer::new(&program);
         let tokens = lexer.tokenize_with_locations();
