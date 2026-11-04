@@ -441,8 +441,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         // TDD FIX: Regular assignments on mutable references need deref operator
         // For loop variables bound from &mut iteration are &mut T, so `var = x` must become `*var = x`
+        // Whole-value reassignment of a `&mut T` formal (`v = Vec::new()`, `slot = 0`) writes through
+        // the reference exactly like the compound branch above.
         let needs_deref = if let Expression::Identifier { name, .. } = target {
             self.mut_borrowed_iterator_vars.contains(name)
+                || self.inferred_mut_borrowed_params.contains(name)
+                || self.identifier_already_mut_ref(name)
         } else {
             false
         };
@@ -552,7 +556,8 @@ impl<'ast> CodeGenerator<'ast> {
                 let demoted_text_formal = self.inferred_borrowed_params.contains(name)
                     || self.inferred_mut_borrowed_params.contains(name)
                     || self.str_ref_optimized_params.contains(name)
-                    || self.emitted_rust_ref_formals.contains(name);
+                    || self.emitted_rust_ref_formals.contains(name)
+                    || self.str_slice_loop_vars.contains(name);
                 if owned_string_field
                     && demoted_text_formal
                     && !value_str.ends_with(".to_string()")

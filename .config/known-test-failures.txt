@@ -31,7 +31,6 @@ compiler_findings_batch3_test::user_method_named_contains_keeps_its_owned_formal
 compiler_findings_batch3_test::copy_field_passed_as_call_argument_keeps_the_parameter_borrowed
 # Drift findings (docs/drift/pilot4-findings.md): interpreted green, generated Rust rejected
 drift_repros_test::let_mut_zero_then_parse_typechecks
-drift_repros_test::map_get_unwrap_or_then_arithmetic_typechecks
 
 # green4 triage (2026-11): failing before the C4 usize work (checked at 22d3fe8b2), still open.
 # Width, owner: numeric solver / convergence C4 (D-WIDTH-OWNERS; docs/spec/inference-divergences.md).

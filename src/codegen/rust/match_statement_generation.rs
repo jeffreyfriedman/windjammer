@@ -12,6 +12,15 @@ use crate::parser::*;
 use super::{pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// A string-literal pattern (possibly inside an or-pattern).
+    fn pattern_has_str_literal(p: &Pattern<'_>) -> bool {
+        match p {
+            Pattern::Literal(crate::parser::Literal::String(_)) => true,
+            Pattern::Or(ps) => ps.iter().any(Self::pattern_has_str_literal),
+            _ => false,
+        }
+    }
+
     /// P3.642: walk nested `Match` / `Let` / `If` / loops — export nests
     /// `decode_store(snapshot)` under `match todos_to_json` inside the Ok arm;
     /// skipping those stmts left first-use move + late `.clone()` (E0382).
@@ -675,6 +684,15 @@ impl<'ast> CodeGenerator<'ast> {
                 && self.expression_produces_str_ref(object)
             {
                 self.generate_expression(object)
+            } else if method == "as_str"
+                && arguments.is_empty()
+                && arms.iter().any(|a| Self::pattern_has_str_literal(&a.pattern))
+            {
+                // Literal arms need a `&str` scrutinee: `text.clone().as_str()` over an owned
+                // `String` keeps the borrow (the clone is only there to satisfy ownership).
+                let base = self.generate_expression(object);
+                let base = base.strip_suffix(".clone()").unwrap_or(&base);
+                format!("{base}.as_str()")
             } else {
                 self.generate_expression(value)
             }

@@ -12,6 +12,18 @@ use crate::parser::*;
 use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `text[a..b]`: a borrowed slice (`&str`) that an owned `string` binding must copy.
+    fn is_range_slice_index(value: &Expression<'ast>) -> bool {
+        match value {
+            Expression::Index { index, .. } => matches!(index, Expression::Range { .. }),
+            // `text[a..b]` is parsed as the desugared `slice(a, b)` / `substring(a, b)`
+            Expression::MethodCall { method, arguments, .. } => {
+                matches!(method.as_str(), "slice" | "substring") && arguments.len() == 2
+            }
+            _ => false,
+        }
+    }
+
     /// Infer a let-binding type from its value (signature-driven), refining bare
     /// `Vec` / `HashSet` element types from return type or forward `.push`/`.insert` usage.
     fn infer_let_value_type(
@@ -658,7 +670,8 @@ impl<'ast> CodeGenerator<'ast> {
                             value: Literal::String(s),
                             ..
                         } if !s.is_empty()
-                    ) || matches!(value, Expression::Identifier { .. });
+                    ) || matches!(value, Expression::Identifier { .. })
+                        || Self::is_range_slice_index(value);
                     if should_convert && !string_utilities::already_owned_string_expr(&value_str) {
                         value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
@@ -1111,7 +1124,8 @@ impl<'ast> CodeGenerator<'ast> {
                         } else if !string_utilities::already_owned_string_expr(&value_str) {
                             value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                         }
-                    } else if matches!(value, Expression::Identifier { .. })
+                    } else if (matches!(value, Expression::Identifier { .. })
+                        || Self::is_range_slice_index(value))
                         && !string_utilities::already_owned_string_expr(&value_str)
                     {
                         value_str = string_utilities::coerce_expr_to_owned_string(&value_str);

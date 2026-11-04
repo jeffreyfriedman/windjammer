@@ -129,6 +129,14 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
+        self.return_position_list_literals = match func.return_type.as_ref() {
+            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::type_classification::type_is_vec_container(t) =>
+            {
+                Self::collect_return_position_lists(&func.body)
+            }
+            _ => Default::default(),
+        };
         // Propagate collection return type to `.collect()` turbofish when RHS lacks annotation.
         // Never use String/Option/etc. — those are not collect targets.
         self.collect_target_type = func
