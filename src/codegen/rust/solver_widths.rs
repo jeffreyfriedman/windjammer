@@ -87,6 +87,18 @@ impl<'ast> CodeGenerator<'ast> {
         f.literal_widths.get(&crate::ir::numeric_defaults::literal_key(lit)?)
     }
 
+    /// A float literal printed at the width the solver fixed from its uses (the float class), if any.
+    pub(in crate::codegen::rust) fn solver_float_literal(&self, lit: &Expression<'ast>, value: f64) -> Option<String> {
+        let suffix = match self.solver_literal_width(lit)? {
+            BaseType::F32 => "f32",
+            BaseType::F64 => "f64",
+            _ => return None,
+        };
+        let s = value.to_string();
+        let s = if s.contains('.') || s.contains('e') || s.contains('E') || s.contains("inf") || s.contains("NaN") { s } else { format!("{s}.0") };
+        Some(format!("{s}_{suffix}"))
+    }
+
     /// Width the solver fixed for a singly bound local (NUM-LOCAL-WIDTH).
     pub(in crate::codegen::rust) fn solver_local_width(&self, name: &str) -> Option<&BaseType> {
         self.current_ir_function.as_ref()?.solver_local_widths.get(name)

@@ -13,7 +13,7 @@ In: analyzed program (`analyzer`) and `parser` AST. Out: `IrModule` with solved 
 - `ir` must not depend on `codegen`; the current imports are tracked debt (WP 4: neutral `ir_contract`).
 
 ## Owns
-IR node types, lowering (`lower.rs`), constraints/solver, effects, taint, capability profiles/lock, execution mode, numeric bridge/solver, coercion encoding.
+IR node types, lowering (`lower.rs`), constraints/solver, effects, taint, capability profiles/lock, execution mode, numeric bridge/solver, coercion encoding. Core-type method calls (`Vec`, `HashMap`, `Option`, `Result`, `String`, `f32`/`f64`, ...) are typed from `typing::core_surface` (`std/rust_core.wji`, option C stage C1) by `constraint_gen/numeric.rs` (`static_type`, `emit_core_surface_constraints`): `usize` parameters are index uses, `usize` results index sources, other numeric types exact.
 
 ## Semantic facts (ADR-0017)
 `liveness.rs` (`last_uses` / `last_moves`, `dying_in`, `read_after`, `captures`, by AST node identity; the Rust backend's reuse clones and closure capture mode obey them, C6 MOVE-LAST-USE / CLONE-USE-AFTER-MOVE / CLOS-MOVE-CAPTURE) `numeric_defaults.rs` (NUM-DEFAULT-INT, by the literal's source position) and `numeric_facts.rs` (ADR-0028: publishes the solver's widths as NUM-LITERAL-WIDTH, NUM-LOCAL-WIDTH, NUM-USIZE index-source widths and NUM-USIZE-TO-INT conversions; classes needing an index-use conversion or naming a shadowed local are held for the legacy path; a local bound to a borrow (`&x`, `opt.unwrap_or(&d)`) gets no NUM-LOCAL-WIDTH, since it holds a reference) are target-independent facts stored on `IrFunction`; backends consume them and never re-decide. Both are deliberately conservative: a use they do not model opens the class / blocks the claim.

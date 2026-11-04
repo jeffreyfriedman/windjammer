@@ -56,6 +56,16 @@ impl View<'_> {
         }
         self.int_type(v)
     }
+
+    /// The solver fixed this float literal's width from a use (`f32` field, parameter, operand); a class
+    /// with no such use is defaulted and stays with the legacy float path.
+    fn published_float(&self, v: ConstraintVar) -> Option<BaseType> {
+        let defaulted = self.result.defaulted.get(v.0 as usize).copied().unwrap_or(true);
+        if defaulted || self.class(v).is_none_or(|c| self.held.contains(&c)) {
+            return None;
+        }
+        self.result.types.get(v.0 as usize).cloned().flatten().filter(|t| matches!(t, BaseType::F32 | BaseType::F64))
+    }
 }
 
 /// Classes whose widths stay with the legacy deciders for now (see module docs).
@@ -67,9 +77,11 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32
             held.extend(view.class(v));
         }
     }
-    // A name the walk met without a binding (a constant, a global, a closure parameter) is not named
-    // by the facts; with lexical scoping every `let`/`for` binding has its own variable.
-    let bound: BTreeSet<&str> = fc.binding_vars.iter().map(|(n, _)| n.as_str()).collect();
+    // A name the walk met without a binding (a global, a closure parameter) is not named by the facts;
+    // with lexical scoping every `let`/`for` binding has its own variable. A module constant with a
+    // declared type is modelled (NUM-DECLARED).
+    let mut bound: BTreeSet<&str> = fc.binding_vars.iter().map(|(n, _)| n.as_str()).collect();
+    bound.extend(fc.unmodelled.declared_constants.iter().map(String::as_str));
     // Sorted: iteration order must not depend on the hash map (codegen determinism).
     let sorted_locals: std::collections::BTreeMap<String, ConstraintVar> = fc.var_map.locals.clone().into_iter().collect();
     for (name, v) in &sorted_locals {
@@ -113,7 +125,7 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
     let held = held_classes(fc, result);
     let view = View { result, held };
     for (key, var) in &fc.literal_vars {
-        if let Some(base) = view.published(*var) {
+        if let Some(base) = view.published(*var).or_else(|| view.published_float(*var)) {
             ir_fn.literal_widths.insert(*key, base);
         }
     }
@@ -235,5 +247,50 @@ mod tests {
         let f = facts("pub fn f(lines: Vec<string>) -> Result<Vec<int>, string> {\n    let mut out = Vec::new()\n    let mut i = 0\n    while i < lines.len() {\n        out.push(i + 1)\n        i = i + 1\n    }\n    Ok(out)\n}\n", "f");
         assert_eq!(f.solver_local_widths.get("i"), Some(&BaseType::Usize));
         assert_eq!(f.usize_conversions.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?}", f.usize_conversions);
+    }
+
+    /// Option C C1: `parse::<int>()` then `unwrap_or(0)` is an `int` (the typed core surface), so a counter
+    /// assigned from it is published `i64` with its literal.
+    #[test]
+    fn counter_assigned_from_parse_int_is_i64() {
+        let f = facts("fn main() {\n    let line = \"5\"\n    let mut k = 0\n    k = line.trim().parse::<int>().unwrap_or(0)\n    println(\"${k}\")\n}\n", "main");
+        assert_eq!(f.solver_local_widths.get("k"), Some(&BaseType::I64), "{:?}", f.solver_local_widths);
+    }
+
+    /// Option C C1: `map.get(k).unwrap_or(0)` on a `HashMap<string, int>` is the value type.
+    #[test]
+    fn map_get_unwrap_or_is_the_value_width() {
+        let f = facts("use std::collections::HashMap\nfn main() {\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let key = \"a\"\n    let n = counts.get(key).unwrap_or(0)\n    counts.insert(key, n + 1)\n}\n", "main");
+        assert_eq!(f.solver_local_widths.get("n"), Some(&BaseType::I64), "{:?}", f.solver_local_widths);
+    }
+
+    /// Option C C1: a `u8` vector's `push` argument is a `u8` (element type from the surface).
+    #[test]
+    fn push_argument_takes_the_element_width() {
+        let f = facts("pub fn f(v: Vec<u8>) -> Vec<u8> {\n    let mut out = v\n    let b = 7\n    out.push(b)\n    out\n}\n", "f");
+        assert_eq!(f.solver_local_widths.get("b"), Some(&BaseType::U8), "{:?}", f.solver_local_widths);
+    }
+
+    /// A module constant has its declared type: `for d in -1..1 { put(base + d) }` with `base = SIZE`
+    /// (`const SIZE: i32`) is one `i32` class, published (was held as an unknown name, so the legacy
+    /// path printed `-1_i64`).
+    #[test]
+    fn module_constant_types_its_class() {
+        let src = "const SIZE: i32 = 64\nfn put(x: i32) {\n}\npub fn build() {\n    let base = SIZE\n    for d in -1..1 {\n        put(base + d)\n    }\n}\n";
+        let f = facts(src, "build");
+        assert_eq!(f.solver_local_widths.get("d"), Some(&BaseType::I32), "{:?}", f.solver_local_widths);
+        assert!(f.literal_widths.values().all(|w| *w == BaseType::I32) && !f.literal_widths.is_empty(), "{:?}", f.literal_widths);
+    }
+
+    /// The float class: an unsuffixed float literal takes the width of its uses (an `f32` parameter, a
+    /// returned accumulator, an enum payload); with no such use it is defaulted and not published.
+    #[test]
+    fn float_literals_take_the_width_of_their_uses() {
+        let f = facts("pub fn f(x: f32) -> f32 {\n    x * 0.5\n}\n", "f");
+        assert_eq!(f.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::F32], "{:?}", f.literal_widths);
+        let acc = facts("pub fn g(a: bool) -> f32 {\n    let mut r = 0.0\n    if a {\n        r = r + 0.2\n    }\n    r\n}\n", "g");
+        assert!(acc.literal_widths.len() == 2 && acc.literal_widths.values().all(|w| *w == BaseType::F32), "{:?}", acc.literal_widths);
+        let open = facts("pub fn h() {\n    let z = 2.5\n    println(\"${z}\")\n}\n", "h");
+        assert!(open.literal_widths.is_empty(), "{:?}", open.literal_widths);
     }
 }
