@@ -42,6 +42,14 @@ impl<'ast> CodeGenerator<'ast> {
         Some(self.returned_fields.1.contains_key(&node) && !copy)
     }
 
+    /// CLONE-BORROWED-TO-OWNED for elements: `Some(clone?)` when `expr` is an owned element read
+    /// (the IR fact's domain): clone unless the element type is known to be Copy.
+    pub(in crate::codegen::rust) fn element_read_clone(&self, expr: &crate::parser::Expression<'_>) -> Option<bool> {
+        self.element_reads.get(&crate::ir::numeric_defaults::node_id(expr))?;
+        let copy = self.infer_expression_type(expr).as_ref().is_some_and(|t| self.is_type_copy(t));
+        Some(!copy)
+    }
+
     /// The binding's type is known and not Copy (a `&T` binding is Copy).
     pub(in crate::codegen::rust) fn binding_known_non_copy(&self, name: &str) -> bool {
         let ty = self
