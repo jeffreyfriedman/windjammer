@@ -323,3 +323,26 @@ fn macro_forms_say_what_to_write() {
         assert!(m.fixes.iter().any(|f| !f.edits.is_empty()), "no machine fix: {t}");
     }
 }
+
+// ---------- WJ0007 (predicted move) says it in Windjammer terms ----------
+
+#[test]
+fn predicted_move_explains_ownership_without_rust_terms() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/self_by_value_reuse.wj");
+    let d = windjammer::check::moves::predicted_moves(&p);
+    assert_eq!(d.len(), 1, "{d:?}");
+    let d = &d[0];
+    assert_eq!(d.code, "WJ0007");
+    assert!(d.message.contains("`n`") && d.message.contains("Node::advance"), "{}", d.message);
+    let t = all_text(d);
+    assert!(t.contains("takes ownership of its receiver") && t.contains("consumed"), "{t}");
+    assert!(t.contains("let moved = n.advance()") || t.contains("the value `advance` returns"), "{t}");
+    assert!(t.contains("move the later use"), "{t}");
+    for rust in ["E0382", "rustc", "by value", "borrow checker"] {
+        assert!(!t.contains(rust), "Rust term `{rust}` in: {t}");
+    }
+    // The span is on the call that consumes the receiver, line 21 of the fixture.
+    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 21, "{d:?}");
+    // No machine fix: `.clone()` would trade this error for lint W0005, so the hint is text only.
+    assert!(d.fixes.is_empty());
+}
