@@ -65,6 +65,14 @@ fn iterator_collect_should_use_inferred_vec(iter_item: &Type, target_elem: &Type
 }
 
 impl CodeGenerator<'_> {
+    /// End of a `for` over string slices: the shadowed borrowed-param names come back, the slice bindings go.
+    pub(in crate::codegen::rust) fn restore_str_slice_loop(&mut self, shadowed: Vec<String>, slice_vars: &[String]) {
+        self.inferred_borrowed_params.extend(shadowed);
+        for v in slice_vars {
+            self.idiom.str_slice_loop_vars.remove(v);
+        }
+    }
+
     /// `let s: String = chars.collect()`: `String` is a collect target, but only for the RHS call itself.
     pub(in crate::codegen::rust) fn string_collect_rhs(target: &Type, value: &Expression) -> bool {
         matches!(value, Expression::MethodCall { method, .. } if method == "collect")
@@ -97,7 +105,7 @@ impl CodeGenerator<'_> {
             let mut names = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut names);
             for n in &names {
-                if self.str_slice_loop_vars.insert(n.clone()) {
+                if self.idiom.str_slice_loop_vars.insert(n.clone()) {
                     slice_vars.push(n.clone());
                 }
             }

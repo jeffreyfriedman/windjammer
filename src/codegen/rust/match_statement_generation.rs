@@ -12,6 +12,19 @@ use crate::parser::*;
 use super::{pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Scrutinee text: `text.clone().as_str()` over an owned `String` keeps its `&str` borrow when the arms
+    /// are string literals (the clone is only there to satisfy ownership).
+    fn generate_match_scrutinee_expr(&mut self, value: &'ast Expression<'ast>, arms: &[MatchArm<'ast>]) -> String {
+        if let Expression::MethodCall { object, method, arguments, .. } = value {
+            if method == "as_str" && arguments.is_empty() && arms.iter().any(|a| Self::pattern_has_str_literal(&a.pattern)) {
+                let base = self.generate_expression(object);
+                let base = base.strip_suffix(".clone()").unwrap_or(&base);
+                return format!("{base}.as_str()");
+            }
+        }
+        self.generate_expression(value)
+    }
+
     /// A string-literal pattern (possibly inside an or-pattern).
     fn pattern_has_str_literal(p: &Pattern<'_>) -> bool {
         match p {
@@ -684,17 +697,8 @@ impl<'ast> CodeGenerator<'ast> {
                 && self.expression_produces_str_ref(object)
             {
                 self.generate_expression(object)
-            } else if method == "as_str"
-                && arguments.is_empty()
-                && arms.iter().any(|a| Self::pattern_has_str_literal(&a.pattern))
-            {
-                // Literal arms need a `&str` scrutinee: `text.clone().as_str()` over an owned
-                // `String` keeps the borrow (the clone is only there to satisfy ownership).
-                let base = self.generate_expression(object);
-                let base = base.strip_suffix(".clone()").unwrap_or(&base);
-                format!("{base}.as_str()")
             } else {
-                self.generate_expression(value)
+                self.generate_match_scrutinee_expr(value, arms)
             }
         } else if let Expression::Call {
             function,

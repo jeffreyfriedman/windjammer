@@ -458,7 +458,7 @@ impl<'ast> CodeGenerator<'ast> {
             && (self.array_literal_as_list
                 || self.struct_field_expects_vec()
                 || arg_expects_vec
-                || self.return_position_list_literals.contains(&(elements.as_ptr() as usize)))
+                || self.idiom.return_position_list_literals.contains(&(elements.as_ptr() as usize)))
         {
             let prev = self.array_literal_as_list;
             self.array_literal_as_list = true; // nested literals are lists too

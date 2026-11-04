@@ -310,11 +310,6 @@ pub struct CodeGenerator<'ast> {
     pub(crate) in_struct_literal_field: bool,
     /// ADR-0014: the array literal being generated is a growable list (`let x = [..]`).
     pub(crate) array_literal_as_list: bool,
-    /// Loop bindings that are `&str` slices (`for w in text.split_whitespace()`), live during the loop body.
-    pub(crate) str_slice_loop_vars: std::collections::HashSet<String>,
-    /// ADR-0014: list literals (by element-slice address) in return position of a function whose
-    /// declared return type is a `Vec`: tail expressions, `return` values, `if`/`match` arm tails.
-    pub(crate) return_position_list_literals: std::collections::HashSet<usize>,
     pub(crate) in_owned_value_context: bool,
     pub(crate) in_unsafe_block: bool,
     // STRUCT LITERAL CONTEXT: Track which struct we're currently constructing
@@ -748,8 +743,6 @@ impl<'ast> CodeGenerator<'ast> {
             idiom: Default::default(),
             in_struct_literal_field: false,
             array_literal_as_list: false,
-            str_slice_loop_vars: std::collections::HashSet::new(),
-            return_position_list_literals: std::collections::HashSet::new(),
             in_owned_value_context: false,
             in_unsafe_block: false,
             current_struct_literal_name: None,
