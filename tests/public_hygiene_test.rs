@@ -2,6 +2,9 @@
 //! patterns in `docs/public-hygiene-patterns.txt` (this repository is public).
 //! Known exceptions live in `docs/public-hygiene-allowlist.txt` and may only shrink.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -152,7 +155,7 @@ fn guard_detects_planted_terms_in_content_and_names() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join(PATTERNS),
     )
     .unwrap());
-    let dir = std::env::temp_dir().join(format!("wj_hygiene_{}", std::process::id()));
+    let dir = Scratch::new("hygiene");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     // Build the planted strings at runtime so this file never spells them out.

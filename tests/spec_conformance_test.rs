@@ -25,6 +25,9 @@
 
 #![allow(clippy::duplicate_mod)]
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use windjammer::interpreter::runner::{exit_code_for, with_big_stack};
@@ -211,11 +214,7 @@ fn effect_report(s: &Spec) -> Result<(), String> {
 
 /// `wj check` on the example as `main.wj` in a project whose `wj.toml` is the `manifest:` lines.
 fn check_front_end(s: &Spec) -> Result<(), String> {
-    let dir = std::env::temp_dir().join(format!(
-        "wj-spec-check-{}-{}",
-        std::process::id(),
-        s.path.file_stem().unwrap().to_string_lossy()
-    ));
+    let dir = Scratch::new("spec-check");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let toml = manifest_text(&s.manifest);
     std::fs::write(dir.join("wj.toml"), toml).map_err(|e| e.to_string())?;

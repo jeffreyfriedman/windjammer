@@ -8,6 +8,9 @@
 
 #[path = "common/conformance/mod.rs"]
 mod conformance;
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 
 use conformance::backends::{compile_and_run_with, Backend, Outcome, ALL_BACKENDS};
 use conformance::compare::{first_divergence, Trace};
@@ -28,11 +31,9 @@ fn wj() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
-fn work_dir(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("wj-conformance-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
+/// Per-test scratch directory, removed when the test ends (`WJ_KEEP_TMP=1` keeps it).
+fn work_dir(name: &str) -> Scratch {
+    Scratch::new(&format!("conformance-{name}"))
 }
 
 fn probe_all() -> ToolProbe {
@@ -97,7 +98,8 @@ fn corpus_conforms_on_every_backend() {
     let probe = probe_all();
     let programs = program::discover(&root());
     let support = Support::load(&root().join("SUPPORT.toml"));
-    let ctx = Arc::new(Ctx { wj: wj(), programs, support, probe, work_root: work_dir("corpus") });
+    let scratch = work_dir("corpus");
+    let ctx = Arc::new(Ctx { wj: wj(), programs, support, probe, work_root: scratch.to_path_buf() });
     let report = run_all(ctx);
     println!("{}", report.summary());
     let failures = report.failures();
