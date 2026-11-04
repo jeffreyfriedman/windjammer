@@ -200,7 +200,7 @@ digraph deps {
   "cli_commands" -> "parser" [label="1"];
   "cli_commands" -> "test_runner" [label="1"];
   "cli_execution" -> "interpreter" [label="1"];
-  "cli_execution" -> "linter" [label="2"];
+  "cli_execution" -> "linter" [label="6"];
   "cli_output" -> "error_mapper" [label="1"];
   "cli_output" -> "source_map" [label="1"];
   "cli_project_build" -> "analyzer" [label="1"];

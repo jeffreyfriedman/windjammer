@@ -102,7 +102,7 @@ pub fn interpret_file(file: &Path) -> Result<()> {
 }
 
 pub fn interpret_with_args(file: &Path, args: Vec<String>) -> Result<()> {
-    report_build_lints(file);
+    report_build_lints(file, false);
     let code = interpreter::runner::run_path(file, args);
     if code != 0 {
         std::process::exit(code);
@@ -117,15 +117,55 @@ pub fn run_repl() -> Result<()> {
 }
 
 /// Print the lints `wj build` would apply (same `linter::lint_text` source of truth) before interpreting.
-/// Interpretation still runs.
-pub fn report_build_lints(file: &Path) {
-    if file.is_file() {
-        if let Ok(src) = std::fs::read_to_string(file) {
-            let name = file.to_string_lossy().to_string();
-            for d in crate::linter::lint_text(&name, &src).unwrap_or_default() {
-                let would_fail = d.level == crate::linter::LintLevel::Error;
-                eprintln!("{}{}", d, if would_fail { "  (error in `wj build`)" } else { "" });
-            }
+/// Interpretation still runs. `gate_reports_errors`: the check gate prints error-level lints itself (with the
+/// source line) and stops the run, so they are not printed twice. When stderr is not a terminal (an agent or a
+/// tool reading the output), warnings are grouped per lint code on one line each.
+pub fn report_build_lints(file: &Path, gate_reports_errors: bool) {
+    use std::io::IsTerminal;
+    if !file.is_file() {
+        return;
+    }
+    let Ok(src) = std::fs::read_to_string(file) else { return };
+    let name = file.to_string_lossy().to_string();
+    let lints: Vec<_> = crate::linter::lint_text(&name, &src)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|d| !(gate_reports_errors && d.level == crate::linter::LintLevel::Error))
+        .collect();
+    let compact = !std::io::stderr().is_terminal();
+    if !compact {
+        for d in &lints {
+            let would_fail = d.level == crate::linter::LintLevel::Error;
+            eprintln!("{}{}", d, if would_fail { "  (error in `wj build`)" } else { "" });
+        }
+        return;
+    }
+    for line in compact_lints(&lints) {
+        eprintln!("{line}");
+    }
+}
+
+/// One line per lint code: level, code, message, the first locations, and the first help.
+pub fn compact_lints(lints: &[crate::linter::LintDiagnostic]) -> Vec<String> {
+    let mut order: Vec<&str> = Vec::new();
+    for d in lints {
+        if d.level != crate::linter::LintLevel::Allow && !order.contains(&d.lint_name.as_str()) {
+            order.push(&d.lint_name);
         }
     }
+    order
+        .into_iter()
+        .map(|code| {
+            let all: Vec<_> = lints.iter().filter(|d| d.lint_name == code).collect();
+            let first = all[0];
+            let level = if first.level == crate::linter::LintLevel::Error { "error" } else { "warning" };
+            let file = std::path::Path::new(&first.location.file).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
+            let mut at: Vec<String> = all.iter().take(4).map(|d| format!("{}:{}", d.location.line, d.location.column)).collect();
+            if all.len() > 4 {
+                at.push(format!("+{} more", all.len() - 4));
+            }
+            let help = first.help.as_deref().map(|h| format!(" (help: {h})")).unwrap_or_default();
+            format!("{level}[{code}] {}: {file} {}{help}", first.message, at.join(", "))
+        })
+        .collect()
 }

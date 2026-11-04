@@ -20,7 +20,7 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn self_by_value_receiver_used_again_is_reported() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/self_by_value_reuse.wj");
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj");
     let d = windjammer::check::moves::predicted_moves(&p);
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, "WJ0007");
@@ -30,11 +30,11 @@ fn self_by_value_receiver_used_again_is_reported() {
 /// Class b, and c (the same move inside a loop), each rejected by rustc with E0382 on the generated code.
 #[test]
 fn moves_into_owning_parameters_are_reported() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction");
-    let d = windjammer::check::moves::predicted_moves(&root.join("arg_move_reuse.wj"));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/diagnostics_oracle/check");
+    let d = windjammer::check::moves::predicted_moves(&root.join("wj0007_arg_move_reuse.wj"));
     assert_eq!(d.len(), 1, "{d:?}");
     assert!(d[0].message.contains("`xs` is used after the call to `wrap` moved it"), "{}", d[0].message);
-    let d = windjammer::check::moves::predicted_moves(&root.join("arg_move_in_loop.wj"));
+    let d = windjammer::check::moves::predicted_moves(&root.join("wj0007_arg_move_in_loop.wj"));
     assert_eq!(d.len(), 1, "{d:?}");
     assert!(d[0].message.contains("in every iteration of the loop"), "{}", d[0].message);
 }
@@ -68,11 +68,11 @@ fn predictions_across_the_corpora() {
     // fixture, `string_literal_move_then_use` is the compiler defect D-CLONE-STRLIT (no clone where the
     // interpreter's copy is expected)
     let expected: &[&str] = &[
+        "tests/diagnostics_oracle/check/wj0007_arg_move_in_loop.wj 1",
+        "tests/diagnostics_oracle/check/wj0007_arg_move_reuse.wj 1",
+        "tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj 1",
         "tests/error_system/test_ownership.wj 1",
         "tests/inference_corpus/string_literal_move_then_use.wj 1",
-        "tests/move_prediction/arg_move_in_loop.wj 1",
-        "tests/move_prediction/arg_move_reuse.wj 1",
-        "tests/move_prediction/self_by_value_reuse.wj 1",
     ];
     assert_eq!(hits, expected, "{} files scanned", files.len());
 }

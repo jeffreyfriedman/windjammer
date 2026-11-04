@@ -1,3 +1,4 @@
+// expect: WJ0007
 // Class c (ADR-0030): a value declared before a loop, moved into an owning parameter inside it: rustc E0382.
 struct Bag {
     items: Vec<int>,
@@ -13,6 +14,7 @@ fn main() {
     let mut i = 0
     while i < 3 {
         let b = wrap(xs)
+//~@17+4 ERROR WJ0007 `xs` is moved by the call to `wrap` in every iteration
         total += b.items.len()
         i += 1
     }

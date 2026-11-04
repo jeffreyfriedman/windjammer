@@ -30,8 +30,9 @@ pub struct RunOptions {
     pub hot: bool,
     /// Interpreter knobs (scheduler seed, deterministic time, network policy).
     pub interp: runner::RunOptions,
-    /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report).
-    pub lint: Option<fn(&Path)>,
+    /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report); the flag
+    /// says the check gate will print error-level lints itself.
+    pub lint: Option<fn(&Path, bool)>,
     /// Interpreted runs: lints (W####) are reported but do not stop the run; compile errors still do.
     pub no_lint: bool,
 }
@@ -48,7 +49,7 @@ pub fn execute(opts: &RunOptions) -> i32 {
     };
     let non_rust = !matches!(opts.target.to_lowercase().as_str(), "rust");
     if let (Some(lint), false, false) = (opts.lint, non_rust, matches!(opts.mode, Mode::Compiled { .. })) {
-        lint(&target.entry);
+        lint(&target.entry, !opts.no_lint);
     }
     match opts.mode {
         Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release),

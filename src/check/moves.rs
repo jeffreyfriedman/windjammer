@@ -35,48 +35,70 @@ fn short(path: &str) -> &str {
 
 fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
     let v = &m.var;
+    // the emitted code may prefix an unused binding with `_`; name it as the source does
+    let src_name = |n: &str| if source.contains(n) { n.to_string() } else { n.trim_start_matches('_').to_string() };
     // "used after X moved it", or for a move in a loop "X moves it in every iteration of the loop"
     let after = |by: String| if m.in_loop { format!("`{v}` is moved by {by} in every iteration of the loop") } else { format!("`{v}` is used after {by} moved it") };
-    let (what, help, needle) = match &m.kind {
+    let (what, help, span) = match &m.kind {
         MoveKind::Receiver { method } => (
             format!("{} (`{method}` takes `self` by value)", after(format!("`{v}.{}()`", short(method)))),
             format!("use the value `{}` returns, call it last, or call it on a copy: `{v}.clone().{}()`", short(method), short(method)),
-            format!("{v}.{}(", short(method)),
+            span_of(source, file, &format!("{v}.{}(", short(method)), |_| true),
         ),
         MoveKind::Argument { callee } => (
             format!("{} (its parameter takes ownership)", after(format!("the call to `{}`", short(callee)))),
             format!("pass a copy (`{v}.clone()`), or make the call the last use of `{v}`"),
-            format!("{}(", short(callee)),
+            // a call (not the definition) whose argument list names the variable
+            span_of(source, file, &format!("{}(", short(callee)), |rest| {
+                rest.split(')').next().is_some_and(|args| args.split(|c: char| !c.is_alphanumeric() && c != '_').any(|w| w == v))
+            }),
         ),
-        MoveKind::Let { to } => (
-            after(format!("`let {to} = {v}`")),
-            format!("use `{to}` from here on, or bind a copy: `let {to} = {v}.clone()`"),
-            format!("{to} = {v}"),
-        ),
-        MoveKind::Field { field, to } => (
-            format!("{} (its field `{field}` is gone; `{v}` is used whole)", after(format!("`let {to} = {v}.{field}`"))),
-            format!("copy the field (`{v}.{field}.clone()`), or stop using `{v}` as a whole after taking `{field}`"),
-            format!("{v}.{field}"),
-        ),
+        MoveKind::Let { to } => {
+            let to = src_name(to);
+            (
+                after(format!("`let {to} = {v}`")),
+                format!("use `{to}` from here on, or bind a copy: `let {to} = {v}.clone()`"),
+                span_of(source, file, &format!("{to} = {v}"), |_| true),
+            )
+        }
+        MoveKind::Field { field, to } => {
+            let to = src_name(to);
+            (
+                format!("{} (its field `{field}` is gone; `{v}` is used whole)", after(format!("`let {to} = {v}.{field}`"))),
+                format!("copy the field (`{v}.{field}.clone()`), or stop using `{v}` as a whole after taking `{field}`"),
+                span_of(source, file, &format!("{v}.{field}"), |_| true),
+            )
+        }
     };
     let mut d = Diagnostic::error("WJ0007", what)
         .with_help(help)
         .with_note("the interpreter would run this, but the compiled program does not build (rustc E0382)");
-    if let Some(sp) = span_of(source, file, &needle) {
+    if let Some(sp) = span {
         d = d.at(sp.with_label("moved here"));
     }
     d
 }
 
-/// The first occurrence of `needle` starting at a word boundary.
-fn span_of(source: &str, file: &str, needle: &str) -> Option<Span> {
-    let byte = source
-        .match_indices(needle)
-        .map(|(i, _)| i)
-        .find(|i| *i == 0 || !source.as_bytes()[i - 1].is_ascii_alphanumeric() && source.as_bytes()[i - 1] != b'_')?;
+/// The first occurrence of `needle` at a word boundary, not in a `fn` definition, for which `ok` holds of the
+/// text after it.
+fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) -> Option<Span> {
+    let bytes = source.as_bytes();
+    let byte = source.match_indices(needle).map(|(i, _)| i).find(|i| {
+        let boundary = *i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
+        boundary && !source[..*i].ends_with("fn ") && ok(&source[i + needle.len()..])
+    })?;
     let line = source[..byte].matches('\n').count() + 1;
     let line_start = source[..byte].rfind('\n').map_or(0, |n| n + 1);
     let col = source[line_start..byte].chars().count() + 1;
-    let len = needle.trim_end_matches('(').chars().count();
-    Some(Span { file: file.to_string(), byte_start: byte, byte_end: byte + needle.trim_end_matches('(').len(), line_start: line, col_start: col, line_end: line, col_end: col + len, label: None })
+    let text = needle.trim_end_matches('(');
+    Some(Span {
+        file: file.to_string(),
+        byte_start: byte,
+        byte_end: byte + text.len(),
+        line_start: line,
+        col_start: col,
+        line_end: line,
+        col_end: col + text.chars().count(),
+        label: None,
+    })
 }

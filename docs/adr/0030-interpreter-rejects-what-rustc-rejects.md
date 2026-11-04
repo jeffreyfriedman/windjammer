@@ -68,7 +68,7 @@ does now.
 - `ir/explain/moves.rs` (`receiver_moves`) finds `v.m()` where the emitted `Type::m` takes `self` by value, `v` is an
   owned non-`Copy` local, and `v` is read again before any reassignment.
 - `check/moves.rs` turns each hit into WJ0007 with a span on `v.m(`.
-- The interpreted-run gate refuses the program. `tests/move_prediction/self_by_value_reuse.wj` now stops before
+- The interpreted-run gate refuses the program. `tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj` now stops before
   running:
 
   ```
@@ -100,7 +100,7 @@ does now.
     exits.
   - Uses inside a closure were counted as uses inside the loop around it.
 - **Precision:**
-  - The scan over `examples/` and `tests/` reports the five fixtures in `tests/move_prediction/`.
+  - The scan over `examples/` and `tests/` reports the three fixtures `tests/diagnostics_oracle/check/wj0007_*.wj` (annotated for the span oracle).
   - It also reports two programs rustc rejects with E0382 on their generated code: `tests/error_system/test_ownership.wj`,
     an ownership-error fixture, and `tests/inference_corpus/string_literal_move_then_use.wj`, the compiler defect
     D-CLONE-STRLIT, where the compiler emits no clone where one is needed.
