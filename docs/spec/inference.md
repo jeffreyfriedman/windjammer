@@ -192,7 +192,12 @@ parameter or `self`; passing a borrowed parameter to an owned formal), the value
 **Decided by (returned fields).** `ir::clone_facts`: the function's value (tail, trailing `if`/`match` tails, every
 `return`) that is a field projection of a parameter or `self` is a candidate; after the solver, the candidates whose
 root is borrowed (`IrFunction::clone_sites`) are cloned, and the Rust backend prints exactly those (a Copy field never).
-Other positions (let initialisers, owned call arguments, struct fields, element reads) are still decided in codegen.
+**Decided by (element reads).** `ir::clone_facts::owned_element_reads`: an element read (`v[i]`, `self.items[i]`) that
+is an assignment value, the function's value, a `return`, a struct-literal field or an array/tuple element is
+cloned unless its type is known Copy (`IrFunction::element_reads`). Call arguments are left to the callee's formal and
+`let` initialisers to the local's ownership (a read-only binding borrows the element).
+Other positions (let initialisers and struct fields of non-element fields, owned call arguments) are still decided in
+codegen.
 **Status.** Conforms. Over-clones exist where the clone is applied and then borrowed again: `prefix + &self.name.clone()`
 (D-CLONE-REDUNDANT).
 

@@ -399,6 +399,16 @@ pub fn clone_reports(
                 dropped: false,
             });
         }
+        if ir_fn.element_reads.values().any(|r| *r == name) {
+            reasons.push(Reason {
+                rule: "CLONE-BORROWED-TO-OWNED".into(),
+                detail: format!("an element of `{}` consumed as an owned value is cloned unless Copy", name),
+                line: None,
+                col: None,
+                binding: true,
+                dropped: false,
+            });
+        }
         // A clone the user wrote is the user's decision, not the compiler's.
         let written = user_clones.get(&name).copied().unwrap_or(0);
         let emitted_clones = emitted
