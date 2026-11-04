@@ -27,7 +27,7 @@ fn test_i32_capacity_with_array_access() {
 #[inline]
 fn get_slot_helper(slots: &Vec<Option<i32>>, index: i32) -> Option<i32> {
     if index < 0_i32 || index >= slots.len() as i32 {
-        return None as i32;
+        return None;
     }
     slots[index as usize]
 }

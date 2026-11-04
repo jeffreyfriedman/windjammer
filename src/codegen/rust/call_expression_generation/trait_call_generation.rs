@@ -330,12 +330,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         });
         if receiver_is_mapish {
             let qualified_for_key =
-                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                    type_name.as_deref(),
-                    call_obj,
-                    call_method,
-                    |name| gen.is_imported_runtime_std_module(name),
-                );
+                gen.qualified_method_key(type_name.as_deref(), call_obj, call_method);
             let sig_for_key = method_signature.clone().or_else(|| {
                 crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
                     call_method,

@@ -1,0 +1,36 @@
+// A user method named `contains` (a std collection name) called on `self` takes its argument by value:
+// `self.contains(cands[i])` must not be borrowed as if it were the std method. Expected by hand: 2 and 1
+// are in the pool, 5 is the first one missing.
+// expect: 5
+struct Pool {
+    pub ids: Vec<int>,
+}
+
+impl Pool {
+    pub fn contains(self, id: int) -> bool {
+        let mut i: usize = 0
+        while i < self.ids.len() {
+            if self.ids[i] == id {
+                return true
+            }
+            i = i + 1
+        }
+        false
+    }
+
+    pub fn first_missing(self, cands: Vec<int>) -> int {
+        let mut i: usize = 0
+        while i < cands.len() {
+            if !self.contains(cands[i]) {
+                return cands[i]
+            }
+            i = i + 1
+        }
+        -1
+    }
+}
+
+fn main() {
+    let p = Pool { ids: [1, 2, 3] }
+    println("${p.first_missing([2, 5, 1])}")
+}

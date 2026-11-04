@@ -1,0 +1,36 @@
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+
+struct Pool {
+    pub ids: Vec<i64>,
+}
+
+impl Pool {
+#[inline]
+pub fn contains(&self, id: i64) -> bool {
+        let mut i: usize = 0_usize;
+        while i < self.ids.len() {
+            if self.ids[i] == id {
+                return true;
+            }
+            i += 1;
+        }
+        false
+}
+#[inline]
+pub fn first_missing(&self, cands: &Vec<i64>) -> i64 {
+        let mut i: usize = 0_usize;
+        while i < cands.len() {
+            if !self.contains(cands[i]) {
+                return cands[i];
+            }
+            i += 1;
+        }
+        -1_i64
+}
+}
+
+fn main() {
+    let p = Pool { ids: vec![1_i64, 2_i64, 3_i64] };
+    println!("{}", p.first_missing(&vec![2_i64, 5_i64, 1_i64]));
+}
+

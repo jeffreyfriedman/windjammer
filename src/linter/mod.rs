@@ -359,6 +359,7 @@ mod owned_but_not_returned_tests {
             cache_locality: crate::analyzer::CacheLocalityAnalysis::default(),
             str_ref_optimizable_params: HashSet::new(),
             module_path: Vec::new(),
+            module_const_types: Default::default(),
         };
 
         let mut linter = Linter::new();
