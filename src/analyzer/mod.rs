@@ -102,6 +102,9 @@ pub struct AnalyzedFunction<'ast> {
     /// Inline modules that contain the definition (`["geo", "area"]`; empty at file level). With the name
     /// (and the impl type for methods) this is the resolver's identity (`geo::area::f`, C3).
     pub module_path: Vec<String>,
+    /// Declared types of the file's top-level `const` / `static` items (`const SIZE: i32`): a function body
+    /// that names one reads a value of that type (NUM-DECLARED for the numeric solver).
+    pub module_const_types: Arc<HashMap<String, Type>>,
 }
 
 impl<'ast> AnalyzedFunction<'ast> {
@@ -354,6 +357,8 @@ pub struct Analyzer<'ast> {
     /// Maps struct_name → { field_name → Type }.
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     global_struct_field_types: Arc<HashMap<String, HashMap<String, Type>>>,
+    /// Declared types of the program's top-level `const` / `static` items.
+    module_const_types: Arc<HashMap<String, Type>>,
     /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
@@ -389,6 +394,7 @@ impl<'ast> Analyzer<'ast> {
             current_impl_functions: None,
             self_impl_context: None,
             global_struct_field_types: Arc::new(HashMap::new()),
+            module_const_types: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
             ownership_preconverged: false,

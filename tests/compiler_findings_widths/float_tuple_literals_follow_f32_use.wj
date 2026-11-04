@@ -1,0 +1,71 @@
+pub struct Pt {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+pub struct Cells {
+    n: i32,
+}
+
+impl Cells {
+    pub fn get(self, x: i32, y: i32, z: i32) -> u8 {
+        0u8
+    }
+}
+
+pub fn resolve(cells: Cells, pos: Pt, scale: i32) {
+    let sf = scale as f32
+    let feet_y = pos.y - 0.2
+    let head_y = pos.y + 0.6
+
+    let cx = (pos.x * sf) as i32
+    let feet_iy = (feet_y * sf) as i32
+    let head_iy = (head_y * sf) as i32
+    let cz = (pos.z * sf) as i32
+
+    let stuck_feet = cells.get(cx, feet_iy, cz) != 0u8
+    let stuck_head = cells.get(cx, head_iy, cz) != 0u8
+    if !stuck_feet && !stuck_head {
+        return
+    }
+
+    let mut best_dist: f32 = 100.0
+    let mut push_x: f32 = 0.0
+    let mut push_y: f32 = 0.0
+    let mut push_z: f32 = 0.0
+    let offsets = [
+        (1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+    ]
+    let check_y = if stuck_feet { feet_iy } else { head_iy }
+    let mut i = 0
+    while i < 6 {
+        let (ox, oy, oz) = offsets[i]
+        let tx = cx + ox as i32
+        let ty = check_y + oy as i32
+        let tz = cz + oz as i32
+        if cells.get(tx, ty, tz) == 0u8 {
+            let dx_dist = (pos.x - tx as f32 / sf).abs()
+            let dy_dist = (pos.y - ty as f32 / sf).abs()
+            let dz_dist = (pos.z - tz as f32 / sf).abs()
+            let dist = dx_dist + dy_dist + dz_dist
+            if dist < best_dist {
+                best_dist = dist
+                push_x = ox / sf
+                push_y = oy / sf
+                push_z = oz / sf
+            }
+        }
+        i = i + 1
+    }
+    if best_dist < 100.0 {
+        pos.x = pos.x + push_x * 0.6
+        pos.y = pos.y + push_y * 0.6
+        pos.z = pos.z + push_z * 0.6
+    }
+}

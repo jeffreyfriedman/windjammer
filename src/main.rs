@@ -70,6 +70,7 @@ pub mod test_utils; // Syntax highlighting for error snippets
 pub mod type_classification;
 pub mod type_display;
 pub mod type_inference; // Expression-level float type inference
+pub mod typing;
 pub mod wjsl; // Windjammer Shader Language (RFC syntax)
 
 mod cli_args;

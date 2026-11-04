@@ -13,15 +13,11 @@ impl<'ast> CodeGenerator<'ast> {
         crate::resolve::same_crate_callee_key(&self.import_fn_alias_map, callee_name)
     }
 
-    /// Resolve every call of a single-file `program` (recomputed per program: keys are node addresses).
-    /// Module files of a multi-file build are skipped until the multipass driver installs a project-wide
-    /// table. Only calls that name one program function are recorded; `Unresolved`/`Ambiguous` keep
-    /// the name-based lookup.
+    /// Resolve every call of `program` (recomputed per program: keys are node addresses). A module file of
+    /// a multi-file build is resolved on its own, so only calls to its own definitions are recorded (paths
+    /// relative to the file, as the name-based keys were); `Unresolved`/`Ambiguous` keep the name-based lookup.
     pub(crate) fn ensure_call_targets(&mut self, program: &Program<'_>) {
         self.call_targets.clear();
-        if self.is_module {
-            return;
-        }
         let file = self.current_wj_file.clone();
         let input = [crate::resolve::ParsedFile::new(Vec::new(), file, program)];
         self.call_targets = crate::resolve::resolve_program(&input).callee_def_paths();

@@ -532,28 +532,31 @@ impl Interpreter {
             Some(d) => (d.fields.clone(), d.copy, d.rc_name.clone(), d.rc_fields.clone()),
             None => return Err(semantic(format!("cannot find struct `{}`", name))),
         };
-        let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(decl_fields.len());
-        for ((fname, ty), rc_fname) in decl_fields.iter().zip(rc_fields.iter()) {
-            match fields.iter().find(|(n, _)| n == fname) {
-                Some((_, ex)) => {
-                    let v = env.eval(self, ex)?;
-                    out.push((rc_fname.clone(), self.coerce(v, ty)?));
-                }
-                None => {
-                    // struct update syntax `..base` is parsed as a field named ".."
-                    if let Some((_, base_ex)) = fields.iter().find(|(n, _)| n == "..") {
-                        let base = env.eval(self, base_ex)?;
-                        let v = self.field_of(&base, fname)?;
-                        out.push((rc_fname.clone(), v));
-                    } else {
-                        return Err(semantic(format!("missing field `{}` in initializer of `{}`", fname, name)));
-                    }
-                }
+        // Rust evaluates the field initializers in the order they are written (not the declaration order), then
+        // the `..base` expression, once (SPEC-EXEC-010).
+        let mut given: Vec<Option<Value>> = (0..decl_fields.len()).map(|_| None).collect();
+        for (n, ex) in fields {
+            if n == ".." {
+                continue;
+            }
+            match decl_fields.iter().position(|(f, _)| f == n) {
+                Some(i) => given[i] = Some(env.eval(self, ex)?),
+                None => return Err(semantic(format!("struct `{}` has no field named `{}`", name, n))),
             }
         }
-        for (n, _) in fields {
-            if n != ".." && !decl_fields.iter().any(|(f, _)| f == n) {
-                return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
+        // struct update syntax `..base` is parsed as a field named ".."
+        let base = match fields.iter().find(|(n, _)| n == "..") {
+            Some((_, base_ex)) => Some(env.eval(self, base_ex)?),
+            None => None,
+        };
+        let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(decl_fields.len());
+        for (i, ((fname, ty), rc_fname)) in decl_fields.iter().zip(rc_fields.iter()).enumerate() {
+            match given[i].take() {
+                Some(v) => out.push((rc_fname.clone(), self.coerce(v, ty)?)),
+                None => match &base {
+                    Some(b) => out.push((rc_fname.clone(), self.field_of(b, fname)?)),
+                    None => return Err(semantic(format!("missing field `{}` in initializer of `{}`", fname, name))),
+                },
             }
         }
         Ok(self.make_struct_named(rc_name, out, copy))

@@ -849,7 +849,7 @@ impl<'ast> Analyzer<'ast> {
             cow_optimizations,
             cache_locality,
             str_ref_optimizable_params,
-            module_path: Vec::new(),
+            module_path: Vec::new(), module_const_types: self.module_const_types.clone(),
         })
     }
 

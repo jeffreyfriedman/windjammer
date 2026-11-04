@@ -535,7 +535,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Static methods → Self::method(args)
     if gen.in_impl_block
         && !func_name.contains("::")
-        && gen.current_impl_methods.contains(func_name)
+        && gen.current_impl_methods.contains(func_name) && gen.resolved_callee_path(function).is_none()
     {
         if gen.current_impl_instance_methods.contains(func_name) {
             func_str = format!("self.{}", func_str);
