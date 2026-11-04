@@ -21,7 +21,7 @@ Ownership, clones, integer widths (IR solver), how a backend prints a call.
 None (layer `support`).
 
 ## Entry points
-`enumerable::lookup`, `enumerable::METHODS`.
+`enumerable::lookup`, `enumerable::METHODS`. `std_functions::exists(module, name)`: the functions each std module provides in some engine (generated table `std_functions_table.rs`, gate tests/std_functions_surface_test.rs), used by `check::std_calls` (WJ0002 for `strings.index_of`).
 
 ## Tests
 Unit tests in `enumerable.rs`; `tests/enumerable_surface_test.rs`; conformance programs `tests/conformance_programs/16x_coll_*.wj`.
