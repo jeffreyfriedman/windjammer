@@ -96,7 +96,8 @@ pub fn load(manifest_dir: &Path) -> RustCrates {
     if let Some(deps) = doc.get("dependencies").and_then(|d| d.as_table()) {
         for (name, spec) in deps {
             let key = name.replace('-', "_");
-            let has_surface = surface_path(manifest_dir, &key).is_file();
+            // a hand-written surface marks a crate as Rust, unless the entry is a Windjammer package
+            let has_surface = surface_path(manifest_dir, &key).is_file() && !is_windjammer_path(manifest_dir, spec);
             if has_surface || is_rust_dependency(manifest_dir, spec) {
                 names.push(key);
             }
@@ -117,7 +118,8 @@ pub fn load(manifest_dir: &Path) -> RustCrates {
     RustCrates { names, surfaces }
 }
 
-/// Registry entries are Rust crates; `path` entries are Rust unless they hold a Windjammer package;
+/// Registry entries are Rust crates; `path` entries are Rust unless they hold a Windjammer package, or are the
+/// `build/` output of one (`super::graph::is_windjammer_path_dep`, the rule the dependency graph uses);
 /// `git` and Windjammer-registry entries are not known to be Rust without fetching them.
 fn is_rust_dependency(manifest_dir: &Path, spec: &toml::Value) -> bool {
     let Some(t) = spec.as_table() else { return spec.is_str() };
@@ -125,12 +127,13 @@ fn is_rust_dependency(manifest_dir: &Path, spec: &toml::Value) -> bool {
         return false;
     }
     match t.get("path").and_then(|p| p.as_str()) {
-        Some(p) => {
-            let dir = manifest_dir.join(p);
-            !(dir.join("wj.toml").is_file() || dir.join("lib.wj").is_file() || dir.join("src").join("lib.wj").is_file())
-        }
+        Some(p) => !super::graph::is_windjammer_path_dep(&manifest_dir.join(p)),
         None => true,
     }
+}
+
+fn is_windjammer_path(manifest_dir: &Path, spec: &toml::Value) -> bool {
+    spec.get("path").and_then(|p| p.as_str()).is_some_and(|p| super::graph::is_windjammer_path_dep(&manifest_dir.join(p)))
 }
 
 /// Parse and validate one surface.
@@ -209,9 +212,12 @@ mod tests {
         std::fs::create_dir_all(root.join("wjpkg")).unwrap();
         std::fs::write(root.join("wjpkg/wj.toml"), "[package]\nname = \"wjpkg\"\n").unwrap();
         std::fs::create_dir_all(root.join("rs")).unwrap();
+        // `wjpkg/build` is the generated Rust of the Windjammer package: still Windjammer
+        std::fs::create_dir_all(root.join("wjpkg/build/src")).unwrap();
+        std::fs::write(root.join("wjpkg/build/Cargo.toml"), "[package]\nname = \"wjpkg\"\n").unwrap();
         std::fs::write(
             root.join("wj.toml"),
-            "[dependencies]\nstr-sim = \"0.11\"\nhex = { version = \"0.4\" }\nwjpkg = { path = \"wjpkg\" }\nrs = { path = \"rs\" }\nremote = { git = \"https://example.invalid/x\" }\n",
+            "[dependencies]\nstr-sim = \"0.11\"\nhex = { version = \"0.4\" }\nwjpkg = { path = \"wjpkg\" }\nwjout = { path = \"wjpkg/build\" }\nrs = { path = \"rs\" }\nremote = { git = \"https://example.invalid/x\" }\n",
         )
         .unwrap();
         std::fs::create_dir_all(root.join("rust")).unwrap();
@@ -220,6 +226,6 @@ mod tests {
         assert_eq!(c.names, ["hex", "rs", "str_sim"]);
         assert_eq!(c.surfaces.len(), 1);
         assert!(c.surface("hex").unwrap().get("encode").is_some());
-        assert!(c.is_rust_crate("str_sim") && !c.is_rust_crate("wjpkg") && !c.is_rust_crate("remote"));
+        assert!(c.is_rust_crate("str_sim") && !c.is_rust_crate("wjpkg") && !c.is_rust_crate("wjout") && !c.is_rust_crate("remote"));
     }
 }
