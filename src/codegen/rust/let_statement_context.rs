@@ -24,6 +24,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.idiom.text_iterator_locals.insert(n.clone());
             }
         }
+        if let (Pattern::Identifier(n) | Pattern::MutBinding(n), true) = (pattern, Self::is_text_slice_option(value)) {
+            self.idiom.text_option_locals.insert(n.clone());
+        }
         let out = self.generate_let_statement(pattern, mutable, type_, value, location);
         self.idiom.next_closure_borrows_captures = false;
         out

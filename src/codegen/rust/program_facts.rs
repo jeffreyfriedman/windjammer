@@ -16,6 +16,8 @@ pub(crate) struct IdiomScratch {
     pub(crate) next_closure_borrows_captures: bool,
     /// Locals bound to `lines()` / `split(..)` / `split_whitespace()` (their `next()` yields `&str`).
     pub(crate) text_iterator_locals: HashSet<String>,
+    /// Locals bound to `text.split(..).next()` and the like: `Option<&str>` values.
+    pub(crate) text_option_locals: HashSet<String>,
     /// Names a type annotation in this file can refer to: items declared here and `use` imports.
     pub(crate) file_scope_type_names: HashSet<String>,
     /// True when the file has a glob import or nested `mod` (name scope is not tracked precisely).

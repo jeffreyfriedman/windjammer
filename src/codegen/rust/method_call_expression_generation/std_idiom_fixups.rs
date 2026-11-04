@@ -18,6 +18,9 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(lowered) = self.mc_lower_string_vec_contains(object, method, arguments, obj_str, args) {
             return Some(lowered);
         }
+        if let Some(lowered) = self.mc_lower_text_option_copy(object, method, args, obj_str) {
+            return Some(lowered);
+        }
         // `opt.unwrap_or(&0)`: a literal behind an explicit `&` is a reference default (`Option<&T>`
         // from `map.get(k)`); the by-value call-site rules must not strip it.
         if matches!(method, "cmp" | "partial_cmp" | "eq" | "ne" | "lt" | "le" | "gt" | "ge")
@@ -88,6 +91,46 @@ impl<'ast> CodeGenerator<'ast> {
             *obj_str = format!("{}.iter()", *obj_str);
         }
         None
+    }
+
+    /// `text.split(..).next()` (also `nth`, `last`, through adapters): an `Option<&str>`.
+    pub(in crate::codegen::rust) fn is_text_slice_option(expr: &Expression<'ast>) -> bool {
+        fn splits(e: &Expression<'_>) -> bool {
+            match e {
+                Expression::MethodCall { object, method, .. } => {
+                    matches!(
+                        method.as_str(),
+                        "split" | "rsplit" | "lines" | "split_whitespace" | "split_terminator" | "splitn" | "rsplitn"
+                            | "split_ascii_whitespace"
+                    ) || splits(object)
+                }
+                _ => false,
+            }
+        }
+        matches!(expr, Expression::MethodCall { object, method, .. }
+            if matches!(method.as_str(), "next" | "nth" | "last" | "next_back") && splits(object))
+    }
+
+    /// `.copied()` / `.cloned()` on an option of string slices (`s.split(" ").next()`, a local of type
+    /// `Option<&str>`): a piece of text is already a value in Windjammer (the interpreter treats both as the
+    /// identity) and Rust has no `Option<&str>::copied`.
+    fn mc_lower_text_option_copy(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        args: &[String],
+        obj_str: &str,
+    ) -> Option<String> {
+        if !matches!(method, "copied" | "cloned") || !args.is_empty() {
+            return None;
+        }
+        let slice_option = matches!(self.infer_expression_type(object),
+            Some(Type::Option(inner)) if matches!(inner.as_ref(), Type::Reference(p) if matches!(p.as_ref(), Type::Custom(n) if n == "str")));
+        let known_slice = slice_option
+            || self.receiver_is_text_iterator_next(object)
+            || Self::is_text_slice_option(object)
+            || matches!(object, Expression::Identifier { name, .. } if self.idiom.text_option_locals.contains(name));
+        known_slice.then(|| obj_str.to_string())
     }
 
     /// `Vec<string>.contains(x)` with a text argument (`&str` formal, literal, `String`): `Vec<String>::contains`

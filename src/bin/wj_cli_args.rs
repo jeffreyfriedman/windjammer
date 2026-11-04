@@ -39,6 +39,11 @@ pub enum Commands {
         #[arg(short, long)]
         release: bool,
 
+        /// Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds
+        /// and the interpreter). Same as `[build] overflow_checks = false` in wj.toml.
+        #[arg(long)]
+        unchecked_arithmetic: bool,
+
         /// Target platform (rust, javascript, wasm)
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
