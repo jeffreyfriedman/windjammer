@@ -24,10 +24,16 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
             let method = m.method.rsplit("::").next().unwrap_or(&m.method).to_string();
             let mut d = Diagnostic::error(
                 "WJ0007",
-                format!("`{}` is used after `{}.{}()` moved it (`{}` takes `self` by value)", m.var, m.var, method, m.method),
+                format!(
+                    "`{}` is used after `{}.{}()` consumed it: `{}` takes ownership of its receiver",
+                    m.var, m.var, method, m.method
+                ),
             )
-            .with_help(format!("use the value `{method}` returns, call `{method}` last, or call it on a copy: `{}.clone().{method}()`", m.var))
-            .with_note("the interpreter would run this, but the compiled program does not build (rustc E0382)");
+            .with_help(format!(
+                "use the value `{method}` returns (`let next = {v}.{method}()`), move the later use of `{v}` before the call, or call it on a copy: `{v}.clone().{method}()`",
+                v = m.var
+            ))
+            .with_note("the interpreter would run this, but the compiled program does not build: a value cannot be used after a call that took ownership of it");
             if let Some(sp) = call_span(&source, &file, &m.var, &method) {
                 d = d.at(sp.with_label("moved here"));
             }

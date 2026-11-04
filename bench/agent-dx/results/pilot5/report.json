@@ -1,0 +1,949 @@
+{
+ "n_trials": 90,
+ "arms": {
+  "pass": {
+   "U": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "V": [
+    0.6666666666666666,
+    0.36666666666666664,
+    0.9
+   ],
+   "W": [
+    0.9666666666666667,
+    0.8666666666666667,
+    1.0
+   ]
+  },
+  "verify": {
+   "U": [
+    3.0,
+    1.8333333333333333,
+    4.266666666666667
+   ],
+   "V": [
+    1.8,
+    1.3,
+    2.3333333333333335
+   ],
+   "W": [
+    3.466666666666667,
+    2.2,
+    4.933333333333334
+   ]
+  },
+  "to_green": {
+   "U": [
+    2.75,
+    1.5263157894736843,
+    4.470588235294118
+   ],
+   "V": [
+    1.4736842105263157,
+    1.0,
+    2.235294117647059
+   ],
+   "W": [
+    2.814814814814815,
+    1.7037037037037037,
+    4.111111111111111
+   ]
+  },
+  "turns": {
+   "U": [
+    6.733333333333333,
+    4.433333333333334,
+    9.7
+   ],
+   "V": [
+    4.3,
+    3.4,
+    5.6
+   ],
+   "W": [
+    6.466666666666667,
+    4.766666666666667,
+    8.433333333333334
+   ]
+  },
+  "tok_in": {
+   "U": [
+    47165.13333333333,
+    27819.866666666665,
+    76177.7
+   ],
+   "V": [
+    27472.766666666666,
+    20912.666666666668,
+    36795.933333333334
+   ],
+   "W": [
+    46407.8,
+    33290.7,
+    61675.46666666667
+   ]
+  },
+  "tok_out": {
+   "U": [
+    2145.7,
+    1517.8,
+    2856.6666666666665
+   ],
+   "V": [
+    1423.3666666666666,
+    1217.3,
+    1627.3666666666666
+   ],
+   "W": [
+    1829.5,
+    1367.7,
+    2367.866666666667
+   ]
+  },
+  "cost": {
+   "U": [
+    0.04291461,
+    0.03077376,
+    0.05697467333333333
+   ],
+   "V": [
+    0.026332456666666667,
+    0.023465756666666667,
+    0.029228573333333334
+   ],
+   "W": [
+    0.03754446333333334,
+    0.028607916666666667,
+    0.04878282
+   ]
+  },
+  "wall": {
+   "U": [
+    27.075333333333333,
+    19.325,
+    37.672000000000004
+   ],
+   "V": [
+    15.244666666666665,
+    13.893333333333334,
+    16.572666666666667
+   ],
+   "W": [
+    22.308666666666667,
+    17.543333333333333,
+    28.23
+   ]
+  },
+  "think": {
+   "U": [
+    16.742033333333335,
+    11.7411,
+    22.9619
+   ],
+   "V": [
+    10.7945,
+    9.7348,
+    11.870266666666668
+   ],
+   "W": [
+    14.356266666666667,
+    11.4276,
+    17.933833333333332
+   ]
+  },
+  "tool": {
+   "U": [
+    6.522666666666667,
+    3.4253333333333336,
+    11.692666666666668
+   ],
+   "V": [
+    0.195,
+    0.14533333333333334,
+    0.256
+   ],
+   "W": [
+    3.8833333333333333,
+    2.0963333333333334,
+    6.479666666666666
+   ]
+  },
+  "denied": {
+   "U": [
+    0.26666666666666666,
+    0.06666666666666667,
+    0.5333333333333333
+   ],
+   "V": [
+    0.2,
+    0.0,
+    0.5
+   ],
+   "W": [
+    0.36666666666666664,
+    0.13333333333333333,
+    0.6666666666666666
+   ]
+  },
+  "capden": {
+   "U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "V": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "W": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "load": {
+   "U": [
+    29.15,
+    26.416666666666668,
+    31.77
+   ],
+   "V": [
+    34.72,
+    29.986666666666668,
+    39.913333333333334
+   ],
+   "W": [
+    32.266666666666666,
+    28.813333333333333,
+    36.2
+   ]
+  },
+  "silent": {
+   "U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "V": [
+    0.3,
+    0.1,
+    0.6
+   ],
+   "W": [
+    0.03333333333333333,
+    0.0,
+    0.13333333333333333
+   ]
+  }
+ },
+ "diffs": {
+  "pass": {
+   "U-V": [
+    0.33333333333333337,
+    0.09999999999999998,
+    0.6
+   ],
+   "U-W": [
+    0.033333333333333326,
+    0.0,
+    0.1333333333333333
+   ],
+   "V-W": [
+    -0.30000000000000004,
+    -0.5666666666666667,
+    -0.06666666666666665
+   ]
+  },
+  "verify": {
+   "U-V": [
+    1.2,
+    -0.06666666666666665,
+    2.5
+   ],
+   "U-W": [
+    -0.4666666666666668,
+    -1.6999999999999997,
+    0.833333333333333
+   ],
+   "V-W": [
+    -1.6666666666666667,
+    -3.0333333333333337,
+    -0.40000000000000013
+   ]
+  },
+  "to_green": {
+   "U-V": [
+    1.023529411764706,
+    -0.33333333333333326,
+    2.953846153846154
+   ],
+   "U-W": [
+    0.5119047619047619,
+    -0.3333333333333335,
+    1.5714285714285716
+   ],
+   "V-W": [
+    -0.3157894736842106,
+    -1.0476190476190474,
+    0.2952380952380953
+   ]
+  },
+  "turns": {
+   "U-V": [
+    2.4333333333333336,
+    0.3333333333333335,
+    5.0
+   ],
+   "U-W": [
+    0.2666666666666666,
+    -1.7333333333333334,
+    2.999999999999999
+   ],
+   "V-W": [
+    -2.166666666666667,
+    -4.033333333333333,
+    -0.4666666666666668
+   ]
+  },
+  "tok_in": {
+   "U-V": [
+    19692.366666666665,
+    2997.633333333335,
+    43053.533333333326
+   ],
+   "U-W": [
+    757.3333333333285,
+    -16405.300000000003,
+    24738.1
+   ],
+   "V-W": [
+    -18935.033333333336,
+    -31189.9,
+    -7825.0999999999985
+   ]
+  },
+  "tok_out": {
+   "U-V": [
+    722.3333333333333,
+    170.4333333333334,
+    1344.5
+   ],
+   "U-W": [
+    316.1999999999998,
+    -96.83333333333348,
+    912.3
+   ],
+   "V-W": [
+    -406.13333333333344,
+    -912.7,
+    8.266666666666652
+   ]
+  },
+  "cost": {
+   "U-V": [
+    0.016582153333333332,
+    0.005465966666666669,
+    0.028832923333333337
+   ],
+   "U-W": [
+    0.005370146666666659,
+    -0.0032192633333333193,
+    0.018033709999999994
+   ],
+   "V-W": [
+    -0.011212006666666673,
+    -0.021862046666666666,
+    -0.002549943333333332
+   ]
+  },
+  "wall": {
+   "U-V": [
+    11.830666666666668,
+    4.112999999999998,
+    21.461333333333332
+   ],
+   "U-W": [
+    4.766666666666666,
+    -2.607000000000003,
+    14.624333333333329
+   ],
+   "V-W": [
+    -7.064000000000002,
+    -13.504666666666663,
+    -2.2093333333333334
+   ]
+  },
+  "think": {
+   "U-V": [
+    5.947533333333336,
+    1.114133333333335,
+    11.736600000000001
+   ],
+   "U-W": [
+    2.385766666666669,
+    -1.6215666666666664,
+    8.305166666666667
+   ],
+   "V-W": [
+    -3.561766666666667,
+    -7.132433333333331,
+    -0.6345333333333318
+   ]
+  },
+  "tool": {
+   "U-V": [
+    6.3276666666666666,
+    3.2256666666666667,
+    11.302000000000001
+   ],
+   "U-W": [
+    2.6393333333333335,
+    -1.1869999999999994,
+    7.85
+   ],
+   "V-W": [
+    -3.6883333333333335,
+    -6.519,
+    -1.9076666666666664
+   ]
+  },
+  "denied": {
+   "U-V": [
+    0.06666666666666665,
+    -0.09999999999999998,
+    0.26666666666666666
+   ],
+   "U-W": [
+    -0.09999999999999998,
+    -0.30000000000000004,
+    0.1
+   ],
+   "V-W": [
+    -0.16666666666666663,
+    -0.3666666666666667,
+    0.0
+   ]
+  },
+  "capden": {
+   "U-V": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U-W": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "V-W": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "load": {
+   "U-V": [
+    -5.57,
+    -10.819999999999997,
+    -0.5299999999999976
+   ],
+   "U-W": [
+    -3.116666666666667,
+    -7.800000000000004,
+    1.2799999999999976
+   ],
+   "V-W": [
+    2.453333333333333,
+    -3.676666666666666,
+    9.109999999999996
+   ]
+  },
+  "silent": {
+   "U-V": [
+    -0.3,
+    -0.6,
+    0.0
+   ],
+   "U-W": [
+    -0.03333333333333333,
+    -0.13333333333333333,
+    0.0
+   ],
+   "V-W": [
+    0.26666666666666666,
+    0.0,
+    0.5666666666666667
+   ]
+  }
+ },
+ "friction": [
+  {
+   "id": "type-mismatch",
+   "title": "type mismatch (often int/float, string/&str)",
+   "fix_kind": "diagnostic text",
+   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+   "wasted_calls": 38,
+   "est_tokens": 268102,
+   "example": "error[E0308]: mismatched types\n    --> main.rs:45:51\n     |\n  45 |                 totals.insert(o.customer.clone(), (old + sub) as f32);\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 3 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nEr",
+   "arms": [
+    "U",
+    "V",
+    "W"
+   ],
+   "n_trials": 20,
+   "n_tasks": 5,
+   "rank": 1,
+   "priority": "P0"
+  },
+  {
+   "id": "rustc-leak",
+   "title": "raw rustc/cargo error surfaced from generated code",
+   "fix_kind": "codegen / diagnostic mapping",
+   "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+   "wasted_calls": 21,
+   "est_tokens": 147625,
+   "example": "error[E0614]: type `f64` cannot be dereferenced\n  --> main.rs:40:52\n   |\n40 |                 totals.insert(o.customer.clone(), (*cur + sum) as f32);\nFor more information about this error, try `rustc --explain E0614`.\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 3 warnings emitted\nerror: could not compile `ws` (bin \"ws\") due to 1 previous error; 3 warnings emitted",
+   "arms": [
+    "U",
+    "V",
+    "W"
+   ],
+   "n_trials": 11,
+   "n_tasks": 2,
+   "rank": 2,
+   "priority": "P0"
+  },
+  {
+   "id": "other:error: bad width",
+   "title": "unclassified failure: error: bad width",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 11,
+   "est_tokens": 77242,
+   "example": "error: bad width",
+   "arms": [
+    "U",
+    "V",
+    "W"
+   ],
+   "n_trials": 10,
+   "n_tasks": 2,
+   "rank": 3,
+   "priority": "P0"
+  },
+  {
+   "id": "silent-divergence",
+   "title": "interpreted run passed but compiled grade failed (silent divergence)",
+   "fix_kind": "interpreter / check parity",
+   "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+   "wasted_calls": 10,
+   "est_tokens": 67584,
+   "example": "",
+   "arms": [
+    "V",
+    "W"
+   ],
+   "n_trials": 10,
+   "n_tasks": 3,
+   "rank": 4,
+   "priority": "P1"
+  },
+  {
+   "id": "other:error",
+   "title": "unclassified failure: error",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 9,
+   "est_tokens": 63319,
+   "example": "error",
+   "arms": [
+    "U",
+    "V",
+    "W"
+   ],
+   "n_trials": 9,
+   "n_tasks": 1,
+   "rank": 5,
+   "priority": "P1"
+  },
+  {
+   "id": "other:error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+   "title": "unclassified failure: error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 7,
+   "est_tokens": 48730,
+   "example": "error[WJ0031]: `float` is not a reference, so it cannot be dereferenced\n  --> main.wj:8:12\n  |\n8 |     price: float,",
+   "arms": [
+    "U"
+   ],
+   "n_trials": 3,
+   "n_tasks": 1,
+   "rank": 6,
+   "priority": "P1"
+  },
+  {
+   "id": "interp-unsupported",
+   "title": "interpreter refused a feature the compiled path accepts",
+   "fix_kind": "interpreter coverage",
+   "fix_location": "src/interpreter + docs/design/interpreter-primary-readiness.md R6",
+   "wasted_calls": 3,
+   "est_tokens": 20040,
+   "example": "error: unsupported in the interpreter: not interpreted yet: call into Rust crate dependency `crc32fast` (`crc32fast::hash`) [deps.rust_crate]\n  --> <ws>/main.wj:8:9\n  = help: run it compiled with `wj run --compiled`",
+   "arms": [
+    "V"
+   ],
+   "n_trials": 3,
+   "n_tasks": 1,
+   "rank": 7,
+   "priority": "P1"
+  },
+  {
+   "id": "name-unresolved",
+   "title": "unresolved name",
+   "fix_kind": "diagnostic text",
+   "fix_location": "diagnostic should list candidates and the import to add",
+   "wasted_calls": 2,
+   "est_tokens": 14145,
+   "example": "cannot find function `write_file` in module `fs`\nerror[E0425]: cannot find function `write_file` in module `fs`\n  --> main.rs:46:17\n   |\n46 |     let _ = fs::write_file(\"report.txt\", report);\n   |                 ^^^^^^^^^^ not found in `fs`\n   |\nhelp: consider importing this function\n   |\n 1 + use windjammer_runtime::platform::native::fs::write_f",
+   "arms": [
+    "V",
+    "W"
+   ],
+   "n_trials": 2,
+   "n_tasks": 1,
+   "rank": 8,
+   "priority": "P1"
+  },
+  {
+   "id": "other:x: cannot read No such file or directory (os error N)",
+   "title": "unclassified failure: x: cannot read No such file or directory (os error N)",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 2,
+   "est_tokens": 13923,
+   "example": "x: cannot read No such file or directory (os error 2)\ngone: cannot read No such file or directory (os error 2)\ny: cannot read No such file or directory (os error 2)\nreport:\ngone: cannot read No such file or directory (os error 2)\ny: cannot read No such file or directory (os error 2)\nreport:\nx -\ny: cannot read No such file or directory (os error 2)\nreport:\nx -\ngone -",
+   "arms": [
+    "U"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 9,
+   "priority": "P2"
+  },
+  {
+   "id": "lint-leakage",
+   "title": "Rust-leakage lint rejected idiomatic-looking code",
+   "fix_kind": "lint rule",
+   "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
+   "wasted_calls": 1,
+   "est_tokens": 6961,
+   "example": "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:38:37\n  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead\n  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`\nerror: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:56:42\n  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead\n  = help: write `x ?? default` instead of `x.un",
+   "arms": [
+    "U"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 10,
+   "priority": "P2"
+  },
+  {
+   "id": "other:error[WJ0017]: trait bound not satisfied: the type `X` cannot be indexed by `X`",
+   "title": "unclassified failure: error[WJ0017]: trait bound not satisfied: the type `X` cannot be indexed by `X`",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 1,
+   "est_tokens": 6961,
+   "example": "error[WJ0017]: trait bound not satisfied: the type `[i64]` cannot be indexed by `int`\n  --> main.wj:19:21\n   |\n19 |     let mut ss: Vec<int> = []\nerror[WJ0017]: trait bound not satisfied: the type `[std::string::string]` cannot be indexed by `int`\n  --> main.wj:17:21\n   |\n17 |     let mut us: Vec<string> = []\nerror[WJ0017]: trait bound not satisfied: the type `[std::string::string]` cannot be indexed by `int`\n  --> main.wj:17:21\n   |\n17 |     let mut us: Vec<string> = []\nerror[WJ0017]: trait bound not satisfied: the type `[std::string::string]` cannot be indexed by `int`\n  --> main.wj:17:21\n  ",
+   "arms": [
+    "U"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 11,
+   "priority": "P2"
+  }
+ ],
+ "aps": {},
+ "attribution": {
+  "U": {
+   "first_turn_input": 8295.0,
+   "pack_tokens": 455.14285714285717,
+   "tool_result_tokens": 919.4333333333333,
+   "docs_calls": 0.7333333333333333,
+   "mcp_calls": 0.0,
+   "tokens_in": 47165.13333333333,
+   "turns": 6.733333333333333
+  },
+  "V": {
+   "first_turn_input": 8345.0,
+   "pack_tokens": 455.14285714285717,
+   "tool_result_tokens": 257.1,
+   "docs_calls": 0.7,
+   "mcp_calls": 0.0,
+   "tokens_in": 27472.766666666666,
+   "turns": 4.3
+  },
+  "W": {
+   "first_turn_input": 8364.0,
+   "pack_tokens": 455.14285714285717,
+   "tool_result_tokens": 787.6333333333333,
+   "docs_calls": 0.43333333333333335,
+   "mcp_calls": 0.0,
+   "tokens_in": 46407.8,
+   "turns": 6.466666666666667
+  }
+ },
+ "friction_by_arm": {
+  "U": [
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 20,
+    "est_tokens": 139227,
+    "example": "error[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:14:37\n   |\n14 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:14:37\n   |\n14 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:14:37\n   |\n14 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:46:1\n   |\n46 |             let parts: Vec<str",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 8,
+    "n_tasks": 4,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+    "title": "unclassified failure: error[WJ0031]: `X` is not a reference, so it cannot be dereferenced",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 7,
+    "est_tokens": 48730,
+    "example": "error[WJ0031]: `float` is not a reference, so it cannot be dereferenced\n  --> main.wj:8:12\n  |\n8 |     price: float,",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error: bad width",
+    "title": "unclassified failure: error: bad width",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 5,
+    "est_tokens": 34807,
+    "example": "error: bad width",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 4,
+    "n_tasks": 2,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error",
+    "title": "unclassified failure: error",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 20884,
+    "example": "error",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 4,
+    "priority": "P1"
+   },
+   {
+    "id": "other:x: cannot read No such file or directory (os error N)",
+    "title": "unclassified failure: x: cannot read No such file or directory (os error N)",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 2,
+    "est_tokens": 13923,
+    "example": "x: cannot read No such file or directory (os error 2)\ngone: cannot read No such file or directory (os error 2)\ny: cannot read No such file or directory (os error 2)\nreport:\ngone: cannot read No such file or directory (os error 2)\ny: cannot read No such file or directory (os error 2)\nreport:\nx -\ny: cannot read No such file or directory (os error 2)\nreport:\nx -\ngone -",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 1,
+    "n_tasks": 1,
+    "rank": 5,
+    "priority": "P1"
+   }
+  ],
+  "V": [
+   {
+    "id": "rustc-leak",
+    "title": "raw rustc/cargo error surfaced from generated code",
+    "fix_kind": "codegen / diagnostic mapping",
+    "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+    "wasted_calls": 11,
+    "est_tokens": 73478,
+    "example": "type `f64` cannot be dereferenced\nerror[E0614]: type `f64` cannot be dereferenced\n  --> main.rs:42:56\n   |\n42 |                     totals.insert(o.customer.clone(), (*cur + t) as f32);\n   |                                                        ^^^^ can't be dereferenced\n\n",
+    "arms": [
+     "V"
+    ],
+    "n_trials": 6,
+    "n_tasks": 2,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "silent-divergence",
+    "title": "interpreted run passed but compiled grade failed (silent divergence)",
+    "fix_kind": "interpreter / check parity",
+    "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+    "wasted_calls": 9,
+    "est_tokens": 60119,
+    "example": "",
+    "arms": [
+     "V"
+    ],
+    "n_trials": 9,
+    "n_tasks": 3,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 7,
+    "est_tokens": 46759,
+    "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:61:47\n   |\n61 |                 if *c > bc || *c == bc && a < best {\n   |                                               ^^^^ expected `&_`, found `String`\n   |\n   = note: expected reference `&_`\n                 found struct `std::string::String`\nhelp: co",
+    "arms": [
+     "V"
+    ],
+    "n_trials": 4,
+    "n_tasks": 2,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "interp-unsupported",
+    "title": "interpreter refused a feature the compiled path accepts",
+    "fix_kind": "interpreter coverage",
+    "fix_location": "src/interpreter + docs/design/interpreter-primary-readiness.md R6",
+    "wasted_calls": 3,
+    "est_tokens": 20040,
+    "example": "error: unsupported in the interpreter: not interpreted yet: call into Rust crate dependency `crc32fast` (`crc32fast::hash`) [deps.rust_crate]\n  --> <ws>/main.wj:8:9\n  = help: run it compiled with `wj run --compiled`",
+    "arms": [
+     "V"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 4,
+    "priority": "P1"
+   },
+   {
+    "id": "other:error",
+    "title": "unclassified failure: error",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 20040,
+    "example": "error",
+    "arms": [
+     "V"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 5,
+    "priority": "P1"
+   }
+  ],
+  "W": [
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 11,
+    "est_tokens": 82116,
+    "example": "error[E0308]: mismatched types\n    --> main.rs:45:51\n     |\n  45 |                 totals.insert(o.customer.clone(), (old + sub) as f32);\nFor more information about this error, try `rustc --explain E0308`.\nwarning: `windjammer` (bin \"windjammer\") generated 3 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nEr",
+    "arms": [
+     "W"
+    ],
+    "n_trials": 8,
+    "n_tasks": 4,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "rustc-leak",
+    "title": "raw rustc/cargo error surfaced from generated code",
+    "fix_kind": "codegen / diagnostic mapping",
+    "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+    "wasted_calls": 9,
+    "est_tokens": 67186,
+    "example": "error[E0614]: type `f64` cannot be dereferenced\n  --> main.rs:44:51\n   |\n44 |                 totals.insert(o.customer.clone(), *t);\nFor more information about this error, try `rustc --explain E0614`.\nwarning: `windjammer` (bin \"windjammer\") generated 3 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./build\"\nError: ",
+    "arms": [
+     "W"
+    ],
+    "n_trials": 4,
+    "n_tasks": 2,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error",
+    "title": "unclassified failure: error",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 22395,
+    "example": "error",
+    "arms": [
+     "W"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error: bad width",
+    "title": "unclassified failure: error: bad width",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 22395,
+    "example": "error: bad width",
+    "arms": [
+     "W"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 4,
+    "priority": "P1"
+   },
+   {
+    "id": "name-unresolved",
+    "title": "unresolved name",
+    "fix_kind": "diagnostic text",
+    "fix_location": "diagnostic should list candidates and the import to add",
+    "wasted_calls": 1,
+    "est_tokens": 7465,
+    "example": "error[E0425]: cannot find function `write_file` in module `fs`\n  --> main.rs:45:17\n   |\n45 |     let _ = fs::write_file(\"report.txt\", report);\nFor more information about this error, try `rustc --explain E0425`.\nwarning: `windjammer` (bin \"windjammer\") generated 3 warnings\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nerror: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\nError: Cargo build failed\nBuilding Windjammer project from \"main.wj\" (target: rust)\nOutput: \"./buil",
+    "arms": [
+     "W"
+    ],
+    "n_trials": 1,
+    "n_tasks": 1,
+    "rank": 5,
+    "priority": "P1"
+   }
+  ]
+ }
+}

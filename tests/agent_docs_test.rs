@@ -185,7 +185,7 @@ const REFERENCE_BUDGET_BYTES: usize = 19_200;
 fn default_sheet_fits_its_ratchet_and_points_at_the_tools() {
     let text = fs::read_to_string(docs_dir().join("WINDJAMMER_FOR_AGENTS.md")).unwrap();
     assert!(text.len() <= SHEET_BUDGET_BYTES, "WINDJAMMER_FOR_AGENTS.md is {} bytes; ratchet is {}", text.len(), SHEET_BUDGET_BYTES);
-    for needle in ["wj docs", "wj explain", "wj build", "wj check", "as int", "/dev/stdin", "${x:?}"] {
+    for needle in ["wj docs", "wj explain", "wj build", "wj check", "wj run --interpret", "wj run --compiled", "must succeed", "as int", "/dev/stdin", "${x:?}"] {
         assert!(text.contains(needle), "default sheet must mention `{}`", needle);
     }
     assert!(!extract(&text, "sheet").is_empty(), "the sheet carries an executed example");

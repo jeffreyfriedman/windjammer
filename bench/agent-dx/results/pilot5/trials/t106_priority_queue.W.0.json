@@ -1,0 +1,123 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "W",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut prios: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let n: int = parts.len() as int\n        if n == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && n == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => {\n                    let mut pos: int = names.len() as int\n                    let mut i: int = 0\n                    while i < names.len() as int {\n                        if prios[i as usize] < p {\n                            pos = i\n                            break\n                        }\n                        i += 1\n                    }\n                    names.insert(pos as usize, parts[1])\n                    prios.insert(pos as usize, p)\n                }\n                Err(_) => println(\"error\"),\n            }\n        } else if parts[0] == \"pop\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                println(\"${names[0]}\")\n                names.remove(0)\n                prios.remove(0)\n            }\n        } else if parts[0] == \"peek\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                println(\"${names[0]}\")\n            }\n        } else if parts[0] == \"size\" && n == 1 {\n            println(\"${names.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    let mut i: int = 0\n    while i < names.len() as int {\n        println(\"${names[i as usize]} ${prios[i as usize]}\")\n        i += 1\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut prios: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let n: int = parts.len() as int\n        if n == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && n == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => {\n                    let mut pos: int = names.len() as int\n                    let mut i: int = 0\n                    while i < names.len() as int {\n                        if prios[i as usize] < p {\n                            pos = i\n                            break\n                        }\n                        i += 1\n                    }\n                    names.insert(pos as usize, parts[1])\n                    prios.insert(pos as usize, p)\n                }\n                Err(_) => println(\"error\"),\n            }\n        } else if parts[0] == \"pop\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                println(\"${names[0]}\")\n                names.remove(0)\n                prios.remove(0)\n            }\n        } else if parts[0] == \"peek\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                println(\"${names[0]}\")\n            }\n        } else if parts[0] == \"size\" && n == 1 {\n            println(\"${names.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    let mut i: int = 0\n    while i < names.len() as int {\n        println(\"${names[i as usize]} ${prios[i as usize]}\")\n        i += 1\n    }\n}\n",
+ "first_turn_input": 8317,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.284,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 3.044,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 13.4,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 5.28,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:23:56",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 10.771,
+ "tool_result_tokens_est": 365,
+ "tool_wait_seconds": 3.33,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6780,
+   "cache_write": 1535,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8317,
+   "output": 3,
+   "result_chars": 219,
+   "turn": 1
+  },
+  {
+   "cache_read": 8315,
+   "cache_write": 1231,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9548,
+   "output": 16,
+   "result_chars": 1059,
+   "turn": 2
+  },
+  {
+   "cache_read": 9546,
+   "cache_write": 610,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 10158,
+   "output": 294,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 10.771,
+  "cost_usd": 0.0300301,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written. It matched Example 1 when I ran it through the interpreter, and `wj build main.wj` compiled cleanly.\n\nI ran Example 1's commands plus a few extras: `add x` (missing priority), `foo` (unknown command) and `add q -2` (negative priority). Both bad lines printed `error`, and the final `left:` listed `q -2`. I did not run Example 2 separately.\n\nThe queue is a list kept in pop orde",
+  "subtype": "success",
+  "tokens_in": 28023,
+  "tokens_out": 1405,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 19.38
+}

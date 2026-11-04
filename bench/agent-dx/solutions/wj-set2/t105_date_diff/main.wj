@@ -1,0 +1,77 @@
+use std::fs
+
+fn is_leap(y: int) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+fn days_in_month(y: int, m: int) -> int {
+    if m == 2 {
+        if is_leap(y) { 29 } else { 28 }
+    } else if m == 4 || m == 6 || m == 9 || m == 11 {
+        30
+    } else {
+        31
+    }
+}
+
+fn all_digits(s: string) -> bool {
+    if s.len() == 0 { return false }
+    for c in s.chars() {
+        if c < '0' || c > '9' { return false }
+    }
+    true
+}
+
+// days since 1900-01-01, or -1 when the text is not a valid date
+fn parse_date(s: string) -> int {
+    let cs: Vec<char> = s.chars().collect()
+    if cs.len() != 10 { return -1 }
+    if cs[4] != '-' || cs[7] != '-' { return -1 }
+    let ys: string = s[0..4].to_string()
+    let ms: string = s[5..7].to_string()
+    let ds: string = s[8..10].to_string()
+    if !all_digits(ys) || !all_digits(ms) || !all_digits(ds) { return -1 }
+    let y = ys.parse::<int>().unwrap_or(0)
+    let m = ms.parse::<int>().unwrap_or(0)
+    let d = ds.parse::<int>().unwrap_or(0)
+    if y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > days_in_month(y, m) { return -1 }
+    let mut n = 0
+    let mut yy = 1900
+    while yy < y {
+        n += if is_leap(yy) { 366 } else { 365 }
+        yy += 1
+    }
+    let mut mm = 1
+    while mm < m {
+        n += days_in_month(y, mm)
+        mm += 1
+    }
+    n + d - 1
+}
+
+fn weekday(n: int) -> string {
+    // 1900-01-01 was a Monday
+    let names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    names[n % 7]
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim().len() == 0 { continue }
+        let p: Vec<string> = line.split(" ").collect()
+        if p.len() != 2 {
+            println("invalid")
+            continue
+        }
+        let a = parse_date(p[0])
+        let b = parse_date(p[1])
+        if a < 0 || b < 0 {
+            println("invalid")
+            continue
+        }
+        let lo = if a < b { a } else { b }
+        let diff = if a < b { b - a } else { a - b }
+        println("${diff} ${weekday(lo)}")
+    }
+}

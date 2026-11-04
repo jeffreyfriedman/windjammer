@@ -1,0 +1,123 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "W",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nfn all_digits(s: string, n: int) -> bool {\n    if s.len() as int != n {\n        return false\n    }\n    for c in s.chars() {\n        if c < '0' || c > '9' {\n            return false\n        }\n    }\n    true\n}\n\nfn is_leap(y: int) -> bool {\n    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0\n}\n\n// returns days since 1970-01-01, or -10000000 if invalid\nfn parse_date(s: string) -> int {\n    let bad = -10000000\n    let parts: Vec<string> = s.split(\"-\").collect()\n    if parts.len() != 3 {\n        return bad\n    }\n    if !all_digits(parts[0], 4) || !all_digits(parts[1], 2) || !all_digits(parts[2], 2) {\n        return bad\n    }\n    let y: int = parts[0].parse::<int>().unwrap_or(0)\n    let m: int = parts[1].parse::<int>().unwrap_or(0)\n    let d: int = parts[2].parse::<int>().unwrap_or(0)\n    if m < 1 || m > 12 || d < 1 {\n        return bad\n    }\n    let mut dim = 31\n    if m == 4 || m == 6 || m == 9 || m == 11 {\n        dim = 30\n    } else if m == 2 {\n        dim = if is_leap(y) { 29 } else { 28 }\n    }\n    if d > dim {\n        return bad\n    }\n    let yy = if m <= 2 { y - 1 } else { y }\n    let era = yy / 400\n    let yoe = yy - era * 400\n    let mp = (m + 9) % 12\n    let doy = (153 * mp + 2) / 5 + d - 1\n    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy\n    era * 146097 + doe - 719468\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let names = [\"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\", \"Sunday\"]\n    for line in text.lines() {\n        let toks: Vec<string> = line.split_whitespace().collect()\n        if toks.len() == 0 {\n            continue\n        }\n        if toks.len() != 2 {\n            println(\"invalid\")\n            continue\n        }\n        let a = parse_date(toks[0])\n        let b = parse_date(toks[1])\n        if a == -10000000 || b == -10000000 {\n            println(\"invalid\")\n            continue\n        }\n        let lo = if a < b { a } else { b }\n        let diff = if a < b { b - a } else { a - b }\n        let wd = (((lo + 3) % 7) + 7) % 7\n        println(\"${diff} ${names[wd as usize]}\")\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn all_digits(s: string, n: int) -> bool {\n    if s.len() as int != n {\n        return false\n    }\n    for c in s.chars() {\n        if c < '0' || c > '9' {\n            return false\n        }\n    }\n    true\n}\n\nfn is_leap(y: int) -> bool {\n    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0\n}\n\n// returns days since 1970-01-01, or -10000000 if invalid\nfn parse_date(s: string) -> int {\n    let bad = -10000000\n    let parts: Vec<string> = s.split(\"-\").collect()\n    if parts.len() != 3 {\n        return bad\n    }\n    if !all_digits(parts[0], 4) || !all_digits(parts[1], 2) || !all_digits(parts[2], 2) {\n        return bad\n    }\n    let y: int = parts[0].parse::<int>().unwrap_or(0)\n    let m: int = parts[1].parse::<int>().unwrap_or(0)\n    let d: int = parts[2].parse::<int>().unwrap_or(0)\n    if m < 1 || m > 12 || d < 1 {\n        return bad\n    }\n    let mut dim = 31\n    if m == 4 || m == 6 || m == 9 || m == 11 {\n        dim = 30\n    } else if m == 2 {\n        dim = if is_leap(y) { 29 } else { 28 }\n    }\n    if d > dim {\n        return bad\n    }\n    let yy = if m <= 2 { y - 1 } else { y }\n    let era = yy / 400\n    let yoe = yy - era * 400\n    let mp = (m + 9) % 12\n    let doy = (153 * mp + 2) / 5 + d - 1\n    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy\n    era * 146097 + doe - 719468\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let names = [\"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\", \"Sunday\"]\n    for line in text.lines() {\n        let toks: Vec<string> = line.split_whitespace().collect()\n        if toks.len() == 0 {\n            continue\n        }\n        if toks.len() != 2 {\n            println(\"invalid\")\n            continue\n        }\n        let a = parse_date(toks[0])\n        let b = parse_date(toks[1])\n        if a == -10000000 || b == -10000000 {\n            println(\"invalid\")\n            continue\n        }\n        let lo = if a < b { a } else { b }\n        let diff = if a < b { b - a } else { a - b }\n        let wd = (((lo + 3) % 7) + 7) % 7\n        println(\"${diff} ${names[wd as usize]}\")\n    }\n}\n",
+ "first_turn_input": 8304,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.098,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 1.364,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 26.3,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 3.46,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:25:00",
+ "schema": 2,
+ "task": "t105_date_diff",
+ "thinking_seconds": 12.825,
+ "tool_result_tokens_est": 366,
+ "tool_wait_seconds": 1.46,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6780,
+   "cache_write": 1522,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8304,
+   "output": 6,
+   "result_chars": 228,
+   "turn": 1
+  },
+  {
+   "cache_read": 8302,
+   "cache_write": 1725,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10029,
+   "output": 16,
+   "result_chars": 1054,
+   "turn": 2
+  },
+  {
+   "cache_read": 10027,
+   "cache_write": 609,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 10638,
+   "output": 204,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 12.825,
+  "cost_usd": 0.0359569,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote `main.wj`. It gives the expected output on both examples, and `wj build main.wj` succeeds.\n\nI also ran a few extra cases through the interpreter. A blank line was skipped. `2023-02-29 2023-01-01` printed `invalid`. `1900-01-01 1900-01-02` printed `1 Monday`.\n\nOne choice to flag: I didn't reject years outside 1900\u20132100, since the task describes that range as a guarantee about the input. A d",
+  "subtype": "success",
+  "tokens_in": 28971,
+  "tokens_out": 1801,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 17.74
+}

@@ -7,6 +7,9 @@
 //!   interpreter crashes at step k is resumed by the compiled program, and the other way round, and the output and files equal an
 //!   uninterrupted run, for every k, on every sample workflow.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -17,12 +20,11 @@ fn text(o: &Output) -> String {
     format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
 }
 
-fn project(src: &str) -> PathBuf {
+fn project(src: &str) -> Scratch {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let root = std::env::temp_dir().join(format!("wj_durable_c_{}_{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
+    let root = Scratch::new("durable_c");
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("src")).unwrap();
-    let root = fs::canonicalize(&root).unwrap();
     fs::write(root.join("wj.toml"), "[package]\nname = \"p\"\nversion = \"0.1.0\"\n").unwrap();
     fs::write(root.join("src/main.wj"), src).unwrap();
     root
@@ -133,12 +135,12 @@ fn one_journal_two_implementations() {
         // build the program once
         let p = project(&src);
         // one target directory for all samples (the dependencies compile once); the binary of each sample is built and used in turn
-        let target = std::env::temp_dir().join(format!("wj_durable_compiled_target_{}", std::process::id()));
+        let target = Scratch::new("durable_compiled_target");
         let b = Command::new(WJ).args(["build", "-o", "out", "."]).current_dir(&p).env("CARGO_TARGET_DIR", &target).output().unwrap();
         assert!(b.status.success(), "{name}: {}", text(&b));
         // `wj build` runs cargo in the debug profile unless asked otherwise
         // cargo's target directory is `out/target` (or the caller's `CARGO_TARGET_DIR` on older builds of `wj`)
-        let bin = [p.join("out/target"), target.clone()].iter().flat_map(|t| ["debug", "release"].map(|profile| t.join(profile).join("p"))).find(|f| f.is_file());
+        let bin = [p.join("out/target"), target.to_path_buf()].iter().flat_map(|t| ["debug", "release"].map(|profile| t.join(profile).join("p"))).find(|f| f.is_file());
         let Some(bin) = bin else {
             failures.push(format!("{name}: no binary `p` under {} (profiles debug, release)", target.display()));
             continue;
@@ -182,7 +184,6 @@ fn one_journal_two_implementations() {
         }
         let _ = fs::remove_dir_all(&p);
     }
-    let _ = fs::remove_dir_all(std::env::temp_dir().join(format!("wj_durable_compiled_target_{}", std::process::id())));
     eprintln!("cross-implementation crash points: {points}");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(points >= 40, "{points}");

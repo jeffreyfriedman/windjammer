@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a 3\nadd b 5\nadd c 5\npop\npeek\nsize\npop\npop\npop\n",
+  "stdout": "b\nc\n2\nc\na\nempty\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add x -1\nadd y -1\nsize\n",
+  "stdout": "2\nleft:\nx -1\ny -1\n"
+ }
+]
