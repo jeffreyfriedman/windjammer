@@ -40,15 +40,28 @@ A test missing from the baseline is `absent` and therefore a divergence: record 
 
 ## The generated programs
 
-`scripts/wj/drift_gen.wj` writes seeded programs (default seeds 1..40) whose cells put a value of one kind
-(`Option<int>`, `Option<int>` from a map lookup, `Result`, an enum with unit/tuple/struct variants, `Option<string>`)
-in one value position (match arm result, return, return from a loop, closure, struct field, nested match, shadowing,
-`Vec` element, if-expression, bool match), on a hit and on a miss. Every integer literal goes through `num(..)`, so
+`scripts/wj/drift_gen.wj` writes seeded programs (default seeds 1..60, 8 cells each) whose cells put a value of one kind
+(`Option<int>`, `Option<int>` from a map lookup, `Result`, an enum with unit/tuple/struct variants, a nested enum, a
+tuple, `Option<string>`, `Option<char>`, `string`) in one of 16 value positions (match arm result, return, return from
+a loop, closure, struct field, nested match, shadowing, `Vec` element, if-expression, bool match, by-value method
+receiver, `break` with a value, nested loops with a labelled `continue`, early `return` from a `for`, a closure built
+from an argument, a closure with an early `return`), on a hit and on a miss. Every integer literal goes through `num(..)`, so
 literal typing is not what the grid probes. Oracles: the walker for the resolved engine (`gen/seed-N`: stdout and exit
 status), and rustc for the compiled backend (`gen/seed-N#rustc`: the generated Rust must type-check; `--run-compiled`
 also runs it). The rows join the corpus rows, so the same ledger applies. `DRIFT_GEN_BARE=1` switches on bare
 unit-variant patterns (a known divergence, `repros/bare_unit_pattern_in_let_match.wj`). Seeds beyond the default:
 `wj run scripts/wj/drift_gen.wj BIN DIR OUT.tsv --seeds 41..400`.
+
+## Move shapes
+
+`tests/drift_corpus/moves/` holds use-after-move programs for ADR-0030. Windjammer clones automatically in many
+shapes, so the directory records what rustc really rejects. `must_refuse_*.wj` programs are ones rustc rejects (E0382):
+a `<program>#refused` row compares whether each side stopped on an ownership error (the interpreter's WJ0007, rustc's
+E0382 behind the compiled build); an interpreter that runs such a program diverges, and the ledger names it until the
+ADR-0030 slice that refuses it lands (then the line goes stale and is deleted). The other programs (owned argument
+reused, string moved into a struct, move in a `for`/`while` body, partial move, closure capture, push then use, reassign
+re-arms, Copy-like struct) are controls: rustc accepts them, so all three modes must run them and agree. A new shape
+that rustc rejects is added as `must_refuse_<shape>.wj`.
 
 ## The drift budget
 
