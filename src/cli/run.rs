@@ -107,7 +107,7 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
         return Ok(code);
     }
     let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--quiet"]).current_dir(output_dir);
+    cmd.args(["run", "--quiet", "--manifest-path"]).arg(output_dir.join("Cargo.toml"));
     if release {
         cmd.arg("--release");
     }
