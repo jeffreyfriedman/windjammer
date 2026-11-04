@@ -4589,6 +4589,7 @@ dependencies = [
  "hmac",
  "js-sys",
  "jsonwebtoken",
+ "libc",
  "log",
  "mime_guess",
  "once_cell",

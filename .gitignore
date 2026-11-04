@@ -54,7 +54,7 @@ std/**/*.rs
 /target-agent*/
 
 # Local agent/debug scratch
-tmp_*
+/tmp_*
 .agent-wip/
 **/*.wip.rs
 /.worktrees/
