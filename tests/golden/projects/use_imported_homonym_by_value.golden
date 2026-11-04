@@ -1,0 +1,96 @@
+// ==== deps.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Deps {
+    pub n: i64,
+}
+impl Deps {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.n.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod deps;
+pub mod report;
+pub mod usecase;
+
+// Re-export public items
+pub use deps::*;
+pub use report::*;
+pub use usecase::*;
+// ==== main.rs ====
+use crate::usecase::list_items;
+mod deps;
+mod usecase;
+mod report;
+fn main() {
+    let d = deps::Deps { n: 7_i64 };
+    let r = list_items(d, "t");
+    println!("{} {}", r.count, r.deps.n);
+    println!("{}", report::total(r.deps));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod deps;
+pub mod report;
+pub mod usecase;
+
+// Re-export public items
+pub use deps::*;
+pub use report::*;
+pub use usecase::*;
+// ==== report.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::deps::Deps;
+#[inline]
+pub fn list_items(deps: Deps, tenant: &str) -> i64 {
+    if tenant == "t" {
+        deps.n
+    } else {
+        0_i64
+    }
+}
+
+#[inline]
+pub fn total(deps: Deps) -> i64 {
+    list_items(deps, "t")
+}
+
+// ==== usecase.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::deps::Deps;
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct Listed {
+    pub count: i64,
+    pub deps: Deps,
+}
+
+#[inline]
+pub fn list_items(deps: Deps, tenant: &str) -> Listed {
+    let count = {
+        if tenant == "t" {
+            2
+        } else {
+            0
+        }
+    };
+    Listed { count: (count as i64), deps }
+}
+

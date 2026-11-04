@@ -50,6 +50,24 @@ method-call result widths, struct field widths, closure parameters.
 | O5 | `auto_clone.rs` + codegen `.clone()` surgery (`maybe_auto_clone`, ~147 sites in ir_call_site, 46 generator) | 2211 + sites | C6 liveness clone facts (owned by the C6 agent, wt/convergence-c6) | in progress elsewhere | D-CLONE-OUTSIDE-SOLVER, D-CLONE-LASTUSE |
 | O6 | `find_signature_ending_with` callers (~13 sites) and bare-name fallbacks | -- | module-qualified lookup (C3) | one site fixed (`global_signature_for_function` tries module path first); rest owned by C3 agent | D-OWN-STAGES |
 
+### Where receiver and parameter ownership is decided today (wt/ownership-recv, 2026-11-04)
+
+Every stage below writes a mode for `self` or a parameter; later stages override earlier ones. `wj explain-ownership`
+shows the stages as `analyzer= solver= ir= emitted=`.
+
+| stage | file / function | decides | shapes it got wrong |
+|---|---|---|---|
+| A1 analyzer, receivers | `analyzer/function_analysis.rs::infer_self_ownership_*` + `resolve_impl_self_receiver_ownership`, fed by `self_return_and_consumption.rs` (`function_matches_on_self`, `match_arms_consume_bound_values`, `function_body_moves_non_copy_self_fields`), `self_mutating_calls.rs`, `self_field_mutation.rs` | `self` seed (OWN-ANALYZER-SEED) | read-only `match self` with bindings made Owned (text concat counted as a move) |
+| A2 analyzer, parameters | `analyzer/parameter_analysis.rs::infer_parameter_ownership` steps 0a-9, `passthrough_inference.rs` (2.5b `param_projects_non_copy_field_into_call_arg`, step 7 passthrough) | parameter seed | Copy field projected into a call; read-only param of a type from another module |
+| A3 analyzer, traits | `analyzer/trait_analysis.rs::infer_trait_self_receiver`, `upgrade_trait_method_self_receiver` | join of impl receivers for `analyzed_trait_methods` (only impls seen in the same compilation) | impl in another module mutating through a field |
+| S1 IR constraints | `ir/constraint_gen.rs` (OWN-MUT-ASSIGN `detect_mutation_target`, OWN-MUT-ANALYZER, OWN-RETURNED, seeds) and `constraint_gen/numeric.rs` (method calls: OWN-MUT-RECEIVER via `ir/receiver_type.rs`) | solver input | `self.items[n].step(x)`: receiver type of an indexed element was unknown, so the `&mut self` callee was never resolved |
+| S2 solver | `ir/solver.rs` (join, only rises) + `ir/pipeline.rs::lower_to_ir` (`retain_mutated_mutref` post-step) | IR mode | - |
+| C1 codegen, explicit `self` | `codegen/rust/function_formal_parameter_generation.rs::collect_additional_formal_parameter_strings` (Owned/Ref/Mut/Inferred hint arms, ~600 lines of `self` branches), helpers in `function_self_helpers.rs` (`owned_self_receiver`, `self_field_partial_move_needs_owned_receiver`, `self_receiver_upgrades`) and `codegen/rust/self_analysis.rs` (`function_consumes_self`, `function_modifies_self`, a 2000-line copy of the analyzer's walks without the registry) | emitted receiver | `lb(self.items, ..)` into a *borrowed* formal counted as a field move, overriding IR `&mut` with owned `self` |
+| C2 codegen, implicit `self` | `codegen/rust/function_implicit_self_generation.rs::extend_implicit_self_parameters` | emitted receiver | same overrides as C1 |
+| C3 codegen, traits | `codegen/rust/item_generation.rs::generate_trait_with_analysis` (analyzer join overrode even a declared `&mut self`; undeclared defaulted to `&self`), `function_self_helpers.rs::get_effective_self_ownership` (impl follows the trait) | trait + impl receivers | undeclared bodyless receiver guessed before the impls were seen |
+| C4 codegen, trait impl post | `function_formal_parameter_post.rs` (std traits `Iterator::next` etc. -> `&mut self`) | emitted receiver | - |
+| R registry/metadata | `codegen/rust/function_self_helpers.rs::record_self_receiver_upgrade`, `function_generation_prepare.rs` (`promote_*`, `get_param_ownership_for_registration`), `compiler/multipass_bare_pass_demotion.rs` (O3) | what callers see | - |
+
 ## Deletion order
 
 1. Stop adding paints: each new width bug gets a solver fact first (rule in `docs/spec/inference.md`), then the legacy path

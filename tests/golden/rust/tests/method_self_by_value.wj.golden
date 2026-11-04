@@ -18,7 +18,7 @@ fn new(value: f32) -> Mat4 {
         Mat4 { m00: value }
 }
 #[inline]
-fn multiply(self, other: Mat4) -> Mat4 {
+fn multiply(&self, other: Mat4) -> Mat4 {
         Mat4 { m00: self.m00 * other.m00 }
 }
 }

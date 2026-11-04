@@ -2,3 +2,4 @@
 # <project> | <stage>: <first error>   (stages: build, runtime, rustc, output)
 bare_pass_vec_reader | rustc: error[E0308]: mismatched types
 user_module_named_like_std | runtime: needs windjammer_runtime (not compiled by this gate)
+vec_element_moved_then_reused | rustc: error[E0308]: mismatched types

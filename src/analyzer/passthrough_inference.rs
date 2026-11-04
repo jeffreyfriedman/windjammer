@@ -840,6 +840,51 @@ impl<'ast> Analyzer<'ast> {
         Self::expr_has_field_move_from_param(param_name, expr, true)
     }
 
+    /// The `param.field...` projections that `expr_has_field_move_from_param` treats as moves
+    /// (same value positions), so their types can be checked.
+    fn collect_value_projections_of_param<'e, 'a>(
+        param_name: &str,
+        expr: &'e Expression<'a>,
+        value_position: bool,
+        out: &mut Vec<&'e Expression<'a>>,
+    ) {
+        let mut each = |e: &'e Expression<'a>, v: bool| Self::collect_value_projections_of_param(param_name, e, v, out);
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                if value_position && Self::expr_is_field_or_index_rooted_at_param(param_name, expr) {
+                    out.push(expr);
+                } else if value_position {
+                    each(object, true);
+                }
+            }
+            Expression::Index { object, index, .. } => {
+                each(object, false);
+                each(index, true);
+            }
+            Expression::Call { arguments, .. } => arguments.iter().for_each(|(_, a)| each(a, true)),
+            Expression::MethodCall { object, arguments, .. } => {
+                each(object, false);
+                arguments.iter().for_each(|(_, a)| each(a, true));
+            }
+            Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, v)| each(v, true)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                elements.iter().for_each(|e| each(e, true))
+            }
+            Expression::Binary { left, right, .. } => {
+                each(left, false);
+                each(right, false);
+            }
+            Expression::ChannelSend { value, .. } => each(value, true),
+            Expression::Unary { operand, .. } => each(operand, false),
+            Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. }
+            | Expression::AsyncCall { expr: operand, .. }
+            | Expression::SpawnCall { expr: operand, .. } => each(operand, true),
+            _ => {}
+        }
+    }
+
     fn expr_has_field_move_from_param(
         param_name: &str,
         expr: &Expression,
@@ -972,6 +1017,12 @@ impl<'ast> Analyzer<'ast> {
             .any(|stmt| self.stmt_has_field_or_index_move_binding(param_name, stmt))
     }
 
+    /// A non-Copy field or element of `param` is moved out by value (the `field_moved_parameters` fact).
+    pub(crate) fn param_field_is_moved_out(&self, param_name: &str, param_type: &Type, body: &[&'ast Statement<'ast>]) -> bool {
+        self.param_has_field_or_index_move_binding(param_name, body)
+            && !self.param_field_move_bindings_are_only_copy_or_text(param_name, param_type, body)
+    }
+
     /// True when every field/index move from `param` is a Copy or Windjammer text field let
     // (`let kind = …`, `let name = tree.nodes[i].name`). Both are readable from `&T`.
     pub(crate) fn param_field_move_bindings_are_only_copy_or_text(
@@ -1022,8 +1073,22 @@ impl<'ast> Analyzer<'ast> {
                 value: Some(expr), ..
             }
             | Statement::Expression { expr, .. } => {
-                // Non-let field moves still consume — not text-let-only.
-                !Self::expr_is_field_move_from_param(param_name, expr)
+                // Non-let field moves still consume, unless every projected value is Copy
+                // (`same(db.last, 3)` copies `last` out of `&Store`; nothing is moved).
+                if !Self::expr_is_field_move_from_param(param_name, expr) {
+                    return true;
+                }
+                let mut projections = Vec::new();
+                Self::collect_value_projections_of_param(param_name, expr, true, &mut projections);
+                let all_copy = !projections.is_empty()
+                    && projections.iter().all(|p| {
+                        self.infer_projected_field_type(param_name, param_type, p)
+                            .is_some_and(|ty| self.is_copy_type(&ty))
+                    });
+                if all_copy {
+                    *saw_benign_let = true;
+                }
+                all_copy
             }
             Statement::If {
                 then_block,
