@@ -20,6 +20,7 @@ tests/constructor_type_inference_test.rs	1
 tests/crate_internal_not_extern_test.rs	1
 tests/cross_crate_string_literal_test.rs	1
 tests/cross_module_extern_unsafe_test.rs	1
+tests/effects_fd_verify_test.rs	1
 tests/effects_scratch_test.rs	1
 tests/interpreter_projects_test.rs	2
 tests/string_literal_method_call_test.rs	1
