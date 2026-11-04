@@ -1,0 +1,15 @@
+// A struct passed to a function that returns it (an owned formal), then used again.
+struct Holder {
+    name: string,
+    n: int,
+}
+
+fn keep(h: Holder) -> Holder {
+    h
+}
+
+fn main() {
+    let h = Holder { name: "a", n: 1 }
+    let k = keep(h)
+    println("${k.n} ${h.n}")
+}
