@@ -6684,9 +6684,9 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type_name: Option<&str>,
         receiver: Option<&Expression<'ast>>,
     ) {
+        if self.solver_typed_numeric_call(receiver, arg_expr) { return; }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        // Prefer receiver-qualified formals so suffix-ambiguous methods
-        // (`insert` → Vec vs HashMap) never drive numeric casts from the wrong sig.
+        // Prefer receiver-qualified formals so suffix-ambiguous methods (`insert` → Vec vs HashMap) never drive numeric casts from the wrong sig.
         let user_argc = sig
             .param_types
             .len()

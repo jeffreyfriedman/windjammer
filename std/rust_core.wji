@@ -125,43 +125,82 @@ pub trait String {
     fn truncate(self, len: usize);
 }
 
-// Float methods: an argument and the result have the receiver's width (`x.min(1.0)` on an `f32` takes an `f32`).
-pub trait f32 {
-    fn abs(self) -> f32;
-    fn sqrt(self) -> f32;
-    fn sin(self) -> f32;
-    fn cos(self) -> f32;
-    fn tan(self) -> f32;
-    fn atan2(self, other: f32) -> f32;
-    fn floor(self) -> f32;
-    fn ceil(self) -> f32;
-    fn round(self) -> f32;
-    fn min(self, other: f32) -> f32;
-    fn max(self, other: f32) -> f32;
-    fn clamp(self, min: f32, max: f32) -> f32;
-    fn powi(self, n: i32) -> f32;
-    fn powf(self, n: f32) -> f32;
-    fn signum(self) -> f32;
-    fn to_radians(self) -> f32;
-    fn to_degrees(self) -> f32;
+// Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
+// an argument or result of type `T` has the receiver's width (`10.min(3)`: one class); exponents, rotations and
+// shift amounts are `u32` and bit counts are `u32`, as in Rust. Signed-only methods (`abs`, `signum`) are checked
+// against rustc on `i64`.
+pub trait Integer<T> {
+    fn abs(self) -> T;
+    fn signum(self) -> T;
+    fn pow(self, exp: u32) -> T;
+    fn min(self, other: T) -> T;
+    fn max(self, other: T) -> T;
+    fn clamp(self, min: T, max: T) -> T;
+    fn div_euclid(self, rhs: T) -> T;
+    fn rem_euclid(self, rhs: T) -> T;
+    fn rotate_left(self, n: u32) -> T;
+    fn rotate_right(self, n: u32) -> T;
+    fn swap_bytes(self) -> T;
+    fn reverse_bits(self) -> T;
+    fn count_ones(self) -> u32;
+    fn count_zeros(self) -> u32;
+    fn leading_zeros(self) -> u32;
+    fn trailing_zeros(self) -> u32;
+    fn checked_add(self, rhs: T) -> Option<T>;
+    fn checked_sub(self, rhs: T) -> Option<T>;
+    fn checked_mul(self, rhs: T) -> Option<T>;
+    fn checked_div(self, rhs: T) -> Option<T>;
+    fn checked_rem(self, rhs: T) -> Option<T>;
+    fn checked_neg(self) -> Option<T>;
+    fn checked_pow(self, exp: u32) -> Option<T>;
+    fn checked_shl(self, rhs: u32) -> Option<T>;
+    fn checked_shr(self, rhs: u32) -> Option<T>;
+    fn wrapping_add(self, rhs: T) -> T;
+    fn wrapping_sub(self, rhs: T) -> T;
+    fn wrapping_mul(self, rhs: T) -> T;
+    fn wrapping_neg(self) -> T;
+    fn wrapping_pow(self, exp: u32) -> T;
+    fn wrapping_shl(self, rhs: u32) -> T;
+    fn wrapping_shr(self, rhs: u32) -> T;
+    fn saturating_add(self, rhs: T) -> T;
+    fn saturating_sub(self, rhs: T) -> T;
+    fn saturating_mul(self, rhs: T) -> T;
+    fn saturating_pow(self, exp: u32) -> T;
+    fn is_positive(self) -> bool;
+    fn is_negative(self) -> bool;
+    fn to_string(self) -> String;
 }
 
-pub trait f64 {
-    fn abs(self) -> f64;
-    fn sqrt(self) -> f64;
-    fn sin(self) -> f64;
-    fn cos(self) -> f64;
-    fn tan(self) -> f64;
-    fn atan2(self, other: f64) -> f64;
-    fn floor(self) -> f64;
-    fn ceil(self) -> f64;
-    fn round(self) -> f64;
-    fn min(self, other: f64) -> f64;
-    fn max(self, other: f64) -> f64;
-    fn clamp(self, min: f64, max: f64) -> f64;
-    fn powi(self, n: i32) -> f64;
-    fn powf(self, n: f64) -> f64;
-    fn signum(self) -> f64;
-    fn to_radians(self) -> f64;
-    fn to_degrees(self) -> f64;
+// Float methods, for `T` = `f32` or `f64` (`float`): an argument and the result of type `T` have the receiver's
+// width (`x.min(1.0)` on an `f32` takes an `f32`); `powi` takes an `i32`.
+pub trait Float<T> {
+    fn abs(self) -> T;
+    fn sqrt(self) -> T;
+    fn cbrt(self) -> T;
+    fn exp(self) -> T;
+    fn ln(self) -> T;
+    fn log10(self) -> T;
+    fn log2(self) -> T;
+    fn sin(self) -> T;
+    fn cos(self) -> T;
+    fn tan(self) -> T;
+    fn atan2(self, other: T) -> T;
+    fn hypot(self, other: T) -> T;
+    fn floor(self) -> T;
+    fn ceil(self) -> T;
+    fn round(self) -> T;
+    fn trunc(self) -> T;
+    fn fract(self) -> T;
+    fn min(self, other: T) -> T;
+    fn max(self, other: T) -> T;
+    fn clamp(self, min: T, max: T) -> T;
+    fn mul_add(self, a: T, b: T) -> T;
+    fn powi(self, n: i32) -> T;
+    fn powf(self, n: T) -> T;
+    fn signum(self) -> T;
+    fn to_radians(self) -> T;
+    fn to_degrees(self) -> T;
+    fn is_nan(self) -> bool;
+    fn is_finite(self) -> bool;
+    fn to_string(self) -> String;
 }
