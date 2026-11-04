@@ -89,20 +89,9 @@ impl<'ast> CodeGenerator<'ast> {
                             ) && self.method_requires_consuming_self_receiver(&qualified, sig)
                         });
                     }
-                    let caller_self_is_owned = self.current_function_params.iter().any(|p| {
-                        p.name == "self"
-                            && !matches!(
-                                p.ownership,
-                                crate::parser::OwnershipHint::Ref
-                                    | crate::parser::OwnershipHint::Mut
-                            )
-                    });
-                    let owned_self_index_move =
-                        caller_self_is_owned && self.codegen_expression_traces_to_self(object);
-                    if needs_clone
-                        && self.field_access_root_is_behind_reference(object)
-                        && !owned_self_index_move
-                    {
+                    // An element never moves out of its collection (E0507), whether the collection
+                    // is borrowed, a local, or a field of an owned `self`.
+                    if needs_clone {
                         obj_str = format!("{}.clone()", obj_str);
                     }
                 }

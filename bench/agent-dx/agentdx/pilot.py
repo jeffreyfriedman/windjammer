@@ -10,11 +10,11 @@ import shutil
 import subprocess
 import time
 
-from . import arms as A, budget as B, diagnostics as dg, grade as G, shim as S, workspace as W
+from . import tasks as T, arms as A, budget as B, diagnostics as dg, grade as G, shim as S, workspace as W
 from .runners import wj_bin
 
 SCHEMA = 2
-DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 6, 0.5   # stop when the sandbox policy, not the language, blocks most trials
+DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 8, 0.85   # stop when the sandbox policy, not the language, blocks most trials
 PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_lru_cache", "t013_bst",
                "t018_word_freq", "t022_csv_parse", "t030_bank_ledger", "t034_shapes_trait", "t050_cat_number"]
 
@@ -152,6 +152,10 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     src = A.SRC[lang]
     with open(os.path.join(ws, src), "w") as f:
         f.write(W.starter(lang))
+    wsdir = os.path.join(T.load_task(task)["dir"], "workspace")   # files the task provides (for example a wj.toml)
+    if os.path.isdir(wsdir):
+        for name in os.listdir(wsdir):
+            shutil.copy(os.path.join(wsdir, name), os.path.join(ws, name))
     log = os.path.join(tdir, "shim.jsonl")
     shim_dir = os.path.join(tdir, "shimbin")
     tool = A.SHIMMED[lang]

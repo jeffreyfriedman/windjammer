@@ -1,0 +1,36 @@
+use std::fs
+use std::process
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let first_end = text.find("\n").unwrap_or(text.len())
+    let first: string = text[0..first_end].to_string()
+    let mut ok = first.len() > 0
+    for c in first.chars() {
+        if c < '0' || c > '9' { ok = false }
+    }
+    let w = first.parse::<int>().unwrap_or(0)
+    if !ok || w == 0 {
+        println("error: bad width")
+        process::exit(1)
+    }
+    let mut cur = ""
+    let mut lines: Vec<string> = []
+    let rest: string = if first_end < text.len() { text[first_end..].to_string() } else { "" }
+    for word in rest.split_whitespace() {
+        if cur.len() == 0 {
+            cur = word.to_string()
+        } else if (cur.len() + 1 + word.len()) as int <= w {
+            cur = cur + " " + word
+        } else {
+            lines.push(cur)
+            cur = word.to_string()
+        }
+    }
+    if cur.len() > 0 {
+        lines.push(cur)
+    }
+    for l in lines {
+        println("${l}")
+    }
+}

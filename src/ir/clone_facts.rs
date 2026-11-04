@@ -40,6 +40,93 @@ pub fn borrowed_returned_fields(
         .collect()
 }
 
+/// Element reads (`v[i]`, `self.items[i]`) consumed as an owned value: an assignment value, the
+/// function's value or a `return`, a struct-literal field, an array/tuple element.
+/// An element cannot move out of its collection, so a non-Copy element is cloned there
+/// (CLONE-BORROWED-TO-OWNED); a Copy element is copied. Call arguments are not included: the
+/// callee's formal decides (OWN-CALL-FORMAL). By node, with the root binding.
+pub fn owned_element_reads(body: &[&Statement<'_>]) -> BTreeMap<usize, String> {
+    let mut out = BTreeMap::new();
+    element_stmts(body, true, &mut out);
+    out
+}
+
+fn element_root(e: &Expression<'_>) -> Option<String> {
+    let Expression::Index { object, .. } = e else { return None };
+    let mut cur: &Expression<'_> = object;
+    loop {
+        match cur {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => cur = object,
+            Expression::Identifier { name, .. } => return Some(name.clone()),
+            _ => return None,
+        }
+    }
+}
+
+fn element_value(e: &Expression<'_>, out: &mut BTreeMap<usize, String>) {
+    if let Some(root) = element_root(e) {
+        out.insert(node_id(e), root);
+        return;
+    }
+    match e {
+        Expression::Block { statements, .. } => element_stmts(statements, true, out),
+        Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| element_value(f, out)),
+        Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+            elements.iter().for_each(|x| element_value(x, out))
+        }
+        Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+            // Not the arguments themselves (the formal decides), but values built inside them.
+            arguments.iter().for_each(|(_, a)| nested_values(a, out))
+        }
+        _ => nested_values(e, out),
+    }
+}
+
+/// Owned positions nested in an expression that is not itself one (`Some(Row { a: v[0] })`).
+fn nested_values(e: &Expression<'_>, out: &mut BTreeMap<usize, String>) {
+    match e {
+        Expression::StructLiteral { .. } | Expression::Tuple { .. } | Expression::Array { .. } | Expression::Block { .. } => {
+            element_value(e, out)
+        }
+        Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+            arguments.iter().for_each(|(_, a)| nested_values(a, out))
+        }
+        _ => {}
+    }
+}
+
+fn element_stmts(body: &[&Statement<'_>], value_tail: bool, out: &mut BTreeMap<usize, String>) {
+    for (i, s) in body.iter().enumerate() {
+        let is_tail = value_tail && i + 1 == body.len();
+        match s {
+            // A `let` initialiser is not included: the binding may borrow the element
+            // (`let node = &nodes[0]` when it is only read), which the local's ownership decides.
+            Statement::Let { value, .. } => nested_values(value, out),
+            Statement::Assignment { value, .. } => element_value(value, out),
+            Statement::Return { value: Some(v), .. } => element_value(v, out),
+            Statement::Expression { expr, .. } if is_tail => element_value(expr, out),
+            Statement::Expression { expr, .. } => nested_values(expr, out),
+            Statement::If { then_block, else_block, .. } => {
+                element_stmts(then_block, is_tail, out);
+                if let Some(b) = else_block {
+                    element_stmts(b, is_tail, out);
+                }
+            }
+            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                element_stmts(body, false, out)
+            }
+            Statement::Match { arms, .. } => arms.iter().for_each(|a| {
+                if is_tail {
+                    element_value(a.body, out)
+                } else {
+                    nested_values(a.body, out)
+                }
+            }),
+            _ => {}
+        }
+    }
+}
+
 fn param_field_root(params: &[&str], e: &Expression<'_>) -> Option<String> {
     let Expression::FieldAccess { object, .. } = e else { return None };
     let mut cur: &Expression<'_> = object;
@@ -127,6 +214,15 @@ mod tests {
         assert_eq!(returned_param_fields(&ps, &d.body, true).values().cloned().collect::<Vec<_>>(), vec!["q".to_string()]);
         let d = decl_of(src, "other");
         assert!(returned_param_fields(&["q"], &d.body, true).is_empty());
+    }
+
+    #[test]
+    fn owned_element_reads_are_value_positions_not_call_arguments() {
+        let src = "struct Row { a: string }\nfn f(v: Vec<string>) -> Row {\n let x = v[0]\n take(v[1])\n let n = v[2].len()\n Row { a: v[3] }\n}\nfn take(s: string) {}\n";
+        let d = decl_of(src, "f");
+        let reads = owned_element_reads(&d.body);
+        assert_eq!(reads.len(), 1, "the struct field `v[3]`; not a let initialiser, an argument or a receiver");
+        assert!(reads.values().all(|r| r == "v"));
     }
 
     #[test]

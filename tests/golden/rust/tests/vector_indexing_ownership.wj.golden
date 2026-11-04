@@ -16,7 +16,7 @@ pub fn add_child(&mut self, child: Node) {
 }
 #[inline]
 pub fn get_child(&self, index: usize) -> Node {
-        (&self.children[index]).clone()
+        self.children[index].clone()
 }
 #[inline]
 pub fn recursive_sum(node: &Node) -> i32 {

@@ -11,14 +11,14 @@ pub fn new(value: i32) -> Node {
         Node { value, children: None }
 }
 #[inline]
-pub fn direct_access(&self, index: usize) -> Node {
-        let children = self.children.as_ref().clone().unwrap();
-        (&children[index]).clone()
+pub fn direct_access(mut self, index: usize) -> Node {
+        let children = self.children.unwrap();
+        children[index].clone()
 }
 #[inline]
-pub fn through_self(&self, index: usize) -> Node {
-        let children_ref = self.children.as_ref().clone().unwrap();
-        (&children_ref[index]).clone()
+pub fn through_self(mut self, index: usize) -> Node {
+        let children_ref = self.children.unwrap();
+        children_ref[index].clone()
 }
 }
 

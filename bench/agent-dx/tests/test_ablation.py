@@ -65,3 +65,16 @@ class Pilot4Packs(unittest.TestCase):
         self.assertEqual(arms.ARMS["M"]["loop"], arms.ARMS["N"]["loop"])
         self.assertEqual(arms.ARMS["K"]["pack_file"], arms.ARMS["L"]["pack_file"])
         self.assertNotEqual(arms.ARMS["M"]["pack_file"], arms.ARMS["N"]["pack_file"])
+
+
+class Pilot5Packs(unittest.TestCase):
+    def test_committed_pack_equals_a_fresh_render_and_has_no_loop_bullet(self):
+        for name, text in ablate.p5_render().items():
+            self.assertEqual(open(os.path.join(ablate.P5_DIR, name)).read(), text)
+        t = open(arms.pack_path("U")).read()
+        self.assertNotIn("- Loop:", t); self.assertIn("/dev/stdin", t)
+
+    def test_pilot5_arms_differ_only_in_loop(self):
+        strip = lambda a: arms.prompt(T, a).replace(arms.LOOP_TEXT[arms.ARMS[a]["loop"]], "")
+        self.assertEqual(len({strip(a) for a in "UVW"}), 1)
+        self.assertEqual(len({arms.ARMS[a]["pack_file"] for a in "UVW"}), 1)

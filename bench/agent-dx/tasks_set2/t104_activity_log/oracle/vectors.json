@@ -1,0 +1,224 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann login 5\nbob login 3\nann edit 40\nann edit 2\nbob logout 1\n",
+  "stdout": "ann 3 47 edit\nbob 2 4 login\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x a 1\nbad line\ny b -4\n",
+  "stdout": "x 1 1 a\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "malformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "u b 1\nu a 1\n",
+  "stdout": "u 2 2 a\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "u a 0\nv a 0\n",
+  "stdout": "u 1 0 a\nv 1 0 a\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "only two\n\nu a 1 extra\nu a 7\n",
+  "stdout": "u 1 7 a\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "u a 10x\n",
+  "stdout": "malformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cy c 23\n",
+  "stdout": "cy 1 23 c\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee b 21\ncy b 12\n",
+  "stdout": "dee 1 21 b\ncy 1 12 b\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cy a 34\ncy b 17\ncy a 48\nbob b 25\nann b 9\nbob b 34\nbob c 22\nbob c 5\ndee b 11\n",
+  "stdout": "cy 3 99 a\nbob 4 86 b\ndee 1 11 b\nann 1 9 b\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee c 10\njunk\njunk\nann c 23\ncy b 20\njunk\ndee c 23\ndee b 25\ncy c 42\ncy a 37\nann c 37\nann b 26\ncy b 48\n",
+  "stdout": "cy 4 147 b\nann 3 86 c\ndee 3 58 c\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee b 45\ncy a 45\njunk\ndee b 12\nbob a 23\njunk\nbob a 24\ncy b 20\njunk\nann b 20\nbob c 31\ncy b 9\ndee c 44\ncy b 47\n",
+  "stdout": "cy 4 121 b\ndee 3 101 b\nbob 3 78 a\nann 1 20 b\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob a 1\njunk\ndee b 10\nbob c 7\ncy b 7\nbob a 30\ndee c 30\nbob a 14\ncy c 7\ndee c x\nann a 40\nbob b 4\ncy a x\n",
+  "stdout": "bob 5 56 a\nann 1 40 a\ndee 2 40 b\ncy 2 14 b\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee a 5\nbob c 25\nbob c 39\ndee c 43\n",
+  "stdout": "bob 2 64 c\ndee 2 48 a\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cy c 33\ncy b 37\ndee a 30\ndee a 21\njunk\njunk\ncy b 14\n",
+  "stdout": "cy 3 84 b\ndee 2 51 a\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee b 32\nann b 45\ndee a 10\nbob a 16\ndee a 0\ndee b 9\nann b x\ndee b 0\n",
+  "stdout": "dee 5 51 b\nann 1 45 b\nbob 1 16 a\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cy a 6\ncy c 9\nbob a 21\njunk\n",
+  "stdout": "bob 1 21 a\ncy 2 15 a\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann b 27\ndee b 0\nann b 20\nbob b 22\ncy c 47\nbob a 44\nbob c 41\ndee c 31\ncy b 45\njunk\ncy b 0\nann c 11\ncy b 14\n",
+  "stdout": "bob 3 107 a\ncy 4 106 b\nann 3 58 b\ndee 2 31 b\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cy c 36\n",
+  "stdout": "cy 1 36 c\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann a 25\ncy c 2\ncy a 18\ndee a 12\nann a 16\nann a 7\nann a 39\ndee c 17\nbob c 16\njunk\ndee a 29\n",
+  "stdout": "ann 4 87 a\ndee 3 58 a\ncy 2 20 a\nbob 1 16 c\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann b 12\nann a 1\ncy a x\nbob a 40\ndee a 45\nbob c 14\ndee a 28\nann a 15\ndee b 5\ncy b 43\ndee b 4\nann c 50\ncy b 8\ncy b 14\n",
+  "stdout": "dee 4 82 a\nann 4 78 a\ncy 3 65 b\nbob 2 54 a\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob b 38\ndee a 50\nbob a 40\ncy a 38\nann a 41\ncy a x\njunk\nbob c 48\ndee b 19\nann c 44\nbob b 44\ndee a 46\nbob b 27\njunk\n",
+  "stdout": "bob 5 197 b\ndee 3 115 a\nann 2 85 a\ncy 1 38 a\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann a 20\ndee c x\nann b 38\ncy b 29\nann b 0\nbob a 4\nann c 42\nbob c 16\njunk\ncy a 3\nbob c 26\n",
+  "stdout": "ann 4 100 b\nbob 3 46 c\ncy 2 32 a\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cy c 40\ncy a 43\njunk\njunk\nann a 18\nbob b 8\nann a 19\n",
+  "stdout": "cy 2 83 a\nann 2 37 a\nbob 1 8 b\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob b 3\ncy c 24\ncy a 47\ncy a 8\nbob b 47\nbob b 42\nbob b 15\ncy c 17\ndee c 16\ndee a 19\ndee a 30\n",
+  "stdout": "bob 4 107 b\ncy 4 96 a\ndee 3 65 a\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob c 10\ndee c 29\nbob a 38\nbob c 26\ndee a 22\nann b 17\nann c x\nann c 2\nann b 18\ndee c 30\ncy a 38\nbob c 28\n",
+  "stdout": "bob 4 102 c\ndee 3 81 c\ncy 1 38 a\nann 3 37 b\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee b 36\ncy c 50\ndee a 4\ndee a 6\ndee c 36\nann a 9\njunk\ndee c 45\ndee a 38\n",
+  "stdout": "dee 6 165 a\ncy 1 50 c\nann 1 9 a\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "junk\nbob a 22\nann c 13\nbob b 26\njunk\ndee b x\n",
+  "stdout": "bob 2 48 a\nann 1 13 c\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann b 7\nbob a 25\nann a 20\nbob c x\ndee a 13\nann a 49\n",
+  "stdout": "ann 3 76 a\nbob 1 25 a\ndee 1 13 a\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee b 47\n",
+  "stdout": "dee 1 47 b\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann c 6\nbob b 24\ncy b 28\ndee c 31\nbob a 21\njunk\nann b 23\nbob a 2\ncy c 3\n",
+  "stdout": "bob 3 47 a\ncy 2 31 b\ndee 1 31 c\nann 2 29 b\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dee a 48\ncy b 35\ndee c 39\ndee c 7\nbob b 36\ncy c 35\n",
+  "stdout": "dee 3 94 c\ncy 2 70 b\nbob 1 36 b\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob c 14\ncy a 41\ncy c 11\nann c 12\ncy c 23\ncy c 30\nann a x\nann c 26\ndee b 40\nann c 45\ncy b 40\ncy a 4\ncy c 21\ndee a 48\n",
+  "stdout": "cy 7 170 c\ndee 2 88 a\nann 3 83 c\nbob 1 14 c\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob c 16\ndee a 18\nbob a 4\nbob a 42\ndee a 22\n",
+  "stdout": "bob 3 62 a\ndee 2 40 a\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob c 21\nann b 49\ncy b 15\ndee b 36\ncy b 5\ncy c 18\nbob c 27\nbob c 49\nann a 37\nbob a 23\njunk\nbob c 41\ncy c 19\n",
+  "stdout": "bob 5 161 c\nann 2 86 a\ncy 4 57 b\ndee 1 36 b\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann c 44\nann b 27\ncy b 45\ndee b 41\nann a 18\nbob a 21\ndee c 23\nann c 19\njunk\ndee b 0\ndee b 50\ncy b 11\nbob b 34\n",
+  "stdout": "dee 4 114 b\nann 4 108 c\ncy 2 56 b\nbob 2 55 a\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bob c 33\nann b 22\nann b 5\ncy c 31\n",
+  "stdout": "bob 1 33 c\ncy 1 31 c\nann 2 27 b\nmalformed: 0\n"
+ }
+]
