@@ -83,7 +83,6 @@ tests/string_test.wj | error[E0433]: cannot find module or crate `windjammer_run
 tests/struct_with_missing_imports.wj | error[E0425]: cannot find type `Animation` in this scope
 tests/svo_convert_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/test_cases_basic.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/tuple_enum_variants.wj | error[E0308]: mismatched types
 tests/type_alias_test.wj | error[E0308]: mismatched types
 tests/type_registry_imports_test.wj | wj build failed
 tests/use_crate_path_test.wj | error[E0432]: unresolved import `crate::ffi`

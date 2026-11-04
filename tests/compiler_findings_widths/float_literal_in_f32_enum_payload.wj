@@ -1,0 +1,9 @@
+pub enum Value {
+    Count(i32),
+    Ratio(f32),
+    Empty,
+}
+
+pub fn init() -> Value {
+    Value::Ratio(5.5)
+}

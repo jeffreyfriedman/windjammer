@@ -73,3 +73,15 @@ early exits from loops) and which hand-written `vp_*` program covers each gap.
 Each new gate was shown to fail when the thing it guards is broken (`docs/drift/generator-audit.md`, section
 Mutation checks): the ledger by planted divergences (`drift_selftest.wj`), the value-position programs by removing
 the fix for the bare-`None` bug and observing the gate go red.
+
+## The spec as an oracle
+
+`scripts/wj/spec_oracle.wj` runs every `tests/spec` case that carries an expected output (`mode: run` and `mode: panic`)
+under the tree walker, the resolved engine and the compiled backend, and judges each run against the case's own
+`// expect:` lines (stdout and exit status; `expect-error:` for panics). The gate's `spec` step feeds the rows to
+`drift_ledger.wj` with its own shrink-only ledger, `tests/spec_oracle/known_divergences.txt`; compiled results come from
+`tests/spec_oracle/compiled_baseline.tsv` (`--compiled live --record` rebuilds them: one `cargo build --keep-going` of a
+scratch workspace with one binary per case, dev profile). `spec_oracle.wj --selftest` plants wrong outputs the judge must
+reject. Expected outputs of new cases come from the compiled program, never from the interpreter; when the compiled
+backend cannot build a program yet, the case says so and its output is that of the equivalent Rust program. Findings:
+`docs/drift/spec-findings.md`.

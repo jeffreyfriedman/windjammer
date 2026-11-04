@@ -1,0 +1,29 @@
+pub struct Ctr {
+    pub cs: Vec<u64>,
+}
+
+impl Ctr {
+    pub fn merge(self, other: Ctr) -> Ctr {
+        let mut merged: Vec<u64> = Vec::new()
+        let mut i = 0
+        while i < self.cs.len() {
+            let a = if i < self.cs.len() {
+                self.cs[i]
+            } else {
+                0
+            }
+            let b = if i < other.cs.len() {
+                other.cs[i]
+            } else {
+                0
+            }
+            if a > b {
+                merged.push(a)
+            } else {
+                merged.push(b)
+            }
+            i = i + 1
+        }
+        Ctr { cs: merged }
+    }
+}

@@ -8,6 +8,7 @@
 //   fast-paths every fast path fires on its programs (a silent fallback is invisible to parity)
 //   jit-loops  generated loop programs: walker == resolved == no-jit
 //   packed-vec packed vectors == boxed vectors
+//   spec       the language spec as an oracle: tests/spec cases under walker, resolved and compiled (spec_oracle.wj)
 //   corpus     (plus 40 generated value-kind x position programs, drift_gen.wj) ecosystem tests + value-position programs: walker, resolved and compiled agree, or the
 //              divergence is in tests/drift_corpus/known_divergences.txt (a shrink-only ledger)
 // `--fast` skips the cargo steps (selftest and corpus only). WJ_CARGO_WRAPPER prefixes every cargo and
@@ -24,6 +25,7 @@ use wj_table::plain
 
 const LEDGER: string = "tests/drift_corpus/known_divergences.txt"
 const MIN_CASES: string = "1300"
+const SPEC_MIN_CASES: string = "200"
 
 struct Step {
     name: string,
@@ -227,6 +229,78 @@ fn ensure_ecosystem() -> Result<string, string> {
     }
 }
 
+// The language spec as an oracle (docs/testing/DRIFT.md, scripts/wj/spec_oracle.wj): every tests/spec case with an
+// expected output runs under the walker, the resolved engine and the compiled backend; the divergences are listed
+// in tests/spec_oracle/known_divergences.txt, a shrink-only ledger judged by drift_ledger.wj like the corpus one.
+fn spec_step(wj: string, compiled: string) -> Step {
+    let run_dir = match sh("mktemp -d /tmp/wj-drift-spec.XXXXXX") {
+        Ok(r) => strings.trim(r.stdout),
+        Err(_) => "/tmp/wj-drift-spec",
+    }
+    let t0 = now()
+    let rows = "${run_dir}/spec.tsv"
+    let ledger = "tests/spec_oracle/known_divergences.txt"
+    let mut ok = true
+    let mut detail = ""
+    let mut cases = ""
+    match sh("${wj} run --interpret scripts/wj/spec_oracle.wj --selftest 2>&1") {
+        Ok(r) => {
+            if r.status != 0 {
+                ok = false
+                detail = r.stdout
+            }
+        },
+        Err(e) => {
+            ok = false
+            detail = e
+        },
+    }
+    if ok {
+        match sh("${wj} run --interpret scripts/wj/spec_oracle.wj ${wj} ${rows} --compiled ${compiled} 2>&1") {
+            Ok(r) => {
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
+    if ok {
+        let base_ref = env::var("DRIFT_BASE_REF").unwrap_or("next/v0.50.0")
+        let mut base_arg = ""
+        match sh("git show ${base_ref}:${ledger} > ${run_dir}/base-ledger.txt 2>/dev/null") {
+            Ok(r) => {
+                if r.status == 0 {
+                    base_arg = "--base-ledger ${run_dir}/base-ledger.txt"
+                }
+            },
+            Err(_) => {},
+        }
+        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${rows} ${ledger} --min-cases ${SPEC_MIN_CASES} ${base_arg} 2>&1") {
+            Ok(r) => {
+                let first = strings.split_lines(r.stdout)
+                if first.len() > 0 {
+                    cases = first[0]
+                }
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
+    let _ = sh("rm -rf ${run_dir}")
+    Step { name: "spec oracle (compiled: ${compiled})", cases: cases, verdict: if ok { "pass" } else { "FAIL" }, secs: now() - t0, detail: detail }
+}
+
 fn main() {
     let args = env::args()
     let mut wj = env::var("WJ").unwrap_or("target/release/wj")
@@ -279,6 +353,7 @@ fn main() {
         steps.push(cargo_step("packed-vec", "interpreter_packed_vec_test::"))
     }
     steps.push(corpus_step(wj, compiled))
+    steps.push(spec_step(wj, compiled))
     let mut t = new(["step", "cases", "verdict", "seconds"])
     let mut failed = 0
     for s in steps {

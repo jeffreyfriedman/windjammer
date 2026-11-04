@@ -67,6 +67,7 @@ fn wrap(name: string) -> Holder {
         index_source_widths: Default::default(),
         usize_conversions: Default::default(),
         last_uses: Default::default(),
+        element_reads: Default::default(),
         module_path: Vec::new(),
         returned_fields: Default::default(),
         element_reads: Default::default(),

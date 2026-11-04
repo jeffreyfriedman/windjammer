@@ -6698,12 +6698,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let is_lang_payload =
                     crate::analyzer::Analyzer::is_language_level_method_payload_store(method);
                 let runtime_key =
-                    crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                        None,
-                        object,
-                        method,
-                        |name| self.is_imported_runtime_std_module(name),
-                    );
+                    self.qualified_method_key(None, object, method);
                 arguments.iter().enumerate().any(|(i, (_, arg))| {
                     // P3.669: runtime-std shared-ref slots (`json::get` `&Value`) are not
                     // owned payload stores — layered bare `get` Owned stubs must not block
@@ -6855,12 +6850,7 @@ impl<'ast> CodeGenerator<'ast> {
         // multipass layers a bare `get` Owned WJ stub — not an owned sibling emitter.
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let runtime_key =
-                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                    None,
-                    object,
-                    method,
-                    |name| self.is_imported_runtime_std_module(name),
-                );
+                self.qualified_method_key(None, object, method);
             if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                 &self.signature_registry,
                 &runtime_key,
@@ -7943,12 +7933,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Prefer module-qualified key — multipass often resolves MethodCall sig.name
             // as bare `get` with Owned WJ stub.
             let runtime_key =
-                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                    None,
-                    object,
-                    method,
-                    |name| self.is_imported_runtime_std_module(name),
-                );
+                self.qualified_method_key(None, object, method);
             let runtime_borrow = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                 &self.signature_registry,
                 &runtime_key,
@@ -11632,12 +11617,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(mut sig) = sig {
                             // P3.669: rewrite bare `get` → `json::get` for runtime-std
                             // oracle in demotion visitors (multipass MethodCall resolve).
-                            let qualified = crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                                None,
-                                object,
-                                method,
-                                |name| self.is_imported_runtime_std_module(name),
-                            );
+                            let qualified = self.qualified_method_key(None, object, method);
                             if qualified.contains("::") && sig.name != qualified {
                                 sig.name = qualified;
                             }
@@ -12015,12 +11995,7 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.669: runtime-std shared-ref slots are not owned method args for demotion.
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let runtime_key =
-                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                    None,
-                    object,
-                    method,
-                    |name| self.is_imported_runtime_std_module(name),
-                );
+                self.qualified_method_key(None, object, method);
             if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                 &self.signature_registry,
                 &runtime_key,

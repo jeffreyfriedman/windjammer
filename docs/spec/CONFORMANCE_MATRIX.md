@@ -118,6 +118,9 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EXEC-007 | execution.md | `execution/SPEC-EXEC-007.wj` |
 | SPEC-EXEC-008 | execution.md | untestable |
 | SPEC-EXEC-009 | execution.md | `execution/SPEC-EXEC-009.wj` |
+| SPEC-EXEC-010 | execution.md | `execution/SPEC-EXEC-010.wj` |
+| SPEC-EXEC-011 | execution.md | `execution/SPEC-EXEC-011.wj` |
+| SPEC-EXEC-012 | execution.md | `execution/SPEC-EXEC-012.wj` |
 | SPEC-EXPR-001 | expressions.md | `expressions/SPEC-EXPR-001.wj` |
 | SPEC-EXPR-002 | expressions.md | `expressions/SPEC-EXPR-002.wj` |
 | SPEC-EXPR-003 | expressions.md | `expressions/SPEC-EXPR-003.wj` |
@@ -136,6 +139,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EXPR-016 | expressions.md | `expressions/SPEC-EXPR-016.wj` |
 | SPEC-EXPR-017 | expressions.md | `expressions/SPEC-EXPR-017.wj` |
 | SPEC-EXPR-018 | expressions.md | `expressions/SPEC-EXPR-018.wj` |
+| SPEC-EXPR-019 | expressions.md | `expressions/SPEC-EXPR-019.wj` |
 | SPEC-GRAM-001 | grammar.md | untestable |
 | SPEC-GRAM-002 | grammar.md | `grammar/SPEC-GRAM-002.wj` |
 | SPEC-GRAM-003 | grammar.md | `grammar/SPEC-GRAM-003.wj` |
@@ -207,6 +211,16 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-NUM-015 | numeric.md | `numeric/SPEC-NUM-015.wj` |
 | SPEC-NUM-016 | numeric.md | `numeric/SPEC-NUM-016.wj` |
 | SPEC-NUM-017 | numeric.md | `numeric/SPEC-NUM-017.wj` |
+| SPEC-NUM-018 | numeric.md | `numeric/SPEC-NUM-018.wj` |
+| SPEC-NUM-019 | numeric.md | `numeric/SPEC-NUM-019.wj` |
+| SPEC-NUM-020 | numeric.md | `numeric/SPEC-NUM-020.wj` |
+| SPEC-NUM-021 | numeric.md | `numeric/SPEC-NUM-021.wj` |
+| SPEC-NUM-022 | numeric.md | `numeric/SPEC-NUM-022.wj` |
+| SPEC-NUM-023 | numeric.md | `numeric/SPEC-NUM-023.wj` |
+| SPEC-NUM-024 | numeric.md | `numeric/SPEC-NUM-024.wj` |
+| SPEC-NUM-025 | numeric.md | `numeric/SPEC-NUM-025.wj` |
+| SPEC-NUM-026 | numeric.md | `numeric/SPEC-NUM-026.wj` |
+| SPEC-NUM-027 | numeric.md | `numeric/SPEC-NUM-027.wj` |
 | SPEC-OPT-001 | optionals.md | `optionals/SPEC-OPT-001.wj` |
 | SPEC-OPT-002 | optionals.md | `optionals/SPEC-OPT-002.wj` |
 | SPEC-OPT-003 | optionals.md | `optionals/SPEC-OPT-003.wj` |
@@ -222,6 +236,9 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-OWN-007 | ownership.md | `ownership/SPEC-OWN-007.wj` |
 | SPEC-OWN-008 | ownership.md | `ownership/SPEC-OWN-008.wj` |
 | SPEC-OWN-009 | ownership.md | untestable |
+| SPEC-OWN-010 | ownership.md | `ownership/SPEC-OWN-010.wj` |
+| SPEC-OWN-011 | ownership.md | `ownership/SPEC-OWN-011.wj` |
+| SPEC-OWN-012 | ownership.md | `ownership/SPEC-OWN-012.wj` |
 | SPEC-PAT-001 | patterns.md | `patterns/SPEC-PAT-001.wj` |
 | SPEC-PAT-002 | patterns.md | `patterns/SPEC-PAT-002.wj` |
 | SPEC-PAT-003 | patterns.md | `patterns/SPEC-PAT-003.wj` |
@@ -267,6 +284,12 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-STR-009 | strings.md | `strings/SPEC-STR-009.wj` |
 | SPEC-STR-010 | strings.md | `strings/SPEC-STR-010.wj` |
 | SPEC-STR-011 | strings.md | `strings/SPEC-STR-011.wj` |
+| SPEC-STR-012 | strings.md | `strings/SPEC-STR-012.wj` |
+| SPEC-STR-013 | strings.md | `strings/SPEC-STR-013.wj` |
+| SPEC-STR-014 | strings.md | `strings/SPEC-STR-014.wj` |
+| SPEC-STR-015 | strings.md | `strings/SPEC-STR-015.wj` |
+| SPEC-STR-016 | strings.md | `strings/SPEC-STR-016.wj` |
+| SPEC-STR-017 | strings.md | `strings/SPEC-STR-017.wj` |
 | SPEC-TRT-001 | traits.md | `traits/SPEC-TRT-001.wj` |
 | SPEC-TRT-002 | traits.md | `traits/SPEC-TRT-002.wj` |
 | SPEC-TRT-003 | traits.md | `traits/SPEC-TRT-003.wj` |

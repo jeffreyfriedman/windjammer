@@ -1,0 +1,120 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod shapes2d;
+pub mod shapes3d;
+
+// Re-export public items
+pub use shapes2d::*;
+pub use shapes3d::*;
+// ==== main.rs ====
+mod shapes2d;
+mod shapes3d;
+fn main() {
+    let a = shapes2d::bag::filled();
+    let b = shapes3d::bag::filled();
+    println!("{} {}", a.count, b.count);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod shapes2d;
+pub mod shapes3d;
+
+// Re-export public items
+pub use shapes2d::*;
+pub use shapes3d::*;
+// ==== shapes2d/bag.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct Bag {
+    pub count: i32,
+    pub total: f32,
+}
+impl Bag {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.count.to_ne_bytes());
+        __bytes.extend_from_slice(&self.total.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Bag {
+#[inline]
+pub fn new() -> Bag {
+        Bag { count: 0_i32, total: 0.0_f32 }
+}
+#[inline]
+pub fn put(&mut self, x: f32) {
+        self.count += 1;
+        self.total += x;
+}
+}
+
+#[inline]
+pub fn filled() -> Bag {
+    let mut b = Bag::new();
+    b.put(-1.0_f32);
+    b.put(2.5_f32);
+    b
+}
+
+// ==== shapes2d/mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod bag;
+
+// Re-export public items
+pub use self::bag::*;
+// ==== shapes3d/bag.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Bag {
+    pub count: i32,
+}
+impl Bag {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(4);
+        __bytes.extend_from_slice(&self.count.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Bag {
+#[inline]
+pub fn new() -> Bag {
+        Bag { count: 0_i32 }
+}
+#[inline]
+pub fn put(&mut self) {
+        self.count += 1;
+}
+}
+
+#[inline]
+pub fn filled() -> Bag {
+    let mut b = Bag::new();
+    b.put();
+    b.put();
+    b
+}
+
+// ==== shapes3d/mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod bag;
+
+// Re-export public items
+pub use self::bag::*;
