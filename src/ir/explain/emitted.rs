@@ -81,6 +81,13 @@ pub struct EmittedLet {
     pub width: Option<String>,
     pub mutable: bool,
     pub owned_init: bool,
+    /// The bound value's type when the emitted code spells it: an annotation, a struct literal, `vec![..]`,
+    /// `String::from`/`format!`/`.to_string()`.
+    pub ty: Option<String>,
+    /// `let x = y` with `y` a bare variable: `(y, seq, loop_depth)`, a move of `y` unless it is `Copy`.
+    pub moved_from: Option<(String, usize, usize)>,
+    /// `let x = y.f` with `y` a bare variable: `(y, f, seq, loop_depth)`, a partial move of `y`.
+    pub field_from: Option<(String, String, usize, usize)>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -95,6 +102,16 @@ pub struct EmittedFn {
     pub assigns: Vec<(usize, String)>,
     /// Every use of a plain variable: `(seq, name, loop_depth)`.
     pub uses: Vec<(usize, String, usize)>,
+    /// Names bound by a pattern (`let`, `for`, `match` arms, closure parameters): `(seq, name)`. A later use
+    /// of the name may be the new binding.
+    pub bindings: Vec<(usize, String)>,
+    /// Positions of `return`, `break` and `continue` (a move right before leaving is not used again).
+    pub exits: Vec<usize>,
+    /// The branch path of every position that is a use or a move: `(branch node, arm)` pairs from the
+    /// outermost `if`/`match` in. Two positions on different arms of one node never both run.
+    pub paths: HashMap<usize, Vec<(usize, usize)>>,
+    /// The `seq`s of those uses that are the base of a field access (`p` in `p.x`), not of the whole value.
+    pub field_bases: std::collections::HashSet<usize>,
     /// Loop depth at which each variable was declared (parameters are 0).
     pub decl_depth: HashMap<String, usize>,
 }
@@ -105,6 +122,8 @@ pub struct EmittedFile {
     pub fns: HashMap<String, EmittedFn>,
     /// Types the emitted Rust derives `Copy` for (a move of one is a copy).
     pub copy_types: std::collections::HashSet<String>,
+    /// Field types of the emitted structs: type -> field -> type.
+    pub struct_fields: HashMap<String, HashMap<String, String>>,
 }
 
 /// Parse emitted Rust. Returns `None` if it is not valid Rust syntax.
@@ -117,9 +136,18 @@ pub fn parse_emitted(src: &str) -> Option<EmittedFile> {
                 let name = f.sig.ident.to_string();
                 out.fns.insert(name.clone(), analyze_fn(&name, &f.sig, &f.block));
             }
-            syn::Item::Struct(syn::ItemStruct { attrs, ident, .. }) | syn::Item::Enum(syn::ItemEnum { attrs, ident, .. })
-                if attrs.iter().any(derives_copy) =>
-            {
+            syn::Item::Struct(st) => {
+                if st.attrs.iter().any(derives_copy) {
+                    out.copy_types.insert(st.ident.to_string());
+                }
+                let fields = st
+                    .fields
+                    .iter()
+                    .filter_map(|f| Some((f.ident.as_ref()?.to_string(), f.ty.to_token_stream().to_string().replace(' ', ""))))
+                    .collect();
+                out.struct_fields.insert(st.ident.to_string(), fields);
+            }
+            syn::Item::Enum(syn::ItemEnum { attrs, ident, .. }) if attrs.iter().any(derives_copy) => {
                 out.copy_types.insert(ident.to_string());
             }
             syn::Item::Impl(imp) => {
@@ -186,6 +214,8 @@ fn analyze_fn(name: &str, sig: &syn::Signature, block: &syn::Block) -> EmittedFn
         f: &mut f,
         seq: 0,
         loop_depth: 0,
+        path: Vec::new(),
+        nodes: 0,
     };
     v.visit_block(block);
     f
@@ -204,6 +234,9 @@ struct BodyVisitor<'a> {
     f: &'a mut EmittedFn,
     seq: usize,
     loop_depth: usize,
+    /// The current branch path (`EmittedFn::paths`) and the next branch node id.
+    path: Vec<(usize, usize)>,
+    nodes: usize,
 }
 
 fn root_ident(e: &syn::Expr) -> Option<String> {
@@ -214,6 +247,25 @@ fn root_ident(e: &syn::Expr) -> Option<String> {
         syn::Expr::Paren(p) => root_ident(&p.expr),
         syn::Expr::Reference(r) => root_ident(&r.expr),
         syn::Expr::MethodCall(m) => root_ident(&m.receiver),
+        _ => None,
+    }
+}
+
+/// The type of a `let` initializer when the emitted code spells it.
+fn type_of_init(e: &syn::Expr) -> Option<String> {
+    match e {
+        syn::Expr::Struct(s) => s.path.segments.last().map(|x| x.ident.to_string()),
+        syn::Expr::Macro(m) if m.mac.path.is_ident("vec") => Some("Vec".into()),
+        syn::Expr::Macro(m) if m.mac.path.is_ident("format") => Some("String".into()),
+        syn::Expr::MethodCall(m) if m.method == "to_string" || m.method == "to_owned" && matches!(&*m.receiver, syn::Expr::Lit(_)) => Some("String".into()),
+        syn::Expr::Call(c) => match &*c.func {
+            syn::Expr::Path(p) if p.path.segments.len() == 2 && p.path.segments[0].ident == "String" => Some("String".into()),
+            syn::Expr::Path(p) if p.path.segments.len() == 2 && ["Vec", "HashMap", "HashSet", "VecDeque", "BTreeMap"].iter().any(|t| p.path.segments[0].ident == t) => {
+                Some(p.path.segments[0].ident.to_string())
+            }
+            _ => None,
+        },
+        syn::Expr::Paren(p) => type_of_init(&p.expr),
         _ => None,
     }
 }
@@ -310,12 +362,35 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
                 .init
                 .as_ref()
                 .is_some_and(|i| !matches!(&*i.expr, syn::Expr::Reference(_)));
+            let ty = match &l.pat {
+                syn::Pat::Type(t) => Some(t.ty.to_token_stream().to_string().replace(' ', "")),
+                _ => l.init.as_ref().and_then(|i| type_of_init(&i.expr)),
+            };
+            let (seq, depth) = (self.seq, self.loop_depth);
+            let moved_from = match l.init.as_ref().map(|i| &*i.expr) {
+                Some(syn::Expr::Path(p)) if p.path.segments.len() == 1 => Some((p.path.segments[0].ident.to_string(), seq, depth)),
+                _ => None,
+            };
+            let field_from = match l.init.as_ref().map(|i| &*i.expr) {
+                Some(syn::Expr::Field(f)) => match (&*f.base, &f.member) {
+                    (syn::Expr::Path(p), syn::Member::Named(m)) if p.path.segments.len() == 1 => {
+                        Some((p.path.segments[0].ident.to_string(), m.to_string(), seq, depth))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
             self.f.decl_depth.insert(name.clone(), self.loop_depth);
+            self.seq += 1;
+            self.f.bindings.push((self.seq, name.clone()));
             self.f.lets.push(EmittedLet {
                 name,
                 width,
                 mutable,
                 owned_init,
+                ty,
+                moved_from,
+                field_from,
             });
         }
     }
@@ -369,9 +444,69 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
         }
     }
 
+    fn visit_pat_ident(&mut self, p: &'ast syn::PatIdent) {
+        self.seq += 1;
+        self.f.bindings.push((self.seq, p.ident.to_string()));
+        syn::visit::visit_pat_ident(self, p);
+    }
+
+    fn visit_expr_return(&mut self, r: &'ast syn::ExprReturn) {
+        syn::visit::visit_expr_return(self, r);
+        self.f.exits.push(self.seq);
+    }
+
+    fn visit_expr_break(&mut self, b: &'ast syn::ExprBreak) {
+        syn::visit::visit_expr_break(self, b);
+        self.f.exits.push(self.seq);
+    }
+
+    fn visit_expr_closure(&mut self, c: &'ast syn::ExprClosure) {
+        // a closure body runs when the closure is called, not once per iteration of the loop around it
+        let depth = std::mem::replace(&mut self.loop_depth, 0);
+        syn::visit::visit_expr_closure(self, c);
+        self.loop_depth = depth;
+    }
+
+    fn visit_expr_continue(&mut self, c: &'ast syn::ExprContinue) {
+        syn::visit::visit_expr_continue(self, c);
+        self.f.exits.push(self.seq);
+    }
+
+    fn visit_expr_if(&mut self, i: &'ast syn::ExprIf) {
+        self.visit_expr(&i.cond);
+        let node = self.nodes;
+        self.nodes += 1;
+        self.path.push((node, 0));
+        self.visit_block(&i.then_branch);
+        if let Some((_, e)) = &i.else_branch {
+            *self.path.last_mut().expect("pushed") = (node, 1);
+            self.visit_expr(e);
+        }
+        self.path.pop();
+    }
+
+    fn visit_expr_match(&mut self, m: &'ast syn::ExprMatch) {
+        self.visit_expr(&m.expr);
+        let node = self.nodes;
+        self.nodes += 1;
+        for (k, arm) in m.arms.iter().enumerate() {
+            self.path.push((node, k));
+            self.visit_arm(arm);
+            self.path.pop();
+        }
+    }
+
+    fn visit_expr_field(&mut self, f: &'ast syn::ExprField) {
+        self.visit_expr(&f.base);
+        if matches!(&*f.base, syn::Expr::Path(p) if p.path.segments.len() == 1) {
+            self.f.field_bases.insert(self.seq);
+        }
+    }
+
     fn visit_expr_path(&mut self, p: &'ast syn::ExprPath) {
         if p.path.segments.len() == 1 {
             self.seq += 1;
+            self.f.paths.insert(self.seq, self.path.clone());
             self.f
                 .uses
                 .push((self.seq, p.path.segments[0].ident.to_string(), self.loop_depth));
@@ -384,6 +519,7 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
         if let Some(n) = pat_name(&f.pat) {
             self.f.decl_depth.insert(n, self.loop_depth);
         }
+        self.visit_pat(&f.pat);
         self.visit_block(&f.body);
         self.loop_depth -= 1;
     }

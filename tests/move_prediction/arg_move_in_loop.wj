@@ -1,0 +1,20 @@
+// Class c (ADR-0030): a value declared before a loop, moved into an owning parameter inside it: rustc E0382.
+struct Bag {
+    items: Vec<int>,
+}
+
+fn wrap(items: Vec<int>) -> Bag {
+    Bag { items: items }
+}
+
+fn main() {
+    let xs = [1, 2, 3]
+    let mut total = 0
+    let mut i = 0
+    while i < 3 {
+        let b = wrap(xs)
+        total += b.items.len()
+        i += 1
+    }
+    println("${total}")
+}
