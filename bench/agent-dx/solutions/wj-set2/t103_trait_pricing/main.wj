@@ -1,0 +1,67 @@
+use std::fs
+
+trait Pricing {
+    fn total(self, qty: int, unit: int) -> int
+}
+
+struct Plain {}
+struct Bulk {}
+struct Member {}
+
+impl Pricing for Plain {
+    fn total(self, qty: int, unit: int) -> int { qty * unit }
+}
+
+impl Pricing for Bulk {
+    fn total(self, qty: int, unit: int) -> int {
+        let base = qty * unit
+        if qty >= 10 { base - base / 10 } else { base }
+    }
+}
+
+impl Pricing for Member {
+    fn total(self, qty: int, unit: int) -> int {
+        let base = qty * unit
+        let c = base - base * 5 / 100
+        if qty >= 3 {
+            if c - 100 < 0 { 0 } else { c - 100 }
+        } else {
+            c
+        }
+    }
+}
+
+fn money(c: int) -> string {
+    let cents = c % 100
+    let d = c / 100
+    if cents < 10 { "$$${d}.0${cents}" } else { "$$${d}.${cents}" }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut sum = 0
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().collect()
+        if p.len() == 0 { continue }
+        let name = p[0]
+        let qty = p[1].parse::<int>().unwrap_or(0)
+        let unit = p[2].parse::<int>().unwrap_or(0)
+        let kind = p[3]
+        if kind == "plain" {
+            let c = Plain {}.total(qty, unit)
+            sum += c
+            println("${name} ${money(c)}")
+        } else if kind == "bulk" {
+            let c = Bulk {}.total(qty, unit)
+            sum += c
+            println("${name} ${money(c)}")
+        } else if kind == "member" {
+            let c = Member {}.total(qty, unit)
+            sum += c
+            println("${name} ${money(c)}")
+        } else {
+            println("${name} invalid kind")
+        }
+    }
+    println("total ${money(sum)}")
+}

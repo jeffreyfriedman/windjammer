@@ -1,0 +1,105 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V",
+ "arm_name": "interpreted-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nstruct Job {\n    name: string,\n    pri: int,\n}\n\nfn best(jobs: Vec<Job>) -> int {\n    let mut bi: int = 0\n    let n: int = jobs.len() as int\n    let mut i: int = 1\n    while i < n {\n        if jobs[i as usize].pri > jobs[bi as usize].pri {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut jobs: Vec<Job> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let c: int = parts.len() as int\n        if c == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && c == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => jobs.push(Job { name: parts[1], pri: p }),\n                Err(_) => println(\"error\"),\n            }\n        } else if parts[0] == \"pop\" && c == 1 {\n            if jobs.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(jobs)\n                println(jobs[b as usize].name)\n                jobs.remove(b as usize)\n            }\n        } else if parts[0] == \"peek\" && c == 1 {\n            if jobs.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(jobs)\n                println(jobs[b as usize].name)\n            }\n        } else if parts[0] == \"size\" && c == 1 {\n            println(\"${jobs.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while jobs.len() > 0 {\n        let b = best(jobs)\n        println(\"${jobs[b as usize].name} ${jobs[b as usize].pri}\")\n        jobs.remove(b as usize)\n    }\n}\n",
+ "first_source": "use std::fs\n\nstruct Job {\n    name: string,\n    pri: int,\n}\n\nfn best(jobs: Vec<Job>) -> int {\n    let mut bi: int = 0\n    let n: int = jobs.len() as int\n    let mut i: int = 1\n    while i < n {\n        if jobs[i as usize].pri > jobs[bi as usize].pri {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut jobs: Vec<Job> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let c: int = parts.len() as int\n        if c == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && c == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => jobs.push(Job { name: parts[1], pri: p }),\n                Err(_) => println(\"error\"),\n            }\n        } else if parts[0] == \"pop\" && c == 1 {\n            if jobs.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(jobs)\n                println(jobs[b as usize].name)\n                jobs.remove(b as usize)\n            }\n        } else if parts[0] == \"peek\" && c == 1 {\n            if jobs.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(jobs)\n                println(jobs[b as usize].name)\n            }\n        } else if parts[0] == \"size\" && c == 1 {\n            println(\"${jobs.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while jobs.len() > 0 {\n        let b = best(jobs)\n        println(\"${jobs[b as usize].name} ${jobs[b as usize].pri}\")\n        jobs.remove(b as usize)\n    }\n}\n",
+ "first_turn_input": 8298,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.089,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 31.0,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 2.6,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:26:24",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 9.686,
+ "tool_result_tokens_est": 63,
+ "tool_wait_seconds": 0.09,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6780,
+   "cache_write": 1516,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8298,
+   "output": 5,
+   "result_chars": 220,
+   "turn": 1
+  },
+  {
+   "cache_read": 8296,
+   "cache_write": 1231,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9529,
+   "output": 298,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 9.686,
+  "cost_usd": 0.0260336,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.wj`. I ran it once in the interpreter on a mixed input, and the output was correct. I did not run `wj check`, the two examples from the task, or the compiled build.\n\nThe test input had adds, a pop, a peek, a size, a negative priority, a bad priority (`add y z`) and an unknown command. Pops came out highest priority first, ties went to the earlier job, bad lines printe",
+  "subtype": "success",
+  "tokens_in": 17827,
+  "tokens_out": 1353,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 12.38
+}

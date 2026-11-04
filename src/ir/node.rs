@@ -148,6 +148,9 @@ pub struct IrFunction {
     /// (candidates, by node, with the root) and, after the solver, those whose root is borrowed.
     pub returned_fields: std::collections::BTreeMap<usize, String>,
     pub clone_sites: std::collections::BTreeMap<usize, String>,
+    /// CLONE-BORROWED-TO-OWNED for elements (`clone_facts::owned_element_reads`): element reads
+    /// consumed as owned values, by node, with the root binding. Non-Copy elements are cloned.
+    pub element_reads: std::collections::BTreeMap<usize, String>,
 }
 
 impl IrFunction {
@@ -393,6 +396,7 @@ impl IrFunction {
                 }),
             ),
             clone_sites: std::collections::BTreeMap::new(),
+            element_reads: crate::ir::clone_facts::owned_element_reads(&analyzed.decl.body),
         }
     }
 }

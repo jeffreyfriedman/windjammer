@@ -10,7 +10,7 @@
 //! - Closures that capture `self` → no `move` (borrow from method receiver)
 //! - Compiler-generated wrappers (__params) → always `move`
 
-use crate::parser::{Expression, Type};
+use crate::parser::Expression;
 
 use super::CodeGenerator;
 
@@ -55,8 +55,13 @@ impl<'ast> CodeGenerator<'ast> {
         let is_compiler_generated = parameters.iter().any(|p| p.starts_with("__"));
         let captures_self = self.expression_references_self(body);
         let captured = crate::ir::liveness::captures(parameters, body);
-        // A `FnOnce` slot (`thread::spawn`) needs `'static`: it keeps `move` whatever is read later.
-        let fn_once = matches!(self.call_arg_expected_type.as_ref(), Some(Type::Custom(n)) if n == "FnOnce");
+        // Escape fact (CLOS-MOVE-CAPTURE): a closure stays in its function only in a known `Fn`/`FnMut`
+        // slot of its callee. An unknown callee (a dependency's `impl Fn() + 'static` callback
+        // registry) or a `FnOnce` slot (`thread::spawn`) may keep it: it escapes and keeps `move`.
+        let non_escaping_slot = self
+            .call_arg_expected_type
+            .as_ref()
+            .is_some_and(crate::codegen::rust::stdlib_method_traits::formal_is_multi_invoke_closure_trait);
         let captures_outer = !captured.is_empty();
 
         // For user-written closures, set flag and track params to suppress transformations
@@ -130,10 +135,10 @@ impl<'ast> CodeGenerator<'ast> {
         } else if borrows_captures {
             false
         } else {
-            // CLOS-MOVE-CAPTURE from liveness: a captured non-Copy binding that is read after
-            // this statement must stay with its owner, so the closure borrows (`move` is E0382).
+            // CLOS-MOVE-CAPTURE from liveness: in a non-escaping slot, a captured non-Copy binding
+            // read after this statement stays with its owner, so the closure borrows (`move` is E0382).
             captures_outer
-                && (fn_once
+                && (!non_escaping_slot
                     || !captured
                         .iter()
                         .any(|n| self.binding_known_non_copy(n) && self.read_after_current_statement(n)))

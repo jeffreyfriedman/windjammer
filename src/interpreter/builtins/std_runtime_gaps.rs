@@ -244,8 +244,10 @@ fn register_misc(r: &mut Registry) {
             Err(e) => Value::err(s(&e.to_string())),
         })
     });
-    r.func("fs::write_string", |_, a| {
-        Ok(match std::fs::write(arg_str(&a, 0, "write_string")?.as_str(), arg_str(&a, 1, "write_string")?.as_bytes()) {
+    r.func("fs::write_string", |it, a| {
+        let path = arg_str(&a, 0, "write_string")?;
+        let text = arg_str(&a, 1, "write_string")?;
+        Ok(match super::std_sys::write_gated(it, path.as_str(), text.as_bytes(), false)? {
             Ok(()) => Value::ok(Value::Unit),
             Err(e) => Value::err(s(&e.to_string())),
         })
