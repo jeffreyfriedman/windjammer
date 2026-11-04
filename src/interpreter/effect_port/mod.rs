@@ -279,15 +279,24 @@ impl Interpreter {
         }
         let key = sinks::canonical(path);
         let effect = effect_name(path);
+        let owned = path.to_string();
+        let mut live = |it: &mut Interpreter, a: &[Value]| it.call_builtin_live(&owned, a.to_vec());
+        self.port_call_with(&effect, &key, &args, &mut live)
+    }
+
+    /// One logged call under `--record` / `--replay`: `live` performs it while recording; replay answers it from the
+    /// log and never runs `live`. Used by sink builtins and by calls into Rust crates (effect `ffi`, ADR-0031).
+    pub(crate) fn port_call_with(&mut self, effect: &str, key: &str, args: &[Value], live: &mut dyn FnMut(&mut Interpreter, &[Value]) -> R) -> R {
+        let kind = self.port_kind().expect("port_call_with without a port");
         let args_j = Json::Array(args.iter().map(codec::encode_lossy).collect());
         let (task, vt) = (self.sched.current as u64, self.sched.clock);
         if kind == Kind::Record {
             // a sink that calls other sinks (a server handler, say) is one event: the nested calls run live, unlogged
             let nested = !self.port.as_ref().unwrap().borrow_mut().enter();
             if nested {
-                return self.call_builtin_live(path, args);
+                return live(self, args);
             }
-            let out = self.call_builtin_live(path, args);
+            let out = live(self, args);
             let (j, bad) = match &out {
                 Ok(v) => match codec::encode(v) {
                     Ok(j) => (j, None),
@@ -296,7 +305,7 @@ impl Interpreter {
                 Err(Ctl::Err(e)) => (rt_error_json(e), None),
                 Err(_) => (Json::Null, None),
             };
-            let logged = self.port.as_ref().unwrap().borrow_mut().leave_and_append(&effect, &key, args_j, j, task, vt);
+            let logged = self.port.as_ref().unwrap().borrow_mut().leave_and_append(effect, key, args_j, j, task, vt);
             if let Err(e) = logged {
                 return Err(Ctl::Err(Box::new(e)));
             }
@@ -309,7 +318,7 @@ impl Interpreter {
             return out;
         }
         // replay: the log answers
-        let r = self.port.as_ref().unwrap().borrow_mut().step(&effect, &key, args_j, task, vt, &mut || Json::Null);
+        let r = self.port.as_ref().unwrap().borrow_mut().step(effect, key, args_j, task, vt, &mut || Json::Null);
         match r {
             Err(e) => Err(Ctl::Err(Box::new(e))),
             Ok(j) => match rt_error_from(&j) {
