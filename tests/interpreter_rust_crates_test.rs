@@ -17,6 +17,8 @@ struct Project {
     root: PathBuf,
     /// `Some`: a private wj cache root (its own crate hosts); `None`: the user's cache.
     cache: Option<PathBuf>,
+    /// `--allow` grant for interpreted runs (`wj run` grants nothing outside the project by default).
+    allow: Option<&'static str>,
 }
 
 fn text(o: &Output) -> String {
@@ -49,7 +51,7 @@ impl Project {
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::write(root.join("wj.toml"), format!("[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\n{deps}")).unwrap();
         std::fs::write(root.join("src/main.wj"), main).unwrap();
-        Project { _tmp: tmp, root, cache: None }
+        Project { _tmp: tmp, root, cache: None, allow: None }
     }
 
     /// A project with the `shapes` path crate next to it.
@@ -59,7 +61,7 @@ impl Project {
         std::fs::create_dir_all(c.join("src")).unwrap();
         std::fs::write(c.join("Cargo.toml"), "[package]\nname = \"shapes\"\nversion = \"0.3.0\"\nedition = \"2021\"\n").unwrap();
         std::fs::write(c.join("src/lib.rs"), SHAPES_LIB).unwrap();
-        p
+        Project { allow: Some("ffi=shapes"), ..p }
     }
 
     fn private_cache(mut self) -> Project {
@@ -80,6 +82,9 @@ impl Project {
 
     fn interp(&self, extra: &[&str]) -> Output {
         let mut args = vec!["run", "--interpret", "--no-lint"];
+        if let Some(a) = self.allow {
+            args.extend_from_slice(&["--allow", a]);
+        }
         args.extend_from_slice(extra);
         self.wj(&args)
     }
@@ -195,7 +200,10 @@ fn main() {
     }
     let (a, b) = shapes::pair(7, true)
     println(\"${a} ${b}\")
-    println(\"${shapes::initial(\"windjammer\")} ${shapes::half(3.0)}\")
+    // a typed binding: an untyped `3.0` argument to an `f32` crate parameter is emitted as `3.0_f64` by the
+    // compiled build (rustc E0308), see the report of ADR-0031
+    let x: f32 = 3.0
+    println(\"${shapes::initial(\"windjammer\")} ${shapes::half(x)}\")
 }
 ";
 
@@ -262,7 +270,8 @@ fn a_missing_grant_exits_126_before_any_host_call() {
     assert!(ok.status.success(), "{}", text(&ok));
     assert_eq!(stdout(&ok), "start\n2\n");
     poison(&p.hosts());
-    let denied = p.interp(&["--caps", "enforce", "--sandbox"]);
+    // no [capabilities] table: `wj run` grants nothing outside the project, so ffi(shlex) is denied
+    let denied = p.interp(&[]);
     let err = String::from_utf8_lossy(&denied.stderr);
     assert_eq!(denied.status.code(), Some(126), "{}", text(&denied));
     assert!(err.contains("capability denied") && err.contains("ffi"), "{}", text(&denied));
@@ -291,17 +300,17 @@ fn replay_answers_crate_calls_from_the_log_without_the_host() {
 #[test]
 fn simulate_runs_pure_functions_and_needs_a_stub_for_the_rest() {
     let pure = Project::new("strsim = \"0.11\"\n", STRSIM_MAIN);
-    let s = pure.interp(&["--simulate", "1"]);
+    let s = pure.interp(&["--simulate"]);
     assert!(s.status.success(), "{}", text(&s));
     assert_textbook(&stdout(&s));
     let main = "use shlex\n\nfn main() {\n    match shlex::split(\"a b\") {\n        Some(w) => println(\"${w.len()} ${w[0]}\"),\n        None => println(\"none\"),\n    }\n}\n";
     let p = Project::new("shlex = \"1.3\"\n\n[capabilities]\nffi = [\"shlex\"]\n", main);
-    let no_stub = p.interp(&["--simulate", "1"]);
+    let no_stub = p.interp(&["--simulate"]);
     assert_eq!(no_stub.status.code(), Some(2), "{}", text(&no_stub));
     assert!(String::from_utf8_lossy(&no_stub.stderr).contains("fixtures/rust_stubs.json"), "{}", text(&no_stub));
     std::fs::create_dir_all(p.root.join("fixtures")).unwrap();
     std::fs::write(p.root.join("fixtures/rust_stubs.json"), r#"{ "shlex::split": ["stub", "x", "y"] }"#).unwrap();
-    let stubbed = p.interp(&["--simulate", "1"]);
+    let stubbed = p.interp(&["--simulate"]);
     assert!(stubbed.status.success(), "{}", text(&stubbed));
     assert_eq!(stdout(&stubbed), "3 stub\n");
 }

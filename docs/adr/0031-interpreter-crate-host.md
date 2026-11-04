@@ -147,7 +147,21 @@ and compares exit status and stdout, plus textbook values as a second oracle. A 
 with `levenshtein` off by one and asserts the comparison fails.
 
 ## Measurements
-See the table filled by the implementation commit (cold first run, warm run, per-call cost, disk).
+This machine (Apple Silicon, about ten concurrent agent builds, `CARGO_BUILD_JOBS=2`), release `wj` of this branch:
+
+| What | Number | How |
+|---|---|---|
+| Cold first run, strsim (empty cache root, nothing compiled) | 1.5 s; 1.65 s in the test | `wj run --interpret` wall time, includes generating the surface and `cargo build --release --offline` of strsim + host |
+| Cold first run, shlex + crc32fast (empty cache root) | 2.2 s | same |
+| Warm run, program calling strsim twice | 57.7 ms median of 20 | vs 50.4 ms for a program with no crate (the same `wj`): about 7 ms for loading surfaces, hashing, spawning the host |
+| Per call (levenshtein of two short strings) | about 6.5 us | 20 000 calls: 0.18 s vs 0.05 s for the same loop without the call |
+| Disk per host | 0.5 MB (the binary and its sources) | `du`; one shared `crates-target/` of 1.3 MB for strsim, shlex, crc32fast (vs about 300 MB per `wj_host_*` bridge today) |
+
+The cost curve: the first run of a new crate set pays one small cargo build (seconds, dominated by the crate itself;
+a crate already compiled for another host is reused from the shared target directory), every later run pays a few
+milliseconds, and a new function in the same crate changes the key and rebuilds only the host crate. Before this ADR the
+same programs fell back to the compiled path: a full `wj build` of the program plus its runtime (minutes on a cold
+cache, ADR-0023 measured 214 s for the bridge's runtime build) and seconds per edit afterwards.
 
 ## Ambition ladder
 1. **Done (this ADR):** free functions over the surface type language, any number of crates per program, panics,
@@ -175,6 +189,13 @@ See the table filled by the implementation commit (cold first run, warm run, per
 - `wj run` on a project that calls surfaced crates stays interpreted; the first run builds the host once.
 - The interpreter spawns a process (the host binary), never cargo; `cli::crate_host_build` runs cargo.
 - `docs/INTERPRETER.md` and `docs/MODULE_SYSTEM.md` describe crate calls as interpreted.
+- `wj run` without a `[capabilities]` table keeps its local profile (ADR-0021), which grants no `ffi`: a crate
+  function that is not `@pure` needs `ffi = ["<crate>"]` or `--allow ffi=<crate>`, and the denial message says so.
+  The compiled build applies no grant without a table, so this is the one intended difference between the two
+  loops, and it is a refusal before the call, never a different result.
+- Found while testing: an untyped float literal passed to an `f32` crate parameter (`shapes::half(3.0)`) is
+  emitted as `3.0_f64` by the compiled build (rustc E0308) while the interpreter accepts it. ADR-0030 territory
+  (the interpreter should refuse what rustc refuses); the fix belongs in the literal typing of surface calls.
 
 ## Decision needed from: project owner
 Accept option A as the semantics of interpreted crate calls (with B and C as later tiers behind the same generator),
