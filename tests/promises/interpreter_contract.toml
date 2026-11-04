@@ -1,0 +1,22 @@
+# Acceptance cases for the interpreter's trust contract (docs/testing/INTERPRETER_CONTRACT.md): what the interpreter
+# accepts it runs faithfully, and what rustc would reject on ownership grounds it refuses before running.
+
+[[case]]
+name = "an accepted program prints what the language defines, including panic exit status"
+polarity = "positive"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "fn level(n: int) -> int {\n    if n == 0 {\n        panic(\"bottom\")\n    }\n    level(n - 1) + 1\n}\n\nfn main() {\n    println(\"wrapping ${200_u8.wrapping_add(100_u8)} cast ${300 as u8} div ${-7 / 2} rem ${-7 % 3}\")\n    println(\"${level(3)}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 101
+stdout_has = ["wrapping 44 cast 44 div -3 rem -1"]
+output_has = ["bottom"]
+
+[[case]]
+name = "a use after a by-value receiver is refused before running, as rustc would reject it (WJ0007)"
+polarity = "negative"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "struct Node {\n    next: int,\n}\n\nimpl Node {\n    fn advance(self) -> Node {\n        Node { next: self.next + 1 }\n    }\n}\n\nfn main() {\n    println(\"start\")\n    let n = Node { next: 1 }\n    let m = n.advance()\n    println(\"${m.next} ${n.next}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 1
+output_has = ["WJ0007"]
+output_lacks = ["start"]

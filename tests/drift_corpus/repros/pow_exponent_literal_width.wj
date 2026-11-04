@@ -1,0 +1,5 @@
+// `pow` takes a u32 exponent; the literal gets the receiver's width (i16 here), so rustc rejects the call.
+fn main() {
+    let a: i16 = 3
+    println("${a.pow(2)}")
+}

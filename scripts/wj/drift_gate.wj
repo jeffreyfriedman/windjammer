@@ -22,6 +22,8 @@ use wj_table::new
 use wj_table::add_row
 use wj_table::plain
 
+const PROBE_BASELINE: string = "tests/drift_corpus/probe_baseline.tsv"
+const STDSHAPE_BASELINE: string = "tests/drift_corpus/stdshape_baseline.txt"
 const LEDGER: string = "tests/drift_corpus/known_divergences.txt"
 const MIN_CASES: string = "1300"
 
@@ -148,6 +150,38 @@ fn corpus_step(wj: string, compiled: string, prune: bool) -> Step {
     if ok {
         let live = if compiled == "live" { "--run-compiled" } else { "" }
         match sh("${wj} run --interpret scripts/wj/drift_gen.wj ${wj} ${run_dir}/gen ${gen_results} ${live} 2>&1 && cat ${gen_results} >> ${results}") {
+            Ok(r) => {
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
+    // semantic probe families (integer wrapping, casts, float formatting, panics, evaluation order, drop order...)
+    if ok {
+        let live = if compiled == "live" { "--run-compiled" } else { "" }
+        match sh("${wj} run --interpret scripts/wj/drift_probes.wj ${wj} ${run_dir}/probes ${run_dir}/probes.tsv ${live} --baseline ${PROBE_BASELINE} 2>&1 && cat ${run_dir}/probes.tsv >> ${results}") {
+            Ok(r) => {
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
+    // return shapes of the standard library: interpreter builtins against the runtime crate's signatures
+    if ok {
+        let live = if compiled == "live" { "--run-compiled" } else { "" }
+        match sh("${wj} run --interpret scripts/wj/drift_stdshape.wj ${wj} ${run_dir}/stdshape ${run_dir}/stdshape.tsv ${live} --baseline ${STDSHAPE_BASELINE} 2>&1 && cat ${run_dir}/stdshape.tsv >> ${results}") {
             Ok(r) => {
                 if r.status != 0 {
                     ok = false
