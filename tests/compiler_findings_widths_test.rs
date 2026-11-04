@@ -147,3 +147,53 @@ fn float_expression_to_float_parameter() {
     std::fs::write(&file, src).unwrap();
     typechecks_at(&file, "float_expression_to_float_parameter");
 }
+
+/// The integer surface on literal receivers: `(-7).abs()`, `2.pow(10)` (a `u32` exponent), `7.div_euclid(-2)`.
+#[test]
+fn numeric_methods_on_literal_receivers() {
+    generated_rust_typechecks("numeric_methods_on_literal_receivers");
+}
+
+/// `10.min(3)` is one class; `u8::rotate_left` takes a `u32`; `ten.min(three)` needs no cast.
+#[test]
+fn numeric_method_argument_widths() {
+    generated_rust_typechecks("numeric_method_argument_widths");
+}
+
+/// `-9223372036854775807 - 1` folds to one `int` literal (spec case SPEC-NUM-001).
+#[test]
+fn folded_minimum_int_literal() {
+    typechecks_at(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/spec/numeric/SPEC-NUM-001.wj"), "SPEC-NUM-001");
+}
+
+/// Float and integer methods on literal receivers (spec case SPEC-STD-005).
+#[test]
+fn float_and_int_methods_on_literals() {
+    typechecks_at(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/spec/stdlib/SPEC-STD-005.wj"), "SPEC-STD-005");
+}
+
+/// A float literal passed to a Rust crate function whose surface (`rust/<crate>.wji`) declares an `f32`
+/// parameter takes that width (`shapes::half(3.0)`).
+#[test]
+fn float_literal_to_f32_crate_parameter() {
+    let tmp = TempDir::new().unwrap();
+    let shapes = tmp.path().join("shapes");
+    std::fs::create_dir_all(shapes.join("src")).unwrap();
+    std::fs::write(shapes.join("Cargo.toml"), "[package]\nname = \"shapes\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(shapes.join("src/lib.rs"), "pub fn half(x: f32) -> f32 {\n    x / 2.0\n}\n").unwrap();
+    let app = tmp.path().join("app");
+    std::fs::create_dir_all(app.join("src")).unwrap();
+    std::fs::create_dir_all(app.join("rust")).unwrap();
+    std::fs::write(app.join("wj.toml"), "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nshapes = { path = \"../shapes\" }\n").unwrap();
+    std::fs::write(app.join("rust/shapes.wji"), "pub fn half(x: f32) -> f32\n").unwrap();
+    std::fs::write(app.join("src/main.wj"), "fn main() {\n    let h = shapes::half(3.0)\n    println(\"${h}\")\n}\n").unwrap();
+    let out = app.join("out");
+    let b = Command::new(WJ).args(["build", ".", "--no-lint", "-o"]).arg(&out).current_dir(&app).env("WJ_ALLOW_TOOLCHAIN_MISMATCH", "1").output().unwrap();
+    assert!(
+        b.status.success(),
+        "the crate call does not build:\n{}\n{}\n--- generated\n{}",
+        String::from_utf8_lossy(&b.stdout),
+        String::from_utf8_lossy(&b.stderr),
+        std::fs::read_to_string(out.join("main.rs")).unwrap_or_default()
+    );
+}
