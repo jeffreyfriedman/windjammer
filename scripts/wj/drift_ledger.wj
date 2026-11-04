@@ -13,6 +13,8 @@
 //   grew      with --base-ledger, a ledger id the base ledger lacks (the ledger is shrink-only;
 //             DRIFT_ALLOW_GROWTH=1 permits it for the change that records a new finding)
 //   vacuous   fewer than --min-cases rows compared
+// `--prune` rewrites the ledger without its stale lines (fixed cases) and lists them; new, changed and grown lines
+// still fail, so pruning can only shrink the ledger.
 use std::env
 use std::fs
 use std::process
@@ -107,11 +109,14 @@ fn main() {
     let args = env::args()
     let mut min_cases = 1
     let mut base = ""
+    let mut prune = false
     let mut i = 3
     while i < args.len() {
         if args[i] == "--min-cases" {
             min_cases = args[i + 1].parse::<int>().unwrap_or(1)
             i += 1
+        } else if args[i] == "--prune" {
+            prune = true
         } else if args[i] == "--base-ledger" {
             base = args[i + 1]
             i += 1
@@ -156,6 +161,42 @@ fn main() {
     }
     if rows.len() < min_cases {
         problems.push("vacuous   ${rows.len()} cases compared, expected at least ${min_cases}")
+    }
+    if prune {
+        // drop the stale lines (kept: comments, blank lines and every line whose case still diverges)
+        let mut kept = ""
+        let mut dropped = 0
+        for line in strings.split_lines(read_or_empty(args[2])) {
+            let t = strings.trim(line)
+            let mut keep = true
+            if t != "" && !strings.starts_with(t, "#") {
+                let id = strings.trim(strings.split(t, " | ")[0])
+                match find_row(rows, id) {
+                    None => keep = false,
+                    Some(r) => {
+                        if !diverges(r) {
+                            keep = false
+                        }
+                    },
+                }
+            }
+            if keep {
+                kept = kept + line + "\n"
+            } else {
+                dropped += 1
+                println("  pruned    ${strings.trim(strings.split(t, " | ")[0])}")
+            }
+        }
+        if dropped > 0 {
+            let _ = fs.write(args[2], kept)
+            let mut live = Vec::new()
+            for p in problems {
+                if !strings.starts_with(p, "stale") {
+                    live.push(p)
+                }
+            }
+            problems = live
+        }
     }
     println("drift ledger: ${rows.len()} cases, ${divergent} divergent, ${ledger.len()} ledgered")
     for p in problems {

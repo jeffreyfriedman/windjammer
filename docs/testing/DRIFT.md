@@ -52,6 +52,10 @@ also runs it). The rows join the corpus rows, so the same ledger applies. `DRIFT
 unit-variant patterns (a known divergence, `repros/bare_unit_pattern_in_let_match.wj`). Seeds beyond the default:
 `wj run scripts/wj/drift_gen.wj BIN DIR OUT.tsv --seeds 41..400`.
 
+After a re-record (`drift_corpus.wj ... --compiled live --record`), `wj run scripts/wj/drift_gate.wj --fast --prune`
+deletes the ledger lines of fixed cases and lists them; new and changed divergences still fail, so a prune can only
+shrink the ledger.
+
 ## Move shapes
 
 `tests/drift_corpus/moves/` holds use-after-move programs for ADR-0030. Windjammer clones automatically in many
