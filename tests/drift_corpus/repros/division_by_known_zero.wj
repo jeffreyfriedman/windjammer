@@ -1,0 +1,7 @@
+// A division whose divisor rustc can see is zero: the compiled build stops at compile time (deny-by-default lint
+// `unconditional_panic`), while the interpreter runs the program and panics at run time (exit 101).
+fn main() {
+    println("start")
+    let z = 0
+    println("${10 / z}")
+}

@@ -118,11 +118,11 @@ fn fam_panic_nested(st: int) -> string {
     let kind = pick(st, "unwrap index div expect assert explicit")
     let body = if kind == "unwrap" { "let o: Option<int> = None\n    match o {\n        Some(x) => x,\n        None => panic(\"unwrap\"),\n    }" }
         else if kind == "index" { "let v = [1, 2, 3]\n    let i = v.len() + 2\n    v[i]" }
-        else if kind == "div" { "let z = 0\n    10 / z" }
+        else if kind == "div" { "let z = zero()\n    10 / z" }
         else if kind == "expect" { "let r: Result<int, string> = Err(\"bad\")\n    r.expect(\"boom\")" }
         else if kind == "assert" { "assert_eq(1 + 1, 3)\n    0" }
         else { "panic(\"explicit\")\n    0" }
-    "fn level3() -> int {\n    @BODY\n}\n\nfn level2() -> int {\n    level3() + 1\n}\n\nfn level1() -> int {\n    level2() * 2\n}\n\nfn main() {\n    println(\"before\")\n    println(\"@{level1()}\")\n    println(\"after\")\n}\n"
+    "fn zero() -> int {\n    0\n}\n\nfn level3() -> int {\n    @BODY\n}\n\nfn level2() -> int {\n    level3() + 1\n}\n\nfn level1() -> int {\n    level2() * 2\n}\n\nfn main() {\n    println(\"before\")\n    println(\"@{level1()}\")\n    println(\"after\")\n}\n"
         .replace("@BODY", body)
 }
 
