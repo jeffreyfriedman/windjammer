@@ -27,22 +27,39 @@ fn main() {
         let key = "${p[0]} ${p[1]}"
         acts.insert(key, acts.get(key).unwrap_or(0) + 1)
     }
-    let mut names: Vec<string> = counts.keys().collect()
-    names.sort_by(|a, b| {
-        let sa = totals.get(a).unwrap_or(0)
-        let sb = totals.get(b).unwrap_or(0)
-        if sa != sb { sb.cmp(sa) } else { a.cmp(b) }
-    })
+    let mut names: Vec<string> = []
+    let mut sums: Vec<int> = []
+    for k in counts.keys() {
+        names.push(k.clone())
+        sums.push(totals.get(k).unwrap_or(0))
+    }
+    // insertion sort: total descending, then name ascending
+    let mut i = 1
+    while i < names.len() {
+        let mut j = i
+        while j > 0 && (sums[j] > sums[j - 1] || (sums[j] == sums[j - 1] && names[j] < names[j - 1])) {
+            let tn = names[j].clone()
+            names[j] = names[j - 1].clone()
+            names[j - 1] = tn
+            let ts = sums[j]
+            sums[j] = sums[j - 1]
+            sums[j - 1] = ts
+            j -= 1
+        }
+        i += 1
+    }
     for n in names {
         let mut top = ""
         let mut top_n = 0
-        let mut keys: Vec<string> = acts.keys().collect()
+        let mut keys: Vec<string> = []
+        for k in acts.keys() {
+            keys.push(k.clone())
+        }
         keys.sort()
         for k in keys {
             let parts: Vec<string> = k.split(" ").collect()
-            let c = acts.get(k).unwrap_or(0)
-            if parts[0] == n && c > top_n {
-                top_n = c
+            if parts[0] == n && acts[k] > top_n {
+                top_n = acts[k]
                 top = parts[1]
             }
         }

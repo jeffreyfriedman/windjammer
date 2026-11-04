@@ -1,0 +1,6 @@
+[package]
+name = "crc_lines"
+version = "0.1.0"
+
+[dependencies]
+crc32fast = "1.5"

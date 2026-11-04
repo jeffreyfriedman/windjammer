@@ -33,7 +33,10 @@ fn main() {
                 }
                 totals.insert(o.customer, t)
             }
-            let mut names: Vec<string> = totals.keys().collect()
+            let mut names: Vec<string> = []
+            for k in totals.keys() {
+                names.push(k.clone())
+            }
             names.sort()
             for n in names {
                 let v = totals.get(n).unwrap_or(0.0)
