@@ -105,6 +105,10 @@ impl<'ast> CodeGenerator<'ast> {
                 });
 
         if (has_inferred_self || needs_self_from_trait) && !has_explicit_self && !is_constructor {
+            if let Some(receiver) = self.ir_self_receiver(&analyzed.decl) {
+                params.push(receiver.to_string());
+                return;
+            }
             let ownership = self.get_effective_self_ownership(&func.name, analyzed).or({
                 // Trait has method but no self in analyzed - default to &mut self (trait convention)
                 if needs_self_from_trait {

@@ -25,10 +25,6 @@ codegen_proactive_hardening_gates_test::len_to_int_formal_substring_must_cargo_c
 codegen_proactive_hardening_gates_test::typed_closure_string_predicate_must_cargo_check
 cross_crate_dogfooding_ownership_test::dogfood_substrate_full_store_patch_part_enum_value_layout
 # Third batch of compiler findings (numeric solver C4 / ownership convergence)
-compiler_findings_batch3_test::field_moved_into_function_keeps_mut_self_callers_valid
-compiler_findings_batch3_test::field_passed_to_extern_fn_keeps_borrowed_receiver
-compiler_findings_batch3_test::user_method_named_contains_keeps_its_owned_formal
-compiler_findings_batch3_test::copy_field_passed_as_call_argument_keeps_the_parameter_borrowed
 # Drift findings (docs/drift/pilot4-findings.md): interpreted green, generated Rust rejected
 
 # green4 triage (2026-11): failing before the C4 usize work (checked at 22d3fe8b2), still open.

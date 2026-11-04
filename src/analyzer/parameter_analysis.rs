@@ -180,9 +180,7 @@ impl<'ast> Analyzer<'ast> {
         // text field lets (`let name = tree.nodes[i].name`) are cloned from `&T`,
         // and Copy field lets (`let kind = tree.nodes[i].kind`) copy from `&T` — neither
         // pins the parent Owned.
-        if self.param_has_field_or_index_move_binding(param_name, body)
-            && !self.param_field_move_bindings_are_only_copy_or_text(param_name, param_type, body)
-        {
+        if self.param_field_is_moved_out(param_name, param_type, body) {
             return Ok(OwnershipMode::Owned);
         }
 
