@@ -1,0 +1,233 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 1, \"customer\": \"ann\", \"items\": [{\"sku\": \"A\", \"qty\": 2, \"price\": 3.5}, {\"sku\": \"B\", \"qty\": 1, \"price\": 10}]}, {\"id\": 2, \"customer\": \"bob\", \"items\": [{\"sku\": \"A\", \"qty\": 1, \"price\": 3.5}], \"note\": \"rush\"}, {\"id\": 3, \"customer\": \"ann\", \"items\": [{\"sku\": \"C\", \"qty\": 4, \"price\": 0.25}]}]",
+  "stdout": "ann 18.00\nbob 3.50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 7, \"customer\": \"zed\", \"items\": []}]",
+  "stdout": "zed 0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[]",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "",
+  "stdout": "invalid input\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "{",
+  "stdout": "invalid input\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "[{\"id\":1,\"customer\":\"x\",\"items\":[{\"sku\":\"a\",\"qty\":\"two\",\"price\":1}]}]",
+  "stdout": "invalid input\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 1, \"customer\": \"Ann\", \"items\": [{\"sku\": \"A\", \"qty\": 1, \"price\": 1.005}]}, {\"id\": 2, \"customer\": \"ann\", \"items\": [{\"sku\": \"A\", \"qty\": 3, \"price\": 0.1}]}]",
+  "stdout": "Ann 1.00\nann 0.30\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 1, \"customer\": \"b\", \"items\": [{\"sku\": \"A\", \"qty\": 1000000, \"price\": 1999.99}]}]",
+  "stdout": "b 1999990000.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 2,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"bob\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 7,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 3,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 4,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 0,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 1,\n        \"price\": 0.1\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 4,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 1,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 4,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 7,\n        \"price\": 0.1\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 0,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 3,\n        \"price\": 7.99\n      }\n    ]\n  }\n]",
+  "stdout": "Dee 26.47\nann 0.10\nbob 6.45\ncy 45.56\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"eve\", \"items\": [{\"sku\": \"A\", \"qty\": 1, \"price\": 3}]}, {\"id\": 1, \"customer\": \"eve\", \"items\": []}, {\"id\": 2, \"customer\": \"Dee\", \"items\": [{\"sku\": \"A\", \"qty\": 2, \"price\": 0.5}, {\"sku\": \"A\", \"qty\": 6, \"price\": 3}, {\"sku\": \"C\", \"qty\": 4, \"price\": 7.99}, {\"sku\": \"B\", \"qty\": 6, \"price\": 1.25}], \"note\": \"n\"}, {\"id\": 3, \"customer\": \"eve\", \"items\": [{\"sku\": \"C\", \"qty\": 5, \"price\": 0.5}, {\"sku\": \"C\", \"qty\": 7, \"price\": 0.1}, {\"sku\": \"B\", \"qty\": 5, \"price\": 0.1}]}]",
+  "stdout": "Dee 58.46\neve 6.70\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"bob\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 1,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 7,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 5,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 8,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 4,\n        \"price\": 3\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 5,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 7,\n        \"price\": 7.99\n      }\n    ]\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"bob\",\n    \"items\": [],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 5,\n    \"customer\": \"bob\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 9,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 8,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 1,\n        \"price\": 12.5\n      }\n    ]\n  }\n]",
+  "stdout": "Dee 68.93\nann 19.05\nbob 48.99\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 6,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 3,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 5,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 1,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 7,\n        \"price\": 1.25\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 5,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 3,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 4,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 9,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 2,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 0,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"bob\",\n    \"items\": []\n  },\n  {\n    \"id\": 5,\n    \"customer\": \"bob\",\n    \"items\": []\n  }\n]",
+  "stdout": "Dee 56.25\nann 72.50\nbob 0.00\nzed 15.98\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 8,\n        \"price\": 3\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 0,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 2,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 1,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 2,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"eve\",\n    \"items\": []\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 6,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 8,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 6,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 6,\n        \"price\": 7.99\n      }\n    ]\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 9,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 0,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 8,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 1,\n        \"price\": 7.99\n      }\n    ]\n  },\n  {\n    \"id\": 5,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 8,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 4,\n        \"price\": 0.5\n      }\n    ],\n    \"note\": \"n\"\n  }\n]",
+  "stdout": "cy 148.49\neve 12.00\nzed 82.04\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 3,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 2,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 9,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 3,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 8,\n        \"price\": 7.99\n      }\n    ],\n    \"note\": \"n\"\n  }\n]",
+  "stdout": "Dee 42.20\nzed 65.42\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 1,\n        \"price\": 12.5\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 0,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 6,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 5,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 2,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 5,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 9,\n        \"price\": 3\n      }\n    ]\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"bob\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 2,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 7,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 9,\n        \"price\": 0.1\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 5,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 7,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 0,\n        \"price\": 12.5\n      }\n    ],\n    \"note\": \"n\"\n  }\n]",
+  "stdout": "Dee 50.50\nbob 37.39\ncy 15.50\nzed 40.15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 6,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 6,\n        \"price\": 3\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 9,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 9,\n        \"price\": 0.1\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 3,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 7,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 3,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 12.5\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 0,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 3,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 1,\n        \"price\": 1.25\n      }\n    ]\n  }\n]",
+  "stdout": "cy 38.75\neve 52.25\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 6,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 6,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 2,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 3,\n        \"price\": 7.99\n      }\n    ]\n  }\n]",
+  "stdout": "cy 117.95\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"Dee\", \"items\": [{\"sku\": \"C\", \"qty\": 8, \"price\": 1.25}, {\"sku\": \"B\", \"qty\": 8, \"price\": 12.5}]}, {\"id\": 1, \"customer\": \"eve\", \"items\": [{\"sku\": \"B\", \"qty\": 2, \"price\": 3}, {\"sku\": \"D\", \"qty\": 2, \"price\": 12.5}, {\"sku\": \"B\", \"qty\": 3, \"price\": 12.5}]}, {\"id\": 2, \"customer\": \"zed\", \"items\": [], \"note\": \"n\"}, {\"id\": 3, \"customer\": \"eve\", \"items\": [{\"sku\": \"D\", \"qty\": 7, \"price\": 7.99}]}, {\"id\": 4, \"customer\": \"Dee\", \"items\": [], \"note\": \"n\"}]",
+  "stdout": "Dee 110.00\neve 124.43\nzed 0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 8,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 7,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 2,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 5,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 0,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 6,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 0.5\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 9,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 2,\n        \"price\": 1.25\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"Dee\",\n    \"items\": []\n  }\n]",
+  "stdout": "Dee 7.00\nann 0.50\ncy 1.30\nzed 16.50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"zed\", \"items\": [{\"sku\": \"C\", \"qty\": 8, \"price\": 3}, {\"sku\": \"A\", \"qty\": 2, \"price\": 3}]}, {\"id\": 1, \"customer\": \"Dee\", \"items\": [], \"note\": \"n\"}, {\"id\": 2, \"customer\": \"cy\", \"items\": []}, {\"id\": 3, \"customer\": \"cy\", \"items\": [{\"sku\": \"B\", \"qty\": 0, \"price\": 3}, {\"sku\": \"B\", \"qty\": 3, \"price\": 1.25}]}, {\"id\": 4, \"customer\": \"ann\", \"items\": [{\"sku\": \"B\", \"qty\": 2, \"price\": 3}, {\"sku\": \"B\", \"qty\": 4, \"price\": 0.1}]}, {\"id\": 5, \"customer\": \"cy\", \"items\": [{\"sku\": \"C\", \"qty\": 6, \"price\": 1.25}, {\"sku\": \"B\", \"qty\": 5, \"price\": 0.5}, {\"sku\": \"A\", \"qty\": 0, \"price\": 3}, {\"sku\": \"B\", \"qty\": 9, \"price\": 3}], \"note\": \"n\"}]",
+  "stdout": "Dee 0.00\nann 6.40\ncy 40.75\nzed 30.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"cy\", \"items\": [{\"sku\": \"D\", \"qty\": 5, \"price\": 12.5}, {\"sku\": \"A\", \"qty\": 4, \"price\": 12.5}]}, {\"id\": 1, \"customer\": \"Dee\", \"items\": [{\"sku\": \"B\", \"qty\": 8, \"price\": 3}, {\"sku\": \"D\", \"qty\": 6, \"price\": 1.25}]}, {\"id\": 2, \"customer\": \"Dee\", \"items\": [{\"sku\": \"D\", \"qty\": 2, \"price\": 0.1}, {\"sku\": \"B\", \"qty\": 1, \"price\": 3}, {\"sku\": \"B\", \"qty\": 7, \"price\": 1.25}, {\"sku\": \"D\", \"qty\": 1, \"price\": 3}]}, {\"id\": 3, \"customer\": \"ann\", \"items\": [{\"sku\": \"B\", \"qty\": 2, \"price\": 3}, {\"sku\": \"C\", \"qty\": 9, \"price\": 12.5}, {\"sku\": \"B\", \"qty\": 8, \"price\": 1.25}, {\"sku\": \"D\", \"qty\": 7, \"price\": 0.5}]}, {\"id\": 4, \"customer\": \"eve\", \"items\": []}]",
+  "stdout": "Dee 46.45\nann 132.00\ncy 112.50\neve 0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 6,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 4,\n        \"price\": 7.99\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 7,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"zed\",\n    \"items\": []\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 7,\n        \"price\": 7.99\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 8,\n        \"price\": 3\n      }\n    ],\n    \"note\": \"n\"\n  }\n]",
+  "stdout": "ann 24.00\ncy 115.71\neve 55.93\nzed 0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"ann\", \"items\": [{\"sku\": \"D\", \"qty\": 9, \"price\": 0.1}, {\"sku\": \"C\", \"qty\": 5, \"price\": 7.99}, {\"sku\": \"B\", \"qty\": 9, \"price\": 12.5}], \"note\": \"n\"}, {\"id\": 1, \"customer\": \"bob\", \"items\": [{\"sku\": \"A\", \"qty\": 4, \"price\": 0.1}], \"note\": \"n\"}, {\"id\": 2, \"customer\": \"cy\", \"items\": [{\"sku\": \"B\", \"qty\": 5, \"price\": 0.1}, {\"sku\": \"D\", \"qty\": 2, \"price\": 7.99}]}, {\"id\": 3, \"customer\": \"Dee\", \"items\": [{\"sku\": \"A\", \"qty\": 9, \"price\": 0.1}, {\"sku\": \"A\", \"qty\": 6, \"price\": 1.25}, {\"sku\": \"D\", \"qty\": 1, \"price\": 0.1}, {\"sku\": \"D\", \"qty\": 2, \"price\": 0.1}], \"note\": \"n\"}, {\"id\": 4, \"customer\": \"Dee\", \"items\": [{\"sku\": \"C\", \"qty\": 4, \"price\": 0.5}, {\"sku\": \"C\", \"qty\": 4, \"price\": 0.1}, {\"sku\": \"C\", \"qty\": 7, \"price\": 0.1}]}]",
+  "stdout": "Dee 11.80\nann 153.35\nbob 0.40\ncy 16.48\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"eve\",\n    \"items\": [],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 2,\n        \"price\": 12.5\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"D\",\n        \"qty\": 6,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 0,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 5,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 5,\n        \"price\": 3\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"Dee\",\n    \"items\": [],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 7,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 7,\n        \"price\": 1.25\n      }\n    ]\n  }\n]",
+  "stdout": "Dee 25.00\neve 38.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"Dee\", \"items\": []}]",
+  "stdout": "Dee 0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"ann\", \"items\": []}, {\"id\": 1, \"customer\": \"cy\", \"items\": []}, {\"id\": 2, \"customer\": \"cy\", \"items\": [{\"sku\": \"D\", \"qty\": 9, \"price\": 7.99}, {\"sku\": \"D\", \"qty\": 9, \"price\": 0.5}, {\"sku\": \"D\", \"qty\": 9, \"price\": 0.1}]}]",
+  "stdout": "ann 0.00\ncy 77.31\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 4,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 3,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 8,\n        \"price\": 0.5\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"bob\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 3,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 4,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 5,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 0,\n        \"price\": 12.5\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"cy\",\n    \"items\": [],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"eve\",\n    \"items\": []\n  },\n  {\n    \"id\": 5,\n    \"customer\": \"cy\",\n    \"items\": []\n  }\n]",
+  "stdout": "bob 18.55\ncy 0.00\neve 9.30\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 8,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 1,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 4,\n        \"price\": 7.99\n      }\n    ]\n  }\n]",
+  "stdout": "Dee 31.96\ncy 2.05\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"cy\", \"items\": [{\"sku\": \"D\", \"qty\": 6, \"price\": 0.5}, {\"sku\": \"C\", \"qty\": 1, \"price\": 3}, {\"sku\": \"A\", \"qty\": 5, \"price\": 7.99}]}, {\"id\": 1, \"customer\": \"zed\", \"items\": [{\"sku\": \"A\", \"qty\": 6, \"price\": 1.25}, {\"sku\": \"A\", \"qty\": 3, \"price\": 0.1}, {\"sku\": \"B\", \"qty\": 9, \"price\": 1.25}], \"note\": \"n\"}, {\"id\": 2, \"customer\": \"zed\", \"items\": [{\"sku\": \"B\", \"qty\": 5, \"price\": 7.99}, {\"sku\": \"B\", \"qty\": 9, \"price\": 12.5}, {\"sku\": \"A\", \"qty\": 8, \"price\": 12.5}, {\"sku\": \"C\", \"qty\": 6, \"price\": 0.5}]}, {\"id\": 3, \"customer\": \"ann\", \"items\": [{\"sku\": \"C\", \"qty\": 4, \"price\": 1.25}, {\"sku\": \"C\", \"qty\": 0, \"price\": 12.5}, {\"sku\": \"D\", \"qty\": 5, \"price\": 1.25}], \"note\": \"n\"}, {\"id\": 4, \"customer\": \"eve\", \"items\": [{\"sku\": \"B\", \"qty\": 5, \"price\": 1.25}, {\"sku\": \"B\", \"qty\": 8, \"price\": 3}, {\"sku\": \"C\", \"qty\": 2, \"price\": 1.25}, {\"sku\": \"A\", \"qty\": 1, \"price\": 1.25}]}]",
+  "stdout": "ann 11.25\ncy 45.95\neve 34.00\nzed 274.50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"eve\", \"items\": [{\"sku\": \"D\", \"qty\": 2, \"price\": 7.99}, {\"sku\": \"D\", \"qty\": 3, \"price\": 3}]}, {\"id\": 1, \"customer\": \"ann\", \"items\": [{\"sku\": \"C\", \"qty\": 6, \"price\": 12.5}]}]",
+  "stdout": "ann 75.00\neve 24.98\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 6,\n        \"price\": 12.5\n      }\n    ]\n  }\n]",
+  "stdout": "Dee 75.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"zed\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 6,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"cy\",\n    \"items\": [],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 3,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"bob\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 2,\n        \"price\": 3\n      }\n    ],\n    \"note\": \"n\"\n  }\n]",
+  "stdout": "Dee 1.50\nbob 6.00\ncy 0.00\nzed 0.60\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"cy\", \"items\": [{\"sku\": \"D\", \"qty\": 4, \"price\": 12.5}, {\"sku\": \"C\", \"qty\": 1, \"price\": 12.5}, {\"sku\": \"B\", \"qty\": 9, \"price\": 7.99}], \"note\": \"n\"}]",
+  "stdout": "cy 134.41\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 0,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 1,\n        \"price\": 0.1\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 5,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 6,\n        \"price\": 1.25\n      }\n    ]\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"cy\",\n    \"items\": []\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"Dee\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 5,\n        \"price\": 1.25\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 7,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 6,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"cy\",\n    \"items\": [\n      {\n        \"sku\": \"C\",\n        \"qty\": 1,\n        \"price\": 0.5\n      }\n    ]\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 9,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 4,\n        \"price\": 12.5\n      },\n      {\n        \"sku\": \"D\",\n        \"qty\": 9,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"A\",\n        \"qty\": 7,\n        \"price\": 1.25\n      }\n    ]\n  }\n]",
+  "stdout": "Dee 94.35\nann 112.75\ncy 0.50\neve 13.85\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"zed\", \"items\": [{\"sku\": \"C\", \"qty\": 9, \"price\": 7.99}]}, {\"id\": 1, \"customer\": \"Dee\", \"items\": [], \"note\": \"n\"}, {\"id\": 2, \"customer\": \"Dee\", \"items\": []}, {\"id\": 3, \"customer\": \"ann\", \"items\": []}, {\"id\": 4, \"customer\": \"zed\", \"items\": []}]",
+  "stdout": "Dee 0.00\nann 0.00\nzed 71.91\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[\n  {\n    \"id\": 0,\n    \"customer\": \"eve\",\n    \"items\": [\n      {\n        \"sku\": \"A\",\n        \"qty\": 8,\n        \"price\": 3\n      },\n      {\n        \"sku\": \"B\",\n        \"qty\": 8,\n        \"price\": 1.25\n      }\n    ],\n    \"note\": \"n\"\n  },\n  {\n    \"id\": 1,\n    \"customer\": \"bob\",\n    \"items\": []\n  },\n  {\n    \"id\": 2,\n    \"customer\": \"Dee\",\n    \"items\": []\n  },\n  {\n    \"id\": 3,\n    \"customer\": \"ann\",\n    \"items\": []\n  },\n  {\n    \"id\": 4,\n    \"customer\": \"ann\",\n    \"items\": [\n      {\n        \"sku\": \"B\",\n        \"qty\": 2,\n        \"price\": 0.5\n      },\n      {\n        \"sku\": \"C\",\n        \"qty\": 2,\n        \"price\": 0.1\n      }\n    ]\n  },\n  {\n    \"id\": 5,\n    \"customer\": \"zed\",\n    \"items\": []\n  }\n]",
+  "stdout": "Dee 0.00\nann 1.20\nbob 0.00\neve 34.00\nzed 0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"zed\", \"items\": [{\"sku\": \"B\", \"qty\": 5, \"price\": 3}, {\"sku\": \"D\", \"qty\": 0, \"price\": 1.25}]}, {\"id\": 1, \"customer\": \"ann\", \"items\": [{\"sku\": \"B\", \"qty\": 3, \"price\": 12.5}, {\"sku\": \"B\", \"qty\": 7, \"price\": 7.99}, {\"sku\": \"A\", \"qty\": 6, \"price\": 0.1}, {\"sku\": \"A\", \"qty\": 7, \"price\": 12.5}]}]",
+  "stdout": "ann 181.53\nzed 15.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{\"id\": 0, \"customer\": \"bob\", \"items\": []}, {\"id\": 1, \"customer\": \"ann\", \"items\": [{\"sku\": \"B\", \"qty\": 5, \"price\": 0.5}, {\"sku\": \"C\", \"qty\": 4, \"price\": 3}, {\"sku\": \"A\", \"qty\": 0, \"price\": 1.25}]}]",
+  "stdout": "ann 14.50\nbob 0.00\n"
+ }
+]

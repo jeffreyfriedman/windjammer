@@ -63,7 +63,8 @@ def _bullets(text):
 
 
 def p4_render():
-    sheet = open(PACK_PATH).read()
+    # frozen copy of the sheet as it was when pilot 4 ran
+    sheet = open(os.path.join(P4_DIR, "sheet_source.md")).read()
     head, bullets, tail = _bullets(sheet)
     noloop = [b for b in bullets if not b.startswith("- `wj check FILE`")]
     if len(noloop) != len(bullets) - 1:
@@ -79,4 +80,24 @@ def p4_write():
     os.makedirs(P4_DIR, exist_ok=True)
     for name, text in p4_render().items():
         with open(os.path.join(P4_DIR, name), "w") as f:
+            f.write(text)
+
+
+# ---- pilot 5: the adopted sheet (interpreted inner loop + final build) minus its loop bullet, so the loop comes from the prompt only.
+P5_DIR = os.path.join(PACKS_DIR, "pilot5")
+
+
+def p5_render():
+    sheet = open(os.path.join(P5_DIR, "sheet_source.md")).read()
+    lines = sheet.split("\n")
+    keep = [l for l in lines if not l.startswith("- Loop:")]
+    if len(keep) != len(lines) - 1:
+        raise ValueError("loop bullet not found exactly once")
+    return {"sheet_noloop.md": "\n".join(keep)}
+
+
+def p5_write():
+    os.makedirs(P5_DIR, exist_ok=True)
+    for name, text in p5_render().items():
+        with open(os.path.join(P5_DIR, name), "w") as f:
             f.write(text)

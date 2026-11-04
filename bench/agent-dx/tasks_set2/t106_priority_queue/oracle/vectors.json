@@ -1,0 +1,218 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a 3\nadd b 5\nadd c 5\npop\npeek\nsize\npop\npop\npop\n",
+  "stdout": "b\nc\n2\nc\na\nempty\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add x -1\nadd y -1\nsize\n",
+  "stdout": "2\nleft:\nx -1\ny -1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "left:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\npeek\nsize\n",
+  "stdout": "empty\nempty\n0\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a\nfoo\nadd b x\nadd c 1 2\n",
+  "stdout": "error\nerror\nerror\nerror\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a 0\nadd b 0\nadd c 0\npop\nadd d 0\n",
+  "stdout": "a\nleft:\nb 0\nc 0\nd 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\n",
+  "stdout": "empty\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add e4 2\n",
+  "stdout": "left:\ne4 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add b9 -1\nsize\npop\npop now\n",
+  "stdout": "1\nb9\nerror\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a2 1\n",
+  "stdout": "left:\na2 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a7 3\nadd b2 4\nboom\npeek\npeek\npop\nsize\nadd a2 0\npop\n",
+  "stdout": "error\nb2\nb2\nb2\n1\na7\nleft:\na2 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop now\nadd e1 1\nadd c2 4\nadd e9 -2\nadd d6 1\npop now\nadd a5 -3\npop\nsize\npop\npop\nadd c4 -1\n",
+  "stdout": "error\nerror\nc2\n4\ne1\nd6\nleft:\nc4 -1\ne9 -2\na5 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add d9 3\nadd b5 -2\npeek\nadd b4 -2\npop\nadd a8 -1\npop\nadd d4 2\n",
+  "stdout": "d9\nd9\na8\nleft:\nd4 2\nb5 -2\nb4 -2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\npop\nadd b0 -1\nboom\nadd f2 -2\npeek\nadd f7 2\nadd d9 -1\npop\npop\nadd f4 0\npop\npop\n",
+  "stdout": "0\nempty\nerror\nb0\nf7\nb0\nf4\nd9\nleft:\nf2 -2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add d3 0\n",
+  "stdout": "left:\nd3 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\npop\nadd b2 -2\nsize\n",
+  "stdout": "0\nempty\n1\nleft:\nb2 -2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\npop\npeek\nadd f1 0\nadd a4 -3\nadd e0 -1\nadd f1 -1\nadd e8 1\nadd d0 3\npeek\nadd c7 3\nadd b4 4\npop\npeek\nadd f5 4\nadd b7 2\n",
+  "stdout": "empty\nempty\nempty\nd0\nb4\nd0\nleft:\nf5 4\nd0 3\nc7 3\nb7 2\ne8 1\nf1 0\ne0 -1\nf1 -1\na4 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nadd a0 -3\nadd a0 -1\nadd d8 2\nadd b5 4\nadd b9 -2\nadd f5 -3\nadd d7 -2\nadd c5 -2\n",
+  "stdout": "empty\nleft:\nb5 4\nd8 2\na0 -1\nb9 -2\nd7 -2\nc5 -2\na0 -3\nf5 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add d7 2\npeek\nadd d9 0\nsize\npop\nsize\nadd d0 3\n",
+  "stdout": "d7\n2\nd7\n1\nleft:\nd0 3\nd9 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\npop\nadd d7 0\nadd e9 -3\npeek\nadd e8 3\npop\nadd z\n",
+  "stdout": "empty\nempty\nd7\ne8\nerror\nleft:\nd7 0\ne9 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add b8 2\nsize\nadd d6 -2\nadd f2 2\nadd b7 2\nadd f9 -3\nadd f7 4\npop\npeek\nadd a4 3\nadd f5 -2\nadd b5 -3\n",
+  "stdout": "1\nf7\nb8\nleft:\na4 3\nb8 2\nf2 2\nb7 2\nd6 -2\nf5 -2\nf9 -3\nb5 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nadd c7 1\nadd a0 0\npop now\nadd e4 3\nsize\nadd z\n",
+  "stdout": "empty\nerror\n3\nerror\nleft:\ne4 3\nc7 1\na0 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\nadd d3 3\npop\nadd b3 2\npop\nadd e6 3\nadd a7 -3\npop\nadd a0 1\nadd e6 3\nsize\nadd c5 3\nadd c5 -3\npop\npeek\nsize\n",
+  "stdout": "empty\nd3\nb3\ne6\n3\ne6\nc5\n4\nleft:\nc5 3\na0 1\na7 -3\nc5 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\nadd f9 2\nsize\npop\npop\npeek\nadd d9 0\nadd c0 4\nsize\nadd e7 2\n",
+  "stdout": "0\n1\nf9\nempty\nempty\n2\nleft:\nc0 4\ne7 2\nd9 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nadd e6 2\npop\nboom\nsize\nsize\nadd d2 2\nadd c5 -3\npop\npop now\nsize\nadd z\nsize\npop\nadd a7 -1\nsize\n",
+  "stdout": "empty\ne6\nerror\n0\n0\nd2\nerror\n1\nerror\n1\nc5\n1\nleft:\na7 -1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\nadd d2 2\npop\npop\nadd z\npop\nadd a7 0\nadd b5 2\npop\n",
+  "stdout": "0\nd2\nempty\nerror\nempty\nb5\nleft:\na7 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add b5 -3\npop\npeek\nadd c4 -3\nsize\nadd e0 -3\npeek\nadd b6 -3\nadd c2 3\nadd d3 4\nadd f4 -3\nadd a0 -2\nadd c7 1\nadd z\n",
+  "stdout": "b5\nempty\n1\nc4\nerror\nleft:\nd3 4\nc2 3\nc7 1\na0 -2\nc4 -3\ne0 -3\nb6 -3\nf4 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add c1 -2\npeek\n",
+  "stdout": "c1\nleft:\nc1 -2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add z\npeek\nadd a1 -2\npeek\npop\n",
+  "stdout": "error\nempty\na1\na1\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nadd a5 2\npop\nadd a1 4\n",
+  "stdout": "empty\na5\nleft:\na1 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add c3 4\npop\nadd b8 0\nadd e5 -3\n",
+  "stdout": "c3\nleft:\nb8 0\ne5 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\nadd d2 -2\nadd e6 -1\nadd c0 -1\n",
+  "stdout": "empty\nleft:\ne6 -1\nc0 -1\nd2 -2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add c8 4\npop\nadd z\nadd c2 -3\nadd e1 0\npop\nadd b5 -2\nadd d1 0\nsize\nsize\nadd b1 -3\nadd e4 4\npeek\nadd d7 -2\nadd e1 -3\npop\n",
+  "stdout": "c8\nerror\ne1\n3\n3\ne4\ne4\nleft:\nd1 0\nb5 -2\nd7 -2\nc2 -3\nb1 -3\ne1 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nsize\npop\nadd e4 3\npop\npeek\nadd b1 4\nadd f9 3\nboom\nadd d3 -2\nadd e9 4\nadd e8 -1\n",
+  "stdout": "empty\n0\nempty\ne4\nempty\nerror\nleft:\nb1 4\ne9 4\nf9 3\ne8 -1\nd3 -2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\nadd b6 0\nadd e7 -3\npop\npop now\nboom\nboom\nadd z\npop\n",
+  "stdout": "empty\nb6\nerror\nerror\nerror\nerror\ne7\nleft:\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\nadd f7 4\nadd d2 3\nadd c5 1\nadd b7 2\n",
+  "stdout": "empty\nleft:\nf7 4\nd2 3\nb7 2\nc5 1\n"
+ }
+]

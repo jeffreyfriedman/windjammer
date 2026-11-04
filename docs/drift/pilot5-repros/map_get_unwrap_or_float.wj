@@ -1,0 +1,9 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut totals: HashMap<string, float> = HashMap::new()
+    let key = "a"
+    let cur = totals.get(key).unwrap_or(0.0)
+    totals.insert(key, cur + 1.5)
+    println("${totals.len()}")
+}
