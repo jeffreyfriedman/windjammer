@@ -1,0 +1,53 @@
+// spec: SPEC-STR-015
+// expect: [Some(1), None]
+// expect: ("a", 1, 2.0, true, 'c')
+// expect: "q\"uote\n\t\\" '\n' '\''
+// expect: P { x: 1, name: "n" }
+// expect: A B(2, "s") C { v: [1, 2] }
+// expect: Err("bad") Some("x") 1.0 0.1 1e21 1e-7
+// expect: P {
+// expect:     x: 1,
+// expect:     name: "n",
+// expect: }
+// expect: B(
+// expect:     2,
+// expect:     "s",
+// expect: )
+// expect: [] []
+struct P {
+    x: int,
+    name: string,
+}
+
+enum E {
+    A,
+    B(int, string),
+    C { v: Vec<int> },
+}
+
+fn main() {
+    let v: Vec<Option<int>> = vec![Some(1), None]
+    println("${v:?}")
+    let tup = ("a", 1, 2.0, true, 'c')
+    println("${tup:?}")
+    let quoted = "q\"uote\n\t\\"
+    let nl = '\n'
+    let sq = '\''
+    println("${quoted:?} ${nl:?} ${sq:?}")
+    let p = P { x: 1, name: "n" }
+    println("${p:?}")
+    let b = E::B(2, "s")
+    let c = E::C { v: vec![1, 2] }
+    println("${E::A:?} ${b:?} ${c:?}")
+    let r: Result<int, string> = Err("bad")
+    let some = Some("x")
+    let one = 1.0
+    let tenth = 0.1
+    let huge = 1e21
+    let tiny = 1.0e-7
+    println("${r:?} ${some:?} ${one:?} ${tenth:?} ${huge:?} ${tiny:?}")
+    println("${p:#?}")
+    println("${b:#?}")
+    let e: Vec<int> = Vec::new()
+    println("${e:?} ${e:#?}")
+}

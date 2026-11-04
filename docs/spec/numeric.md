@@ -308,3 +308,266 @@ Output:
 ```
 Then panics (message contains `overflow`), exit status 101.
 
+
+## Wrapping, saturating and checked operations
+
+**SPEC-NUM-018** `wrapping_*`, `saturating_*`, `checked_*` and `overflowing_*` operate in the receiver's declared width: wrapping wraps modulo 2^N, saturating clamps to the type range, checked returns `None` on overflow.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-018.wj -->
+```windjammer
+fn main() {
+    let a: u8 = 250
+    println("${a.wrapping_add(10)} ${a.saturating_add(10)} ${a.checked_add(10).is_none()} ${a.checked_add(5).unwrap_or(0)}")
+    let m: i32 = 2147483647
+    println("${m.wrapping_add(1)} ${m.saturating_add(1)} ${m.checked_mul(2).is_none()}")
+    let lo: i64 = -9223372036854775807 - 1
+    println("${lo.wrapping_sub(1)} ${lo.saturating_sub(1)} ${lo.wrapping_neg()} ${lo.checked_neg().is_none()}")
+    let z: u32 = 0
+    println("${z.wrapping_sub(1)} ${z.saturating_sub(1)} ${z.checked_sub(1).is_none()}")
+}
+```
+Output:
+```text
+4 255 true 255
+-2147483648 2147483647 true
+9223372036854775807 -9223372036854775808 -9223372036854775808 true
+4294967295 0 true
+```
+
+## Casts
+
+**SPEC-NUM-019** `as` between integer widths keeps the low bits (two's complement); `float as int` truncates toward zero, saturates at the target range and maps NaN to 0; `char as int` is the code point and `u8 as char` the character.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-019.wj -->
+```windjammer
+fn main() {
+    println("${300 as u8} ${-1 as u8} ${-1i64 as u32} ${255u8 as i8} ${128u8 as i8} ${70000 as i16}")
+    println("${3.99 as int} ${-3.99 as int} ${2.5 as int} ${-0.5 as int}")
+    println("${1e20 as int} ${-1e20 as int} ${1e20 as u8} ${-5.0 as u8} ${300.7 as u8}")
+    let nan = 0.0 / 0.0
+    println("${nan as int} ${nan as u8}")
+    println("${'a' as int} ${'z' as u8} ${65u8 as char}")
+    println("${4294967296 as i32} ${4294967295 as i32} ${-129 as i8}")
+    println("${7 as float / 2.0} ${(7 / 2) as float}")
+}
+```
+Output:
+```text
+44 255 4294967295 -1 -128 4464
+3 -3 2 0
+9223372036854775807 -9223372036854775808 255 0 255
+0 0
+97 122 A
+0 -1 127
+3.5 3
+```
+
+## Shifts and bit operations
+
+**SPEC-NUM-020** Shifts and bitwise operators act on the declared width: `<<` discards high bits, `>>` is arithmetic on signed and logical on unsigned types, `!` flips every bit of the width.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-020.wj -->
+```windjammer
+fn main() {
+    println("${1 << 62} ${-8 >> 1} ${-1 >> 63} ${1u32 << 31} ${255u8 >> 3}")
+    let x: i32 = 1
+    println("${x << 31} ${(x << 30) << 1}")
+    let u: u8 = 0b1011_0001
+    println("${u << 1} ${u >> 4} ${u & 0x0F} ${u | 0x0F} ${u ^ 0xFF} ${!u}")
+    println("${5 & 3} ${5 | 3} ${5 ^ 3} ${!5} ${-5 & 0xFF}")
+    println("${u.count_ones()} ${u.leading_zeros()} ${u.trailing_zeros()}")
+}
+```
+Output:
+```text
+4611686018427387904 -4 -1 2147483648 31
+-2147483648 -2147483648
+98 11 1 191 78 78
+1 7 6 -6 251
+4 0 0
+```
+
+## Shift amount out of range
+
+**SPEC-NUM-021** Shifting by an amount greater than or equal to the bit width of the left operand panics with a message containing `overflow`.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-021.wj -->
+```windjammer
+fn main() {
+    let s = "64".parse::<int>().unwrap_or(0)
+    println("before")
+    println("${1 << s}")
+}
+```
+Output:
+```text
+before
+```
+Then panics (message contains `overflow`), exit status 101.
+
+## Integer division, remainder and helpers
+
+**SPEC-NUM-022** `/` truncates and `%` takes the dividend's sign for every sign combination; `div_euclid` and `rem_euclid` round toward negative infinity with a non-negative remainder; `abs`, `signum`, `pow`, `min`, `max`, `clamp` and `abs_diff` follow their mathematical definitions.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-022.wj -->
+```windjammer
+fn main() {
+    let a: int = -7
+    let b: int = 2
+    let c: int = 7
+    let d: int = -2
+    println("${a / b} ${a % b} ${c / d} ${c % d} ${a / d} ${a % d}")
+    println("${a.div_euclid(b)} ${a.rem_euclid(b)} ${c.div_euclid(d)} ${c.rem_euclid(d)}")
+    let z: int = 0
+    println("${a.abs()} ${a.signum()} ${z.signum()}")
+    let ten: int = 10
+    println("${c.abs_diff(ten)} ${ten.abs_diff(c)}")
+}
+```
+Output:
+```text
+-3 -1 -3 1 3 -1
+-4 1 -3 1
+7 -1 0
+3 3
+```
+
+## Division overflow
+
+**SPEC-NUM-023** Dividing the minimum signed value by -1 panics with a message containing `overflow`.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-023.wj -->
+```windjammer
+fn main() {
+    let lo: i64 = -9223372036854775807 - 1
+    let d = "-1".parse::<int>().unwrap_or(1)
+    println("start")
+    println("${lo / d}")
+}
+```
+Output:
+```text
+start
+```
+Then panics (message contains `overflow`), exit status 101.
+
+## Float display and rounding
+
+**SPEC-NUM-024** Floats print their shortest round-tripping decimal without exponent notation; `round` rounds halves away from zero, `f32` arithmetic is single precision, and `-0.0` prints as `-0`.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-024.wj -->
+```windjammer
+fn main() {
+    println("${0.1 + 0.2} ${1.0 / 3.0} ${2.0 / 3.0} ${100.0 * 1.1}")
+    println("${1e21} ${1e-7} ${123456789012345680.0} ${0.000001}")
+    println("${1.5e300 * 1.5e300} ${-1.0 / 0.0} ${0.0 / 0.0}")
+    let a: f32 = 0.1
+    let b: f32 = 0.2
+    println("${a + b} ${a * 3.0} ${16777217.0 as f32} ${(0.1 as f32) as float}")
+    println("${(2.5).round()} ${(-2.5).round()} ${(3.5).round()} ${(2.5).floor()} ${(2.5).ceil()} ${(-2.5).trunc()}")
+    println("${(9.0).sqrt()} ${(2.0).powi(10)} ${(1.0).exp() > 2.718} ${(-0.0)} ${0.0 == -0.0}")
+}
+```
+Output:
+```text
+0.30000000000000004 0.3333333333333333 0.6666666666666666 110.00000000000001
+1000000000000000000000 0.0000001 123456789012345680 0.000001
+inf -inf NaN
+0.3 0.3 16777216 0.10000000149011612
+3 -3 4 2 3 -2
+3 1024 true -0 true
+```
+
+## Methods on literal receivers
+
+**SPEC-NUM-025** A numeric method may be called on a literal or a negated literal (`(-7).abs()`, `2.pow(10)`, `7.div_euclid(-2)`); the literal has type `int` (SPEC-NUM-001), so the result is the same as for an `int` variable.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-025.wj -->
+```windjammer
+fn main() {
+    println("${(-7).abs()} ${(-7).signum()} ${2.pow(10)} ${(-2).pow(3)}")
+    println("${(-7).div_euclid(2)} ${(-7).rem_euclid(2)} ${7.div_euclid(-2)} ${7.rem_euclid(-2)}")
+    println("${7.abs_diff(10)} ${10.abs_diff(7)}")
+    let two: int = 2
+    let minus_two: int = -2
+    println("${two.pow(10)} ${minus_two.pow(3)} ${minus_two.pow(2)}")
+}
+```
+Output:
+```text
+7 -1 1024 -8
+-4 1 -3 1
+3 3
+1024 -8 4
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
+
+## min, max, clamp and rotate
+
+**SPEC-NUM-026** `min`, `max` and `clamp` take arguments of the receiver's type whether the operands are variables or literals; `rotate_left`/`rotate_right` take a bit count and `swap_bytes` reverses the byte order of the declared width.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-026.wj -->
+```windjammer
+fn main() {
+    let ten: int = 10
+    let three: int = 3
+    let neg: int = -1
+    let zero: int = 0
+    println("${ten.min(three)} ${ten.max(three)} ${neg.clamp(zero, 5)} ${ten.clamp(zero, 5)}")
+    println("${10.min(3)} ${10.max(3)} ${(-1).clamp(0, 5)} ${9.clamp(0, 5)}")
+    let u: u8 = 0b1011_0001
+    println("${u.rotate_left(3)} ${u.rotate_right(3)} ${u.swap_bytes()}")
+}
+```
+Output:
+```text
+3 10 0 5
+3 10 0 5
+141 54 177
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
+
+## Parsing numbers
+
+**SPEC-NUM-027** `parse` accepts an optional sign and digits for integers (no spaces, no underscores), rejects values outside the target width, accepts decimal and exponent forms for floats, and accepts only `true` and `false` for `bool`; the error texts are Rust's.
+
+<!-- example: tests/spec/numeric/SPEC-NUM-027.wj -->
+```windjammer
+fn main() {
+    println("${"42".parse::<int>().unwrap_or(-1)} ${"-42".parse::<int>().unwrap_or(-1)} ${"+7".parse::<int>().unwrap_or(-1)}")
+    println("${" 5".parse::<int>().is_err()} ${"5 ".parse::<int>().is_err()} ${"".parse::<int>().is_err()} ${"1_000".parse::<int>().is_err()}")
+    println("${"256".parse::<u8>().is_err()} ${"255".parse::<u8>().unwrap_or(0)} ${"-1".parse::<u8>().is_err()}")
+    println("${"9223372036854775807".parse::<int>().unwrap_or(0)} ${"9223372036854775808".parse::<int>().is_err()}")
+    println("${"3.5".parse::<float>().unwrap_or(0.0)} ${"1e3".parse::<float>().unwrap_or(0.0)} ${".5".parse::<float>().unwrap_or(0.0)} ${"abc".parse::<float>().is_err()}")
+    println("${"true".parse::<bool>().unwrap_or(false)} ${"True".parse::<bool>().is_err()}")
+    match "12x".parse::<int>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match "".parse::<int>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match "300".parse::<u8>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+    match "x".parse::<float>() {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err ${e}"),
+    }
+}
+```
+Output:
+```text
+42 -42 7
+true true true true
+true 255 true
+9223372036854775807 true
+3.5 1000 0.5 true
+true true
+err invalid digit found in string
+err cannot parse integer from empty string
+err number too large to fit in target type
+err invalid float literal
+```

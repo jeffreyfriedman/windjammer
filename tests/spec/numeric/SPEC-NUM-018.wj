@@ -1,0 +1,15 @@
+// spec: SPEC-NUM-018
+// expect: 4 255 true 255
+// expect: -2147483648 2147483647 true
+// expect: 9223372036854775807 -9223372036854775808 -9223372036854775808 true
+// expect: 4294967295 0 true
+fn main() {
+    let a: u8 = 250
+    println("${a.wrapping_add(10)} ${a.saturating_add(10)} ${a.checked_add(10).is_none()} ${a.checked_add(5).unwrap_or(0)}")
+    let m: i32 = 2147483647
+    println("${m.wrapping_add(1)} ${m.saturating_add(1)} ${m.checked_mul(2).is_none()}")
+    let lo: i64 = -9223372036854775807 - 1
+    println("${lo.wrapping_sub(1)} ${lo.saturating_sub(1)} ${lo.wrapping_neg()} ${lo.checked_neg().is_none()}")
+    let z: u32 = 0
+    println("${z.wrapping_sub(1)} ${z.saturating_sub(1)} ${z.checked_sub(1).is_none()}")
+}
