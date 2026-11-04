@@ -1,0 +1,123 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "W",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nstruct Job {\n    name: string,\n    prio: int,\n}\n\nfn best(jobs: Vec<Job>) -> int {\n    let mut bi: int = -1\n    let mut i: int = 0\n    let n: int = jobs.len() as int\n    while i < n {\n        if bi < 0 || jobs[i as usize].prio > jobs[bi as usize].prio {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut jobs: Vec<Job> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            println(\"error\")\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"add\" && parts.len() == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => jobs.push(Job { name: parts[1], prio: p }),\n                Err(_) => println(\"error\"),\n            }\n        } else if cmd == \"pop\" && parts.len() == 1 {\n            let b = best(jobs)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(jobs[b as usize].name)\n                jobs.remove(b as usize)\n            }\n        } else if cmd == \"peek\" && parts.len() == 1 {\n            let b = best(jobs)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(jobs[b as usize].name)\n            }\n        } else if cmd == \"size\" && parts.len() == 1 {\n            println(\"${jobs.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while jobs.len() > 0 {\n        let b = best(jobs)\n        println(\"${jobs[b as usize].name} ${jobs[b as usize].prio}\")\n        jobs.remove(b as usize)\n    }\n}\n",
+ "first_source": "use std::fs\n\nstruct Job {\n    name: string,\n    prio: int,\n}\n\nfn best(jobs: Vec<Job>) -> int {\n    let mut bi: int = -1\n    let mut i: int = 0\n    let n: int = jobs.len() as int\n    while i < n {\n        if bi < 0 || jobs[i as usize].prio > jobs[bi as usize].prio {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut jobs: Vec<Job> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        if parts.len() == 0 {\n            println(\"error\")\n            continue\n        }\n        let cmd = parts[0]\n        if cmd == \"add\" && parts.len() == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => jobs.push(Job { name: parts[1], prio: p }),\n                Err(_) => println(\"error\"),\n            }\n        } else if cmd == \"pop\" && parts.len() == 1 {\n            let b = best(jobs)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(jobs[b as usize].name)\n                jobs.remove(b as usize)\n            }\n        } else if cmd == \"peek\" && parts.len() == 1 {\n            let b = best(jobs)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(jobs[b as usize].name)\n            }\n        } else if cmd == \"size\" && parts.len() == 1 {\n            println(\"${jobs.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while jobs.len() > 0 {\n        let b = best(jobs)\n        println(\"${jobs[b as usize].name} ${jobs[b as usize].prio}\")\n        jobs.remove(b as usize)\n    }\n}\n",
+ "first_turn_input": 8317,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.147,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 8.153,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 52.8,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 5.41,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:33:57",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 10.85,
+ "tool_result_tokens_est": 394,
+ "tool_wait_seconds": 8.3,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 7967,
+   "cache_write": 348,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8317,
+   "output": 5,
+   "result_chars": 220,
+   "turn": 1
+  },
+  {
+   "cache_read": 8315,
+   "cache_write": 1185,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9502,
+   "output": 3,
+   "result_chars": 1160,
+   "turn": 2
+  },
+  {
+   "cache_read": 9500,
+   "cache_write": 669,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 10171,
+   "output": 302,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 10.85,
+  "cost_usd": 0.0254882,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the priority job queue in `main.wj`. It passed a quick interpreted run, and the final `wj build main.wj` compiled it.\n\nThe run used a short hand-made input, not your two examples. It covered `pop`, `peek`, `size`, a negative priority, an unknown command, a non-integer priority and the final `left:` list. The output was correct, including ties going to the job added first. I didn't run the ",
+  "subtype": "success",
+  "tokens_in": 27990,
+  "tokens_out": 1409,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 24.56
+}

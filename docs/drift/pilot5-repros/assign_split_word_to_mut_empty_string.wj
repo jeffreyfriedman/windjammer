@@ -1,0 +1,12 @@
+fn main() {
+    let text = "alpha beta gamma"
+    let mut cur = ""
+    for w in text.split_whitespace() {
+        if cur.len() == 0 {
+            cur = w
+        } else {
+            cur = "${cur} ${w}"
+        }
+    }
+    println("${cur}")
+}
