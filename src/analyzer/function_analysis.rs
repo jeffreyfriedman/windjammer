@@ -834,12 +834,6 @@ impl<'ast> Analyzer<'ast> {
             })
             .collect();
 
-        let field_moved_parameters = func
-            .parameters
-            .iter()
-            .filter(|p| p.name != "self" && self.param_field_is_moved_out(&p.name, &p.type_, &func.body))
-            .map(|p| p.name.clone())
-            .collect();
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
@@ -849,7 +843,7 @@ impl<'ast> Analyzer<'ast> {
             returned_parameters,
             field_extract_parameters,
             field_mutated_parameters,
-            field_moved_parameters,
+            field_moved_parameters: self.field_moved_parameters(func),
             auto_clone_analysis,
             clone_optimizations,
             struct_mapping_optimizations,
