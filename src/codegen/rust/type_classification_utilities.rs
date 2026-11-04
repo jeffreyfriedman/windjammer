@@ -173,3 +173,33 @@ pub fn peel_reference_layer(t: &Type) -> &Type {
         _ => t,
     }
 }
+
+/// `ty` is a vector of strings (`Vec<string>`, `&Vec<String>`). A type kept as text (`Custom("Vec<string>")`) is read
+/// by its element, never by searching the text: `Vec<Vec<string>>` is not a vector of strings.
+pub fn type_is_string_element_vec(ty: &Type) -> bool {
+    let is_string = |t: &Type| matches!(t, Type::String) || matches!(t, Type::Custom(n) if n == "string" || n == "String");
+    match ty {
+        Type::Vec(inner) => is_string(inner),
+        Type::Parameterized(name, args) if name == "Vec" => args.len() == 1 && is_string(&args[0]),
+        Type::Reference(inner) | Type::MutableReference(inner) => type_is_string_element_vec(inner),
+        Type::Custom(text) => text
+            .strip_prefix("Vec<")
+            .and_then(|r| r.strip_suffix('>'))
+            .is_some_and(|elem| matches!(elem.trim().trim_start_matches('&').trim(), "string" | "String" | "str")),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod string_vec_tests {
+    use super::*;
+
+    #[test]
+    fn string_element_vec_is_decided_by_the_element_type() {
+        assert!(type_is_string_element_vec(&Type::Custom("Vec<string>".into())));
+        assert!(type_is_string_element_vec(&Type::Vec(Box::new(Type::String))));
+        assert!(!type_is_string_element_vec(&Type::Custom("Vec<Vec<string>>".into())));
+        assert!(!type_is_string_element_vec(&Type::Custom("Vec<Labelstring>".into())));
+        assert!(!type_is_string_element_vec(&Type::Custom("Vec<(int, string)>".into())));
+    }
+}

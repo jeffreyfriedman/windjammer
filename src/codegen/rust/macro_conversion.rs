@@ -231,6 +231,19 @@ impl<'ast> CodeGenerator<'ast> {
         if !matches!(func_name, "print" | "println" | "eprintln" | "eprint") {
             return None;
         }
+        // The arguments of a print are values (`${if c { a } else { b }}`): branch tails produce the
+        // value instead of being statements ending in `;`.
+        let prev_ctx = std::mem::replace(&mut self.in_expression_context, true);
+        let out = self.try_generate_print_macro_inner(func_name, arguments);
+        self.in_expression_context = prev_ctx;
+        out
+    }
+
+    fn try_generate_print_macro_inner(
+        &mut self,
+        func_name: &str,
+        arguments: &[(Option<String>, &Expression<'ast>)],
+    ) -> Option<String> {
 
         if !self.should_use_runtime_io() {
             return self.try_generate_print_rust_macro(func_name, arguments);

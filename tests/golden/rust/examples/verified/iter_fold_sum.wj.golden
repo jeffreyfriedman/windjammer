@@ -4,9 +4,9 @@ fn main() {
     println!("{}", v.iter().product::<i64>());
     println!("{}", v.iter().fold(0_i64, |acc, x| {
         if *x > acc {
-            *x;
+            *x
         } else {
-            acc;
+            acc
         }
     }));
     let fs = vec![1.0_f64, 2.0_f64, 3.0_f64, 4.0_f64, 5.0_f64];

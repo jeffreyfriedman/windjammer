@@ -70,8 +70,8 @@ impl<'ast> Analyzer<'ast> {
                 // PHASE 3: Developer explicitly requested &str
                 // Trust the developer - they promise it's safe
                 optimizable.insert(param.name.clone());
-            } else if has_string_ref {
-                // PHASE 3: Developer explicitly requested &String
+            } else if has_string_ref || self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
+                // &String requested (PHASE 3), or the formal is reassigned whole (`s = "x"`): `&mut String`, not `&str`
                 // Don't optimize this parameter
                 continue;
             } else {

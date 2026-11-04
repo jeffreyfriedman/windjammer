@@ -36,6 +36,8 @@ pub struct MockEntry {
     status: u16,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+    /// Seconds the canned server takes to answer; a request whose timeout is shorter fails with `timed out`.
+    delay_secs: Option<u64>,
 }
 
 impl HttpMode {
@@ -60,6 +62,7 @@ impl HttpMode {
                     .map(|o| o.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect())
                     .unwrap_or_default(),
                 body: get("body").unwrap_or_default().into_bytes(),
+                delay_secs: e.get("delay_secs").and_then(|v| v.as_u64()),
             });
         }
         Ok(HttpMode::Mock(Rc::new(out)))
@@ -89,22 +92,44 @@ impl Native for HeadersObj {
     }
 }
 
+/// Per-request options of a `ClientRequest` (`std::http::request`); the verb functions use the defaults.
+#[derive(Clone, Default)]
+struct ReqOpts {
+    headers: Vec<(String, String)>,
+    timeout_secs: Option<u64>,
+}
+
 fn send(mode: &HttpMode, method: &str, url: &str, body: Option<&str>) -> Result<ResponseObj, String> {
+    send_with(mode, method, url, body, &ReqOpts::default())
+}
+
+fn send_with(mode: &HttpMode, method: &str, url: &str, body: Option<&str>, opts: &ReqOpts) -> Result<ResponseObj, String> {
     match mode {
         HttpMode::Deny => Err(format!(
             "network access is disabled in the interpreter: {method} {url} (use --mock-http FILE for canned responses or --allow-network for plain http://)"
         )),
-        HttpMode::Mock(m) => m
-            .entries
-            .iter()
-            .find(|e| e.method == method && e.url == url)
-            .map(|e| ResponseObj { status: e.status, headers: e.headers.clone(), body: e.body.clone() })
-            .ok_or_else(|| format!("mock http: no response recorded for {method} {url}")),
-        HttpMode::Real => real_request(method, url, body),
+        HttpMode::Mock(m) => {
+            let entry = m.entries.iter().find(|e| e.method == method && e.url == url);
+            match (entry, opts.timeout_secs) {
+                // a server that never answers, or answers later than the timeout, is a timeout
+                (None, Some(_)) => Err("timed out".to_string()),
+                (Some(e), Some(t)) if e.delay_secs.is_some_and(|d| d > t) => Err("timed out".to_string()),
+                (Some(e), _) => Ok(ResponseObj { status: e.status, headers: e.headers.clone(), body: e.body.clone() }),
+                (None, None) => Err(format!("mock http: no response recorded for {method} {url}")),
+            }
+        }
+        HttpMode::Real => real_request(method, url, body, opts),
     }
 }
 
-fn real_request(method: &str, url: &str, body: Option<&str>) -> Result<ResponseObj, String> {
+fn io_error(e: std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => "timed out".to_string(),
+        _ => e.to_string(),
+    }
+}
+
+fn real_request(method: &str, url: &str, body: Option<&str>, opts: &ReqOpts) -> Result<ResponseObj, String> {
     if !url.starts_with("http://") {
         return Err(format!("only http:// is available in the interpreter (no TLS): {url}; use --mock-http or `wj run`"));
     }
@@ -112,15 +137,26 @@ fn real_request(method: &str, url: &str, body: Option<&str>) -> Result<ResponseO
     let (host, port, path) = crate::ir::effect_facts::scope_match::split_url(url).ok_or_else(|| format!("invalid url: {url}"))?;
     let port = port.unwrap_or(80);
     let hostport = if port == 80 { host.clone() } else { format!("{host}:{port}") };
-    let mut stream = std::net::TcpStream::connect((host.as_str(), port)).map_err(|e| e.to_string())?;
+    let timeout = opts.timeout_secs.map(std::time::Duration::from_secs);
+    let mut stream = match timeout {
+        Some(t) => {
+            use std::net::ToSocketAddrs;
+            let addr = (host.as_str(), port).to_socket_addrs().map_err(io_error)?.next().ok_or_else(|| format!("cannot resolve {host}"))?;
+            std::net::TcpStream::connect_timeout(&addr, t).map_err(io_error)?
+        }
+        None => std::net::TcpStream::connect((host.as_str(), port)).map_err(|e| e.to_string())?,
+    };
+    stream.set_read_timeout(timeout).map_err(io_error)?;
+    stream.set_write_timeout(timeout).map_err(io_error)?;
     let payload = body.unwrap_or("");
+    let extra: String = opts.headers.iter().map(|(k, v)| format!("{k}: {v}\r\n")).collect();
     let req = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {hostport}\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{payload}",
+        "{method} {path} HTTP/1.1\r\nHost: {hostport}\r\nConnection: close\r\n{extra}Content-Length: {}\r\n\r\n{payload}",
         payload.len()
     );
-    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    stream.write_all(req.as_bytes()).map_err(io_error)?;
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).map_err(|e| e.to_string())?;
+    stream.read_to_end(&mut raw).map_err(io_error)?;
     let split = raw.windows(4).position(|w| w == b"\r\n\r\n").ok_or("malformed HTTP response")?;
     let head = String::from_utf8_lossy(&raw[..split]).to_string();
     let mut lines = head.lines();
@@ -129,12 +165,70 @@ fn real_request(method: &str, url: &str, body: Option<&str>) -> Result<ResponseO
     Ok(ResponseObj { status, headers, body: raw[split + 4..].to_vec() })
 }
 
+/// A request under construction: `http.request(method, url)` then `.header` / `.body` / `.timeout_secs`, then `.send()`.
+struct ClientRequestObj {
+    method: String,
+    url: String,
+    body: Option<String>,
+    opts: ReqOpts,
+}
+impl Native for ClientRequestObj {
+    fn type_name(&self) -> &'static str {
+        "ClientRequest"
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+fn creq(v: &Value) -> R<&ClientRequestObj> {
+    downcast::<ClientRequestObj>(v).ok_or_else(|| semantic("expected an http ClientRequest"))
+}
+
+fn derived(v: &Value, f: impl FnOnce(&mut ClientRequestObj)) -> R {
+    let c = creq(v)?;
+    let mut n = ClientRequestObj { method: c.method.clone(), url: c.url.clone(), body: c.body.clone(), opts: c.opts.clone() };
+    f(&mut n);
+    Ok(Value::Native(Rc::new(n)))
+}
+
 fn resp(v: &Value) -> R<&ResponseObj> {
     downcast::<ResponseObj>(v).ok_or_else(|| semantic("expected an http Response"))
 }
 
 pub fn register(r: &mut Registry) {
     r.type_name("Response");
+    r.type_name("ClientRequest");
+    // `request` is a sink (net.connect on the url, argument 1); `send` asks the gate again, as the compiled runtime does
+    r.func("http::request", |_, a| {
+        let method = arg_str(&a, 0, "http::request")?.to_ascii_uppercase();
+        let url = arg_str(&a, 1, "http::request")?;
+        Ok(Value::Native(Rc::new(ClientRequestObj { method, url: url.to_string(), body: None, opts: ReqOpts::default() })))
+    });
+    r.native("ClientRequest", "header", |_, v, a| {
+        let k = arg_str(&a, 0, "header")?;
+        let val = arg_str(&a, 1, "header")?;
+        derived(v, |c| c.opts.headers.push((k.to_string(), val.to_string())))
+    });
+    r.native("ClientRequest", "body", |_, v, a| {
+        let b = arg_str(&a, 0, "body")?;
+        derived(v, |c| c.body = Some(b.to_string()))
+    });
+    r.native("ClientRequest", "timeout_secs", |_, v, a| {
+        let n = match a.first() {
+            Some(Value::Int(n, _)) => (*n).max(0) as u64,
+            _ => return Err(semantic("timeout_secs expects an int")),
+        };
+        derived(v, |c| c.opts.timeout_secs = Some(n))
+    });
+    r.native("ClientRequest", "send", |it, v, _| {
+        let c = creq(v)?;
+        it.cap_decide(&crate::ir::effect_facts::EffectKind::NetConnect, Some(c.url.as_str()))?;
+        Ok(match send_with(&it.http, &c.method, &c.url, c.body.as_deref(), &c.opts) {
+            Ok(resp) => Value::ok(Value::Native(Rc::new(resp))),
+            Err(e) => Value::err(Value::str(e)),
+        })
+    });
     for (name, method, has_body) in [
         ("get", "GET", false),
         ("post", "POST", true),

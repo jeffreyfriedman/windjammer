@@ -122,7 +122,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.borrowed_iterator_vars.clear();
 
         // Track function return type for string literal conversion
-        self.current_function_return_type = func.return_type.clone();
+        self.set_return_type_and_list_positions(func);
         // Propagate collection return type to `.collect()` turbofish when RHS lacks annotation.
         // Never use String/Option/etc. — those are not collect targets.
         self.collect_target_type = func
@@ -10522,23 +10522,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(in crate::codegen::rust) fn type_is_string_element_vec(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Vec(inner) => {
-                matches!(inner.as_ref(), Type::String)
-                    || matches!(inner.as_ref(), Type::Custom(n) if n == "string" || n == "String")
-            }
-            Type::Parameterized(name, args) if name == "Vec" => args.first().is_some_and(|a| {
-                matches!(a, Type::String)
-                    || matches!(a, Type::Custom(n) if n == "string" || n == "String")
-            }),
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                self.type_is_string_element_vec(inner)
-            }
-            Type::Custom(name) if name.starts_with("Vec<") => {
-                name.contains("string") || name.contains("String")
-            }
-            _ => false,
-        }
+        crate::codegen::rust::type_classification_utilities::type_is_string_element_vec(ty)
     }
 
     /// True when the body only forwards `param_name` to callees that emit owned non-Copy formals.
@@ -13065,5 +13049,21 @@ impl<'ast> CodeGenerator<'ast> {
             user_param_idx += 1;
         }
         updated.string_ref_string_formal_params = Some(string_ref_flags);
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Record the function's return type and which list literals sit in its return position (ADR-0014: a
+    /// list literal returned from a `Vec` function is a `Vec`).
+    fn set_return_type_and_list_positions(&mut self, func: &FunctionDecl<'ast>) {
+        self.current_function_return_type = func.return_type.clone();
+        self.idiom.return_position_list_literals = match func.return_type.as_ref() {
+            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::type_classification::type_is_vec_container(t) =>
+            {
+                Self::collect_return_position_lists(&func.body)
+            }
+            _ => Default::default(),
+        };
     }
 }
