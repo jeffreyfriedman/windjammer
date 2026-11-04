@@ -1,0 +1,7 @@
+use std::strings
+
+/// `cut` is an `int` computed from two ints; std::strings.substring declares usize bounds.
+pub fn drop_indent(line: string, indent: int, limit: int) -> string {
+    let cut = if indent < limit { indent } else { limit }
+    strings.substring(line, cut, strings.len(line))
+}

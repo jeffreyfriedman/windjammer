@@ -1046,6 +1046,10 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::literals::generate_literal(lit)
             }
             Literal::Float(f) => {
+                // NUM-LITERAL-WIDTH (float class): the solver fixed this literal's width from a use.
+                if let Some(s) = self.solver_float_literal(expr, *f) {
+                    return s;
+                }
                 // Struct field annotations beat float inference (avoids `100.0_f64` in `f32` slots).
                 if self.in_struct_literal_field {
                     if let (Some(struct_name), Some(field_name)) = (

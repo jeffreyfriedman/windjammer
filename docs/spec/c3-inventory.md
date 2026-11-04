@@ -213,3 +213,17 @@ Method, per pass: disable it, then compare four things:
 `bare_pass_vec_reader` stays listed. The defining module emits `pub fn total(xs: Vec<int>)` owned (D-OWN-PUB), while
 the bare-pass demotion makes the caller pass `&xs`. Deciding D-OWN-PUB (C7) comes first. Deleting the promote pass alone
 would turn this into E0382 (see the single-file `pub fn` shape above).
+
+## Same type name in two modules; std-vocabulary method names
+
+| Case | Cause | Fix |
+|---|---|---|
+| `method_homonyms_on_same_type_name` (project: `shapes2d::bag::Bag` and `shapes3d::bag::Bag`, both with `put`) | the multipass merge stored `Bag::put` under the bare type name, so the numeric collectors read the other module's formal (`put(x: f32)` saw zero params) | `merge_function_return_types` also keys impl methods by module path (`shapes2d::bag::Bag::put`); the float collector resolves `Type::method` through the type's defining module first |
+| `user_module_named_like_std` (project: a user `mod http`) | the runtime std module scan imported `windjammer_runtime::http` over the user module | a program's own `mod` names shadow runtime std roots |
+| `module_qualified_method_name` callers (`function_generation_prepare.rs`, `trait_call_generation.rs`) | built `Type::method` without the lexical scope | routed through the scope-aware `qualified_method_key` |
+| `user_method_named_find_returns_element` (identity corpus) | `table.find(child.up)` borrowed as std `find` | the receiver was classed as text because the binding is a ref formal (`table: &Table`), so the `str` Pattern rule borrowed the argument; a receiver type that defines the method itself is never text, its own signature decides |
+| `user_method_named_contains_takes_value` (identity corpus) | `self.contains(cands[i])` borrowed as std `contains` | same |
+| `free_call_inside_impl_with_same_named_method` (identity corpus) | a free call `triple(x)` inside an impl with a `triple` method was emitted as `self.triple(x)` | the `self.` rewrite applies only when the resolver did not bind the call to a free function |
+
+The interpreter still prints `0 2` for `method_homonyms_on_same_type_name` (an implicit-self method, `fn put(x: f32)`,
+does not mutate its receiver); it is listed in `project_rejects.txt` for the interpreter stream.

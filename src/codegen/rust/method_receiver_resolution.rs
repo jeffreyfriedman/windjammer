@@ -25,5 +25,13 @@ impl<'ast> CodeGenerator<'ast> {
             self.is_imported_runtime_std_module(name)
         })
     }
-}
 
+    /// C3: the receiver's resolved type defines `method` in its own impl (`Pool::contains`, `Table::find`), so the
+    /// call is that method, never the std one of the same name (`str::contains` Pattern), whatever the binding is.
+    pub(in crate::codegen::rust) fn type_defines_own_method(&self, receiver_type_name: Option<&str>, method: &str) -> bool {
+        receiver_type_name.is_some_and(|rt| {
+            let base = rt.split('<').next().unwrap_or(rt);
+            self.struct_method_ast_formal_param_types.get(base).is_some_and(|m| m.contains_key(method))
+        })
+    }
+}
