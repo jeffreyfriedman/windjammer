@@ -96,7 +96,7 @@ def head(lang):
             "in the current directory. The program reads standard input (and command-line arguments / files in the "
             f"current directory when the task says so) and writes to standard output exactly as specified; it is graded "
             f"on hidden tests with {grader}. Create and edit files with the Write/Edit tools; the only shell "
-            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`). "
+            f"commands available are {cmds} (pipe input with `printf 'a\\nb\\n' | ...`; shell variables such as `$?` are not available, so a command that fails ends its output with `[exit N]`). "
             "Stop when you believe it is correct for all inputs.\n\n")
 
 
