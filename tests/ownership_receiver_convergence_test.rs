@@ -292,3 +292,43 @@ impl Bin for Tray {
     assert!(rs.contains("fn get(&mut self, k: u64) -> u64;"), "{rs}");
     assert!(rs.contains("fn delete(&mut self, k: u64);"), "{rs}");
 }
+
+/// A mutating method that reads a non-Copy field into a local (`let allowed = self.cfg.allowed`) keeps `&mut self`
+/// (the read is cloned), so a caller holding the value behind `&mut` (a lock guard, a field) can call it.
+#[test]
+fn mutating_method_reading_a_non_copy_field_keeps_mut_self() {
+    let rs = single_file(
+        r#"pub struct Cfg {
+    pub allowed: Vec<string>,
+}
+
+pub struct Gate {
+    pub cfg: Cfg,
+    pub hits: int,
+}
+
+impl Gate {
+    fn bump(self) {
+        self.hits = self.hits + 1
+    }
+
+    pub fn admit(self, who: string) -> bool {
+        let allowed = self.cfg.allowed
+        self.bump()
+        allowed.contains(who)
+    }
+}
+
+pub struct Server {
+    pub gate: Gate,
+}
+
+impl Server {
+    pub fn serve(self, who: string) -> bool {
+        self.gate.admit(who) && self.gate.admit("x")
+    }
+}
+"#,
+    );
+    assert!(rs.contains("fn admit(&mut self"), "expected `&mut self`:\n{rs}");
+}

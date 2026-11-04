@@ -180,16 +180,16 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl<'ast>,
         modifies_fields: bool,
         _returns_self: bool,
-        body_moves_fields: bool,
+        _body_moves_fields: bool,
         consumes_self: bool,
         calls_mutating: bool,
         calls_owned_on_self: bool,
     ) -> OwnershipMode {
         // In-place mutation → &mut self, not owned self — including `returns self` builders
         // (`append_edge`: mutates `self.buffer` then returns `self`).
-        // Skip when the method calls another method with owned `self` (evaluate → evaluate_node)
-        // or moves non-Copy fields out of `self`.
-        if (modifies_fields || calls_mutating) && !body_moves_fields && !calls_owned_on_self {
+        // Skip when the method calls another method with owned `self` (evaluate → evaluate_node).
+        // A non-Copy field read out of a mutated `self` is cloned at the read (C5: the receiver stays `&mut`).
+        if (modifies_fields || calls_mutating) && !calls_owned_on_self {
             return OwnershipMode::MutBorrowed;
         }
 
