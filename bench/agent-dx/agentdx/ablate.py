@@ -63,7 +63,8 @@ def _bullets(text):
 
 
 def p4_render():
-    sheet = open(PACK_PATH).read()
+    # frozen copy of the sheet as it was when pilot 4 ran
+    sheet = open(os.path.join(P4_DIR, "sheet_source.md")).read()
     head, bullets, tail = _bullets(sheet)
     noloop = [b for b in bullets if not b.startswith("- `wj check FILE`")]
     if len(noloop) != len(bullets) - 1:
