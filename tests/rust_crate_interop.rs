@@ -296,3 +296,57 @@ fn wj_build_produces_a_working_binary_with_a_real_crate() {
     // Jaro("martha", "marhta") = 0.944.. (Winkler's paper)
     assert!(stdout.contains("jaro 0.944"), "{stdout}");
 }
+
+// ---- Windjammer path dependencies are never Rust crates (direct, `../pkg/build`, transitive) ----
+
+/// `app` -> `pkg_a` (path `../pkg_a/build`) -> `pkg_b` (path `../pkg_b/build`), and `app` -> `pkg_b` directly.
+/// Each `build/` holds what `wj build` leaves there: a Cargo crate transpiled from the package. Its Rust
+/// signature is generic, so a surface generated from it (the bug) would reject `pkg_b::f` with WJ0050.
+fn windjammer_path_packages() -> (tempfile::TempDir, PathBuf) {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let w = |rel: &str, text: &str| {
+        let p = tmp.path().join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    for (pkg, deps, body) in [
+        ("pkg_b", "", "pub fn f(x: int) -> int {\n    x + 1\n}\n"),
+        ("pkg_a", "pkg_b = { path = \"../pkg_b/build\" }\n", "use pkg_b\n\npub fn g(x: int) -> int {\n    pkg_b::f(x) * 2\n}\n"),
+    ] {
+        w(&format!("{pkg}/wj.toml"), &format!("[package]\nname = \"{pkg}\"\nversion = \"0.1.0\"\n\n[lib]\n\n[dependencies]\n{deps}"));
+        w(&format!("{pkg}/src/lib.wj"), body);
+        w(&format!("{pkg}/build/Cargo.toml"), &format!("[package]\nname = \"{pkg}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"));
+        w(&format!("{pkg}/build/src/lib.rs"), "pub fn f<T: Into<i64>>(x: T) -> i64 { x.into() + 1 }\npub fn g<T: Into<i64>>(x: T) -> i64 { x.into() * 2 }\n");
+    }
+    w(
+        "app/wj.toml",
+        "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\npkg_a = { path = \"../pkg_a/build\" }\npkg_b = { path = \"../pkg_b/build\" }\n",
+    );
+    w("app/src/main.wj", "use pkg_a\nuse pkg_b\n\nfn main() {\n    println(\"${pkg_a::g(1)} ${pkg_b::f(2)}\")\n}\n");
+    let app = tmp.path().join("app");
+    (tmp, app)
+}
+
+#[test]
+fn windjammer_path_dependencies_are_not_rust_crates() {
+    let (tmp, app) = windjammer_path_packages();
+    let run = |dir: &Path, args: &[&str]| {
+        let o = Command::new(WJ).args(args).current_dir(dir).env("NO_COLOR", "1").output().unwrap();
+        text(&o)
+    };
+    let out = app.join("out");
+    let build = run(&app, &["build", ".", "-o", out.to_str().unwrap(), "--no-cargo"]);
+    assert!(!build.contains("WJ0050") && !build.contains("signature surface"), "{build}");
+    assert!(!app.join(".wj-cache/rust-surfaces/pkg_b").exists() && !app.join(".wj-cache/rust-surfaces/pkg_a").exists());
+    for dir in [app.clone(), tmp.path().join("pkg_a")] {
+        let check = run(&dir, &["check", "."]);
+        assert!(!check.contains("W0014") && !check.contains("WJ0050"), "{}: {check}", dir.display());
+    }
+    // the same project with a real Rust crate next to it still classifies that one as Rust
+    let manifest = std::fs::read_to_string(app.join("wj.toml")).unwrap() + "strsim = \"0.11\"\n";
+    std::fs::write(app.join("wj.toml"), manifest).unwrap();
+    std::fs::write(app.join("src/main.wj"), "use pkg_b\nuse strsim\n\nfn main() {\n    println(\"${pkg_b::f(2)} ${strsim::levenshtein(\"a\", \"b\")}\")\n}\n").unwrap();
+    std::fs::remove_dir_all(app.join(".wj-cache")).ok();
+    let check = run(&app, &["check", "."]);
+    assert!(check.contains("W0014") && check.contains("`strsim`") && !check.contains("`pkg_b`"), "{check}");
+}
