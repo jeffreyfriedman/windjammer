@@ -235,14 +235,14 @@ pub fn register(r: &mut Registry) {
             Value::Str(s) => s.as_bytes().to_vec(),
             other => it.to_items(other)?.into_iter().filter_map(|v| if let Value::Int(n, _) = v { Some(n as u8) } else { None }).collect(),
         };
-        Ok(match std::fs::write(&*p, bytes) {
+        Ok(match super::std_sys::write_gated(it, &p, &bytes, false)? {
             Ok(()) => Value::ok(Value::Unit),
             Err(e) => io_err(e),
         })
     });
-    r.func("fs::remove_file", |_, a| {
+    r.func("fs::remove_file", |it, a| {
         let p = arg_str(&a, 0, "fs::remove_file")?;
-        Ok(match std::fs::remove_file(&*p) {
+        Ok(match super::std_sys::entry_gated(it, &p, crate::ir::effect_facts::grant::EntryOp::RemoveFile)? {
             Ok(()) => Value::ok(Value::Unit),
             Err(e) => io_err(e),
         })
@@ -401,11 +401,10 @@ fn register_std_modules(r: &mut Registry) {
     r.add_const("math::E", Value::float(std::f64::consts::E));
     r.func("fs::is_dir", |_, a| Ok(Value::Bool(std::path::Path::new(arg_str(&a, 0, "is_dir")?.as_str()).is_dir())));
     r.func("fs::is_file", |_, a| Ok(Value::Bool(std::path::Path::new(arg_str(&a, 0, "is_file")?.as_str()).is_file())));
-    r.func("fs::append", |_, a| {
-        use std::io::Write;
+    r.func("fs::append", |it, a| {
         let p = arg_str(&a, 0, "fs::append")?;
         let c = arg_str(&a, 1, "fs::append")?;
-        let r = std::fs::OpenOptions::new().append(true).create(true).open(&*p).and_then(|mut f| f.write_all(c.as_bytes()));
+        let r = super::std_sys::write_gated(it, &p, c.as_bytes(), true)?;
         Ok(match r {
             Ok(()) => Value::ok(Value::Unit),
             Err(e) => io_err(e),

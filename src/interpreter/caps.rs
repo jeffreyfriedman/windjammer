@@ -25,6 +25,14 @@ pub enum CapMode {
 /// `--caps warn|off` / `WJ_CAPS=warn|off` remain explicit opt-outs.
 pub const LOCAL_PROFILE_MODE: CapMode = CapMode::Enforce;
 
+/// What a gated write found: the checked handle, the finished operation, its error, or "do it by name" (no gate applies).
+pub enum WriteOpen {
+    File(std::fs::File),
+    Done,
+    Failed(std::io::Error),
+    ByName,
+}
+
 pub struct CapGate {
     /// The application's grant.
     pub grant: Grant,
@@ -328,6 +336,12 @@ impl Interpreter {
                 }
                 continue;
             }
+            if u.effect == EffectKind::FsWrite && sinks::FD_VERIFIED_WRITES.contains(&sinks::canonical(path).as_str()) {
+                if let Some(g) = self.caps.as_mut() {
+                    g.seen.insert(EffectKind::FsWrite);
+                }
+                continue;
+            }
             self.cap_decide(&u.effect, resource.as_deref())?;
         }
         Ok(())
@@ -391,6 +405,40 @@ impl Interpreter {
                 }
             }
         Ok(())
+    }
+
+    /// Open a file for writing under the gate, deciding on its parent directory's descriptor (see `Grant::open_write`).
+    pub(crate) fn cap_open_write(&mut self, path: &str, append: bool) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.open_write(path, append).map(|o| o.map(WriteOpen::File)))
+    }
+
+    /// `mkdir`, `unlink`, `rmdir` of one name under the gate (see `Grant::entry_op`); `Done` carries the operation's own result.
+    pub(crate) fn cap_entry_op(&mut self, path: &str, op: crate::ir::effect_facts::grant::EntryOp) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.entry_op(path, op).map(|o| o.map(|()| WriteOpen::Done)))
+    }
+
+    fn cap_checked_write(&mut self, run: impl FnOnce(&Grant) -> Result<Option<WriteOpen>, crate::ir::effect_facts::grant::OpenError>) -> R<WriteOpen> {
+        use crate::ir::effect_facts::grant::OpenError;
+        if self.caps.is_none() {
+            return Ok(WriteOpen::ByName);
+        }
+        let package = self.cap_package();
+        let Some(gate) = self.caps.as_mut() else { return Ok(WriteOpen::ByName) };
+        if !gate.seen.contains(&EffectKind::FsWrite) {
+            gate.seen.insert(EffectKind::FsWrite);
+        }
+        if gate.bypass > 0 {
+            return Ok(WriteOpen::ByName);
+        }
+        match run(gate.grant_for(package.as_deref())) {
+            Ok(Some(w)) => Ok(w),
+            Ok(None) => Ok(WriteOpen::ByName),
+            Err(OpenError::Io(e)) => Ok(WriteOpen::Failed(e)),
+            Err(OpenError::Denied(d)) => {
+                self.cap_denied(d, package)?;
+                Ok(WriteOpen::ByName)
+            }
+        }
     }
 
     /// Open a file for reading under the gate and decide on the path of the open file, not on the name (a name can be re-pointed
