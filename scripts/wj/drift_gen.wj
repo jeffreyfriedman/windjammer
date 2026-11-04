@@ -9,7 +9,7 @@
 // Rows (id <TAB> walker <TAB> resolved <TAB> compiled), like drift_corpus.wj:
 //   gen/seed-N          exit<N>:<bytes>:<checksum> of stdout under each engine (compiled: skip, or with --run-compiled)
 //   gen/seed-N#rustc    `typechecks` | `typechecks` | rustc's first error code for the generated Rust
-// The seed list is fixed (default 1..40), so rows are stable and the ledger can name them.
+// The seed list is fixed (default 1..60), so rows are stable and the ledger can name them.
 use std::env
 use std::fs
 use std::process
@@ -220,7 +220,7 @@ fn main() {
     let dir = args[2]
     let out = args[3]
     let mut lo = 1
-    let mut hi = 40
+    let mut hi = 60
     let mut compiled = false
     let mut i = 4
     while i < args.len() {
