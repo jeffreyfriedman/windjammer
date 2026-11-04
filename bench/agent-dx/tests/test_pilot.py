@@ -365,3 +365,21 @@ class GradeRetry(unittest.TestCase):
             calls["n"] += 1
             return {"status": "fail", "passed": 0, "total": 1, "categories": []}
         pilot.pair_with_retry(grade); self.assertEqual(calls["n"], 2)
+
+
+class ExitStatusLine(unittest.TestCase):
+    def test_shim_reports_a_nonzero_status_on_stderr_and_passes_it_through(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            real = fake_wj(d, 3, "boom")
+            shim.install(os.path.join(d, "bin"), real, os.path.join(d, "log"), os.path.join(d, "main.wj"))
+            r = subprocess.run([os.path.join(d, "bin", "wj"), "run", "x"], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 3)
+            self.assertIn("[exit 3]", r.stderr)
+            ok = fake_wj(d, 0, "fine")
+            shim.install(os.path.join(d, "bin2"), ok, os.path.join(d, "log"), os.path.join(d, "main.wj"))
+            r = subprocess.run([os.path.join(d, "bin2", "wj"), "run", "x"], capture_output=True, text=True)
+            self.assertNotIn("[exit", r.stderr)
+
+    def test_prompt_tells_the_agent_about_the_status_line(self):
+        self.assertIn("[exit N]", arms.head("wj"))
