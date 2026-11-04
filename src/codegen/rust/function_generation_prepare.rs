@@ -127,7 +127,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.borrowed_iterator_vars.clear();
 
         // Track function return type for string literal conversion
-        self.current_function_return_type = func.return_type.clone();
+        self.set_return_type_and_list_positions(func);
         // Propagate collection return type to `.collect()` turbofish when RHS lacks annotation.
         // Never use String/Option/etc. — those are not collect targets.
         self.collect_target_type = func
@@ -13070,5 +13070,21 @@ impl<'ast> CodeGenerator<'ast> {
             user_param_idx += 1;
         }
         updated.string_ref_string_formal_params = Some(string_ref_flags);
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Record the function's return type and which list literals sit in its return position (ADR-0014: a
+    /// list literal returned from a `Vec` function is a `Vec`).
+    fn set_return_type_and_list_positions(&mut self, func: &FunctionDecl<'ast>) {
+        self.current_function_return_type = func.return_type.clone();
+        self.idiom.return_position_list_literals = match func.return_type.as_ref() {
+            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::type_classification::type_is_vec_container(t) =>
+            {
+                Self::collect_return_position_lists(&func.body)
+            }
+            _ => Default::default(),
+        };
     }
 }

@@ -25,6 +25,11 @@ pub(crate) struct IdiomScratch {
     /// Functions of the standard library this file imports by name or through a glob
     /// (`use std::log::*` brings `debug`): they shadow a language intrinsic of the same name (ADR-0014).
     pub(crate) imported_std_fn_names: HashSet<String>,
+    /// Loop bindings that are `&str` slices (`for w in text.split_whitespace()`), live during the loop body.
+    pub(crate) str_slice_loop_vars: HashSet<String>,
+    /// ADR-0014: list literals (by element-slice address) in return position of a function whose
+    /// declared return type is a `Vec`: tail expressions, `return` values, `if`/`match` arm tails.
+    pub(crate) return_position_list_literals: HashSet<usize>,
 }
 
 impl<'ast> CodeGenerator<'ast> {

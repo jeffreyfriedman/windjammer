@@ -70,6 +70,7 @@ std/**/*.rs
 .wj-readiness-history.json
 scripts/**/__pycache__/
 /windjammer-ecosystem
+!src/cli/tmp_janitor.rs
 # Old local scratch directories (kept untracked, not tests)
 /tests/tmp_eco_repro/
 /tests/tmp_p335/

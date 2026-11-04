@@ -104,7 +104,7 @@ fn every_sink_of_an_authority_module_exists_in_the_compiled_runtime() {
     let mut missing = BTreeSet::new();
     for path in windjammer::ir::effect_facts::sinks::all_paths() {
         let Some((module, name)) = path.split_once("::") else { continue };
-        if !["fs", "process", "env", "subprocess"].contains(&module) || name.contains("::") {
+        if !["fs", "process", "env", "subprocess", "http"].contains(&module) || name.contains("::") {
             continue;
         }
         let src = std::fs::read_to_string(base.join(format!("{module}.rs"))).unwrap();

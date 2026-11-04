@@ -242,6 +242,22 @@
       "param_ownership": ["Borrowed"],
       "has_self_receiver": true
     },
+    "String::split_once": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Option(Tuple([Reference(Custom(\"str\")), Reference(Custom(\"str\"))]))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::rsplit_once": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Option(Tuple([Reference(Custom(\"str\")), Reference(Custom(\"str\"))]))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
     "String::strip_prefix": {
       "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
       "return_type": "Option(Reference(Custom(\"str\")))",
