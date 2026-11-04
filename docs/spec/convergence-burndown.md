@@ -86,6 +86,23 @@ shows the stages as `analyzer= solver= ir= emitted=`.
   convert a literal for an owned `String` formal; listed in `project_rejects.txt`), `param_rebound_then_compared`
   and `use_imported_homonym_by_value` (pass here; the larger-project failures they stand for did not reproduce).
 
+## Name-based guesses (decide from declarations instead)
+
+The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a
+fact from an identifier's spelling; each is a deletion target once the declaration-based fact exists.
+
+| site | guess | replacement |
+|---|---|---|
+| `codegen/rust/string_utilities.rs` `is_windjammer_string_const_name` | a constant named `SCOPE_*`, `AUDIT_*`, `PERIOD_STATUS_*` is a string | **deleted** (wt/c4-optc): `module_string_consts`, built from `const …: string` declarations in this and imported modules, already held every such constant; test `tests/string_const_by_declaration_test.rs` |
+| `module_system/mod.rs` (5 sites), `build_utils/module_generation.rs` (3 sites) | a module named `desktop_*` or `app_*` (except `app_reactive`) gets a desktop feature gate | a declaration on the module (an attribute or a `[features]` entry in `wj.toml`) |
+| `codegen/rust/stdlib_method_traits.rs:810`, `ir_call_site.rs:436/448`, `method_call_expression_generation/arguments.rs:914/986` | a receiver type named `SharedMap` / `SharedMapSI` (or ending so) is a lock-guarded map | the receiver's declared type (a type alias to `Mutex<HashMap<..>>` or the type's `Deref` target), from the type owner (C2/C3) |
+| `codegen/rust/function_formal_parameter_generation.rs:1466` | a debug trace filters on one function name | delete the filter (trace every function under the env flag) |
+| `codegen/rust/function_generation_prepare.rs:10735` | a `Custom("Vec<…>")` type spelled with `string` inside is a `Vec<string>` | parse the type (`parser_type_to_base_type`) instead of searching its text |
+| `codegen/rust/program_generation.rs:830` | a `@game` decorator selects a code path | check that `@game` is a declared language decorator (`decorator_registry`); otherwise delete |
+
+Language-level conventions that stay: test modules and files named `*_test` / `*_tests` (the test runner's documented
+rule) and std module names (`db`, `config`, `strings`).
+
 ## Deletion order
 
 1. Stop adding paints: each new width bug gets a solver fact first (rule in `docs/spec/inference.md`), then the legacy path
