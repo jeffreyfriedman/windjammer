@@ -106,7 +106,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_params = func.parameters.clone();
         self.current_field_moved_params = analyzed.field_moved_parameters.clone();
         self.current_function_name = Some(func.name.to_string());
-        // Combine inline bounds (<T: Foo>) and where clause for trait resolution
         let mut all_bounds: Vec<(String, Vec<String>)> = func
             .type_params
             .iter()
