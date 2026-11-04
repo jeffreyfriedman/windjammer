@@ -248,6 +248,11 @@ path = "tests/project_gates_test.rs"
 name = "rust_crate_interop"
 path = "tests/rust_crate_interop.rs"
 
+# ADR-0031 interpreter calls into Rust crates (crate host: equivalence, panics, replay, grants, simulate): cargo test --release --test interpreter_rust_crates
+[[test]]
+name = "interpreter_rust_crates"
+path = "tests/interpreter_rust_crates_test.rs"
+
 # ADR-0026 generator (wj rust-surface, cache surfaces, precedence, staleness, tracked-generated gate): cargo test --release --test rust_surface_generator
 [[test]]
 name = "rust_surface_generator"
