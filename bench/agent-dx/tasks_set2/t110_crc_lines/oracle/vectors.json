@@ -1,0 +1,230 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "hello\n123456789\n",
+  "stdout": "3610a686\ncbf43926\nlines: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "The quick brown fox\n",
+  "stdout": "b74574de\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "lines: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n",
+  "stdout": "00000000\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a\n\nb\n",
+  "stdout": "e8b7be43\n00000000\n71beeff9\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "no newline at end",
+  "stdout": "e45668c4\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "caf\u00e9 \u00fc\u00f1\n",
+  "stdout": "72ec40e1\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+  "stdout": "1b432d13\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": ";598\u00df851;d.60\u00df7 \u00e9\n9\n 2b7;f -badcbff3!26c;\nY8?!2\u00dfa5;c\u00dfe\n",
+  "stdout": "3c5555ca\n8d076785\n0f9a1516\ne1236ac1\nlines: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "058X--a9aZZ9-8;Z\u00df9ae7b\n\u00e9-78Z0_f0\n.f;2,_6!c?3,YY2-a4\n",
+  "stdout": "644485d9\n2f8d3a33\nac4e3be7\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6?ed1;\n?4a4e0bXYY0\u00e9791 \u00e9a0?!-:X\n9:X\n- .\u00dfec4bfd.:a!\n424\u00e921?e;3\u00e9.8,d-2\n\u00dfYd!-1.5:8 Y\n",
+  "stdout": "74e0e01f\ne9d3119e\n94e200b2\nee3ec2bd\n46fa67df\nf5bab918\nlines: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "_?70aX\n;-fb6?f-4a.\n_.96dY2!?!3bfb\n",
+  "stdout": "3faa927e\n9e3f6047\n3867ceb4\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\u00df28bY!:\u00dfb:-bd _?c2f86YX\n",
+  "stdout": "d4dbb3de\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "Z904a,5f,c9!.463bY4Y0\na b1Y1e9-00Z2e5\n72?X15X;b\u00df0:;05.:?:  ?3 7\n0bZ3_a9,eY52665\n",
+  "stdout": "03375aee\nceb214de\n591cb476\ne128eaf8\nlines: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1;e979,d:cX\u00e9,0.- 2;7!\nae250:624e?abc,7c\n9_d157;X5!\u00e9c;\n;_ec3\u00e96\nf b_:\u00e93de2f cdb58\n7ba?3f8a,b. ..69349c\u00e9\n",
+  "stdout": "76d0b410\na981823f\nd1fa89ad\n2fbb7707\n0488a347\na64f5438\nlines: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5,b0 :.e83Xef6_fb8\u00e9.:63\n. Y\na:\n.,!51,,8.c1\u00df\n_:9;b\u00e93?\u00e90-.b0;4\u00df2-\n",
+  "stdout": "6da05340\n4aa17f0a\nfb3391ab\n1714b702\nd0e85b2c\nlines: 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2f1c 8\n53,\u00e9bbd_7\n",
+  "stdout": "5182f369\naf4ef3f9\nlines: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": ";;e:,5!?-!3_d\nXb_4.4_\u00df?.Z,2_6f91f_!;\n 4 X__fc-c2e-!2.f2YZX\n.5d;7 \u00e9?5a8XXb\n0-27\u00e9\u00e9\n9-Y\u00df\n",
+  "stdout": "912d998c\n61d4c280\n3f09ebde\n6485d644\ne9baaebe\ndb41456e\nlines: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2.1-\u00df?3XfZbY2:-.\n",
+  "stdout": "3dd88e63\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4X.d5Z\n\ne272?ccfX3_d7fZ\n",
+  "stdout": "00f6a1bf\n00000000\n990c42cd\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": ";4:-a 43de_?.6\u00e9eZ11:?\n",
+  "stdout": "28f8073f\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": ".;YZ\n8062-\u00df!8cY\u00e9!_e8c81.b1\n63\u00df24e\nb2!69-fZe:,56\nb\u00e98_-_0Y\n",
+  "stdout": "a9505397\ncad00851\n3eba0e32\n8c3c7877\n18a577f2\nlines: 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5,,9f\u00df\u00e97a Ya3?;_Z8\ncZa\u00e9_,a-e\u00e94\ne70!948\nX Yc\n!d;6,1\n",
+  "stdout": "5b0b5107\n9f56d367\n5ca06e82\na872684e\n7ea32bab\nlines: 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "Yf1.!5:e-c555\ncZ!fe1?\n0eXfZ1eX\u00e9a!9d0-\u00df.Y\n6X1,::86Z3 cZbf82\u00df8669 \n8f;8\u00df0Z?Z,256ed -:1\n55Z1 ! ea\u00df\u00e9\u00e9e2d14-\u00df1Y\u00e9,\n",
+  "stdout": "341928f6\n56ec2fb8\nb0f4fd1c\n90f4e3c0\n2d5e4313\n42355c40\nlines: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ZX_f,!6-.,8Yd8!d?9b535,0Y\n,ZfaY!3?e9cX80;8:?7d83caZ\n\u00e92?b\u00e958.\u00e901b66?e?b?1\n,-e0;d._ c-335,f78\n4ZcY?149Y6\u00e9?-\u00df\n!Zb-9;Z_:69;0d.;9d\u00e9!8\n",
+  "stdout": "4ecb7a22\n08268953\n19566f72\n813b0bf8\n415ffb78\n76f4d42e\nlines: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 786\u00dfca-2!Y2Yda;\u00e9;\nd. d6\u00df2\u00e9\n",
+  "stdout": "66f578d0\n06bdb69b\nlines: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "!5\u00e9a_a25X-;:78c!20-\nd\u00df :YX\u00dff,?_Z 913;ebfe6 \na8Y5a_\u00e97Yaa9;Y\u00e9\u00df\n7:.Zf?-db_Xf!1-1,X93.\n",
+  "stdout": "f98e6fa7\n5dd5ddc0\n2a609fc0\nadc1d03c\nlines: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7X0,35e9d3-4!8_c!;\n4YXebd23bZ4\u00e9X0d.314,\n :,Y0\u00df77YY1;76,-a.Y\u00e9Yd0Y4\n",
+  "stdout": "03ed0c18\n7998b632\n619b2a50\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "--6!\n,2!?9Y2.-bZ:-\n\u00e90\u00e9c7e\n\nXZ X2fa5:cY.aYY8Xd7c\u00df\n",
+  "stdout": "86fcfc67\n63ca26bb\n3eda8ab3\n00000000\n2eaacc5b\nlines: 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n;c;3-_7,9X_\u00df\nX:847;aYf_3b_\nYX\u00e9aZZ7\u00e922b.9e\n;610b164282c0;f3\n",
+  "stdout": "6dd28e9b\n9f9a1bf5\ncacb8b2e\n7bca35e3\n3c1e56c6\nlines: 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "X!743-YY4Z645c,e6\n",
+  "stdout": "06eaa911\nlines: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5X.Z:;474\n89:e8!,9dZ.\n",
+  "stdout": "6891d65a\n43eec5b1\nlines: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5!7,fad1,.\n3\n763\u00df_33\u00e9\n78e8_\u00e9783\nc,:_;!3f_dX\u00e9?8Zb\n",
+  "stdout": "713a854e\n6dd28e9b\n1f24f62c\n15ae8649\nef0c95a1\nlines: 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1Z,0eXZ\u00e9a401f,\u00e9b9\nYbX!Y!cXe;!9.5f7X1Y 0,caZ\n5,\u00df.X\u00df,2;X -:0\u00e9c42;\n",
+  "stdout": "a932884c\n008b1dfe\naf13ded8\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "_YZ.0\ncb:\u00df\u00e9!7c;df1abe8!Z!1-1Y:0\n!9f22ddb\u00df,2bfZe\n",
+  "stdout": "86917dc9\nc06b1d29\na85a0b4c\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-a.X\u00df!;\u00df8\u00e9b_\u00dfc-YX514 \n_a: -\u00dfZ8\n;96c\n6eY\u00dfcf?-a12:X2\n",
+  "stdout": "c3345276\n9fac9dd6\n7073df34\na39660c2\nlines: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "80af;X17X899\n!f\nb04!2Z:f9\u00e908\u00e997\u00e9,ZY?\n",
+  "stdout": "313c945b\n6997c371\n28c59063\nlines: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "f?b1\u00df\n",
+  "stdout": "78ffd8c4\nlines: 1\n"
+ }
+]

@@ -1,0 +1,125 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "U",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": true,
+  "interp_pass": false,
+  "silent": false
+ },
+ "docs_calls": 1,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut n = 0\n    for line in text.lines() {\n        let h = crc32fast::hash(line.as_bytes())\n        println(\"${h:08x}\")\n        n += 1\n    }\n    println(\"lines: ${n}\")\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "first_turn_input": 8247,
+ "interp_grade": {
+  "categories": [
+   "unsupported"
+  ],
+  "passed": 0,
+  "status": "fail",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.009,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 1.862,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 27.1,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 2.95,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:31:18",
+ "schema": 2,
+ "task": "t110_crc_lines",
+ "thinking_seconds": 7.432,
+ "tool_result_tokens_est": 385,
+ "tool_wait_seconds": 1.87,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 7897,
+   "cache_write": 348,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8247,
+   "output": 16,
+   "result_chars": 218,
+   "turn": 1
+  },
+  {
+   "cache_read": 8245,
+   "cache_write": 200,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8447,
+   "output": 22,
+   "result_chars": 1131,
+   "turn": 2
+  },
+  {
+   "cache_read": 8445,
+   "cache_write": 973,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9420,
+   "output": 200,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 7.432,
+  "cost_usd": 0.0142247,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written and compiles. On Example 1 (`hello` and `123456789`) it printed `3610a686`, `cbf43926` and `lines: 2`, which matches the expected output. I didn't run Example 2 or any other input.\n\nIt reads all of standard input and calls `crc32fast::hash` on each line's bytes. It prints the checksum as 8 lowercase hex digits with leading zeros, then `lines: N` at the end.\n\nThe build printed ",
+  "subtype": "success",
+  "tokens_in": 26114,
+  "tokens_out": 567,
+  "turns": 4
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 12.25
+}

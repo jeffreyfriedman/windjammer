@@ -1,0 +1,155 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V",
+ "arm_name": "interpreted-first",
+ "capability_denials": 0,
+ "diag_samples": [
+  "invalid input"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "docs_calls": 1,
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "type `f64` cannot be dereferenced\nerror[E0614]: type `f64` cannot be dereferenced\n  --> main.rs:40:52\n   |\n40 |                 totals.insert(o.customer.clone(), (*cur + sum) as f32);\n   |                                                    ^^^^ can't be dereferenced\n\n"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 38
+ },
+ "final_source": "use std::fs\nuse std::json\nuse std::collections::HashMap\n\nstruct Item {\n    sku: string,\n    qty: int,\n    price: float,\n}\n\nstruct Order {\n    id: int,\n    customer: string,\n    items: Vec<Item>,\n    note: Option<string>,\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let parsed = json.parse_string::<Vec<Order>>(text)\n    match parsed {\n        Ok(orders) => {\n            let mut totals: HashMap<string, float> = HashMap::new()\n            for o in orders {\n                let mut sum = 0.0\n                for it in o.items {\n                    sum += (it.qty as float) * it.price\n                }\n                let cur = totals.get(o.customer).unwrap_or(0.0)\n                totals.insert(o.customer, cur + sum)\n            }\n            let mut names: Vec<string> = []\n            for k in totals.keys() {\n                names.push(k)\n            }\n            names.sort()\n            for n in names {\n                let t = totals.get(n).unwrap_or(0.0)\n                println(\"${n} ${t:.2}\")\n            }\n        }\n        Err(e) => {\n            println(\"invalid input\")\n            std::process::exit(1)\n        }\n    }\n}\n",
+ "first_source": "// Windjammer solution. Read stdin, write stdout. See PROMPT.md.\nfn main() {\n}\n",
+ "first_turn_input": 8498,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.008,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.29,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.146,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 35.0,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "original_final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 38
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "other_seconds": 4.08,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": false,
+ "recorded_at": "2026-11-04T00:30:21",
+ "regraded": true,
+ "schema": 2,
+ "task": "t101_json_orders",
+ "thinking_seconds": 9.162,
+ "tool_result_tokens_est": 187,
+ "tool_wait_seconds": 0.44,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 8149,
+   "cache_write": 347,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8498,
+   "output": 17,
+   "result_chars": 423,
+   "turn": 1
+  },
+  {
+   "cache_read": 8496,
+   "cache_write": 293,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8791,
+   "output": 7,
+   "result_chars": 231,
+   "turn": 2
+  },
+  {
+   "cache_read": 8789,
+   "cache_write": 1053,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9844,
+   "output": 221,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 9.162,
+  "cost_usd": 0.0207774,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.wj`. In the interpreter it handles Example 1 and empty input correctly. I didn't run Example 2, a missing `note`, or any other malformed input. I also didn't run `wj check`, and I didn't run the compiled build, as instructed.\n\n- **Example 1:** it printed `ann 18.00` and `bob 3.50`.\n- **Empty input:** it printed `invalid input` and exited with status 1.\n\nThe program pa",
+  "subtype": "success",
+  "tokens_in": 27133,
+  "tokens_out": 1145,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": null,
+ "wall_seconds": 13.69
+}

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "hello\n123456789\n",
+  "stdout": "3610a686\ncbf43926\nlines: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "The quick brown fox\n",
+  "stdout": "b74574de\nlines: 1\n"
+ }
+]

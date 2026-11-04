@@ -1,0 +1,455 @@
+[
+ {
+  "args": [
+   "a.txt"
+  ],
+  "files": {
+   "a.txt": "hello world\nfoo\n"
+  },
+  "stdin": "",
+  "stdout": "a.txt: 2 lines, 3 words\nreport:\na.txt 2 3\n"
+ },
+ {
+  "args": [
+   "x",
+   "gone",
+   "y"
+  ],
+  "code": 1,
+  "files": {
+   "x": "one two\n",
+   "y": "three\n\nfour five six\n"
+  },
+  "stdin": "",
+  "stdout": "x: 1 lines, 2 words\ngone: cannot read\ny: 3 lines, 4 words\nreport:\nx 1 2\ngone -\ny 3 4\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "usage: tally FILE...\n"
+ },
+ {
+  "args": [
+   "nothing"
+  ],
+  "code": 1,
+  "files": {},
+  "stdin": "",
+  "stdout": "nothing: cannot read\nreport:\nnothing -\n"
+ },
+ {
+  "args": [
+   "e",
+   "e"
+  ],
+  "files": {
+   "e": ""
+  },
+  "stdin": "",
+  "stdout": "e: 0 lines, 0 words\ne: 0 lines, 0 words\nreport:\ne 0 0\ne 0 0\n"
+ },
+ {
+  "args": [
+   "n"
+  ],
+  "files": {
+   "n": "no newline"
+  },
+  "stdin": "",
+  "stdout": "n: 0 lines, 2 words\nreport:\nn 0 2\n"
+ },
+ {
+  "args": [
+   "t"
+  ],
+  "files": {
+   "t": "a\tb  c\r\nd\n\n\n"
+  },
+  "stdin": "",
+  "stdout": "t: 4 lines, 4 words\nreport:\nt 4 4\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "\tab \nab \nab cdecde",
+   "f1.txt": "",
+   "f2.txt": " ab  "
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 2 lines, 4 words\nf0.txt: 2 lines, 4 words\nreport:\nf0.txt 2 4\nf0.txt 2 4\n"
+ },
+ {
+  "args": [
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {},
+  "stdin": "",
+  "stdout": "gone.txt: cannot read\nreport:\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f2.txt",
+   "f2.txt",
+   "f2.txt",
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": " \t\n\n\nab ab ",
+   "f1.txt": "\tx y\n \n\n\n\nx y\nx y\n cde",
+   "f2.txt": "x y\n \n\tab \tx y\n"
+  },
+  "stdin": "",
+  "stdout": "f2.txt: 3 lines, 5 words\nf2.txt: 3 lines, 5 words\nf2.txt: 3 lines, 5 words\nf2.txt: 3 lines, 5 words\nreport:\nf2.txt 3 5\nf2.txt 3 5\nf2.txt 3 5\nf2.txt 3 5\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "  x y\ncdecdeab x y\nx y\n"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 3 lines, 7 words\ngone.txt: cannot read\nreport:\nf0.txt 3 7\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": "x y\n\n \t\ncde\n",
+   "f1.txt": "x y\ncdeab ab ",
+   "f2.txt": "\nab  \nx y\n"
+  },
+  "stdin": "",
+  "stdout": "f2.txt: 3 lines, 3 words\nreport:\nf2.txt 3 3\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": " \tab ",
+   "f1.txt": "ab cde\nx y\nab ",
+   "f2.txt": " cde"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 0 lines, 1 words\nf2.txt: 0 lines, 1 words\nreport:\nf0.txt 0 1\nf2.txt 0 1\n"
+ },
+ {
+  "args": [
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "ab \nx y\n\t"
+  },
+  "stdin": "",
+  "stdout": "gone.txt: cannot read\nreport:\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\tcdeab ab ab  \n\n"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 2 lines, 3 words\ngone.txt: cannot read\ngone.txt: cannot read\nreport:\nf0.txt 2 3\ngone.txt -\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f2.txt",
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "\t ab ab cde cde  cde\t\t",
+   "f1.txt": " \n\tab ",
+   "f2.txt": "x y\n"
+  },
+  "stdin": "",
+  "stdout": "f2.txt: 1 lines, 2 words\nf1.txt: 1 lines, 1 words\nreport:\nf2.txt 1 2\nf1.txt 1 1\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f1.txt",
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": "cdecde",
+   "f1.txt": "ab ",
+   "f2.txt": ""
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 0 lines, 1 words\nf1.txt: 0 lines, 1 words\nf2.txt: 0 lines, 0 words\nreport:\nf0.txt 0 1\nf1.txt 0 1\nf2.txt 0 0\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f2.txt",
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": "ab cdex y\n\t\n\n  \n ",
+   "f1.txt": " \t\t",
+   "f2.txt": " ab x y\n\n\t "
+  },
+  "stdin": "",
+  "stdout": "f1.txt: 0 lines, 0 words\nf2.txt: 2 lines, 3 words\nf2.txt: 2 lines, 3 words\nreport:\nf1.txt 0 0\nf2.txt 2 3\nf2.txt 2 3\n"
+ },
+ {
+  "args": [
+   "f2.txt",
+   "f1.txt",
+   "gone.txt",
+   "f1.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\ncdeab cde\n x y\n",
+   "f1.txt": "ab ab ",
+   "f2.txt": "cdex y\n \ncdex y\n"
+  },
+  "stdin": "",
+  "stdout": "f2.txt: 3 lines, 4 words\nf1.txt: 0 lines, 2 words\ngone.txt: cannot read\nf1.txt: 0 lines, 2 words\nreport:\nf2.txt 3 4\nf1.txt 0 2\ngone.txt -\nf1.txt 0 2\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt",
+   "f0.txt",
+   "f1.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\tx y\nab ",
+   "f1.txt": "\tab cdecdex y\nab ab "
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 1 lines, 3 words\ngone.txt: cannot read\nf0.txt: 1 lines, 3 words\nf1.txt: 1 lines, 5 words\nreport:\nf0.txt 1 3\ngone.txt -\nf0.txt 1 3\nf1.txt 1 5\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f1.txt",
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "  ",
+   "f1.txt": "\n ab  \ncdecdecde\tcde"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 0 lines, 0 words\nf1.txt: 2 lines, 3 words\nf0.txt: 0 lines, 0 words\nf0.txt: 0 lines, 0 words\nreport:\nf0.txt 0 0\nf1.txt 2 3\nf0.txt 0 0\nf0.txt 0 0\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f1.txt",
+   "f2.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "ab ab ab ab x y\nab cde\n",
+   "f1.txt": "ab ",
+   "f2.txt": "\tcdex y\nab cde \n\tab "
+  },
+  "stdin": "",
+  "stdout": "f1.txt: 0 lines, 1 words\nf1.txt: 0 lines, 1 words\nf2.txt: 2 lines, 5 words\nf0.txt: 2 lines, 8 words\nreport:\nf1.txt 0 1\nf1.txt 0 1\nf2.txt 2 5\nf0.txt 2 8\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\t\n\t\t\tcde\nx y\n\nab x y\nab "
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 5 lines, 7 words\nf0.txt: 5 lines, 7 words\ngone.txt: cannot read\nreport:\nf0.txt 5 7\nf0.txt 5 7\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "x y\nab cde cde",
+   "f1.txt": "\t"
+  },
+  "stdin": "",
+  "stdout": "f1.txt: 0 lines, 0 words\nf1.txt: 0 lines, 0 words\nreport:\nf1.txt 0 0\nf1.txt 0 0\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt",
+   "f0.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": " \t ab cde\t x y\n\tab "
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 1 lines, 5 words\ngone.txt: cannot read\nf0.txt: 1 lines, 5 words\nreport:\nf0.txt 1 5\ngone.txt -\nf0.txt 1 5\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt",
+   "f1.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "cdex y\n\t\t x y\n\nab x y\n\n\n ",
+   "f1.txt": "ab \n"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 6 lines, 7 words\ngone.txt: cannot read\nf1.txt: 1 lines, 1 words\nreport:\nf0.txt 6 7\ngone.txt -\nf1.txt 1 1\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f1.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "ab ",
+   "f1.txt": "\t\n ",
+   "f2.txt": "\t "
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 0 lines, 1 words\nf1.txt: 1 lines, 0 words\ngone.txt: cannot read\nreport:\nf0.txt 0 1\nf1.txt 1 0\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f0.txt",
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "ab cdeab \n \t\t",
+   "f1.txt": "\n"
+  },
+  "stdin": "",
+  "stdout": "f1.txt: 1 lines, 0 words\nf0.txt: 1 lines, 2 words\nf0.txt: 1 lines, 2 words\nf0.txt: 1 lines, 2 words\nreport:\nf1.txt 1 0\nf0.txt 1 2\nf0.txt 1 2\nf0.txt 1 2\n"
+ },
+ {
+  "args": [
+   "gone.txt",
+   "f2.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\nx y\n\ncde cde",
+   "f1.txt": "\t\tcdex y\n\n \n\tab \n",
+   "f2.txt": "ab ab x y\n x y\nx y\n\t"
+  },
+  "stdin": "",
+  "stdout": "gone.txt: cannot read\nf2.txt: 3 lines, 8 words\nreport:\ngone.txt -\nf2.txt 3 8\n"
+ },
+ {
+  "args": [
+   "gone.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": " x y\ncdecde\n"
+  },
+  "stdin": "",
+  "stdout": "gone.txt: cannot read\ngone.txt: cannot read\nreport:\ngone.txt -\ngone.txt -\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt",
+   "f0.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "cdecde"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 0 lines, 1 words\ngone.txt: cannot read\nf0.txt: 0 lines, 1 words\nreport:\nf0.txt 0 1\ngone.txt -\nf0.txt 0 1\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "gone.txt",
+   "f1.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "",
+   "f1.txt": ""
+  },
+  "stdin": "",
+  "stdout": "f1.txt: 0 lines, 0 words\ngone.txt: cannot read\nf1.txt: 0 lines, 0 words\nreport:\nf1.txt 0 0\ngone.txt -\nf1.txt 0 0\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "\nab  ab cde  \n\nx y\n  ",
+   "f1.txt": ""
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 4 lines, 5 words\nf0.txt: 4 lines, 5 words\nf1.txt: 0 lines, 0 words\nreport:\nf0.txt 4 5\nf0.txt 4 5\nf1.txt 0 0\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f0.txt",
+   "f2.txt",
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "\n\nab cdex y\n x y\n ",
+   "f1.txt": "x y\nab x y\ncdex y\n \n\n\t\n ",
+   "f2.txt": "\tab cdecde \n  \t"
+  },
+  "stdin": "",
+  "stdout": "f1.txt: 6 lines, 7 words\nf0.txt: 4 lines, 5 words\nf2.txt: 1 lines, 2 words\nf1.txt: 6 lines, 7 words\nreport:\nf1.txt 6 7\nf0.txt 4 5\nf2.txt 1 2\nf1.txt 6 7\n"
+ },
+ {
+  "args": [
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "\t\tcdeab cde"
+  },
+  "stdin": "",
+  "stdout": "f0.txt: 0 lines, 2 words\nreport:\nf0.txt 0 2\n"
+ },
+ {
+  "args": [
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "cdecdecde"
+  },
+  "stdin": "",
+  "stdout": "gone.txt: cannot read\nreport:\ngone.txt -\n"
+ }
+]
