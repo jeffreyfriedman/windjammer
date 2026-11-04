@@ -70,3 +70,4 @@ tmp_*
 .wj-readiness-history.json
 scripts/**/__pycache__/
 /windjammer-ecosystem
+!src/cli/tmp_janitor.rs
