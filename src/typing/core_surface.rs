@@ -1,22 +1,26 @@
 //! The typed surface of the Rust core types (`std/rust_core.wji`): method signatures of `Vec`, `VecDeque`,
-//! `HashMap`, `BTreeMap`, `HashSet`, `BTreeSet`, `Option`, `Result` and `String`, in Windjammer types.
+//! `HashMap`, `BTreeMap`, `HashSet`, `BTreeSet`, `Option`, `Result`, `String` and the `f32` / `f64` math
+//! methods, in Windjammer types.
 //!
-//! Option C, stage C1 (docs/design/numeric-width-redesign.md section 7): the surface is data, parsed once with
-//! the Windjammer parser, and [`method_signature`] instantiates an entry for a receiver's static type (the
-//! type's generics from the receiver, a method's own generics from a turbofish). The numeric solver reads it
-//! for std method arguments and results instead of matching method names.
+//! Option C, stage C1 (docs/design/numeric-width-redesign.md section 7): the surface is data, parsed with the
+//! Windjammer parser into a [`CoreSurface`] that a compilation session owns (no global state), and
+//! [`CoreSurface::method_signature`] instantiates an entry for a receiver's static type (the type's generics from
+//! the receiver, a method's own generics from a turbofish). The numeric solver reads it for std method arguments
+//! and results instead of matching method names.
 
-use crate::parser::ast::core::{Item, TraitMethod};
+use crate::parser::ast::core::Item;
 use crate::parser::Type;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 
 const SURFACE: &str = include_str!("../../std/rust_core.wji");
 
-/// One declared method: the generics of its type, the method.
+/// One declared method: the generics of its type and of the method, the parameter types (no receiver), the result.
+#[derive(Debug, Clone)]
 struct Entry {
     type_generics: Vec<String>,
-    method: &'static TraitMethod<'static>,
+    method_generics: Vec<String>,
+    params: Vec<Type>,
+    ret: Option<Type>,
 }
 
 /// An instantiated signature. A type the receiver or the turbofish does not fix stays `Type::Generic`.
@@ -27,36 +31,65 @@ pub struct MethodSig {
     pub ret: Option<Type>,
 }
 
-fn table() -> &'static BTreeMap<(String, String), Entry> {
-    static TABLE: OnceLock<BTreeMap<(String, String), Entry>> = OnceLock::new();
-    TABLE.get_or_init(|| {
+/// The parsed surface, keyed by (type, method).
+#[derive(Debug, Clone)]
+pub struct CoreSurface {
+    table: BTreeMap<(String, String), Entry>,
+}
+
+impl CoreSurface {
+    /// Parse `std/rust_core.wji` (embedded in the compiler).
+    pub fn parse() -> Self {
         let tokens = crate::lexer::Lexer::new(SURFACE).tokenize_with_locations();
         let program = crate::parser_impl::Parser::new(tokens).parse().expect("std/rust_core.wji parses");
-        let program: &'static _ = Box::leak(Box::new(program));
-        let mut out = BTreeMap::new();
+        let mut table = BTreeMap::new();
         for item in &program.items {
             if let Item::Trait { decl, .. } = item {
                 for m in &decl.methods {
-                    let entry = Entry { type_generics: decl.generics.clone(), method: m };
-                    out.insert((decl.name.clone(), m.name.clone()), entry);
+                    let entry = Entry {
+                        type_generics: decl.generics.clone(),
+                        method_generics: m.type_params.iter().map(|t| t.name.clone()).collect(),
+                        params: m.parameters.iter().filter(|p| p.name != "self").map(|p| p.type_.clone()).collect(),
+                        ret: m.return_type.clone(),
+                    };
+                    table.insert((decl.name.clone(), m.name.clone()), entry);
                 }
             }
         }
-        out
-    })
-}
+        Self { table }
+    }
 
-/// Every declared `(type, method)` pair, sorted (for the rustc agreement gate and the docs).
-pub fn entries() -> Vec<(String, String)> {
-    table().keys().cloned().collect()
-}
+    /// Every declared `(type, method)` pair, sorted (for the rustc agreement gate and the docs).
+    pub fn entries(&self) -> Vec<(String, String)> {
+        self.table.keys().cloned().collect()
+    }
 
-/// The declared signature of `type_name::method`, uninstantiated: (type generics, method generics, params, ret).
-pub fn declared(type_name: &str, method: &str) -> Option<(Vec<String>, Vec<String>, Vec<Type>, Option<Type>)> {
-    let e = table().get(&(type_name.to_string(), method.to_string()))?;
-    let params = e.method.parameters.iter().filter(|p| p.name != "self").map(|p| p.type_.clone()).collect();
-    let method_generics = e.method.type_params.iter().map(|t| t.name.clone()).collect();
-    Some((e.type_generics.clone(), method_generics, params, e.method.return_type.clone()))
+    /// The declared signature of `type_name::method`, uninstantiated: (type generics, method generics, params, ret).
+    #[allow(clippy::type_complexity)]
+    pub fn declared(&self, type_name: &str, method: &str) -> Option<(Vec<String>, Vec<String>, Vec<Type>, Option<Type>)> {
+        let e = self.table.get(&(type_name.to_string(), method.to_string()))?;
+        Some((e.type_generics.clone(), e.method_generics.clone(), e.params.clone(), e.ret.clone()))
+    }
+
+    /// The signature of `receiver.method::<turbofish>(..)`, instantiated, or `None` when the receiver is not a
+    /// surface type or the method is not declared for it. Generics left unfixed come back as `Type::Generic`.
+    pub fn method_signature(&self, receiver: &Type, method: &str, turbofish: &[Type]) -> Option<MethodSig> {
+        let (name, type_args) = head(receiver)?;
+        let (type_generics, method_generics, params, ret) = self.declared(name, method)?;
+        let mut names = type_generics;
+        let mut args = type_args;
+        args.resize(names.len(), Type::Infer);
+        for (i, g) in method_generics.iter().enumerate() {
+            names.push(g.clone());
+            args.push(turbofish.get(i).cloned().unwrap_or(Type::Infer));
+        }
+        // An unfixed generic (no receiver argument, no turbofish) stays generic.
+        let args: Vec<Type> = args.into_iter().zip(&names).map(|(a, n)| if a == Type::Infer { Type::Generic(n.clone()) } else { a }).collect();
+        Some(MethodSig {
+            params: params.iter().map(|p| substitute(p, &names, &args)).collect(),
+            ret: ret.map(|r| substitute(&r, &names, &args)),
+        })
+    }
 }
 
 /// The surface type a receiver type names, with its type arguments (`&Vec<int>` -> `Vec`, `[int]`).
@@ -94,29 +127,17 @@ fn substitute(t: &Type, names: &[String], args: &[Type]) -> Type {
     }
 }
 
-/// The signature of `receiver.method::<turbofish>(..)`, instantiated, or `None` when the receiver is not a
-/// surface type or the method is not declared for it. Generics left unfixed come back as `Type::Generic`.
-pub fn method_signature(receiver: &Type, method: &str, turbofish: &[Type]) -> Option<MethodSig> {
-    let (name, type_args) = head(receiver)?;
-    let (type_generics, method_generics, params, ret) = declared(name, method)?;
-    let mut names = type_generics;
-    let mut args = type_args;
-    args.resize(names.len(), Type::Infer);
-    for (i, g) in method_generics.iter().enumerate() {
-        names.push(g.clone());
-        args.push(turbofish.get(i).cloned().unwrap_or(Type::Infer));
-    }
-    // An unfixed generic (no receiver argument, no turbofish) stays generic.
-    let args: Vec<Type> = args.into_iter().zip(&names).map(|(a, n)| if a == Type::Infer { Type::Generic(n.clone()) } else { a }).collect();
-    Some(MethodSig {
-        params: params.iter().map(|p| substitute(p, &names, &args)).collect(),
-        ret: ret.map(|r| substitute(&r, &names, &args)),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn method_signature(receiver: &Type, method: &str, turbofish: &[Type]) -> Option<MethodSig> {
+        CoreSurface::parse().method_signature(receiver, method, turbofish)
+    }
+
+    fn entries() -> Vec<(String, String)> {
+        CoreSurface::parse().entries()
+    }
 
     fn vec_of(t: Type) -> Type {
         Type::Vec(Box::new(t))

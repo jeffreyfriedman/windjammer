@@ -76,6 +76,7 @@ pub const RULES: &[Rule] = rules![
     ("NUM-INDEX", Number, "Indexing and `len()` accept and produce `int` through a checked conversion"),
     ("NUM-USIZE", Number, "An integer class with no exact width that meets an index source or use is `usize`"),
     ("NUM-USIZE-TO-INT", Number, "A `usize` value entering a slot of another integer width is converted at that site"),
+    ("NUM-STD-SIG", Number, "A core-type method's argument and result have the types its typed surface declares"),
     ("NUM-MIXED", Number, "Mixed-width arithmetic requires an explicit conversion"),
     ("NUM-CAST", Number, "`as` fixes the width of its result"),
     ("NUM-LITERAL", Number, "Literal of a non-numeric kind"),
