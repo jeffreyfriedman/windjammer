@@ -792,7 +792,7 @@ pub fn is_map_deref_wrapper_type_name(base: &str) -> bool {
 /// Stdlib `HashMap::{method}` when the receiver is a map / map Deref wrapper, or when
 /// the receiver type is unknown but `method` has conflicting first-arg ownership
 /// (Owned vs Borrowed) across types — multipass `Ok(g)` after `Mutex::lock` often
-/// fails to name `MutexGuard<HashMap<…>>` (P3.576 / wj-sync SharedMapSI).
+/// fails to name `MutexGuard<HashMap<…>>` (P3.576).
 pub fn hashmap_key_method_signature_for_wrapper(
     method: &str,
     receiver_type: Option<&str>,
@@ -805,15 +805,8 @@ pub fn hashmap_key_method_signature_for_wrapper(
     match receiver_type {
         Some(rt) => {
             let base = rt.split('<').next().unwrap_or(rt);
-            // `SharedMap` / aliases: lock-guard bindings are sometimes inferred as the
-            // outer map handle (wj-sync multipass) rather than `MutexGuard<HashMap<…>>`.
-            let shared_map_handle = base == "SharedMap"
-                || base == "SharedMapSI"
-                || base.ends_with("SharedMap")
-                || base.ends_with("SharedMapSI");
             if !is_map_deref_wrapper_type_name(base)
                 && !is_map_type_name(base)
-                && !shared_map_handle
             {
                 return None;
             }
