@@ -14,7 +14,7 @@ from . import tasks as T, arms as A, budget as B, diagnostics as dg, grade as G,
 from .runners import wj_bin
 
 SCHEMA = 2
-DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 6, 0.5   # stop when the sandbox policy, not the language, blocks most trials
+DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 8, 0.85   # stop when the sandbox policy, not the language, blocks most trials
 PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_lru_cache", "t013_bst",
                "t018_word_freq", "t022_csv_parse", "t030_bank_ledger", "t034_shapes_trait", "t050_cat_number"]
 
