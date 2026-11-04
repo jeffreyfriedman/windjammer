@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ann login 5\nbob login 3\nann edit 40\nann edit 2\nbob logout 1\n",
+  "stdout": "ann 3 47 edit\nbob 2 4 login\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x a 1\nbad line\ny b -4\n",
+  "stdout": "x 1 1 a\nmalformed: 2\n"
+ }
+]

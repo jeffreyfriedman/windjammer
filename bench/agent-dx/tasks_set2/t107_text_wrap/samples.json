@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10\nthe quick brown fox jumps over the lazy dog\n",
+  "stdout": "the quick\nbrown fox\njumps over\nthe lazy\ndog\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nabcdefgh ij k\n",
+  "stdout": "abcdefgh\nij k\n"
+ }
+]

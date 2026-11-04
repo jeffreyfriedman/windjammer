@@ -1,0 +1,218 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pen 3 150 plain\nink 10 999 bulk\ncap 4 2000 member\n",
+  "stdout": "pen $4.50\nink $89.91\ncap $75.00\ntotal $169.41\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "odd 1 5 gold\nx 0 100 plain\n",
+  "stdout": "odd invalid kind\nx $0.00\ntotal $0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "total $0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a 9 100 bulk\nb 10 100 bulk\n\nc 2 99 member\nd 3 100 member\n",
+  "stdout": "a $9.00\nb $9.00\nc $1.89\nd $1.85\ntotal $21.74\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "m 3 10 member\n",
+  "stdout": "m $0.00\ntotal $0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "z 1000 1999 bulk\n",
+  "stdout": "z $17991.00\ntotal $17991.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 0 0 plain\ncap 1 150 member\ncap 2 1999 member\nbox 4 99 plain\nink 9 150 member\nbox 11 99 plain\n",
+  "stdout": "cap $0.00\ncap $1.43\ncap $37.99\nbox $3.96\nink $11.83\nbox $10.89\ntotal $66.10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pen 11 99 vip\nink 9 0 plain\nink 9 0 plain\n",
+  "stdout": "pen invalid kind\nink $0.00\nink $0.00\ntotal $0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 4 0 bulk\npen 13 99 bulk\ncap 3 5 vip\npen 13 99 plain\n",
+  "stdout": "box $0.00\npen $11.59\ncap invalid kind\npen $12.87\ntotal $24.46\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 8 0 vip\npen 13 1999 plain\nink 12 5 vip\npen 8 99 plain\nink 13 1999 plain\n",
+  "stdout": "ink invalid kind\npen $259.87\nink invalid kind\npen $7.92\nink $259.87\ntotal $527.66\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 2 0 member\nink 11 99 plain\npen 13 0 bulk\n",
+  "stdout": "ink $0.00\nink $10.89\npen $0.00\ntotal $10.89\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 9 5 plain\npen 0 99 bulk\nbox 1 5 plain\n",
+  "stdout": "box $0.45\npen $0.00\nbox $0.05\ntotal $0.50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 5 1999 member\nbox 7 0 plain\nbox 5 1999 member\nink 7 0 bulk\n",
+  "stdout": "box $93.96\nbox $0.00\nbox $93.96\nink $0.00\ntotal $187.92\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 14 150 plain\ncap 1 1999 bulk\ncap 11 150 member\npen 12 5 plain\ncap 4 5 bulk\nink 9 5 plain\n",
+  "stdout": "cap $21.00\ncap $19.99\ncap $14.68\npen $0.60\ncap $0.20\nink $0.45\ntotal $56.92\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pen 13 5 plain\npen 15 150 member\npen 11 0 vip\nink 8 150 member\nbox 2 99 bulk\n",
+  "stdout": "pen $0.65\npen $20.38\npen invalid kind\nink $10.40\nbox $1.98\ntotal $33.41\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 1 0 bulk\npen 6 5 bulk\npen 11 5 bulk\n",
+  "stdout": "ink $0.00\npen $0.30\npen $0.50\ntotal $0.80\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 8 150 bulk\nink 11 150 vip\ncap 11 5 vip\ncap 8 1999 plain\nbox 6 150 plain\ncap 9 99 vip\n",
+  "stdout": "cap $12.00\nink invalid kind\ncap invalid kind\ncap $159.92\nbox $9.00\ncap invalid kind\ntotal $180.92\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 11 1999 plain\ncap 12 99 plain\npen 10 99 vip\nink 10 99 plain\nbox 14 0 bulk\n",
+  "stdout": "box $219.89\ncap $11.88\npen invalid kind\nink $9.90\nbox $0.00\ntotal $241.67\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 12 150 vip\npen 6 1999 member\nink 8 5 vip\nink 3 5 bulk\n",
+  "stdout": "ink invalid kind\npen $112.95\nink invalid kind\nink $0.15\ntotal $113.10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 13 150 plain\nink 9 5 plain\nbox 4 99 plain\ncap 3 5 member\nbox 5 1999 bulk\nbox 13 5 plain\n",
+  "stdout": "ink $19.50\nink $0.45\nbox $3.96\ncap $0.00\nbox $99.95\nbox $0.65\ntotal $124.51\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 9 99 bulk\n",
+  "stdout": "cap $8.91\ntotal $8.91\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 11 1999 bulk\n",
+  "stdout": "ink $197.91\ntotal $197.91\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 14 1999 bulk\nink 9 1999 member\ncap 3 99 plain\nbox 9 0 plain\n",
+  "stdout": "cap $251.88\nink $169.92\ncap $2.97\nbox $0.00\ntotal $424.77\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 0 99 member\nink 8 0 member\npen 2 1999 bulk\ncap 7 1999 plain\npen 7 150 bulk\n",
+  "stdout": "box $0.00\nink $0.00\npen $39.98\ncap $139.93\npen $10.50\ntotal $190.41\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 5 99 member\nink 4 0 plain\nbox 6 0 member\nbox 10 99 vip\nink 10 5 member\n",
+  "stdout": "cap $3.71\nink $0.00\nbox $0.00\nbox invalid kind\nink $0.00\ntotal $3.71\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 6 150 plain\ncap 2 150 plain\npen 10 1999 plain\npen 6 99 bulk\nbox 7 1999 plain\n",
+  "stdout": "ink $9.00\ncap $3.00\npen $199.90\npen $5.94\nbox $139.93\ntotal $357.77\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 12 99 plain\ncap 5 99 plain\nbox 9 150 member\npen 11 150 plain\ncap 8 0 vip\ncap 10 99 vip\n",
+  "stdout": "ink $11.88\ncap $4.95\nbox $11.83\npen $16.50\ncap invalid kind\ncap invalid kind\ntotal $45.16\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cap 9 1999 bulk\n",
+  "stdout": "cap $179.91\ntotal $179.91\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pen 3 5 member\npen 1 0 plain\n",
+  "stdout": "pen $0.00\npen $0.00\ntotal $0.00\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 0 5 plain\nink 7 5 plain\npen 8 1999 plain\n",
+  "stdout": "ink $0.00\nink $0.35\npen $159.92\ntotal $160.27\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ink 11 5 member\npen 10 99 member\npen 10 150 vip\npen 3 150 bulk\n",
+  "stdout": "ink $0.00\npen $8.41\npen invalid kind\npen $4.50\ntotal $12.91\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 1 0 plain\nbox 13 99 plain\nink 14 0 member\npen 1 150 member\ncap 1 0 bulk\nink 12 1999 bulk\n",
+  "stdout": "box $0.00\nbox $12.87\nink $0.00\npen $1.43\ncap $0.00\nink $215.90\ntotal $230.20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pen 9 0 vip\npen 4 5 bulk\nbox 1 1999 plain\nbox 11 99 plain\n",
+  "stdout": "pen invalid kind\npen $0.20\nbox $19.99\nbox $10.89\ntotal $31.08\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 13 1999 member\nbox 15 0 plain\nbox 12 5 plain\nink 4 150 bulk\nink 6 150 plain\npen 14 150 plain\n",
+  "stdout": "box $245.88\nbox $0.00\nbox $0.60\nink $6.00\nink $9.00\npen $21.00\ntotal $282.48\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 0 1999 vip\nbox 8 1999 member\nink 8 0 plain\npen 9 0 vip\ncap 14 5 member\n",
+  "stdout": "box invalid kind\nbox $150.93\nink $0.00\npen invalid kind\ncap $0.00\ntotal $150.93\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "box 7 1999 bulk\nbox 13 0 vip\n",
+  "stdout": "box $139.93\nbox invalid kind\ntotal $139.93\n"
+ }
+]
