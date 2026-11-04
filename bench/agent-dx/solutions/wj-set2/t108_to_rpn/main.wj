@@ -60,7 +60,7 @@ fn to_rpn(toks: Vec<string>) -> Option<string> {
                 out.push(st.pop().unwrap_or(""))
             }
             if st.len() == 0 { return None }
-            st.pop()
+            let _ = st.pop()
         } else {
             if want_operand { return None }
             while st.len() > 0 && st[st.len() - 1] != "(" && (prec(st[st.len() - 1]) > prec(t) || (prec(st[st.len() - 1]) == prec(t) && t != "^")) {

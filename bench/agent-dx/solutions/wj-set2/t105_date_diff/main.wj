@@ -27,9 +27,9 @@ fn parse_date(s: string) -> int {
     let cs: Vec<char> = s.chars().collect()
     if cs.len() != 10 { return -1 }
     if cs[4] != '-' || cs[7] != '-' { return -1 }
-    let ys: string = s[0..4]
-    let ms: string = s[5..7]
-    let ds: string = s[8..10]
+    let ys: string = s[0..4].to_string()
+    let ms: string = s[5..7].to_string()
+    let ds: string = s[8..10].to_string()
     if !all_digits(ys) || !all_digits(ms) || !all_digits(ds) { return -1 }
     let y = ys.parse::<int>().unwrap_or(0)
     let m = ms.parse::<int>().unwrap_or(0)
