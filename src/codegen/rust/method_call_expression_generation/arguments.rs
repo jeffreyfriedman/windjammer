@@ -907,12 +907,6 @@ impl<'ast> CodeGenerator<'ast> {
                     || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
-                    // P3.660 / wj-sync: lock-guard bindings sometimes infer as the outer
-                    // SharedMap alias rather than `MutexGuard<HashMap<…>>`.
-                    || base == "SharedMap"
-                    || base == "SharedMapSI"
-                    || base.ends_with("SharedMap")
-                    || base.ends_with("SharedMapSI")
             });
             // Field access with unknown type: still try collection-key finalize when
             // the resolved method signature already looks like a map-key borrow.
@@ -981,10 +975,6 @@ impl<'ast> CodeGenerator<'ast> {
                     || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
-                    || base == "SharedMap"
-                    || base == "SharedMapSI"
-                    || base.ends_with("SharedMap")
-                    || base.ends_with("SharedMapSI")
             });
             let wrapper_keeps_key = crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
                 method,
