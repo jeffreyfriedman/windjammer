@@ -296,7 +296,7 @@ pub static ERRORS: &[CodeInfo] = &[
         category: C::Type,
         origin: O::FrontEnd,
         maturity: "high_confidence",
-        rust_codes: &["E0369", "E0368", "E0600", "E0604", "E0606"],
+        rust_codes: &["E0369", "E0368", "E0600", "E0604", "E0605", "E0606"],
         explanation: "A binary, unary or cast operator is used with operand types it does not support.",
         cause: "Mixing numbers with strings or structs, or comparing values that cannot be compared.",
         fix: "Convert the operands to a common type first.",

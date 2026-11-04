@@ -296,6 +296,12 @@ path = "tests/effects_escape_test.rs"
 name = "effects_compiled"
 path = "tests/effects_compiled_test.rs"
 
+# Reads decide on the open file; checked-only names are stale for at most the TTL (stress against a swapped link)
+#   cargo test --release --test effects_fd_verify
+[[test]]
+name = "effects_fd_verify"
+path = "tests/effects_fd_verify_test.rs"
+
 # Every OS-touching runtime function reaches a capability check (ADR-0021)
 #   cargo test --release --test effects_runtime_audit
 [[test]]
