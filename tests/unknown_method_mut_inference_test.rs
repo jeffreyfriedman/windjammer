@@ -10,6 +10,9 @@
     feature = "analyzer_tests",
 ))]
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::Path;
 use std::process::Command;
 
@@ -18,7 +21,7 @@ fn compile_wj_to_rust(source: &str) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let test_dir = std::env::temp_dir().join(format!("wj_unknown_method_mut_test_{}", test_id));
+    let test_dir = Scratch::new("unknown_method_mut_test");
     let _ = std::fs::remove_dir_all(&test_dir);
     let _ = std::fs::create_dir_all(&test_dir);
 
@@ -45,7 +48,7 @@ fn compile_wj_to_rust(source: &str) -> String {
         }
     }
     // Fallback: find any .rs file
-    for dir in &[test_dir.join("build"), test_dir.clone()] {
+    for dir in &[test_dir.join("build"), test_dir.to_path_buf()] {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 if entry.path().extension().map(|x| x == "rs").unwrap_or(false) {

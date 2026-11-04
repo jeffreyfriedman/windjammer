@@ -10,6 +10,8 @@ REAL, LOG, SRC = %(real)r, %(log)r, %(src)r
 t0 = time.time()
 p = subprocess.run([REAL] + sys.argv[1:], capture_output=True, text=True)
 sys.stdout.write(p.stdout); sys.stderr.write(p.stderr)
+if p.returncode != 0:
+    sys.stderr.write("[exit %%d]\\n" %% p.returncode)   # the sandbox forbids `$?`: this is how an agent sees a status
 try:
     src = open(SRC).read()[:20000]
 except OSError:

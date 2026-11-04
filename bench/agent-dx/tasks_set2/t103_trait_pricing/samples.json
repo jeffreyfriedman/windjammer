@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pen 3 150 plain\nink 10 999 bulk\ncap 4 2000 member\n",
+  "stdout": "pen $4.50\nink $89.91\ncap $75.00\ntotal $169.41\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "odd 1 5 gold\nx 0 100 plain\n",
+  "stdout": "odd invalid kind\nx $0.00\ntotal $0.00\n"
+ }
+]

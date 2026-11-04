@@ -1,0 +1,232 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10\nthe quick brown fox jumps over the lazy dog\n",
+  "stdout": "the quick\nbrown fox\njumps over\nthe lazy\ndog\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nabcdefgh ij k\n",
+  "stdout": "abcdefgh\nij k\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "0\nx\n",
+  "stdout": "error: bad width\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "abc\nx\n",
+  "stdout": "error: bad width\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\na  b\tc\n\n d\n",
+  "stdout": "a b\nc d\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\na b c\n",
+  "stdout": "a\nb\nc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "20\nexactly twenty chars!! and more\n",
+  "stdout": "exactly twenty\nchars!! and more\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nccc eeeee eeeee bb ccc bb bb ffffffffff\n",
+  "stdout": "ccc\neeeee\neeeee\nbb\nccc\nbb\nbb\nffffffffff\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nccc bb\nffffffffff eeeee bb ccc dddd eeeee a dddd\n",
+  "stdout": "ccc bb\nffffffffff\neeeee\nbb ccc\ndddd\neeeee\na dddd\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\na dddd ffffffffff ffffffffff ccc\n",
+  "stdout": "a dddd\nffffffffff\nffffffffff\nccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7\n\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "11\nffffffffff ffffffffff a ccc bb\n",
+  "stdout": "ffffffffff\nffffffffff\na ccc bb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "14\na eeeee ccc bb bb a dddd ccc\n\nbb dddd dddd\n",
+  "stdout": "a eeeee ccc bb\nbb a dddd ccc\nbb dddd dddd\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\na bb eeeee\neeeee ffffffffff a\n",
+  "stdout": "a\nbb\neeeee\neeeee\nffffffffff\na\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nffffffffff\n\ndddd\n",
+  "stdout": "ffffffffff\ndddd\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12\na dddd eeeee dddd bb\na bb eeeee dddd ccc\n",
+  "stdout": "a dddd eeeee\ndddd bb a bb\neeeee dddd\nccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\neeeee\nffffffffff eeeee ccc ffffffffff a eeeee ffffffffff eeeee\n",
+  "stdout": "eeeee\nffffffffff\neeeee\nccc\nffffffffff\na\neeeee\nffffffffff\neeeee\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12\n\neeeee bb ccc\na ffffffffff dddd ffffffffff a\n",
+  "stdout": "eeeee bb ccc\na ffffffffff\ndddd\nffffffffff a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\ndddd ffffffffff bb\n",
+  "stdout": "dddd\nffffffffff\nbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\na a eeeee ccc eeeee a\n",
+  "stdout": "a a\neeeee\nccc\neeeee\na\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\neeeee\ndddd dddd ffffffffff bb\nccc\n",
+  "stdout": "eeeee\ndddd\ndddd\nffffffffff\nbb\nccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "14\na eeeee dddd ffffffffff bb\nccc dddd dddd ffffffffff a eeeee\n",
+  "stdout": "a eeeee dddd\nffffffffff bb\nccc dddd dddd\nffffffffff a\neeeee\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "14\nbb dddd\nbb ffffffffff eeeee bb eeeee bb\n",
+  "stdout": "bb dddd bb\nffffffffff\neeeee bb eeeee\nbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9\na a ffffffffff eeeee ffffffffff\n",
+  "stdout": "a a\nffffffffff\neeeee\nffffffffff\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9\neeeee ffffffffff bb dddd\nccc\n",
+  "stdout": "eeeee\nffffffffff\nbb dddd\nccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7\nffffffffff bb\n",
+  "stdout": "ffffffffff\nbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9\neeeee dddd ccc dddd ccc eeeee ccc bb\nccc\n",
+  "stdout": "eeeee\ndddd ccc\ndddd ccc\neeeee ccc\nbb ccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\neeeee dddd a a bb bb ccc a\n",
+  "stdout": "eeeee\ndddd\na a\nbb\nbb\nccc\na\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\n\na bb ffffffffff ffffffffff bb ccc ffffffffff\n",
+  "stdout": "a bb\nffffffffff\nffffffffff\nbb ccc\nffffffffff\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\neeeee ffffffffff ffffffffff a ccc dddd\n",
+  "stdout": "eeeee\nffffffffff\nffffffffff\na ccc\ndddd\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9\neeeee dddd dddd eeeee bb dddd bb eeeee\nccc eeeee dddd a dddd\n",
+  "stdout": "eeeee\ndddd dddd\neeeee bb\ndddd bb\neeeee ccc\neeeee\ndddd a\ndddd\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nffffffffff bb\ndddd\n",
+  "stdout": "ffffffffff\nbb\ndddd\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\ndddd eeeee dddd eeeee ffffffffff ccc eeeee eeeee\nbb ffffffffff bb ffffffffff ffffffffff\ndddd bb bb\n",
+  "stdout": "dddd\neeeee\ndddd\neeeee\nffffffffff\nccc\neeeee\neeeee bb\nffffffffff\nbb\nffffffffff\nffffffffff\ndddd bb\nbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\na ccc ffffffffff\n",
+  "stdout": "a\nccc\nffffffffff\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12\nffffffffff eeeee eeeee ccc ccc ffffffffff bb\n",
+  "stdout": "ffffffffff\neeeee eeeee\nccc ccc\nffffffffff\nbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\nffffffffff\nbb ffffffffff dddd ccc\n",
+  "stdout": "ffffffffff\nbb\nffffffffff\ndddd ccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9\ndddd dddd eeeee ffffffffff dddd\neeeee ccc a\ndddd a ffffffffff a a bb dddd dddd\n",
+  "stdout": "dddd dddd\neeeee\nffffffffff\ndddd\neeeee ccc\na dddd a\nffffffffff\na a bb\ndddd dddd\n"
+ }
+]

@@ -1,0 +1,123 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "W",
+ "arm_name": "interpreted+final-build",
+ "capability_denials": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nfn best(pr: Vec<int>) -> int {\n    let mut b = 0\n    let mut i = 1\n    while i < pr.len() as int {\n        if pr[i] > pr[b] {\n            b = i\n        }\n        i += 1\n    }\n    b\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut pr: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let n: int = parts.len() as int\n        if n == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && n == 3 {\n            match parts[2].parse::<int>() {\n                Ok(v) => {\n                    names.push(parts[1])\n                    pr.push(v)\n                }\n                Err(_) => println(\"error\")\n            }\n        } else if parts[0] == \"pop\" && n == 1 {\n            if pr.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(pr)\n                println(names[b])\n                names.remove(b)\n                pr.remove(b)\n            }\n        } else if parts[0] == \"peek\" && n == 1 {\n            if pr.len() == 0 {\n                println(\"empty\")\n            } else {\n                println(names[best(pr)])\n            }\n        } else if parts[0] == \"size\" && n == 1 {\n            println(\"${pr.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while pr.len() > 0 {\n        let b = best(pr)\n        println(\"${names[b]} ${pr[b]}\")\n        names.remove(b)\n        pr.remove(b)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn best(pr: Vec<int>) -> int {\n    let mut b = 0\n    let mut i = 1\n    while i < pr.len() as int {\n        if pr[i] > pr[b] {\n            b = i\n        }\n        i += 1\n    }\n    b\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut pr: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let n: int = parts.len() as int\n        if n == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && n == 3 {\n            match parts[2].parse::<int>() {\n                Ok(v) => {\n                    names.push(parts[1])\n                    pr.push(v)\n                }\n                Err(_) => println(\"error\")\n            }\n        } else if parts[0] == \"pop\" && n == 1 {\n            if pr.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(pr)\n                println(names[b])\n                names.remove(b)\n                pr.remove(b)\n            }\n        } else if parts[0] == \"peek\" && n == 1 {\n            if pr.len() == 0 {\n                println(\"empty\")\n            } else {\n                println(names[best(pr)])\n            }\n        } else if parts[0] == \"size\" && n == 1 {\n            println(\"${pr.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while pr.len() > 0 {\n        let b = best(pr)\n        println(\"${names[b]} ${pr[b]}\")\n        names.remove(b)\n        pr.remove(b)\n    }\n}\n",
+ "first_turn_input": 8317,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.098,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 1.534,
+   "verb": "build"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 39.6,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 3.87,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:29:45",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 11.308,
+ "tool_result_tokens_est": 579,
+ "tool_wait_seconds": 1.63,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 7967,
+   "cache_write": 348,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8317,
+   "output": 3,
+   "result_chars": 220,
+   "turn": 1
+  },
+  {
+   "cache_read": 8315,
+   "cache_write": 1163,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 9480,
+   "output": 16,
+   "result_chars": 1805,
+   "turn": 2
+  },
+  {
+   "cache_read": 9478,
+   "cache_write": 960,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 10440,
+   "output": 397,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 11.308,
+  "cost_usd": 0.026792000000000003,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the priority queue in `main.wj`, and it passes a run through the interpreter and `wj build`.\n\nI fed the interpreter a mixed input of adds, pops, a peek, a size and bad lines. It printed the expected results for the add, pop, peek, size and error cases, and the leftover jobs under `left:` in pop order. For equal priorities, the job added first comes out first. I did not run the two examples",
+  "subtype": "success",
+  "tokens_in": 28237,
+  "tokens_out": 1432,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 16.81
+}
