@@ -492,3 +492,21 @@ path = "tests/build_output_golden.rs"
 [[test]]
 name = "move_prediction"
 path = "tests/move_prediction_test.rs"
+
+# Return-position list literals, reassigned `&mut` formals, owned text bindings (generated Rust type-checks)
+#   cargo test --release --test reassign_list_codegen
+[[test]]
+name = "reassign_list_codegen"
+path = "tests/reassign_and_list_codegen_test.rs"
+
+# std::http::request builder: interpreted and compiled, against a local silent server
+#   cargo test --release --test http_request_builder
+[[test]]
+name = "http_request_builder"
+path = "tests/http_request_builder_test.rs"
+
+# std/*.wj declarations vs the compiled runtime (shrink-only ledger tests/std_runtime_gaps.txt)
+#   cargo test --release --test std_runtime_parity
+[[test]]
+name = "std_runtime_parity"
+path = "tests/std_runtime_parity_test.rs"
