@@ -116,8 +116,9 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | ADR-0028 step 3: NUM-USIZE-TO-INT, variant payloads, tail-cast helper | aa0bbcebe | 50 | ~150 | 60 -> 58; narrowing casts 12 -> 11; rustc rejects 93 -> 91 |
 | ADR-0028: lexical scoping (per-binding vars) | c1df05cfb | 0 | ~70 | 58 -> 58 (no corpus program shadows a width-carrying name) |
 | ADR-0028: delete five never-firing W5 sites | 3c6a01667 | 106 | 1 | 58 -> 58 |
-| C5 receivers from the IR (`ir_self_receiver`), indexed receiver types, W0016 | cbe50d47c | 0 | ~160 | D-OWN-STAGES 21 -> 9; ownership ratchet 43 -> 41 |
+| C5 receivers from the IR (`ir_self_receiver`), indexed receiver types, W0016 | cbe50d47c | 0 | ~160 | D-OWN-STAGES 21 -> 9; D-CLONE-OUTSIDE-SOLVER 14 -> 18 (snapshot methods clone fields) |
 | C5 field-move fact replaces the codegen walk | cbe50d47c, 24fe5083b | ~180 | ~70 | (same measurement) |
+| C5 self owned only when self is consumed (seed rule; field reads clone) | af2a31ce9 + next | 6 | 4 | ecosystem width gate 6/9 -> 9/9; ratchet: 3 batch3 ownership tests leave (48 -> 45 entries owned by C3/C5/C6) |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 
