@@ -1,9 +1,9 @@
 fn main() {
-    println!("{}", 17);
+    println!("{}", 17_i64);
     println!("{}", 3);
     println!("{}", 2);
     println!("{}", -3);
-    println!("{}", 2.pow(10_i64));
+    println!("{}", 2_i64.pow(10_u32));
     println!("{}", 2);
 }
 

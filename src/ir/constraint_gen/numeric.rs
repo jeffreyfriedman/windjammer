@@ -18,6 +18,9 @@ pub struct Unmodelled {
     pub borrowed_bindings: Vec<String>,
     /// Unbound names that are module constants with a declared type: modelled (not held as unknown names).
     pub declared_constants: Vec<String>,
+    /// Receivers of a numeric method that are literals (`2.pow(10)`, `(-7).abs()`): rustc cannot infer their width
+    /// (E0689), so their class is published even at its default (`int` / `float`).
+    pub literal_receivers: Vec<ConstraintVar>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -220,7 +223,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
         // Option C stage C1: a method of a Rust core type is typed by `std/rust_core.wji` (index slots,
         // lengths, element and payload types); a same-named registry signature is a homonym and is not used.
-        let surface = self.emit_core_surface_constraints(expr, object, method, arguments, &arg_vars, result);
+        let surface = self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
+            || self.emit_core_surface_constraints(expr, object, method, arguments, &arg_vars, result);
         if method == "push" && arguments.len() == 1 {
             if let Some(key) = crate::ir::numeric_facts::conversion_key(arguments[0].1) {
                 self.element_stores.push((key, arg_vars[0], obj_var));
@@ -601,5 +605,66 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         if declared.is_none() && is_borrow_initializer(value) {
             self.numeric_unmodelled.borrowed_bindings.push(n.clone());
         }
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A method of the integer or float numeric surface (`Integer<T>` / `Float<T>` in `std/rust_core.wji`) on a
+    /// receiver that is a number: a declared numeric type or a numeric literal (`10.min(3)`, `2.pow(10)`). An
+    /// argument or result of type `T` joins the receiver's class; other numeric types are exact (`pow` takes a
+    /// `u32`). Returns whether the call was typed this way.
+    pub(super) fn emit_numeric_method_constraints(
+        &mut self,
+        object: &'ast Expression<'ast>,
+        obj_var: ConstraintVar,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        arg_vars: &[ConstraintVar],
+        result: ConstraintVar,
+    ) -> bool {
+        let float = match self.static_type(object).as_ref().map(crate::ir::node::parser_type_to_base_type) {
+            Some(BaseType::F32 | BaseType::F64) => true,
+            Some(b) if crate::ir::solver::is_integer_type(&b) => false,
+            Some(_) => return false,
+            None if is_int_literal_tree(object) => false,
+            None if is_float_literal_tree(object) => true,
+            None => return false,
+        };
+        if is_int_literal_tree(object) || is_float_literal_tree(object) {
+            self.numeric_unmodelled.literal_receivers.push(obj_var);
+        }
+        let Some((params, ret)) = self.core_surface.and_then(|s| s.numeric_method(float, method)) else { return false };
+        if params.len() != arguments.len() {
+            return false;
+        }
+        let same = |t: &Type| crate::typing::core_surface::is_receiver_type(t);
+        for ((param, &v), (_, a)) in params.iter().zip(arg_vars).zip(arguments) {
+            if same(param) {
+                self.cs.add_because(Constraint::TypeEquals(v, obj_var), origin("NUM-STD-SIG", format!("`.{}()` takes the receiver's type", method), &a.location()));
+            } else if let Some(base) = numeric_base(param) {
+                self.cs.add_because(Constraint::TypeIs(v, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` takes `{}` here", method, crate::type_display::format_wj_type(param)), &a.location()));
+                emit_numeric_class_constraint(&mut self.cs, v, &base);
+            }
+        }
+        match ret.as_ref() {
+            Some(t) if same(t) => self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG")),
+            Some(t) => {
+                if let Some(base) = numeric_base(t) {
+                    self.cs.add_because(Constraint::TypeIs(result, base.clone()), tagged("NUM-STD-SIG"));
+                    emit_numeric_class_constraint(&mut self.cs, result, &base);
+                }
+            }
+            None => {}
+        }
+        true
+    }
+}
+
+/// A float literal, possibly negated.
+fn is_float_literal_tree(e: &Expression<'_>) -> bool {
+    match e {
+        Expression::Literal { value: Literal::Float(_), .. } => true,
+        Expression::Unary { op: crate::parser::ast::operators::UnaryOp::Neg, operand, .. } => is_float_literal_tree(operand),
+        _ => false,
     }
 }

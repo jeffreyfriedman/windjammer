@@ -103,11 +103,30 @@ fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
         Type::Result(t, e) => Some(("Result", vec![(**t).clone(), (**e).clone()])),
         Type::String => Some(("String", Vec::new())),
         Type::Custom(n) if matches!(n.as_str(), "String" | "string" | "str") => Some(("String", Vec::new())),
-        Type::Float => Some(("f64", Vec::new())),
-        Type::Custom(n) if n == "f64" || n == "float" => Some(("f64", Vec::new())),
-        Type::Custom(n) if n == "f32" => Some(("f32", Vec::new())),
+        Type::Float => Some(("Float", vec![receiver.clone()])),
+        Type::Custom(n) if matches!(n.as_str(), "f64" | "f32" | "float") => Some(("Float", vec![receiver.clone()])),
+        Type::Int | Type::Int32 | Type::Uint => Some(("Integer", vec![receiver.clone()])),
+        Type::Custom(n) if is_integer_name(n) => Some(("Integer", vec![receiver.clone()])),
         Type::Parameterized(n, args) => known(n).map(|k| (k, args.clone())),
         _ => None,
+    }
+}
+
+fn is_integer_name(n: &str) -> bool {
+    matches!(n, "int" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize")
+}
+
+/// Whether a numeric method's parameter or result is the receiver's own type (`T` of `Integer<T>` / `Float<T>`).
+pub fn is_receiver_type(t: &Type) -> bool {
+    matches!(t, Type::Custom(n) | Type::Generic(n) if n == "T")
+}
+
+impl CoreSurface {
+    /// A method of the integer (`float == false`) or float numeric surface, uninstantiated: (params, result), where
+    /// a type `T` is the receiver's own type. Used when the receiver's width is a class (a literal), not a type.
+    pub fn numeric_method(&self, float: bool, method: &str) -> Option<(Vec<Type>, Option<Type>)> {
+        let (_, _, params, ret) = self.declared(if float { "Float" } else { "Integer" }, method)?;
+        Some((params, ret))
     }
 }
 
@@ -147,7 +166,7 @@ mod tests {
     fn surface_parses_and_declares_the_core_types() {
         let e = entries();
         assert!(e.len() > 80, "{}", e.len());
-        for t in ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "f32", "f64"] {
+        for t in ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Integer", "Float"] {
             assert!(e.iter().any(|(n, _)| n == t), "{t} missing");
         }
     }
@@ -186,7 +205,10 @@ mod tests {
         let s = method_signature(&Type::Custom("f32".into()), "min", &[]).unwrap();
         assert_eq!(s.params, vec![Type::Custom("f32".into())]);
         assert_eq!(s.ret, Some(Type::Custom("f32".into())));
-        assert_eq!(method_signature(&Type::Float, "sqrt", &[]).unwrap().ret, Some(Type::Custom("f64".into())));
+        assert_eq!(method_signature(&Type::Float, "sqrt", &[]).unwrap().ret, Some(Type::Float));
+        let pow = method_signature(&Type::Int, "pow", &[]).unwrap();
+        assert_eq!(pow.params, vec![Type::Custom("u32".into())]);
+        assert_eq!(pow.ret, Some(Type::Int));
     }
 
     #[test]
