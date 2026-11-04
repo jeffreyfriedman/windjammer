@@ -6,6 +6,16 @@ use crate::parser::*;
 
 use super::CodeGenerator;
 
+/// A receiver the source declares (`&self` / `&mut self`): the contract of a trait method and its impls (W0016).
+pub(super) fn declared_receiver(param: &Parameter) -> Option<&'static str> {
+    match param.ownership {
+        _ if param.name != "self" => None,
+        OwnershipHint::Ref => Some("&self"),
+        OwnershipHint::Mut => Some("&mut self"),
+        _ => None,
+    }
+}
+
 impl<'ast> CodeGenerator<'ast> {
     /// The receiver the IR solver decided (ADR-0001: one ownership owner; convergence C5). Codegen
     /// only spells it: `Owned` becomes `mut self` when the body writes through `self`. `None` in trait
@@ -419,10 +429,10 @@ impl<'ast> CodeGenerator<'ast> {
                 });
                 if let Some(trait_method) = methods.and_then(|m| m.get(func_name)) {
                     // The trait's declared receiver is the contract (W0016).
-                    match trait_method.decl.parameters.first().filter(|p| p.name == "self").map(|p| &p.ownership) {
-                        Some(OwnershipHint::Ref) => return Some(OwnershipMode::Borrowed),
-                        Some(OwnershipHint::Mut) => return Some(OwnershipMode::MutBorrowed),
-                        _ => {}
+                    match trait_method.decl.parameters.first().and_then(declared_receiver) {
+                        Some("&self") => return Some(OwnershipMode::Borrowed),
+                        Some(_) => return Some(OwnershipMode::MutBorrowed),
+                        None => {}
                     }
                     if let Some(ownership)= trait_method.inferred_ownership.get("self").copied() {
                         return Some(ownership);

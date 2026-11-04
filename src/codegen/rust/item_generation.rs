@@ -722,17 +722,8 @@ impl<'ast> CodeGenerator<'ast> {
                 .parameters
                 .iter()
                 .map(|param| {
-                    // A declared receiver (`&self` / `&mut self`) is the trait's contract (W0016):
-                    // no analysis of impls or defaults overrides it.
-                    if param.name == "self" {
-                        match param.ownership {
-                            OwnershipHint::Ref => return "&self".to_string(),
-                            OwnershipHint::Mut => return "&mut self".to_string(),
-                            _ => {}
-                        }
-                    }
-                    // THE WINDJAMMER WAY:
-                    // Use the analyzed ownership from the analyzer, which has inferred
+                    if let Some(r) = super::function_self_helpers::declared_receiver(param) { return r.to_string(); }
+                    // THE WINDJAMMER WAY: use the analyzer's ownership, which has inferred
                     // the most permissive signature needed based on ALL implementations!
                     let ownership = if let Some(analyzed) = analyzed_method {
                         // Has default implementation OR global cross-file analysis - use analyzer's inferred ownership
