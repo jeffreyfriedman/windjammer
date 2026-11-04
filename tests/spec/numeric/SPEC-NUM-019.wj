@@ -1,0 +1,18 @@
+// spec: SPEC-NUM-019
+// expect: 44 255 4294967295 -1 -128 4464
+// expect: 3 -3 2 0
+// expect: 9223372036854775807 -9223372036854775808 255 0 255
+// expect: 0 0
+// expect: 97 122 A
+// expect: 0 -1 127
+// expect: 3.5 3
+fn main() {
+    println("${300 as u8} ${-1 as u8} ${-1i64 as u32} ${255u8 as i8} ${128u8 as i8} ${70000 as i16}")
+    println("${3.99 as int} ${-3.99 as int} ${2.5 as int} ${-0.5 as int}")
+    println("${1e20 as int} ${-1e20 as int} ${1e20 as u8} ${-5.0 as u8} ${300.7 as u8}")
+    let nan = 0.0 / 0.0
+    println("${nan as int} ${nan as u8}")
+    println("${'a' as int} ${'z' as u8} ${65u8 as char}")
+    println("${4294967296 as i32} ${4294967295 as i32} ${-129 as i8}")
+    println("${7 as float / 2.0} ${(7 / 2) as float}")
+}

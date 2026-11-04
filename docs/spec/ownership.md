@@ -182,3 +182,177 @@ Output:
 
 **SPEC-OWN-009** The rules by which the compiler infers move, borrow, mutable borrow and clone are specified separately in docs/spec/inference.md (placeholder; owned by the ownership-inference stream). This chapter specifies only the observable surface. (untestable: placeholder cross-reference)
 
+
+## Drop with moves, loops, Option::take and collections
+
+**SPEC-OWN-012** A value passed through a function is dropped where its final owner ends; each loop iteration drops its locals; `Option::take` moves the value out, `pop` returns it (so it is dropped at the end of the statement when unused) and `clear` drops every element; a value moved into a closure is dropped when the closure is.
+
+<!-- example: tests/spec/ownership/SPEC-OWN-012.wj -->
+```windjammer
+struct G {
+    name: string,
+}
+
+impl Drop for G {
+    fn drop(self) {
+        println("drop ${self.name}")
+    }
+}
+
+fn pass_through(g: G) -> G {
+    println("pass ${g.name}")
+    g
+}
+
+fn main() {
+    let g = pass_through(G { name: "p" })
+    println("got ${g.name}")
+    for i in 0..2 {
+        let it = G { name: "loop${i}" }
+        println("body ${it.name}")
+    }
+    let mut slot: Option<G> = Some(G { name: "slot" })
+    let taken = slot.take()
+    println("taken ${taken.is_some()} left ${slot.is_none()}")
+    let mut v = vec![G { name: "a" }, G { name: "b" }, G { name: "c" }]
+    v.pop()
+    println("popped")
+    v.clear()
+    println("cleared")
+    let f = move || println("closure ${g.name}")
+    f()
+    println("end")
+}
+```
+Output:
+```text
+pass p
+got p
+body loop0
+drop loop0
+body loop1
+drop loop1
+taken true left true
+drop c
+popped
+drop a
+drop b
+cleared
+closure p
+end
+drop slot
+drop p
+```
+
+## Drop order
+
+**SPEC-OWN-010** Locals are dropped in reverse declaration order at the end of their block, a shadowed binding is still dropped at the end of its block, a temporary passed to a function is dropped when the callee returns, `let _ = e` drops at once, `let _name = e` at the end of the block, and `drop(x)` drops immediately.
+
+<!-- example: tests/spec/ownership/SPEC-OWN-010.wj -->
+```windjammer
+struct G {
+    name: string,
+}
+
+impl Drop for G {
+    fn drop(self) {
+        println("drop ${self.name}")
+    }
+}
+
+fn make(name: string) -> G {
+    G { name: name }
+}
+
+fn consume(g: G) {
+    println("consume ${g.name}")
+}
+
+fn main() {
+    let a = make("a")
+    let b = make("b")
+    {
+        let c = make("c")
+        println("inner")
+    }
+    consume(make("t"))
+    let a = make("a2")
+    let _ = make("ignored")
+    let _keep = make("kept")
+    drop(b)
+    println("end")
+}
+```
+Output:
+```text
+inner
+drop c
+consume t
+drop t
+drop ignored
+drop b
+end
+drop kept
+drop a2
+drop a
+```
+
+## Drop on assignment, fields and early return
+
+**SPEC-OWN-011** Assigning to a variable drops the old value at once; struct fields drop in declaration order and collection elements in index order after the container; an early `return` drops the locals of the function.
+
+<!-- example: tests/spec/ownership/SPEC-OWN-011.wj -->
+```windjammer
+struct G {
+    name: string,
+}
+
+impl Drop for G {
+    fn drop(self) {
+        println("drop ${self.name}")
+    }
+}
+
+struct Pair {
+    first: G,
+    second: G,
+}
+
+fn early(flag: bool) -> int {
+    let _g = G { name: "early" }
+    if flag {
+        return 1
+    }
+    println("not early")
+    2
+}
+
+fn main() {
+    let mut slot = G { name: "old" }
+    slot = G { name: "new" }
+    println("assigned")
+    let p = Pair { first: G { name: "f" }, second: G { name: "s" } }
+    println("pair built")
+    let v = vec![G { name: "v0" }, G { name: "v1" }]
+    println("${v.len()} ${early(true)} ${early(false)}")
+    let boxed = Some(G { name: "opt" })
+    println("end")
+}
+```
+Output:
+```text
+drop old
+assigned
+pair built
+drop early
+not early
+drop early
+2 1 2
+end
+drop opt
+drop v0
+drop v1
+drop f
+drop s
+drop new
+```
