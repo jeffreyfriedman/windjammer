@@ -1,0 +1,17 @@
+use std::ops::Mul
+
+pub struct Pair {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Mul<f32> for Pair {
+    type Output = Pair
+    fn mul(self, s: f32) -> Pair {
+        Pair { x: self.x * s, y: self.y * s }
+    }
+}
+
+pub fn halve(p: Pair) -> Pair {
+    p * 0.5
+}

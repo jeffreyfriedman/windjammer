@@ -8,7 +8,7 @@
 use super::test_discovery::{self, Discovery};
 use super::test_extraction::TestScope;
 use super::test_harness::select_files;
-use crate::interpreter::runner::{report_tests, run_specs, TestSpec};
+use crate::interpreter::runner::{report_tests, TestSpec};
 use anyhow::Result;
 use std::path::Path;
 

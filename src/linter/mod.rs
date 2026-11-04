@@ -14,6 +14,7 @@ pub mod missing_value;
 pub mod mixed_int_width;
 pub mod redundant_as_str;
 pub mod trailing_return;
+pub mod trait_receiver;
 
 /// The single lint entry point shared by `wj lint`, `wj build` diagnostics and `wj run --interpret`:
 /// parse `source` and run every Rust-leakage / surface-syntax / diagnostics lint. `None` when it does not parse.
@@ -347,6 +348,7 @@ mod owned_but_not_returned_tests {
             returned_parameters: HashSet::new(),
             field_extract_parameters: HashSet::new(),
             field_mutated_parameters: HashSet::new(),
+            field_moved_parameters: HashSet::new(),
             auto_clone_analysis: AutoCloneAnalysis::default(),
             clone_optimizations: vec![],
             struct_mapping_optimizations: vec![],
@@ -359,6 +361,7 @@ mod owned_but_not_returned_tests {
             cache_locality: crate::analyzer::CacheLocalityAnalysis::default(),
             str_ref_optimizable_params: HashSet::new(),
             module_path: Vec::new(),
+            module_const_types: Default::default(),
         };
 
         let mut linter = Linter::new();

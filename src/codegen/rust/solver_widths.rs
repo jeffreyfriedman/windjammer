@@ -87,6 +87,18 @@ impl<'ast> CodeGenerator<'ast> {
         f.literal_widths.get(&crate::ir::numeric_defaults::literal_key(lit)?)
     }
 
+    /// A float literal printed at the width the solver fixed from its uses (the float class), if any.
+    pub(in crate::codegen::rust) fn solver_float_literal(&self, lit: &Expression<'ast>, value: f64) -> Option<String> {
+        let suffix = match self.solver_literal_width(lit)? {
+            BaseType::F32 => "f32",
+            BaseType::F64 => "f64",
+            _ => return None,
+        };
+        let s = value.to_string();
+        let s = if s.contains('.') || s.contains('e') || s.contains('E') || s.contains("inf") || s.contains("NaN") { s } else { format!("{s}.0") };
+        Some(format!("{s}_{suffix}"))
+    }
+
     /// Width the solver fixed for a singly bound local (NUM-LOCAL-WIDTH).
     pub(in crate::codegen::rust) fn solver_local_width(&self, name: &str) -> Option<&BaseType> {
         self.current_ir_function.as_ref()?.solver_local_widths.get(name)
@@ -96,6 +108,12 @@ impl<'ast> CodeGenerator<'ast> {
     /// decide and no cast to place (the W3 peer/promotion deciders are skipped).
     pub(in crate::codegen::rust) fn solver_agrees(&self, left: &Expression<'ast>, right: &Expression<'ast>) -> bool {
         self.solver_operand_width(left).is_some_and(|l| self.solver_operand_width(right) == Some(l))
+    }
+
+    /// NUM-STD-SIG: a numeric method whose receiver and argument widths the solver fixed (`u.rotate_left(3)` takes a
+    /// `u32`, `ten.min(three)` is one class) needs no formal-driven cast at the argument.
+    pub(in crate::codegen::rust) fn solver_typed_numeric_call(&self, receiver: Option<&Expression<'ast>>, arg: &Expression<'ast>) -> bool {
+        receiver.is_some_and(|r| self.solver_operand_width(r).is_some()) && self.solver_operand_width(arg).is_some()
     }
 
     /// Width of an integer operand as the solver fixed it, when every part of it has a fact:

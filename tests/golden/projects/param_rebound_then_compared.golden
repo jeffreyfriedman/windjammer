@@ -1,0 +1,48 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod lookup;
+
+// Re-export public items
+pub use lookup::*;
+// ==== lookup.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Row {
+    pub code: String,
+}
+
+#[inline]
+pub fn find_code(rows: &Vec<Row>, wanted: String) -> i64 {
+    let code = wanted;
+    let mut i = 0_usize;
+    while i < rows.len() {
+        if rows[i].code == code {
+            return i as i64;
+        }
+        i += 1;
+    }
+    -1_i64
+}
+
+// ==== main.rs ====
+mod lookup;
+fn main() {
+    let rows = vec![lookup::Row { code: String::from("a") }, lookup::Row { code: String::from("b") }];
+    let code: String = String::from("b");
+    let x = lookup::find_code(&rows, code.to_string());
+    let y = lookup::find_code(&rows, code.to_string());
+    println!("{} {} {}", x, y, code);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod lookup;
+
+// Re-export public items
+pub use lookup::*;

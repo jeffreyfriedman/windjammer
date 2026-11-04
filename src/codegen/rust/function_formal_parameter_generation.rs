@@ -75,6 +75,11 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
+                if param.name == "self" {
+                    if let Some(receiver) = self.ir_self_receiver(&analyzed.decl) {
+                        return receiver.to_string();
+                    }
+                }
                 if param.name != "self"
                     && (self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
                         || self.param_used_via_explicit_user_clone(
@@ -493,9 +498,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
-                    && !self.param_has_field_or_index_move_binding(
-                        func.body.as_slice(),
-                        &param.name,
+                    && !self.param_has_field_or_index_move_binding(&param.name,
                     )
                     && matches!(
                         analyzed.inferred_ownership.get(&param.name),
@@ -511,9 +514,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Map/set key lookup formals (`self.quests.get(id)`) demote to `&Key` before
                 // single-arg owned forward — stale engine metadata Owned must not beat borrow.
-                let field_move_forces_owned_early = self.param_has_field_or_index_move_binding(
-                    func.body.as_slice(),
-                    &param.name,
+                let field_move_forces_owned_early = self.param_has_field_or_index_move_binding(&param.name,
                 );
                 let map_key_borrow_forward_early = param.name != "self"
                     && matches!(&param.type_, Type::Custom(_))
@@ -602,9 +603,7 @@ impl<'ast> CodeGenerator<'ast> {
                     Some(OwnershipMode::Borrowed)
                 ) || self.str_ref_optimizable_param(analyzed, &param.name);
 
-                let field_move_forces_owned = self.param_has_field_or_index_move_binding(
-                    func.body.as_slice(),
-                    &param.name,
+                let field_move_forces_owned = self.param_has_field_or_index_move_binding(&param.name,
                 );
                 let multiparam_store_keeps_owned = self
                     .param_multiparam_store_keeps_owned_key_formal(param, func);
@@ -4768,7 +4767,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Readonly field-projection helpers (`keys_equal(a, b) { a.bytes == b.bytes }`)
             // demote to `&Key` even when multipass locked pub Custom formals to Owned.
             if self.param_only_used_via_field_or_index_projection(func.body.as_slice(), &param.name)
-                && !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
+                && !self.param_has_field_or_index_move_binding(&param.name)
                 && !self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func)
             {
                 return false;
@@ -4776,7 +4775,7 @@ impl<'ast> CodeGenerator<'ast> {
             // field/index reads + bare forward into shared-ref callees
             // (`out_degree(view)` → `vertex_index(&view)`). Signature-driven — not a
             // method-name heuristic; requires every call site to expect Borrowed.
-            if !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
+            if !self.param_has_field_or_index_move_binding(&param.name)
                 && !self.param_passes_to_wj_owned_sibling_call(
                     func.body.as_slice(),
                     &param.name,

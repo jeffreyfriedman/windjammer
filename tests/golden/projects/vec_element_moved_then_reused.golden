@@ -1,0 +1,48 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod repo;
+
+// Re-export public items
+pub use repo::*;
+// ==== main.rs ====
+mod repo;
+fn main() {
+    let mut r = repo::Repo { rows: Vec::new() };
+    let got = r.flag_and_get("p7", "on").clone();
+    println!("{} {}", r.rows.len(), got);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod repo;
+
+// Re-export public items
+pub use repo::*;
+// ==== repo.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Repo {
+    pub rows: Vec<Vec<String>>,
+}
+
+impl Repo {
+#[inline]
+pub fn record(&mut self, values: Vec<String>) {
+        self.rows.push(values);
+}
+#[inline]
+pub fn flag_and_get(&mut self, party_id: String, flag: &str) -> String {
+        let id = party_id;
+        self.record(vec![flag.to_string(), id.clone()]);
+        self.record(vec!["seen".to_string()]);
+        let got = id;
+        got
+}
+}
+

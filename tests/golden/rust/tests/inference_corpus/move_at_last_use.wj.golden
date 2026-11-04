@@ -42,7 +42,7 @@ fn wrap(b: Bag, t: String) -> String {
 }
 
 #[inline]
-fn take(i: It) -> i64 {
+fn take(i: &It) -> i64 {
     i.n
 }
 
@@ -55,12 +55,12 @@ fn main() {
     l.put("x".to_string());
     println!("{}", l.order.len());
     let it = It { n: 1_i64, s: String::from("a") };
-    let a = take(it.clone());
-    let c = take(it);
+    let a = take(&it);
+    let c = take(&it);
     let looped = It { n: 3_i64, s: String::from("c") };
     let mut sum = 0_i64;
     for k in 0_i64..2_i64 {
-        sum = sum + take(looped.clone()) + k as i64;
+        sum = sum + take(&looped) + k as i64;
     }
     println!("{}", a + c + sum);
 }

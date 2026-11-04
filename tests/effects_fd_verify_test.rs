@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use windjammer::ir::effect_facts::grant::OpenError;
+use windjammer::ir::effect_facts::grant::{EntryOp, OpenError};
 use windjammer::ir::effect_facts::{EffectKind, Grant};
 
 const STRESS: Duration = Duration::from_millis(1500);
@@ -37,6 +37,11 @@ impl World {
     fn grant(&self) -> Grant {
         let mut g = Grant::sandbox(&self.dir);
         g.allow(EffectKind::FsRead, "./granted/**");
+        g
+    }
+    fn write_grant(&self) -> Grant {
+        let mut g = Grant::sandbox(&self.dir);
+        g.allow(EffectKind::FsWrite, "./granted/**");
         g
     }
     fn link_path(&self) -> String {
@@ -174,6 +179,109 @@ fn cached_checks_are_stale_for_at_most_the_ttl() {
     }
     eprintln!("cached checks: {checked} allowed checks after a swap to the denied directory, the latest began {worst:?} after it (ttl {ttl:?})");
     assert!(checked > 0, "no allowed check fell into a denied interval: the test measured nothing");
+}
+
+/// Writes decide on the parent directory's descriptor. The oracle is the denied directory: nothing a write, a `mkdir` or an
+/// `unlink` does through the link may touch it.
+fn run_writer(w: &World, act: &dyn Fn(&Grant, &str, &Path) -> Option<bool>) -> Tally {
+    let g = w.write_grant();
+    let stop = Arc::new(AtomicBool::new(false));
+    let s = swapper(w.dir.clone(), stop.clone(), Duration::ZERO, Arc::new(Mutex::new(Vec::new())));
+    let start = Instant::now();
+    let mut t = Tally::default();
+    let via = w.dir.join("l").to_string_lossy().to_string();
+    while start.elapsed() < STRESS {
+        // Some(true): the action ran; Some(false): denied; None: an I/O error. The caller reports a leak by returning Some(true)
+        // only when the denied directory was touched (it checks that itself).
+        match act(&g, &via, &w.dir) {
+            Some(true) => t.leaks += 1,
+            Some(false) => t.denied += 1,
+            None => t.io += 1,
+        }
+        t.allowed_reads += 1;
+    }
+    stop.store(true, Ordering::Relaxed);
+    s.join().unwrap();
+    t
+}
+
+fn write_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    use std::io::Write;
+    let target = format!("{via}/out.txt");
+    match g.open_write(&target, false) {
+        Ok(Some(mut f)) => {
+            let _ = f.write_all(b"x");
+            let leaked = dir.join("denied/out.txt").exists();
+            let _ = std::fs::remove_file(dir.join("denied/out.txt"));
+            let _ = std::fs::remove_file(dir.join("granted/out.txt"));
+            if leaked { Some(true) } else { None }
+        }
+        Ok(None) => None,
+        Err(OpenError::Denied(_)) => Some(false),
+        Err(OpenError::Io(_)) => None,
+    }
+}
+
+fn mkdir_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    let target = format!("{via}/newdir");
+    match g.entry_op(&target, EntryOp::MakeDir) {
+        Ok(_) => {
+            let leaked = dir.join("denied/newdir").exists();
+            let _ = std::fs::remove_dir(dir.join("denied/newdir"));
+            let _ = std::fs::remove_dir(dir.join("granted/newdir"));
+            if leaked { Some(true) } else { None }
+        }
+        Err(OpenError::Denied(_)) => Some(false),
+        Err(OpenError::Io(_)) => None,
+    }
+}
+
+fn unlink_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    // both directories hold a file of that name; the one in the denied directory must survive
+    let _ = std::fs::write(dir.join("denied/victim.txt"), "keep");
+    let _ = std::fs::write(dir.join("granted/victim.txt"), "go");
+    let r = g.entry_op(&format!("{via}/victim.txt"), EntryOp::RemoveFile);
+    let leaked = !dir.join("denied/victim.txt").exists();
+    match r {
+        Ok(_) if leaked => Some(true),
+        Ok(_) => None,
+        Err(OpenError::Denied(_)) => Some(false),
+        Err(OpenError::Io(_)) => None,
+    }
+}
+
+#[test]
+fn nothing_lands_in_the_denied_directory_through_a_swapped_link() {
+    let w = World::new("w");
+    for (name, act) in [("write", &write_through as &dyn Fn(&Grant, &str, &Path) -> Option<bool>), ("mkdir", &mkdir_through), ("unlink", &unlink_through)] {
+        let t = run_writer(&w, act);
+        eprintln!("fd-verified {name}: {t:?}");
+        assert_eq!(t.leaks, 0, "a {name} reached the denied directory: {t:?}");
+        assert!(t.denied > 50 && t.io > 50, "the swap never raced with the {name}s: {t:?}");
+    }
+}
+
+/// The stress must see the old order for writes too: check the name, then write the name.
+#[test]
+fn the_stress_sees_a_write_that_checks_the_name_first() {
+    let w = World::new("wname");
+    let naive = |g: &Grant, via: &str, dir: &Path| -> Option<bool> {
+        let target = format!("{via}/out.txt");
+        if g.check(&EffectKind::FsWrite, Some(&target)).is_err() {
+            return Some(false);
+        }
+        let _ = std::fs::write(&target, "x");
+        let leaked = dir.join("denied/out.txt").exists();
+        let _ = std::fs::remove_file(dir.join("denied/out.txt"));
+        let _ = std::fs::remove_file(dir.join("granted/out.txt"));
+        if leaked { Some(true) } else { None }
+    };
+    let mut leaks = 0;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while leaks == 0 && Instant::now() < deadline {
+        leaks += run_writer(&w, &naive).leaks;
+    }
+    assert!(leaks > 0, "the naive order never leaked in 20 s: the stress test cannot see the race");
 }
 
 #[allow(dead_code)]

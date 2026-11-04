@@ -1,0 +1,11 @@
+use crate::deps::Deps
+
+pub struct Listed {
+    pub count: int,
+    pub deps: Deps,
+}
+
+pub fn list_items(deps: Deps, tenant: string) -> Listed {
+    let count = if tenant == "t" { 2 } else { 0 }
+    Listed { count: count, deps: deps }
+}

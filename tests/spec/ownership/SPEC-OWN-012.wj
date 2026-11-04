@@ -1,0 +1,51 @@
+// spec: SPEC-OWN-012
+// expect: pass p
+// expect: got p
+// expect: body loop0
+// expect: drop loop0
+// expect: body loop1
+// expect: drop loop1
+// expect: taken true left true
+// expect: drop c
+// expect: popped
+// expect: drop a
+// expect: drop b
+// expect: cleared
+// expect: closure p
+// expect: end
+// expect: drop slot
+// expect: drop p
+struct G {
+    name: string,
+}
+
+impl Drop for G {
+    fn drop(self) {
+        println("drop ${self.name}")
+    }
+}
+
+fn pass_through(g: G) -> G {
+    println("pass ${g.name}")
+    g
+}
+
+fn main() {
+    let g = pass_through(G { name: "p" })
+    println("got ${g.name}")
+    for i in 0..2 {
+        let it = G { name: "loop${i}" }
+        println("body ${it.name}")
+    }
+    let mut slot: Option<G> = Some(G { name: "slot" })
+    let taken = slot.take()
+    println("taken ${taken.is_some()} left ${slot.is_none()}")
+    let mut v = vec![G { name: "a" }, G { name: "b" }, G { name: "c" }]
+    v.pop()
+    println("popped")
+    v.clear()
+    println("cleared")
+    let f = move || println("closure ${g.name}")
+    f()
+    println("end")
+}

@@ -1,0 +1,26 @@
+// Inside an impl, a bare call `triple(v)` names the free function, not the impl's method `triple`
+// (which has a different signature). Expected by hand: 1 + 4 * 3.
+// expect: 13
+pub fn triple(v: int) -> int {
+    v * 3
+}
+
+struct Counter {
+    pub total: int,
+}
+
+impl Counter {
+    pub fn triple(self, slot: usize) -> usize {
+        slot + 1
+    }
+
+    pub fn run(self, v: int) -> int {
+        self.total = self.total + triple(v)
+        self.total
+    }
+}
+
+fn main() {
+    let mut c = Counter { total: 1 }
+    println("${c.run(4)}")
+}

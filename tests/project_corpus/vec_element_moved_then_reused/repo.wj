@@ -1,0 +1,17 @@
+pub struct Repo {
+    pub rows: Vec<Vec<string>>,
+}
+
+impl Repo {
+    pub fn record(self, values: Vec<string>) {
+        self.rows.push(values)
+    }
+
+    pub fn flag_and_get(self, party_id: string, flag: string) -> string {
+        let id = party_id
+        self.record(vec![flag, id])
+        self.record(vec!["seen"])
+        let got = id
+        got
+    }
+}

@@ -1,0 +1,15 @@
+pub struct Row {
+    pub code: string,
+}
+
+pub fn find_code(rows: Vec<Row>, wanted: string) -> int {
+    let code = wanted
+    let mut i = 0
+    while i < rows.len() {
+        if rows[i].code == code {
+            return i as int
+        }
+        i = i + 1
+    }
+    -1
+}

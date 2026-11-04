@@ -1,0 +1,50 @@
+// spec: SPEC-OWN-011
+// expect: drop old
+// expect: assigned
+// expect: pair built
+// expect: drop early
+// expect: not early
+// expect: drop early
+// expect: 2 1 2
+// expect: end
+// expect: drop opt
+// expect: drop v0
+// expect: drop v1
+// expect: drop f
+// expect: drop s
+// expect: drop new
+struct G {
+    name: string,
+}
+
+impl Drop for G {
+    fn drop(self) {
+        println("drop ${self.name}")
+    }
+}
+
+struct Pair {
+    first: G,
+    second: G,
+}
+
+fn early(flag: bool) -> int {
+    let _g = G { name: "early" }
+    if flag {
+        return 1
+    }
+    println("not early")
+    2
+}
+
+fn main() {
+    let mut slot = G { name: "old" }
+    slot = G { name: "new" }
+    println("assigned")
+    let p = Pair { first: G { name: "f" }, second: G { name: "s" } }
+    println("pair built")
+    let v = vec![G { name: "v0" }, G { name: "v1" }]
+    println("${v.len()} ${early(true)} ${early(false)}")
+    let boxed = Some(G { name: "opt" })
+    println("end")
+}

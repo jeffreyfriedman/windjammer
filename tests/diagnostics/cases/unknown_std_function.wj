@@ -1,0 +1,7 @@
+// expect: WJ0002
+use std::strings
+
+fn main() {
+    let at = strings.index_of("a:b", ":")
+    println("${at}")
+}

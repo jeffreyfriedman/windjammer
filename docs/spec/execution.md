@@ -179,3 +179,135 @@ Output:
 662824084
 ```
 
+
+## Evaluation order
+
+**SPEC-EXEC-010** Function arguments, operands of a binary operator, struct literal fields (in the order written, not the declaration order) and array elements are evaluated left to right in source order; `&&` and `||` evaluate the right operand only when needed; only the chosen branch of an `if` runs.
+
+<!-- example: tests/spec/execution/SPEC-EXEC-010.wj -->
+```windjammer
+fn t(tag: string, v: int) -> int {
+    println("eval ${tag}")
+    v
+}
+
+fn three(a: int, b: int, c: int) -> int {
+    a * 100 + b * 10 + c
+}
+
+struct S {
+    a: int,
+    b: int,
+}
+
+fn main() {
+    println("${three(t("a", 1), t("b", 2), t("c", 3))}")
+    println("${t("x", 1) + t("y", 2) * t("z", 3)}")
+    let s = S { b: t("b", 2), a: t("a", 1) }
+    println("${s.a} ${s.b}")
+    let arr = [t("e0", 0), t("e1", 1), t("e2", 2)]
+    println("${arr.len()}")
+    let ok = t("l", 0) == 1 && t("r", 1) == 1
+    println("${ok}")
+    let ok2 = t("l", 1) == 1 || t("r", 1) == 1
+    println("${ok2}")
+    let picked = if t("c", 1) == 1 { t("then", 10) } else { t("else", 20) }
+    println("${picked}")
+    println("${t("p", 5) - t("q", 3) - t("r", 1)}")
+}
+```
+Output:
+```text
+eval a
+eval b
+eval c
+123
+eval x
+eval y
+eval z
+7
+eval b
+eval a
+1 2
+eval e0
+eval e1
+eval e2
+3
+eval l
+false
+eval l
+true
+eval c
+eval then
+10
+eval p
+eval q
+eval r
+1
+```
+
+## Branches inside an interpolation
+
+**SPEC-EXEC-012** `if` and `match` expressions may be used inside `${..}`: the condition and exactly the chosen branch are evaluated, in order, and the branch value is printed.
+
+<!-- example: tests/spec/execution/SPEC-EXEC-012.wj -->
+```windjammer
+fn t(tag: string, v: int) -> int {
+    println("eval ${tag}")
+    v
+}
+
+fn main() {
+    println("${if t("c", 1) == 1 { t("then", 10) } else { t("else", 20) }}")
+    println("${match t("m", 2) { 1 => t("one", 100), _ => t("other", 200) }}")
+}
+```
+Output:
+```text
+eval c
+eval then
+10
+eval m
+eval other
+200
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
+
+## Assignment evaluation order
+
+**SPEC-EXEC-011** In `place = value` the value is evaluated before the place expression's index; in `place op= value` the value is evaluated before the place is read for a primitive left operand; a closure called three times in a tuple runs in order.
+
+<!-- example: tests/spec/execution/SPEC-EXEC-011.wj -->
+```windjammer
+fn t(tag: string, v: int) -> int {
+    println("eval ${tag}")
+    v
+}
+
+fn main() {
+    let mut v = vec![10, 20, 30]
+    v[t("index", 1) as usize] = t("value", 99)
+    println("${v[0]} ${v[1]} ${v[2]}")
+    let mut w = vec![1, 2, 3]
+    w[t("idx2", 2) as usize] += t("rhs2", 5)
+    println("${w[0]} ${w[1]} ${w[2]}")
+    let mut x = 1
+    x += { x += 10; x }
+    println("${x}")
+    let mut c = 0
+    let mut next = || { c += 1; c }
+    let pair = (next(), next(), next())
+    println("${pair.0}${pair.1}${pair.2}")
+}
+```
+Output:
+```text
+eval value
+eval index
+10 99 30
+eval rhs2
+eval idx2
+1 2 8
+22
+123
+```
