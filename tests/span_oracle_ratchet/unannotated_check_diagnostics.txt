@@ -453,6 +453,7 @@ tests/effects/replay/write_then_stat_loop.wj W0002
 tests/engine_parity/condvar_guard_match.wj W0005,W0008
 tests/engine_parity/islands_scopes.wj W0004
 tests/error_system/test_function_not_found.wj WJ0002
+tests/error_system/test_ownership.wj WJ0007
 tests/error_system/test_type_mismatch.wj WJ0003
 tests/error_system/test_variable_not_found.wj WJ0001
 tests/error_system_e2e/test_struct_errors.wj WJ0005,WJ0014
@@ -514,6 +515,7 @@ tests/inference_corpus/for_accumulator_width.wj W0007
 tests/inference_corpus/int_accumulator_field_width.wj W0007
 tests/inference_corpus/interp_call_width.wj W0007
 tests/inference_corpus/pin_ref_vec.wj W0001,W0007
+tests/inference_corpus/string_literal_move_then_use.wj WJ0007
 tests/input_keyboard_test.wj WJ0012
 tests/interpreter_corpus/async_sequential.wj W0008
 tests/interpreter_corpus/bucket_counts.wj W0007,W0008

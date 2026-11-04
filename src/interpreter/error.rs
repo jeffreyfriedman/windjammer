@@ -62,7 +62,7 @@ impl RuntimeError {
         let mut out = String::new();
         match (&self.kind, &self.span) {
             (ErrorKind::Panic, Some(s)) => {
-                out.push_str(&format!("thread 'main' panicked at {}:\n{}", s, self.message))
+                out.push_str(&format!("thread 'main' panicked at {}:\n{}", at(s), self.message))
             }
             (ErrorKind::Panic, None) => {
                 out.push_str(&format!("thread 'main' panicked:\n{}", self.message))
@@ -95,16 +95,52 @@ impl RuntimeError {
             (_, None) => out.push_str(&format!("error: {}", self.message)),
         }
         if !self.backtrace.is_empty() {
+            // After the Rust-shaped head (which tools compare with compiled output, up to this line): the
+            // failing source line with a caret, and the chain of Windjammer calls on one line.
             out.push_str("\nstack backtrace:");
-            for (i, fr) in self.backtrace.iter().enumerate() {
-                out.push_str(&format!("\n  {}: {}", i, fr.function));
-                if let Some(s) = &fr.call_site {
-                    out.push_str(&format!("\n        at {}", s));
-                }
+            if let Some(excerpt) = self.span.as_ref().and_then(source_excerpt) {
+                out.push_str(&excerpt);
             }
+            out.push_str(&format!("\n  {}", call_chain(&self.backtrace)));
         }
         out
     }
+}
+
+/// `file` relative to the current directory when it lies below it (shorter for people and agents alike).
+pub(crate) fn short_path(file: &str) -> String {
+    let cwd = std::env::current_dir().ok().map(|d| d.to_string_lossy().to_string() + "/");
+    match cwd.as_deref().and_then(|c| file.strip_prefix(c)) {
+        Some(rel) => rel.to_string(),
+        None => file.to_string(),
+    }
+}
+
+/// `file:line:col` with a shortened path.
+fn at(s: &Span) -> String {
+    format!("{}:{}:{}", short_path(&s.file), s.line, s.column)
+}
+
+/// The source line of `s` with a caret under its column, as `wj check` shows diagnostics.
+fn source_excerpt(s: &Span) -> Option<String> {
+    let text = std::fs::read_to_string(&s.file).ok()?;
+    let line = text.lines().nth(s.line.checked_sub(1)?)?;
+    let n = s.line.to_string();
+    let pad = " ".repeat(n.len());
+    let caret = " ".repeat(s.column.saturating_sub(1).min(line.chars().count()));
+    Some(format!("\n {pad}--> {}\n {n} | {line}\n {pad} | {caret}^", at(s)))
+}
+
+/// `in `f`, called from `g` at file:line:col, called from `main` at ..`: the Windjammer frames, innermost first.
+fn call_chain(frames: &[Frame]) -> String {
+    let mut out = format!("in `{}`", frames[0].function);
+    for (i, fr) in frames.iter().enumerate().skip(1) {
+        out.push_str(&format!(", called from `{}`", fr.function));
+        if let Some(site) = &frames[i - 1].call_site {
+            out.push_str(&format!(" at {}", at(site)));
+        }
+    }
+    out
 }
 
 impl fmt::Display for RuntimeError {
