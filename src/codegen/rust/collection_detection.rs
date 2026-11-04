@@ -104,12 +104,12 @@ impl CodeGenerator<'_> {
         if yields {
             let mut names = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut names);
-            for n in &names {
+            shadowed.extend(names.into_iter().filter(|n| {
                 if self.idiom.str_slice_loop_vars.insert(n.clone()) {
                     slice_vars.push(n.clone());
                 }
-            }
-            shadowed.extend(names.into_iter().filter(|n| self.inferred_borrowed_params.remove(n)));
+                self.inferred_borrowed_params.remove(n)
+            }));
         }
         (yields, shadowed, slice_vars)
     }
