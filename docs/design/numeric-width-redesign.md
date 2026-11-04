@@ -401,7 +401,31 @@ in the goldens or a red ecosystem target, or when (from C2 on) checker and rustc
 expressions. A deletion step that turns a "never fires" claim into a real regression (as the W5 deletion did) is
 reverted on the spot and the trace is widened to the drift and ecosystem corpora before the next attempt.
 
-**C1 result.** Recorded in section 7.1 when the stage lands.
+**C1 result.** Section 7.1.
+
+### 7.1 C1 result
+
+| meter | before | after |
+|---|---|---|
+| `D-WIDTH-OWNERS` (gate 3) | 58 | 58 |
+| width-ratcheted tests (`.config/known-test-failures.txt`, C4 section) | 12 | 11 |
+| golden rustc rejects (gate 2) | 91 | 90 (`tests/tuple_enum_variants.wj`) |
+| drift repros `let_mut_zero_then_parse`, `map_get_unwrap_or_deref` | compiled red | pass (ledger lines deleted) |
+| `tests/core_surface_rustc_test.rs` (every surface entry against rustc) | - | pass |
+
+Deleted: the solver's hand lists `std_sequence_index_method` (which methods take an index) and
+`receiver_is_std_collection` (which receivers have a `usize` length), and the registry's name-based signature guess
+for core-type methods. Added: `std/rust_core.wji` (124 method entries including the float methods), `src/typing/`, the
+receiver typer in `ir/constraint_gen/numeric.rs`.
+
+`D-WIDTH-OWNERS` did not move: it compares the solver's verdict for named locals with the emitted width, and the
+locals it counts are mostly held classes (unknown field reads, loop bindings over undeclared element types, closures)
+that need C2's expression types, not core-method signatures. The stage still pays: two drift repros and a reject
+fall, and the hand lists are gone.
+
+Root cause of the regression found by compiling a large program (`for d in -1..1` printed `-1_i64` next to an
+`i32` constant): the lexical-scoping step of C4 holds every class that names an unbound name, and a module constant
+was unbound to the solver; the legacy path then took over. Module constants now carry their declared type.
 
 ### 7.2 Floats: a float class, like the index class
 
