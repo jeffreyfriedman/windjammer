@@ -72,10 +72,11 @@ fn loc_of(text: string) -> string {
 struct Outcome {
     token: string,
     loc: string,
+    diag: string,
 }
 
 fn none_outcome() -> Outcome {
-    Outcome { token: "absent", loc: "" }
+    Outcome { token: "absent", loc: "", diag: "" }
 }
 
 struct TestRun {
@@ -103,7 +104,7 @@ fn parse_tests(target: string, stdout: string) -> TestRun {
                 let status = as_str(get(t, "status") ?? object()) ?? ""
                 let ok = (as_bool(get(t, "passed") ?? object()) ?? false) || status == "passed"
                 run.ids.push("${target}::${strings.replace(file, "./", "")}::${name}")
-                run.outs.push(Outcome { token: if ok { "pass" } else { "fail" }, loc: loc_of(msg) })
+                run.outs.push(Outcome { token: if ok { "pass" } else { "fail" }, loc: loc_of(msg), diag: "" })
             }
         },
         Err(_) => {},
@@ -159,9 +160,12 @@ fn run_program(o: Opts, file: string, mode: string) -> Outcome {
         Ok(r) => {
             let no_loc = mode == "compiled" || r.status == 0
             let loc = if no_loc { "" } else { loc_of(r.stderr) }
-            Outcome { token: "exit${r.status}:${checksum(r.stdout)}", loc: loc }
+            // did the run stop on an ownership error (the interpreter's WJ0007, or rustc's E0382 behind the compiled build)?
+            let said = strings.contains(r.stderr, "WJ0007") || strings.contains(r.stderr, "E0382") || strings.contains(r.stdout, "E0382") || strings.contains(r.stdout, "WJ0007")
+            let diag = if r.status != 0 && said { "refused" } else { "ran" }
+            Outcome { token: "exit${r.status}:${checksum(r.stdout)}", loc: loc, diag: diag }
         },
-        Err(e) => Outcome { token: "error", loc: "" },
+        Err(e) => Outcome { token: "error", loc: "", diag: "error" },
     }
 }
 
@@ -175,7 +179,7 @@ fn read_baseline() -> TestRun {
                 let f = strings.split(line, "\t")
                 if f.len() == 3 {
                     run.ids.push(f[0])
-                    run.outs.push(Outcome { token: f[1], loc: f[2] })
+                    run.outs.push(Outcome { token: f[1], loc: f[2], diag: "" })
                 }
             }
         },
@@ -282,7 +286,7 @@ fn main() {
         for id in ids {
             let wo = lookup(w, id)
             let ro = lookup(r, id)
-            let co = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else { lookup(c, id) }
+            let co = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip" } } else { lookup(c, id) }
             out = out + row(id, wo.token, ro.token, co.token)
             if wo.loc != "" || ro.loc != "" || co.loc != "" {
                 let cl = if o.compiled == "skip" { "skip" } else { "loc:${co.loc}" }
@@ -296,7 +300,7 @@ fn main() {
     }
     // value-position programs and the minimal repros of ledgered divergences
     let mut progs = Vec::new()
-    for dir in ["tests/engine_parity", "${CORPUS}/repros"] {
+    for dir in ["tests/engine_parity", "${CORPUS}/repros", "${CORPUS}/moves"] {
         match fs.read_dir(dir) {
             Ok(es) => {
                 for e in es {
@@ -315,11 +319,20 @@ fn main() {
     for p in progs {
         let w = run_program(o, p, "walker")
         let r = run_program(o, p, "resolved")
-        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else if o.compiled == "live" { run_program(o, p, "compiled") } else { lookup(baseline, p) }
+        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip" } } else if o.compiled == "live" { run_program(o, p, "compiled") } else { lookup(baseline, p) }
         out = out + row(p, w.token, r.token, c.token)
-        // a program that does not run under the walker agrees with itself in every mode: it is a broken case
-        let ran = strings.starts_with(w.token, "exit0:")
-        out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") { "runs" } else { "broken" }, "runs")
+        if strings.contains(p, "/must_refuse_") {
+            // the interpreter must refuse what rustc rejects: `#refused` rows say whether each side stopped on an ownership error
+            let cd = if o.compiled == "skip" { "skip" } else if o.compiled == "live" { c.diag } else { lookup(baseline, "${p}#refused").token }
+            out = out + row("${p}#refused", w.diag, r.diag, cd)
+            if o.compiled == "live" {
+                recorded = recorded + "${p}#refused\t${c.diag}\t\n"
+            }
+        } else {
+            // a program that does not run under the walker agrees with itself in every mode: it is a broken case
+            let ran = strings.starts_with(w.token, "exit0:")
+            out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") { "runs" } else { "broken" }, "runs")
+        }
         if o.compiled == "live" {
             recorded = recorded + "${p}\t${c.token}\t\n"
         }

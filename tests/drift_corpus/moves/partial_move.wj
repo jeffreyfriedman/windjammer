@@ -1,0 +1,15 @@
+// A field moved out of a struct, then the whole struct used.
+struct Person {
+    name: string,
+    age: int,
+}
+
+fn show(p: Person) -> string {
+    "${p.name} ${p.age}"
+}
+
+fn main() {
+    let p = Person { name: "ann", age: 3 }
+    let n = p.name
+    println("${n} ${show(p)}")
+}
