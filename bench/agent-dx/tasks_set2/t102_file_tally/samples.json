@@ -1,0 +1,26 @@
+[
+ {
+  "args": [
+   "a.txt"
+  ],
+  "files": {
+   "a.txt": "hello world\nfoo\n"
+  },
+  "stdin": "",
+  "stdout": "a.txt: 2 lines, 3 words\nreport:\na.txt 2 3\n"
+ },
+ {
+  "args": [
+   "x",
+   "gone",
+   "y"
+  ],
+  "code": 1,
+  "files": {
+   "x": "one two\n",
+   "y": "three\n\nfour five six\n"
+  },
+  "stdin": "",
+  "stdout": "x: 1 lines, 2 words\ngone: cannot read\ny: 3 lines, 4 words\nreport:\nx 1 2\ngone -\ny 3 4\n"
+ }
+]

@@ -1,0 +1,138 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V",
+ "arm_name": "interpreted-first",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error: bad width"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:35:27\n   |\n11 |     let mut cur = String::new();\n   |                   ------------- expected due to this value\n...\n35 |                     cur = w;\n   |                           ^ expected `String`, found `&str`\n   |\nhelp: try using a conversion metho",
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:43:31\n   |\n11 |     let mut cur = String::new();\n   |                   ------------- expected due to this value\n...\n43 |                         cur = w;\n   |                               ^ expected `String`, found `&str`\n   |\nhelp: try using a conversi"
+ ],
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 38
+ },
+ "final_source": "use std::fs\nuse std::process\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut ok = false\n    let mut cur = \"\"\n    let mut curlen = 0\n    let mut out: Vec<string> = []\n    for line in text.lines() {\n        if first {\n            first = false\n            match line.trim().parse::<int>() {\n                Ok(n) => {\n                    if n > 0 {\n                        width = n\n                        ok = true\n                    }\n                }\n                Err(_) => {}\n            }\n            if !ok {\n                println(\"error: bad width\")\n                process::exit(1)\n            }\n        } else {\n            for w in line.split_whitespace() {\n                let wl: int = w.chars().count() as int\n                if curlen == 0 {\n                    cur = w\n                    curlen = wl\n                } else if curlen + 1 + wl <= width {\n                    cur = \"${cur} ${w}\"\n                    curlen = curlen + 1 + wl\n                } else {\n                    out.push(cur)\n                    cur = w\n                    curlen = wl\n                }\n            }\n        }\n    }\n    if first {\n        println(\"error: bad width\")\n        process::exit(1)\n    }\n    if curlen > 0 {\n        out.push(cur)\n    }\n    for l in out {\n        println(l)\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::process\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut ok = false\n    let mut cur = \"\"\n    let mut curlen = 0\n    let mut out: Vec<string> = []\n    for line in text.lines() {\n        if first {\n            first = false\n            match line.trim().parse::<int>() {\n                Ok(n) => {\n                    if n > 0 {\n                        width = n\n                        ok = true\n                    }\n                }\n                Err(_) => {}\n            }\n            if !ok {\n                println(\"error: bad width\")\n                process::exit(1)\n            }\n        } else {\n            for w in line.split_whitespace() {\n                let wl: int = w.chars().count() as int\n                if curlen == 0 {\n                    cur = w\n                    curlen = wl\n                } else if curlen + 1 + wl <= width {\n                    cur = \"${cur} ${w}\"\n                    curlen = curlen + 1 + wl\n                } else {\n                    out.push(cur)\n                    cur = w\n                    curlen = wl\n                }\n            }\n        }\n    }\n    if first {\n        println(\"error: bad width\")\n        process::exit(1)\n    }\n    if curlen > 0 {\n        out.push(cur)\n    }\n    for l in out {\n        println(l)\n    }\n}\n",
+ "first_turn_input": 8249,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.071,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.066,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 23.5,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "original_final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 38
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "other_seconds": 3.0,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": false,
+ "recorded_at": "2026-11-04T00:31:34",
+ "regraded": true,
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 7.904,
+ "tool_result_tokens_est": 65,
+ "tool_wait_seconds": 0.14,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 7899,
+   "cache_write": 348,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8249,
+   "output": 6,
+   "result_chars": 227,
+   "turn": 1
+  },
+  {
+   "cache_read": 8247,
+   "cache_write": 1037,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 9286,
+   "output": 231,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 7.904,
+  "cost_usd": 0.0180226,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.wj`. I only ran it on Example 2 and one bad-width input, both in the interpreter, so Example 1 and other edge cases are untested.\n\n- **Example 2:** input `5` then `abcdefgh ij k` printed `abcdefgh` and `ij k`, which matches the expected output.\n- **Bad width:** input `x` printed `error: bad width` and exited with status 1.\n\nTwo cases are handled in code but not run. A",
+  "subtype": "success",
+  "tokens_in": 17535,
+  "tokens_out": 1086,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": null,
+ "wall_seconds": 11.04
+}

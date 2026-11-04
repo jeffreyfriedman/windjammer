@@ -1,0 +1,46 @@
+use std::env
+use std::fs
+use std::process
+
+fn main() {
+    let mut args: Vec<string> = []
+    let mut first = true
+    for a in env::args() {
+        if first {
+            first = false
+        } else {
+            args.push(a)
+        }
+    }
+    if args.len() == 0 {
+        println("usage: tally FILE...")
+        process::exit(2)
+    }
+    let mut report = ""
+    let mut bad = false
+    for a in args {
+        match fs::read_to_string(a) {
+            Ok(text) => {
+                let mut lines = 0
+                for c in text.chars() {
+                    if c == '\n' { lines += 1 }
+                }
+                let words = text.split_whitespace().count()
+                println("${a}: ${lines} lines, ${words} words")
+                report = report + "${a} ${lines} ${words}\n"
+            }
+            Err(_) => {
+                println("${a}: cannot read")
+                report = report + "${a} -\n"
+                bad = true
+            }
+        }
+    }
+    let _ = fs::write("report.txt", report)
+    let back = fs::read_to_string("report.txt").unwrap_or("")
+    println("report:")
+    print(back)
+    if bad {
+        process::exit(1)
+    }
+}

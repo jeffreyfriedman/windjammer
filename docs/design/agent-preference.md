@@ -217,7 +217,7 @@ Verdict per tip:
 | strings (`string` not `String`, no `.to_string()` on literals) | does not earn its bytes | lint W0006/W0010 text and diagnostic R2 |
 | ownership (no `&`, `.iter()`, `.unwrap()`) | does not earn its bytes: lints teach it in one round trip | lint messages (W0001-W0005) |
 | printing `Option`/`Result` with `${x:?}`, HashMap order | no signal either way | reference (`wj docs`) |
-| "Unsure? `wj docs` / `wj explain`" line | agents rarely follow it (3 of 30) and the arm without it was cheaper | `AGENTS.md`, the loop text, and the diagnostics themselves |
+| "Unsure? `wj docs` / `wj explain`" line | agents rarely follow it (3/30) and the arm without it was cheaper | `AGENTS.md`, the loop text, and the diagnostics themselves |
 
 Sheet v2 candidate (about 0.9 KB): types and basics, the input recipe, `len() as int`, the build loop. It needs one confirming run (S2 versus S versus the full reference, 5 trials per cell)
 before it replaces the current sheet; the size ratchet stays at 2 KB until then.
@@ -249,3 +249,24 @@ Decision against the rule (an interpreted arm within 5 points of compiled-first 
 - **v2 sheet:** not adopted. It matched the control in arm N but with the largest lint-leakage count (12 trials) because it drops the ownership bullet, and N-M is not significant.
 
 Harness finding: under load 25-35, 14/120 first compiled grades failed all vectors for programs that pass on a quiet re-run. The grader now retries a compiled failure once when the interpreter passes everything and records `first_compiled`; the pilot-4 records were corrected with `pilot-regrade` (every figure above is after correction). Earlier pilots used the same grader, so their compiled pass rates under load are lower bounds.
+
+## Pilot 5 (Nov 2026): adopted loop on a new task set
+
+Sheet change (adopted from pilot 4): the sheet's loop bullet now says to iterate with `wj check` and `wj run --interpret` and to finish with a mandatory `wj build` plus `wj run --compiled`
+with the same output. The v2 sheet is not adopted. Task set 2 (`bench/agent-dx/tasks_set2`, ten tasks, reference solutions in `solutions/wj-set2` verified interpreted and compiled):
+typed JSON orders, a file-writing CLI, trait-based pricing, HashMap log summary, calendar distance, priority queue, word wrap, infix to postfix, spiral order, and a Rust-crate call
+(`crc32fast` through a generated surface; the interpreter refuses crate calls with a clear error and exit 2). Compiler: `next/v0.50.0` 03e15b0830ea. All arms carry the adopted sheet minus its loop bullet,
+so the loop comes from the prompt only. 3 trials per task, 30 per arm, 90 trials, $3.20. Records: `bench/agent-dx/results/pilot5/`. Machine load average 29-35 (recorded per trial).
+
+| arm | loop | pass@1 | silent divergence | turns | tokens in | $/trial | wall s |
+|---|---|---|---|---|---|---|---|
+| U | compiled-first | 1.00 [1.00, 1.00] | 0.00 | 6.7 | 47.2k | 0.043 | 27.1 |
+| V | interpreted-first | 0.67 [0.37, 0.90] | 0.30 | 4.3 | 27.5k | 0.026 | 15.2 |
+| W | interpreted + one final build | 0.97 [0.87, 1.00] | 0.03 | 6.5 | 46.4k | 0.038 | 22.3 |
+
+Paired versus U: V pass -0.33 [-0.60, -0.10], turns -2.4 [-4.9, -0.3], cost -$0.017 [-0.029, -0.006], wall -11.8 s [-21.2, -4.1]; W pass -0.03 [-0.13, 0.00], turns -0.3 [-3.1, 1.7], cost -$0.005 [-0.018, 0.003], wall -4.8 s [-14.4, 2.6].
+
+- **Reading.** W matches the control within 3 points of pass with the same turns; its savings (-4.8 s wall, -$0.005) are not significant at this N. V is cheaper and faster and loses a third of its programs. The pilot-4 recommendation stands: interpreted inner loop, mandatory final build; interpret-by-default without the build is not safe yet.
+- **Why V loses.** Nine of its ten divergent programs share two classes (`docs/drift/pilot5-findings.md`): `let cur = m.get(k).unwrap_or(0.0)` followed by `m.insert(k, cur + x)` (generated dereference of an owned value) and `let mut cur = ""` then `cur = w` for a word from `split_whitespace()` (`String` against `&str`). Fixing those two classes is worth about 0.30 of V's pass rate.
+- **Crate task.** t110 passed 9/9 in all arms: compiled runs use the generated surface; the interpreter's clear refusal (exit 2) sent V agents to `wj run --compiled`.
+- **Harness defects found and fixed this round.** (1) The sandbox rejects shell variable expansion, so `echo $?` was denied 48 times across the 90 first-run trials and agents on tasks with exit-status requirements stopped after the denial (t107 passed 0/9 in the discarded first run and 5/9 after the fix, the rest being genuine compiled rejections); the shim now prints `[exit N]` for a failing `wj` command and the prompt says so. (2) The interpreter grade ran with capabilities enforced in a scratch directory, which denied every file read: pilots 2-4 under-reported divergence on file tasks (t050); the grader now sets `WJ_CAPS=off` for that run. (3) Under load 40-60, two compiled grades failed all vectors even after the retry and passed on a quiet re-grade; `pilot-regrade` corrected them.

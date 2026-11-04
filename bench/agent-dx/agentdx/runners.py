@@ -54,6 +54,7 @@ class Runner:
     build_timeout = 120
     run_timeout = 10
     arg_separator = []  # tokens placed between the program and its arguments
+    run_env = None      # extra environment for the program run
 
     def build_dir(self, wd):
         d = os.path.join(wd, ".build")
@@ -75,7 +76,7 @@ class Runner:
                     f.write(content)
             args = list(case.get("args") or [])
             cmd = self.command(build, wd) + (self.arg_separator if args else []) + args
-            code, out, err, to, sec = _exec(cmd, cwd, case.get("stdin", ""), self.run_timeout)
+            code, out, err, to, sec = _exec(cmd, cwd, case.get("stdin", ""), self.run_timeout, env=self.run_env)
             return RunResult(out, err, code, to, sec)
 
 
@@ -152,6 +153,9 @@ class WjInterpRunner(Runner):
     lang, src = "wj-interp", "main.wj"
     run_timeout = 20
     arg_separator = ["--"]  # otherwise `wj run` parses program flags such as --name itself
+    # The grader runs the program in a scratch directory next to nothing: capability enforcement (ADR-0021) would deny every
+    # file read outside the project directory and mask real behaviour. The grade measures semantics, not the sandbox.
+    run_env = {"WJ_CAPS": "off"}
 
     def build(self, wd):
         # Interpreter has no separate compile step; errors surface at run time (first vector).

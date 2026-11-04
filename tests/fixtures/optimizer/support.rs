@@ -91,10 +91,12 @@ pub fn check_source(src: &str, want: &[String], dir: &Path, name: &str) -> Verdi
     }
 }
 
-pub fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("wj-opt-test-{}-{}", tag, std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+#[path = "../../common/scratch.rs"]
+mod scratch_guard;
+
+/// Scratch directory removed when dropped (hold it for the whole test).
+pub fn scratch(tag: &str) -> scratch_guard::Scratch {
+    scratch_guard::Scratch::new(&format!("opt-test-{tag}"))
 }
 
 /// Run `f` over `items` on up to 4 threads, preserving order.

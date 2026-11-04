@@ -1,0 +1,133 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "U",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "diag_samples": [
+  "error[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:14:37\n   |\n14 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:14:37\n   |\n14 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0031]: `int` is not a reference, so it cannot be dereferenced\n  --> main.wj:14:37\n   |\n14 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:46:1\n   |\n46 |             let parts: Vec<str"
+ ],
+ "diagnostic_categories": {
+  "other": 1,
+  "syntax": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 37,
+  "status": "pass",
+  "total": 37
+ },
+ "final_source": "use std::fs\n\nfn all_digits(s: string) -> bool {\n    if s.len() == 0 { return false }\n    for c in s.chars() {\n        if c < '0' || c > '9' { return false }\n    }\n    true\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut us: Vec<string> = []\n    let mut acts: Vec<string> = []\n    let mut secs: Vec<int> = []\n    let mut bad = 0\n    for line in text.lines() {\n        let toks: Vec<string> = line.split_whitespace().collect()\n        if toks.len() != 3 || !all_digits(toks[2]) {\n            bad += 1\n            continue\n        }\n        us.push(toks[0])\n        acts.push(toks[1])\n        secs.push(toks[2].parse::<int>().unwrap_or(0))\n    }\n    let n: int = us.len() as int\n    let mut names: Vec<string> = []\n    let mut totals: Vec<int> = []\n    let mut cnts: Vec<int> = []\n    let mut i = 0\n    while i < n {\n        let u = us[i as usize]\n        let mut idx: int = -1\n        let mut j = 0\n        while j < names.len() as int {\n            if names[j as usize] == u { idx = j }\n            j += 1\n        }\n        if idx < 0 {\n            names.push(u)\n            totals.push(secs[i as usize])\n            cnts.push(1)\n        } else {\n            totals[idx as usize] = totals[idx as usize] + secs[i as usize]\n            cnts[idx as usize] = cnts[idx as usize] + 1\n        }\n        i += 1\n    }\n    let m: int = names.len() as int\n    let mut order: Vec<int> = []\n    let mut k = 0\n    while k < m {\n        order.push(k)\n        k += 1\n    }\n    let mut a = 0\n    while a < m {\n        let mut b = a + 1\n        while b < m {\n            let oa = order[a as usize]\n            let ob = order[b as usize]\n            let ta = totals[oa as usize]\n            let tb = totals[ob as usize]\n            let swap = tb > ta || (tb == ta && names[ob as usize] < names[oa as usize])\n            if swap {\n                order[a as usize] = ob\n                order[b as usize] = oa\n            }\n            b += 1\n        }\n        a += 1\n    }\n    for o in order {\n        let u = names[o as usize]\n        let mut best = \"\"\n        let mut bc = 0\n        let mut p = 0\n        while p < n {\n            if us[p as usize] == u {\n                let act = acts[p as usize]\n                let mut c = 0\n                let mut q = 0\n                while q < n {\n                    if us[q as usize] == u && acts[q as usize] == act { c += 1 }\n                    q += 1\n                }\n                if c > bc || (c == bc && act < best) {\n                    bc = c\n                    best = act\n                }\n            }\n            p += 1\n        }\n        println(\"${u} ${cnts[o as usize]} ${totals[o as usize]} ${best}\")\n    }\n    println(\"malformed: ${bad}\")\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn all_digits(s: string) -> bool {\n    if s.len() == 0 { return false }\n    for c in s.chars() {\n        if c < '0' || c > '9' { return false }\n    }\n    true\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let mut totals: HashMap<string, int> = HashMap::new()\n    let mut acts: HashMap<string, int> = HashMap::new()\n    let mut users: Vec<string> = []\n    let mut bad = 0\n    for line in text.lines() {\n        let toks: Vec<string> = line.split_whitespace().collect()\n        if toks.len() != 3 || !all_digits(toks[2]) {\n            bad += 1\n            continue\n        }\n        let u = toks[0]\n        let secs: int = toks[2].parse::<int>().unwrap_or(0)\n        if !counts.contains_key(u) {\n            users.push(u)\n            counts.insert(u, 0)\n            totals.insert(u, 0)\n        }\n        counts.insert(u, counts.get(u).unwrap_or(0) + 1)\n        totals.insert(u, totals.get(u).unwrap_or(0) + secs)\n        let key = \"${u}\\t${toks[1]}\"\n        acts.insert(key, acts.get(key).unwrap_or(0) + 1)\n    }\n    users.sort_by(|a, b| {\n        let ta = totals.get(a).unwrap_or(0)\n        let tb = totals.get(b).unwrap_or(0)\n        if ta != tb { tb.cmp(ta) } else { a.cmp(b) }\n    })\n    for u in users {\n        let mut best = \"\"\n        let mut bc = 0\n        for k in acts.keys() {\n            let parts: Vec<string> = k.split(\"\\t\").collect()\n            if parts[0] != u { continue }\n            let c = acts.get(k).unwrap_or(0)\n            if c > bc || (c == bc && parts[1] < best) {\n                bc = c\n                best = parts[1]\n            }\n        }\n        println(\"${u} ${counts.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}\")\n    }\n    println(\"malformed: ${bad}\")\n}\n",
+ "first_turn_input": 8287,
+ "interp_grade": {
+  "categories": [],
+  "passed": 37,
+  "status": "pass",
+  "total": 37
+ },
+ "invocations": [
+  {
+   "categories": [
+    "other",
+    "syntax"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 1.808,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 1.847,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 33.8,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 4,
+ "other_seconds": 3.28,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "recorded_at": "2026-11-04T00:26:21",
+ "schema": 2,
+ "task": "t104_activity_log",
+ "thinking_seconds": 18.51,
+ "tool_result_tokens_est": 1273,
+ "tool_wait_seconds": 3.66,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6780,
+   "cache_write": 1505,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 8287,
+   "output": 10,
+   "result_chars": 3506,
+   "turn": 1
+  },
+  {
+   "cache_read": 8285,
+   "cache_write": 2732,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11019,
+   "output": 7,
+   "result_chars": 949,
+   "turn": 2
+  },
+  {
+   "cache_read": 11017,
+   "cache_write": 2042,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13061,
+   "output": 353,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 18.51,
+  "cost_usd": 0.058226200000000006,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written and compiles with `wj run --compiled`. I ran it on one input: Example 1's five lines plus the two lines from Example 2 (`bad line` and `y b -4`). The output was:\n\n```\nann 3 47 edit\nbob 2 4 login\nmalformed: 2\n```\n\nThat matches Example 1's user lines, and the malformed count of 2 is right for the two bad lines I added. I did not run Example 2 on its own, and I tried no other edg",
+  "subtype": "success",
+  "tokens_in": 32367,
+  "tokens_out": 3049,
+  "turns": 5
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 2,
+ "wall_seconds": 25.45
+}

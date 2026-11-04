@@ -29,6 +29,7 @@ pub mod rust_surface;
 pub mod run_dev;
 pub mod self_install;
 pub mod test;
+pub mod tmp_janitor;
 pub mod update;
 pub mod watch;
 

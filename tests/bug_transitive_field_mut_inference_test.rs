@@ -1,3 +1,6 @@
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 /// TDD: Transitive &mut self inference through self.field.method()
 ///
 /// Bug: When a method calls self.field.method() and the called method requires
@@ -12,7 +15,7 @@
 /// Expected: Outer::do_work generates `&mut self` (not `&self`)
 /// because it transitively mutates through self.inner.
 fn compile_wj_to_rust(test_name: &str, wj_source: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("wj_transitive_mut_{}", test_name));
+    let dir = Scratch::new("transitive_mut");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(dir.join("src/test_input.wj"), wj_source).unwrap();

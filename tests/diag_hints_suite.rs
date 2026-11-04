@@ -5,6 +5,9 @@
 //! from a small Rust program (never hand-written strings), so the hint logic is checked against what
 //! rustc really says. Run: `cargo test --release --test diag_hints_suite`.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use windjammer::diagnostics::rustc_map::{self, SourceCache};
 use windjammer::diagnostics::{Applicability, Diagnostic};
 use windjammer::error_mapper::{DiagnosticLevel, ErrorMapper};
@@ -13,7 +16,7 @@ use windjammer::source_map::SourceMap;
 /// Compile `rs` with rustc and return the cargo-style JSON lines for its diagnostics.
 fn rustc_json(rs: &str) -> String {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!("wj-hints-{}-{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
+    let dir = Scratch::new("hints");
     std::fs::create_dir_all(&dir).unwrap();
     let f = dir.join("main.rs");
     std::fs::write(&f, rs).unwrap();
@@ -223,7 +226,7 @@ fn regex_like_rustc_code(t: &str) -> bool {
 /// The fix is attached only when its target text is found exactly once on the mapped `.wj` line.
 #[test]
 fn fix_is_machine_checkable_when_the_wj_line_contains_the_expression() {
-    let dir = std::env::temp_dir().join(format!("wj-hints-fix-{}", std::process::id()));
+    let dir = Scratch::new("hints-fix");
     std::fs::create_dir_all(&dir).unwrap();
     let wj = dir.join("main.wj");
     std::fs::write(&wj, "fn take(s: string) {}\nfn main() {\n    let a = \"x\"\n    take(a)\n}\n").unwrap();
@@ -322,4 +325,27 @@ fn macro_forms_say_what_to_write() {
         assert!(t.contains("replace `") || t.contains("use "), "{t}");
         assert!(m.fixes.iter().any(|f| !f.edits.is_empty()), "no machine fix: {t}");
     }
+}
+
+// ---------- WJ0007 (predicted move) says it in Windjammer terms ----------
+
+#[test]
+fn predicted_move_explains_ownership_without_rust_terms() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/self_by_value_reuse.wj");
+    let d = windjammer::check::moves::predicted_moves(&p);
+    assert_eq!(d.len(), 1, "{d:?}");
+    let d = &d[0];
+    assert_eq!(d.code, "WJ0007");
+    assert!(d.message.contains("`n`") && d.message.contains("Node::advance"), "{}", d.message);
+    let t = all_text(d);
+    assert!(t.contains("takes ownership of its receiver") && t.contains("consumed"), "{t}");
+    assert!(t.contains("let moved = n.advance()") || t.contains("the value `advance` returns"), "{t}");
+    assert!(t.contains("move the later use"), "{t}");
+    for rust in ["E0382", "rustc", "by value", "borrow checker"] {
+        assert!(!t.contains(rust), "Rust term `{rust}` in: {t}");
+    }
+    // The span is on the call that consumes the receiver, line 21 of the fixture.
+    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 21, "{d:?}");
+    // No machine fix: `.clone()` would trade this error for lint W0005, so the hint is text only.
+    assert!(d.fixes.is_empty());
 }

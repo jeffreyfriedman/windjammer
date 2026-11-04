@@ -2,6 +2,9 @@
 //! format consistently: the compiler lexer and the formatter tokenizer share the same `${"` rule, and the
 //! formatter must leave the nested literals untouched (it used to insert spaces: `${" Hello "...}`).
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use windjammer::formatter::{format_source, FormatOptions};
 
 const SRC: &str = "fn main() {\n    let s = \"a,b\"\n    println(\"${s.replace(\",\", \";\")}\")\n    println(\"${\"Hello\".to_uppercase()} ${s.len()}\")\n}\n";
@@ -16,8 +19,7 @@ fn formatter_preserves_nested_string_literals() {
 
 #[test]
 fn interpreter_runs_nested_quotes() {
-    let dir = std::env::temp_dir().join(format!("wj-nestedq-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new("nestedq");
     let f = dir.join("t.wj");
     std::fs::write(&f, SRC).unwrap();
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&f).output().unwrap();

@@ -43,6 +43,9 @@
 ///     self.quests.insert(id, quest);  // ERROR: expected Quest, found &mut Quest
 /// }
 /// ```
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -50,11 +53,7 @@ fn compile_wj(source: &str) -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = std::env::temp_dir().join(format!(
-        "wj_owned_param_insert_test_{}_{}",
-        std::process::id(),
-        id
-    ));
+    let temp_dir = Scratch::new("owned_param_insert_test");
     let _ = std::fs::remove_dir_all(&temp_dir);
     std::fs::create_dir_all(&temp_dir).unwrap();
 
