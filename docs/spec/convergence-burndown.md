@@ -85,6 +85,7 @@ shows the stages as `analyzer= solver= ir= emitted=`.
 - Open cases filed as project_corpus programs: `vec_element_moved_then_reused` (cross-module method call does not
   convert a literal for an owned `String` formal; listed in `project_rejects.txt`), `param_rebound_then_compared`
   and `use_imported_homonym_by_value` (pass here; the larger-project failures they stand for did not reproduce).
+
 ## Name-based guesses (decide from declarations instead)
 
 The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a
