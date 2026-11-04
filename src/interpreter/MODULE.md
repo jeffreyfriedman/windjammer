@@ -14,8 +14,7 @@ the interpreter must never print something the compiled program would not print.
 - `value.rs`, `int.rs`, `u128ops.rs`  value model; integer widths (`IntTy`) with Rust overflow rules; u128 bit patterns
 - `engine.rs`            `Interpreter` state, public entry points (`run`, `run_checked`, `call_main`)
 - `register.rs`, `loader.rs`, `project.rs`  definitions; program file selection; whole-program module tree bound by `crate::resolve` (E0603 privacy)
-- `preflight.rs`, `deps.rs`, `host_bridge.rs`  `Unsupported`-feature detection (compiled-fallback trigger); dependencies as source (transitive, each crate once; `path = "../pkg/build"` is the package `../pkg`); `extern fn` bridge (ADR-0023)
-- `crate_host/`          calls into Rust crate dependencies (ADR-0031): `sig.rs` surface fn -> wire types, `wire.rs` value encoding, `gen.rs` host binary source, `process.rs` the spawned host (pipes on fds 3/4), `stub.rs` `--simulate` stubs, `mod.rs` gate -> effect port -> call -> `&mut` copy-out
+- `preflight.rs`, `deps.rs`, `host_bridge.rs`  `Unsupported`-feature detection (compiled-fallback trigger); dependencies as source (transitive, each crate once; `path = "../pkg/build"` is the package `../pkg`); `extern fn` bridge (ADR-0023); `crate_host/` Rust crate calls (ADR-0031): `sig.rs` surface fn -> wire types, `wire.rs` value encoding, `gen.rs` host binary source, `process.rs` the spawned host (pipes on fds 3/4), `stub.rs` `--simulate` stubs, `mod.rs` gate -> effect port -> call -> `&mut` copy-out
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`; `moves.rs` ownership moves
