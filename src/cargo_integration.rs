@@ -598,12 +598,6 @@ edition = "2021"
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
-# The spec says an overflowing or dividing-by-zero constant expression panics at run time;
-# rustc would reject the generated program instead (deny-by-default lints).
-[lints.rust]
-arithmetic_overflow = "allow"
-unconditional_panic = "allow"
-
 {}{}{}"#,
         project_name, deps_section, lib_or_bin_section, release_profile
     );

@@ -70,16 +70,11 @@ impl<'ast> Analyzer<'ast> {
                 // PHASE 3: Developer explicitly requested &str
                 // Trust the developer - they promise it's safe
                 optimizable.insert(param.name.clone());
-            } else if has_string_ref {
-                // PHASE 3: Developer explicitly requested &String
+            } else if has_string_ref || self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
+                // &String requested (PHASE 3), or the formal is reassigned whole (`s = "x"`): `&mut String`, not `&str`
                 // Don't optimize this parameter
                 continue;
             } else {
-                // A formal that is reassigned as a whole (`s = "x"`) is written through: it is
-                // `&mut String`, never a read-only `&str`.
-                if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
-                    continue;
-                }
                 // Pub concat APIs keep owned `String` (`a + b` moves). Read-only
                 // comparison helpers (`pattern == path`) demote to `&str` so loop
                 // reuse can borrow (bug_loop_reuse_readonly_string_param / wj-glob).
