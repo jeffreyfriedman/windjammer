@@ -626,6 +626,13 @@ impl CodeGenerator<'_> {
         skip_module_roots: &std::collections::HashSet<String>,
     ) -> std::collections::HashSet<String> {
         let mut mods = std::collections::HashSet::new();
+        // C3 lexical scope: a module this program declares (`mod http`) shadows the runtime module of that name.
+        let mut skip_module_roots = skip_module_roots.clone();
+        skip_module_roots.extend(program.items.iter().filter_map(|i| match i {
+            Item::Mod { name, .. } => Some(name.clone()),
+            _ => None,
+        }));
+        let skip_module_roots = &skip_module_roots;
         for item in &program.items {
             Self::item_collect_runtime_std_modules(
                 item,

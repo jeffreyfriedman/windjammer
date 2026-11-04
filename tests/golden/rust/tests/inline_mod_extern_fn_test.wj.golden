@@ -1,6 +1,3 @@
-use windjammer_runtime::ffi;
-use windjammer_runtime::ffi::FfiString;
-use windjammer_runtime::ffi::FfiBytes;
 use windjammer_runtime::test::*;
 mod ffi {
     #[inline]
