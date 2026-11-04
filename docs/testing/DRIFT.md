@@ -20,6 +20,7 @@ shared machine).
 | fast-paths | each fast path fires on its programs (a silent fallback keeps output right and hides the regression) | `tests/interpreter_fast_paths_test.rs` |
 | jit-loops | generated loop programs: walker == resolved == no-jit | `tests/interpreter_jit_loops_test.rs` |
 | packed-vec | packed vectors == boxed vectors | `tests/interpreter_packed_vec_test.rs` |
+| crate-host | calls into Rust crates (ADR-0031): interpreted == compiled on the interop projects (strsim, shlex, crc32fast, a path crate with every surface shape), panics, replay, grants, simulate | `tests/interpreter_rust_crates_test.rs` |
 | corpus | walker, resolved and compiled on every test of the ecosystem snapshot plus the value-position programs | `scripts/wj/drift_corpus.wj`, `tests/drift_corpus/` |
 
 A cargo step that runs zero tests fails (a gate that compared nothing proves nothing); the corpus step fails below a

@@ -24,11 +24,13 @@ pub(crate) fn err(id: &str, what: String, file: &std::path::Path, line: usize, c
 }
 
 /// First registry-unsupported feature used by the program, if any.
+/// `crate_fn`: does the crate host serve this `crate::function` path (ADR-0031).
 /// `std_fn`: does the interpreter implement this `std::module::function` path.
 pub fn check(
     _files: &[LoadedFile],
     resolved: &ResolvedProgram<'static>,
     rust_crates: &[String],
+    crate_fn: &dyn Fn(&str) -> bool,
     bridged: &dyn Fn(&str) -> bool,
     std_fn: &dyn Fn(&str) -> bool,
 ) -> Result<(), RuntimeError> {
@@ -58,6 +60,10 @@ pub fn check(
                         _ if !call.callee.contains("::") && !path.ends_with(&format!("::{}", call.callee)) => format!("{}::{}", path, call.callee),
                         _ => path.clone(),
                     };
+                    // ADR-0031: a function the crate host serves runs interpreted
+                    if crate_fn(&called) {
+                        continue;
+                    }
                     return Err(at(
                         "deps.rust_crate",
                         format!("call into Rust crate dependency `{}` (`{}`)", head, called),
