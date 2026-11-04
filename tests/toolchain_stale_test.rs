@@ -1,9 +1,6 @@
 //! Gates: age-based staleness warning (30 days behind an enclosing compiler checkout, 60 days otherwise),
 //! once per day, silenceable, and free on the hot path. The clock is injected with `WJ_TOOLCHAIN_NOW`.
 
-#[path = "common/scratch.rs"]
-mod scratch;
-use scratch::Scratch;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -125,8 +122,9 @@ fn inside_a_checkout_the_binary_is_measured_against_the_newest_commit_there() {
 #[test]
 fn a_binary_younger_than_thirty_days_pays_almost_nothing() {
     let Some(ts) = commit_ts() else { return };
-    let guard = Scratch::new("stale-hotpath");
-    let missing = guard.join("absent-target-root");
+    // tempfile, not Scratch: WJ_CARGO_TARGET_ROOT is process-global, so a concurrent `wj` child may recreate the path after removal.
+    let guard = tempfile::tempdir().unwrap();
+    let missing = guard.path().join("absent-target-root");
     std::env::set_var("WJ_CARGO_TARGET_ROOT", &missing);
     std::env::remove_var("WJ_NO_STALE_WARN");
     let id = identity::current();
