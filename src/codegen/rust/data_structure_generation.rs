@@ -455,7 +455,10 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .is_some_and(crate::type_classification::type_is_vec_container);
         if !elements.is_empty()
-            && (self.array_literal_as_list || self.struct_field_expects_vec() || arg_expects_vec)
+            && (self.array_literal_as_list
+                || self.struct_field_expects_vec()
+                || arg_expects_vec
+                || self.return_position_list_literals.contains(&(elements.as_ptr() as usize)))
         {
             let prev = self.array_literal_as_list;
             self.array_literal_as_list = true; // nested literals are lists too

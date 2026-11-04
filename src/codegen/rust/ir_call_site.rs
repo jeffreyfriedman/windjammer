@@ -2635,6 +2635,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Expression::Identifier { name, .. } = arg_expr {
             if self.in_user_written_closure
                 && self.user_closure_params.contains(name)
+                && !self.borrowed_iterator_vars.contains(name)
                 && self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")

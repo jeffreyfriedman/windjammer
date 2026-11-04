@@ -79,7 +79,7 @@ impl CodeGenerator<'_> {
         &mut self,
         iterable: &Expression,
         pattern: &Pattern,
-    ) -> (bool, Vec<String>) {
+    ) -> (bool, Vec<String>, Vec<String>) {
         const STR_SLICE_METHODS: [&str; 8] = [
             "split", "split_whitespace", "lines", "split_terminator", "rsplit", "splitn", "rsplitn",
             "split_ascii_whitespace",
@@ -92,12 +92,18 @@ impl CodeGenerator<'_> {
             _ => false,
         };
         let mut shadowed = Vec::new();
+        let mut slice_vars = Vec::new();
         if yields {
             let mut names = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut names);
+            for n in &names {
+                if self.str_slice_loop_vars.insert(n.clone()) {
+                    slice_vars.push(n.clone());
+                }
+            }
             shadowed.extend(names.into_iter().filter(|n| self.inferred_borrowed_params.remove(n)));
         }
-        (yields, shadowed)
+        (yields, shadowed, slice_vars)
     }
 
     /// Check if a program references a collection type (HashMap or HashSet)
@@ -401,6 +407,18 @@ impl CodeGenerator<'_> {
                     })
                 {
                     return Some(Type::Reference(Box::new(Type::Custom("str".to_string()))));
+                }
+
+                // `map.keys()` / `map.values()` yield borrowed `&K` / `&V` items.
+                if matches!(method.as_str(), "keys" | "values") {
+                    if let Some(recv_ty) = self.infer_expression_type(object) {
+                        if let Type::Parameterized(base, args) = peel_type_reference(&recv_ty) {
+                            if matches!(base.as_str(), "HashMap" | "BTreeMap") && args.len() == 2 {
+                                let item = if method == "keys" { &args[0] } else { &args[1] };
+                                return Some(Type::Reference(Box::new(item.clone())));
+                            }
+                        }
+                    }
                 }
 
                 if let Some(item) = self

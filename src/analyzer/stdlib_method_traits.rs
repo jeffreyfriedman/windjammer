@@ -669,6 +669,12 @@ pub fn method_predicate_closure_receives_ref(method: &str) -> bool {
             | "skip_while"
             | "partition"
             | "inspect"
+            | "sort_by"
+            | "sort_unstable_by"
+            | "sort_by_key"
+            | "sort_unstable_by_key"
+            | "binary_search_by"
+            | "binary_search_by_key"
     ) || enumerable_key_closure(method)
 }
 
