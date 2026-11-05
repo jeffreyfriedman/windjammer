@@ -286,7 +286,10 @@ pub fn run(cli: Cli) -> Result<()> {
             let allow_empty = allow_empty || doc_count > 0;
             if interpret {
                 let sim = sim_run(simulate, seeds, seed, faults)?;
-                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json, sim);
+                // ADR-0031: the crate host for the project's surfaced Rust crates (built once, cached)
+                let here = path.clone().unwrap_or_else(|| std::path::PathBuf::from("."));
+                let crates = if list { None } else { windjammer::cli::crate_host_build::host_for_path(&here, &mut |m| eprintln!("{m}")).map_err(|e| anyhow::anyhow!(e))? };
+                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json, sim, crates);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -612,7 +615,12 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
 
 /// Run the Windjammerscript REPL (state persists between inputs).
 fn run_repl() -> Result<()> {
-    windjammer::interpreter::repl::run_repl_stdio();
+    // ADR-0031: calls into the surfaced Rust crates of the project around the working directory
+    let crates = windjammer::cli::crate_host_build::host_for_repl(std::path::Path::new("."), &mut |m| eprintln!("{m}")).unwrap_or_else(|e| {
+        eprintln!("wj: Rust crate calls are not available in this REPL: {e}");
+        None
+    });
+    windjammer::interpreter::repl::run_repl_with(crates);
     Ok(())
 }
 

@@ -500,7 +500,6 @@ Output:
 3 3
 1024 -8 4
 ```
-The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
 
 ## min, max, clamp and rotate
 
@@ -525,7 +524,6 @@ Output:
 3 10 0 5
 141 54 177
 ```
-The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
 
 ## Parsing numbers
 

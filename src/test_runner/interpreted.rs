@@ -37,7 +37,8 @@ pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
         .collect()
 }
 
-/// Entry point of `wj test --interpret`. Exits the process with the test status on failure.
+/// Entry point of `wj test --interpret`. Exits the process with the test status on failure. `crates`: the crate host
+/// for the project's Rust crate calls (ADR-0031), built by the caller (`cli::crate_host_build::host_for_path`).
 pub fn run_interpreted(
     path: Option<&Path>,
     filter: Option<&str>,
@@ -45,6 +46,7 @@ pub fn run_interpreted(
     allow_empty: bool,
     json: bool,
     sim: Option<crate::interpreter::runner::SimRun>,
+    crates: Option<crate::interpreter::crate_host::CrateHost>,
 ) -> Result<()> {
     let test_dir = path.unwrap_or_else(|| Path::new("."));
     if !test_dir.exists() {
@@ -73,7 +75,7 @@ pub fn run_interpreted(
             discovery.test_count()
         );
     }
-    let results = crate::interpreter::runner::run_specs_simulated(specs, sim);
+    let results = crate::interpreter::runner::run_specs_with(specs, sim, crates);
     if json {
         let failed = results.iter().filter(|r| !r.passed).count();
         let tests: Vec<_> = results
