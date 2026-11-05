@@ -230,3 +230,21 @@ fn method_call_inside_interpolation_makes_the_binding_mutable() {
     );
     assert!(g.contains("let mut w") && g.contains("let c ="), "{g}");
 }
+
+// ---- game-engine findings (neutral ports) ----
+
+#[test]
+fn if_let_over_split_last_does_not_copy_a_string_slice() {
+    let g = typechecks(
+        "pub fn extension(path: string) -> string {\n    if let Some(ext) = path.split('.').last() {\n        return ext.to_string()\n    }\n    \"\".to_string()\n}\nfn main() {\n    println(extension(\"a.txt\"))\n}\n",
+    );
+    assert!(!g.contains(".copied()"), "{g}");
+}
+
+#[test]
+fn match_over_map_get_with_default_binds_a_value_not_a_reference() {
+    let g = typechecks(
+        "use std::collections::HashMap\n\npub fn cost(g: HashMap<(i32, i32), f32>, x: i32, y: i32) -> f32 {\n    let cur = match g.get((x, y)) {\n        Some(v) => v,\n        None => 999999.0,\n    }\n    cur + 1.0\n}\nfn main() {\n    println(\"${cost(HashMap::new(), 1, 2)}\")\n}\n",
+    );
+    assert!(!g.contains("*cur"), "{g}");
+}
