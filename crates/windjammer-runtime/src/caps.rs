@@ -132,6 +132,50 @@ pub fn entry_op(p: impl AsRef<Path>, op: crate::caps_core::grant::EntryOp) -> st
     }
 }
 
+/// `rename` decided on both parent directories (see `Grant::rename_op`).
+pub fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+    let (a, b) = (from.as_ref(), to.as_ref());
+    let grant = if BYPASS.with(|x| x.get()) > 0 { None } else { GRANT.get() };
+    let Some(g) = grant else { return std::fs::rename(a, b) };
+    match g.rename_op(&a.to_string_lossy(), &b.to_string_lossy()) {
+        Ok(Some(())) => Ok(()),
+        Ok(None) => std::fs::rename(a, b),
+        Err(crate::caps_core::grant::OpenError::Io(e)) => Err(e),
+        Err(crate::caps_core::grant::OpenError::Denied(d)) => fault(d),
+    }
+}
+
+/// `copy` between two checked handles (see `Grant::copy_op`).
+pub fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<u64> {
+    let (a, b) = (from.as_ref(), to.as_ref());
+    let grant = if BYPASS.with(|x| x.get()) > 0 { None } else { GRANT.get() };
+    let Some(g) = grant else { return std::fs::copy(a, b) };
+    match g.copy_op(&a.to_string_lossy(), &b.to_string_lossy()) {
+        Ok(Some(n)) => Ok(n),
+        Ok(None) => std::fs::copy(a, b),
+        Err(crate::caps_core::grant::OpenError::Io(e)) => Err(e),
+        Err(crate::caps_core::grant::OpenError::Denied(d)) => fault(d),
+    }
+}
+
+/// `create_dir_all` / `remove_dir_all` decided descriptor by descriptor (see `Grant::dir_all_op`).
+pub fn dir_all(p: impl AsRef<Path>, op: crate::caps_core::grant::DirAllOp) -> std::io::Result<()> {
+    use crate::caps_core::grant::DirAllOp;
+    let name = p.as_ref();
+    let by_name = || match op {
+        DirAllOp::Create => std::fs::create_dir_all(name),
+        DirAllOp::Remove => std::fs::remove_dir_all(name),
+    };
+    let grant = if BYPASS.with(|x| x.get()) > 0 { None } else { GRANT.get() };
+    let Some(g) = grant else { return by_name() };
+    match g.dir_all_op(&name.to_string_lossy(), op) {
+        Ok(Some(())) => Ok(()),
+        Ok(None) => by_name(),
+        Err(crate::caps_core::grant::OpenError::Io(e)) => Err(e),
+        Err(crate::caps_core::grant::OpenError::Denied(d)) => fault(d),
+    }
+}
+
 pub fn fs_read(p: impl AsRef<Path>) {
     check(&EffectKind::FsRead, Some(&p.as_ref().to_string_lossy()));
 }

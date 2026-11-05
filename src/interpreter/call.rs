@@ -525,18 +525,33 @@ impl Interpreter {
         if self.caps.is_some() {
             self.cap_gate(path, &args)?;
         }
-        if self.port.is_some() && super::effect_port::routed(path) {
-            return self.port_call(path, args);
+        let mut found = None;
+        if self.port.is_some() {
+            // a registered function carries its routing answer; a path nothing is registered for is decided by its name
+            let routed = match self.builtins.function_routed(path) {
+                Some((f, routed)) => {
+                    found = Some(f);
+                    routed
+                }
+                None => super::effect_port::routed(path),
+            };
+            if routed {
+                return self.port_call(path, args);
+            }
         }
-        self.call_builtin_live(path, args)
+        self.call_builtin_with(path, args, found)
     }
 
     /// The builtin itself, after the capability gate and the effect port.
     pub(crate) fn call_builtin_live(&mut self, path: &str, args: Vec<Value>) -> R {
+        self.call_builtin_with(path, args, None)
+    }
+
+    fn call_builtin_with(&mut self, path: &str, args: Vec<Value>, found: Option<super::builtins::FnImpl>) -> R {
         if let Some(r) = super::builtins::assoc_numeric(self, path, &args) {
             return r;
         }
-        let f = self.builtins.function(path);
+        let f = found.or_else(|| self.builtins.function(path));
         match f {
             Some(f) => f(self, args),
             None => Err(unsupported(format!("`{}` is not implemented by the interpreter", path))),

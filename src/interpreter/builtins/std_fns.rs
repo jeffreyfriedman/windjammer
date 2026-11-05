@@ -243,9 +243,15 @@ pub fn register(r: &mut Registry) {
             Err(e) => io_err(e),
         })
     });
-    r.func("fs::create_dir_all", |_, a| {
+    r.func("fs::create_dir_all", |it, a| {
+        use crate::interpreter::caps::WriteOpen;
         let p = arg_str(&a, 0, "fs::create_dir_all")?;
-        Ok(match std::fs::create_dir_all(&*p) {
+        let r = match it.cap_dir_all(&p, crate::ir::effect_facts::grant::DirAllOp::Create)? {
+            WriteOpen::Done | WriteOpen::Copied(_) | WriteOpen::File(_) => Ok(()),
+            WriteOpen::Failed(e) => Err(e),
+            WriteOpen::ByName => std::fs::create_dir_all(&*p),
+        };
+        Ok(match r {
             Ok(()) => Value::ok(Value::Unit),
             Err(e) => io_err(e),
         })
