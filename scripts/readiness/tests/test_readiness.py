@@ -542,5 +542,13 @@ class CargoWrapper(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class BuildFailure(unittest.TestCase):
+    def test_a_windjammer_diagnostic_from_the_compiled_path_is_a_build_failure_not_a_divergence(self):
+        wj_diag = core.Res(1, "", "Success! Transpilation complete!\n\nerror[WJ0003]: mismatched types: expected `uint`, found `int`\n", 1.0)
+        self.assertTrue(r2.build_failed(wj_diag))
+        self.assertFalse(r2.build_failed(core.Res(101, "partial output", "thread 'main' panicked at x.wj:3:1:\nboom", 1.0)))
+        self.assertFalse(r2.build_failed(core.Res(1, "", "plain failure", 1.0)))
+
+
 if __name__ == "__main__":
     unittest.main()
