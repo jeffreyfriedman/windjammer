@@ -65,8 +65,21 @@ pub(crate) fn enter(it: &mut Interpreter, b: usize, site: &OsrSite) -> R<bool> {
     let path = &unit.plan.exits[exit].path;
     if !path.is_empty() {
         resume(it, b, &reg, path, &buf, raised)?;
+    } else {
+        close_body(it, b, &reg, site.stmt);
     }
     Ok(true)
+}
+
+/// The machine code stopped at the loop head: the last iteration's body locals are still in their slots (each
+/// iteration overwrote the previous one). Release them as the closure engine does after every iteration, so an
+/// `Rc` (a crate handle, a shared value) dies when the loop ends, not when the function returns.
+fn close_body(it: &mut Interpreter, b: usize, reg: &Reg, s: S) {
+    let body: &'static [S] = match s {
+        Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => &body[..],
+        _ => return,
+    };
+    let _ = close_block(it, b, reg.block(body).as_deref(), Ok(()));
 }
 
 /// Try a range `for` loop's machine code with its counter at `i` (the end `hi` exclusive).
@@ -83,6 +96,7 @@ pub(crate) fn enter_for(it: &mut Interpreter, b: usize, site: &OsrSite, i: i128,
     let at = int_value(buf[c], ty);
     let path = &unit.plan.exits[exit].path;
     if path.is_empty() {
+        close_body(it, b, &reg, site.stmt);
         return Ok(Some(at)); // stopped at the head: the counter reached the end
     }
     let Statement::For { label, .. } = site.stmt else { unreachable!("a for site") };

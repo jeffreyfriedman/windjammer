@@ -104,11 +104,24 @@ fn new_repl_interpreter(scratch: Option<&super::caps::Scratch>) -> Interpreter {
 
 /// Interactive loop on stdin/stdout. Prompts are only printed when stdin is a terminal.
 pub fn run_repl_stdio() -> i32 {
+    run_repl_with(None)
+}
+
+/// The REPL with a crate host for the project's surfaced Rust crates (ADR-0031); it survives `:reset`.
+pub fn run_repl_with(crates: Option<super::crate_host::CrateHost>) -> i32 {
     use std::io::{BufRead, IsTerminal, Write};
-    super::runner::with_big_stack(|| {
+    super::runner::with_big_stack(move || {
+        let crates = crates.map(std::rc::Rc::new);
+        let fresh = |scratch: Option<&super::caps::Scratch>| {
+            let mut it = new_repl_interpreter(scratch);
+            if let Some(h) = &crates {
+                it.attach_shared_crate_host(h.clone());
+            }
+            it
+        };
         let interactive = std::io::stdin().is_terminal();
         let scratch = super::caps::Scratch::new();
-        let mut it = new_repl_interpreter(scratch.as_ref());
+        let mut it = fresh(scratch.as_ref());
         if interactive {
             println!("Windjammerscript REPL (interpreted, no cargo). Type :help for commands, exit or Ctrl-D to quit.");
         }
@@ -134,7 +147,7 @@ pub fn run_repl_stdio() -> i32 {
                         continue;
                     }
                     ":reset" => {
-                        it = new_repl_interpreter(scratch.as_ref());
+                        it = fresh(scratch.as_ref());
                         continue;
                     }
                     _ => {}
