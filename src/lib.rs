@@ -69,6 +69,7 @@ pub mod test_utils;
 pub mod type_classification;
 pub mod type_display;
 pub mod type_inference;
+pub mod typing;
 pub mod type_registry;
 pub mod wjsl;
 

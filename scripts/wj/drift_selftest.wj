@@ -134,13 +134,22 @@ fn main() {
     let first = sh_out("${live} 2>&1; echo \"exit=$?\"")
     checks.push(Check { name: "a stale lock is taken over", out: first, exit: 0, needle: "scratch: /tmp/wj-drift-live." })
     let second = sh_out("${live} 2>&1; echo \"exit=$?\"")
-    checks.push(Check { name: "two runs use different scratch directories", out: if scratch_of(first) != scratch_of(second) && scratch_of(first) != "" { "exit=0" } else { "same scratch ${scratch_of(first)}" }, exit: 0, needle: "" })
+    let (s1, s2) = (scratch_of(first), scratch_of(second))
+    let mut differ = "same scratch ${s1}"
+    if s1 != s2 && s1 != "" {
+        differ = "exit=0"
+    }
+    checks.push(Check { name: "two runs use different scratch directories", out: differ, exit: 0, needle: "" })
     checks.push(Check { name: "the scratch directory is removed on exit", out: sh_out("ls -d ${scratch_of(first)} 2>&1; echo \"exit=$?\""), exit: 1, needle: "No such file" })
     // two simultaneous runs: each either runs alone or is refused, never both in one directory
     let both = sh_out("(${live} > ${dir}/a.out 2>&1; echo $? >> ${dir}/a.out) & (${live} > ${dir}/b.out 2>&1; echo $? >> ${dir}/b.out) & wait; cat ${dir}/a.out ${dir}/b.out")
     let sa = scratch_of(sh_out("cat ${dir}/a.out"))
     let sb = scratch_of(sh_out("cat ${dir}/b.out"))
-    checks.push(Check { name: "simultaneous live runs never share a scratch directory", out: if sa != "" && sa == sb { "shared ${sa}" } else { "exit=0" }, exit: 0, needle: "" })
+    let mut shared = "exit=0"
+    if sa != "" && sa == sb {
+        shared = "shared ${sa}"
+    }
+    checks.push(Check { name: "simultaneous live runs never share a scratch directory", out: shared, exit: 0, needle: "" })
     let _ = both
     let _ = sh("rm -rf ${dir}")
     let mut bad = 0

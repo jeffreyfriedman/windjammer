@@ -1,6 +1,5 @@
-// Refused before an interpreted run (WJ0007, ADR-0030); the compiled build fails with E0382.
-// A method taking `self` by value and moving its fields into a new value, called on a non-Copy
-// value that is used again afterwards. The interpreter copies; the compiled backend moves `n`.
+// Not reported: `n.advance()` takes `self` by value and `n` is read afterwards; the compiler copies the
+// receiver (C6 CLONE-USE-AFTER-MOVE), so the build succeeds.
 struct Node {
     label: string,
     next: Option<int>,

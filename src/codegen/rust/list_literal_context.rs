@@ -20,6 +20,50 @@ impl<'ast> CodeGenerator<'ast> {
         tail_is_list(then_block) && tail_is_list(else_block)
     }
 
+    /// Addresses (element slices) of the list literals in return position of `body`: the tail
+    /// expression, `return` values, and the tails of `if`/`match` arms and blocks in those positions.
+    /// Closures have their own return position and are not entered.
+    pub(in crate::codegen::rust) fn collect_return_position_lists(
+        body: &[&Statement<'_>],
+    ) -> std::collections::HashSet<usize> {
+        fn stmts(list: &[&Statement<'_>], tail: bool, out: &mut std::collections::HashSet<usize>) {
+            for (i, st) in list.iter().enumerate() {
+                let last = tail && i + 1 == list.len();
+                match st {
+                    Statement::Return { value: Some(e), .. } => expr(e, true, out),
+                    Statement::Expression { expr: e, .. } => expr(e, last, out),
+                    Statement::If { then_block, else_block, .. } => {
+                        stmts(then_block, last, out);
+                        if let Some(b) = else_block {
+                            stmts(b, last, out);
+                        }
+                    }
+                    Statement::Match { arms, .. } => {
+                        for a in arms {
+                            expr(a.body, last, out);
+                        }
+                    }
+                    Statement::For { body, .. }
+                    | Statement::While { body, .. }
+                    | Statement::Loop { body, .. } => stmts(body, false, out),
+                    _ => {}
+                }
+            }
+        }
+        fn expr(e: &Expression<'_>, tail: bool, out: &mut std::collections::HashSet<usize>) {
+            match e {
+                Expression::Array { elements, .. } if tail && !elements.is_empty() => {
+                    out.insert(elements.as_ptr() as usize);
+                }
+                Expression::Block { statements, .. } => stmts(statements, tail, out),
+                _ => {}
+            }
+        }
+        let mut out = std::collections::HashSet::new();
+        stmts(body, true, &mut out);
+        out
+    }
+
     /// Should list literals in `value` be generated as `Vec`s? `declared` is the annotated type, if any.
     pub(in crate::codegen::rust) fn list_literal_wanted(value: &Expression<'ast>, declared: Option<&Type>) -> bool {
         (matches!(value, Expression::Array { .. }) || Self::if_arms_yield_list_literals(value))

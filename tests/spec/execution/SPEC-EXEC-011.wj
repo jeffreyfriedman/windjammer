@@ -1,0 +1,29 @@
+// spec: SPEC-EXEC-011
+// expect: eval value
+// expect: eval index
+// expect: 10 99 30
+// expect: eval rhs2
+// expect: eval idx2
+// expect: 1 2 8
+// expect: 22
+// expect: 123
+fn t(tag: string, v: int) -> int {
+    println("eval ${tag}")
+    v
+}
+
+fn main() {
+    let mut v = vec![10, 20, 30]
+    v[t("index", 1) as usize] = t("value", 99)
+    println("${v[0]} ${v[1]} ${v[2]}")
+    let mut w = vec![1, 2, 3]
+    w[t("idx2", 2) as usize] += t("rhs2", 5)
+    println("${w[0]} ${w[1]} ${w[2]}")
+    let mut x = 1
+    x += { x += 10; x }
+    println("${x}")
+    let mut c = 0
+    let mut next = || { c += 1; c }
+    let pair = (next(), next(), next())
+    println("${pair.0}${pair.1}${pair.2}")
+}

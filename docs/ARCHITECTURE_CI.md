@@ -31,9 +31,12 @@ The filter `architecture` matches every test in `tests/architecture.rs` and the 
 | `... allow-list ... higher than reality` | an improvement landed; the baseline must shrink | run `scripts/update-architecture-baselines.sh` and commit |
 | `docs/generated/deps.* is stale` | import edges changed | run `scripts/update-architecture-baselines.sh` and commit |
 | `MODULE.md problems` / `missing from docs/MODULE_MAP.toml` | new module without docs or map entry | add `MODULE.md` (<= 60 lines, required headings) and a map entry |
+| `[name_matches]`, `[match_arm_names]`, `[fallback_legacy]` heuristic surface grew (`tests/heuristic_surface_test.rs`) | a decider in `codegen`/`analyzer`/`ir`/`typing`/`type_inference` matches a name literal, matches names in a `match` arm, or adds a `*fallback*`/`*legacy*` path | decide from a declaration, a parsed type or a solver fact (`docs/spec/convergence-burndown.md`, "Heuristic surface") |
+| `heuristic surface shrank` / `must contain the current totals` | a deletion landed | run `cargo test --test all heuristic_surface_test::regenerate_heuristic_baseline -- --ignored`, copy the printed totals line into the burndown doc, commit |
 
 ## Local workflow
 
 - Check: `cargo test --release --test all architecture`
 - After shrinking a number: `scripts/update-architecture-baselines.sh` (never raises a baseline; it refuses and prints the offender).
+- Heuristic surface: `cargo test --release --test all heuristic_surface_test` (baseline `docs/heuristic-allowlist.toml`).
 - Baselines: `docs/architecture-allowlist.toml`; contracts: `docs/MODULE_MAP.toml`; graph: `docs/generated/deps.md`, `deps.dot`.

@@ -322,7 +322,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        obj_str
+        self.copy_consumed_receiver(object, method, obj_str) // CLONE-USE-AFTER-MOVE: owned receiver read again
     }
 
     /// True when `expr` is a bare borrowed param or a field/index chain rooted at one.

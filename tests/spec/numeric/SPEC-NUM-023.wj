@@ -1,0 +1,10 @@
+// spec: SPEC-NUM-023
+// mode: panic
+// expect: start
+// expect-error: overflow
+fn main() {
+    let lo: i64 = -9223372036854775807 - 1
+    let d = "-1".parse::<int>().unwrap_or(1)
+    println("start")
+    println("${lo / d}")
+}

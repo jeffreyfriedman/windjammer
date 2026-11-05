@@ -1,0 +1,15 @@
+pub fn parsed(ok: bool) -> Result<(int, string), string> {
+    if ok {
+        return Ok((7, "seven"))
+    }
+    Err("no")
+}
+
+/// The Err arm's tuple literal is typed (i32, &str) and clashes with the Ok arm's (i64, String).
+pub fn code(ok: bool) -> int {
+    let pair = match parsed(ok) {
+        Ok(p) => p,
+        Err(_) => (0, ""),
+    }
+    pair.0
+}

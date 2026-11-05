@@ -65,6 +65,14 @@ fn iterator_collect_should_use_inferred_vec(iter_item: &Type, target_elem: &Type
 }
 
 impl CodeGenerator<'_> {
+    /// End of a `for` over string slices: the shadowed borrowed-param names come back, the slice bindings go.
+    pub(in crate::codegen::rust) fn restore_str_slice_loop(&mut self, shadowed: Vec<String>, slice_vars: &[String]) {
+        self.inferred_borrowed_params.extend(shadowed);
+        for v in slice_vars {
+            self.idiom.str_slice_loop_vars.remove(v);
+        }
+    }
+
     /// `let s: String = chars.collect()`: `String` is a collect target, but only for the RHS call itself.
     pub(in crate::codegen::rust) fn string_collect_rhs(target: &Type, value: &Expression) -> bool {
         matches!(value, Expression::MethodCall { method, .. } if method == "collect")
@@ -79,7 +87,7 @@ impl CodeGenerator<'_> {
         &mut self,
         iterable: &Expression,
         pattern: &Pattern,
-    ) -> (bool, Vec<String>) {
+    ) -> (bool, Vec<String>, Vec<String>) {
         const STR_SLICE_METHODS: [&str; 8] = [
             "split", "split_whitespace", "lines", "split_terminator", "rsplit", "splitn", "rsplitn",
             "split_ascii_whitespace",
@@ -92,12 +100,18 @@ impl CodeGenerator<'_> {
             _ => false,
         };
         let mut shadowed = Vec::new();
+        let mut slice_vars = Vec::new();
         if yields {
             let mut names = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut names);
+            for n in &names {
+                if self.idiom.str_slice_loop_vars.insert(n.clone()) {
+                    slice_vars.push(n.clone());
+                }
+            }
             shadowed.extend(names.into_iter().filter(|n| self.inferred_borrowed_params.remove(n)));
         }
-        (yields, shadowed)
+        (yields, shadowed, slice_vars)
     }
 
     /// Check if a program references a collection type (HashMap or HashSet)
@@ -403,6 +417,18 @@ impl CodeGenerator<'_> {
                     return Some(Type::Reference(Box::new(Type::Custom("str".to_string()))));
                 }
 
+                // `map.keys()` / `map.values()` yield borrowed `&K` / `&V` items.
+                if matches!(method.as_str(), "keys" | "values") {
+                    if let Some(recv_ty) = self.infer_expression_type(object) {
+                        if let Type::Parameterized(base, args) = peel_type_reference(&recv_ty) {
+                            if matches!(base.as_str(), "HashMap" | "BTreeMap") && args.len() == 2 {
+                                let item = if method == "keys" { &args[0] } else { &args[1] };
+                                return Some(Type::Reference(Box::new(item.clone())));
+                            }
+                        }
+                    }
+                }
+
                 if let Some(item) = self
                     .lookup_method_function_signature_for_iterator_item(object, method)
                     .and_then(|sig| {
@@ -626,6 +652,13 @@ impl CodeGenerator<'_> {
         skip_module_roots: &std::collections::HashSet<String>,
     ) -> std::collections::HashSet<String> {
         let mut mods = std::collections::HashSet::new();
+        // C3 lexical scope: a module this program declares (`mod http`) shadows the runtime module of that name.
+        let mut skip_module_roots = skip_module_roots.clone();
+        skip_module_roots.extend(program.items.iter().filter_map(|i| match i {
+            Item::Mod { name, .. } => Some(name.clone()),
+            _ => None,
+        }));
+        let skip_module_roots = &skip_module_roots;
         for item in &program.items {
             Self::item_collect_runtime_std_modules(
                 item,

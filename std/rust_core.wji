@@ -1,0 +1,206 @@
+// std/rust_core.wji - the typed surface of the Rust core types Windjammer programs call methods on.
+//
+// Each `trait` is named after the Rust type and declares that type's methods in Windjammer types, with the
+// type's own parameters as the trait's generics and a method's own parameters as the method's generics
+// (`parse<F>` takes its `F` from a turbofish). `usize` is an index slot (ADR-0028): an argument there is an
+// index use, a `usize` result is an index source. The table is read by `src/typing/core_surface.rs` (option C,
+// stage C1, docs/design/numeric-width-redesign.md section 7); every entry is checked against rustc by
+// `tests/core_surface_rustc_test.rs`.
+
+pub trait Vec<T> {
+    fn len(self) -> usize;
+    fn capacity(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn push(self, value: T);
+    fn pop(self) -> Option<T>;
+    fn get(self, index: usize) -> Option<&T>;
+    fn get_mut(self, index: usize) -> Option<&mut T>;
+    fn first(self) -> Option<&T>;
+    fn last(self) -> Option<&T>;
+    fn insert(self, index: usize, value: T);
+    fn remove(self, index: usize) -> T;
+    fn swap_remove(self, index: usize) -> T;
+    fn swap(self, a: usize, b: usize);
+    fn truncate(self, len: usize);
+    fn split_off(self, at: usize) -> Vec<T>;
+    fn contains(self, value: &T) -> bool;
+    fn clear(self);
+}
+
+pub trait VecDeque<T> {
+    fn len(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn push_back(self, value: T);
+    fn push_front(self, value: T);
+    fn pop_back(self) -> Option<T>;
+    fn pop_front(self) -> Option<T>;
+    fn front(self) -> Option<&T>;
+    fn back(self) -> Option<&T>;
+    fn get(self, index: usize) -> Option<&T>;
+    fn get_mut(self, index: usize) -> Option<&mut T>;
+    fn remove(self, index: usize) -> Option<T>;
+    fn swap(self, a: usize, b: usize);
+    fn truncate(self, len: usize);
+    fn split_off(self, at: usize) -> VecDeque<T>;
+    fn swap_remove_back(self, index: usize) -> Option<T>;
+    fn contains(self, value: &T) -> bool;
+}
+
+pub trait HashMap<K, V> {
+    fn len(self) -> usize;
+    fn capacity(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn get(self, key: &K) -> Option<&V>;
+    fn get_mut(self, key: &K) -> Option<&mut V>;
+    fn insert(self, key: K, value: V) -> Option<V>;
+    fn remove(self, key: &K) -> Option<V>;
+    fn contains_key(self, key: &K) -> bool;
+}
+
+pub trait BTreeMap<K, V> {
+    fn len(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn get(self, key: &K) -> Option<&V>;
+    fn get_mut(self, key: &K) -> Option<&mut V>;
+    fn insert(self, key: K, value: V) -> Option<V>;
+    fn remove(self, key: &K) -> Option<V>;
+    fn contains_key(self, key: &K) -> bool;
+}
+
+pub trait HashSet<T> {
+    fn len(self) -> usize;
+    fn capacity(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn insert(self, value: T) -> bool;
+    fn remove(self, value: &T) -> bool;
+    fn contains(self, value: &T) -> bool;
+}
+
+pub trait BTreeSet<T> {
+    fn len(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn insert(self, value: T) -> bool;
+    fn remove(self, value: &T) -> bool;
+    fn contains(self, value: &T) -> bool;
+}
+
+pub trait Option<T> {
+    fn unwrap(self) -> T;
+    fn expect(self, message: &str) -> T;
+    fn unwrap_or(self, default: T) -> T;
+    fn unwrap_or_default(self) -> T;
+    fn is_some(self) -> bool;
+    fn is_none(self) -> bool;
+    // On `Option<&T>`: the copy of the referent (references carry no width).
+    fn copied(self) -> Option<T>;
+    fn cloned(self) -> Option<T>;
+}
+
+pub trait Result<T, E> {
+    fn unwrap(self) -> T;
+    fn expect(self, message: &str) -> T;
+    fn unwrap_or(self, default: T) -> T;
+    fn unwrap_or_default(self) -> T;
+    fn ok(self) -> Option<T>;
+    fn err(self) -> Option<E>;
+    fn is_ok(self) -> bool;
+    fn is_err(self) -> bool;
+}
+
+pub trait String {
+    fn len(self) -> usize;
+    fn capacity(self) -> usize;
+    fn is_empty(self) -> bool;
+    fn trim(self) -> &str;
+    fn trim_start(self) -> &str;
+    fn trim_end(self) -> &str;
+    fn to_lowercase(self) -> String;
+    fn to_uppercase(self) -> String;
+    fn to_string(self) -> String;
+    fn contains(self, pattern: &str) -> bool;
+    fn starts_with(self, pattern: &str) -> bool;
+    fn ends_with(self, pattern: &str) -> bool;
+    fn parse<F>(self) -> Result<F, String>;
+    fn push_str(self, text: &str);
+    fn truncate(self, len: usize);
+}
+
+// Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
+// an argument or result of type `T` has the receiver's width (`10.min(3)`: one class); exponents, rotations and
+// shift amounts are `u32` and bit counts are `u32`, as in Rust. Signed-only methods (`abs`, `signum`) are checked
+// against rustc on `i64`.
+pub trait Integer<T> {
+    fn abs(self) -> T;
+    fn signum(self) -> T;
+    fn pow(self, exp: u32) -> T;
+    fn min(self, other: T) -> T;
+    fn max(self, other: T) -> T;
+    fn clamp(self, min: T, max: T) -> T;
+    fn div_euclid(self, rhs: T) -> T;
+    fn rem_euclid(self, rhs: T) -> T;
+    fn rotate_left(self, n: u32) -> T;
+    fn rotate_right(self, n: u32) -> T;
+    fn swap_bytes(self) -> T;
+    fn reverse_bits(self) -> T;
+    fn count_ones(self) -> u32;
+    fn count_zeros(self) -> u32;
+    fn leading_zeros(self) -> u32;
+    fn trailing_zeros(self) -> u32;
+    fn checked_add(self, rhs: T) -> Option<T>;
+    fn checked_sub(self, rhs: T) -> Option<T>;
+    fn checked_mul(self, rhs: T) -> Option<T>;
+    fn checked_div(self, rhs: T) -> Option<T>;
+    fn checked_rem(self, rhs: T) -> Option<T>;
+    fn checked_neg(self) -> Option<T>;
+    fn checked_pow(self, exp: u32) -> Option<T>;
+    fn checked_shl(self, rhs: u32) -> Option<T>;
+    fn checked_shr(self, rhs: u32) -> Option<T>;
+    fn wrapping_add(self, rhs: T) -> T;
+    fn wrapping_sub(self, rhs: T) -> T;
+    fn wrapping_mul(self, rhs: T) -> T;
+    fn wrapping_neg(self) -> T;
+    fn wrapping_pow(self, exp: u32) -> T;
+    fn wrapping_shl(self, rhs: u32) -> T;
+    fn wrapping_shr(self, rhs: u32) -> T;
+    fn saturating_add(self, rhs: T) -> T;
+    fn saturating_sub(self, rhs: T) -> T;
+    fn saturating_mul(self, rhs: T) -> T;
+    fn saturating_pow(self, exp: u32) -> T;
+    fn is_positive(self) -> bool;
+    fn is_negative(self) -> bool;
+    fn to_string(self) -> String;
+}
+
+// Float methods, for `T` = `f32` or `f64` (`float`): an argument and the result of type `T` have the receiver's
+// width (`x.min(1.0)` on an `f32` takes an `f32`); `powi` takes an `i32`.
+pub trait Float<T> {
+    fn abs(self) -> T;
+    fn sqrt(self) -> T;
+    fn cbrt(self) -> T;
+    fn exp(self) -> T;
+    fn ln(self) -> T;
+    fn log10(self) -> T;
+    fn log2(self) -> T;
+    fn sin(self) -> T;
+    fn cos(self) -> T;
+    fn tan(self) -> T;
+    fn atan2(self, other: T) -> T;
+    fn hypot(self, other: T) -> T;
+    fn floor(self) -> T;
+    fn ceil(self) -> T;
+    fn round(self) -> T;
+    fn trunc(self) -> T;
+    fn fract(self) -> T;
+    fn min(self, other: T) -> T;
+    fn max(self, other: T) -> T;
+    fn clamp(self, min: T, max: T) -> T;
+    fn mul_add(self, a: T, b: T) -> T;
+    fn powi(self, n: i32) -> T;
+    fn powf(self, n: T) -> T;
+    fn signum(self) -> T;
+    fn to_radians(self) -> T;
+    fn to_degrees(self) -> T;
+    fn is_nan(self) -> bool;
+    fn is_finite(self) -> bool;
+    fn to_string(self) -> String;
+}

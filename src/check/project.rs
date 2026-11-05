@@ -52,6 +52,8 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     let manifest_dir = super::effects::manifest_path(root).and_then(|m| m.parent().map(std::path::Path::to_path_buf));
     let crates = manifest_dir.as_deref().map(crate::package::rust_surface::load).unwrap_or_default();
     super::rust_calls::run(&crates, &idx, parsed, out);
+    // a call to a function a std module does not provide (`strings.index_of`)
+    super::std_calls::run(parsed, out);
     if let Some(dir) = &manifest_dir {
         super::rust_surface_health::run(dir, &crates, out);
     }
@@ -268,6 +270,11 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
         Err(e) => out.push(
             Diagnostic::error("WJ0028", format!("{e}")).with_note(format!("in {}", p.file)),
         ),
+    }
+    // uses after a move rustc would reject, read from the generated Rust (ADR-0030); only for a file
+    // that is otherwise clean, so a broken file does not report moves on top of its errors
+    if !out.iter().any(|d| d.is_error()) {
+        out.extend(super::moves::predict(&p.program, &p.text, &p.file));
     }
     out
 }

@@ -31,7 +31,11 @@ fn main() {
         None => 0,
     }
     c += 1
-    println("${m.get(&3).unwrap()} ${c}")
+    let three = match m.get(&3) {
+        Some(v) => *v,
+        None => -1,
+    }
+    println("${three} ${c}")
 
     // the bound value is captured by a closure after the match
     let base = match m.get(&4) {
@@ -55,7 +59,7 @@ fn main() {
         accs[1].n += 10
         j += 1
     }
-    println("${pick(vec![3, 4], 1)} ${pick(vec![3, 4], 9)}")
+    println("${pick([3, 4], 1)} ${pick([3, 4], 9)}")
 
     // a match in tail position yields the function's value
     let mut s = 0

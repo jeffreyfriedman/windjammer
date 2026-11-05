@@ -30,8 +30,9 @@ pub struct RunOptions {
     pub hot: bool,
     /// Interpreter knobs (scheduler seed, deterministic time, network policy).
     pub interp: runner::RunOptions,
-    /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report).
-    pub lint: Option<fn(&Path)>,
+    /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report); the flag
+    /// says the check gate will print error-level lints itself.
+    pub lint: Option<fn(&Path, bool)>,
     /// Interpreted runs: lints (W####) are reported but do not stop the run; compile errors still do.
     pub no_lint: bool,
 }
@@ -48,7 +49,7 @@ pub fn execute(opts: &RunOptions) -> i32 {
     };
     let non_rust = !matches!(opts.target.to_lowercase().as_str(), "rust");
     if let (Some(lint), false, false) = (opts.lint, non_rust, matches!(opts.mode, Mode::Compiled { .. })) {
-        lint(&target.entry);
+        lint(&target.entry, !opts.no_lint);
     }
     match opts.mode {
         Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release),
@@ -71,9 +72,20 @@ pub fn execute(opts: &RunOptions) -> i32 {
                     return 2;
                 }
             };
+            let crates = match crate_host(&target) {
+                Ok(c) => c,
+                Err(m) if auto => {
+                    eprintln!("wj: running compiled (cargo): {}; use `wj run --compiled` to skip this check", m);
+                    return run_compiled(&target, &opts.args, &opts.target, false);
+                }
+                Err(m) => {
+                    eprintln!("error: unsupported in the interpreter: {}", m);
+                    return 2;
+                }
+            };
             let mut interp = opts.interp.clone();
             interp.durable_sites = crate::check::durable_sites::discover(&target.entry).unwrap_or_default();
-            let eo = runner::EntryOptions { fallback: auto, host, hot: opts.hot, run: interp };
+            let eo = runner::EntryOptions { fallback: auto, host, crates, hot: opts.hot, run: interp };
             match runner::run_entry(&target.entry, opts.args.clone(), eo) {
                 RunOutcome::Exited(c) => c,
                 RunOutcome::NeedsCompiled(e) => {
@@ -104,6 +116,16 @@ fn host_bridge(t: &RunTarget) -> Result<Option<(PathBuf, Vec<crate::interpreter:
     }
     let lib = super::host_build::ensure(&root, &rust, &sigs, &mut |m| eprintln!("{}", m))?;
     Ok(Some((lib, sigs)))
+}
+
+/// Build (or reuse) the crate host when the program names a Rust crate dependency that has a signature
+/// surface (ADR-0031). `Err` is a failed host build.
+fn crate_host(t: &RunTarget) -> Result<Option<crate::interpreter::crate_host::CrateHost>, String> {
+    let Some(root) = t.project_root.clone() else { return Ok(None) };
+    let files = crate::interpreter::loader::program_files(&t.entry).map_err(|e| e.message)?;
+    let texts: Vec<String> = files.iter().filter_map(|f| std::fs::read_to_string(&f.file).ok()).collect();
+    let p = super::crate_host_build::ensure(&root, &texts, &mut |m| eprintln!("{}", m))?;
+    Ok(p.map(|p| crate::interpreter::crate_host::CrateHost::new(p.exe, p.key, p.sigs).with_stubs(p.stubs)))
 }
 
 /// The one-line notice printed (to stderr) when `wj run` switches to the compiled path.

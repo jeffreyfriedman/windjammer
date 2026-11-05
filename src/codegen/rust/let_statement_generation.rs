@@ -12,6 +12,19 @@ use crate::parser::*;
 use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `text[a..b]`: a borrowed slice (`&str`) that an owned `string` binding must copy.
+    fn let_value_borrows_text(value: &Expression<'ast>) -> bool {
+        match value {
+            Expression::Identifier { .. } => true,
+            Expression::Index { index, .. } => matches!(index, Expression::Range { .. }),
+            // `text[a..b]` is parsed as the desugared `slice(a, b)` / `substring(a, b)`
+            Expression::MethodCall { method, arguments, .. } => {
+                matches!(method.as_str(), "slice" | "substring") && arguments.len() == 2
+            }
+            _ => false,
+        }
+    }
+
     /// Infer a let-binding type from its value (signature-driven), refining bare
     /// `Vec` / `HashSet` element types from return type or forward `.push`/`.insert` usage.
     fn infer_let_value_type(
@@ -638,7 +651,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Auto-convert &str to String if type is String
-                let mut value_str = self.generate_expression(value);
+                let mut value_str = { let v = self.generate_expression(value); self.copy_if_read_again(value, v) };
 
                 self.collect_target_type = prev_collect_target;
                 self.suppress_collection_turbofish = prev_suppress_turbo;
@@ -658,7 +671,7 @@ impl<'ast> CodeGenerator<'ast> {
                             value: Literal::String(s),
                             ..
                         } if !s.is_empty()
-                    ) || matches!(value, Expression::Identifier { .. });
+                    ) || Self::let_value_borrows_text(value);
                     if should_convert && !string_utilities::already_owned_string_expr(&value_str) {
                         value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
@@ -1111,7 +1124,7 @@ impl<'ast> CodeGenerator<'ast> {
                         } else if !string_utilities::already_owned_string_expr(&value_str) {
                             value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                         }
-                    } else if matches!(value, Expression::Identifier { .. })
+                    } else if Self::let_value_borrows_text(value)
                         && !string_utilities::already_owned_string_expr(&value_str)
                     {
                         value_str = string_utilities::coerce_expr_to_owned_string(&value_str);

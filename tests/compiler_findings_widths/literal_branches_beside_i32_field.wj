@@ -1,0 +1,40 @@
+pub struct Cell {
+    pub col: i32,
+}
+
+pub struct Grid {
+    pub w: i32,
+}
+
+impl Grid {
+    pub fn open(self, c: i32) -> bool {
+        c < self.w
+    }
+}
+
+pub struct Finder {
+    pub diagonal: bool,
+    pub grid: Grid,
+}
+
+impl Finder {
+    pub fn search(self) -> Option<i32> {
+        let cells: Vec<Cell> = []
+        while cells.len() > 0 {
+            let first: usize = 0
+            let base = cells[first].col
+            if self.diagonal {
+                let mut k = 0
+                while k < 4 {
+                    let delta = if k == 0 { -1 } else if k == 3 { -1 } else { 1 }
+                    let next = base + delta
+                    if self.grid.open(next) {
+                        return Some(next)
+                    }
+                    k = k + 1
+                }
+            }
+        }
+        None
+    }
+}

@@ -1,0 +1,15 @@
+// Not reported: `xs` is passed to an owning parameter and read afterwards; the compiler copies it at
+// the call (C6 CLONE-USE-AFTER-MOVE), so the build succeeds.
+struct Bag {
+    items: Vec<int>,
+}
+
+fn wrap(items: Vec<int>) -> Bag {
+    Bag { items: items }
+}
+
+fn main() {
+    let xs = [1, 2, 3]
+    let b = wrap(xs)
+    println("${b.items.len()} ${xs.len()}")
+}

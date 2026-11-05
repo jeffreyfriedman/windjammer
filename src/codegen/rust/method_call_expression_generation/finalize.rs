@@ -863,7 +863,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         && crate::codegen::rust::types::is_windjammer_text_type(t)
                                 });
                             if formal_is_owned_string {
-                                // P3.376: `pub const SCOPE_*: string` / module string consts lower
+                                // P3.376: module `const …: string` constants (by declaration) lower
                                 // to `&'static str`; owned `string` formals need `.to_string()`.
                                 let arg_is_string_const = arguments.get(i).is_some_and(|(_, arg_expr)| {
                                     let name = match arg_expr {
@@ -1629,6 +1629,7 @@ impl<'ast> CodeGenerator<'ast> {
             .infer_expression_type(object)
             .as_ref()
             .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+        let receiver_is_text = receiver_is_text && !self.type_defines_own_method(receiver_type_name.as_deref(), method);
 
         // Determine separator: :: for static/module calls, . for instance methods
         // - Type/Module (starts with uppercase): use ::
@@ -1789,7 +1790,6 @@ impl<'ast> CodeGenerator<'ast> {
                     .is_some_and(|sig| {
                         self.is_collection_key_lookup_at_site(sig, i, receiver_type_name.as_deref())
                     });
-            if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
             // Do not undo IR ToOwnedString on emit-owned `String` slots. `expects_pattern`
             // can be true from a stale all-`&str` snapshot after a sibling demote
             // (notes-api `handle(method: &str, origin: String)`).
@@ -1834,7 +1834,6 @@ impl<'ast> CodeGenerator<'ast> {
                     arg_expr,
                     arg_str,
                 );
-                if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
             }
             // P3.402: always peel `&'.'` even when Pattern formal lookup missed.
             crate::codegen::rust::string_utilities::peel_amp_from_char_literal_arg(
