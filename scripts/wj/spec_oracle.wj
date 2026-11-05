@@ -172,11 +172,26 @@ fn dep_lines(manifest: string) -> Vec<string> {
     out
 }
 
+// `[lints.rust]` lines of a generated Cargo.toml (the generated crates allow the constant-overflow lints)
+fn lint_lines(manifest: string) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut inside = false
+    for line in strings.split_lines(fs.read_to_string(manifest).unwrap_or("")) {
+        if strings.starts_with(line, "[") {
+            inside = line == "[lints.rust]"
+        } else if inside && strings.trim(line) != "" && !strings.starts_with(line, "#") {
+            out.push(line)
+        }
+    }
+    out
+}
+
 // Compile every case in one cargo build and run each binary: rows `bin name <TAB> judged token`.
 fn compile_all(wj: string, cases: Vec<Case>, scratch: string) -> Vec<string> {
     let ws = "${scratch}/ws"
     let _ = sh("mkdir -p ${quote(ws)}")
     let mut deps: Vec<string> = Vec::new()
+    let mut lints: Vec<string> = Vec::new()
     let mut bins = ""
     let mut tokens: Vec<string> = Vec::new()
     let mut built: Vec<bool> = Vec::new()
@@ -194,10 +209,15 @@ fn compile_all(wj: string, cases: Vec<Case>, scratch: string) -> Vec<string> {
                     deps.push(d)
                 }
             }
+            for l in lint_lines("${dir}/b/Cargo.toml") {
+                if !lints.contains(l) {
+                    lints.push(l)
+                }
+            }
             bins = bins + "[[bin]]\nname = \"${n}\"\npath = \"${dir}/b/case.rs\"\n\n"
         }
     }
-    let manifest = "[package]\nname = \"spec-oracle\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n\n[dependencies]\n" + strings.join(deps, "\n") + "\n\n" + bins
+    let manifest = "[package]\nname = \"spec-oracle\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n\n[dependencies]\n" + strings.join(deps, "\n") + "\n\n[lints.rust]\n" + strings.join(lints, "\n") + "\n\n" + bins
     let _ = fs.write("${ws}/Cargo.toml", manifest)
     println("  compiling ${cases.len()} cases in one cargo build")
     let build = "cd ${quote(ws)} && ${wrapper()} env CARGO_TARGET_DIR=${quote(ws)}/target CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_DEV_CODEGEN_UNITS=256 CARGO_PROFILE_DEV_LTO=off cargo build --keep-going --quiet > ${quote(ws)}/build.log 2>&1; true"
