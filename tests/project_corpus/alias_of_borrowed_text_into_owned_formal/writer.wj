@@ -1,0 +1,39 @@
+use crate::port::Reader
+use crate::reader::ListReader
+
+pub struct Line {
+    pub code: string,
+}
+
+fn lookup(tenant_slug: string, wanted: string) -> Result<bool, string> {
+    let slug = tenant_slug
+    let code = wanted
+    let r = ListReader { n: 0 }
+    let items = r.list(slug)
+    if items.is_empty() {
+        return Err("none")
+    }
+    for item in items {
+        if item == code {
+            return Ok(true)
+        }
+    }
+    Ok(false)
+}
+
+fn validate(tenant_slug: string, lines: Vec<Line>) -> Result<(), string> {
+    let slug = tenant_slug
+    for line in lines {
+        let code = line.code
+        match lookup(slug, code) {
+            Ok(true) => {},
+            Ok(false) => return Err("unknown: " + code),
+            Err(msg) => return Err(msg),
+        }
+    }
+    Ok(())
+}
+
+pub fn post(tenant: string, lines: Vec<Line>) -> Result<(), string> {
+    validate(tenant, lines)
+}
