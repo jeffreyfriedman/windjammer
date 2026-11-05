@@ -182,7 +182,7 @@ fn run_program_once(o: Opts, file: string, mode: string) -> Outcome {
     let cmd = if mode == "compiled" {
         "${wrapper()} ${quote(o.wj)} run --compiled --no-lint ${quote(file)}"
     } else {
-        "${quote(o.wj)} run --interpret --no-lint --deterministic-time --engine ${mode} ${quote(file)} < /dev/null"
+        "${quote(o.wj)} run --interpret --no-lint --deterministic-time --caps off --engine ${mode} ${quote(file)} < /dev/null"
     }
     match sh(cmd) {
         Ok(r) => {
@@ -192,7 +192,10 @@ fn run_program_once(o: Opts, file: string, mode: string) -> Outcome {
             let said = strings.contains(r.stderr, "WJ0007") || strings.contains(r.stderr, "E0382") || strings.contains(r.stdout, "E0382") || strings.contains(r.stdout, "WJ0007")
             let rejected = r.status != 0 && (strings.contains(r.stderr, "error[WJ") || strings.contains(r.stderr, "Error: not running") || strings.contains(r.stdout, "error[WJ"))
             let diag = if rejected { "rejected" } else if r.status != 0 && said { "refused" } else { "ran" }
-            Outcome { token: "exit${r.status}:${checksum(r.stdout)}", loc: loc, diag: diag, out: r.stdout }
+            // the compiled build refuses deprecated surface forms (`println("{}")`, `vec![]`, `.iter()`) as lint errors even
+            // though the interpreter runs them with --no-lint: that is a policy difference, not a behavioural one
+            let linted = mode == "compiled" && r.status != 0 && (strings.contains(r.stderr, "Rust leakage") || strings.contains(r.stdout, "Rust leakage"))
+            Outcome { token: if linted { "lint" } else { "exit${r.status}:${checksum(r.stdout)}" }, loc: loc, diag: diag, out: r.stdout }
         },
         Err(e) => Outcome { token: "error", loc: "", diag: "error", out: "" },
     }
@@ -389,8 +392,9 @@ fn main() {
             }
         } else {
             // a program that does not run under the walker agrees with itself in every mode: it is a broken case
-            let ran = strings.starts_with(w.token, "exit0:")
-            out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") { "runs" } else { "broken" }, "runs")
+            // (a run that panics, exit 101, ran: the guard is against programs that never started)
+            let ran = strings.starts_with(w.token, "exit0:") || strings.starts_with(w.token, "exit101:")
+            out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") || strings.starts_with(r.token, "exit101:") { "runs" } else { "broken" }, "runs")
         }
         if o.compiled == "live" {
             recorded = recorded + "${p}\t${c.token}\t\n"
@@ -419,7 +423,7 @@ fn main() {
             let r = run_program(o, f, "resolved")
             let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "" } } else if o.compiled == "live" { compiled_program(o, f, baseline) } else { lookup(baseline, f) }
             // no recorded compiled result yet: not compared (counted in the summary), unlike the pinned programs above
-            let ct = if c.token == "absent" { "skip" } else { c.token }
+            let ct = if c.token == "absent" || c.token == "lint" { "skip" } else { c.token }
             out = out + row(f, w.token, r.token, ct)
             out = out + row("${f}#accepted", if w.diag == "rejected" { "rejected" } else { "accepted" }, if r.diag == "rejected" { "rejected" } else { "accepted" }, "accepted")
             let expect = expected_stdout(f)
