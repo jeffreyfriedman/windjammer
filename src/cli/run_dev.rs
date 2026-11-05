@@ -37,8 +37,22 @@ pub struct RunOptions {
     pub no_lint: bool,
 }
 
-/// Run once; returns the process exit status.
+/// Run once; returns the process exit status. A path of `-` reads the program from stdin (`wj run -`).
 pub fn execute(opts: &RunOptions) -> i32 {
+    let script = match super::eval::stdin_script(opts.path.as_deref()) {
+        Ok(Some(file)) => file,
+        Ok(None) => return execute_path(opts),
+        Err(e) => {
+            eprintln!("error: cannot read the program from stdin: {e}");
+            return 1;
+        }
+    };
+    let code = execute_path(&RunOptions { path: Some(script.clone()), ..opts.clone() });
+    super::eval::remove(&script);
+    code
+}
+
+fn execute_path(opts: &RunOptions) -> i32 {
     let cwd = std::env::current_dir().unwrap_or_default();
     let target = match resolve_run_target(opts.path.as_deref(), &cwd, opts.bin.as_deref()) {
         Ok(t) => t,

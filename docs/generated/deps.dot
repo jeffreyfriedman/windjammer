@@ -154,7 +154,7 @@ digraph deps {
   "check" -> "lexer" [label="6"];
   "check" -> "linter" [label="1"];
   "check" -> "metadata" [label="2"];
-  "check" -> "module_system" [label="3"];
+  "check" -> "module_system" [label="4"];
   "check" -> "package" [label="9"];
   "check" -> "parser" [label="27"];
   "check" -> "resolve" [label="3"];
@@ -177,13 +177,13 @@ digraph deps {
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
   "cli" -> "formatter" [label="1"];
-  "cli" -> "interpreter" [label="16"];
+  "cli" -> "interpreter" [label="17"];
   "cli" -> "intrinsics" [label="2"];
   "cli" -> "ir" [label="6"];
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
   "cli" -> "metadata" [label="1"];
-  "cli" -> "module_system" [label="8"];
+  "cli" -> "module_system" [label="9"];
   "cli" -> "package" [label="15"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
