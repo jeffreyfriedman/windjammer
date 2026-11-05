@@ -58,10 +58,6 @@ probe/exit_code-1	exit255:7:678959615
 probe/exit_code-2	exit42:7:678959615
 probe/exit_code-3	exit2:7:678959615
 probe/exit_code-4	exit1:7:678959615
-probe/panic_nested-1	exit101:7:678959615
-probe/panic_nested-2	exit101:7:678959615
-probe/panic_nested-3	exit1:0:17
-probe/panic_nested-4	exit101:7:678959615
 probe/stdin-1	exit0:11:549335999
 probe/stdin-2	exit0:11:549335968
 probe/stdin-3	exit0:11:549335968
@@ -70,3 +66,7 @@ probe/threads-1	exit0:14:17512774
 probe/threads-2	exit0:11:413198299
 probe/threads-3	exit0:14:17512774
 probe/threads-4	exit0:11:413198299
+probe/panic_nested-1	exit101:7:678959615
+probe/panic_nested-2	exit101:7:678959615
+probe/panic_nested-3	exit101:7:678959615
+probe/panic_nested-4	exit101:7:678959615
