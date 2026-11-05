@@ -15,6 +15,7 @@
 //! | 7 / 8 | None / Some | - / item |
 //! | 9 / 10 | Ok / Err | item |
 //! | 11 | tuple | u32 count, items |
+//! | 12 | handle (opaque crate value) | u64 id in the host's table |
 
 use super::super::int::IntTy;
 use super::super::place::deref_value;
@@ -33,6 +34,7 @@ pub const SOME: u8 = 8;
 pub const OK: u8 = 9;
 pub const ERR: u8 = 10;
 pub const TUPLE: u8 = 11;
+pub const HANDLE: u8 = 12;
 
 fn len32(out: &mut Vec<u8>, n: usize) -> Result<(), String> {
     let n = u32::try_from(n).map_err(|_| "a value larger than 4 GiB cannot cross to the crate host".to_string())?;
@@ -93,6 +95,13 @@ pub fn encode(v: &Value, t: &WireTy, out: &mut Vec<u8>) -> Result<(), String> {
             }
             None => return Err(bad()),
         },
+        (WireTy::Handle(q), Value::Native(_)) => match super::handle::parts(&v) {
+            Some((hq, id)) if hq == q => {
+                out.push(HANDLE);
+                out.extend_from_slice(&id.to_le_bytes());
+            }
+            _ => return Err(bad()),
+        },
         (WireTy::Result(a, b), Value::Enum(ev)) if &*ev.ty == "Result" => {
             let Payload::Tuple(p) = &ev.payload else { return Err(bad()) };
             let x = p.first().ok_or_else(bad)?;
@@ -122,8 +131,17 @@ fn u32_at(inp: &mut &[u8]) -> Result<u32, String> {
     Ok(u32::from_le_bytes(take(inp, 4)?.try_into().unwrap()))
 }
 
-/// Read one value the surface declares as `t`.
+/// Makes the value of a handle the host returned: `(crate::Type, id)`.
+pub type MakeHandle<'a> = &'a dyn Fn(&str, u64) -> Value;
+
+/// Read one value the surface declares as `t` (handles become handles with no host behind them).
 pub fn decode(inp: &mut &[u8], t: &WireTy) -> Result<Value, String> {
+    decode_with(inp, t, &|q, id| super::handle::value(q, "handle", id, None))
+}
+
+/// Read one value; `mk` turns a host handle into a program value.
+pub fn decode_with(inp: &mut &[u8], t: &WireTy, mk: MakeHandle<'_>) -> Result<Value, String> {
+    let decode = |inp: &mut &[u8], t: &WireTy| decode_with(inp, t, mk);
     let tag = take(inp, 1)?[0];
     let bad = || format!("the crate host sent tag {tag} where the surface declares {}", show(t));
     Ok(match (t, tag) {
@@ -166,6 +184,10 @@ pub fn decode(inp: &mut &[u8], t: &WireTy) -> Result<Value, String> {
         (WireTy::Option(e), SOME) => Value::some(decode(inp, e)?),
         (WireTy::Result(a, _), OK) => Value::ok(decode(inp, a)?),
         (WireTy::Result(_, b), ERR) => Value::err(decode(inp, b)?),
+        (WireTy::Handle(q), HANDLE) => {
+            let id = u64::from_le_bytes(take(inp, 8)?.try_into().unwrap());
+            mk(q, id)
+        }
         _ => return Err(bad()),
     })
 }
@@ -182,6 +204,7 @@ pub fn show(t: &WireTy) -> String {
         WireTy::Option(e) => format!("Option<{}>", show(e)),
         WireTy::Result(a, b) => format!("Result<{}, {}>", show(a), show(b)),
         WireTy::Tuple(ts) => format!("({})", ts.iter().map(show).collect::<Vec<_>>().join(", ")),
+        WireTy::Handle(q) => q.rsplit("::").next().unwrap_or(q).to_string(),
     }
 }
 
@@ -232,6 +255,18 @@ mod tests {
         let e = round(Value::err(Value::str("bad")), WireTy::Result(Box::new(WireTy::Unit), Box::new(WireTy::Str)));
         assert!(matches!(&e, Value::Enum(ev) if ev.idx == 1));
         assert!(matches!(round(Value::none(), WireTy::Option(Box::new(WireTy::Int("u8")))).as_option(), Some(None)));
+    }
+
+    #[test]
+    fn handles_cross_as_ids_and_keep_their_type() {
+        let t = WireTy::Option(Box::new(WireTy::Handle("ctr::Counter".into())));
+        let mut b = Vec::new();
+        encode(&Value::some(super::super::handle::value("ctr::Counter", "Counter", 9, None)), &t, &mut b).unwrap();
+        assert_eq!(b, [8, 12, 9, 0, 0, 0, 0, 0, 0, 0]);
+        let back = decode(&mut &b[..], &t).unwrap();
+        assert_eq!(super::super::handle::parts(back.as_option().unwrap().unwrap()), Some(("ctr::Counter", 9)));
+        let other = super::super::handle::value("ctr::Other", "Other", 1, None);
+        assert!(encode(&other, &WireTy::Handle("ctr::Counter".into()), &mut Vec::new()).is_err());
     }
 
     #[test]

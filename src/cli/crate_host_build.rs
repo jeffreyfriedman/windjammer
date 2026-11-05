@@ -7,7 +7,7 @@
 //! package and runs one `cargo build --release` in a target directory shared by every host, so a crate is
 //! compiled once per version and feature set, and each host keeps only its binary (moved next to its sources).
 
-use crate::interpreter::crate_host::{gen, sig::CrateFnSig};
+use crate::interpreter::crate_host::{gen, sig::CrateFnSig, CrateHost};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -48,9 +48,18 @@ pub fn signatures(project_root: &Path, texts: &[String]) -> (Vec<CrateFnSig>, Ve
         if !s.problems.is_empty() || !names_crate(texts, &s.crate_name) {
             continue;
         }
-        for f in &s.fns {
-            match crate::interpreter::crate_host::sig::crate_fn_sig(&s.crate_name, f) {
-                Ok(sig) => sigs.push(sig),
+        use crate::interpreter::crate_host::sig::{crate_fn_sig_in, Opaque};
+        let free = Opaque { krate: &s.crate_name, types: &s.types, self_ty: None };
+        let methods = s.methods.iter().map(|(t, f)| (Opaque { self_ty: Some(t.as_str()), ..free.clone() }, *f));
+        let bytes = crate::interpreter::crate_host::sig::byte_monomorphs(&s.text);
+        for (scope, f) in s.fns.iter().map(|f| (free.clone(), *f)).chain(methods) {
+            match crate_fn_sig_in(&scope, f) {
+                Ok(mut sig) => {
+                    if let Some((_, names)) = bytes.iter().find(|(n, _)| *n == sig.name) {
+                        sig.bytes_or_str = sig.params.iter().enumerate().filter(|(_, (p, _, _))| names.contains(p)).map(|(i, _)| i).collect();
+                    }
+                    sigs.push(sig)
+                }
                 Err(why) => skipped.push(why),
             }
         }
@@ -165,6 +174,60 @@ pub fn ensure(project_root: &Path, texts: &[String], log: &mut dyn FnMut(&str)) 
     }
     std::fs::rename(&built, &exe).or_else(|_| std::fs::copy(&built, &exe).map(|_| ())).map_err(|e| format!("{}: {e}", exe.display()))?;
     Ok(Some(Prepared { exe, key, sigs, stubs }))
+}
+
+/// Every `.wj` file of the project at `root` (not build output, caches or hidden directories), as text.
+fn project_texts(root: &Path) -> Vec<String> {
+    fn walk(dir: &Path, out: &mut Vec<String>, depth: usize) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() {
+                if depth < 8 && !name.starts_with('.') && !matches!(name.as_str(), "build" | "target" | "node_modules" | "out") {
+                    walk(&p, out, depth + 1);
+                }
+            } else if name.ends_with(".wj") {
+                if let Ok(t) = std::fs::read_to_string(&p) {
+                    out.push(t);
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, &mut out, 0);
+    out
+}
+
+/// The crate host for whatever project contains `path` (a file or directory), for `wj test --interpret`: the
+/// surfaced crates the project's `.wj` files name. `None` outside a project or when none is named. Attach it with
+/// `Interpreter::attach_crate_host` before loading the program.
+pub fn host_for_path(path: &Path, log: &mut dyn FnMut(&str)) -> Result<Option<CrateHost>, String> {
+    host_near(path, false, log)
+}
+
+/// The same for `wj repl`, where the program is typed later: every surfaced crate of the project.
+pub fn host_for_repl(path: &Path, log: &mut dyn FnMut(&str)) -> Result<Option<CrateHost>, String> {
+    host_near(path, true, log)
+}
+
+fn host_near(path: &Path, every_crate: bool, log: &mut dyn FnMut(&str)) -> Result<Option<CrateHost>, String> {
+    let abs = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let start = if abs.is_file() { abs.parent().unwrap_or(&abs) } else { &abs };
+    let Some(root) = crate::module_system::project::find_manifest_dir(start) else { return Ok(None) };
+    let texts = if every_crate {
+        crate::package::rust_surface::load(&root).names.iter().map(|n| format!("use {n}")).collect()
+    } else {
+        project_texts(&root)
+    };
+    let p = ensure(&root, &texts, log)?;
+    Ok(p.map(Prepared::into_host))
+}
+
+impl Prepared {
+    pub fn into_host(self) -> CrateHost {
+        CrateHost::new(self.exe, self.key, self.sigs).with_stubs(self.stubs)
+    }
 }
 
 #[cfg(test)]

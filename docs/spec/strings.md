@@ -279,7 +279,6 @@ Output:
 key -> value
 true true
 ```
-The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
 
 ## Byte offsets
 
