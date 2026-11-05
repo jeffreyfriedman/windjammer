@@ -15,7 +15,7 @@ output_has = ["bottom"]
 name = "a use after a by-value receiver is refused before running, as rustc would reject it (WJ0007)"
 polarity = "negative"
 covers = ["feature interpreter-matches-compiled"]
-files = { "m.wj" = "struct Node {\n    label: string,\n    next: int,\n}\n\nimpl Node {\n    fn advance(self) -> Node {\n        Node { label: self.label, next: self.next + 1 }\n    }\n}\n\nfn main() {\n    println(\"start\")\n    let n = Node { label: \"a\", next: 1 }\n    let m = n.advance()\n    println(\"${m.next} ${n.next}\")\n}\n" }
+files = { "m.wj" = "struct Node {\n    label: string,\n    next: int,\n}\n\nimpl Node {\n    fn advance(self) -> Node {\n        Node { label: self.label, next: self.next + 1 }\n    }\n\n    fn peek(self) -> int {\n        self.next\n    }\n}\n\nfn main() {\n    println(\"start\")\n    let n = Node { label: \"a\", next: 1 }\n    let m = n.advance()\n    println(\"${m.label} ${n.peek()}\")\n}\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
 exit = 1
 output_has = ["WJ0007"]
