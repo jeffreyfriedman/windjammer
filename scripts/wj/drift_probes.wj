@@ -188,10 +188,20 @@ fn recorded_token(text: string, id: string) -> string {
 }
 
 fn fam_splits(st: int) -> string {
-    let s = pick(st, "250_OK\\r\\n a\\nb\\n EMPTY \\n\\n \\n _a__b_ a\\r\\nb x\\n\\ny \\r\\n a,,b, tail\\n\\n")
-    let lit = if s == "EMPTY" { "" } else { strings.replace(s, "_", " ") }
-    "use std::strings\n\nfn show(parts: Vec<string>) -> string {\n    let mut out = \"@{parts.len()}:\"\n    for p in parts {\n        out = out + \"[\" + p + \"]\"\n    }\n    out\n}\n\nfn main() {\n    let s = \"@S\"\n    println(show(strings.split_lines(s)))\n    println(show(strings.split(s, \"\\n\")))\n    println(show(strings.split(s, \" \")))\n    println(show(strings.split(s, \",\")))\n    println(show(strings.split_whitespace(s)))\n    println(\"[@{strings.trim(s)}] [@{strings.trim_start(s)}] [@{strings.trim_end(s)}]\")\n}\n"
-        .replace("@S", lit)
+    // every separator shape in one program: the seed only rotates the order of the inputs
+    let all = "250_OK\\r\\n a\\nb\\n EMPTY \\n\\n \\n _a__b_ a\\r\\nb x\\n\\ny \\r\\n a,,b, tail\\n\\n a\\rb"
+    let items = strings.split(all, " ")
+    let shift = ((st / 65536) % (items.len() as int)) as usize
+    let mut listed = ""
+    let mut i: usize = 0
+    while i < items.len() {
+        let raw = items[(i + shift) % items.len()]
+        let lit = if raw == "EMPTY" { "" } else { strings.replace(raw, "_", " ") }
+        listed = listed + "\"" + lit + "\", "
+        i += 1
+    }
+    "use std::strings\n\nfn show(parts: Vec<string>) -> string {\n    let mut out = \"@{parts.len()}:\"\n    for p in parts {\n        out = out + \"[\" + p + \"]\"\n    }\n    out\n}\n\nfn main() {\n    let inputs: Vec<string> = [@LIST]\n    for s in inputs {\n        println(show(strings.split_lines(s)))\n        println(show(strings.split(s, \"\\n\")))\n        println(show(strings.split(s, \" \")))\n        println(show(strings.split(s, \",\")))\n        println(show(strings.split_whitespace(s)))\n        println(\"[@{strings.trim(s)}] [@{strings.trim_start(s)}] [@{strings.trim_end(s)}]\")\n    }\n}\n"
+        .replace("@LIST", listed)
 }
 
 fn families() -> string {
