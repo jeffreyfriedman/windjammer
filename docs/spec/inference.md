@@ -177,8 +177,12 @@ inserted at the move, never at the later use.
 iteration of a loop they outlive, or kept alive by a derived binding such as a capturing closure). The Rust backend's
 reuse checks (`local_binding_reused_after_current_statement`, `param_has_later_owned_formal_pass`) read it instead of
 scanning the current block's later statements (which missed uses after the enclosing block and mixed statement indices).
-**Status.** Conforms for the earlier site; see MOVE-LAST-USE for the clone at the final site. Also diverges for values bound to a string literal (D-CLONE-STRLIT): `let t = s` followed by a use of `s`
-moves `s` and rustc rejects the program.
+At a bare move of a plain binding (an argument the generated code passes by value, an owned `self` receiver,
+`let t = s`), the Rust backend copies the value when liveness says it is read again: later in the same statement
+(`ir::liveness::reread_in`), after the statement, or in the next loop iteration (`read_after`); never for a Copy
+value or a value without `Clone` (`codegen/rust/move_at_last_use.rs::copy_if_read_again`). `wj check`'s WJ0007
+reads the generated code, so it no longer reports these programs.
+**Status.** Conforms (C6, 2026-11). D-CLONE-STRLIT is fixed by the same rule.
 
 ### CLONE-LOOP
 **Rule.** A value moved inside a loop body whose binding is declared outside the loop is cloned at the move.
@@ -304,7 +308,10 @@ integer solver defaults to `i32`. `let big = 3000000000` emits `3000000000_i32` 
 ### NUM-DEFAULT-FLOAT
 **Rule (ADR-0015 section 1).** A float class with no constraint is `float` (f64).
 **Status.** Diverges (D-NUM-DEFAULT): the unified solver says `f64`, the legacy float solver emits `f32`
-(`let a = 2.5` emits `2.5_f32`), so the two disagree with each other as well as with the ADR.
+(`let a = 2.5` emits `2.5_f32`), so the two disagree with each other as well as with the ADR. An unsuffixed float
+literal is a float class in the solver (like an integer literal): when a use fixes its width (an `f32` parameter,
+field, payload or operand, a returned accumulator) the solver publishes that width and the backend prints it; a class
+with no such use is still printed by the legacy float path.
 
 ### NUM-INDEX
 **Rule (ADR-0015 section 1).** Indexing accepts `int` and `len()` returns `int`, converting through a checked
@@ -323,6 +330,14 @@ source or use is `usize` (a solved width, published as a fact); with an exact wi
 **Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index
 source whose class resolved to `W` is emitted `(v.len() as W)`; a `usize` class pushed into a `Vec<W>` is converted at
 the argument. The solver places these conversions (`IrFunction::usize_conversions`); the backend prints them.
+
+### NUM-STD-SIG
+**Rule (ADR-0029, option C stage C1).** A method of a Rust core type (`Vec`, `VecDeque`, `HashMap`, `BTreeMap`,
+`HashSet`, `BTreeSet`, `Option`, `Result`, `String`, every integer and float type) has the signature declared in `std/rust_core.wji`,
+instantiated for the receiver's static type (and a turbofish): `counts.get(k).unwrap_or(0)` on a `HashMap<string, int>`
+is an `int`, `line.parse::<int>().unwrap_or(0)` is an `int`, `x.min(1.0)` on an `f32` takes an `f32`, `2.pow(10)` takes a `u32` exponent and `10.min(3)` is one class (a numeric method's `T` is the receiver's own type, also for a literal receiver). A `usize`
+parameter is an index use and a `usize` result an index source (NUM-USIZE).
+**Status.** Conforms for receivers whose static type is declared (parameters, annotated or typed initializers, fields).
 
 ### NUM-MIXED
 **Rule (ADR-0015 section 2).** Mixed-width arithmetic requires an explicit conversion (`int(x)`, `float(x)`). The compiler
@@ -347,7 +362,7 @@ parameter is read-only and borrowed (OWN-STR-REF / STR-READONLY-REF).
 
 ### STR-LITERAL
 **Rule.** A string literal is a `string` value. `let s = "a"` is a `String`; reusing `s` after a move follows
-CLONE-USE-AFTER-MOVE. **Status.** Diverges (D-CLONE-STRLIT).
+CLONE-USE-AFTER-MOVE. **Status.** Conforms (D-CLONE-STRLIT fixed in C6).
 
 ### STR-READONLY-REF
 **Rule.** A read-only `string` parameter is borrowed as `&str`; callers may pass any string without cloning.

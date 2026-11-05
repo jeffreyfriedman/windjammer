@@ -722,8 +722,8 @@ impl<'ast> CodeGenerator<'ast> {
                 .parameters
                 .iter()
                 .map(|param| {
-                    // THE WINDJAMMER WAY:
-                    // Use the analyzed ownership from the analyzer, which has inferred
+                    if let Some(r) = super::function_self_helpers::declared_receiver(param) { return r.to_string(); }
+                    // THE WINDJAMMER WAY: use the analyzer's ownership, which has inferred
                     // the most permissive signature needed based on ALL implementations!
                     let ownership = if let Some(analyzed) = analyzed_method {
                         // Has default implementation OR global cross-file analysis - use analyzer's inferred ownership
@@ -1278,36 +1278,6 @@ impl<'ast> CodeGenerator<'ast> {
             "// Component trait implementation for {}\n// TODO: Implement Component trait",
             s.name
         ));
-
-        output
-    }
-
-    /// Generate automatic trait implementation for @game decorator
-    pub(super) fn generate_game_impl(&mut self, s: &StructDecl) -> String {
-        let mut output = String::new();
-
-        // Generate Default implementation
-        // All fields are initialized to their default values (0, 0.0, false, etc.)
-        output.push_str(&format!("impl Default for {} {{\n", s.name));
-        output.push_str("    fn default() -> Self {\n");
-        output.push_str(&format!("        {} {{\n", s.name));
-
-        for field in &s.fields {
-            let default_value = match &field.field_type {
-                Type::Int | Type::Int32 | Type::Uint => "0",
-                Type::Float => "0.0",
-                Type::Bool => "false",
-                Type::String => "String::new()",
-                Type::Vec(_) => "Vec::new()",
-                Type::Custom(name) if name == "String" => "String::new()",
-                _ => "Default::default()",
-            };
-            output.push_str(&format!("            {}: {},\n", field.name, default_value));
-        }
-
-        output.push_str("        }\n");
-        output.push_str("    }\n");
-        output.push('}');
 
         output
     }

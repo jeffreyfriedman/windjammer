@@ -836,7 +836,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when `expr` moves `param.field` as a value (return/let/call arg).
-    fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
+    pub(super) fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
         Self::expr_has_field_move_from_param(param_name, expr, true)
     }
 
@@ -897,7 +897,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when `expr` is `param.field`, `param[i]`, or a nested chain rooted at `param`.
-    fn expr_is_field_or_index_rooted_at_param(param_name: &str, expr: &Expression) -> bool {
+    pub(super) fn expr_is_field_or_index_rooted_at_param(param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
@@ -972,111 +972,6 @@ impl<'ast> Analyzer<'ast> {
             .any(|stmt| self.stmt_has_field_or_index_move_binding(param_name, stmt))
     }
 
-    /// True when every field/index move from `param` is a Copy or Windjammer text field let
-    // (`let kind = …`, `let name = tree.nodes[i].name`). Both are readable from `&T`.
-    pub(crate) fn param_field_move_bindings_are_only_copy_or_text(
-        &self,
-        param_name: &str,
-        param_type: &Type,
-        body: &[&'ast Statement<'ast>],
-    ) -> bool {
-        let mut saw_benign_let = false;
-        for stmt in body {
-            if !self.stmt_field_move_bindings_are_only_copy_or_text(
-                param_name,
-                param_type,
-                stmt,
-                &mut saw_benign_let,
-            ) {
-                return false;
-            }
-        }
-        saw_benign_let
-    }
-
-    fn stmt_field_move_bindings_are_only_copy_or_text(
-        &self,
-        param_name: &str,
-        param_type: &Type,
-        stmt: &Statement<'ast>,
-        saw_benign_let: &mut bool,
-    ) -> bool {
-        match stmt {
-            Statement::Let { value, .. } => {
-                if !Self::expr_is_field_move_from_param(param_name, value) {
-                    return true;
-                }
-                if self
-                    .infer_projected_field_type(param_name, param_type, value)
-                    .is_some_and(|ty| {
-                        Self::is_windjammer_text_param_type(&ty) || self.is_copy_type(&ty)
-                    })
-                {
-                    *saw_benign_let = true;
-                    true
-                } else {
-                    false
-                }
-            }
-            Statement::Return {
-                value: Some(expr), ..
-            }
-            | Statement::Expression { expr, .. } => {
-                // Non-let field moves still consume — not text-let-only.
-                !Self::expr_is_field_move_from_param(param_name, expr)
-            }
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                then_block.iter().all(|s| {
-                    self.stmt_field_move_bindings_are_only_copy_or_text(
-                        param_name,
-                        param_type,
-                        s,
-                        saw_benign_let,
-                    )
-                }) && else_block.as_ref().is_none_or(|b| {
-                    b.iter().all(|s| {
-                        self.stmt_field_move_bindings_are_only_copy_or_text(
-                            param_name,
-                            param_type,
-                            s,
-                            saw_benign_let,
-                        )
-                    })
-                })
-            }
-            Statement::While { body, .. }
-            | Statement::For { body, .. }
-            | Statement::Loop { body, .. } => body.iter().all(|s| {
-                self.stmt_field_move_bindings_are_only_copy_or_text(
-                    param_name,
-                    param_type,
-                    s,
-                    saw_benign_let,
-                )
-            }),
-            Statement::Match { arms, .. } => arms.iter().all(|arm| {
-                if !Self::expr_is_field_move_from_param(param_name, &arm.body) {
-                    return true;
-                }
-                if self
-                    .infer_projected_field_type(param_name, param_type, &arm.body)
-                    .is_some_and(|ty| {
-                        Self::is_windjammer_text_param_type(&ty) || self.is_copy_type(&ty)
-                    })
-                {
-                    *saw_benign_let = true;
-                    true
-                } else {
-                    false
-                }
-            }),
-            _ => true,
-        }
-    }
 
     /// True when a non-Copy `param.field` is passed as a call/method argument
     // (`return_f64(buf.scores)`). That is a partial move — keep the param Owned.

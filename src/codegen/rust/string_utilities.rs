@@ -477,20 +477,14 @@ pub fn param_is_rust_string_ref(param_type: &Type) -> bool {
     crate::ir::formal_predicates::param_is_rust_string_ref(param_type)
 }
 
-/// Module-level `pub const …: string` identifiers that lower to `&'static str` in Rust.
-pub fn is_windjammer_string_const_name(name: &str) -> bool {
-    name.starts_with("SCOPE_") || name.starts_with("AUDIT_") || name.starts_with("PERIOD_STATUS_")
-}
-
-/// Identifier is a string constant (`SCOPE_*`, module `const string`, or a let-bound literal).
+/// Identifier is a string constant: a module `const …: string` (declared, in this or an imported module) or a
+/// let-bound literal. Decided from declarations only, never from the name.
 pub fn is_string_const_identifier(
     name: &str,
     auto_clone: Option<&crate::auto_clone::AutoCloneAnalysis>,
     module_string_consts: Option<&std::collections::HashSet<String>>,
 ) -> bool {
-    is_windjammer_string_const_name(name)
-        || module_string_consts.is_some_and(|s| s.contains(name))
-        || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
+    module_string_consts.is_some_and(|s| s.contains(name)) || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
 }
 
 /// Callee borrows a string parameter: Rust will receive `&str` or `&String`.

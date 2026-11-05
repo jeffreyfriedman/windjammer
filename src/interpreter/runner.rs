@@ -134,6 +134,8 @@ pub struct EntryOptions {
     pub fallback: bool,
     /// Bridge library and the `extern fn`s it provides (ADR-0023), built by the CLI.
     pub host: Option<(PathBuf, Vec<super::host_bridge::ExternSig>)>,
+    /// Crate host for the program's Rust crate calls (ADR-0031), built by the CLI.
+    pub crates: Option<super::crate_host::CrateHost>,
     /// Apply source edits to the running program (ADR-0024).
     pub hot: bool,
     /// Scheduler seed, deterministic time, network policy.
@@ -144,7 +146,7 @@ pub struct EntryOptions {
 pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutcome {
     let entry = entry.to_path_buf();
     with_big_stack(move || {
-        let EntryOptions { fallback, host, hot, run: opts } = opts;
+        let EntryOptions { fallback, host, crates, hot, run: opts } = opts;
         let mut it = Interpreter::new();
         it.set_env_snapshot(host_env()); // host input, like `args`
         it.guard_stack();
@@ -204,6 +206,9 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
                     return RunOutcome::Exited(1);
                 }
             }
+        }
+        if let Some(c) = crates {
+            it.attach_crate_host(c);
         }
         if let Err(e) = it.load_program_at(&entry) {
             if fallback && super::preflight::is_preflight(&e) {

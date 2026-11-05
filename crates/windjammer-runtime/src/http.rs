@@ -257,6 +257,86 @@ fn client_send_with_body(
     })
 }
 
+/// A client request under construction: `http::request(method, url)`, then `header` / `body` /
+/// `timeout_secs`, then `send`.
+#[derive(Debug, Clone)]
+pub struct ClientRequest {
+    method: String,
+    url: String,
+    headers: Vec<(String, String)>,
+    body: Option<String>,
+    timeout_secs: Option<u64>,
+}
+
+/// Start a request. The capability check runs here (the url is what the program is allowed to
+/// reach) and again at `send`.
+pub fn request(method: impl AsRef<str>, url: impl AsRef<str>) -> ClientRequest {
+    crate::caps::net_connect(url.as_ref());
+    ClientRequest {
+        method: method.as_ref().to_ascii_uppercase(),
+        url: url.as_ref().to_string(),
+        headers: Vec::new(),
+        body: None,
+        timeout_secs: None,
+    }
+}
+
+impl ClientRequest {
+    /// Add a request header.
+    pub fn header(mut self, key: impl AsRef<str>, value: impl AsRef<str>) -> Self {
+        self.headers.push((key.as_ref().to_string(), value.as_ref().to_string()));
+        self
+    }
+
+    /// Set the request body.
+    pub fn body(mut self, body: impl AsRef<str>) -> Self {
+        self.body = Some(body.as_ref().to_string());
+        self
+    }
+
+    /// Give up after this many seconds (connect and response together).
+    pub fn timeout_secs(mut self, secs: i64) -> Self {
+        self.timeout_secs = Some(secs.max(0) as u64);
+        self
+    }
+
+    /// Send the request.
+    pub fn send(self) -> Result<Response, String> {
+        crate::caps::net_connect(&self.url);
+        let method = reqwest::Method::from_bytes(self.method.as_bytes()).map_err(|e| e.to_string())?;
+        let rt = Runtime::new().map_err(|e| e.to_string())?;
+        rt.block_on(async {
+            let mut client = reqwest::Client::builder();
+            if let Some(t) = self.timeout_secs {
+                client = client.timeout(std::time::Duration::from_secs(t));
+            }
+            let client = client.build().map_err(|e| e.to_string())?;
+            let mut builder = client.request(method, &self.url);
+            for (k, v) in &self.headers {
+                builder = builder.header(k.as_str(), v.as_str());
+            }
+            if let Some(body) = &self.body {
+                builder = builder.body(body.clone());
+            }
+            let response = builder.send().await.map_err(|e| {
+                if e.is_timeout() {
+                    "timed out".to_string()
+                } else {
+                    e.to_string()
+                }
+            })?;
+            let status = response.status().as_u16();
+            let headers = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
+            let body = response.bytes().await.map_err(|e| e.to_string())?.to_vec();
+            Ok(Response { status, body, headers })
+        })
+    }
+}
+
 // ============================================================================
 // SERVER TYPES
 // ============================================================================

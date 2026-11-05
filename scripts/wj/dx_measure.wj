@@ -1,0 +1,254 @@
+// Interpreter DX baseline (docs/design/interpreter-dx.md): what agents pay per interpreted run, and how fast it starts.
+//
+//   wj run --interpret scripts/wj/dx_measure.wj -- <abs wj binary> [--runs N]
+//
+// Output cost: every pilot-4 trial of the Windjammer arms (first and final drafts, bench/agent-dx/results/pilot4/trials),
+// run as the agent ran it (`wj run --interpret main.wj` with the task's first sample on stdin). Bytes of stderr are the
+// diagnostics, warnings and panics the agent reads; stdout is the program's own output. Tokens are estimated as bytes / 4.
+// Speed: start-up of `wj run --interpret` and `wj check` on a one-line program and on the largest pilot solution, warm
+// (the project cache filled) and cold (`.wj-cache` removed), median of N runs, CPU seconds.
+use std::env
+use std::fs
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+use wj_proc::load_avg
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::as_str
+use wj_json_doc::items
+
+const TRIALS: string = "bench/agent-dx/results/pilot4/trials"
+
+struct Sizes {
+    runs: int,
+    with_err: int,
+    err: Vec<int>,
+    out: Vec<int>,
+}
+
+fn median(xs: Vec<int>) -> int {
+    if xs.len() == 0 {
+        return 0
+    }
+    let mut v = xs
+    v.sort()
+    v[v.len() / 2]
+}
+
+fn sum(xs: Vec<int>) -> int {
+    let mut s = 0
+    for x in xs {
+        s += x
+    }
+    s
+}
+
+fn first_stdin(task: string) -> string {
+    match fs::read_to_string("bench/agent-dx/tasks/${task}/samples.json") {
+        Ok(t) => match parse(t) {
+            Ok(doc) => {
+                let all = items(doc)
+                if all.len() == 0 {
+                    return ""
+                }
+                match get(all[0], "stdin") {
+                    Some(s) => as_str(s).unwrap_or(""),
+                    None => "",
+                }
+            },
+            Err(_) => "",
+        },
+        Err(_) => "",
+    }
+}
+
+/// Run `source` as the agent did; (stdout bytes, stderr bytes, the stderr text).
+fn run_draft(wj: string, dir: string, source: string, stdin: string) -> (int, int, string) {
+    let _ = fs::write("${dir}/main.wj", source)
+    let _ = fs::write("${dir}/in.txt", stdin)
+    match sh("cd ${quote(dir)} && ${quote(wj)} run --interpret main.wj < in.txt") {
+        Ok(o) => (o.stdout.len() as int, o.stderr.len() as int, o.stderr),
+        Err(_) => (0, 0, ""),
+    }
+}
+
+fn output_cost(wj: string, scratch: string) {
+    let mut s = Sizes { runs: 0, with_err: 0, err: Vec::new(), out: Vec::new() }
+    let mut kinds: Vec<string> = Vec::new()
+    let entries = match fs::read_dir(TRIALS) {
+        Ok(es) => es,
+        Err(e) => {
+            eprintln("cannot read ${TRIALS}: ${e}")
+            return
+        },
+    }
+    let mut names: Vec<string> = Vec::new()
+    for e in entries {
+        names.push(e.path())
+    }
+    names.sort()
+    for p in names {
+        let doc = match fs::read_to_string(p) {
+            Ok(t) => match parse(t) {
+                Ok(d) => d,
+                Err(_) => continue,
+            },
+            Err(_) => continue,
+        }
+        let lang = match get(doc, "lang") {
+            Some(v) => as_str(v).unwrap_or(""),
+            None => "",
+        }
+        if lang != "wj" {
+            continue
+        }
+        let task = match get(doc, "task") {
+            Some(v) => as_str(v).unwrap_or(""),
+            None => "",
+        }
+        let stdin = first_stdin(task)
+        for key in ["first_source", "final_source"] {
+            let src = match get(doc, key) {
+                Some(v) => as_str(v).unwrap_or(""),
+                None => "",
+            }
+            if src.len() == 0 {
+                continue
+            }
+            let (o, e, text) = run_draft(wj, scratch, src, stdin)
+            s.runs += 1
+            s.out.push(o)
+            s.err.push(e)
+            if e > 0 {
+                s.with_err += 1
+                for line in strings.split_lines(text) {
+                    if headline(line) {
+                        kinds.push(line)
+                    }
+                }
+            }
+        }
+    }
+    let errs = s.err
+    println("output cost: ${s.runs} interpreted runs of pilot-4 drafts, ${s.with_err} wrote to stderr")
+    println("  stderr bytes: total ${sum(errs)}, median ${median(errs)} (all runs), max ${max_of(errs)}")
+    println("  stdout bytes: total ${sum(s.out)}")
+    let mut per_run = 0
+    if s.runs > 0 {
+        per_run = sum(errs) / (4 * s.runs)
+    }
+    println("  estimated stderr tokens per run (bytes / 4): ${per_run}")
+    println("  diagnostic headlines: ${kinds.len()}; by kind (count):")
+    let mut counts: Vec<(string, int)> = Vec::new()
+    for k in kinds {
+        let key = if k.len() > 48 { strings.substring(k, 0, 48) } else { k }
+        let mut found = false
+        let mut j = 0
+        while j < counts.len() {
+            if counts[j].0 == key {
+                let seen = counts[j].1
+                counts[j] = (key, seen + 1)
+                found = true
+            }
+            j += 1
+        }
+        if !found {
+            counts.push((key, 1))
+        }
+    }
+    for (k, n) in counts {
+        println("    ${n}  ${k}")
+    }
+}
+
+/// A diagnostic's or a panic's first line.
+fn headline(line: string) -> bool {
+    for p in ["error", "warning", "thread"] {
+        if strings.starts_with(line, p) {
+            return true
+        }
+    }
+    false
+}
+
+fn max_of(xs: Vec<int>) -> int {
+    let mut m = 0
+    for x in xs {
+        if x > m {
+            m = x
+        }
+    }
+    m
+}
+
+/// Median wall and CPU milliseconds of `command` over `runs` runs (`/usr/bin/time -p`, 10 ms resolution),
+/// `prep` run before each.
+fn time_median(command: string, prep: string, runs: int) -> string {
+    let mut wall: Vec<int> = Vec::new()
+    let mut cpu: Vec<int> = Vec::new()
+    let mut i = 0
+    while i < runs {
+        if prep.len() > 0 {
+            let _ = sh(prep)
+        }
+        let quiet = "${command} >/dev/null 2>&1"
+        match sh("/usr/bin/time -p sh -c ${quote(quiet)} 2>&1") {
+            Ok(o) => {
+                let mut c = 0.0
+                let both = "${o.stdout}${o.stderr}"
+                for line in strings.split_lines(both) {
+                    let parts = strings.split_whitespace(line)
+                    if parts.len() == 2 && (parts[0] == "user" || parts[0] == "sys") {
+                        c += parts[1].parse::<f64>().unwrap_or(0.0)
+                    } else if parts.len() == 2 && parts[0] == "real" {
+                        let secs = parts[1].parse::<f64>().unwrap_or(0.0)
+                        wall.push((secs * 1000.0) as int)
+                    }
+                }
+                cpu.push((c * 1000.0) as int)
+            },
+            Err(_) => {},
+        }
+        i += 1
+    }
+    "${median(wall)}/${median(cpu)} ms"
+}
+
+fn speed(wj: string, scratch: string, runs: int) {
+    let small = "${scratch}/small"
+    let mid = "${scratch}/mid"
+    let _ = sh("mkdir -p ${quote(small)} ${quote(mid)}")
+    let _ = fs::write("${small}/main.wj", "fn main() {\n    println(\"hi\")\n}\n")
+    let _ = fs::write("${small}/wj.toml", "[package]\nname = \"small\"\nversion = \"0.1.0\"\n")
+    let _ = sh("cp bench/agent-dx/solutions/wj/t011_lru_cache/main.wj ${quote(mid)}/main.wj && printf '[package]\\nname = \"mid\"\\nversion = \"0.1.0\"\\n' > ${quote(mid)}/wj.toml")
+    println("speed (wall/CPU ms, median of ${runs}; load ${load_avg()} at start):")
+    for (name, dir) in [("one-line program", small), ("t011_lru_cache solution", mid)] {
+        let run = "cd ${quote(dir)} && ${quote(wj)} run --interpret main.wj < /dev/null"
+        let check = "cd ${quote(dir)} && ${quote(wj)} check main.wj"
+        let cold = "rm -rf ${quote(dir)}/.wj-cache"
+        println("  ${name}: run warm ${time_median(run, "", runs)}, run cold ${time_median(run, cold, runs)}, check warm ${time_median(check, "", runs)}, check cold ${time_median(check, cold, runs)}")
+    }
+    println("  load ${load_avg()} at end")
+}
+
+fn main() {
+    let args = env::args()
+    let absolute = args.len() >= 2 && strings.starts_with(args[1], "/")
+    if !absolute {
+        eprintln("usage: wj run --interpret scripts/wj/dx_measure.wj -- <absolute wj binary> [--runs N]")
+        std::process::exit(2)
+    }
+    let wj = args[1]
+    let mut runs = 5
+    if args.len() > 3 && args[2] == "--runs" {
+        runs = args[3].parse::<int>().unwrap_or(5)
+    }
+    let scratch = strings.trim(match sh("mktemp -d /tmp/wj-dx.XXXXXX") {
+        Ok(o) => o.stdout,
+        Err(_) => "/tmp/wj-dx",
+    })
+    output_cost(wj, scratch)
+    speed(wj, scratch, runs)
+    let _ = sh("rm -rf ${quote(scratch)}")
+}

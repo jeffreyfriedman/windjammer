@@ -1,0 +1,13 @@
+// A callee that rebinds its text parameter (`let code = wanted`) and only compares it; the caller passes
+// the same binding twice. Formal and call site must agree (both borrow, or the call site clones).
+// Expected by hand: index 1 twice, then the code itself.
+// expect: 1 1 b
+mod lookup
+
+fn main() {
+    let rows = vec![lookup::Row { code: "a" }, lookup::Row { code: "b" }]
+    let code = "b"
+    let x = lookup::find_code(rows, code)
+    let y = lookup::find_code(rows, code)
+    println("${x} ${y} ${code}")
+}

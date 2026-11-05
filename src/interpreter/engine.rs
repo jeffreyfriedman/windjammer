@@ -241,6 +241,8 @@ pub struct Interpreter {
     pub(crate) project_loading: bool,
     /// Bridge library for `extern fn` (ADR-0020), when the project provides Rust code.
     pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
+    /// Rust crate dependencies called through the crate host (ADR-0031).
+    pub(crate) crate_host: Option<std::rc::Rc<super::crate_host::CrateHost>>,
     /// `wj run --hot`: pending file edits applied at function entry (`hot.rs`).
     pub(crate) hot: Option<Box<super::hot::HotState>>,
     /// Programs loaded into this interpreter (files, REPL inputs, hot-reload revisions). Every `&'static` AST node the
@@ -328,6 +330,7 @@ impl Interpreter {
             body_use_modules: HashMap::new(),
             project_loading: false,
             host: None,
+            crate_host: None,
             hot: None,
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));

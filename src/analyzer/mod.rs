@@ -14,6 +14,7 @@ pub(crate) use spawn_capture::param_captured_by_spawned_closure;
 mod cache_locality;
 pub(crate) mod nested_mod_items;
 pub(crate) mod field_enum_borrow;
+mod field_moves;
 mod forbidden_patterns;
 mod function_analysis;
 mod generic_analysis;
@@ -81,6 +82,10 @@ pub struct AnalyzedFunction<'ast> {
     pub field_extract_parameters: HashSet<String>,
     /// Parameters mutated via direct field/identifier assignment (not method-call-only).
     pub field_mutated_parameters: HashSet<String>,
+    /// Parameters a non-Copy field (or element) of which is moved out by value (`let b = p.bytes`,
+    /// `take(p.items)`, `return p.name`). Copy projections and text `let`s are reads, not moves. One
+    /// fact for the analyzer seed and codegen (C5: codegen no longer re-walks the body for it).
+    pub field_moved_parameters: HashSet<String>,
     /// Legacy: auto-clone analysis. Superseded by IR solver when `IrCutoverConfig.clones` is true.
     pub auto_clone_analysis: AutoCloneAnalysis,
     pub clone_optimizations: Vec<CloneOptimization>,
@@ -97,6 +102,9 @@ pub struct AnalyzedFunction<'ast> {
     /// Inline modules that contain the definition (`["geo", "area"]`; empty at file level). With the name
     /// (and the impl type for methods) this is the resolver's identity (`geo::area::f`, C3).
     pub module_path: Vec<String>,
+    /// Declared types of the file's top-level `const` / `static` items (`const SIZE: i32`): a function body
+    /// that names one reads a value of that type (NUM-DECLARED for the numeric solver).
+    pub module_const_types: Arc<HashMap<String, Type>>,
 }
 
 impl<'ast> AnalyzedFunction<'ast> {
@@ -349,6 +357,8 @@ pub struct Analyzer<'ast> {
     /// Maps struct_name → { field_name → Type }.
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     global_struct_field_types: Arc<HashMap<String, HashMap<String, Type>>>,
+    /// Declared types of the program's top-level `const` / `static` items.
+    module_const_types: Arc<HashMap<String, Type>>,
     /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
@@ -384,6 +394,7 @@ impl<'ast> Analyzer<'ast> {
             current_impl_functions: None,
             self_impl_context: None,
             global_struct_field_types: Arc::new(HashMap::new()),
+            module_const_types: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
             ownership_preconverged: false,

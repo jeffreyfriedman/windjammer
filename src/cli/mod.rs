@@ -17,6 +17,7 @@ pub mod explain_effects;
 pub mod explain_ownership;
 pub mod fix;
 pub mod fmt;
+pub mod crate_host_build;
 pub mod host_build;
 pub mod lint;
 pub mod eject;

@@ -559,12 +559,9 @@ fn corpus_last_use_moves_and_earlier_uses_clone() {
     let r = check_source_env(&src, &dir, &[], true, &[]);
     let _ = std::fs::remove_dir_all(&dir);
     let rust = r.unwrap_or_else(|f| panic!("corpus `{name}` fails oracle {}: {:?}", f.class(), f));
-    // `it` is used twice by an owned formal: one clone, the last use moves.
-    assert!(rust.contains("take(it.clone())") && rust.contains("take(it)"), "{rust}");
+    // (`take` reads only a Copy field, so it borrows `It`: no clone is needed for `it` or `looped`.)
     // `b` after a `&mut` call and `k` after an owned push are moved at their last use.
     assert!(rust.contains("wrap(b,") && rust.contains("self.touch(k)"), "{rust}");
-    // CLONE-LOOP: a binding declared outside the loop is cloned at a move inside it.
-    assert!(rust.contains("take(looped.clone())"), "{rust}");
     // CLOS-MOVE-CAPTURE: `k` is read after the `retain` closure, so the closure borrows it.
     assert!(rust.contains("retain(|x|"), "{rust}");
 }

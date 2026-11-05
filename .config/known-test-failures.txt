@@ -25,19 +25,12 @@ codegen_proactive_hardening_gates_test::len_to_int_formal_substring_must_cargo_c
 codegen_proactive_hardening_gates_test::typed_closure_string_predicate_must_cargo_check
 cross_crate_dogfooding_ownership_test::dogfood_substrate_full_store_patch_part_enum_value_layout
 # Third batch of compiler findings (numeric solver C4 / ownership convergence)
-compiler_findings_batch3_test::field_moved_into_function_keeps_mut_self_callers_valid
-compiler_findings_batch3_test::field_passed_to_extern_fn_keeps_borrowed_receiver
-compiler_findings_batch3_test::user_method_named_contains_keeps_its_owned_formal
-compiler_findings_batch3_test::copy_field_passed_as_call_argument_keeps_the_parameter_borrowed
 # Drift findings (docs/drift/pilot4-findings.md): interpreted green, generated Rust rejected
-drift_repros_test::let_mut_zero_then_parse_typechecks
-drift_repros_test::map_get_unwrap_or_then_arithmetic_typechecks
 
 # green4 triage (2026-11): failing before the C4 usize work (checked at 22d3fe8b2), still open.
 # Width, owner: numeric solver / convergence C4 (D-WIDTH-OWNERS; docs/spec/inference-divergences.md).
 codegen_mcp_frame_content_length_rustc_test::mcp_frame_int_to_dec_len_must_rustc
 codegen_string_len_int_formal_test::string_len_passed_to_int_formal_must_agree
-enum_struct_destructuring_test::test_enum_mixed_variants
 float_inference_field_initializer_test::test_struct_tuple_field_with_type_alias
 inference_differential_test::corpus_closure_len_arithmetic_width
 round2_findings_test::json_parse_target_type_inferred_from_later_use
@@ -91,3 +84,15 @@ codegen::rust::string_utilities::tests::static_impl_borrowed_string_formal_liter
 ir::formal_predicates::tests::method_call_arg_index_accounts_for_self_layout
 ir::signature_bridge::tests::analyzer_borrowed_bare_string_formal_stays_owned_without_emission
 ir::signature_bridge::tests::free_fn_plain_string_borrows_at_call_site
+# Width findings from a large multi-module program, a database project and the ecosystem (tests/compiler_findings_widths/),
+# owner: option C (typed collection literals and operator impls, C2) / the numeric solver.
+compiler_findings_widths_test::float_list_in_f32_enum_payload
+compiler_findings_widths_test::float_literal_times_f32_operator
+compiler_findings_widths_test::float_tuple_literals_follow_f32_use
+compiler_findings_widths_test::push_literal_takes_local_vec_width
+compiler_findings_widths_test::untyped_int_list_element_to_i32_parameter
+compiler_findings_widths_test::substring_bound_from_int_variables
+compiler_findings_widths_test::counter_in_int_tuple_return
+compiler_findings_widths_test::tuple_literal_in_match_arm
+compiler_findings_widths_test::float_expression_to_float_parameter
+compiler_findings_widths_test::float_literal_to_f32_crate_parameter

@@ -15,6 +15,7 @@ pub mod locate;
 mod project;
 mod rust_calls;
 mod rust_surface_health;
+mod std_calls;
 mod semantic;
 pub mod watch;
 

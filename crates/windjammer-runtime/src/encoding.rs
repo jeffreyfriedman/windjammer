@@ -43,6 +43,20 @@ pub fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Hex encode the UTF-8 bytes of a string (Windjammer `std::encoding::hex_encode_string`).
+pub fn hex_encode_string(data: impl AsRef<str>) -> String {
+    hex_encode(data.as_ref().as_bytes())
+}
+
+/// Hex decode to a string (Windjammer `std::encoding::hex_decode_string`): the bytes must be UTF-8.
+pub fn hex_decode_string(s: &str) -> Result<String, String> {
+    if s.len() % 2 != 0 || !s.is_ascii() {
+        return Err(format!("invalid hex string: {s:?}"));
+    }
+    let bytes = hex_decode(s)?;
+    String::from_utf8(bytes).map_err(|e| e.to_string())
+}
+
 /// URL-encode a string (Windjammer `std::encoding::url_encode`).
 pub fn url_encode(data: impl AsRef<str>) -> String {
     urlencoding::encode(data.as_ref()).into_owned()
@@ -87,6 +101,15 @@ pub fn form_stringify(pairs: &[(String, String)]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hex_string_round_trip() {
+        assert_eq!(super::hex_encode_string("hi"), "6869");
+        assert_eq!(super::hex_decode_string("6869").unwrap(), "hi");
+        assert!(super::hex_decode_string("686").is_err());
+        assert!(super::hex_decode_string("zz").is_err());
+        assert!(super::hex_decode_string("ff").is_err());
+    }
+
     use super::*;
 
     #[test]

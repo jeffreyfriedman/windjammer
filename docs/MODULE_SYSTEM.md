@@ -364,8 +364,10 @@ pub fn jaro(a: string, b: string) -> f64
 
 **Effects.** `@pure` and `@uses(..)` state what a function does for the capability model. Generated functions are
 `@pure` only for the small curated list of computation crates the generator ships; every other crate function needs
-`ffi = ["<crate>"]` under `[capabilities]` (effects are never guessed from names). Crate calls run compiled:
-`wj run` switches to the compiled path for them automatically. Design and roadmap:
+`ffi = ["<crate>"]` under `[capabilities]` (effects are never guessed from names). Crate calls run interpreted too:
+the first `wj run` builds a small cached crate host for the crates the program names, and every later run starts
+instantly ([ADR-0031](adr/0031-interpreter-crate-host.md)); a function whose types the host cannot carry yet runs compiled
+automatically. Design and roadmap:
 [ADR-0026](adr/0026-rust-crate-dependencies.md).
 
 ## Open design questions

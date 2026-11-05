@@ -346,33 +346,6 @@ pub(crate) trait PlaceEnv {
     fn eval_keep_ref(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value>;
 }
 
-/// An environment whose listed expressions were already evaluated (struct-literal fields, run in written order):
-/// asking for one of them returns its value once; everything else goes to `inner`.
-pub(crate) struct Evaluated<'a> {
-    pub(crate) inner: &'a mut dyn PlaceEnv,
-    pub(crate) vals: Vec<(*const Expression<'static>, Value)>,
-}
-
-impl PlaceEnv for Evaluated<'_> {
-    fn var(&mut self, it: &Interpreter, name: &str) -> Option<Slot> {
-        self.inner.var(it, name)
-    }
-    fn eval(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value> {
-        let key = e as *const Expression<'static>;
-        match self.vals.iter().position(|(p, _)| *p == key) {
-            Some(i) => Ok(self.vals.remove(i).1),
-            None => self.inner.eval(it, e),
-        }
-    }
-    fn eval_keep_ref(&mut self, it: &mut Interpreter, e: &'static Expression<'static>) -> R<Value> {
-        let key = e as *const Expression<'static>;
-        match self.vals.iter().position(|(p, _)| *p == key) {
-            Some(i) => Ok(self.vals.remove(i).1),
-            None => self.inner.eval_keep_ref(it, e),
-        }
-    }
-}
-
 /// The tree walker's scope.
 pub(crate) struct WalkerEnv;
 

@@ -76,14 +76,14 @@ pub(super) fn struct_literal(cx: &mut Cx, name: &'static str, fields: &'static [
         it.mark(loc);
         if it.hot.is_none() {
             if let Some(p) = plan_cell.get_or_init(|| plan(it, name, fields)) {
-                let mut out = Vec::with_capacity(p.order.len());
-                // run the field expressions in the order they are written, then lay the values out in declaration order
-                let mut vals: Vec<Option<Value>> = Vec::with_capacity(codes.len());
+                // initializers run in the order they are written, the struct is built in declaration order
+                let mut given: Vec<Option<Value>> = Vec::with_capacity(codes.len());
                 for c in codes.iter() {
-                    vals.push(Some(c(it, b)?));
+                    given.push(Some(c(it, b)?));
                 }
+                let mut out = Vec::with_capacity(p.order.len());
                 for (i, src) in p.order.iter().enumerate() {
-                    let v = vals[*src].take().unwrap_or(Value::Unit);
+                    let Some(v) = given[*src].take() else { return Err(semantic("struct literal field evaluated twice")) };
                     let v = match (&v, p.ints[i]) {
                         (Value::Int(_, t), Some(w)) if *t == w => v,
                         _ => it.coerce(v, &p.types[i].1)?,

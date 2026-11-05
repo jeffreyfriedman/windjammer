@@ -1,0 +1,17 @@
+pub fn first() {
+    let depths = [35, 38]
+    let mut i = 0
+    while i < 4 {
+        let d = depths[i]
+        place(0, d)
+        i = i + 1
+    }
+}
+
+fn place(a: i32, d: i32) {
+    let w = 0
+    let mut v = a
+    while v < w {
+        v = v + 1
+    }
+}

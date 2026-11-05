@@ -1,0 +1,41 @@
+// spec: SPEC-EXPR-019
+// expect: inner 20
+// expect: outer 2
+// expect: now a string 2
+// expect: 14 0
+// expect: 303
+// expect: 6
+// expect: if-let 7
+// expect: after 6
+fn main() {
+    let x = 1
+    let x = x + 1
+    {
+        let x = x * 10
+        println("inner ${x}")
+    }
+    println("outer ${x}")
+    let x = "now a string ${x}"
+    println("${x}")
+    let f = || x.len()
+    let x = 0
+    println("${f()} ${x}")
+    let mut total = 0
+    for i in 0..3 {
+        let total2 = total + i
+        total = total2
+        let i = i * 100
+        total += i
+    }
+    println("${total}")
+    let v = Some(5)
+    let v = match v {
+        Some(v) => v + 1,
+        None => 0,
+    }
+    println("${v}")
+    if let Some(v) = Some(7) {
+        println("if-let ${v}")
+    }
+    println("after ${v}")
+}

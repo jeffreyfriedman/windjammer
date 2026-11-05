@@ -146,6 +146,12 @@ fn classify(root: &Path) -> DepKind {
     }
 }
 
+/// Is the `path` dependency directory `dir` a Windjammer package (directly, or as `../pkg/build`, the generated
+/// output of one)? The single rule for "Windjammer or Rust" that every consumer shares (ADR-0026).
+pub fn is_windjammer_path_dep(dir: &Path) -> bool {
+    classify(&package_of_build_output(dir.to_path_buf())) == DepKind::Windjammer
+}
+
 /// `path = "../pkg/build"` names the generated output of the Windjammer package `../pkg`: the package is the
 /// dependency (its `src/` and `wj.toml`), not the Rust crate that was transpiled from it.
 fn package_of_build_output(dir: PathBuf) -> PathBuf {

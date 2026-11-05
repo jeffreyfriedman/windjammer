@@ -60,7 +60,7 @@ does now.
    - e. borrow conflicts, which need lifetimes of references in the generated code. This one may not fit the approach:
      the alternative is item 6.
 6. **Exact fallback (measured, not adopted):** `rustc --emit=metadata` on the generated crate. It is exact for every
-   class, but takes about 1 s or more per program. It may suit `wj check --deep` or a background check, not every run.
+   class, but takes about 1 s or more per program. It may suit a planned deep mode of `wj check` or a background check, not every run.
 
 ## First slice (landed)
 
@@ -68,7 +68,7 @@ does now.
 - `ir/explain/moves.rs` (`receiver_moves`) finds `v.m()` where the emitted `Type::m` takes `self` by value, `v` is an
   owned non-`Copy` local, and `v` is read again before any reassignment.
 - `check/moves.rs` turns each hit into WJ0007 with a span on `v.m(`.
-- The interpreted-run gate refuses the program. `tests/move_prediction/self_by_value_reuse.wj` now stops before
+- The interpreted-run gate refuses the program. `tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj` now stops before
   running:
 
   ```
@@ -81,13 +81,41 @@ does now.
 - Cost: the generator runs on every interpreted single-file run that passes `wj check`. On `bench/interp/structs.wj` it
   adds about 20 ms of CPU (0.01 to 0.03 s user; 0.02 to 0.05 s wall).
 
+## Second slice (landed): classes b, c and d, in `wj check`
+
+- **What is predicted:**
+  - b: a bare variable passed to a parameter the emitted callee takes by value;
+  - b': `let w = v`;
+  - d: `let w = v.f` followed by a use of `v` as a whole;
+  - c: any of these inside a loop that does not declare `v`.
+  - Each needs a type the emitted code spells and that is known to move (`String`, collections, `Box`/`Rc`/`Arc`,
+    non-`Copy` structs of the file, `Option` of those).
+- **Where it runs:** in `wj check`'s per-file analysis phase, so the check memo keeps it. The interpreted-run gate
+  reports it as one more check error.
+- **What the scan found first, and the rules that removed it:**
+  - A method name was matched to a user method of the same name (`HashMap::get` taken for a user `get`). Method
+    callees are now resolved by the receiver's spelled type.
+  - A use on another arm of an `if`/`match`, or behind a `return`, `break` or `continue`, was counted as a later use
+    (`return parse_alias(&trimmed, expr)` followed by more code). The emitted reader now records branch paths and
+    exits.
+  - Uses inside a closure were counted as uses inside the loop around it.
+- **Precision:**
+  - The scan over `examples/` and `tests/` reports the three fixtures `tests/diagnostics_oracle/check/wj0007_*.wj` (annotated for the span oracle).
+  - It also reports two programs rustc rejects with E0382 on their generated code: `tests/error_system/test_ownership.wj`,
+    an ownership-error fixture, and `tests/inference_corpus/string_literal_move_then_use.wj`, the compiler defect
+    D-CLONE-STRLIT, where the compiler emits no clone where one is needed.
+  - The ecosystem files of the drift corpus have no prediction.
+  - `tests/engine_parity/map_get_match.wj` copied a map with `let snapshot = m` and used `m` afterwards. Its compiled
+    build already failed on that line; it now copies explicitly.
+- **Recall check:** the auto-cloned shapes (`tests/move_prediction/accepted/`) build, and nothing is reported for them.
+
 ## Kill criteria
 
 - **Any false positive** (a program the compiled build accepts that the prediction refuses) that one revision of the
   class cannot remove means that class is dropped. The interpreter then keeps running such programs, and the drift
   ledger keeps them.
 - **Cost:** more than 50 ms added to the start-up of a small single-file run, or more than 10% of `wj check` time on the
-  ecosystem, means the prediction moves behind the check cache, or behind `wj check --deep` only.
+  ecosystem, means the prediction moves behind the check cache, or behind a planned deep mode of `wj check` only.
 - **Coverage:** if after classes a-d the drift ledger's ownership rows and pilot 4's ownership-shaped failures are not
   at least halved, stop extending this approach and evaluate the rustc metadata check (item 6) as the default instead.
 

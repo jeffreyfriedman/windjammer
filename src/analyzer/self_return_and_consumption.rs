@@ -868,7 +868,12 @@ impl<'ast> Analyzer<'ast> {
                         | BinaryOp::Gt
                         | BinaryOp::Ge
                 );
-                if is_comparison {
+                // Text concatenation with a literal (`"label:" + name`) formats a borrowed binding;
+                // it does not move it, so a read-only `match self` keeps `&self`.
+                let is_literal_text =
+                    |e: &Expression| matches!(e, Expression::Literal { value: crate::parser::ast::literals::Literal::String(_), .. });
+                let is_text_concat = matches!(op, BinaryOp::Add) && (is_literal_text(left) || is_literal_text(right));
+                if is_comparison || is_text_concat {
                     false
                 } else {
                     self.expression_uses_variables_consuming(left, vars)

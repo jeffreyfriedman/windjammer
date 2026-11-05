@@ -41,7 +41,7 @@ add: pure
 main: console
 ```
 
-**SPEC-EFF-002** Each standard-library sink performs one effect: file reads `fs.read`, file writes `fs.write`, the http client and TCP connect `net.connect`, servers `net.listen`, environment reads and writes `env.read`/`env.write`, running a program `process`, clocks and sleeps `time`, `std::random` and random UUIDs `random`. The table of sinks is part of the semantic layer and is the only classification the compiler and the interpreter use.
+**SPEC-EFF-002** Each standard-library sink performs one effect: file reads `fs.read`, file writes `fs.write`, the http client (`http::get`, `http::request(method, url).header(..).body(..).timeout_secs(n).send()`, checked on the url at construction and again at `send`) and TCP connect `net.connect`, servers `net.listen`, environment reads and writes `env.read`/`env.write`, running a program `process`, clocks and sleeps `time`, `std::random` and random UUIDs `random`. The table of sinks is part of the semantic layer and is the only classification the compiler and the interpreter use.
 
 <!-- example: tests/spec/effects/SPEC-EFF-002.wj -->
 ```windjammer

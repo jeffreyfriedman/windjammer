@@ -1,0 +1,15 @@
+// Not reported: the compiler clones the field for `let l = n.label` and borrows `n` for `show`, so the build succeeds.
+struct Node {
+    label: string,
+    tags: Vec<string>,
+}
+
+fn show(n: Node) -> int {
+    n.tags.len()
+}
+
+fn main() {
+    let n = Node { label: "a", tags: ["x"] }
+    let l = n.label
+    println("${l} ${show(n)}")
+}

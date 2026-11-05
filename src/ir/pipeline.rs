@@ -131,6 +131,14 @@ impl IrPipeline {
         self
     }
 
+    /// The typed Rust core surface: the session's copy, or parsed for this pipeline.
+    fn core_surface(&self) -> std::borrow::Cow<'_, crate::typing::core_surface::CoreSurface> {
+        match &self.stdlib {
+            Some(t) => std::borrow::Cow::Borrowed(&t.core_surface),
+            None => std::borrow::Cow::Owned(crate::typing::core_surface::CoreSurface::parse()),
+        }
+    }
+
     fn stdlib_effect_declarations(&self) -> Vec<EffectConstraint> {
         match &self.stdlib {
             Some(t) => t.effect_declarations.clone(),
@@ -183,19 +191,14 @@ impl IrPipeline {
         });
 
         // Stage 2: Generate constraints and solve per-function
-        let mut total_constraints = 0usize;
-        let mut total_solver_diags = 0usize;
+        let (mut total_constraints, mut total_solver_diags) = (0usize, 0usize);
         let mut effect_constraints_forwarded = Vec::new();
         let mut taint_constraints_forwarded: Vec<taint::TaintConstraint> = Vec::new();
-        let mut execution_constraints_forwarded: Vec<super::execution::ExecutionConstraint> =
-            Vec::new();
+        let mut execution_constraints_forwarded: Vec<super::execution::ExecutionConstraint> = Vec::new();
+        let core_surface = self.core_surface();
 
         for (i, af) in analyzed.iter().enumerate() {
-            let fc = constraint_gen::generate_constraints_with_fields(
-                af,
-                Some(registry),
-                Some(&struct_field_types),
-            );
+            let fc = constraint_gen::generate_constraints_typed(af, Some(registry), Some(&struct_field_types), Some(&core_surface));
             total_constraints += fc.constraints.len();
 
             // Forward effect constraints to the domain solver.

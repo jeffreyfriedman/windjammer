@@ -430,11 +430,6 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
-                    // P3.660: SharedMap aliases are map handles, not Vec/Store.
-                    && base != "SharedMap"
-                    && base != "SharedMapSI"
-                    && !base.ends_with("SharedMap")
-                    && !base.ends_with("SharedMapSI")
             });
             let owned_copy_or_custom_get = receiver_rt.is_some_and(|rt| {
                 let base = rt.split('<').next().unwrap_or(rt);
@@ -443,10 +438,6 @@ impl<'ast> CodeGenerator<'ast> {
                     || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
-                    || base == "SharedMap"
-                    || base == "SharedMapSI"
-                    || base.ends_with("SharedMap")
-                    || base.ends_with("SharedMapSI")
                 {
                     return false;
                 }
@@ -6684,9 +6675,9 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type_name: Option<&str>,
         receiver: Option<&Expression<'ast>>,
     ) {
+        if self.solver_typed_numeric_call(receiver, arg_expr) { return; }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        // Prefer receiver-qualified formals so suffix-ambiguous methods
-        // (`insert` → Vec vs HashMap) never drive numeric casts from the wrong sig.
+        // Prefer receiver-qualified formals so suffix-ambiguous methods (`insert` → Vec vs HashMap) never drive numeric casts from the wrong sig.
         let user_argc = sig
             .param_types
             .len()
