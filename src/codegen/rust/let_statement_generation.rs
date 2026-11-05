@@ -651,7 +651,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Auto-convert &str to String if type is String
-                let mut value_str = self.generate_expression(value);
+                let mut value_str = { let v = self.generate_expression(value); self.copy_if_read_again(value, v) };
 
                 self.collect_target_type = prev_collect_target;
                 self.suppress_collection_turbofish = prev_suppress_turbo;

@@ -1461,9 +1461,7 @@ impl<'ast> CodeGenerator<'ast> {
                             let eff_ownership =
                                 self.get_effective_self_ownership(&func.name, analyzed);
                             let self_str = if let Some(ownership_mode) = eff_ownership {
-                                if crate::debug_env::enabled("WJ_DEBUG_SELF_RECV")
-                                    && func.name.contains("update_death")
-                                {
+                                if crate::debug_env::enabled("WJ_DEBUG_SELF_RECV") {
                                     eprintln!(
                                         "[SELF-RECV] fn={} eff={:?} body_modifies={} consumes={} returns_impl={} owned_recv={}",
                                         func.name,
@@ -1489,7 +1487,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     // P3.707: Borrowed + consumes (e.g. owned
                                     // `upload_camera`) must not drop `mut` when the
                                     // body also assigns `self.field` — bare `self`
-                                    // → E0594 (BP `update_death_state`).
+                                    // → E0594.
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
                                             && consumes_self
@@ -1835,9 +1833,8 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Inferred => {
                         if param.name == "self" {
                             // P3.707: early owned-sibling path used to require
-                            // `returns_impl_struct` for `mut self`, so BP
-                            // `update_death_state` (returns bool + field assigns +
-                            // owned `upload_camera`) emitted bare immutable `self`.
+                            // `returns_impl_struct` for `mut self`, so a method that returns bool,
+                            // assigns fields and calls an owned-self method emitted bare immutable `self`.
                             if !self.in_trait_impl
                                 && super::self_analysis::function_calls_owned_self_method(
                                     &analyzed.decl,

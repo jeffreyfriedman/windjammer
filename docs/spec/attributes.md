@@ -6,6 +6,10 @@ Part of the [Windjammer language specification](README.md). Rule IDs are checked
 
 Attributes the compiler interprets today include `derive`, `test`, `property_test`, `test_cases`, `timing`, `route` (web) and several UI/runtime decorators. The authoritative list lives in `src/decorator_registry.rs`; unknown attributes parse and are ignored by the core.
 
+Framework decorators (`framework_decorators` in the registry) select generated code by their declared meaning, never by a
+type's name. `@game` marks a game state struct; like every struct whose fields all have defaults it gets `Default` (every
+field at its zero value: `0`, `0.0`, `false`, an empty `string` or list), so a game loop can start from `Name::default()`. `@component` marks a UI component (no code is generated for it yet).
+
 ## Attribute syntax
 
 **SPEC-ATTR-001** An attribute `@name` or `@name(args)` precedes an item (function, struct, enum, impl, trait). Several may stack. Unknown attributes are retained for tooling and ignored by the compiler core.

@@ -863,7 +863,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         && crate::codegen::rust::types::is_windjammer_text_type(t)
                                 });
                             if formal_is_owned_string {
-                                // P3.376: `pub const SCOPE_*: string` / module string consts lower
+                                // P3.376: module `const …: string` constants (by declaration) lower
                                 // to `&'static str`; owned `string` formals need `.to_string()`.
                                 let arg_is_string_const = arguments.get(i).is_some_and(|(_, arg_expr)| {
                                     let name = match arg_expr {

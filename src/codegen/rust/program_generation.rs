@@ -822,13 +822,10 @@ impl<'ast> CodeGenerator<'ast> {
                     body.push_str(&self.generate_struct(s));
                     body.push_str("\n\n");
 
-                    // Check for @component or @game decorators and generate trait implementations
+                    // `@component` marks a UI component. (`@game` structs get their zero-value `Default` from the
+                    // derive every all-default struct receives; a second impl conflicted with it, E0119.)
                     if s.decorators.iter().any(|d| d.name == "component") {
                         body.push_str(&self.generate_component_impl(s));
-                        body.push_str("\n\n");
-                    }
-                    if s.decorators.iter().any(|d| d.name == "game") {
-                        body.push_str(&self.generate_game_impl(s));
                         body.push_str("\n\n");
                     }
                 }
