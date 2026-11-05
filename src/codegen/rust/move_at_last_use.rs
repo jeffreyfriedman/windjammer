@@ -69,6 +69,12 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// The binding is an owned value (not a Rust reference) in the emitted function.
+    /// A parameter or local this function emits as a reference (an alias of it is a reference too).
+    pub(in crate::codegen::rust) fn binding_is_known_borrow(&self, name: &str) -> bool {
+        let known = self.current_function_params.iter().any(|p| p.name == name) || self.local_var_types.contains_key(name);
+        known && name != "self" && !self.binding_emits_owned_value(name)
+    }
+
     fn binding_emits_owned_value(&self, name: &str) -> bool {
         let is_ref = |t: &Type| matches!(t, Type::Reference(_) | Type::MutableReference(_));
         // Emission truth only: `inferred_*` can lag signature promotion.

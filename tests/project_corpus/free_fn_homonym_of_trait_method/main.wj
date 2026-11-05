@@ -1,0 +1,13 @@
+// A use-case function imported by `use` shares its bare name with a trait method in another module. The
+// unqualified call must use the free function's signature (it takes `deps` and the text by value), not
+// the method's (`&self`). Expected by hand: the two stored items plus the tenant tag.
+// expect: 3
+mod ports
+mod shelf
+mod usecases
+mod routes
+
+fn main() {
+    let deps = usecases::Deps { shelf: shelf::Shelf { items: ["a", "b"] }, tag: "t" }
+    println(routes::handle(deps, "t"))
+}

@@ -1,0 +1,11 @@
+use crate::port::Reader
+
+pub struct ListReader {
+    pub n: int,
+}
+
+impl Reader for ListReader {
+    fn list(self, slug: string) -> Vec<string> {
+        vec![slug]
+    }
+}

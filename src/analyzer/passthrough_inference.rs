@@ -268,7 +268,6 @@ impl<'ast> Analyzer<'ast> {
         }
 
         let mut inferred_mode: Option<OwnershipMode> = None;
-
         let std_collection_param = matches!(
             Self::param_receiver_type_name(param_type),
             Some("Vec" | "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "VecDeque")
@@ -343,6 +342,7 @@ impl<'ast> Analyzer<'ast> {
                     current_func_name, func_name, sig.param_ownership, sig.has_self_receiver
                 );
             }
+            if *is_bare_fn_call && sig.has_self_receiver { continue } // a bare call names a free fn, not a method homonym
             let adjusted_position = if sig.has_self_receiver {
                 *arg_position + 1
             } else {

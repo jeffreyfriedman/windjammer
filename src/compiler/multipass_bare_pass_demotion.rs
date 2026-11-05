@@ -262,7 +262,7 @@ fn restore_owned_formals_forwarded_to_owned_callees_with_cache(
         if changed {
             registry.signatures.insert(key.clone(), new_sig.clone());
             if let Some(bare) = key.rsplit("::").next() {
-                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                if bare != key.as_str() && registry.signatures.get(bare).is_some_and(|s| s.has_self_receiver == new_sig.has_self_receiver) {
                     registry.signatures.insert(bare.to_string(), new_sig);
                 }
             }
@@ -498,7 +498,7 @@ fn restore_pub_owned_non_copy_api_formals_with_cache(
         if changed {
             registry.signatures.insert(key.clone(), new_sig.clone());
             if let Some(bare) = key.rsplit("::").next() {
-                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                if bare != key.as_str() && registry.signatures.get(bare).is_some_and(|s| s.has_self_receiver == new_sig.has_self_receiver) {
                     registry.signatures.insert(bare.to_string(), new_sig);
                 }
             }
