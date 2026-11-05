@@ -209,6 +209,7 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C5 receivers from the IR (`ir_self_receiver`), indexed receiver types, W0016 | cbe50d47c | 0 | ~160 | D-OWN-STAGES 21 -> 9; D-CLONE-OUTSIDE-SOLVER 14 -> 18 (snapshot methods clone fields) |
 | C5 field-move fact replaces the codegen walk | cbe50d47c, 24fe5083b | ~180 | ~70 | (same measurement) |
 | C5 self owned only when self is consumed (seed rule; field reads clone) | af2a31ce9 + next | 6 | 4 | ecosystem width gate 6/9 -> 9/9; ratchet: 3 batch3 ownership tests leave (48 -> 45 entries owned by C3/C5/C6) |
+| C5 receiver arms deleted: one `self_receiver` spelling rule (IR mode; trait mode in trait impls) | d76a87198 | ~620 | ~60 | D-OWN-STAGES 9 -> 9 (the deleted arms ran only where codegen and the IR already agreed); DownstreamApp api-check ownership errors 3 -> 1; ratchet 44 -> 43 (one stale entry) |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 
