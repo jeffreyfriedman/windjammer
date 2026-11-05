@@ -1,0 +1,52 @@
+// spec: SPEC-TRT-010
+// expect: square:9
+// expect: shape:10
+// expect: square
+// expect: shape
+// expect: 11
+trait Shape {
+    fn area(self) -> int
+    fn name(self) -> string {
+        "shape"
+    }
+}
+
+struct Sq {
+    s: int,
+}
+
+struct Rect {
+    w: int,
+    h: int,
+}
+
+impl Shape for Sq {
+    fn area(self) -> int {
+        self.s * self.s
+    }
+    fn name(self) -> string {
+        "square"
+    }
+}
+
+impl Shape for Rect {
+    fn area(self) -> int {
+        self.w * self.h
+    }
+}
+
+fn describe<T: Shape>(x: T) -> string {
+    "${x.name()}:${x.area()}"
+}
+
+fn main() {
+    println(describe(Sq { s: 3 }))
+    println(describe(Rect { w: 2, h: 5 }))
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq { s: 2 }), Box::new(Rect { w: 1, h: 7 })]
+    let mut total = 0
+    for sh in shapes {
+        total += sh.area()
+        println(sh.name())
+    }
+    println("${total}")
+}

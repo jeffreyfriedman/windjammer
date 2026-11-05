@@ -1,0 +1,48 @@
+// spec: SPEC-PAT-011
+// expect: big circle
+// expect: circle
+// expect: square
+// expect: rect
+// expect: equilateral
+// expect: tall tri
+// expect: empty
+// expect: negative zero digit round large
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+    Tri { a: int, b: int, c: int },
+    Empty,
+}
+
+fn classify(s: Shape) -> string {
+    match s {
+        Shape::Circle(r) if r > 10 => "big circle",
+        Shape::Circle(_) => "circle",
+        Shape::Rect(w, h) if w == h => "square",
+        Shape::Rect(_, _) => "rect",
+        Shape::Tri { a, b, c } if a == b && b == c => "equilateral",
+        Shape::Tri { a, .. } => if a > 3 { "tall tri" } else { "tri" },
+        Shape::Empty => "empty",
+    }
+}
+
+fn bucket(n: int) -> string {
+    match n {
+        n if n < 0 => "negative",
+        0 => "zero",
+        1..=9 => "digit",
+        10 | 20 | 30 => "round",
+        _ => "large",
+    }
+}
+
+fn main() {
+    println(classify(Shape::Circle(11)))
+    println(classify(Shape::Circle(2)))
+    println(classify(Shape::Rect(3, 3)))
+    println(classify(Shape::Rect(3, 4)))
+    println(classify(Shape::Tri { a: 2, b: 2, c: 2 }))
+    println(classify(Shape::Tri { a: 5, b: 1, c: 1 }))
+    println(classify(Shape::Empty))
+    println("${bucket(-5)} ${bucket(0)} ${bucket(7)} ${bucket(20)} ${bucket(99)}")
+}
