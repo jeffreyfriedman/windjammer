@@ -331,21 +331,24 @@ fn macro_forms_say_what_to_write() {
 
 #[test]
 fn predicted_move_explains_ownership_without_rust_terms() {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/self_by_value_reuse.wj");
+    // A value that cannot be copied (it holds a channel end): the compiler copies every other value that is
+    // used again, so only such values reach WJ0007.
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/receiver_non_clone.wj");
     let d = windjammer::check::moves::predicted_moves(&p);
     assert_eq!(d.len(), 1, "{d:?}");
     let d = &d[0];
     assert_eq!(d.code, "WJ0007");
-    assert!(d.message.contains("`n`") && d.message.contains("Node::advance"), "{}", d.message);
+    assert!(d.message.contains("`inbox`") && d.message.contains("Inbox::with_seen"), "{}", d.message);
     let t = all_text(d);
     assert!(t.contains("takes ownership of its receiver") && t.contains("consumed"), "{t}");
-    assert!(t.contains("let moved = n.advance()") || t.contains("the value `advance` returns"), "{t}");
+    assert!(t.contains("the value `with_seen` returns"), "{t}");
+    assert!(t.contains("cannot be copied") && !t.contains(".clone()"), "{t}");
     assert!(t.contains("move the later use"), "{t}");
-    for rust in ["E0382", "rustc", "by value", "borrow checker"] {
+    for rust in ["E0382", "rustc", "by value", "borrow checker", "Clone"] {
         assert!(!t.contains(rust), "Rust term `{rust}` in: {t}");
     }
-    // The span is on the call that consumes the receiver, line 21 of the fixture.
-    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 21, "{d:?}");
+    // The span is on the call that consumes the receiver, line 19 of the fixture.
+    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 19, "{d:?}");
     // No machine fix: `.clone()` would trade this error for lint W0005, so the hint is text only.
     assert!(d.fixes.is_empty());
 }

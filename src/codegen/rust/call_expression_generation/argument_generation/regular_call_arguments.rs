@@ -889,7 +889,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
                             &coerced,
                         );
-                    return vec![gen.copy_if_read_again(arg, coerced)]; // CLONE-USE-AFTER-MOVE (liveness)
+                    return vec![gen.copy_if_read_again(arg, gen.drop_clone_under_borrow(arg, coerced))]; // C6 clone facts
                 }
                 debug_assert!(
                     false,
