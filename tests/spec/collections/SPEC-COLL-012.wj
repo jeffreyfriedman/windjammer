@@ -1,0 +1,44 @@
+// spec: SPEC-COLL-012
+// expect: 3 20 60
+// expect: 3
+// expect: 8
+// expect: 3 3c
+// expect: 30
+// expect: 4 5
+// expect: 120
+// expect: true false 6
+// expect: 6 1
+// expect: 4
+// expect: 3 3
+// expect: 3
+// expect: 1 1
+fn main() {
+    let calls = vec![0]
+    let v = vec![1, 2, 3, 4, 5, 6]
+    let mut log: Vec<string> = Vec::new()
+    let evens: Vec<int> = v.iter().filter(|x| *x % 2 == 0).map(|x| x * 10).collect()
+    println("${evens.len()} ${evens[0]} ${evens[2]}")
+    let firsts: Vec<int> = v.iter().take_while(|x| **x < 4).map(|x| *x).collect()
+    println("${firsts.len()}")
+    let s: int = v.iter().skip(2).step_by(2).sum()
+    println("${s}")
+    let z: Vec<(int, string)> = v.iter().zip(vec!["a", "b", "c"]).map(|(n, t)| (*n, t.to_string())).collect()
+    println("${z.len()} ${z[2].0}${z[2].1}")
+    let en: Vec<int> = v.iter().enumerate().map(|(i, x)| (i as int) * x).collect()
+    println("${en[5]}")
+    let ch: Vec<int> = v.iter().take(2).chain(v.iter().skip(4)).map(|x| *x).collect()
+    println("${ch.len()} ${ch[2]}")
+    let folded = v.iter().fold(0, |acc, x| acc * 2 + x)
+    println("${folded}")
+    println("${v.iter().any(|x| *x > 5)} ${v.iter().all(|x| *x > 1)} ${v.iter().count()}")
+    println("${v.iter().max().unwrap_or(&0)} ${v.iter().min().unwrap_or(&0)}")
+    let found = v.iter().find(|x| **x > 3)
+    println("${found.unwrap_or(&0)}")
+    let mut seen = 0
+    let first_big = v.iter().map(|x| { seen += 1; *x }).find(|x| *x > 2)
+    println("${first_big.unwrap_or(0)} ${seen}")
+    let flat: Vec<int> = vec![vec![1], vec![], vec![2, 3]].into_iter().flatten().collect()
+    println("${flat.len()}")
+    log.push("done")
+    println("${log.len()} ${calls.len()}")
+}
