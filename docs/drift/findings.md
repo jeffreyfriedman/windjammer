@@ -95,7 +95,7 @@ Also on this head: `nth_cast` is fixed (its ledger line is gone, the test passes
 | `repros/pow_exponent_literal_width.wj`, `shift_count_method_literal_width.wj` | `pow` and `wrapping_shl` take a `u32` count; the literal gets the receiver's width | compiled-backend bug |
 | `repros/division_by_known_zero.wj` | a division whose divisor rustc can see is zero stops the compiled build (deny-by-default `unconditional_panic`); the interpreter runs it and panics | policy difference, ledgered |
 | `tests/conformance/types/enums_and_matching.wj` | the interpreter refuses a non-exhaustive match (WJ0010); the compiled build accepts the program | decide which is right |
-| 40 programs of `examples/verified`, `tests/conformance*`, `tests/engine_parity` | the interpreter runs them; the compiled build rejects them (mostly WJ0003 `uint`/`int` width mismatches, e.g. `examples/verified/algo_lcs.wj`) | compiled-backend regressions in the verified corpus; not reduced |
+| about 50 programs of `examples/verified`, `tests/conformance*`, `tests/engine_parity` | the interpreter runs them; the compiled build rejects them (mostly WJ0003 `uint`/`int` width mismatches, e.g. `examples/verified/algo_lcs.wj`) | compiled-backend regressions in the verified corpus; not reduced |
 
 Fixed in this branch: struct literal fields ran in declaration order (rustc: as written; next had the same fix, its version was kept),
 `env::current_dir` returned a bare string, `env::current_exe` and `json::number_f64` were missing in the interpreter, and
