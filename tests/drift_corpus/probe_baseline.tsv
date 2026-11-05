@@ -70,3 +70,7 @@ probe/panic_nested-1	exit101:7:678959615
 probe/panic_nested-2	exit101:7:678959615
 probe/panic_nested-3	exit101:7:678959615
 probe/panic_nested-4	exit101:7:678959615
+probe/splits-1	exit0:67:623919708
+probe/splits-2	exit0:66:320735511
+probe/splits-3	exit0:67:623919708
+probe/splits-4	exit0:66:320735511

@@ -1777,6 +1777,7 @@ tests/drift_corpus/repros/dyn_box_param.wj	exit0:2:18114
 tests/drift_corpus/repros/dyn_fn_box_return.wj	exit1:0:17	
 tests/drift_corpus/repros/enum_variant_literal_payload.wj	exit0:3:571495	
 tests/drift_corpus/repros/env_current_dir_shape.wj	exit0:3:616445	
+tests/drift_corpus/repros/i64_min_literal.wj	exit0:21:797500658	
 tests/drift_corpus/repros/int_compared_with_len_and_indexed.wj	exit0:17:243019704	
 tests/drift_corpus/repros/len_minus_literal_returned_as_int.wj	exit0:2:17866	
 tests/drift_corpus/repros/let_literal_captured_by_closure.wj	exit1:0:17	
@@ -1795,3 +1796,4 @@ tests/drift_corpus/repros/shadow_match_binding_literal.wj	exit1:0:17
 tests/drift_corpus/repros/shadowed_option_literal_arms.wj	exit1:0:17	
 tests/drift_corpus/repros/shift_count_method_literal_width.wj	exit0:5:537151487	
 tests/drift_corpus/repros/thread_join_coalesce.wj	exit0:3:557979	
+tests/drift_corpus/repros/u64_literal_above_i64_max.wj	exit1:0:17	
