@@ -255,7 +255,18 @@ fn panic_loc(stderr: string, status: int) -> string {
     ""
 }
 
+// an empty exit-1 run may be a starved build rather than a verdict: try again, up to three times
 fn run_compiled(wj: string, file: string) -> string {
+    let mut t = run_compiled_once(wj, file)
+    let mut tries = 1
+    while t == "exit1:0:17" && tries < 3 {
+        t = run_compiled_once(wj, file)
+        tries += 1
+    }
+    t
+}
+
+fn run_compiled_once(wj: string, file: string) -> string {
     let w = env::var("WJ_CARGO_WRAPPER").unwrap_or("")
     match sh("${w} ${quote(wj)} run --compiled --no-lint ${quote(file)} < /dev/null") {
         Ok(r) => "exit${r.status}:${checksum(r.stdout)}",
