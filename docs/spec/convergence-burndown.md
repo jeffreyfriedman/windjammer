@@ -86,6 +86,96 @@ shows the stages as `analyzer= solver= ir= emitted=`.
   convert a literal for an owned `String` formal; listed in `project_rejects.txt`), `param_rebound_then_compared`
   and `use_imported_homonym_by_value` (pass here; the larger-project failures they stand for did not reproduce).
 
+## Name-based guesses (decide from declarations instead)
+
+The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a
+fact from an identifier's spelling; each is a deletion target once the declaration-based fact exists.
+
+| site | guess | replacement |
+|---|---|---|
+| `codegen/rust/string_utilities.rs` `is_windjammer_string_const_name` | a constant named `SCOPE_*`, `AUDIT_*`, `PERIOD_STATUS_*` is a string | **deleted** (wt/c4-optc): `module_string_consts`, built from `const …: string` declarations in this and imported modules, already held every such constant; test `tests/string_const_by_declaration_test.rs` |
+| `module_system/mod.rs` (5 sites), `build_utils/module_generation.rs` (3 sites) | a module named `desktop_*` or `app_*` (except `app_reactive`) gets a desktop feature gate | **open, needs a declaration first**: a `wj.toml` table (`[module_features]` `desktop = ["desktop_window", ...]`) read where `lib.rs`/`mod.rs` are generated (`generate_lib_rs` has the project root; `generate_mod_file` and `generate_mod_rs_for_submodule` need it passed); the gate is emitted only for listed modules. A downstream project that relies on the prefix must add its entries in the same change, then the 8 prefix checks go |
+| `codegen/rust/stdlib_method_traits.rs:810`, `ir_call_site.rs:436/448`, `method_call_expression_generation/arguments.rs:914/986` | a receiver type named `SharedMap` / `SharedMapSI` (or ending so) is a lock-guarded map | **deleted** (wt/names): the lock guard is typed from the declared field (`inner: Arc<Mutex<HashMap<..>>>`); `tests/locked_map_handle_by_declaration_test.rs` uses a neutral name, and the compiled ecosystem sweep covers the cross-package case |
+| `codegen/rust/function_formal_parameter_generation.rs:1466` | a debug trace filters on one function name | **deleted** (wt/names): the trace fires for every function under the env flag |
+| `codegen/rust/function_generation_prepare.rs:10735` | a `Custom("Vec<…>")` type spelled with `string` inside is a `Vec<string>` | **done** (wt/names): `type_classification_utilities::type_is_string_element_vec` reads the element (`Vec<Vec<string>>` is not a string vector) |
+| `codegen/rust/program_generation.rs:830` | a `@game` decorator selects a code path | **code path deleted** (wt/names): its `impl Default` conflicted with the derived `Default` every all-default struct gets (E0119); `@game` stays a registered framework decorator, documented in `docs/spec/attributes.md`, tested by `tests/framework_decorator_game_test.rs` |
+| `cargo_integration.rs:345` (and `config.game_path`), `plugin.rs:29` | importing one of three hard-coded engine crate names adds a path dependency to a local engine checkout; plugins are searched in a hard-coded sibling engine directory | a declared dependency in `wj.toml` (path or registry), like every other crate |
+
+Language-level conventions that stay: test modules and files named `*_test` / `*_tests` (the test runner's documented
+rule) and std module names (`db`, `config`, `strings`).
+
+## Heuristic surface (gate: `tests/heuristic_surface_test.rs`)
+
+Convergence is converging when the deciders shrink, not only when the solver grows. The heuristic-surface ratchet
+counts, per file in `src/codegen`, `src/analyzer`, `src/ir`, `src/typing` and `src/type_inference` (test modules and
+test files excluded):
+
+- `H-NAME-MATCHES`: a string literal that spells a name (identifier, type, method, module or path fragment such as
+  `"Vec<"` or `"_i32"`) compared with `==` / `!=` or searched with `starts_with` / `ends_with` / `contains` /
+  `strip_prefix` / `strip_suffix`;
+- `H-MATCH-ARM-NAMES`: such a literal used as a `match` arm pattern (`"Foo" =>`, `"a" | "b" =>`, `Some("x") =>`);
+- `H-FALLBACK-LEGACY`: identifiers containing `fallback` or `legacy` (each definition and each use).
+
+Literals that spell a language keyword, a primitive type, a Rust std module or a Windjammer std module (`std/`) are
+exempt; any other exemption is a `[conventions]` entry in `docs/heuristic-allowlist.toml` that must point at the doc
+defining it. Every per-file number may only fall; a new file may not appear; the allow-list may not be higher than
+reality (lower it with `cargo test --test all heuristic_surface_test::regenerate_heuristic_baseline -- --ignored`); a
+mutation check adds one guess of each kind to a real file and requires all three sections to fail. The gate also
+fails when the line below does not match the allow-list.
+
+Current totals (seeded 2026-11-04 from wt/names):
+`H-NAME-MATCHES` 647, `H-MATCH-ARM-NAMES` 1150, `H-FALLBACK-LEGACY` 128 (total 1925)
+
+| area | name matches | match-arm names | fallback/legacy |
+|---|---|---|---|
+| `codegen/rust` | 481 | 109 | 76 |
+| other backends (`codegen/portable`, `javascript`, `go`, shared) | 46 | 957 | 0 |
+| `analyzer` | 64 | 9 | 48 |
+| `ir` | 38 | 46 | 4 |
+| `type_inference` | 17 | 28 | 0 |
+| `typing` | 1 | 1 | 0 |
+
+Largest files: name matches `ir_call_site.rs` 32, `program_generation.rs` 24, `match_statement_generation.rs` 23,
+`statement_generation.rs` 22; match-arm names are dominated by the other backends' builtin tables
+(`portable/builtins.rs` 259, `javascript/emit/builtin.rs` 244, `go/emit/builtin.rs` 237), which map std function names
+to target spellings and should come from the declared std surface; fallback/legacy `analyzer/signature_registry.rs` 48
+(the C3 bare-name searches), `signature_promotion.rs` 17, `ir_call_site.rs` 16.
+
+Solver meters at the same time (next, 2026-11-04): `D-WIDTH-OWNERS` 51, `D-OWN-STAGES` 9, `D-CLONE-OUTSIDE-SOLVER` 19,
+golden rustc rejects 86.
+
+Net growth of the deciding code: `src/codegen` + `src/analyzer`, 2026-11-01 (9c14e598e, last first-parent commit
+before 2026-11-02) to wt/names 585b70904: 1728 lines added, 1289 deleted, net +439
+(`git diff --shortstat 9c14e598e HEAD -- src/codegen src/analyzer`). Net growth is the number to drive below zero:
+a convergence step deletes more decider code than the solver rule it adds.
+
+### Hand-back rules: where the solver returns a decision to the legacy deciders
+
+Each rule below is heuristic surface: the solver solved the class but does not publish it, so the legacy decider
+(`codegen/rust` W3-W12, the analyzer O1-O5) still decides. Each one is retired by the stage named, and its deletion is
+measured by `D-WIDTH-OWNERS` / `D-OWN-STAGES` and this ratchet.
+
+| rule (site) | the solver hands back when ... | retired by |
+|---|---|---|
+| index-use hold (`ir/numeric_facts.rs` `held_classes`, `index_uses`) | an index use sits in a class that resolved to a width other than `usize` (needs a conversion at the index) | C4: NUM-USIZE-TO-INT at the index, as already done at index sources |
+| unbound-name hold (`held_classes`, `var_map.locals` not in `binding_vars`) | a class contains a name the walk met without a binding: a closure parameter or a global | **C2** closure parameter types (closure params get binding vars); typed module constants are already modelled (NUM-DECLARED) |
+| width-conflict hold (`result.width_conflicts`, c4-regress) | two exact integer widths meet in one class | C4: a conversion fact at the meeting point, or a diagnostic when the program is wrong |
+| negated-unsigned hold (`unmodelled.negated_literals`, c4-regress) | a negated literal sits in an unsigned class | C4: a diagnostic (the program is wrong), never a silent legacy width |
+| loop-binding hold (`unmodelled.loop_bindings`, c4-regress) | a `for` binding's element width is unknown | **C2** collection-literal element types and element types of declared collections |
+| unknown-length hold (`unmodelled.unknown_lengths`, c4-regress) | `len()` on a receiver of unknown type | **C2** type aliases, then C3 cross-module receiver types |
+| unknown-field-read hold (`unmodelled.unknown_fields`, c4-regress) | a field read whose declared type the walk cannot see (another module's struct, a generic) | C3 (cross-module declared field types by DefId) and **C2** (generic arguments through aliases) |
+| lexical-scope publish-if-agree (`binding_widths`, NUM-LOCAL-WIDTH) | bindings of one name carry different widths: no name-keyed fact, the classes stay legacy | C4: facts keyed by binding node identity instead of name (replaces the W8 (line,col) collectors) |
+| borrowed-binding skip (`unmodelled.borrowed_bindings`) | a local is bound to a borrow: no width fact for the name | C5: reference types in the ownership solver |
+| defaulted-class withhold (`View::published`, `defaulted`) | the class has no use that fixes a width (`int` default); the legacy paint may still pick i32 | **C2**: publish defaults once closure, collection and std-argument uses are modelled (the 2026-11-02 experiment showed 31 rejects without them) |
+| defaulted-float withhold (`View::published_float`) | a float class has no `f32`/`f64` use | **C2**: the float class follows the same default rule |
+| codegen operand hand-back (`codegen/rust/solver_widths.rs` `solver_operand_width` / `solver_agrees` answering `None`/false; the `!solver_agreed` branches of `binary_expression_generation.rs`) | any hold above applies to an operand | follows the holds: each retired hold deletes the `!solver_agreed` branch it feeds (W3/W4) |
+| analyzer seeds (`OWN-ANALYZER-SEED`, `OWN-MUT-ANALYZER`, `OWN-COPY-SEED`, `TY-ANALYZER-SEED` in `ir/constraint_gen.rs`) | the solver starts from the analyzer's pre-decision instead of deriving it | C5 (ownership from uses; O1/O2), C3 for `TY-ANALYZER-SEED` |
+| `CLONE-ANALYZER` (auto-clone pass sites) | clone sites come from `auto_clone.rs` | C6 liveness clone facts |
+| `generator.rs` `get_param_ownership` falls back to `AnalyzedFunction.inferred_ownership` | the IR function for the current function is not found | C3: one function identity (DefId), so the IR function is always found |
+
+C2's share is the rows marked **C2**. Its acceptance list stays the 8 spec class-A cases and the ratcheted width tests,
+and each retired hold must lower `H-NAME-MATCHES` or `H-FALLBACK-LEGACY` in the file whose branch it deletes.
+
 ## Deletion order
 
 1. Stop adding paints: each new width bug gets a solver fact first (rule in `docs/spec/inference.md`), then the legacy path

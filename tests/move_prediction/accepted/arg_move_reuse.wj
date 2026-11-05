@@ -1,5 +1,5 @@
-// expect: WJ0007
-// Class b (ADR-0030): a bare variable passed to a parameter that takes ownership, then used again: rustc E0382.
+// Not reported: `xs` is passed to an owning parameter and read afterwards; the compiler copies it at
+// the call (C6 CLONE-USE-AFTER-MOVE), so the build succeeds.
 struct Bag {
     items: Vec<int>,
 }
@@ -11,6 +11,5 @@ fn wrap(items: Vec<int>) -> Bag {
 fn main() {
     let xs = [1, 2, 3]
     let b = wrap(xs)
-//~@13+4 ERROR WJ0007 `xs` is used after the call to `wrap` moved it
     println("${b.items.len()} ${xs.len()}")
 }

@@ -97,12 +97,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.auto_clone_analysis = Some(self.without_module_item_clones(analyzed.auto_clone_analysis.clone()));
         }
         self.auto_clone_counter = 0;
-        let entry: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
-        let always_move = self.config.liveness_mutation_always_move;
-        self.last_use_nodes = crate::ir::liveness::last_moves(&entry, &func.body, always_move);
-        self.read_after = (crate::ir::liveness::read_after(&entry, &func.body, always_move), Vec::new());
-        self.returned_fields = self.current_ir_function.as_ref().map(|f| (f.returned_fields.clone(), f.clone_sites.clone())).unwrap_or_default();
-        self.element_reads = self.current_ir_function.as_ref().map(|f| f.element_reads.clone()).unwrap_or_default();
+        self.load_clone_facts(func);
         self.current_function_params = func.parameters.clone();
         self.current_field_moved_params = analyzed.field_moved_parameters.clone();
         self.current_function_name = Some(func.name.to_string());
@@ -10527,23 +10522,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(in crate::codegen::rust) fn type_is_string_element_vec(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Vec(inner) => {
-                matches!(inner.as_ref(), Type::String)
-                    || matches!(inner.as_ref(), Type::Custom(n) if n == "string" || n == "String")
-            }
-            Type::Parameterized(name, args) if name == "Vec" => args.first().is_some_and(|a| {
-                matches!(a, Type::String)
-                    || matches!(a, Type::Custom(n) if n == "string" || n == "String")
-            }),
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                self.type_is_string_element_vec(inner)
-            }
-            Type::Custom(name) if name.starts_with("Vec<") => {
-                name.contains("string") || name.contains("String")
-            }
-            _ => false,
-        }
+        crate::codegen::rust::type_classification_utilities::type_is_string_element_vec(ty)
     }
 
     /// True when the body only forwards `param_name` to callees that emit owned non-Copy formals.
