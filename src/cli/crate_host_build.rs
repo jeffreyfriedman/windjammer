@@ -51,9 +51,15 @@ pub fn signatures(project_root: &Path, texts: &[String]) -> (Vec<CrateFnSig>, Ve
         use crate::interpreter::crate_host::sig::{crate_fn_sig_in, Opaque};
         let free = Opaque { krate: &s.crate_name, types: &s.types, self_ty: None };
         let methods = s.methods.iter().map(|(t, f)| (Opaque { self_ty: Some(t.as_str()), ..free.clone() }, *f));
+        let bytes = crate::interpreter::crate_host::sig::byte_monomorphs(&s.text);
         for (scope, f) in s.fns.iter().map(|f| (free.clone(), *f)).chain(methods) {
             match crate_fn_sig_in(&scope, f) {
-                Ok(sig) => sigs.push(sig),
+                Ok(mut sig) => {
+                    if let Some((_, names)) = bytes.iter().find(|(n, _)| *n == sig.name) {
+                        sig.bytes_or_str = sig.params.iter().enumerate().filter(|(_, (p, _, _))| names.contains(p)).map(|(i, _)| i).collect();
+                    }
+                    sigs.push(sig)
+                }
                 Err(why) => skipped.push(why),
             }
         }

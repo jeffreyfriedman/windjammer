@@ -47,6 +47,9 @@ pub struct CrateFnSig {
     pub ret: WireTy,
     /// Declared effects: `Some(empty)` for `@pure`, `Some(set)` for `@uses(..)`, `None` for `ffi(<crate>)`.
     pub effects: Option<BTreeSet<EffectKind>>,
+    /// Parameters monomorphised from `T: AsRef<[u8]>` (declared `&Vec<u8>`): Rust also takes a string there, so a
+    /// `string` argument crosses as its UTF-8 bytes, as in the compiled call.
+    pub bytes_or_str: Vec<usize>,
 }
 
 impl CrateFnSig {
@@ -181,7 +184,28 @@ pub fn crate_fn_sig_in(o: &Opaque<'_>, f: &FunctionDecl<'_>) -> Result<CrateFnSi
         params,
         ret,
         effects: crate::ir::effect_facts::analysis::declared_effects(f),
+        bytes_or_str: Vec::new(),
     })
+}
+
+/// `// monomorph f(p: &[u8], q: &str)` lines the generator writes before a monomorphised function: for each
+/// function, the parameters instantiated at `&[u8]`.
+pub fn byte_monomorphs(surface_text: &str) -> Vec<(String, Vec<String>)> {
+    surface_text
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("// monomorph "))
+        .filter_map(|rest| {
+            let (name, params) = rest.split_once('(')?;
+            let params = params.trim_end().strip_suffix(')')?;
+            let bytes = params
+                .split(',')
+                .filter_map(|p| p.split_once(':'))
+                .filter(|(_, t)| t.trim() == "&[u8]")
+                .map(|(n, _)| n.trim().to_string())
+                .collect::<Vec<_>>();
+            Some((name.trim().to_string(), bytes))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -238,6 +262,12 @@ mod tests {
         assert_eq!(twin.ret, WireTy::Option(Box::new(h)));
         // without the type in scope it does not cross
         assert!(crate_fn_sig("ctr", s.get("total").unwrap()).is_err());
+    }
+
+    #[test]
+    fn byte_monomorphs_are_read_from_the_generator_comments() {
+        let text = "// monomorph encode(data: &[u8])\npub fn encode(data: &Vec<u8>) -> string\n// monomorph join(a: &str, b: &[u8])\npub fn join(a: string, b: &Vec<u8>) -> string\n";
+        assert_eq!(byte_monomorphs(text), vec![("encode".to_string(), vec!["data".to_string()]), ("join".to_string(), vec!["b".to_string()])]);
     }
 
     #[test]
