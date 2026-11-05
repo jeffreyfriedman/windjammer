@@ -31,6 +31,10 @@ pub struct Surface {
     pub path: PathBuf,
     pub text: String,
     pub fns: Vec<&'static FunctionDecl<'static>>,
+    /// Opaque crate types (`pub struct Regex {}`: no fields; values live in the crate, ADR-0031 handles).
+    pub types: Vec<String>,
+    /// Methods and associated functions of those types (`impl Regex { pub fn new(..) -> .. }`): `(type, decl)`.
+    pub methods: Vec<(String, &'static FunctionDecl<'static>)>,
     pub problems: Vec<SurfaceProblem>,
     /// The generator's header when the file was generated (cached or `--write` copy).
     pub generated: Option<super::rust_surface_gen::Header>,
@@ -39,8 +43,12 @@ pub struct Surface {
 }
 
 impl Surface {
+    /// A free function (`levenshtein`) or a method of an opaque type (`Regex::new`).
     pub fn get(&self, name: &str) -> Option<&'static FunctionDecl<'static>> {
-        self.fns.iter().copied().find(|f| f.name == name)
+        match name.split_once("::") {
+            Some((ty, m)) => self.methods.iter().find(|(t, f)| t == ty && f.name == m).map(|(_, f)| *f),
+            None => self.fns.iter().copied().find(|f| f.name == name),
+        }
     }
 }
 
@@ -140,6 +148,8 @@ fn is_windjammer_path(manifest_dir: &Path, spec: &toml::Value) -> bool {
 pub fn parse_surface(crate_name: &str, path: PathBuf, text: String) -> Surface {
     let mut problems = Vec::new();
     let mut fns = Vec::new();
+    let mut types: Vec<String> = Vec::new();
+    let mut methods = Vec::new();
     let mut lexer = crate::lexer::Lexer::new(&text);
     let tokens = lexer.tokenize_with_locations();
     let mut parser = crate::parser::Parser::new_with_source(tokens, path.display().to_string(), text.clone());
@@ -165,9 +175,30 @@ pub fn parse_surface(crate_name: &str, path: PathBuf, text: String) -> Surface {
                         }
                     }
                     Item::Use { .. } => {}
+                    Item::Struct { decl, location } if decl.fields.is_empty() && decl.tuple_fields.is_none() && decl.type_params.is_empty() => {
+                        let _ = location;
+                        types.push(decl.name.clone());
+                    }
+                    Item::Struct { decl, location } => problems.push(SurfaceProblem {
+                        line: location.as_ref().map(|l| l.line).unwrap_or(0),
+                        message: format!("`struct {}` has fields or type parameters: a surface declares an opaque crate type as `pub struct {} {{}}` (ADR-0031)", decl.name, decl.name),
+                    }),
+                    Item::Impl { block, location } if block.trait_name.is_none() && block.type_params.is_empty() => {
+                        let line = location.as_ref().map(|l| l.line).unwrap_or(0);
+                        for f in &block.functions {
+                            if !f.body.is_empty() || !f.type_params.is_empty() {
+                                problems.push(SurfaceProblem {
+                                    line,
+                                    message: format!("`{}::{}` has a body or is generic: a surface only declares concrete signatures", block.type_name, f.name),
+                                });
+                            } else {
+                                methods.push((block.type_name.clone(), f));
+                            }
+                        }
+                    }
                     _ => problems.push(SurfaceProblem {
                         line: 0,
-                        message: "a surface may only contain `fn` declarations (ADR-0026)".to_string(),
+                        message: "a surface may only contain `fn` declarations, opaque types (`pub struct T {}`) and their `impl` blocks (ADR-0026, ADR-0031)".to_string(),
                     }),
                 }
             }
@@ -176,7 +207,12 @@ pub fn parse_surface(crate_name: &str, path: PathBuf, text: String) -> Surface {
     }
     let generated = super::rust_surface_gen::header(&text);
     let skipped = if generated.is_some() { super::rust_surface_gen::skipped_in(&text) } else { Vec::new() };
-    Surface { crate_name: crate_name.to_string(), path, text, fns, problems, generated, skipped }
+    for (t, f) in &methods {
+        if !types.contains(t) {
+            problems.push(SurfaceProblem { line: 0, message: format!("`impl {t}` for `{t}::{}`: declare the type first (`pub struct {t} {{}}`)", f.name) });
+        }
+    }
+    Surface { crate_name: crate_name.to_string(), path, text, fns, types, methods, problems, generated, skipped }
 }
 
 #[cfg(test)]
@@ -194,6 +230,17 @@ mod tests {
         assert_eq!(s.fns.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["f", "g"]);
         assert_eq!(s.get("f").unwrap().parameters.len(), 1);
         assert!(s.get("h").is_none());
+    }
+
+    #[test]
+    fn opaque_types_and_their_methods_are_collected() {
+        let s = surface("pub struct Counter {}\n\nimpl Counter {\n    pub fn new(start: i64) -> Counter\n    pub fn bump(&mut self) -> i64\n}\n\npub fn total(c: &Counter) -> i64\n");
+        assert!(s.problems.is_empty(), "{:?}", s.problems);
+        assert_eq!(s.types, ["Counter"]);
+        assert!(s.get("Counter::new").is_some() && s.get("Counter::bump").is_some() && s.get("total").is_some());
+        assert!(s.get("Counter::nope").is_none() && s.get("bump").is_none());
+        let bad = surface("pub struct P {\n    x: int,\n}\nimpl Q {\n    pub fn f()\n}\n");
+        assert_eq!(bad.problems.len(), 2, "{:?}", bad.problems);
     }
 
     #[test]
