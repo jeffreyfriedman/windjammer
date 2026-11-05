@@ -187,8 +187,15 @@ fn recorded_token(text: string, id: string) -> string {
     "absent"
 }
 
+fn fam_splits(st: int) -> string {
+    let s = pick(st, "250_OK\\r\\n a\\nb\\n EMPTY \\n\\n \\n _a__b_ a\\r\\nb x\\n\\ny \\r\\n a,,b, tail\\n\\n")
+    let lit = if s == "EMPTY" { "" } else { strings.replace(s, "_", " ") }
+    "use std::strings\n\nfn show(parts: Vec<string>) -> string {\n    let mut out = \"@{parts.len()}:\"\n    for p in parts {\n        out = out + \"[\" + p + \"]\"\n    }\n    out\n}\n\nfn main() {\n    let s = \"@S\"\n    println(show(strings.split_lines(s)))\n    println(show(strings.split(s, \"\\n\")))\n    println(show(strings.split(s, \" \")))\n    println(show(strings.split(s, \",\")))\n    println(show(strings.split_whitespace(s)))\n    println(\"[@{strings.trim(s)}] [@{strings.trim_start(s)}] [@{strings.trim_end(s)}]\")\n}\n"
+        .replace("@S", lit)
+}
+
 fn families() -> string {
-    "intwrap panic_overflow casts divmod shifts floatfmt strings panic_slice format panic_nested order closures drop sort hashorder exit_code stdin threads"
+    "intwrap panic_overflow casts divmod shifts floatfmt strings panic_slice format panic_nested order closures drop sort hashorder exit_code stdin threads splits"
 }
 
 fn program(fam: string, seed: int) -> string {
@@ -210,6 +217,7 @@ fn program(fam: string, seed: int) -> string {
         else if fam == "hashorder" { fam_hashorder(st) }
         else if fam == "exit_code" { fam_exit(st) }
         else if fam == "stdin" { fam_stdin(st) }
+        else if fam == "splits" { fam_splits(st) }
         else { fam_threads(st) }
     finish(src)
 }
@@ -352,7 +360,7 @@ fn main() {
                 rows = rows + "${id}#runs\t${if strings.starts_with(w, "exit0:") { "runs" } else { "broken" }}\t${if strings.starts_with(r, "exit0:") { "runs" } else { "broken" }}\truns\n"
             }
             // std modules (process, thread, io...) need the runtime crate: rustc alone cannot check them
-            if !(fam == "exit_code" || fam == "stdin" || fam == "threads") {
+            if !(fam == "exit_code" || fam == "stdin" || fam == "threads" || fam == "splits") {
                 rows = rows + "${id}#rustc\ttypechecks\ttypechecks\t${rustc_verdict(wj, dir, file)}\n"
             }
             seed += 1
