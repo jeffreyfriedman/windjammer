@@ -57,7 +57,7 @@ def compiled(ctx, path, src_hash):
 
 
 def build_failed(c):
-    return c.rc != 0 and not c.out and ("could not compile" in c.err or "Cargo build failed" in c.err or "error[E" in c.err
+    return c.rc != 0 and not c.out and ("could not compile" in c.err or "Cargo build failed" in c.err or "error[E" in c.err or "error[WJ" in c.err
                                         or "error: build failed" in c.err or "Rust leakage" in c.err)
 
 
