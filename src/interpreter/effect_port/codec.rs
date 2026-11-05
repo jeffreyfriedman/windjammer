@@ -42,6 +42,11 @@ pub fn encode(v: &Value) -> Result<Json, String> {
             json!({ "en": &*e.ty, "var": &*e.variant, "idx": e.idx, "p": payload })
         }
         Value::Range(r, t) => json!({ "range": [r.0.to_string(), r.1.to_string(), t.name()] }),
+        // an opaque crate value (ADR-0031) is its handle: replay hands the same id back to the replayed calls
+        Value::Native(_) if crate::interpreter::crate_host::handle::parts(v).is_some() => {
+            let (q, id) = crate::interpreter::crate_host::handle::parts(v).unwrap_or_default();
+            json!({ "handle": q, "id": id.to_string() })
+        }
         Value::Native(_) => match (metadata_parts(v), dirent_path(v)) {
             (Some((len, file, dir, ro)), _) => json!({ "meta": [len, file, dir, ro] }),
             (_, Some(path)) => json!({ "dirent": path }),
@@ -99,6 +104,10 @@ fn decode_object(m: &Map<String, Json>, bad: &dyn Fn(&str) -> String) -> Result<
         };
         let bits = m.get("bits").and_then(|b| b.as_str()).and_then(|b| u64::from_str_radix(b, 16).ok()).ok_or_else(|| bad("float"))?;
         return Ok(Value::Float(f64::from_bits(bits), ty));
+    }
+    if let (Some(q), Some(id)) = (m.get("handle").and_then(|q| q.as_str()), m.get("id").and_then(|i| i.as_str()).and_then(|i| i.parse::<u64>().ok())) {
+        // a replayed opaque crate value: no host behind it; the log answers every call on it
+        return Ok(crate::interpreter::crate_host::handle::value(q, "handle", id, None));
     }
     if let Some(c) = m.get("c") {
         return c.as_str().and_then(|s| s.chars().next()).map(Value::Char).ok_or_else(|| bad("char"));

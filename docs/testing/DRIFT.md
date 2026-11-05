@@ -148,3 +148,24 @@ scratch workspace with one binary per case, dev profile). `spec_oracle.wj --self
 reject. Expected outputs of new cases come from the compiled program, never from the interpreter; when the compiled
 backend cannot build a program yet, the case says so and its output is that of the equivalent Rust program. Findings:
 `docs/drift/spec-findings.md`.
+
+## Wall time of the full gate
+
+Measured on a busy shared machine with a release `wj` and every cargo call going through the build-slot gate. The
+seconds column of the gate table includes waiting for a slot and for the release test binary to build; the `ran` figure
+(from cargo's own report) and the script steps are the work itself:
+
+| Step | Work | Notes |
+|---|---|---|
+| selftest | 2 s | planted divergences against the ledger comparer |
+| parity (engine_parity) | 84 s run | walker == resolved on every corpus program; the first cargo step also pays the release build of `tests/all` |
+| fast-paths | 2 s run | |
+| jit-loops | 54 s run | |
+| packed-vec | 32 s run | |
+| crate-host | 56 s run | |
+| corpus (compiled: recorded) | 90 s | 1570 cases, ecosystem tests plus value-position and generated programs |
+| spec oracle (compiled: recorded) | 36 s | 228 cases x walker and resolved; compiled results come from the recorded baseline |
+
+About 6 minutes of work on a quiet machine; the rest of a gate run is the release build of `tests/all` (once per source
+change, 15 to 25 minutes cold, nothing when warm) and queueing. Re-recording the compiled results is a separate, rarer
+job: `--compiled live --record` of the spec oracle is one `cargo build --keep-going` plus 228 runs.

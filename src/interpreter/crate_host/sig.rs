@@ -24,6 +24,8 @@ pub enum WireTy {
     Option(Box<WireTy>),
     Result(Box<WireTy>, Box<WireTy>),
     Tuple(Vec<WireTy>),
+    /// An opaque crate type (`crate::Type`, ADR-0031): the value lives in the host, the program holds a handle.
+    Handle(String),
 }
 
 /// How a parameter is handed to the crate function.
@@ -56,8 +58,30 @@ impl CrateFnSig {
 
 const INTS: &[&str] = &["i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "usize"];
 
-/// The wire type of an owned surface type, or the type as written when it cannot cross.
+/// The opaque types of one crate's surface, for mapping type names to handles.
+#[derive(Debug, Clone, Default)]
+pub struct Opaque<'a> {
+    pub krate: &'a str,
+    pub types: &'a [String],
+    /// The type of the `impl` block being read (what `Self` names).
+    pub self_ty: Option<&'a str>,
+}
+
+impl Opaque<'_> {
+    fn handle(&self, name: &str) -> Option<WireTy> {
+        let name = if name == "Self" { self.self_ty? } else { name };
+        self.types.iter().any(|t| t == name).then(|| WireTy::Handle(format!("{}::{name}", self.krate)))
+    }
+}
+
+/// The wire type of an owned surface type with no crate types in scope.
 pub fn wire_of(t: &Type) -> Result<WireTy, String> {
+    wire_in(t, &Opaque::default())
+}
+
+/// The wire type of an owned surface type, or the type as written when it cannot cross.
+pub fn wire_in(t: &Type, o: &Opaque<'_>) -> Result<WireTy, String> {
+    let wire_of = |t: &Type| wire_in(t, o);
     let shown = || crate::type_display::format_wj_type(t);
     Ok(match t {
         Type::Int => WireTy::Int("i64"),
@@ -74,16 +98,17 @@ pub fn wire_of(t: &Type) -> Result<WireTy, String> {
             "bool" => WireTy::Bool,
             "char" => WireTy::Char,
             "string" | "String" | "str" => WireTy::Str,
-            n => match INTS.iter().find(|i| **i == n) {
-                Some(i) => WireTy::Int(i),
-                None => return Err(shown()),
+            n => match (INTS.iter().find(|i| **i == n), o.handle(n)) {
+                (Some(i), _) => WireTy::Int(i),
+                (None, Some(h)) => h,
+                (None, None) => return Err(shown()),
             },
         },
         Type::Vec(inner) => WireTy::Vec(Box::new(wire_of(inner)?)),
         Type::Option(inner) => WireTy::Option(Box::new(wire_of(inner)?)),
         Type::Result(a, b) => WireTy::Result(Box::new(wire_of(a)?), Box::new(wire_of(b)?)),
         Type::Tuple(ts) if ts.is_empty() => WireTy::Unit,
-        Type::Tuple(ts) => WireTy::Tuple(ts.iter().map(wire_of).collect::<Result<_, _>>()?),
+        Type::Tuple(ts) => WireTy::Tuple(ts.iter().map(|t| wire_in(t, o)).collect::<Result<_, _>>()?),
         Type::Parameterized(n, args) => match (n.as_str(), args.as_slice()) {
             ("Vec", [a]) => WireTy::Vec(Box::new(wire_of(a)?)),
             ("Option", [a]) => WireTy::Option(Box::new(wire_of(a)?)),
@@ -96,35 +121,63 @@ pub fn wire_of(t: &Type) -> Result<WireTy, String> {
 
 /// A parameter: its passing mode and the wire type of the value the host decodes.
 pub fn param_of(t: &Type) -> Result<(Pass, WireTy), String> {
+    param_in(t, &Opaque::default())
+}
+
+fn param_in(t: &Type, o: &Opaque<'_>) -> Result<(Pass, WireTy), String> {
     match t {
-        Type::Reference(inner) => Ok((Pass::Borrow, wire_of(inner)?)),
-        Type::MutableReference(inner) => Ok((Pass::BorrowMut, wire_of(inner)?)),
+        Type::Reference(inner) => Ok((Pass::Borrow, wire_in(inner, o)?)),
+        Type::MutableReference(inner) => Ok((Pass::BorrowMut, wire_in(inner, o)?)),
         _ => {
-            let w = wire_of(t)?;
+            let w = wire_in(t, o)?;
             // surface `string` parameters are `&str` (ADR-0026)
             Ok((if w == WireTy::Str { Pass::Borrow } else { Pass::Owned }, w))
         }
     }
 }
 
-const SUPPORTED: &str = "the crate host carries integers, floats, bool, char, string, Vec, Option, Result, tuples and references to them";
+const SUPPORTED: &str = "the crate host carries integers, floats, bool, char, string, Vec, Option, Result, tuples, opaque types declared as `pub struct T {}` and references to them";
 
 /// The host signature of one surface function, or why it cannot cross (naming the function and the type).
 pub fn crate_fn_sig(krate: &str, f: &FunctionDecl<'_>) -> Result<CrateFnSig, String> {
+    crate_fn_sig_in(&Opaque { krate, types: &[], self_ty: None }, f)
+}
+
+/// The same, with the crate's opaque types in scope; a method's name is `Type::method` and its receiver is the
+/// first parameter (`&self` borrows the handle, `&mut self` borrows it mutably, `self` moves it into the call).
+pub fn crate_fn_sig_in(o: &Opaque<'_>, f: &FunctionDecl<'_>) -> Result<CrateFnSig, String> {
+    use crate::parser::OwnershipHint;
+    let krate = o.krate;
+    let name = match o.self_ty {
+        Some(t) => format!("{t}::{}", f.name),
+        None => f.name.clone(),
+    };
     let mut params = Vec::new();
     for p in &f.parameters {
-        let (pass, w) = param_of(&p.type_).map_err(|t| {
-            format!("`{krate}::{}`: parameter `{}: {t}` cannot cross to the crate host ({SUPPORTED})", f.name, p.name)
+        if p.name == "self" {
+            let h = o.handle("Self").ok_or_else(|| format!("`{krate}::{name}`: `self` outside an opaque type's impl"))?;
+            let pass = match p.ownership {
+                OwnershipHint::Ref => Pass::Borrow,
+                OwnershipHint::Mut => Pass::BorrowMut,
+                _ => Pass::Owned,
+            };
+            params.push(("self".to_string(), pass, h));
+            continue;
+        }
+        let (pass, w) = param_in(&p.type_, o).map_err(|t| {
+            format!("`{krate}::{name}`: parameter `{}: {t}` cannot cross to the crate host ({SUPPORTED})", p.name)
         })?;
+        // `@owned s: string`: the crate takes an owned `String` (the generator's form for Rust `String` parameters)
+        let pass = if p.decorators.iter().any(|d| d.name == "owned") { Pass::Owned } else { pass };
         params.push((p.name.clone(), pass, w));
     }
     let ret = match &f.return_type {
         None => WireTy::Unit,
-        Some(t) => wire_of(t).map_err(|t| format!("`{krate}::{}`: return type `{t}` cannot cross to the crate host ({SUPPORTED})", f.name))?,
+        Some(t) => wire_in(t, o).map_err(|t| format!("`{krate}::{name}`: return type `{t}` cannot cross to the crate host ({SUPPORTED})"))?,
     };
     Ok(CrateFnSig {
         krate: krate.to_string(),
-        name: f.name.clone(),
+        name,
         params,
         ret,
         effects: crate::ir::effect_facts::analysis::declared_effects(f),
@@ -163,6 +216,36 @@ mod tests {
         );
         assert_eq!(got[4].params[0].2, WireTy::Float("f32"));
         assert_eq!(got[4].path(), "demo::pair");
+    }
+
+    #[test]
+    fn opaque_types_are_handles_and_methods_take_the_receiver_first() {
+        let text = "pub struct Counter {}\nimpl Counter {\n    pub fn new(start: i64) -> Counter\n    pub fn bump(&mut self) -> i64\n    pub fn get(&self) -> i64\n    pub fn twin(&self) -> Option<Self>\n}\npub fn total(c: &Counter, n: i64) -> i64\n";
+        let s = crate::package::rust_surface::parse_surface("ctr", PathBuf::from("rust/ctr.wji"), text.to_string());
+        assert!(s.problems.is_empty(), "{:?}", s.problems);
+        let h = WireTy::Handle("ctr::Counter".into());
+        let free = Opaque { krate: "ctr", types: &s.types, self_ty: None };
+        let total = crate_fn_sig_in(&free, s.get("total").unwrap()).unwrap();
+        assert_eq!(total.params[0], ("c".into(), Pass::Borrow, h.clone()));
+        let m = Opaque { self_ty: Some("Counter"), ..free.clone() };
+        let new = crate_fn_sig_in(&m, s.get("Counter::new").unwrap()).unwrap();
+        assert_eq!((new.name.as_str(), new.path().as_str(), &new.ret), ("Counter::new", "ctr::Counter::new", &h));
+        let bump = crate_fn_sig_in(&m, s.get("Counter::bump").unwrap()).unwrap();
+        assert_eq!(bump.params[0], ("self".into(), Pass::BorrowMut, h.clone()));
+        let get = crate_fn_sig_in(&m, s.get("Counter::get").unwrap()).unwrap();
+        assert_eq!(get.params[0].1, Pass::Borrow);
+        let twin = crate_fn_sig_in(&m, s.get("Counter::twin").unwrap()).unwrap();
+        assert_eq!(twin.ret, WireTy::Option(Box::new(h)));
+        // without the type in scope it does not cross
+        assert!(crate_fn_sig("ctr", s.get("total").unwrap()).is_err());
+    }
+
+    #[test]
+    fn an_owned_string_parameter_is_passed_by_value() {
+        let got = sigs("pub fn take(@owned s: string, t: string) -> usize\n");
+        let f = got[0].clone().unwrap();
+        assert_eq!(f.params[0], ("s".into(), Pass::Owned, WireTy::Str));
+        assert_eq!(f.params[1], ("t".into(), Pass::Borrow, WireTy::Str));
     }
 
     #[test]
