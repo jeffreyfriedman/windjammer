@@ -516,5 +516,31 @@ class AllowHeaders(unittest.TestCase):
             shutil.rmtree(d, ignore_errors=True)
 
 
+class CargoWrapper(unittest.TestCase):
+    def test_wrapper_prefixes_compiled_runs_only(self):
+        seen = []
+        def fake(cmd, timeout=0, **kw):
+            seen.append(list(cmd))
+            return core.Res(0, "", "", 0.0)
+        d = tempfile.mkdtemp(prefix="wj-wrap-")
+        try:
+            cache = core.Cache(os.path.join(d, "c"), enabled=False) if hasattr(core, "Cache") else None
+            ctx = core.Ctx("/bin/true", d, "quick", cache, [], runner=fake)
+            old = os.environ.get("WJ_CARGO_WRAPPER")
+            os.environ["WJ_CARGO_WRAPPER"] = "/usr/bin/env SLOT=1"
+            try:
+                ctx.cached_run("r1-compiled-warm", "h1", ["wj", "test"], 5)
+                ctx.cached_run("r1-interp", "h2", ["wj", "test", "--interpret"], 5)
+            finally:
+                if old is None:
+                    del os.environ["WJ_CARGO_WRAPPER"]
+                else:
+                    os.environ["WJ_CARGO_WRAPPER"] = old
+            self.assertEqual(seen[0][:3], ["/usr/bin/env", "SLOT=1", "wj"])
+            self.assertEqual(seen[1], ["wj", "test", "--interpret"])
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
