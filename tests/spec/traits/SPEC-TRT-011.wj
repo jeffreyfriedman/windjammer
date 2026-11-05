@@ -1,0 +1,45 @@
+// spec: SPEC-TRT-011
+// expect: int 7
+// expect: string hi
+// expect: yes
+// expect: (int 1, string x)
+trait Describe {
+    fn describe(self) -> string
+}
+
+impl Describe for int {
+    fn describe(self) -> string {
+        "int ${self}"
+    }
+}
+
+impl Describe for string {
+    fn describe(self) -> string {
+        "string ${self}"
+    }
+}
+
+impl Describe for bool {
+    fn describe(self) -> string {
+        if self { "yes" } else { "no" }
+    }
+}
+
+struct Pair<A, B> {
+    a: A,
+    b: B,
+}
+
+impl<A: Describe, B: Describe> Pair<A, B> {
+    fn show(self) -> string {
+        "(${self.a.describe()}, ${self.b.describe()})"
+    }
+}
+
+fn main() {
+    println(7.describe())
+    println("hi".describe())
+    println(true.describe())
+    let p = Pair { a: 1, b: "x" }
+    println(p.show())
+}

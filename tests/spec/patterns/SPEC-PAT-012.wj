@@ -1,0 +1,40 @@
+// spec: SPEC-PAT-012
+// expect: 1 two 3.5
+// expect: 9
+// expect: 10 40 2
+// expect: deep 3
+// expect: low 5
+// expect: 1a
+// expect: 2b
+struct P {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let pair = (1, ("two", 3.5))
+    let (a, (b, c)) = pair
+    println("${a} ${b} ${c}")
+    let p = P { x: 4, y: 5 }
+    let P { x, y } = p
+    println("${x + y}")
+    let v = vec![10, 20, 30, 40]
+    println("${v[0]} ${v[v.len() - 1]} ${v.len() - 2}")
+    let opt = Some(Some(3))
+    match opt {
+        Some(Some(n)) if n > 2 => println("deep ${n}"),
+        Some(Some(_)) => println("small"),
+        Some(None) => println("inner none"),
+        None => println("none"),
+    }
+    let n = 5
+    let msg = match n {
+        1..=5 => "low",
+        _ => "high",
+    }
+    println("${msg} ${n}")
+    let items = vec![(1, "a"), (2, "b")]
+    for (i, s) in items {
+        println("${i}${s}")
+    }
+}
