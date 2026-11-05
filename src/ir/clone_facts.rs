@@ -3,8 +3,9 @@
 //! A function's value is owned (RET-OWNED, RET-NO-BORROW). When that value is a field of a
 //! parameter (or `self`) that the solver resolved as a borrow, the field must be cloned there:
 //! it cannot move out from behind the reference. This module finds the candidate sites (field
-//! projections of a parameter that are the function's value: the tail, the tails of a trailing
-//! `if`/`match`, and every `return`) and keeps those whose root the solver borrowed.
+//! projections of a parameter consumed as owned values: the function's value, every `return`, an
+//! assignment value, a struct-literal field, an array/tuple element) and keeps those whose root the
+//! solver borrowed. Element reads (`v[i]`) in the same positions are cloned unless Copy.
 //!
 //! Data only, keyed by AST node identity. The Rust backend prints a clone exactly at these sites
 //! (when the field type is not Copy) and nowhere else for the same candidates.
@@ -14,13 +15,12 @@ use super::safety_type::{OwnedType, SafetyType};
 use crate::parser::ast::core::{Expression, Statement};
 use std::collections::{BTreeMap, HashMap};
 
-/// Candidate sites: returned field projections of a parameter, by node, with the root name.
+/// Candidate sites: field projections of a parameter consumed as owned values (the function's
+/// value, a `return`, an assignment value, a struct-literal field, an array/tuple element), by
+/// node, with the root name. `returns_value`: the function's tail is its value.
 pub fn returned_param_fields(params: &[&str], body: &[&Statement<'_>], returns_value: bool) -> BTreeMap<usize, String> {
     let mut out = BTreeMap::new();
-    if returns_value {
-        tail(params, body, &mut out);
-    }
-    returns(params, body, &mut out);
+    element_stmts(body, returns_value, &|e| param_field_root(params, e), &mut out);
     out
 }
 
@@ -47,7 +47,7 @@ pub fn borrowed_returned_fields(
 /// callee's formal decides (OWN-CALL-FORMAL). By node, with the root binding.
 pub fn owned_element_reads(body: &[&Statement<'_>]) -> BTreeMap<usize, String> {
     let mut out = BTreeMap::new();
-    element_stmts(body, true, &mut out);
+    element_stmts(body, true, &element_root, &mut out);
     out
 }
 
@@ -63,63 +63,65 @@ fn element_root(e: &Expression<'_>) -> Option<String> {
     }
 }
 
-fn element_value(e: &Expression<'_>, out: &mut BTreeMap<usize, String>) {
-    if let Some(root) = element_root(e) {
+type Pick<'p> = &'p dyn Fn(&Expression<'_>) -> Option<String>;
+
+fn element_value(e: &Expression<'_>, pick: Pick, out: &mut BTreeMap<usize, String>) {
+    if let Some(root) = pick(e) {
         out.insert(node_id(e), root);
         return;
     }
     match e {
-        Expression::Block { statements, .. } => element_stmts(statements, true, out),
-        Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| element_value(f, out)),
+        Expression::Block { statements, .. } => element_stmts(statements, true, pick, out),
+        Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| element_value(f, pick, out)),
         Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
-            elements.iter().for_each(|x| element_value(x, out))
+            elements.iter().for_each(|x| element_value(x, pick, out))
         }
         Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
             // Not the arguments themselves (the formal decides), but values built inside them.
-            arguments.iter().for_each(|(_, a)| nested_values(a, out))
+            arguments.iter().for_each(|(_, a)| nested_values(a, pick, out))
         }
-        _ => nested_values(e, out),
+        _ => nested_values(e, pick, out),
     }
 }
 
 /// Owned positions nested in an expression that is not itself one (`Some(Row { a: v[0] })`).
-fn nested_values(e: &Expression<'_>, out: &mut BTreeMap<usize, String>) {
+fn nested_values(e: &Expression<'_>, pick: Pick, out: &mut BTreeMap<usize, String>) {
     match e {
         Expression::StructLiteral { .. } | Expression::Tuple { .. } | Expression::Array { .. } | Expression::Block { .. } => {
-            element_value(e, out)
+            element_value(e, pick, out)
         }
         Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-            arguments.iter().for_each(|(_, a)| nested_values(a, out))
+            arguments.iter().for_each(|(_, a)| nested_values(a, pick, out))
         }
         _ => {}
     }
 }
 
-fn element_stmts(body: &[&Statement<'_>], value_tail: bool, out: &mut BTreeMap<usize, String>) {
+fn element_stmts(body: &[&Statement<'_>], value_tail: bool, pick: Pick, out: &mut BTreeMap<usize, String>) {
     for (i, s) in body.iter().enumerate() {
         let is_tail = value_tail && i + 1 == body.len();
         match s {
             // A `let` initialiser is not included: the binding may borrow the element
             // (`let node = &nodes[0]` when it is only read), which the local's ownership decides.
-            Statement::Let { value, .. } => nested_values(value, out),
-            Statement::Assignment { value, .. } => element_value(value, out),
-            Statement::Return { value: Some(v), .. } => element_value(v, out),
-            Statement::Expression { expr, .. } if is_tail => element_value(expr, out),
-            Statement::Expression { expr, .. } => nested_values(expr, out),
+            Statement::Let { value, .. } => nested_values(value, pick, out),
+            Statement::Assignment { value, .. } => element_value(value, pick, out),
+            Statement::Return { value: Some(v), .. } => element_value(v, pick, out),
+            Statement::Expression { expr, .. } if is_tail => element_value(expr, pick, out),
+            Statement::Expression { expr, .. } => nested_values(expr, pick, out),
             Statement::If { then_block, else_block, .. } => {
-                element_stmts(then_block, is_tail, out);
+                element_stmts(then_block, is_tail, pick, out);
                 if let Some(b) = else_block {
-                    element_stmts(b, is_tail, out);
+                    element_stmts(b, is_tail, pick, out);
                 }
             }
             Statement::For { body, .. } | Statement::While { body, .. } | Statement::Loop { body, .. } => {
-                element_stmts(body, false, out)
+                element_stmts(body, false, pick, out)
             }
             Statement::Match { arms, .. } => arms.iter().for_each(|a| {
                 if is_tail {
-                    element_value(a.body, out)
+                    element_value(a.body, pick, out)
                 } else {
-                    nested_values(a.body, out)
+                    nested_values(a.body, pick, out)
                 }
             }),
             _ => {}
@@ -135,52 +137,6 @@ fn param_field_root(params: &[&str], e: &Expression<'_>) -> Option<String> {
             Expression::FieldAccess { object, .. } => cur = object,
             Expression::Identifier { name, .. } if params.contains(&name.as_str()) => return Some(name.clone()),
             _ => return None,
-        }
-    }
-}
-
-fn value(params: &[&str], e: &Expression<'_>, out: &mut BTreeMap<usize, String>) {
-    match e {
-        Expression::Block { statements, .. } => tail(params, statements, out),
-        _ => {
-            if let Some(root) = param_field_root(params, e) {
-                out.insert(node_id(e), root);
-            }
-        }
-    }
-}
-
-fn tail(params: &[&str], body: &[&Statement<'_>], out: &mut BTreeMap<usize, String>) {
-    match body.last() {
-        Some(Statement::Expression { expr, .. }) => value(params, expr, out),
-        Some(Statement::If { then_block, else_block: Some(e), .. }) => {
-            tail(params, then_block, out);
-            tail(params, e, out);
-        }
-        Some(Statement::Match { arms, .. }) => arms.iter().for_each(|a| value(params, a.body, out)),
-        _ => {}
-    }
-}
-
-fn returns(params: &[&str], body: &[&Statement<'_>], out: &mut BTreeMap<usize, String>) {
-    for s in body {
-        match s {
-            Statement::Return { value: Some(v), .. } => value(params, v, out),
-            Statement::If { then_block, else_block, .. } => {
-                returns(params, then_block, out);
-                if let Some(b) = else_block {
-                    returns(params, b, out);
-                }
-            }
-            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Loop { body, .. } => {
-                returns(params, body, out)
-            }
-            Statement::Match { arms, .. } => arms.iter().for_each(|a| {
-                if let Expression::Block { statements, .. } = a.body {
-                    returns(params, statements, out);
-                }
-            }),
-            _ => {}
         }
     }
 }
