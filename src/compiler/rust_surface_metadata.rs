@@ -31,26 +31,32 @@ fn passing(t: &crate::parser::Type) -> (&crate::parser::Type, &'static str, bool
     }
 }
 
-/// The metadata that describes `surface` to the ownership pipeline.
+/// The metadata that describes `surface` to the ownership pipeline: free functions under their name, and the
+/// methods of opaque crate types (ADR-0031) under `Type::method`, as path dependencies publish theirs.
 pub(crate) fn surface_metadata(surface: &Surface) -> CrateMetadata {
     let mut meta = CrateMetadata::new();
-    for f in &surface.fns {
+    let all = surface.fns.iter().map(|f| (None, *f)).chain(surface.methods.iter().map(|(t, f)| (Some(t.as_str()), *f)));
+    for (ty, f) in all {
         let passed: Vec<_> = f.parameters.iter().filter(|p| p.name != "self").map(|p| passing(&p.type_)).collect();
         let sig = FunctionSignature {
             params: passed.iter().map(|(t, _, _)| ModuleMetadata::serialize_type(t)).collect(),
             formal_params: Vec::new(),
             return_type: f.return_type.as_ref().map(ModuleMetadata::serialize_type),
-            is_associated: false,
-            parent_type: None,
+            is_associated: ty.is_some(),
+            parent_type: ty.map(str::to_string),
             param_ownership: passed.iter().map(|(_, o, _)| o.to_string()).collect(),
             emitted_rust_ref_params: Some(passed.iter().map(|(_, _, r)| *r).collect()),
             string_ref_string_formal_params: None,
             forwarding_borrow_params: None,
-            has_self_receiver: false,
+            has_self_receiver: f.parameters.first().is_some_and(|p| p.name == "self"),
             is_extern: false,
             is_trait_method: false,
         };
-        meta.functions.insert(f.name.clone(), sig);
+        let key = match ty {
+            Some(t) => format!("{t}::{}", f.name),
+            None => f.name.clone(),
+        };
+        meta.functions.insert(key, sig);
     }
     meta
 }

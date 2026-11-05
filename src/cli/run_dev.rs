@@ -125,7 +125,7 @@ fn crate_host(t: &RunTarget) -> Result<Option<crate::interpreter::crate_host::Cr
     let files = crate::interpreter::loader::program_files(&t.entry).map_err(|e| e.message)?;
     let texts: Vec<String> = files.iter().filter_map(|f| std::fs::read_to_string(&f.file).ok()).collect();
     let p = super::crate_host_build::ensure(&root, &texts, &mut |m| eprintln!("{}", m))?;
-    Ok(p.map(|p| crate::interpreter::crate_host::CrateHost::new(p.exe, p.key, p.sigs).with_stubs(p.stubs)))
+    Ok(p.map(super::crate_host_build::Prepared::into_host))
 }
 
 /// The one-line notice printed (to stderr) when `wj run` switches to the compiled path.
