@@ -123,6 +123,7 @@ mod tests {
             params: params.into_iter().enumerate().map(|(i, (p, t))| (format!("p{i}"), p, t)).collect(),
             ret,
             effects: None,
+            bytes_or_str: Vec::new(),
         }
     }
 
