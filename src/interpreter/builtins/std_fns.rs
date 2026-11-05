@@ -210,6 +210,12 @@ pub fn register(r: &mut Registry) {
             Err(e) => Value::err(Value::str(e.to_string())),
         })
     });
+    r.func("env::current_exe", |_, _| {
+        Ok(match std::env::current_exe() {
+            Ok(p) => Value::ok(Value::str(p.to_string_lossy().to_string())),
+            Err(e) => Value::err(Value::str(e.to_string())),
+        })
+    });
     r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
     // a sandboxed test/REPL session has a private scratch directory (ADR-0021); everyone else gets the system one
     r.func("env::temp_dir", |it, _| Ok(Value::str(it.scratch_dir().unwrap_or_else(std::env::temp_dir).to_string_lossy().to_string())));

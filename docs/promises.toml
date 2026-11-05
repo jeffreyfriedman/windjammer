@@ -9,7 +9,7 @@
 #   through the installed binary (codes: >=1 negative case whose expected output contains the code).
 # - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
 
-max_pending = 38
+max_pending = 37
 
 [[promise]]
 id = "feature ownership-inferred"
@@ -108,7 +108,6 @@ pending = "`wj check` does not emit it yet and only cargo-backed `wj build --che
 
 [[promise]]
 id = "code WJ0007"
-pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0008"
