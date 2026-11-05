@@ -167,6 +167,8 @@ pub fn crate_fn_sig_in(o: &Opaque<'_>, f: &FunctionDecl<'_>) -> Result<CrateFnSi
         let (pass, w) = param_in(&p.type_, o).map_err(|t| {
             format!("`{krate}::{name}`: parameter `{}: {t}` cannot cross to the crate host ({SUPPORTED})", p.name)
         })?;
+        // `@owned s: string`: the crate takes an owned `String` (the generator's form for Rust `String` parameters)
+        let pass = if p.decorators.iter().any(|d| d.name == "owned") { Pass::Owned } else { pass };
         params.push((p.name.clone(), pass, w));
     }
     let ret = match &f.return_type {
@@ -236,6 +238,14 @@ mod tests {
         assert_eq!(twin.ret, WireTy::Option(Box::new(h)));
         // without the type in scope it does not cross
         assert!(crate_fn_sig("ctr", s.get("total").unwrap()).is_err());
+    }
+
+    #[test]
+    fn an_owned_string_parameter_is_passed_by_value() {
+        let got = sigs("pub fn take(@owned s: string, t: string) -> usize\n");
+        let f = got[0].clone().unwrap();
+        assert_eq!(f.params[0], ("s".into(), Pass::Owned, WireTy::Str));
+        assert_eq!(f.params[1], ("t".into(), Pass::Borrow, WireTy::Str));
     }
 
     #[test]
