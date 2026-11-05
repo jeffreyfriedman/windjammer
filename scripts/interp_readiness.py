@@ -32,6 +32,9 @@ def git(root, *a):
 
 
 def main(argv=None, runner=core.run):
+    # the scorecard measures the compiler under test against the ecosystem's sources: the projects' WJ_PIN.md names the
+    # compiler they were last released with, and a pin mismatch would refuse every compiled run (unmeasured)
+    os.environ.setdefault("WJ_ALLOW_TOOLCHAIN_MISMATCH", "1")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--quick", action="store_true", help="small subsets (default)")
