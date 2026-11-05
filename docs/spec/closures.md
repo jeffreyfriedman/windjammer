@@ -147,3 +147,56 @@ fn main() {
 }
 ```
 Error contains: `shorthand makes a closure here`
+
+## Boxed closures, function pointers and capture
+
+**SPEC-CLOS-009** A closure returned as `Box<dyn Fn>` keeps the values it captured with `move`; a function name is a value of function-pointer type; a closure that mutates a captured `mut` variable updates it in place; a closure captures the binding visible where it is written, so a later shadowing `let` does not change it.
+
+<!-- example: tests/spec/closures/SPEC-CLOS-009.wj -->
+```windjammer
+fn make_adder(n: int) -> Box<dyn Fn(int) -> int> {
+    Box::new(move |x| x + n)
+}
+
+fn apply_twice(f: fn(int) -> int, x: int) -> int {
+    f(f(x))
+}
+
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn main() {
+    let add5 = make_adder(5)
+    println("${add5(1)} ${add5(10)}")
+    println("${apply_twice(double, 3)}")
+    let mut counter = 0
+    let mut inc = || {
+        counter += 1
+        counter
+    }
+    inc()
+    inc()
+    println("${inc()}")
+    println("${counter}")
+    let base = 10
+    let f = |x: int| x + base
+    let base = 1000
+    println("${f(1)} ${base}")
+    let names = vec!["b", "a", "c"]
+    let mut sorted = names.clone()
+    sorted.sort()
+    let joined = sorted.iter().map(|s| s.to_uppercase()).collect::<Vec<string>>().join("-")
+    println(joined)
+}
+```
+Output:
+```text
+6 15
+12
+3
+3
+11 1000
+A-B-C
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.

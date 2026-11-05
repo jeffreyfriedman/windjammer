@@ -22,40 +22,40 @@ its ledger line stale: delete the line.
 ## Coverage
 
 `wj run --interpret scripts/wj/spec_oracle.wj wj out.tsv --report` prints the table below (cases per spec area, cases with
-an expected output that the oracle compares, and how many of those ran in all three modes). 284 spec cases in 27 areas;
-219 are comparable (the others check parse errors, `wj check` results, effect reports, simulations and replays, which
-have no stdout to compare across engines and stay with `tests/spec_conformance_test.rs`); all 219 ran in all three
-modes (100%). Walker and resolved engine agree with the spec on all 219. The compiled backend builds and agrees on 185;
-34 do not build (listed below, one ledger line each).
+an expected output that the oracle compares, and how many of those ran in all three modes). 293 spec cases in 27 areas;
+228 are comparable (the others check parse errors, `wj check` results, effect reports, simulations and replays, which
+have no stdout to compare across engines and stay with `tests/spec_conformance_test.rs`); all 228 ran in all three
+modes (100%). Walker and resolved engine agree with the spec on all 228. The compiled backend builds and agrees on 197;
+31 do not build (listed below, one ledger line each).
 
 | Area | Cases | Compared | Compiled builds |
 |---|---|---|---|
 | arguments | 9 | 3 | 3 |
 | attributes | 4 | 4 | 2 |
-| closures | 8 | 4 | 3 |
-| collections | 10 | 10 | 7 |
+| closures | 9 | 5 | 3 |
+| collections | 12 | 12 | 7 |
 | concurrency | 5 | 5 | 1 |
 | doctests | 3 | 0 | |
 | effects | 39 | 1 | 1 |
-| errors | 6 | 6 | 4 |
-| execution | 11 | 11 | 10 |
+| errors | 7 | 7 | 7 |
+| execution | 11 | 11 | 11 |
 | expressions | 19 | 18 | 17 |
 | grammar | 8 | 7 | 6 |
 | guard-match | 4 | 2 | 2 |
 | intrinsics | 9 | 9 | 8 |
 | items | 11 | 10 | 7 |
 | lexical | 16 | 15 | 15 |
-| modules | 5 | 4 | 4 |
-| numeric | 27 | 26 | 21 |
+| modules | 6 | 5 | 4 |
+| numeric | 27 | 26 | 26 |
 | optionals | 6 | 5 | 3 |
 | ownership | 11 | 11 | 11 |
-| patterns | 10 | 10 | 9 |
+| patterns | 12 | 12 | 11 |
 | pipe | 7 | 6 | 6 |
 | statements | 11 | 10 | 9 |
 | stdlib | 5 | 5 | 3 |
-| strings | 17 | 17 | 16 |
+| strings | 17 | 17 | 17 |
 | trailing-blocks | 4 | 3 | 3 |
-| traits | 9 | 9 | 7 |
+| traits | 11 | 11 | 7 |
 | types | 10 | 8 | 7 |
 
 Spec areas the oracle added cases for (the spec had none, or none that ran compiled): integer wrapping/saturating/checked
@@ -72,6 +72,14 @@ After the typed integer and float core surface landed (`wt/c4-optc`), `SPEC-NUM-
 `SPEC-STD-005` build and agree compiled; their ledger lines are gone (38 -> 34). `SPEC-NUM-017` now fails at the class-B
 overflow lint instead of the literal width.
 
+## Closed since the second record
+
+With the generated crates allowing the constant-overflow lints (`arithmetic_overflow`, `unconditional_panic`), class B is
+closed: `SPEC-NUM-002`, `003`, `004`, `006` and `017` build and panic at run time as specified. `SPEC-ERR-003`,
+`SPEC-ERR-005`, `SPEC-EXEC-012` and `SPEC-STR-017` also build now. For the last two the expected output was taken from an
+equivalent Rust program while the backend could not build them; the compiled output now matches it byte for byte.
+Ledger: 34 -> 25, then +6 new second-round cases -> 31.
+
 ## Compiled backend does not build these spec cases
 
 ### A. Integer literal and method-argument widths (rustc sees `i32` where the spec type is `int`)
@@ -84,7 +92,7 @@ overflow lint instead of the literal width.
 | `intrinsics/SPEC-INTR-007` | `usize` expected, `i32` found |
 | `grammar/SPEC-GRAM-006` | `Vec<i64>` collected from an iterator of `usize` |
 
-### B. A statically known panic is a compile error in rustc
+### B. A statically known panic is a compile error in rustc (closed)
 
 `numeric/SPEC-NUM-002` (`i64::MAX + 1`), `SPEC-NUM-017` (`-m` of the minimum value), `SPEC-NUM-003` (`u8::MAX + 1`), `SPEC-NUM-004` (`3u32 - 5`), `SPEC-NUM-006`
 (`10 % 0`): rustc's deny-by-default `arithmetic_overflow` and `unconditional_panic` lints reject the generated
@@ -98,8 +106,6 @@ shows that the run-time behaviour is right and the lint is the whole difference.
 | Case | rustc says |
 |---|---|
 | `traits/SPEC-TRT-001` | expected `String`, found `&str` |
-| `errors/SPEC-ERR-003` | expected `Option<_>`, found `()` |
-| `errors/SPEC-ERR-005` | use of moved value `r` |
 | `items/SPEC-ITEM-010` | expected type parameter `T`, found `&T` |
 | `traits/SPEC-TRT-004` | `V + V` in a generic function without an `Add` bound |
 | `collections/SPEC-COLL-005`, `SPEC-COLL-009` | lifetime may not live long enough |
@@ -107,8 +113,6 @@ shows that the run-time behaviour is right and the lint is the whole difference.
 | `types/SPEC-TYP-006` | `Ok([1])` against `Result<Vec<i64>, _>`: array where a `Vec` is expected |
 | `patterns/SPEC-PAT-009` | non-exhaustive integer range patterns: rustc does not see that the ranges and the wildcard cover `i64` |
 | `stdlib/SPEC-STD-002` | `wj build` refuses the program (W0010, `str` in a signature) while `wj run --interpret --no-lint` accepts it |
-| `strings/SPEC-STR-017` | `"key=value".split_once("=")` is emitted as `split_once(String::from("="))`: `String` is not a `Pattern` |
-| `execution/SPEC-EXEC-012` | `${if c { a() } else { b() }}`: the branch is emitted with a trailing `;`, so the block is `()` and has no `Display` |
 
 ### D. Optional chaining `?.` is refused by the Rust backend
 
@@ -125,3 +129,25 @@ to `SPEC-CONC-003` (no `tokio` crate in the generated manifest; `__wj_scope` hel
 
 `wj check` rejects `i64::checked_abs` (WJ0015, unknown method) although it exists in Rust's std: the surface table
 (`stdlib_surface::known_methods`) lacks it. The spec case `SPEC-NUM-018` uses `checked_neg` instead.
+
+## Second round: thin areas (traits, patterns, closures, errors, modules, slices, iterators)
+
+Nine cases added (`TRT-010`, `TRT-011`, `PAT-011`, `PAT-012`, `CLOS-009`, `ERR-007`, `MOD-006`, `COLL-011`, `COLL-012`).
+`ERR-007`, `PAT-011` and `PAT-012` build compiled and agree in all three modes (expected output from the compiled
+program). The other six do not build compiled; their expected output is that of an equivalent hand-written Rust
+program (checked with rustc), and the walker and resolved engine print exactly that output:
+
+| Case | rustc says |
+|---|---|
+| `traits/SPEC-TRT-010` | default method `fn name(self) -> string { "shape" }` is emitted returning `&str` against `-> String` (E0308) |
+| `traits/SPEC-TRT-011` | `impl Describe for string`: `"hi".describe()` finds no method on `&'static str` (the impl is for `String`); `impl ... for int` with a `self` receiver mismatches |
+| `closures/SPEC-CLOS-009` | `Box<dyn Fn(int) -> int>` is emitted with a zero-argument closure type (E0593, the known `dyn_fn_box_return` finding); `let f = \|x: int\| x + base` with a shadowed `base` mixes `i32` and `i64` |
+| `modules/SPEC-MOD-006` | a `pub const LIMIT` inside `mod util` is not emitted (E0425 for `LIMIT` and `util::LIMIT`) |
+| `collections/SPEC-COLL-011` | integer widths (`Vec<i64>` collected from `i32` and `usize` iterators; `&i32 as i32`) |
+| `collections/SPEC-COLL-012` | integer widths in closures (`cannot multiply i32 by i64`, `&i64 + i32`) |
+
+Language-surface gaps met while writing the cases (these are limits of the language today, not oracle findings): no
+`..=` in index expressions or after `MIN` in patterns, no slice patterns (`[first, .., last]`), no `x @ pat` bindings,
+and a one-line `if c { CONST } else { y }` parses `{ CONST }` as a struct literal. `wj check` also rejects (WJ0002,
+"cannot find function `g`") a closure that returns a closure over its own parameter,
+`let compose = |f: fn(int) -> int, g: fn(int) -> int| move |x: int| g(f(x))`, which is valid.
