@@ -112,7 +112,12 @@ pub fn interpret_with_args(file: &Path, args: Vec<String>) -> Result<()> {
 
 /// Run the Windjammerscript REPL (Read-Eval-Print Loop)
 pub fn run_repl() -> Result<()> {
-    interpreter::repl::run_repl_stdio();
+    // ADR-0031: calls into the surfaced Rust crates of the project around the working directory
+    let crates = crate::cli::crate_host_build::host_for_repl(std::path::Path::new("."), &mut |m| eprintln!("{m}")).unwrap_or_else(|e| {
+        eprintln!("wj: Rust crate calls are not available in this REPL: {e}");
+        None
+    });
+    crate::interpreter::repl::run_repl_with(crates);
     Ok(())
 }
 
