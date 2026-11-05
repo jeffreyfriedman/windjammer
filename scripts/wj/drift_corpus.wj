@@ -36,6 +36,7 @@ struct Opts {
     record: bool,
     only: string,
     wide: bool,
+    refresh_failed: bool,
 }
 
 // ---- tokens ----
@@ -120,6 +121,17 @@ fn label(dir: string) -> string {
     strings.replace(dir, "tests/drift_corpus/eco/", "")
 }
 
+// the compiled result of a program: run now, or with --refresh-failed keep every recorded verdict except a failed build
+fn compiled_program(o: Opts, file: string, baseline: TestRun) -> Outcome {
+    if o.refresh_failed && !strings.contains(file, "/must_refuse_") {
+        let old = lookup(baseline, file)
+        if old.token != "exit1:0:17" && old.token != "absent" {
+            return old
+        }
+    }
+    run_program(o, file, "compiled")
+}
+
 fn lookup(run: TestRun, id: string) -> Outcome {
     let mut i = 0
     while i < run.ids.len() {
@@ -154,7 +166,19 @@ fn live_tests(o: Opts, dir: string) -> TestRun {
     }
 }
 
+// A compiled run that exits 1 without a word of output may be a build that was killed or starved (memory pressure,
+// a build-directory race), not a verdict: run it again, up to three times, before believing it.
 fn run_program(o: Opts, file: string, mode: string) -> Outcome {
+    let mut out = run_program_once(o, file, mode)
+    let mut tries = 1
+    while mode == "compiled" && out.token == "exit1:0:17" && tries < 3 {
+        out = run_program_once(o, file, mode)
+        tries += 1
+    }
+    out
+}
+
+fn run_program_once(o: Opts, file: string, mode: string) -> Outcome {
     let cmd = if mode == "compiled" {
         "${wrapper()} ${quote(o.wj)} run --compiled --no-lint ${quote(file)}"
     } else {
@@ -240,7 +264,7 @@ fn sorted_dirs(parent: string) -> Vec<string> {
 
 fn main() {
     let args = env::args()
-    let mut o = Opts { scratch: "", wj: args[1], out: args[2], compiled: "recorded", record: false, only: "", wide: true }
+    let mut o = Opts { scratch: "", wj: args[1], out: args[2], compiled: "recorded", record: false, only: "", wide: true, refresh_failed: false }
     let mut i = 3
     while i < args.len() {
         if args[i] == "--compiled" {
@@ -248,6 +272,8 @@ fn main() {
             i += 1
         } else if args[i] == "--record" {
             o.record = true
+        } else if args[i] == "--refresh-failed" {
+            o.refresh_failed = true
         } else if args[i] == "--programs" {
             o.wide = args[i + 1] != "off"
             i += 1
@@ -352,7 +378,7 @@ fn main() {
     for p in progs {
         let w = run_program(o, p, "walker")
         let r = run_program(o, p, "resolved")
-        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "" } } else if o.compiled == "live" { run_program(o, p, "compiled") } else { lookup(baseline, p) }
+        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "" } } else if o.compiled == "live" { compiled_program(o, p, baseline) } else { lookup(baseline, p) }
         out = out + row(p, w.token, r.token, c.token)
         if strings.contains(p, "/must_refuse_") {
             // the interpreter must refuse what rustc rejects: `#refused` rows say whether each side stopped on an ownership error
@@ -391,7 +417,7 @@ fn main() {
             }
             let w = run_program(o, f, "walker")
             let r = run_program(o, f, "resolved")
-            let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "" } } else if o.compiled == "live" { run_program(o, f, "compiled") } else { lookup(baseline, f) }
+            let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "" } } else if o.compiled == "live" { compiled_program(o, f, baseline) } else { lookup(baseline, f) }
             // no recorded compiled result yet: not compared (counted in the summary), unlike the pinned programs above
             let ct = if c.token == "absent" { "skip" } else { c.token }
             out = out + row(f, w.token, r.token, ct)
