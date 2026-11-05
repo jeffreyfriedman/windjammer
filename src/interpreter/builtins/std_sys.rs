@@ -424,21 +424,10 @@ fn register_uuid_log_strings(r: &mut Registry) {
 
     r.func("strings::trim_start", |_, a| Ok(s(arg_str(&a, 0, "trim_start")?.trim_start())));
     r.func("strings::trim_end", |_, a| Ok(s(arg_str(&a, 0, "trim_end")?.trim_end())));
+    // Rust's `str::lines()`: a final newline ends the last line (no empty element), `\r` is dropped only before `\n`
     r.func("strings::split_lines", |_, a| {
         let text = arg_str(&a, 0, "split_lines")?;
-        let mut lines = Vec::new();
-        let mut cur = String::new();
-        for ch in text.chars() {
-            if ch == '\n' {
-                lines.push(Value::str(std::mem::take(&mut cur)));
-            } else if ch != '\r' {
-                cur.push(ch);
-            }
-        }
-        if !cur.is_empty() {
-            lines.push(Value::str(cur));
-        }
-        Ok(Value::vec(lines))
+        Ok(Value::vec(text.lines().map(s).collect()))
     });
     r.func("strings::split_whitespace", |_, a| {
         let mut parts = Vec::new();
