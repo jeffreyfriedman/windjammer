@@ -31,6 +31,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-CLOS-006 | closures.md | `closures/SPEC-CLOS-006.wj` |
 | SPEC-CLOS-007 | closures.md | `closures/SPEC-CLOS-007.wj` |
 | SPEC-CLOS-008 | closures.md | `closures/SPEC-CLOS-008.wj` |
+| SPEC-CLOS-009 | closures.md | `closures/SPEC-CLOS-009.wj` |
 | SPEC-COLL-001 | collections.md | `collections/SPEC-COLL-001.wj` |
 | SPEC-COLL-002 | collections.md | `collections/SPEC-COLL-002.wj` |
 | SPEC-COLL-003 | collections.md | `collections/SPEC-COLL-003.wj` |
@@ -41,6 +42,8 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-COLL-008 | collections.md | `collections/SPEC-COLL-008.wj` |
 | SPEC-COLL-009 | collections.md | `collections/SPEC-COLL-009.wj` |
 | SPEC-COLL-010 | collections.md | `collections/SPEC-COLL-010.wj` |
+| SPEC-COLL-011 | collections.md | `collections/SPEC-COLL-011.wj` |
+| SPEC-COLL-012 | collections.md | `collections/SPEC-COLL-012.wj` |
 | SPEC-CONC-001 | concurrency.md | `concurrency/SPEC-CONC-001.wj` |
 | SPEC-CONC-002 | concurrency.md | `concurrency/SPEC-CONC-002.wj` |
 | SPEC-CONC-003 | concurrency.md | `concurrency/SPEC-CONC-003.wj` |
@@ -108,7 +111,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-ERR-004 | errors.md | `errors/SPEC-ERR-004.wj` |
 | SPEC-ERR-005 | errors.md | `errors/SPEC-ERR-005.wj` |
 | SPEC-ERR-006 | errors.md | `errors/SPEC-ERR-006.wj` |
-| SPEC-ERR-007 | errors.md | untestable |
+| SPEC-ERR-007 | errors.md | `errors/SPEC-ERR-007.wj` |
 | SPEC-EXEC-001 | execution.md | `execution/SPEC-EXEC-001.wj` |
 | SPEC-EXEC-002 | execution.md | `execution/SPEC-EXEC-002.wj` |
 | SPEC-EXEC-003 | execution.md | `execution/SPEC-EXEC-003.wj` |
@@ -194,6 +197,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-MOD-003 | modules.md | `modules/SPEC-MOD-003.wj` |
 | SPEC-MOD-004 | modules.md | `modules/SPEC-MOD-004.wj` (xfail Q-009) |
 | SPEC-MOD-005 | modules.md | `modules/SPEC-MOD-005.wj` |
+| SPEC-MOD-006 | modules.md | `modules/SPEC-MOD-006.wj` |
 | SPEC-NUM-001 | numeric.md | `numeric/SPEC-NUM-001.wj` |
 | SPEC-NUM-002 | numeric.md | `numeric/SPEC-NUM-002.wj` |
 | SPEC-NUM-003 | numeric.md | `numeric/SPEC-NUM-003.wj` |
@@ -249,6 +253,8 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-PAT-008 | patterns.md | `patterns/SPEC-PAT-008.wj` |
 | SPEC-PAT-009 | patterns.md | `patterns/SPEC-PAT-009.wj` |
 | SPEC-PAT-010 | patterns.md | `patterns/SPEC-PAT-010.wj` |
+| SPEC-PAT-011 | patterns.md | `patterns/SPEC-PAT-011.wj` |
+| SPEC-PAT-012 | patterns.md | `patterns/SPEC-PAT-012.wj` |
 | SPEC-PIPE-001 | pipe.md | `pipe/SPEC-PIPE-001.wj` |
 | SPEC-PIPE-002 | pipe.md | `pipe/SPEC-PIPE-002.wj` |
 | SPEC-PIPE-003 | pipe.md | `pipe/SPEC-PIPE-003.wj` |
@@ -299,6 +305,8 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-TRT-007 | traits.md | `traits/SPEC-TRT-007.wj` |
 | SPEC-TRT-008 | traits.md | `traits/SPEC-TRT-008.wj` |
 | SPEC-TRT-009 | traits.md | `traits/SPEC-TRT-009.wj` |
+| SPEC-TRT-010 | traits.md | `traits/SPEC-TRT-010.wj` |
+| SPEC-TRT-011 | traits.md | `traits/SPEC-TRT-011.wj` |
 | SPEC-TYP-001 | types.md | `types/SPEC-TYP-001.wj` |
 | SPEC-TYP-002 | types.md | `types/SPEC-TYP-002.wj` |
 | SPEC-TYP-003 | types.md | `types/SPEC-TYP-003.wj` (xfail Q-017) |

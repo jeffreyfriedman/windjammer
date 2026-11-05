@@ -1,4 +1,5 @@
 """Process runner, resumable result cache, and the context every criterion shares."""
+import shlex
 import hashlib, json, os, re, resource, shutil, subprocess, tempfile, time
 
 QUICK, FULL = "quick", "full"
@@ -126,6 +127,10 @@ class Ctx:
         if "compiled" in kind and self.low_disk():
             return Res(-9, "", "skipped: free disk space below the readiness minimum", 0.0, timed_out=True)
         self.log("run: " + kind)
+        # a compiled run builds with cargo: WJ_CARGO_WRAPPER (a build-slot gate) prefixes it, as for the drift gate
+        wrapper = os.environ.get("WJ_CARGO_WRAPPER", "")
+        if "compiled" in kind and wrapper and isinstance(cmd, list):
+            cmd = shlex.split(wrapper) + cmd
         r = self.runner(cmd, timeout=timeout, **kw)
         # timeouts are environmental (machine load): never cached, so a quieter rerun can succeed
         if keep_timeouts or not r.timed_out:
