@@ -3093,17 +3093,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Binding whose resolved type is a scanned runtime non-`Clone` struct.
     pub(in crate::codegen::rust) fn binding_is_runtime_non_clone(&self, name: &str) -> bool {
-        if self
-            .current_function_params
-            .iter()
-            .find(|p| p.name == name)
-            .is_some_and(|p| self.type_is_runtime_non_clone(&p.type_))
-        {
-            return true;
-        }
-        self.local_var_types
-            .get(name)
-            .is_some_and(|t| self.type_is_runtime_non_clone(t))
+        // a runtime handle, or a struct holding a channel end or a trait object (no `Clone` either)
+        let param = self.current_function_params.iter().find(|p| p.name == name).map(|p| &p.type_);
+        [param, self.local_var_types.get(name)].into_iter().flatten().any(|t| self.type_is_runtime_non_clone(t) || !self.type_known_clone(t, 0))
     }
 
     /// Owned caller param → owned callee formal, used again at a later owned call site.
