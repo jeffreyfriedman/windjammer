@@ -76,6 +76,15 @@ fn fail(kind: ErrorKind, msg: String) -> Ctl {
     Ctl::Err(Box::new(RuntimeError::new(kind, msg)))
 }
 
+/// What the gate asks before a call into a surfaced crate function: the effects its surface declares (none for `@pure`), else
+/// `ffi(<crate>)`. The static effect pass (`CrateEffects::uses`) must say the same; `tests` below hold the two together.
+pub(crate) fn gate_requests(sig: &CrateFnSig) -> Vec<(EffectKind, Option<String>)> {
+    match &sig.effects {
+        None => vec![(EffectKind::Ffi, Some(sig.krate.clone()))],
+        Some(ks) => ks.iter().map(|k| (k.clone(), None)).collect(),
+    }
+}
+
 impl Interpreter {
     /// Attach the crate host before loading the program, so the preflight knows which crate calls run here.
     pub fn attach_crate_host(&mut self, h: CrateHost) {
@@ -113,13 +122,8 @@ impl Interpreter {
     pub(crate) fn call_crate_fn(&mut self, path: &str, args: Vec<Value>) -> R {
         let host = self.crate_host.clone().expect("call_crate_fn without a crate host");
         let sig = host.sigs[path].clone();
-        match &sig.effects {
-            None => self.cap_decide(&EffectKind::Ffi, Some(&sig.krate))?,
-            Some(ks) => {
-                for k in ks {
-                    self.cap_decide(k, None)?;
-                }
-            }
+        for (kind, resource) in gate_requests(&sig) {
+            self.cap_decide(&kind, resource.as_deref())?;
         }
         if self.limits.is_some() && sig.effects.as_ref().is_none_or(|k| !k.is_empty()) {
             self.limit_call()?;
@@ -244,4 +248,43 @@ fn signal_text(s: &std::process::ExitStatus) -> String {
 #[cfg(not(unix))]
 fn signal_text(s: &std::process::ExitStatus) -> String {
     s.to_string()
+}
+
+#[cfg(test)]
+mod parity {
+    use super::*;
+    use crate::ir::effect_facts::analysis::Resource;
+    use crate::ir::effect_facts::CrateEffects;
+    use std::path::PathBuf;
+
+    /// Crate calls in the sink-parity audit: for every function of a surface, the effects the interpreter's gate asks for before
+    /// the call equal the effects the static pass attributes to the same call (`wj check`, the capability lock, the durable steps).
+    #[test]
+    fn the_gate_asks_what_the_static_pass_says() {
+        let text = "@pure\npub fn levenshtein(a: string, b: string) -> usize\n@uses(net.connect)\npub fn fetch(url: string) -> string\n@uses(fs.read, env.read)\npub fn load(p: string) -> string\npub fn split(s: string) -> Option<Vec<string>>\n";
+        let s = crate::package::rust_surface::parse_surface("demo", PathBuf::from("rust/demo.wji"), text.to_string());
+        assert!(s.problems.is_empty(), "{:?}", s.problems);
+        let mut stat = CrateEffects::default();
+        stat.add_crate("demo");
+        for f in &s.fns {
+            stat.declare("demo", &f.name, crate::ir::effect_facts::analysis::declared_effects(f));
+        }
+        assert_eq!(s.fns.len(), 4);
+        for f in &s.fns {
+            let sig = super::sig::crate_fn_sig("demo", f).expect("a bridgeable signature");
+            let asked: Vec<(EffectKind, Option<String>)> = gate_requests(&sig);
+            let said: Vec<(EffectKind, Option<String>)> = stat
+                .uses(&format!("demo::{}", f.name))
+                .expect("demo is a registered crate")
+                .into_iter()
+                .map(|(k, r)| (k, match r {
+                    Resource::Lit(l) => Some(l),
+                    _ => None,
+                }))
+                .collect();
+            assert_eq!(asked, said, "demo::{}", f.name);
+        }
+        // a function the surface does not declare, and a crate with no surface at all, are `ffi(<crate>)` statically
+        assert_eq!(stat.uses("demo::not_declared"), Some(vec![(EffectKind::Ffi, Resource::Lit("demo".into()))]));
+    }
 }

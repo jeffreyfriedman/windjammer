@@ -20,7 +20,7 @@ pub(super) fn write_gated(it: &mut Interpreter, path: &str, data: &[u8], append:
     Ok(match it.cap_open_write(path, append)? {
         WriteOpen::File(mut f) => f.write_all(data),
         WriteOpen::Failed(e) => Err(e),
-        WriteOpen::Done => Ok(()),
+        WriteOpen::Done | WriteOpen::Copied(_) => Ok(()),
         WriteOpen::ByName if append => std::fs::OpenOptions::new().append(true).create(true).open(path).and_then(|mut f| f.write_all(data)),
         WriteOpen::ByName => std::fs::write(path, data),
     })
@@ -31,7 +31,7 @@ pub(super) fn entry_gated(it: &mut Interpreter, path: &str, op: crate::ir::effec
     use crate::interpreter::caps::WriteOpen;
     use crate::ir::effect_facts::grant::EntryOp;
     Ok(match it.cap_entry_op(path, op)? {
-        WriteOpen::Done | WriteOpen::File(_) => Ok(()),
+        WriteOpen::Done | WriteOpen::File(_) | WriteOpen::Copied(_) => Ok(()),
         WriteOpen::Failed(e) => Err(e),
         WriteOpen::ByName => match op {
             EntryOp::MakeDir => std::fs::create_dir(path),
@@ -185,10 +185,26 @@ fn register_fs(r: &mut Registry) {
         let r = write_gated(it, path.as_str(), &data, false)?;
         unit_res(r)
     });
-    r.func("fs::copy", |_, a| {
-        unit_res(std::fs::copy(arg_str(&a, 0, "copy")?.as_str(), arg_str(&a, 1, "copy")?.as_str()).map(|_| ()))
+    r.func("fs::copy", |it, a| {
+        use crate::interpreter::caps::WriteOpen;
+        let (from, to) = (arg_str(&a, 0, "copy")?, arg_str(&a, 1, "copy")?);
+        let r = match it.cap_copy(from.as_str(), to.as_str())? {
+            WriteOpen::Copied(_) | WriteOpen::Done | WriteOpen::File(_) => Ok(()),
+            WriteOpen::Failed(e) => Err(e),
+            WriteOpen::ByName => std::fs::copy(from.as_str(), to.as_str()).map(|_| ()),
+        };
+        unit_res(r)
     });
-    r.func("fs::rename", |_, a| unit_res(std::fs::rename(arg_str(&a, 0, "rename")?.as_str(), arg_str(&a, 1, "rename")?.as_str())));
+    r.func("fs::rename", |it, a| {
+        use crate::interpreter::caps::WriteOpen;
+        let (from, to) = (arg_str(&a, 0, "rename")?, arg_str(&a, 1, "rename")?);
+        let r = match it.cap_rename(from.as_str(), to.as_str())? {
+            WriteOpen::Done | WriteOpen::Copied(_) | WriteOpen::File(_) => Ok(()),
+            WriteOpen::Failed(e) => Err(e),
+            WriteOpen::ByName => std::fs::rename(from.as_str(), to.as_str()),
+        };
+        unit_res(r)
+    });
     r.func("fs::create_dir", |it, a| {
         let path = arg_str(&a, 0, "create_dir")?;
         let r = entry_gated(it, path.as_str(), crate::ir::effect_facts::grant::EntryOp::MakeDir)?;
@@ -199,7 +215,16 @@ fn register_fs(r: &mut Registry) {
         let r = entry_gated(it, path.as_str(), crate::ir::effect_facts::grant::EntryOp::RemoveDir)?;
         unit_res(r)
     });
-    r.func("fs::remove_dir_all", |_, a| unit_res(std::fs::remove_dir_all(arg_str(&a, 0, "remove_dir_all")?.as_str())));
+    r.func("fs::remove_dir_all", |it, a| {
+        use crate::interpreter::caps::WriteOpen;
+        let p = arg_str(&a, 0, "remove_dir_all")?;
+        let r = match it.cap_dir_all(p.as_str(), crate::ir::effect_facts::grant::DirAllOp::Remove)? {
+            WriteOpen::Done | WriteOpen::Copied(_) | WriteOpen::File(_) => Ok(()),
+            WriteOpen::Failed(e) => Err(e),
+            WriteOpen::ByName => std::fs::remove_dir_all(p.as_str()),
+        };
+        unit_res(r)
+    });
     r.func("fs::read_dir", |_, a| {
         let rd = match std::fs::read_dir(arg_str(&a, 0, "read_dir")?.as_str()) {
             Ok(r) => r,

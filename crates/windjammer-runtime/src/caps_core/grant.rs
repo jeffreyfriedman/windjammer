@@ -14,6 +14,13 @@ pub enum Scope {
     Only(Vec<String>),
 }
 
+/// Whole-tree directory operations decided descriptor by descriptor (`Grant::dir_all_op`).
+#[derive(Debug, Clone, Copy)]
+pub enum DirAllOp {
+    Create,
+    Remove,
+}
+
 /// One directory-entry operation decided on its parent directory (`Grant::entry_op`).
 #[derive(Debug, Clone, Copy)]
 pub enum EntryOp {
@@ -437,6 +444,102 @@ impl Grant {
                 EntryOp::RemoveFile => fdio::unlink(p, false),
                 EntryOp::RemoveDir => fdio::unlink(p, true),
             })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = op;
+            self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+            Ok(None)
+        }
+    }
+
+    /// `rename` decided on both parent directories (two descriptors): each canonical parent comes from its descriptor, both
+    /// `parent/name` are checked, and the move is one `renameat` between those same descriptors. `Ok(None)`: do it by name.
+    pub fn rename_op(&self, from: &str, to: &str) -> Result<Option<()>, OpenError> {
+        #[cfg(unix)]
+        {
+            use std::sync::atomic::Ordering::Relaxed;
+            if device_effect(&EffectKind::FsWrite, from).is_some() || device_effect(&EffectKind::FsWrite, to).is_some() {
+                self.check(&EffectKind::FsWrite, Some(from)).map_err(OpenError::Denied)?;
+                self.check(&EffectKind::FsWrite, Some(to)).map_err(OpenError::Denied)?;
+                return Ok(None);
+            }
+            let mut parents = Vec::new();
+            for res in [from, to] {
+                let lex = m::lexical_abs(res, &Self::base_for(res));
+                match fdio::open_parent(&lex) {
+                    Ok(p) => {
+                        self.check_with(&EffectKind::FsWrite, Some(res), Some(p.canon.join(&p.name))).map_err(OpenError::Denied)?;
+                        parents.push(p);
+                    }
+                    Err(e) => {
+                        self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+                        return Err(OpenError::Io(e));
+                    }
+                }
+            }
+            GENERATION.fetch_add(1, Relaxed);
+            fdio::rename_at(&parents[0], &parents[1]).map(Some).map_err(OpenError::Io)
+        }
+        #[cfg(not(unix))]
+        {
+            self.check(&EffectKind::FsWrite, Some(from)).map_err(OpenError::Denied)?;
+            self.check(&EffectKind::FsWrite, Some(to)).map_err(OpenError::Denied)?;
+            Ok(None)
+        }
+    }
+
+    /// `copy`: the source is opened and decided on as an open file, the destination as `open_write` does, and the bytes go
+    /// from the one handle to the other (permissions follow, as `std::fs::copy` does). `Ok(None)`: do it by name.
+    pub fn copy_op(&self, from: &str, to: &str) -> Result<Option<u64>, OpenError> {
+        let mut src = self.open_read(from)?;
+        let Some(mut dst) = self.open_write(to, false)? else { return Ok(None) };
+        let n = std::io::copy(&mut src, &mut dst).map_err(OpenError::Io)?;
+        if let Ok(meta) = src.metadata() {
+            let _ = dst.set_permissions(meta.permissions());
+        }
+        Ok(Some(n))
+    }
+
+    /// `create_dir_all` and `remove_dir_all`. The whole path is first checked by name (so nothing is created for a path that is
+    /// out of scope, as before); then each missing component is created relative to the descriptor of the directory before it,
+    /// after checking `canonical(parent)/name` from that descriptor, and the final directory is checked once more. A removal
+    /// is decided on the parent directory and never follows a link inside the tree.
+    pub fn dir_all_op(&self, res: &str, op: DirAllOp) -> Result<Option<()>, OpenError> {
+        #[cfg(unix)]
+        {
+            use std::sync::atomic::Ordering::Relaxed;
+            if let DirAllOp::Remove = op {
+                return self.checked_parent(res, false, &mut |p| fdio::remove_tree(p));
+            }
+            if device_effect(&EffectKind::FsWrite, res).is_some() {
+                self.check(&EffectKind::FsWrite, Some(res)).map_err(OpenError::Denied)?;
+                return Ok(None);
+            }
+            self.check_with(&EffectKind::FsWrite, Some(res), None).map_err(OpenError::Denied)?;
+            let lex = m::lexical_abs(res, &Self::base_for(res));
+            let mut cur = std::fs::File::open("/").map_err(OpenError::Io)?;
+            let mut cur_canon = path_of_open_file(&cur).unwrap_or_else(|| PathBuf::from("/"));
+            for comp in lex.components() {
+                let std::path::Component::Normal(name) = comp else { continue };
+                match fdio::open_dir_at(&cur, name) {
+                    Ok(next) => cur = next,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                        self.check_with(&EffectKind::FsWrite, Some(res), Some(cur_canon.join(name))).map_err(OpenError::Denied)?;
+                        GENERATION.fetch_add(1, Relaxed);
+                        match fdio::make_dir_at(&cur, name) {
+                            Ok(()) => {}
+                            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                            Err(e) => return Err(OpenError::Io(e)),
+                        }
+                        cur = fdio::open_dir_at(&cur, name).map_err(OpenError::Io)?;
+                    }
+                    Err(e) => return Err(OpenError::Io(e)),
+                }
+                cur_canon = path_of_open_file(&cur).ok_or_else(|| OpenError::Io(std::io::Error::new(std::io::ErrorKind::Unsupported, "cannot name an open directory")))?;
+            }
+            self.check_with(&EffectKind::FsWrite, Some(res), Some(cur_canon)).map_err(OpenError::Denied)?;
+            Ok(Some(()))
         }
         #[cfg(not(unix))]
         {

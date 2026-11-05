@@ -99,3 +99,114 @@ pub fn unlink(p: &Parent, remove_directory: bool) -> io::Result<()> {
 pub fn is_symlink_loop(e: &io::Error) -> bool {
     e.raw_os_error() == Some(libc::ELOOP)
 }
+
+/// `renameat(from.dir, from.name, to.dir, to.name)`: moves the entry itself (a link is moved, not followed).
+pub fn rename_at(from: &Parent, to: &Parent) -> io::Result<()> {
+    let (a, b) = (cname(&from.name)?, cname(&to.name)?);
+    // SAFETY: both names are valid NUL-terminated strings and both directory descriptors stay open for the call
+    if unsafe { libc::renameat(from.dir.as_raw_fd(), a.as_ptr(), to.dir.as_raw_fd(), b.as_ptr()) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+fn open_dir_flags(dir: &File, name: &OsStr, extra: i32) -> io::Result<File> {
+    let c = cname(name)?;
+    // SAFETY: as in `open_for_write`
+    let fd = unsafe { libc::openat(dir.as_raw_fd(), c.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | extra) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `fd` was just returned by openat and nothing else owns it
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
+/// Open the directory `name` inside `dir` (a link to a directory is followed).
+pub fn open_dir_at(dir: &File, name: &OsStr) -> io::Result<File> {
+    open_dir_flags(dir, name, 0)
+}
+
+/// `mkdirat(dir, name)`; an existing entry is the caller's `AlreadyExists`.
+pub fn make_dir_at(dir: &File, name: &OsStr) -> io::Result<()> {
+    let c = cname(name)?;
+    // SAFETY: as in `open_for_write`
+    if unsafe { libc::mkdirat(dir.as_raw_fd(), c.as_ptr(), 0o777) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Names in an open directory (not `.` and `..`).
+fn entries(dir: &File) -> io::Result<Vec<OsString>> {
+    // SAFETY: `dup` of a valid descriptor; `fdopendir` takes ownership of the duplicate, `closedir` releases it
+    let fd = unsafe { libc::dup(dir.as_raw_fd()) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: as above
+    let d = unsafe { libc::fdopendir(fd) };
+    if d.is_null() {
+        let e = io::Error::last_os_error();
+        // SAFETY: `fd` is still ours when fdopendir failed
+        unsafe { libc::close(fd) };
+        return Err(e);
+    }
+    let mut out = Vec::new();
+    loop {
+        // SAFETY: `d` is a valid open directory stream; readdir returns null at the end
+        let e = unsafe { libc::readdir(d) };
+        if e.is_null() {
+            break;
+        }
+        // SAFETY: `d_name` is a NUL-terminated name inside the returned entry
+        let name = unsafe { std::ffi::CStr::from_ptr((*e).d_name.as_ptr()) };
+        let b = name.to_bytes();
+        if b != b"." && b != b".." {
+            out.push(OsStr::from_bytes(b).to_os_string());
+        }
+    }
+    // SAFETY: closes the stream and its descriptor
+    unsafe { libc::closedir(d) };
+    Ok(out)
+}
+
+fn is_dir_nofollow(dir: &File, name: &OsStr) -> io::Result<bool> {
+    let c = cname(name)?;
+    // SAFETY: a zeroed stat is a valid out-parameter
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    // SAFETY: as in `open_for_write`; `st` is a valid out-parameter
+    if unsafe { libc::fstatat(dir.as_raw_fd(), c.as_ptr(), &mut st, libc::AT_SYMLINK_NOFOLLOW) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((st.st_mode as u32 & libc::S_IFMT as u32) == libc::S_IFDIR as u32)
+}
+
+fn unlink_at(dir: &File, name: &OsStr, remove_directory: bool) -> io::Result<()> {
+    let c = cname(name)?;
+    let flag = if remove_directory { libc::AT_REMOVEDIR } else { 0 };
+    // SAFETY: as in `open_for_write`
+    if unsafe { libc::unlinkat(dir.as_raw_fd(), c.as_ptr(), flag) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+fn remove_contents(dir: &File) -> io::Result<()> {
+    for name in entries(dir)? {
+        if is_dir_nofollow(dir, &name)? {
+            let sub = open_dir_flags(dir, &name, libc::O_NOFOLLOW)?;
+            remove_contents(&sub)?;
+            unlink_at(dir, &name, true)?;
+        } else {
+            unlink_at(dir, &name, false)?;
+        }
+    }
+    Ok(())
+}
+
+/// `remove_dir_all` of `p.name` inside `p.dir`, never following a link: a link inside the tree is removed, not entered.
+pub fn remove_tree(p: &Parent) -> io::Result<()> {
+    let dir = open_dir_flags(&p.dir, &p.name, libc::O_NOFOLLOW)?;
+    remove_contents(&dir)?;
+    unlink(p, true)
+}
