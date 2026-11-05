@@ -30,3 +30,15 @@ fn real_functions_shadowing_locals_and_uncovered_modules_are_quiet() {
     let (ok, out) = check(src);
     assert!(ok && !out.contains("WJ0002"), "{out}");
 }
+
+#[test]
+fn function_typed_parameters_of_closures_and_functions_are_bindings() {
+    // typed closure parameters, `move` closures nested in closures, fn-typed parameters of nested fns and
+    // let-bound closures called later are all values in scope, not missing functions
+    let src = "fn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {\n    move |x: int| g(f(x))\n}\n\nfn make() -> fn(fn(int) -> int, fn(int) -> int) -> fn(int) -> int {\n    |f: fn(int) -> int, g: fn(int) -> int| move |x: int| g(f(x))\n}\n\nfn apply_twice(op: fn(int) -> int, v: int) -> int {\n    let inner = |h: fn(int) -> int, y: int| h(h(y))\n    inner(op, v)\n}\n\nfn main() {\n    let inc = |n: int| n + 1\n    let both = compose(inc, inc)\n    println(\"${both(1)} ${apply_twice(inc, 1)}\")\n}\n";
+    let (ok, out) = check(src);
+    assert!(ok && !out.contains("WJ0002"), "{out}");
+    // a call to a name that is bound nowhere is still an error
+    let (ok, out) = check("fn main() {\n    let f = |x: int| x\n    println(\"${f(g(1))}\")\n}\n");
+    assert!(!ok && out.contains("cannot find function `g`"), "{out}");
+}
