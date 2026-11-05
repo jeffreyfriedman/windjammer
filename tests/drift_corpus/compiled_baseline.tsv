@@ -1416,3 +1416,4 @@ packages/wj-gitignore::tests/gitignore_test.wj::test_double_star_prefix	pass
 packages/wj-gitignore::tests/gitignore_test.wj::test_negation_reincludes_and_last_rule_wins	pass	
 packages/wj-gitignore::tests/gitignore_test.wj::test_cannot_reinclude_file_under_ignored_dir	pass	
 packages/wj-gitignore::tests/gitignore_test.wj::test_filter_unignored_keeps_order	pass	
+tests/engine_parity/vp_implicit_self.wj	exit0:8:701631072	

@@ -13,6 +13,7 @@ pub mod mcp_bind;
 pub mod check;
 pub mod clean;
 pub mod errors;
+pub mod eval;
 pub mod explain_effects;
 pub mod explain_ownership;
 pub mod fix;

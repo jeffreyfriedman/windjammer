@@ -45,6 +45,7 @@ resolved, with and without eager machine-code loops) because it lives in `tests/
 | `vp_loop_exits` | `return` of enum/Option/Result from nested `while`/`for`/`loop`, labelled `break`/`continue`, `break <value>` |
 | `vp_ref_rebind` | `r = &mut b` on a variable holding a reference (vectors, structs, a loop that may run in machine code, after a reborrow), shared references rebound, a reference chosen inside a function |
 | `vp_param_reassign` | a parameter reassigned whole (`slot = f(slot)`, `slot = slot + 1`, reassigned then returned, in a method) next to compound and field writes: by value or `&mut` as the emitted signature says |
+| `vp_implicit_self` | a method written without `self` that assigns `self.field` (called directly and in a loop), next to one that only reads it |
 | `vp_closure_captures` | captured `Option`/enum/`Vec`, closures returning Option, closures called through their bindings, a captured name shadowed later |
 | `vp_option_fields` | Option fields read in methods, rewritten each iteration, matched inside loops, `ok_or`, `map` |
 
