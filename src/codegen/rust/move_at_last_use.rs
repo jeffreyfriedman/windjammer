@@ -114,6 +114,16 @@ impl<'ast> CodeGenerator<'ast> {
     /// its name) of a known non-Copy owned value that is read again (later in the statement, after
     /// it, or in the next loop iteration; `ir::liveness`): the move copies instead. Everything else
     /// passes through unchanged. With the liveness mutation (nothing read again) this never fires.
+    /// Collection, tuple and struct-literal elements: copy only for a read in a later statement. A read
+    /// elsewhere in the same statement may be an exclusive `match` arm (`Ok(_) => (tx, true), Err(_) => (tx, false)`).
+    pub(in crate::codegen::rust) fn copy_element_if_read_later(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        let later = match (expr, self.clone_facts.stmt_stack.last()) {
+            (crate::parser::Expression::Identifier { name, .. }, Some(stmt)) => self.clone_facts.read_after.get(stmt).is_some_and(|n| n.contains(name)),
+            _ => false,
+        };
+        if later { self.copy_if_read_again(expr, emitted) } else { emitted }
+    }
+
     pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
         let crate::parser::Expression::Identifier { name, .. } = expr else { return emitted };
         if emitted != *name || self.auto_clone_analysis.is_none() || !self.clone_facts.plain_bindings.contains(name) {
@@ -145,6 +155,13 @@ impl<'ast> CodeGenerator<'ast> {
     /// structs) is a type the derive rules leave without `Clone` (`type_precludes_auto_debug_clone`).
     fn type_known_clone(&self, ty: &Type, depth: u8) -> bool {
         if self.type_precludes_auto_debug_clone(ty) {
+            return false;
+        }
+        // `Clone` of a generic value (or a type applied to one) depends on a bound we cannot see.
+        if matches!(ty, Type::Generic(_))
+            || matches!(ty, Type::Vec(e) | Type::Option(e) if !self.type_known_clone(e, depth + 1))
+            || matches!(ty, Type::Parameterized(_, args) if args.iter().any(|a| !self.type_known_clone(a, depth + 1)))
+        {
             return false;
         }
         let base = match ty {
