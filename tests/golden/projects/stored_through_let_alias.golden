@@ -1,0 +1,42 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod request;
+
+// Re-export public items
+pub use request::*;
+// ==== main.rs ====
+mod request;
+fn main() {
+    let mut headers: Vec<String> = Vec::new();
+    headers.push(String::from("a"));
+    headers.push(String::from("b"));
+    let req = request::make_request(&headers, String::from("/x"));
+    println!("{} {}", req.headers.len(), &req.headers[0]);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod request;
+
+// Re-export public items
+pub use request::*;
+// ==== request.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Request {
+    pub headers: Vec<String>,
+    pub path: String,
+}
+
+#[inline]
+pub fn make_request(headers: Vec<String>, path: String) -> Request {
+    let kept: Vec<String> = headers;
+    Request { headers: kept, path }
+}
+

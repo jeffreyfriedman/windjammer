@@ -1119,21 +1119,32 @@ pub fn sync_ir_ownership_to_registry(
     ir_functions: &[crate::ir::node::IrFunction],
     analyzed: &[crate::analyzer::AnalyzedFunction],
     registry: &mut crate::analyzer::SignatureRegistry,
+    file_stem: Option<&str>,
 ) {
     use crate::analyzer::OwnershipMode;
 
     for (ir_fn, af) in ir_functions.iter().zip(analyzed.iter()) {
-        let mut lookup_keys = vec![ir_fn.name.clone()];
-        if !lookup_keys.contains(&af.decl.name) {
-            lookup_keys.push(af.decl.name.clone());
+        // Every key that names this function: its file-stem key (`module::f`, how other files' call sites
+        // find it) and the bare names, the latter only with this function's arity (not a homonym's).
+        let mut lookup_keys: Vec<String> = file_stem
+            .filter(|_| !ir_fn.name.contains("::"))
+            .map(|stem| format!("{stem}::{}", af.decl.name))
+            .into_iter()
+            .collect();
+        for k in [&ir_fn.name, &af.decl.name] {
+            if !lookup_keys.contains(k) {
+                lookup_keys.push(k.clone());
+            }
         }
-        let Some(base_key) = lookup_keys
-            .iter()
-            .find(|k| registry.get_signature(k).is_some())
-            .cloned()
-        else {
-            continue;
-        };
+        let arity = af.decl.parameters.len();
+        let mut base_keys: Vec<String> = lookup_keys
+            .into_iter()
+            .filter(|k| registry.get_signature(k).is_some_and(|s| s.param_ownership.len() == arity || ir_fn.name.contains("::")))
+            .collect();
+        if ir_fn.name.contains("::") {
+            base_keys.truncate(1); // a method: its `Type::name` key (a bare name may be another type's)
+        }
+        for base_key in base_keys {
         let Some(mut sig) = registry.get_signature(&base_key).cloned() else {
             continue;
         };
@@ -1145,11 +1156,17 @@ pub fn sync_ir_ownership_to_registry(
             if idx >= sig.param_ownership.len() {
                 continue;
             }
+            // A free function's value formal is spelled from this very mode (O4; `mut p` is owned): callers
+            // in other files must read it as is, so the guards below apply only to the other formals.
+            let spelled = af.decl.parent_type.is_none()
+                && crate::ir::formal_predicates::ir_spells_value_formal(param)
+                && !crate::analyzer::Analyzer::is_generic_type_param(&param.type_);
+            let mode = if spelled && param.is_mutable { OwnershipMode::Owned } else { mode };
             let prior = sig.param_ownership[idx];
             // IR formal lowering may classify bare non-Copy WJ params as Owned even when
             // body analysis converged Borrowed (Map keys). Do not let IR sync clobber
             // promoted/converged borrow metadata — call sites need `&` not `.clone()`.
-            if matches!(prior, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            if !spelled && matches!(prior, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
                 && matches!(mode, OwnershipMode::Owned)
                 && sig.formal_param_type(idx).is_some_and(|t| {
                     let bare = match t {
@@ -1165,7 +1182,7 @@ pub fn sync_ir_ownership_to_registry(
             }
             // Inverse: bare-pass / field-forward restore already set Owned Custom —
             // do not let IR MutRef (field moves misread as mutation) clobber it.
-            if matches!(prior, OwnershipMode::Owned)
+            if !spelled && matches!(prior, OwnershipMode::Owned)
                 && matches!(mode, OwnershipMode::MutBorrowed)
                 && sig.formal_param_type(idx).is_some_and(|t| {
                     matches!(t, Type::Custom(_))
@@ -1175,6 +1192,9 @@ pub fn sync_ir_ownership_to_registry(
                 continue;
             }
             sig.param_ownership[idx] = mode;
+            if let Some(flag) = sig.emitted_rust_ref_params.as_mut().and_then(|f| f.get_mut(idx)).filter(|_| spelled) {
+                *flag = matches!(mode, OwnershipMode::Borrowed);
+            }
             if matches!(mode, OwnershipMode::Owned)
                 && idx < sig.param_types.len()
                 && matches!(
@@ -1193,6 +1213,7 @@ pub fn sync_ir_ownership_to_registry(
             }
         }
         registry.add_function(base_key, sig);
+        }
     }
 }
 

@@ -1,0 +1,9 @@
+pub fn query_value(query: std::collections::HashMap<string, string>, key: string) -> Option<string> {
+    let wanted = key
+    for pair in query {
+        if pair.0 == wanted {
+            return Some(pair.1)
+        }
+    }
+    None
+}

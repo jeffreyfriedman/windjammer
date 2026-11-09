@@ -1,0 +1,51 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod lookup;
+
+// Re-export public items
+pub use lookup::*;
+// ==== lookup.rs ====
+use std::collections::HashMap;
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn query_value(query: &std::collections::HashMap<String, String>, key: String) -> Option<String> {
+    let wanted = key;
+    for pair in query {
+        if *pair.0 == wanted {
+            return Some(pair.1.clone());
+        }
+    }
+    None
+}
+
+// ==== main.rs ====
+use std::collections::HashMap;
+mod lookup;
+fn main() {
+    let mut q = HashMap::new();
+    q.insert(String::from("a"), String::from("1"));
+    q.insert(String::from("b"), String::from("2"));
+    let hit: String = match lookup::query_value(&q, String::from("b")) {
+        Some(v) => v,
+        None => String::from("none"),
+    };
+    let mut q2 = HashMap::new();
+    q2.insert(String::from("a"), String::from("1"));
+    let miss: String = match lookup::query_value(&q2, String::from("z")) {
+        Some(v) => v,
+        None => String::from("none"),
+    };
+    println!("{} {}", hit, miss);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod lookup;
+
+// Re-export public items
+pub use lookup::*;

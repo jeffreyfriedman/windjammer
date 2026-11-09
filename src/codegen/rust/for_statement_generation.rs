@@ -412,7 +412,7 @@ impl<'ast> CodeGenerator<'ast> {
             match pattern {
                 Pattern::Identifier(var) => {
                     let elem_type = if tracks_borrowed_loop_var {
-                        Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                        self.wrap_for_loop_binding_as_borrowed(iterable, elem_type)
                     } else {
                         elem_type
                     };
@@ -435,7 +435,7 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => {
                     if let Some(var) = &loop_var {
                         let elem_type = if tracks_borrowed_loop_var {
-                            Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                            self.wrap_for_loop_binding_as_borrowed(iterable, elem_type)
                         } else {
                             elem_type
                         };
@@ -448,7 +448,7 @@ impl<'ast> CodeGenerator<'ast> {
                 match pattern {
                     Pattern::Identifier(var) => {
                         let elem_type = if tracks_borrowed_loop_var {
-                            Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                            self.wrap_for_loop_binding_as_borrowed(iterable, elem_type)
                         } else {
                             elem_type
                         };
@@ -471,7 +471,7 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => {
                         if let Some(var) = &loop_var {
                             let elem_type = if tracks_borrowed_loop_var {
-                                Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                                self.wrap_for_loop_binding_as_borrowed(iterable, elem_type)
                             } else {
                                 elem_type
                             };

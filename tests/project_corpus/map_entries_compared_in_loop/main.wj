@@ -1,0 +1,23 @@
+// A public lookup iterates a map parameter and compares each entry's key with an owned string; over a
+// borrowed map the entry parts are references. Expected by hand: the value for "b", then none.
+// expect: 2 none
+mod lookup
+
+use std::collections::HashMap
+
+fn main() {
+    let mut q = HashMap::new()
+    q.insert("a", "1")
+    q.insert("b", "2")
+    let hit = match lookup::query_value(q, "b") {
+        Some(v) => v,
+        None => "none",
+    }
+    let mut q2 = HashMap::new()
+    q2.insert("a", "1")
+    let miss = match lookup::query_value(q2, "z") {
+        Some(v) => v,
+        None => "none",
+    }
+    println("${hit} ${miss}")
+}
