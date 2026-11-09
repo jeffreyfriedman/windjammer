@@ -10,6 +10,7 @@
 //! function; a host that dies mid-call is an error naming the function and how it died.
 
 pub mod gen;
+pub mod handle;
 pub mod process;
 pub mod sig;
 pub mod stub;
@@ -37,6 +38,10 @@ pub struct CrateHost {
     process: RefCell<process::HostProcess>,
     /// `--simulate` answers for functions that are not `@pure`: `crate::fn` -> result (effect-log JSON).
     stubs: HashMap<String, Json>,
+    /// Ids of opaque values whose last handle is gone, sent before the next call.
+    release: handle::ReleaseQueue,
+    /// `crate::Type` -> the interpreter's name of the type (`Type`), interned once per host.
+    type_names: HashMap<String, &'static str>,
 }
 
 impl CrateHost {
@@ -44,11 +49,20 @@ impl CrateHost {
         let mut crates: Vec<String> = sigs.iter().map(|s| s.krate.clone()).collect();
         crates.sort();
         crates.dedup();
+        let type_names = gen::handle_types(&sigs)
+            .into_iter()
+            .map(|q| {
+                let short: &'static str = Box::leak(q.rsplit("::").next().unwrap_or(&q).to_string().into_boxed_str());
+                (q, short)
+            })
+            .collect();
         CrateHost {
             sigs: sigs.into_iter().map(|s| (s.path(), s)).collect(),
             crates,
             process: RefCell::new(process::HostProcess::new(exe, key)),
             stubs: HashMap::new(),
+            release: Default::default(),
+            type_names,
         }
     }
 
@@ -64,6 +78,27 @@ impl CrateHost {
 
     pub fn serves_crate(&self, name: &str) -> bool {
         self.crates.iter().any(|c| c == name)
+    }
+
+    /// A handle value for an object the host just returned.
+    fn handle_value(&self, qual: &str, id: u64) -> Value {
+        let name = self.type_names.get(qual).copied().unwrap_or("handle");
+        handle::value(qual, name, id, Some(self.release.clone()))
+    }
+
+    /// Send the queued releases (one frame for all of them). A failure here surfaces on the next real call.
+    fn flush_releases(&self) {
+        let ids: Vec<u64> = match self.release.lock() {
+            Ok(mut q) if !q.is_empty() => std::mem::take(&mut *q),
+            _ => return,
+        };
+        let mut req = Vec::new();
+        let ids = Value::vec(ids.into_iter().map(|i| Value::Int(i as i128, super::int::IntTy::U64)).collect());
+        if wire::encode(&Value::str("__wj_release"), &WireTy::Str, &mut req).is_ok()
+            && wire::encode(&ids, &WireTy::Vec(Box::new(WireTy::Int("u64"))), &mut req).is_ok()
+        {
+            let _ = self.process.borrow_mut().call(&req);
+        }
     }
 
     /// Calls sent to the host process so far (replayed calls are not sent).
@@ -82,6 +117,18 @@ impl Interpreter {
         self.crate_host = Some(Rc::new(h));
     }
 
+    /// The same host for several interpreters on one thread (one process for a whole `wj test` run).
+    pub fn attach_shared_crate_host(&mut self, h: Rc<CrateHost>) {
+        self.crate_host = Some(h);
+    }
+
+    /// `crate::Type::method` when `recv` is a handle to an opaque crate value whose surface declares `method`.
+    pub(crate) fn crate_method_path(&self, recv: &Value, method: &str) -> Option<String> {
+        let (qual, _) = handle::parts(recv)?;
+        let path = format!("{qual}::{method}");
+        self.is_crate_fn(&path).then_some(path)
+    }
+
     /// Is `path` (`strsim::levenshtein`) a crate function the attached host serves?
     pub(crate) fn is_crate_fn(&self, path: &str) -> bool {
         self.crate_host.as_ref().is_some_and(|h| h.serves(path))
@@ -98,7 +145,7 @@ impl Interpreter {
                 Expression::Unary { op: UnaryOp::MutRef, operand, .. } => *operand,
                 _ => *a,
             };
-            if sig.params.get(i).is_some_and(|(_, p, _)| *p == Pass::BorrowMut) {
+            if sig.params.get(i).is_some_and(|(_, p, t)| *p == Pass::BorrowMut && !matches!(t, WireTy::Handle(_))) {
                 if let Some(p) = self.resolve_place(inner)? {
                     out.push(Value::Ref(Box::new(p)));
                     continue;
@@ -129,11 +176,17 @@ impl Interpreter {
         }
         let mut places = Vec::new();
         let mut plain = Vec::with_capacity(args.len());
-        for (a, (_, pass, _)) in args.into_iter().zip(&sig.params) {
-            if *pass == Pass::BorrowMut {
+        for (i, (a, (_, pass, t))) in args.into_iter().zip(&sig.params).enumerate() {
+            if *pass == Pass::BorrowMut && !matches!(t, WireTy::Handle(_)) {
                 places.push(a.clone());
             }
-            plain.push(super::place::deref_value(a)?);
+            let v = super::place::deref_value(a)?;
+            // `T: AsRef<[u8]>` takes a string too: its UTF-8 bytes, as the compiled call passes them
+            let v = match v {
+                Value::Str(s) if sig.bytes_or_str.contains(&i) => Value::vec(s.bytes().map(|b| Value::Int(b as i128, super::int::IntTy::U8)).collect()),
+                v => v,
+            };
+            plain.push(v);
         }
         let result = match self.port_kind() {
             None => self.crate_call_live(&host, &sig, &plain)?,
@@ -175,6 +228,7 @@ impl Interpreter {
         }
         // the crate writes to the same stdout as the program: keep the order the compiled program has
         self.flush();
+        host.flush_releases();
         let reply = host.process.borrow_mut().call(&req);
         let body = match reply {
             Ok(process::Reply::Values(b)) => b,
@@ -186,8 +240,9 @@ impl Interpreter {
         let mut inp = &body[..];
         let n = u32::from_le_bytes(inp.get(..4).and_then(|b| b.try_into().ok()).ok_or_else(|| semantic(format!("`{path}`: empty reply")))?);
         inp = &inp[4..];
-        let ret = wire::decode(&mut inp, &sig.ret).map_err(|m| semantic(format!("`{path}`: {m}")))?;
-        let muts: Vec<&WireTy> = sig.params.iter().filter(|(_, p, _)| *p == Pass::BorrowMut).map(|(_, _, t)| t).collect();
+        let mk = |q: &str, id: u64| host.handle_value(q, id);
+        let ret = wire::decode_with(&mut inp, &sig.ret, &mk).map_err(|m| semantic(format!("`{path}`: {m}")))?;
+        let muts: Vec<&WireTy> = sig.params.iter().filter(|(_, p, t)| *p == Pass::BorrowMut && !matches!(t, WireTy::Handle(_))).map(|(_, _, t)| t).collect();
         if n as usize != 1 + muts.len() {
             return Err(semantic(format!("`{path}`: the crate host sent {n} values, expected {}", 1 + muts.len())));
         }
@@ -196,7 +251,7 @@ impl Interpreter {
         }
         let mut all = vec![ret];
         for t in muts {
-            all.push(wire::decode(&mut inp, t).map_err(|m| semantic(format!("`{path}`: {m}")))?);
+            all.push(wire::decode_with(&mut inp, t, &mk).map_err(|m| semantic(format!("`{path}`: {m}")))?);
         }
         Ok(Value::tuple(all))
     }
