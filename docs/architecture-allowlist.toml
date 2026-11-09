@@ -234,7 +234,7 @@
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
 "src/compiler/compilation_pipeline.rs::build_project_with_config" = 348
 "src/compiler/library_copy_registry.rs::collect_global_enum_variant_types_for_library" = 359
-"src/compiler/library_multipass.rs::build_library_multipass" = 1401
+"src/compiler/library_multipass.rs::build_library_multipass" = 1399
 "src/file_compilation_pipeline.rs::compile_file_impl" = 401
 "src/interpreter/builtins/option.rs::register" = 313
 "src/interpreter/builtins/seq.rs::register_vec" = 357

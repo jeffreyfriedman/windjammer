@@ -1,0 +1,57 @@
+// ==== build.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::shape::Shape;
+use crate::shape::size;
+#[inline]
+pub fn total() -> f32 {
+    size(Shape::Sphere(0.5_f32)) + size(Shape::Cone(1.0_f32, 2.0_f32)) + size(Shape::Point)
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod build;
+pub mod shape;
+
+// Re-export public items
+pub use build::*;
+pub use shape::*;
+// ==== main.rs ====
+mod shape;
+mod build;
+fn main() {
+    println!("{}", build::total());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod build;
+pub mod shape;
+
+// Re-export public items
+pub use build::*;
+pub use shape::*;
+// ==== shape.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum Shape {
+    Sphere(f32),
+    Cone(f32, f32),
+    Point,
+}
+
+#[inline]
+pub fn size(s: Shape) -> f32 {
+    match s {
+        Shape::Sphere(r) => r,
+        Shape::Cone(a, b) => a + b,
+        Shape::Point => 0.0_f32,
+    }
+}
+

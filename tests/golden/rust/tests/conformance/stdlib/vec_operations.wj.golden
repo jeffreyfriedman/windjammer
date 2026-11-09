@@ -59,7 +59,7 @@ fn test_vec_empty() {
 
 #[inline]
 fn test_vec_nested() {
-    let mut matrix = vec![vec![1_i32, 2_i32, 3_i32], vec![4_i32, 5_i32, 6_i32], vec![7_i32, 8_i32, 9_i32]];
+    let mut matrix = vec![vec![1_i64, 2_i64, 3_i64], vec![4_i64, 5_i64, 6_i64], vec![7_i64, 8_i64, 9_i64]];
     println!("[vec_nested] matrix[0][0]={}, matrix[1][1]={}, matrix[2][2]={}", matrix[0][0], matrix[1][1], matrix[2][2]);
 }
 

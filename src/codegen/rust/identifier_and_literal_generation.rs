@@ -16,10 +16,13 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'_>,
         target: &Expression<'_>,
     ) -> bool {
+        // A struct field or element that holds a Windjammer `string` holds an owned `String` (`p.status = STATUS_POSTED`,
+        // with the struct declared in another module whose field type is not in scope here).
         self.expression_is_static_str_value(value)
-            && self
-                .infer_expression_type(target)
-                .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t))
+            && (matches!(target, Expression::FieldAccess { .. } | Expression::Index { .. })
+                || self
+                    .infer_expression_type(target)
+                    .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t)))
     }
 
     /// `expr` is a module `const NAME: string` (or a `let s = "lit"` binding): emitted as a

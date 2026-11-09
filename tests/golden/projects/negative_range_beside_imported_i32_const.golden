@@ -1,0 +1,52 @@
+// ==== build.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::grid::SIZE;
+#[inline]
+pub fn put(x: i32) -> i32 {
+    x
+}
+
+#[inline]
+pub fn total() -> i32 {
+    let cx = SIZE / 2_i32;
+    let mut sum = 0_i32;
+    for dx in -1_i32..1_i32 {
+        sum += put(cx + dx);
+    }
+    sum
+}
+
+// ==== grid.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const SIZE: i32 = 64_i32;
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod build;
+pub mod grid;
+
+// Re-export public items
+pub use build::*;
+pub use grid::*;
+// ==== main.rs ====
+mod grid;
+mod build;
+fn main() {
+    println!("{}", build::total());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod build;
+pub mod grid;
+
+// Re-export public items
+pub use build::*;
+pub use grid::*;
