@@ -101,9 +101,9 @@ fn main() {
     show_str("");
     show_interp("x");
     show_interp("yz");
-    show_vec("1 2 3 4 5 6", vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64, 6_i64]);
-    show_vec("7 9", vec![7_i64, 9_i64]);
-    show_vec("10", vec![10_i64]);
+    show_vec("1 2 3 4 5 6", &vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64, 6_i64]);
+    show_vec("7 9", &vec![7_i64, 9_i64]);
+    show_vec("10", &vec![10_i64]);
     show_method(4_i64);
     show_method(0_i64);
     show_method(-3_i64);
@@ -173,9 +173,9 @@ fn show_interp(name: &str) {
 }
 
 #[inline]
-fn show_vec(label: &str, v: Vec<i64>) {
+fn show_vec(label: &str, v: &Vec<i64>) {
     let a = total(&evens(&v));
-    let b = total(&scale(&evens(&v), 3_i64));
+    let b = total(&scale(&evens(v), 3_i64));
     println!("[pipe_vec] {} -> {} | {}", label, a, b);
 }
 

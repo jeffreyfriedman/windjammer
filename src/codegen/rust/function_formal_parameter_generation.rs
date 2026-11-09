@@ -73,6 +73,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name == "self" {
                     return self.self_receiver(analyzed).unwrap_or("&self").to_string();
                 }
+                if let Some(formal) = self.ir_value_formal(param, analyzed, func.is_pub, unused_params) {
+                    return formal;
+                }
                 if param.name != "self"
                     && (self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
                         || self.param_used_via_explicit_user_clone(
@@ -100,21 +103,6 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
-                {
-                    self.inferred_borrowed_params.remove(&param.name);
-                    self.inferred_mut_borrowed_params.remove(&param.name);
-                    self.emitted_rust_ref_formals.remove(&param.name);
-                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
-                }
-                // Vec that only forwards as a call argument keeps the WJ owned
-                // formal even when the next sibling already demoted (`median_pair: &Vec`).
-                // Reuse sites clone into this slot; do not cascade `&Vec` up the chain.
-                if param.name != "self"
-                    && self.vec_formal_only_forwards_as_call_arg(param, func)
-                    && !matches!(
-                        &param.type_,
-                        Type::Reference(_) | Type::MutableReference(_)
                     )
                 {
                     self.inferred_borrowed_params.remove(&param.name);

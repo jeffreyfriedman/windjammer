@@ -212,6 +212,7 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C5 receiver arms deleted: one `self_receiver` spelling rule (IR mode; trait mode in trait impls) | d76a87198 | ~620 | ~60 | D-OWN-STAGES 9 -> 9 (the deleted arms ran only where codegen and the IR already agreed); DownstreamApp api-check ownership errors 3 -> 1; ratchet 44 -> 43 (one stale entry) |
 | C5: delete name-gated debug traces (formal parameters `grid`/`do_work`, passthrough `clear`/`place`/`Cache`); one CLONE-USE-AFTER-MOVE decision with a `MoveSite` | this branch | ~70 | ~15 | H-NAME-MATCHES 647 -> 642 |
 | O4: the `@string_ref` / `@str_ref` pins are one AST fact (`Parameter::pins_string_ref` / `pins_str_ref`), not 17 decorator-name comparisons in the formal-parameter and analyzer code | this branch | ~25 | ~16 | H-NAME-MATCHES 642 -> 625 |
+| O4: plain value formals (non-Copy user types and collections, declared by value, no pattern or pin) are spelled from the IR mode (`ir_value_formal`); the Vec-forwarding keep-owned branch is deleted | this branch | 15 | ~40 | D-OWN-STAGES 9 -> 8; project_rejects 4 -> 3 (`bare_pass_vec_reader` compiles) |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 
