@@ -11,7 +11,7 @@ pub fn encode(n: i64) -> Vec<i64> {
 }
 
 #[inline]
-pub fn frame_len(buf: Vec<i64>) -> i64 {
+pub fn frame_len(buf: &Vec<i64>) -> i64 {
     buf.len() as i64
 }
 
@@ -26,8 +26,8 @@ pub use codec::*;
 // ==== main.rs ====
 mod codec;
 fn main() {
-    let a = codec::frame_len(codec::encode(3_i64));
-    let b = codec::frame_len(codec::encode(5_i64));
+    let a = codec::frame_len(&codec::encode(3_i64));
+    let b = codec::frame_len(&codec::encode(5_i64));
     println!("{} {}", a, b);
 }
 
