@@ -1,0 +1,8 @@
+use crate::cell::Cell
+
+pub fn adjusted(cells: Vec<Cell>) -> i32 {
+    let w = cells[0].weight
+    let d = if w > 3 { -1 } else { 1 }
+    let t = w + d
+    t
+}

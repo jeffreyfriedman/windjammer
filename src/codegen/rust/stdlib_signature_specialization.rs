@@ -164,11 +164,11 @@ fn substitute_type(ty: &Type, subst: &[(String, Type)]) -> Type {
     }
 }
 
-/// Infer a concrete receiver `Type` for specialization when only a type name is known.
-pub fn receiver_type_from_name_and_hint(
+/// A concrete receiver `Type` for specialization: the inferred type, or the type the name spells (`Vec<int>`). A bare
+/// name is not completed from other context (the enclosing function's return type says nothing about a receiver).
+pub fn receiver_type_from_name(
     receiver_type_name: Option<&str>,
     inferred: Option<&Type>,
-    return_type_hint: Option<&Type>,
 ) -> Option<Type> {
     if let Some(ty) = inferred {
         if collection_generic_subst(ty).is_some() {
@@ -178,23 +178,6 @@ pub fn receiver_type_from_name_and_hint(
     if let Some(name) = receiver_type_name {
         if let Some((base, args)) = parse_angled_type_args(name) {
             return Some(Type::Parameterized(base, args));
-        }
-        // Unparameterized `Vec` / `HashMap`: recover args from function return type.
-        if let Some(ret) = return_type_hint {
-            if let Some(subst_src) = match (name, peel_ref(ret)) {
-                ("Vec", Type::Vec(_)) => Some(ret.clone()),
-                ("Vec", Type::Parameterized(n, _)) if n == "Vec" => Some(ret.clone()),
-                (map, Type::Parameterized(n, _))
-                    if map == n
-                        || (crate::type_classification::is_map_type_name(map)
-                            && crate::type_classification::is_map_type_name(n)) =>
-                {
-                    Some(ret.clone())
-                }
-                _ => None,
-            } {
-                return Some(subst_src);
-            }
         }
         // Bare name only — insufficient for substitution.
         return Some(Type::Custom(name.to_string()));
@@ -283,19 +266,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn receiver_hint_from_return_type_vec_string() {
-        let hint = receiver_type_from_name_and_hint(
-            Some("Vec"),
-            None,
-            Some(&Type::Vec(Box::new(Type::String))),
-        );
-        assert!(matches!(hint, Some(Type::Vec(_))));
-        let mut sig = vec_push_sig();
-        specialize_signature_for_receiver(&mut sig, &hint.unwrap());
-        assert!(matches!(
-            sig.param_types.get(sig.arg_param_index(0)),
-            Some(Type::String)
-        ));
-    }
 }
