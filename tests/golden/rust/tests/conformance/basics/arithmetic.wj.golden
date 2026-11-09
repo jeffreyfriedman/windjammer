@@ -5,9 +5,9 @@ fn main() {
     println!("[sub] {}", b);
     let c = 42_i64;
     println!("[mul] {}", c);
-    let d = 5_i32;
+    let d = 5_i64;
     println!("[div] {}", d);
-    let e = 1_i32;
+    let e = 1_i64;
     println!("[mod] {}", e);
     let f = -10_i64;
     println!("[neg] {}", f);

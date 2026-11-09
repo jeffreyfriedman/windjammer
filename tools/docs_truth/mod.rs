@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+pub mod book;
+pub mod book_projects;
 pub mod claims;
 pub mod config;
 pub mod ebnf;
@@ -81,6 +83,7 @@ pub fn run_all(ctx: &Ctx) -> Vec<Finding> {
     out.extend(fences::check_all(ctx, &cfg));
     out.extend(links::check_all(ctx, &cfg));
     out.extend(claims::check_all(ctx, &cfg));
+    out.extend(book::check_all(ctx, &cfg));
     out.extend(freshness::check_all(ctx, &cfg));
     out.extend(proposal::check_all(ctx));
     out.extend(ebnf::check_all(ctx, &cfg));

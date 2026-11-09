@@ -1,0 +1,6 @@
+use crate::shape::Shape
+use crate::shape::size
+
+pub fn total() -> f32 {
+    size(Shape::Sphere(0.5)) + size(Shape::Cone(1.0, 2.0)) + size(Shape::Point)
+}

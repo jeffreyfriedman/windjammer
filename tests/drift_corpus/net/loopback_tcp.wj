@@ -1,0 +1,124 @@
+// Raw TCP on loopback (ADR-0032): echo, partial reads, half close, timeouts, connection refused.
+// One task: `connect` completes from the listen backlog before `accept`, so client and server can take turns.
+use std::net::TcpListener
+use std::net::TcpStream
+
+fn bytes(n: int) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new()
+    for i in 0..n {
+        out.push((i + 1) as u8)
+    }
+    out
+}
+
+fn echo() -> Result<(), string> {
+    let server = TcpListener::bind("127.0.0.1:0")?
+    let mut client = TcpStream::connect(server.local_addr())?
+    let mut conn = server.accept()?
+    client.write_str("hello\nworld\n")?
+    client.flush()?
+    let a = conn.read_line()?
+    let b = conn.read_line()?
+    println("server read ${a.trim()} and ${b.trim()}")
+    conn.write_str(a.to_uppercase())?
+    let back = client.read_line()?
+    println("client read ${back.trim()}")
+    println("peer is loopback: ${conn.peer_addr().starts_with("127.0.0.1:")}")
+    println("addresses agree: ${client.peer_addr() == server.local_addr()}")
+    Ok(())
+}
+
+fn partial_reads() -> Result<(), string> {
+    let server = TcpListener::bind("127.0.0.1:0")?
+    let mut client = TcpStream::connect(server.local_addr())?
+    let mut conn = server.accept()?
+    client.write_all(bytes(10))?
+    let head = conn.read_exact(4)?
+    let tail = conn.read_exact(6)?
+    println("read_exact ${head.len()}+${tail.len()}: first ${head[0]} last ${tail[5]}")
+    client.write_str("ab")?
+    let some = conn.read(64)?
+    println("read up to 64 got ${some.len()}")
+    Ok(())
+}
+
+fn half_close() -> Result<(), string> {
+    let server = TcpListener::bind("127.0.0.1:0")?
+    let mut client = TcpStream::connect(server.local_addr())?
+    let mut conn = server.accept()?
+    client.write_str("abcde")?
+    client.shutdown_write()?
+    let mut total = 0
+    let mut chunks = 0
+    loop {
+        let chunk = conn.read(2)?
+        if chunk.len() == 0 {
+            break
+        }
+        total = total + chunk.len()
+        chunks = chunks + 1
+    }
+    println("server saw ${total} bytes in ${chunks} reads, then end of stream")
+    conn.write_str("got ${total}\n")?
+    conn.shutdown()?
+    let reply = client.read_line()?
+    let after = client.read_line()?
+    println("client read ${reply.trim()}, then ${after.len()} bytes")
+    match conn.read_exact(1) {
+        Ok(_) => println("read after shutdown: data"),
+        Err(e) => println("read after shutdown: error"),
+    }
+    Ok(())
+}
+
+fn timeouts() -> Result<(), string> {
+    let server = TcpListener::bind("127.0.0.1:0")?
+    let mut client = TcpStream::connect(server.local_addr())?
+    let mut conn = server.accept()?
+    conn.set_timeouts(50, 0)?
+    match conn.read(8) {
+        Ok(b) => println("read without data returned ${b.len()} bytes"),
+        Err(e) => println("read without data: ${e}"),
+    }
+    match conn.read_line() {
+        Ok(l) => println("read_line without data returned ${l}"),
+        Err(e) => println("read_line without data: ${e}"),
+    }
+    client.write_str("late\n")?
+    let l = conn.read_line()?
+    println("after the timeout the stream still works: ${l.trim()}")
+    Ok(())
+}
+
+fn closed_port() -> Result<string, string> {
+    let l = TcpListener::bind("127.0.0.1:0")?
+    Ok(l.local_addr())
+}
+
+fn refused() -> Result<(), string> {
+    let addr = closed_port()?
+    match TcpStream::connect(addr) {
+        Ok(_) => println("connect to a closed port succeeded"),
+        Err(e) => println("connect to a closed port: ${e}"),
+    }
+    match TcpStream::connect("127.0.0.1") {
+        Ok(_) => println("connect without a port succeeded"),
+        Err(e) => println("connect without a port: ${e}"),
+    }
+    Ok(())
+}
+
+fn report(name: string, r: Result<(), string>) {
+    match r {
+        Ok(_) => println("${name}: ok"),
+        Err(e) => println("${name}: FAILED ${e}"),
+    }
+}
+
+fn main() {
+    report("echo", echo())
+    report("partial reads", partial_reads())
+    report("half close", half_close())
+    report("timeouts", timeouts())
+    report("refused", refused())
+}

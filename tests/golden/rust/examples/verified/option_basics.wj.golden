@@ -20,6 +20,6 @@ fn main() {
     println!("{}", Some(3).unwrap_or(0));
     let nothing: Option<i64> = None;
     println!("{}", nothing.unwrap_or(0_i64));
-    println!("{} {}", Some(1).is_some(), nothing.is_some());
+    println!("{} {}", Some(1_i64).is_some(), nothing.is_some());
 }
 

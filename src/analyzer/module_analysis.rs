@@ -150,6 +150,10 @@ impl<'ast> Analyzer<'ast> {
                 Item::Const { name, type_, .. } | Item::Static { name, type_, .. } => {
                     std::sync::Arc::make_mut(&mut self.module_const_types).insert(name.clone(), type_.clone());
                 }
+                Item::TypeAlias { name, type_params, target, .. } => {
+                    let params = type_params.iter().map(|p| p.name.clone()).collect();
+                    std::sync::Arc::make_mut(&mut self.type_aliases).insert(name.clone(), (params, target.clone()));
+                }
                 _ => {}
             }
         }

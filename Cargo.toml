@@ -385,6 +385,12 @@ path = "tests/effects_packages_test.rs"
 name = "effects_soundness"
 path = "tests/effects_soundness_test.rs"
 
+# The Windjammer Book: structure, links, samples run interpreted and compiled: cargo test --release --test book
+[[test]]
+name = "book"
+path = "tests/book_test.rs"
+required-features = ["cli"]
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"
