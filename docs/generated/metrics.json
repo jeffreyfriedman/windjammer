@@ -10,7 +10,7 @@
     "book.features_uncovered": 0,
     "book.pages": 44,
     "book.promises_uncovered": 0,
-    "cli.subcommands": 38,
+    "cli.subcommands": 39,
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
@@ -22,6 +22,6 @@
     "lints.w_codes": 7,
     "stdlib.files": 43,
     "tests.rust_files": 2004,
-    "tests.wj_programs": 1932
+    "tests.wj_programs": 1940
   }
 }
