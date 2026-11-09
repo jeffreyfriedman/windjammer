@@ -1,10 +1,14 @@
 // A `string` constant declared in one file and imported into another is owned where a `string` value is
 // stored: a struct field and a list element (the constant's declared type crosses the module boundary).
+// The same constant assigned to a field and mixed with an owned value in an untyped list.
 // expect: read write 2
+// expect: write 2
 mod names
 mod grants
 
 fn main() {
     let g = grants::default_grant()
     println("${g.scope} ${g.extra[0]} ${g.extra.len()}")
+    let w = grants::widened(g)
+    println("${w.scope} ${grants::label_count()}")
 }

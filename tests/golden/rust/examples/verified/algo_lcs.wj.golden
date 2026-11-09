@@ -3,7 +3,7 @@ fn lcs(a: &str, b: &str) -> i64 {
     let y: Vec<char> = b.chars().collect::<Vec<char>>();
     let mut dp: Vec<Vec<i64>> = vec![];
     for _ in 0_usize..=x.len() {
-        dp.push(vec![0_i64; 8_i64]);
+        dp.push(vec![0_i64; 8_usize]);
     }
     for i in 0_usize..x.len() {
         for j in 0_usize..y.len() {

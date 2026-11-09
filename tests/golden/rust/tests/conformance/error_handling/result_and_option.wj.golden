@@ -47,7 +47,7 @@ fn double_option(opt: Option<i64>) -> Option<i64> {
 
 #[inline]
 fn test_option_map() {
-    let result = double_option(Some(5_i32));
+    let result = double_option(Some(5_i64));
     match result {
         Some(v) => println!("[option_map] Some(5) mapped -> {}", v),
         None => println!("[option_map] None"),

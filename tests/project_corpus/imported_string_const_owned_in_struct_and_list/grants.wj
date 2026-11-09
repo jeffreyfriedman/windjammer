@@ -9,3 +9,15 @@ pub struct Grant {
 pub fn default_grant() -> Grant {
     Grant { scope: SCOPE_READ, extra: vec![SCOPE_WRITE, SCOPE_READ] }
 }
+
+pub fn widened(g: Grant) -> Grant {
+    let mut h = g
+    h.scope = SCOPE_WRITE
+    h
+}
+
+pub fn label_count() -> int {
+    let first = SCOPE_WRITE + "!"
+    let labels = vec![first, SCOPE_READ]
+    labels.len() as int
+}

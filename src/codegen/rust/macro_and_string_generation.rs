@@ -301,12 +301,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 return self.coerce_vec_macro_element(&args[idx], s, exp_ty);
                             }
                         }
-                        // Untyped vec!: keep legacy string-literal-only coercion.
+                        // Untyped vec!: Windjammer text elements are owned `String`s (a string literal, or a module
+                        // `const …: string`, which lowers to `&'static str`), like every other `string` value.
                         if idx < args.len() {
-                            if let Expression::Literal {
-                                value: Literal::String(_),
-                                ..
-                            } = &args[idx]
+                            if matches!(args[idx], Expression::Literal { value: Literal::String(_), .. })
+                                || self.expression_is_static_str_value(args[idx])
                             {
                                 if !s.ends_with(".to_string()") {
                                     return format!("{}.to_string()", s);

@@ -6,8 +6,8 @@ fn eval_rpn(expr: &str) -> Result<i64, String> {
             if stack.len() < 2_usize {
                 return Err(String::from("stack underflow"));
             }
-            let b = stack.pop().unwrap_or(0_i64);
-            let a = stack.pop().unwrap_or(0_i64);
+            let b = stack.pop().unwrap_or(0);
+            let a = stack.pop().unwrap_or(0);
             let r = match tok.as_str() {
                 "+" => a + b,
                 "-" => a - b,
