@@ -11,7 +11,7 @@ use std::path::Path;
 
 const OS_TOKENS: &[&str] = &[
     "std::fs::", "std::env::var", "std::env::set_var", "std::env::remove_var", "std::env::vars", "Command::new", "reqwest::", "TcpListener::bind",
-    "SqlitePoolOptions::new", "tokio::net::", "net_core::",
+    "SqlitePoolOptions::new", "tokio::net::", "net_core::resolve_once", "net_core::Listener::bind", "net_core::Datagrams::bind",
 ];
 
 /// Public functions that read or act on the OS but are deliberately not capabilities (information about the
@@ -164,6 +164,10 @@ fn the_fd_verified_writes_act_through_the_checked_parent() {
 fn the_addr_verified_connects_use_one_resolution() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = std::fs::read_to_string(root.join("crates/windjammer-runtime/src/platform/native/net.rs")).unwrap();
+    // only `impl TcpStream` (other types of the module have methods of the same names)
+    let at = src.find("\nimpl TcpStream {").expect("impl TcpStream in the native net runtime");
+    let body = &src[at..];
+    let src = &body[..body[1..].find("\n}\n").map_or(body.len(), |e| e + 3)];
     let cs = chunks(&src);
     for path in windjammer::ir::effect_facts::sinks::ADDR_VERIFIED_CONNECTS {
         let name = path.rsplit("::").next().unwrap();

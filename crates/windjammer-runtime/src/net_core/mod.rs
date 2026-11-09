@@ -336,11 +336,11 @@ mod tests {
         let l = Listener::bind("127.0.0.1:0").unwrap();
         let mut c = connect_resolved(&resolve_once(&l.local_addr()).unwrap(), None).unwrap();
         let mut s = l.accept().unwrap();
+        c.set_timeouts(2000, 0).unwrap();
         c.shutdown_write().unwrap();
         assert_eq!(s.read(8).unwrap(), b"");
         s.write_all(b"bye\n").unwrap();
         s.shutdown().unwrap();
-        c.set_timeouts(2000, 0).unwrap();
         assert_eq!(c.read_line().unwrap(), "bye\n");
         assert_eq!(c.read_line().unwrap(), "", "the peer must see end of stream, not a timeout");
     }

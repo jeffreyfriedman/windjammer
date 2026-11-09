@@ -32,14 +32,8 @@ pub struct World {
     tmp: String,
     /// The one salt stream of password hashing, so a hash is a function of the seed.
     salts: rand::rngs::StdRng,
-    /// This world's virtual network (`sim_net`): an id, so concurrent simulated runs never see each other's sockets.
-    pub(crate) net: u64,
-}
-
-impl Drop for World {
-    fn drop(&mut self) {
-        super::sim_net::drop_network(self.net);
-    }
+    /// This world's virtual network (`sim_net`): its own, so concurrent simulated runs never see each other's sockets.
+    pub(crate) net: super::sim_net::Network,
 }
 
 impl World {
