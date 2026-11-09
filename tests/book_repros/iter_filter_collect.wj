@@ -1,5 +1,0 @@
-fn main() {
-    let v = [5, 3, 8, 4]
-    let evens: Vec<int> = v.filter(|x| *x % 2 == 0).collect()
-    println("${evens:?}")
-}
