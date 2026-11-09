@@ -414,3 +414,32 @@ name = "rust-surface --fn conflicts with --all-pub"
 polarity = "negative"
 args = ["rust-surface", "tinycrate", "--fn", "double", "--all-pub"]
 exit = 2
+
+[[case]]
+name = "clean --sidecars rejects unexpected arguments"
+polarity = "negative"
+args = ["clean", "--sidecars", "extra"]
+exit = 2
+
+[[case]]
+name = "clean --yes rejects unexpected arguments"
+polarity = "negative"
+args = ["clean", "--yes", "extra"]
+exit = 2
+
+[[case]]
+name = "rust-surface --path fails when no project is found there"
+polarity = "negative"
+args = ["rust-surface", "tinycrate", "--path", "nowhere"]
+exit = 1
+output_has = ["no wj.toml found"]
+
+[[case]]
+name = "rust-surface --write refuses a crate that is not a dependency"
+polarity = "negative"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n" }
+cwd = "proj"
+args = ["rust-surface", "nosuchcrate", "--write"]
+exit = 1
+output_has = ["is not a [dependencies] entry"]
+absent = ["proj/rust/nosuchcrate.wji"]
