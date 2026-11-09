@@ -73,9 +73,9 @@ them and must agree. A new shape that rustc rejects is added as `must_refuse_<sh
 
 The differential corpus runs, besides the ecosystem tests, every repository program that has a `main`, deterministic
 output and no expected failure: `tests/conformance_programs`, `tests/conformance`, `tests/interpreter_corpus`,
-`tests/engine_parity`, `examples/verified` (358 programs), plus the value-position (10), move-shape (13) and repro (28)
-programs: 409 of the 1544 `.wj` files with a `main` outside the ecosystem snapshot (26 %). The 261 spec programs are run
-with their `// expect:` oracle by `scripts/wj/spec_oracle.wj` (about 43 % together). What is left is deliberate: the
+`tests/engine_parity` and `examples/verified`, plus the value-position, move-shape and repro programs. `drift_corpus.wj`
+prints the share of the repository's `.wj` programs with a `main` that it covers (outside the ecosystem snapshot). The spec programs are run
+with their `// expect:` oracle by `scripts/wj/spec_oracle.wj`. What is left is deliberate: the
 negative cases (`tests/check_negative`, diagnostics and effects fixtures, `// expect-error:` specs), programs that read
 stdin, the clock, randomness or the network, and seeded corpus templates (run by the cargo parity test). Each corpus
 program gets a `#accepted` row (the interpreter did not refuse it: it is compared with the compiled build accepting

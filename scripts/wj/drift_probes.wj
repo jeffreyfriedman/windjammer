@@ -200,7 +200,7 @@ fn fam_splits(st: int) -> string {
         listed = listed + "\"" + lit + "\", "
         i += 1
     }
-    "use std::strings\n\nfn show(parts: Vec<string>) -> string {\n    let mut out = \"@{parts.len()}:\"\n    for p in parts {\n        out = out + \"[\" + p + \"]\"\n    }\n    out\n}\n\nfn main() {\n    let inputs: Vec<string> = [@LIST]\n    for s in inputs {\n        println(show(strings.split_lines(s)))\n        println(show(strings.split(s, \"\\n\")))\n        println(show(strings.split(s, \" \")))\n        println(show(strings.split(s, \",\")))\n        println(show(strings.split_whitespace(s)))\n        println(\"[@{strings.trim(s)}] [@{strings.trim_start(s)}] [@{strings.trim_end(s)}]\")\n    }\n}\n"
+    "use std::strings\n\nfn show(parts: Vec<string>) -> string {\n    let mut out = \"@{parts.len()}:\"\n    for p in parts {\n        out = out + \"[\" + p + \"]\"\n    }\n    out\n}\n\nfn main() {\n    let inputs: Vec<string> = [@LIST]\n    for s in inputs {\n        println(show(strings.split_lines(s)))\n        println(show(strings.split(s, \"\\n\")))\n        println(show(strings.split(s, \" \")))\n        println(show(strings.split(s, \",\")))\n        println(show(strings.split_whitespace(s)))\n        println(\"[@{strings.trim(s)}] [@{strings.trim_start(s)}] [@{strings.trim_end(s)}]\")\n        println(\"[@{s.trim()}] [@{s.trim_start()}] [@{s.trim_end()}]\")\n    }\n}\n"
         .replace("@LIST", listed)
 }
 
