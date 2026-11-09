@@ -1,5 +1,11 @@
 //! Runtime types that are `Clone` through a hand-written impl rather than a derive.
 
+/// A runtime struct without a `Clone` derive or a hand-written `Clone` impl is non-Clone (no `.clone()`, and a user struct
+/// holding one derives neither Debug nor Clone).
+pub(super) fn is_non_clone(content: &str, name: &str, derives_clone: bool) -> bool {
+    !derives_clone && !implements_clone_by_hand(content, name)
+}
+
 /// `impl Clone for Name` / `impl<T> Clone for Name<T>` in the file: the type is Clone without a derive.
 pub(super) fn implements_clone_by_hand(content: &str, name: &str) -> bool {
     let needle = format!("Clone for {name}");
