@@ -115,11 +115,11 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="130"];
+  "analyzer" -> "parser" [label="132"];
   "analyzer" -> "stdlib_scanner" [label="2"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
-  "analyzer" -> "type_classification" [label="34"];
+  "analyzer" -> "type_classification" [label="35"];
   "analyzer" -> "type_inference" [label="1"];
   "auto_clone" -> "analyzer" [label="15"];
   "auto_clone" -> "codegen" [label="3",color=red,fontcolor=red];
@@ -368,8 +368,8 @@ digraph deps {
   "linter" -> "error" [label="3"];
   "linter" -> "intrinsics" [label="1",color=red,fontcolor=red];
   "linter" -> "lexer" [label="5"];
-  "linter" -> "parser" [label="31"];
-  "linter" -> "source_map" [label="5"];
+  "linter" -> "parser" [label="34"];
+  "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];
   "metadata" -> "analyzer" [label="29"];
   "metadata" -> "codegen" [label="5"];
