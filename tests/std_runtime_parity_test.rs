@@ -33,11 +33,40 @@ fn runtime_fns(src: &str) -> BTreeSet<String> {
     body.lines().filter_map(|l| fn_name(l, &["pub async fn ", "pub fn "])).collect()
 }
 
+/// The runtime source of a std module: the crate-root file, plus the native platform file (`platform/native/net.rs` is
+/// what `std::net` compiles to when there is no crate-root `net.rs`).
 fn runtime_source(module: &str) -> Option<String> {
     let base = root().join("crates/windjammer-runtime/src");
-    [format!("{module}.rs"), format!("{module}_mod.rs"), format!("{module}/mod.rs")]
+    let top = [format!("{module}.rs"), format!("{module}_mod.rs"), format!("{module}/mod.rs")]
         .iter()
-        .find_map(|f| std::fs::read_to_string(base.join(f)).ok())
+        .find_map(|f| std::fs::read_to_string(base.join(f)).ok());
+    let native = std::fs::read_to_string(base.join(format!("platform/native/{module}.rs"))).ok();
+    match (top, native) {
+        (None, None) => None,
+        (a, b) => Some(format!("{}\n{}", a.unwrap_or_default(), b.unwrap_or_default())),
+    }
+}
+
+/// Methods of each `impl Type {` block at column 0, as `Type::method` (a column-0 `}` ends the block).
+fn impl_methods(src: &str) -> BTreeSet<String> {
+    let body = src.split("#[cfg(test)]").next().unwrap_or(src);
+    let mut out = BTreeSet::new();
+    let mut ty: Option<String> = None;
+    for l in body.lines() {
+        if let Some(rest) = l.strip_prefix("impl ") {
+            let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+            ty = (!name.is_empty() && !rest.contains(" for ")).then_some(name);
+        } else if l.starts_with('}') {
+            ty = None;
+        } else if let Some(t) = &ty {
+            if l.starts_with("    pub ") {
+                if let Some(m) = fn_name(l.trim_start(), &["pub async fn ", "pub fn "]) {
+                    out.insert(format!("{t}::{m}"));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn current_gaps() -> BTreeSet<String> {
@@ -54,10 +83,20 @@ fn current_gaps() -> BTreeSet<String> {
     }
     let mut gaps = BTreeSet::new();
     for (module, path) in modules {
-        let declared = declared_fns(&std::fs::read_to_string(&path).unwrap());
-        let have = runtime_source(&module).map(|s| runtime_fns(&s)).unwrap_or_default();
+        let wj_src = std::fs::read_to_string(&path).unwrap();
+        let declared = declared_fns(&wj_src);
+        let rt_src = runtime_source(&module).unwrap_or_default();
+        let have = runtime_fns(&rt_src);
         for name in declared.difference(&have) {
             gaps.insert(format!("{module}::{name}"));
+        }
+        // the methods of every type the runtime implements: each declared method needs its compiled twin
+        let rt_methods = impl_methods(&rt_src);
+        let rt_types: BTreeSet<&str> = rt_methods.iter().filter_map(|m| m.split("::").next()).collect();
+        for m in impl_methods(&wj_src) {
+            if rt_types.contains(m.split("::").next().unwrap_or("")) && !rt_methods.contains(&m) {
+                gaps.insert(format!("{module}::{m}"));
+            }
         }
     }
     gaps
@@ -91,6 +130,21 @@ fn the_scanners_see_what_they_are_meant_to_see() {
     let have = runtime_fns("pub fn a() {}\nfn private() {}\n    pub fn in_impl(&self) {}\npub async fn c() {}\n#[cfg(test)]\nmod t { pub fn tested() {} }\n");
     assert_eq!(have, ["a", "c"].iter().map(|s| s.to_string()).collect());
     assert_eq!(declared.difference(&have).cloned().collect::<Vec<_>>(), vec!["b".to_string()]);
+    // methods: a declared method of a runtime type that the runtime lacks is visible; trait impls are not inherent methods
+    let wj = impl_methods("impl S {\n    pub fn a(self) {}\n    pub fn gone(self) {}\n}\n");
+    let rt = impl_methods("impl S {\n    pub fn a(&self) {}\n        pub fn nested() {}\n}\nimpl Display for S {\n    pub fn fmt(&self) {}\n}\n");
+    assert_eq!(rt, ["S::a".to_string()].into_iter().collect());
+    assert_eq!(wj.difference(&rt).cloned().collect::<Vec<_>>(), vec!["S::gone".to_string()]);
+}
+
+#[test]
+fn the_socket_types_have_every_declared_method_compiled() {
+    // ADR-0032: TcpStream, TcpListener and UdpSocket are complete in the compiled runtime, so none may be a gap
+    let gaps = current_gaps();
+    let socket_gaps: Vec<_> = gaps.iter().filter(|g| ["TcpStream", "TcpListener", "UdpSocket"].iter().any(|t| g.contains(t))).collect();
+    assert!(socket_gaps.is_empty(), "{socket_gaps:?}");
+    let declared = impl_methods(&std::fs::read_to_string(root().join("std/net/mod.wj")).unwrap());
+    assert!(declared.contains("TcpStream::read_exact") && declared.contains("UdpSocket::recv_from"), "the scanner must see the socket methods");
 }
 
 #[test]
