@@ -32,14 +32,22 @@ pub struct World {
     tmp: String,
     /// The one salt stream of password hashing, so a hash is a function of the seed.
     salts: rand::rngs::StdRng,
+    /// This world's virtual network (`sim_net`): an id, so concurrent simulated runs never see each other's sockets.
+    pub(crate) net: u64,
+}
+
+impl Drop for World {
+    fn drop(&mut self) {
+        super::sim_net::drop_network(self.net);
+    }
 }
 
 impl World {
     /// `cwd` is where relative paths resolve (the project directory, so the capability gate sees the same paths it would live);
     /// `tmp` is what `env::temp_dir()` returns (the run's granted scratch directory).
     pub fn new(cfg: &SimConfig, cwd: &Path, tmp: &Path) -> World {
-        super::sim_net::reset();
         World {
+            net: super::sim_net::new_network(),
             seed: cfg.seed,
             faults: cfg.faults.clamp(0.0, 1.0),
             frng: rand::rngs::StdRng::seed_from_u64(cfg.seed ^ 0xFA17_FA17_FA17_FA17),

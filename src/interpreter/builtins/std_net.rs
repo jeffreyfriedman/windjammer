@@ -13,8 +13,9 @@ use crate::interpreter::effect_port::{sim_net, Kind};
 use crate::interpreter::native::{downcast, Native};
 use crate::interpreter::net_core;
 use std::any::Any;
-use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 enum Live {
     Stream(net_core::Stream),
@@ -22,18 +23,27 @@ enum Live {
     Udp(net_core::Datagrams),
 }
 
-thread_local! {
-    static LIVE: RefCell<HashMap<i128, Live>> = RefCell::new(HashMap::new());
-    static NEXT: Cell<i128> = const { Cell::new(1) };
+/// Live sockets by handle id. Process-wide: interpreter tasks run on their own OS threads (one at a time).
+fn live_lock() -> &'static Mutex<HashMap<i128, Arc<Mutex<Live>>>> {
+    static LIVE: OnceLock<Mutex<HashMap<i128, Arc<Mutex<Live>>>>> = OnceLock::new();
+    LIVE.get_or_init(Default::default)
+}
+
+fn live_table() -> MutexGuard<'static, HashMap<i128, Arc<Mutex<Live>>>> {
+    live_lock().lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Run `f` on live socket `id`, holding only that socket (a blocking read never holds the table).
+fn on_live<T>(id: i128, f: impl FnOnce(&mut Live) -> T) -> Option<T> {
+    let s = live_table().get(&id).cloned()?;
+    let mut g = s.lock().unwrap_or_else(|p| p.into_inner());
+    Some(f(&mut g))
 }
 
 /// A fresh handle id (live and simulated handles share the sequence; replayed ones come from the log).
 pub(crate) fn next_id() -> i128 {
-    NEXT.with(|n| {
-        let id = n.get();
-        n.set(id + 1);
-        id
-    })
+    static NEXT: AtomicI64 = AtomicI64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed) as i128
 }
 
 /// A socket handle. Dropping the last copy closes it (the peer reads end of stream).
@@ -53,7 +63,9 @@ impl Native for Sock {
 
 impl Drop for Sock {
     fn drop(&mut self) {
-        let _ = LIVE.try_with(|t| t.try_borrow_mut().map(|mut t| t.remove(&self.id)));
+        // removed outside the lock: closing a socket never runs while the table is held
+        let gone = live_lock().try_lock().ok().and_then(|mut t| t.remove(&self.id));
+        drop(gone);
         sim_net::close(self.id);
     }
 }
@@ -130,10 +142,7 @@ fn handle(v: Value, kind: &'static str) -> R {
 }
 
 fn with_live<T>(id: i128, f: impl FnOnce(&mut Live) -> Result<T, String>) -> Result<T, String> {
-    LIVE.with(|t| match t.borrow_mut().get_mut(&id) {
-        Some(s) => f(s),
-        None => Err("not connected".to_string()),
-    })
+    on_live(id, f).unwrap_or_else(|| Err("not connected".to_string()))
 }
 
 fn live_stream<T>(a: &[Value], f: impl FnOnce(&mut net_core::Stream) -> Result<T, String>) -> Result<T, String> {
@@ -150,7 +159,7 @@ fn live_stream<T>(a: &[Value], f: impl FnOnce(&mut net_core::Stream) -> Result<T
 fn opened(r: Result<Live, String>) -> Value {
     result(r, |s| {
         let id = next_id();
-        LIVE.with(|t| t.borrow_mut().insert(id, s));
+        live_table().insert(id, Arc::new(Mutex::new(s)));
         int(id)
     })
 }
@@ -360,12 +369,12 @@ fn other_tasks(it: &Interpreter) -> bool {
 }
 
 fn live_ready(id: i128) -> bool {
-    LIVE.with(|t| match t.borrow().get(&id) {
-        Some(Live::Stream(s)) => s.ready(),
-        Some(Live::Listener(l)) => l.ready(),
-        Some(Live::Udp(u)) => u.ready(),
-        None => true,
+    on_live(id, |l| match l {
+        Live::Stream(s) => s.ready(),
+        Live::Listener(l) => l.ready(),
+        Live::Udp(u) => u.ready(),
     })
+    .unwrap_or(true)
 }
 
 /// A live run with other tasks: wait for the socket on the scheduler (other tasks run meanwhile) instead of blocking the
@@ -375,23 +384,25 @@ fn cooperate(it: &mut Interpreter, id: i128, done: impl Fn(&Live) -> bool) -> R<
     if it.port.is_some() || !other_tasks(it) {
         return Ok(());
     }
-    let timeout = LIVE.with(|t| match t.borrow().get(&id) {
-        Some(Live::Stream(s)) => s.read_timeout(),
-        Some(Live::Udp(u)) => u.read_timeout(),
-        _ => None,
-    });
+    let timeout = on_live(id, |l| match l {
+        Live::Stream(s) => s.read_timeout(),
+        Live::Udp(u) => u.read_timeout(),
+        Live::Listener(_) => None,
+    })
+    .flatten();
     let start = std::time::Instant::now();
     loop {
-        let finished = LIVE.with(|t| t.borrow().get(&id).map_or(true, &done));
+        let finished = on_live(id, |l| done(l)).unwrap_or(true);
         if finished || timeout.is_some_and(|d| start.elapsed() >= d) {
             return Ok(());
         }
         if live_ready(id) {
             // one read into the buffer: data (loop again) or end of stream (the operation sees it)
-            let got = LIVE.with(|t| match t.borrow_mut().get_mut(&id) {
-                Some(Live::Stream(s)) => s.pump().unwrap_or(0),
+            let got = on_live(id, |l| match l {
+                Live::Stream(s) => s.pump().unwrap_or(0),
                 _ => 0,
-            });
+            })
+            .unwrap_or(0);
             if got == 0 {
                 return Ok(());
             }
