@@ -127,7 +127,7 @@ Gates that keep them identical:
 - Line and binary protocol clients and servers are ordinary Windjammer, testable without a network.
 - TLS is out of scope (a later `std::tls` wraps a `TcpStream`); so are non-blocking sockets and `select` (the
   interpreter's tasks and timeouts cover concurrency for now).
-- A live socket call in the interpreter blocks its OS thread, so other interpreter tasks do not run while it waits (compiled threads do). Lockstep protocols in one task work everywhere; concurrent servers in one interpreted program are tested under `--simulate`, where reads block cooperatively. Cooperative live polling is the next rung.
+- Live interpreted runs with several tasks wait for a socket on the scheduler (a non-blocking readiness check between task switches), so a server thread and a client in one program work interpreted as they do compiled (`tests/drift_corpus/net/threaded_echo.wj`). Under `--record` the call blocks instead: a recording must switch tasks exactly as its replay will, so recorded concurrent socket programs are a known gap (simulate them instead).
 - The wasm target has no sockets: `platform/wasm/net.rs` returns `Err("sockets are not available on wasm")`.
 
 ## Kill criteria

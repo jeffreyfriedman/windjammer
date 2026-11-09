@@ -53,7 +53,7 @@ impl Native for Sock {
 
 impl Drop for Sock {
     fn drop(&mut self) {
-        let _ = LIVE.try_with(|t| t.borrow_mut().remove(&self.id));
+        let _ = LIVE.try_with(|t| t.try_borrow_mut().map(|mut t| t.remove(&self.id)));
         sim_net::close(self.id);
     }
 }
