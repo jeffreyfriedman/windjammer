@@ -1,5 +1,4 @@
-//! CLI     // The legacy driver has no Rust-crate host (the `wj` driver wires it, ADR-0031): importing `cli` here broke the layering.
-    crate::interpreter::repl::run_repl_with(None);xecution utilities
+//! CLI execution utilities
 //!
 //! This module handles:
 //! - Running compiled Windjammer programs
