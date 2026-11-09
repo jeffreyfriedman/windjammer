@@ -196,7 +196,7 @@ fn a_sample_with_wrong_output_fails_the_runner() {
     assert!(ok, "{out}");
     s.page("```wj\n// expect: bye\nfn main() {\n    println(\"hi\")\n}\n```\n");
     let (ok, out) = run_samples(&ctx, false);
-    assert!(!ok && out.contains("page.md:3") && out.contains("output differs"), "{out}");
+    assert!(!ok && out.contains("page.md:1") && out.contains("output differs"), "{out}");
     s.page("```wj\nfn main() {\n    let x: int = \"no\"\n    println(\"${x}\")\n}\n```\n");
     let (ok, out) = run_samples(&ctx, false);
     assert!(!ok, "{out}");
@@ -208,9 +208,9 @@ fn extraction_keeps_hidden_lines_and_expectations() {
     s.page("```wj\n// expect: 3\n~fn main() {\nprintln(\"3\")\n~}\n```\n");
     let tmp = tempfile::tempdir().unwrap();
     assert_eq!(book::extract(&s.ctx(), tmp.path()).unwrap(), 1);
-    let prog = std::fs::read_to_string(tmp.path().join("page_L3.wj")).unwrap();
+    let prog = std::fs::read_to_string(tmp.path().join("page_L1.wj")).unwrap();
     assert!(prog.contains("fn main() {") && !prog.contains('~'), "{prog}");
-    assert_eq!(std::fs::read_to_string(tmp.path().join("page_L3.expect")).unwrap(), "3\n");
+    assert_eq!(std::fs::read_to_string(tmp.path().join("page_L1.expect")).unwrap(), "3\n");
     assert!(Path::new(tmp.path()).join("INDEX.tsv").exists());
 }
 
