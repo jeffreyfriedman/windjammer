@@ -64,6 +64,10 @@ fn check(ctx: &Ctx) -> Vec<Finding> {
 
 /// Run the sample runner over `ctx`'s book; (success, output).
 fn run_samples(ctx: &Ctx, compiled: bool) -> (bool, String) {
+    run_samples_with(ctx, compiled, &[])
+}
+
+fn run_samples_with(ctx: &Ctx, compiled: bool, env: &[(&str, &str)]) -> (bool, String) {
     let _g = if compiled { Some(compiled_lock()) } else { None };
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("samples");
@@ -75,6 +79,9 @@ fn run_samples(ctx: &Ctx, compiled: bool) -> (bool, String) {
     if compiled {
         cmd.arg("--compiled");
         isolate(&mut cmd);
+    }
+    for (k, v) in env {
+        cmd.env(k, v);
     }
     let out = cmd.current_dir(&real().root).output().expect("run scripts/book/book_samples.wj");
     (out.status.success(), report(&out, if compiled { "compiled" } else { "interpreted" }))
@@ -391,12 +398,25 @@ fn compiled_samples_do_not_see_each_other_functions() {
 }
 
 #[test]
-fn the_compiled_gate_fails_on_a_sample_the_compiler_rejects() {
-    // Mutation check for the isolated compiled pass: a program the interpreter runs and the Rust backend rejects
-    // (optional chaining, see tests/book_repros/optional_chain.wj) must still fail, naming the sample. When that repro
-    // is fixed and deleted, plant another interpreted-only construct here.
+fn the_compiled_gate_fails_when_compiled_output_differs() {
+    // Mutation check for the isolated compiled pass, self-contained: the runner's own test hook makes the compiled
+    // output of one sample differ, and the gate must fail naming that sample. No compiler behaviour is involved.
     let s = Scratch::new();
-    s.page("```wj\n// expect: Some(\"x\")\nstruct Inner {\n    label: string,\n}\n\nstruct Outer {\n    inner: Option<Inner>,\n}\n\nfn main() {\n    let o = Outer { inner: Some(Inner { label: \"x\" }) }\n    println(\"${o.inner?.label:?}\")\n}\n```\n");
+    s.page("```wj\n// expect: hi\nfn main() {\n    println(\"hi\")\n}\n```\n");
+    let (ok, out) = run_samples_with(&s.ctx(), true, &[("BOOK_PLANT_COMPILED_DIFF", "page_L1")]);
+    assert!(!ok && out.contains("[page_L1]") && out.contains("compiled output differs"), "{out}");
+    // and without the hook the same book passes
     let (ok, out) = run_samples(&s.ctx(), true);
-    assert!(!ok && out.contains("[page_L1]") && out.contains("compiled run exit"), "{out}");
+    assert!(ok, "{out}");
+}
+
+#[test]
+fn mutation_tests_do_not_depend_on_known_gaps() {
+    let text = std::fs::read_to_string(real().root.join("tests/book_test.rs")).unwrap();
+    let start = text.find("fn the_compiled_gate_fails_when_compiled_output_differs").unwrap();
+    let body = &text[start..text[start..].find("\n}\n").map(|e| start + e).unwrap()];
+    let forbidden = ["known-gaps", "known_gap", "book_repros", "OPEN_QUESTIONS", "?."];
+    for f in forbidden {
+        assert!(!body.contains(f), "the compiled-gate mutation test must not depend on a compiler gap (found {f:?}); use the runner's test hook");
+    }
 }
