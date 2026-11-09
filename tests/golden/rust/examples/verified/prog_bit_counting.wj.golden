@@ -10,7 +10,7 @@ fn popcount(n: u32) -> i64 {
 }
 
 fn main() {
-    for n in [5, 255, 1024] {
+    for n in [5_u32, 255_u32, 1024_u32] {
         println!("{} -> {} bits", n, popcount(n));
     }
     let m: u32 = 1023_u32;

@@ -23,14 +23,14 @@ fn test_multiplication() {
 #[test]
 
 fn test_division() {
-    let result = 5_i32;
+    let result = 5_i64;
     assert!(result == 5_i64);
 }
 
 #[test]
 
 fn test_modulo() {
-    let result = 1_i32;
+    let result = 1_i64;
     assert!(result == 1_i64);
 }
 

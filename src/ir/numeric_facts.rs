@@ -48,20 +48,18 @@ impl View<'_> {
         self.result.types.get(v.0 as usize).cloned().flatten().filter(is_integer_type)
     }
 
-    /// The solver fixed this variable's integer width and its class is publishable.
+    /// The solver's integer width for this variable (a width some use fixed, or the `int` default) when its class is publishable.
     fn published(&self, v: ConstraintVar) -> Option<BaseType> {
-        let defaulted = self.result.defaulted.get(v.0 as usize).copied().unwrap_or(true);
-        if defaulted || self.class(v).is_none_or(|c| self.held.contains(&c)) {
+        if self.class(v).is_none_or(|c| self.held.contains(&c)) {
             return None;
         }
         self.int_type(v)
     }
 
-    /// The solver fixed this float literal's width from a use (`f32` field, parameter, operand); a class
-    /// with no such use is defaulted and stays with the legacy float path.
+    /// The solver's float width for this literal (from an `f32` field, parameter or operand, else the `float`
+    /// default) when its class is publishable.
     fn published_float(&self, v: ConstraintVar) -> Option<BaseType> {
-        let defaulted = self.result.defaulted.get(v.0 as usize).copied().unwrap_or(true);
-        if defaulted || self.class(v).is_none_or(|c| self.held.contains(&c)) {
+        if self.class(v).is_none_or(|c| self.held.contains(&c)) {
             return None;
         }
         self.result.types.get(v.0 as usize).cloned().flatten().filter(|t| matches!(t, BaseType::F32 | BaseType::F64))
@@ -98,7 +96,7 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32
         }
     }
     let u = &fc.unmodelled;
-    for &v in u.loop_bindings.iter().chain(&u.unknown_lengths).chain(&u.unknown_fields) {
+    for &v in u.loop_bindings.iter().chain(&u.unknown_lengths).chain(&u.unknown_fields).chain(&u.opaque) {
         held.extend(view.class(v));
     }
     // Bindings of one name with different widths cannot be named by one fact: their classes stay legacy.
@@ -107,15 +105,28 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32
             held.extend(widths.iter().filter_map(|(v, _)| view.class(*v)));
         }
     }
+    // The parts of a held container are held too (an opaque `Vec` holds its elements).
+    loop {
+        let more: Vec<u32> = result
+            .parts
+            .iter()
+            .filter(|(c, _, _)| held.contains(c))
+            .filter_map(|(_, _, v)| view.class(*v))
+            .filter(|c| !held.contains(c))
+            .collect();
+        if more.is_empty() {
+            break;
+        }
+        held.extend(more);
+    }
     held
 }
 
-/// Each binding's solved width, grouped by name (`None` for a defaulted or non-integer binding).
+/// Each binding's solved width (or `None` for a non-integer binding), grouped by name.
 fn binding_widths(fc: &FunctionConstraints, view: &View<'_>) -> std::collections::BTreeMap<String, Vec<(ConstraintVar, Option<BaseType>)>> {
     let mut out: std::collections::BTreeMap<String, Vec<(ConstraintVar, Option<BaseType>)>> = Default::default();
     for (name, v) in &fc.binding_vars {
-        let defaulted = view.result.defaulted.get(v.0 as usize).copied().unwrap_or(true);
-        let w = if defaulted { None } else { view.int_type(*v) };
+        let w = view.int_type(*v);
         out.entry(name.clone()).or_default().push((*v, w));
     }
     out
@@ -163,12 +174,10 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
             ir_fn.index_source_widths.insert(*key, w);
         }
     }
-    // ... and a `usize` value pushed into a `Vec` of another integer width is converted at the argument.
-    for (key, arg, obj) in &fc.element_stores {
-        let elem = match result.types.get(obj.0 as usize) {
-            Some(Some(BaseType::Vec(e))) => (**e).clone(),
-            _ => continue,
-        };
+    // ... and a `usize` value passed to a std method's generic slot of another integer width (`out.push(i + 1)` on a
+    // `Vec<int>`) is converted at the argument.
+    for (key, arg, slot) in &fc.element_stores {
+        let Some(elem) = view.int_type(*slot) else { continue };
         if view.published(*arg) == Some(BaseType::Usize) && is_integer_type(&elem) && elem != BaseType::Usize {
             ir_fn.usize_conversions.insert(*key, elem);
         }
@@ -215,7 +224,7 @@ mod tests {
         assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
     }
 
-    /// A `usize` counter pushed into a returned `Vec<int>` is converted at the argument.
+    /// A `usize` counter pushed into a returned `Vec<int>` is converted at the argument (it flows into the slot).
     #[test]
     fn usize_counter_pushed_into_int_vec_is_converted() {
         let f = facts("pub fn f(lines: Vec<string>) -> Vec<int> {\n    let mut out = Vec::new()\n    let mut i = 0\n    while i < lines.len() {\n        out.push(i + 1)\n        i = i + 1\n    }\n    out\n}\n", "f");
@@ -300,6 +309,64 @@ mod tests {
         let acc = facts("pub fn g(a: bool) -> f32 {\n    let mut r = 0.0\n    if a {\n        r = r + 0.2\n    }\n    r\n}\n", "g");
         assert!(acc.literal_widths.len() == 2 && acc.literal_widths.values().all(|w| *w == BaseType::F32), "{:?}", acc.literal_widths);
         let open = facts("pub fn h() {\n    let z = 2.5\n    println(\"${z}\")\n}\n", "h");
-        assert!(open.literal_widths.is_empty(), "{:?}", open.literal_widths);
+        assert_eq!(open.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::F64], "{:?}", open.literal_widths);
+    }
+
+    /// Stage C2: a class no use fixes is the language default (`int` = i64), published like any other width.
+    #[test]
+    fn unconstrained_literals_publish_the_int_default() {
+        let f = facts("pub fn f() -> bool {\n    let v = [3, 1, 2]\n    let k = 10\n    v.len() > 1 && k > 2\n}\n", "f");
+        let widths: Vec<_> = f.literal_widths.values().filter(|w| **w != BaseType::Usize).collect();
+        assert!(widths.len() == 5 && widths.iter().all(|w| **w == BaseType::I64), "{:?}", f.literal_widths);
+    }
+
+    /// Stage C2: a closure parameter is an element of the receiver; a literal beside it takes the element's width.
+    #[test]
+    fn closure_parameter_takes_the_receivers_element_width() {
+        let f = facts("pub fn f(v: Vec<i32>) -> Vec<i32> {\n    v.iter().map(|x| x * 2).collect()\n}\n", "f");
+        assert_eq!(f.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::I32], "{:?}", f.literal_widths);
+        let fold = facts("pub fn g(v: Vec<u8>) -> u8 {\n    v.iter().fold(0, |a, x| a + x)\n}\n", "g");
+        assert_eq!(fold.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::U8], "{:?}", fold.literal_widths);
+    }
+
+    /// Stage C2: tuple fields, `Some` payloads and pushed elements are parts of their containers.
+    #[test]
+    fn parts_of_declared_containers_type_their_literals() {
+        let t = facts("fn take(p: (i32, u8)) -> u8 {\n    p.1\n}\npub fn f() -> u8 {\n    take((1, 2))\n}\n", "f");
+        let mut ws: Vec<_> = t.literal_widths.values().cloned().collect();
+        ws.sort_by_key(|w| format!("{w:?}"));
+        assert_eq!(ws, vec![BaseType::I32, BaseType::U8], "{:?}", t.literal_widths);
+        let o = facts("pub fn f(n: i16) -> Option<i16> {\n    if n > 0 { Some(n - 1) } else { None }\n}\n", "f");
+        assert!(o.literal_widths.len() == 2 && o.literal_widths.values().all(|w| *w == BaseType::I16), "{:?}", o.literal_widths);
+        let p = facts("pub fn f() -> Vec<u32> {\n    let mut r: Vec<u32> = Vec::new()\n    r.push(1)\n    r\n}\n", "f");
+        assert_eq!(p.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::U32], "{:?}", p.literal_widths);
+    }
+
+    /// Stage C2: a payload inside a payload takes the formal's nested width (`Result::Ok(Some(42))` at a
+    /// `Result<Option<i32>, string>` formal is an `i32`).
+    #[test]
+    fn nested_payload_takes_the_formals_width() {
+        let f = facts("fn t(r: Result<Option<i32>, string>) -> bool {\n    true\n}\npub fn f() -> bool {\n    t(Result::Ok(Some(42)))\n}\n", "f");
+        assert_eq!(f.literal_widths.values().collect::<Vec<_>>(), vec![&BaseType::I32], "{:?}", f.literal_widths);
+        let m = facts("pub fn f() -> bool {\n    let mut m: HashMap<i32, i32> = HashMap::new()\n    m.insert(1, 2)\n    true\n}\n", "f");
+        assert!(m.literal_widths.len() == 2 && m.literal_widths.values().all(|w| *w == BaseType::I32), "{:?}", m.literal_widths);
+    }
+
+    /// Stage C2: a closure parameter typed by the surface has that static type in the body: `s.len()` is a std
+    /// length, converted where it meets the `int` element of the collected `Vec<int>`.
+    #[test]
+    fn closure_parameter_static_type_types_methods_in_the_body() {
+        let f = facts("pub fn f() -> Vec<int> {\n    \"ab cd\".split(\" \").map(|s| s.len()).collect::<Vec<int>>()\n}\n", "f");
+        assert_eq!(f.index_source_widths.values().collect::<Vec<_>>(), vec![&BaseType::I64], "{:?} {:?}", f.index_source_widths, f.literal_widths);
+        let a = facts("type Pair<T> = (T, T)\nfn swap(p: Pair<int>) -> Pair<int> {\n    (p.1, p.0)\n}\npub fn f() -> Pair<int> {\n    swap((1, 2))\n}\n", "f");
+        assert!(a.literal_widths.len() == 2 && a.literal_widths.values().all(|w| *w == BaseType::I64), "{:?}", a.literal_widths);
+    }
+
+    /// A value passed to a call the walk cannot type is opaque: its class (and the class of its elements) stays
+    /// with the legacy deciders instead of taking the default.
+    #[test]
+    fn values_passed_to_unknown_calls_are_not_published() {
+        let f = facts("pub fn f() {\n    let v = [1, 2]\n    mystery(v, 3)\n}\n", "f");
+        assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
     }
 }

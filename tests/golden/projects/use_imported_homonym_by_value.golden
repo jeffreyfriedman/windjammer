@@ -86,11 +86,11 @@ pub struct Listed {
 pub fn list_items(deps: Deps, tenant: &str) -> Listed {
     let count = {
         if tenant == "t" {
-            2
+            2_i64
         } else {
-            0
+            0_i64
         }
     };
-    Listed { count: (count as i64), deps }
+    Listed { count, deps }
 }
 

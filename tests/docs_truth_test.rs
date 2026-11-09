@@ -133,7 +133,7 @@ impl Scratch {
         let s = Scratch { dir: tempfile::tempdir().unwrap() };
         s.write(
             "docs/docs-truth.toml",
-            "[freshness]\ntracked = [\"docs/design/*.md\"]\n\n[[exclude]]\ncheck = \"links\"\nglob = \"docs/reference/**\"\nreason = \"generated from the real CLI definition, whose help text cites the repository's ADRs; the scratch repo has none of them\"\n",
+            "[freshness]\ntracked = [\"docs/design/*.md\"]\n\n[[exclude]]\ncheck = \"links\"\nglob = \"docs/reference/**\"\nreason = \"generated from the real CLI definition, whose help text cites the repository's ADRs; the scratch repo has none of them\"\n\n[[exclude]]\ncheck = \"links\"\nglob = \"docs/book/src/reference/**\"\nreason = \"the book's copies of the same generated pages\"\n",
         );
         s.write("docs/adr/0001-first.md", "# ADR-0001: First\n\n- **Status:** Accepted (2026-01-01)\n");
         s.write("tests/conformance_programs/SUPPORT.toml", "[[unsupported]]\nprogram = \"01_a\"\nbackend = \"go\"\nreason = \"x: y\"\n");
