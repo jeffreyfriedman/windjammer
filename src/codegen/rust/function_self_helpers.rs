@@ -52,14 +52,14 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// O4 (convergence C5): a plain value formal (a non-Copy user type or a `Vec`, declared by value,
     /// no pattern or pin) is spelled from the IR mode: `&T`, `&mut T` or `T`. Text, Copy, generic and
-    /// trait-impl formals keep their own spelling rules for now. `None` when the IR has no mode.
+    /// trait-impl formals keep their own spelling rules for now, and so do maps and sets: codegen still
+    /// lowers element comparisons in a loop over them for owned entries. `None` when the IR has no mode.
     fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, unused: &std::collections::HashSet<String>) -> Option<String> {
-        let plain = matches!(&param.type_, Type::Custom(_) | Type::Vec(_) | Type::Parameterized(..))
-            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+        let plain = crate::ir::formal_predicates::ir_spells_value_formal(param)
             && !self.is_type_copy(&param.type_)
             && !matches!(&param.type_, Type::Custom(n) if crate::analyzer::Analyzer::is_generic_type_param(&Type::Custom(n.clone())));
         // Public formals too: other crates' call sites read the emitted formals from `metadata.json`.
-        if self.in_trait_impl || param.pattern.is_some() || !param.decorators.is_empty() || !plain {
+        if self.in_trait_impl || !plain {
             return None;
         }
         let ty = self.type_to_rust(&param.type_);
@@ -86,7 +86,11 @@ impl<'ast> CodeGenerator<'ast> {
                 self.emitted_rust_ref_formals.remove(&name);
                 self.inferred_borrowed_params.remove(&name);
                 self.inferred_mut_borrowed_params.remove(&name);
-                let rebinds = param.is_mutable || analyzed.mutated_parameters.contains(&name);
+                // An owned binding the body writes through (`volume.push(x)`, a field store) is `mut`.
+                let rebinds = param.is_mutable
+                    || analyzed.mutated_parameters.contains(&name)
+                    || analyzed.field_mutated_parameters.contains(&name)
+                    || self.variable_needs_mut(&name);
                 format!("{}{shown}: {ty}", if rebinds { "mut " } else { "" })
             }
         })

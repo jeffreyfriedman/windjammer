@@ -179,7 +179,7 @@
 "src/codegen/rust/statement_generation.rs" = 2434
 "src/codegen/rust/stdlib_method_traits.rs" = 2430
 "src/codegen/rust/string_utilities.rs" = 2038
-"src/compiler/multipass_bare_pass_demotion.rs" = 4065
+"src/compiler/multipass_bare_pass_demotion.rs" = 4051
 "src/stdlib_scanner.rs" = 2155
 
 [long_functions]

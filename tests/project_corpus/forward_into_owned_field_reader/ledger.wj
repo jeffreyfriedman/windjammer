@@ -1,0 +1,5 @@
+pub struct Ledger {
+    pub code: string,
+    pub name: string,
+    pub cents: int,
+}
