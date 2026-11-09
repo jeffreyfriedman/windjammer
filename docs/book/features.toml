@@ -1,0 +1,178 @@
+# The registry of Windjammer's language features (checked by tools/docs_truth/book_features.rs).
+#
+# * `families`: the spec rule families (SPEC-<FAMILY>-nnn in docs/spec/*.md) the feature owns. Every family defined by a
+#   spec chapter must appear here, so a feature added to the specification cannot go unlisted.
+# * A book page that teaches the feature carries `<!-- feature: ID -->`; `[book] max_uncovered_features` in
+#   docs/docs-truth.toml counts the entries no page covers and may only shrink.
+
+[[feature]]
+id = "lexical-structure"
+title = "Tokens, comments, literals, escapes"
+families = ["LEX"]
+spec = "docs/spec/lexical.md"
+
+[[feature]]
+id = "grammar"
+title = "The checked grammar"
+families = ["GRAM"]
+spec = "docs/spec/grammar.md"
+
+[[feature]]
+id = "types"
+title = "Type forms, inference and conversions"
+families = ["TYP"]
+spec = "docs/spec/types.md"
+
+[[feature]]
+id = "numerics"
+title = "int, float and the sized numeric types, usize included"
+families = ["NUM"]
+spec = "docs/spec/numeric.md"
+
+[[feature]]
+id = "expressions"
+title = "Expressions, operators and ranges"
+families = ["EXPR"]
+spec = "docs/spec/expressions.md"
+
+[[feature]]
+id = "statements"
+title = "let, loops and control flow"
+families = ["STMT"]
+spec = "docs/spec/statements.md"
+
+[[feature]]
+id = "patterns"
+title = "Patterns and match"
+families = ["PAT"]
+spec = "docs/spec/patterns.md"
+
+[[feature]]
+id = "guard-match"
+title = "Guard-only match, a condition table as an expression"
+families = ["MATCH"]
+spec = "docs/spec/guard-match.md"
+
+[[feature]]
+id = "items-and-traits"
+title = "Functions, structs, enums, impls, traits and generics"
+families = ["ITEM", "TRT"]
+spec = "docs/spec/items.md"
+
+[[feature]]
+id = "ownership"
+title = "Inferred ownership, borrowing and copies"
+families = ["OWN"]
+spec = "docs/spec/ownership.md"
+
+[[feature]]
+id = "strings"
+title = "Strings, interpolation and format specs"
+families = ["STR"]
+spec = "docs/spec/strings.md"
+
+[[feature]]
+id = "collections"
+title = "Lists, maps and sets"
+families = ["COLL"]
+spec = "docs/spec/collections.md"
+
+[[feature]]
+id = "closures"
+title = "Closures"
+families = ["CLOS"]
+spec = "docs/spec/closures.md"
+
+[[feature]]
+id = "trailing-blocks"
+title = "Trailing blocks"
+families = ["BLOCK"]
+spec = "docs/spec/trailing-blocks.md"
+
+[[feature]]
+id = "named-arguments"
+title = "Named and default arguments"
+families = ["ARGS"]
+spec = "docs/spec/arguments.md"
+
+[[feature]]
+id = "pipe"
+title = "Pipe notation"
+families = ["PIPE"]
+spec = "docs/spec/pipe.md"
+
+[[feature]]
+id = "errors-and-options"
+title = "Option, Result, ?, ?? and ?."
+families = ["ERR", "OPT"]
+spec = "docs/spec/errors.md"
+
+[[feature]]
+id = "modules"
+title = "Modules, visibility and packages"
+families = ["MOD"]
+spec = "docs/spec/modules.md"
+
+[[feature]]
+id = "effects"
+title = "Effects, grants and capability values"
+families = ["EFF"]
+spec = "docs/spec/effects.md"
+
+[[feature]]
+id = "concurrency"
+title = "Tasks, scopes and channels"
+families = ["CONC"]
+spec = "docs/spec/concurrency.md"
+
+[[feature]]
+id = "async-await"
+title = "async fn and await"
+spec = "docs/spec/concurrency.md"
+
+[[feature]]
+id = "decorators"
+title = "Attributes: @derive, @test, @json and friends"
+families = ["ATTR"]
+spec = "docs/spec/attributes.md"
+
+[[feature]]
+id = "defer"
+title = "defer and resource cleanup"
+spec = "docs/spec/statements.md"
+
+[[feature]]
+id = "intrinsics"
+title = "println, assert, panic and the other intrinsics"
+families = ["INTR"]
+spec = "docs/spec/intrinsics.md"
+
+[[feature]]
+id = "program-execution"
+title = "How a program starts, runs and exits"
+families = ["EXEC"]
+spec = "docs/spec/execution.md"
+
+[[feature]]
+id = "standard-library"
+title = "The standard library"
+families = ["STD"]
+spec = "docs/spec/stdlib.md"
+
+[[feature]]
+id = "doctests"
+title = "Examples in documentation comments are tests"
+families = ["DOC"]
+spec = "docs/spec/doctests.md"
+
+[[feature]]
+id = "rust-interop"
+title = "Rust crates, signature surfaces and extern fn"
+
+[[feature]]
+id = "compile-targets"
+title = "Compiling to Rust, JavaScript, WebAssembly and Go"
+
+[[feature]]
+id = "shaders"
+title = "WJSL shaders and the WGSL backend"

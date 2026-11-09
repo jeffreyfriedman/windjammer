@@ -37,6 +37,8 @@ pub struct BookCfg {
     pub max_interpreter_only: usize,
     #[serde(default)]
     pub max_uncovered_promises: usize,
+    #[serde(default)]
+    pub max_uncovered_features: usize,
 }
 
 /// Cross-check of `docs/spec/grammar.ebnf` (see `spec_grammar.rs`). There is no divergence table:

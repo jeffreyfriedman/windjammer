@@ -329,6 +329,7 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     out.extend(links_check(ctx));
     let inv = inventory(ctx);
     out.extend(sample_shape(&inv));
+    out.extend(super::book_features::check(ctx, cfg));
     for (file, line) in &inv.unexplained {
         out.push(Finding::fail("book", file, *line, "`interpreter_only` fences need a reason: put `<!-- interpreter-only: why -->` on the line above"));
     }
@@ -359,6 +360,8 @@ pub fn stats_table(ctx: &Ctx) -> String {
             vec!["Chapters still to be written".into(), c.drafts.to_string()],
             vec!["Pages".into(), c.pages.to_string()],
             vec!["Promises no page mentions yet".into(), c.uncovered.to_string()],
+            vec!["Language features in the registry".into(), super::book_features::load(ctx).len().to_string()],
+            vec!["Registry features no page covers yet".into(), super::book_features::uncovered(ctx).len().to_string()],
         ],
     )
 }
