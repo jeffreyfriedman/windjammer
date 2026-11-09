@@ -42,6 +42,45 @@ impl<'ast> CodeGenerator<'ast> {
         Some(receiver)
     }
 
+    /// O4 (convergence C5): a plain value formal (a non-Copy user type or a `Vec`, declared by value,
+    /// no pattern or pin) is spelled from the IR mode: `&T`, `&mut T` or `T`. Text, Copy, generic and
+    /// trait-impl formals keep their own spelling rules for now. `None` when the IR has no mode.
+    pub(super) fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, is_pub: bool, unused: &std::collections::HashSet<String>) -> Option<String> {
+        let plain = matches!(&param.type_, Type::Custom(_) | Type::Vec(_) | Type::Parameterized(..))
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+            && !self.is_type_copy(&param.type_)
+            && !matches!(&param.type_, Type::Custom(n) if crate::analyzer::Analyzer::is_generic_type_param(&Type::Custom(n.clone())));
+        if self.in_trait_impl || param.pattern.is_some() || !param.decorators.is_empty() || !plain {
+            return None;
+        }
+        let ty = self.type_to_rust(&param.type_);
+        let name = param.name.clone();
+        // The IR's mode; the analyzer's only where no IR exists (isolated unit tests).
+        let mode = self.ir_param_ownership_definitive(&name).or_else(|| analyzed.inferred_ownership.get(&name).copied())?;
+        let shown = if unused.contains(&name) && !is_pub { format!("_{name}") } else { name.clone() };
+        Some(match mode {
+            OwnershipMode::Borrowed => {
+                self.emitted_rust_ref_formals.insert(name.clone());
+                self.inferred_borrowed_params.insert(name.clone());
+                self.inferred_mut_borrowed_params.remove(&name);
+                format!("{shown}: &{ty}")
+            }
+            OwnershipMode::MutBorrowed => {
+                self.emitted_rust_ref_formals.insert(name.clone());
+                self.inferred_mut_borrowed_params.insert(name.clone());
+                self.inferred_borrowed_params.remove(&name);
+                format!("{shown}: &mut {ty}")
+            }
+            OwnershipMode::Owned => {
+                self.emitted_rust_ref_formals.remove(&name);
+                self.inferred_borrowed_params.remove(&name);
+                self.inferred_mut_borrowed_params.remove(&name);
+                let rebinds = param.is_mutable || analyzed.mutated_parameters.contains(&name);
+                format!("{}{shown}: {ty}", if rebinds { "mut " } else { "" })
+            }
+        })
+    }
+
     pub(super) fn method_returns_impl_struct(&self, func: &FunctionDecl) -> bool {
         use crate::parser::Type;
         let returns_self_type = match &func.return_type {
