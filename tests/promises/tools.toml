@@ -315,3 +315,102 @@ args = ["check", "--json", "{w}/m.wj"]
 exit = 1
 stdout_has = ["WJ0161", "WJ0160"]
 
+
+[[case]]
+name = "clean --tmp lists stale scratch dirs without removing them (dry run)"
+polarity = "positive"
+args = ["clean", "--tmp"]
+output_has = ["dry run, pass --yes to remove"]
+
+[[case]]
+name = "clean --tmp --older-than-hours only considers directories that old"
+polarity = "positive"
+args = ["clean", "--tmp", "--older-than-hours", "100000000"]
+output_has = ["0 stale wj-* dir(s)"]
+
+[[case]]
+name = "clean --tmp --yes removes only what the threshold selects"
+polarity = "positive"
+args = ["clean", "--tmp", "--older-than-hours", "100000000", "--yes"]
+output_has = ["removed 0 dir(s)"]
+
+[[case]]
+name = "clean --tmp rejects a non-numeric age"
+polarity = "negative"
+args = ["clean", "--tmp", "--older-than-hours", "soon"]
+exit = 2
+
+[[case]]
+name = "clean --sidecars removes legacy .wj.meta files and keeps sources"
+polarity = "positive"
+files = { "proj/a.wj" = "fn main() {}\n", "proj/a.wj.meta" = "legacy" }
+cwd = "proj"
+args = ["clean", "--sidecars"]
+absent = ["proj/a.wj.meta"]
+creates = ["proj/a.wj"]
+output_has = ["legacy sidecar(s) removed"]
+
+[[case]]
+name = "rust-surface prints the signature surface of a path crate"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\ntinycrate = { path = \"tinycrate\" }\n", "proj/tinycrate/Cargo.toml" = "[package]\nname = \"tinycrate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "proj/tinycrate/src/lib.rs" = "pub fn double(x: i64) -> i64 {\n    x * 2\n}\n\npub fn triple(x: i64) -> i64 {\n    x * 3\n}\n" }
+cwd = "proj"
+args = ["rust-surface", "tinycrate"]
+stdout_has = ["double", "triple"]
+
+[[case]]
+name = "rust-surface --all-pub prints every public free function"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\ntinycrate = { path = \"tinycrate\" }\n", "proj/tinycrate/Cargo.toml" = "[package]\nname = \"tinycrate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "proj/tinycrate/src/lib.rs" = "pub fn double(x: i64) -> i64 {\n    x * 2\n}\n\npub fn triple(x: i64) -> i64 {\n    x * 3\n}\n" }
+cwd = "proj"
+args = ["rust-surface", "tinycrate", "--all-pub"]
+stdout_has = ["double", "triple"]
+
+[[case]]
+name = "rust-surface --fn restricts the printed surface to the named functions"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\ntinycrate = { path = \"tinycrate\" }\n", "proj/tinycrate/Cargo.toml" = "[package]\nname = \"tinycrate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "proj/tinycrate/src/lib.rs" = "pub fn double(x: i64) -> i64 {\n    x * 2\n}\n\npub fn triple(x: i64) -> i64 {\n    x * 3\n}\n" }
+cwd = "proj"
+args = ["rust-surface", "tinycrate", "--fn", "double"]
+stdout_has = ["double"]
+output_lacks = ["triple"]
+
+[[case]]
+name = "rust-surface --write saves an editable copy under rust/"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\ntinycrate = { path = \"tinycrate\" }\n", "proj/tinycrate/Cargo.toml" = "[package]\nname = \"tinycrate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "proj/tinycrate/src/lib.rs" = "pub fn double(x: i64) -> i64 {\n    x * 2\n}\n" }
+cwd = "proj"
+args = ["rust-surface", "tinycrate", "--write"]
+creates = ["proj/rust/tinycrate.wji"]
+file_has = { "proj/rust/tinycrate.wji" = "double" }
+
+[[case]]
+name = "rust-surface --path finds the project from another directory"
+polarity = "positive"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\ntinycrate = { path = \"tinycrate\" }\n", "proj/tinycrate/Cargo.toml" = "[package]\nname = \"tinycrate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "proj/tinycrate/src/lib.rs" = "pub fn double(x: i64) -> i64 {\n    x * 2\n}\n" }
+args = ["rust-surface", "tinycrate", "--path", "proj"]
+stdout_has = ["double"]
+
+[[case]]
+name = "rust-surface rejects a crate that is not a dependency"
+polarity = "negative"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n" }
+cwd = "proj"
+args = ["rust-surface", "nosuchcrate"]
+exit = 1
+output_has = ["is not a [dependencies] entry"]
+
+[[case]]
+name = "rust-surface --fn names a function the crate does not have"
+polarity = "negative"
+files = { "proj/wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[dependencies]\ntinycrate = { path = \"tinycrate\" }\n", "proj/tinycrate/Cargo.toml" = "[package]\nname = \"tinycrate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "proj/tinycrate/src/lib.rs" = "pub fn double(x: i64) -> i64 {\n    x * 2\n}\n" }
+cwd = "proj"
+args = ["rust-surface", "tinycrate", "--fn", "nothere"]
+exit = 1
+output_has = ["has no public free function `nothere`"]
+
+[[case]]
+name = "rust-surface --fn conflicts with --all-pub"
+polarity = "negative"
+args = ["rust-surface", "tinycrate", "--fn", "double", "--all-pub"]
+exit = 2
