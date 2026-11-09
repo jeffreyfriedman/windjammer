@@ -1,0 +1,28 @@
+// spec: SPEC-STR-018
+// expect: 1 [250 OK]
+// expect: 2 [a][b]
+// expect: 0
+// expect: 2 [][]
+// expect: 3 [x][][y]
+// expect: 1 [a]
+use std::strings
+
+fn show(parts: Vec<string>) -> string {
+    let mut out = "${parts.len()}"
+    if parts.len() > 0 {
+        out = out + " "
+    }
+    for p in parts {
+        out = out + "[" + p + "]"
+    }
+    out
+}
+
+fn main() {
+    println(show(strings.split_lines("250 OK\r\n")))
+    println(show(strings.split_lines("a\nb\n")))
+    println(show(strings.split_lines("")))
+    println(show(strings.split_lines("\n\n")))
+    println(show(strings.split_lines("x\n\ny")))
+    println(show(strings.split_lines("a\r\n")))
+}

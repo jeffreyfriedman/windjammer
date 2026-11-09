@@ -1,2 +1,2 @@
 use std::env
-fn main() { println("cwd: ${env::current_dir()}") }
+fn main() { println("cwd: ${env::current_dir() ?? "unknown"}") }

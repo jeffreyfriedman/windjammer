@@ -1,0 +1,6 @@
+// The smallest i64 written as a literal. The interpreter evaluates 9223372036854775808 first (it does not fit i64)
+// and then panics on the negation; Rust, and the compiled backend, accept `-9223372036854775808` as an i64.
+fn main() {
+    let b: i64 = -9223372036854775808
+    println("${b}")
+}

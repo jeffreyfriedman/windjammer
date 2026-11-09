@@ -1,0 +1,399 @@
+// Semantic probe families for the drift gate: one generated program per (family, seed), each exercising one class
+// of observable behaviour whose implementation exists twice (interpreter and compiled backend): integer wrapping
+// and checked operations, overflow panics, casts, division and modulo of negatives, shifts, float formatting,
+// string and char handling, `${x:?}` and width/precision formatting, panics in nested calls, evaluation order and
+// short-circuiting, closures, drop order, sort stability, hash-map iteration, process exit codes, stdin and
+// arguments, and threads and channels.
+//
+//   wj run scripts/wj/drift_probes.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled]
+//
+// Rows (id <TAB> walker <TAB> resolved <TAB> compiled) like drift_gen.wj: `probe/<family>-N` (stdout and exit
+// status of each engine), `...#rustc` (rustc's verdict on the generated Rust). `--run-compiled` also runs the
+// compiled program. Families whose names start with `panic_` or `exit_` end in a non-zero status on purpose.
+// Templates write `@{` where the program needs `${`.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+fn next(s: int) -> int {
+    (s * 1103515245 + 12345) % 2147483648
+}
+
+// element `st / 7 % len` of a list given as one space-separated string
+fn pick(st: int, vals: string) -> string {
+    let parts = strings.split(vals, " ")
+    parts[((st / 7) % (parts.len() as int)) as usize]
+}
+
+fn finish(src: string) -> string {
+    strings.replace(src, "@{", "$" + "{")
+}
+
+fn int_edges(t: string) -> string {
+    if t == "i8" { "0 1 -1 127 -128 100 -100 64" }
+    else if t == "i16" { "0 1 -1 32767 -32768 300 -300 255" }
+    else if t == "i32" { "0 1 -1 2147483647 -2147483648 65536 -65536 100" }
+    else if t == "i64" { "0 1 -1 9223372036854775807 -9223372036854775808 4294967296 -4294967296 100" }
+    else if t == "u8" { "0 1 255 200 128 100 16 254" }
+    else if t == "u16" { "0 1 65535 40000 256 255 32768 3" }
+    else if t == "u32" { "0 1 4294967295 4294967294 65536 255 2147483648 3" }
+    else { "0 1 18446744073709551615 18446744073709551614 4294967296 255 9223372036854775808 3" }
+}
+
+fn int_type(st: int) -> string {
+    pick(st, "i8 i16 i32 i64 u8 u16 u32 u64")
+}
+
+fn fam_intwrap(st: int) -> string {
+    let t = int_type(st)
+    let a = pick(next(st), int_edges(t))
+    let b = pick(next(next(st)), int_edges(t))
+    "fn main() {\n    let a: @T = @A\n    let b: @T = @B\n    println(\"@{a.wrapping_add(b)} @{a.wrapping_sub(b)} @{a.wrapping_mul(b)}\")\n    println(\"@{a.saturating_add(b)} @{a.saturating_sub(b)}\")\n    println(\"@{a.checked_add(b).unwrap_or(0)} @{a.checked_sub(b).is_none()} @{a.checked_mul(b).is_none()}\")\n}\n"
+        .replace("@T", t).replace("@A", a).replace("@B", b)
+}
+
+fn fam_panic_overflow(st: int) -> string {
+    let t = int_type(st)
+    let op = pick(next(st), "+ - *")
+    let big = if strings.starts_with(t, "u") { pick(next(next(st)), int_edges(t)) } else { pick(next(next(st)), int_edges(t)) }
+    "fn bump(a: @T, b: @T) -> @T {\n    a @OP b\n}\n\nfn main() {\n    println(\"start\")\n    let a: @T = @A\n    let b: @T = @A\n    println(\"@{bump(a, b)}\")\n    println(\"end\")\n}\n"
+        .replace("@T", t).replace("@OP", op).replace("@A", big)
+}
+
+fn fam_casts(st: int) -> string {
+    let src = pick(st, "i64 i32 u64 u32 i16")
+    let v = pick(next(st), int_edges(src))
+    let f = pick(next(next(st)), "300.7 -1.5 255.9 1e10 -1e10 0.5 2147483648.0 -0.0")
+    "fn main() {\n    let v: @S = @V\n    println(\"@{v as u8} @{v as i8} @{v as u16} @{v as i16} @{v as u32} @{v as i32} @{v as i64} @{v as u64}\")\n    let f: f64 = @F\n    println(\"@{f as u8} @{f as i8} @{f as i32} @{f as u32} @{f as i64} @{f as u64}\")\n    let n: f64 = 0.0 / 0.0\n    println(\"@{n as i32} @{n as u8} @{(1.0 / 0.0) as i32} @{(-1.0 / 0.0) as i64}\")\n    println(\"@{(65 as u8) as char} @{('z' as u8)} @{('é' as u32)} @{(true as i32)}\")\n}\n"
+        .replace("@S", src).replace("@V", v).replace("@F", f)
+}
+
+fn fam_divmod(st: int) -> string {
+    let t = pick(st, "i8 i16 i32 i64")
+    let a = pick(next(st), "-7 7 -8 8 -1 0 13 -13 100 -100")
+    let b = pick(next(next(st)), "2 -2 3 -3 5 -5 1 -1 7")
+    "fn main() {\n    let a: @T = @A\n    let b: @T = @B\n    println(\"@{a / b} @{a % b} @{a.rem_euclid(b)} @{a.div_euclid(b)}\")\n    println(\"@{a.abs()} @{a.signum()}@{(a as f64) / (b as f64)}\")\n}\n"
+        .replace("@T", t).replace("@A", a).replace("@B", b)
+}
+
+fn fam_shifts(st: int) -> string {
+    let t = pick(st, "i8 i16 i32 i64 u8 u16 u32 u64")
+    let x = pick(next(st), int_edges(t))
+    let n = pick(next(next(st)), "0 1 2 3 5 7")
+    "fn main() {\n    let x: @T = @X\n    let sh: u32 = @N + 9\n    println(\"@{x << @N} @{x >> @N} @{x.wrapping_shl(sh)} @{x.wrapping_shr(sh)}\")\n    println(\"@{x & 15} @{x | 3} @{x ^ 85} @{!x} @{x.count_ones()} @{x.leading_zeros()} @{x.trailing_zeros()}\")\n}\n"
+        .replace("@T", t).replace("@X", x).replace("@N", n)
+}
+
+fn fam_floatfmt(st: int) -> string {
+    let v = pick(st, "0.1 1.0 3.14159265358979 123456789.123456789 1e21 1e-7 5e-324 2.5 0.5 -0.0 1.7976931348623157e308 100.0")
+    let w = pick(next(st), "0.2 3.0 2.0 0.3 7.0 1.5")
+    "fn main() {\n    let a: f64 = @V\n    let b: f64 = @W\n    println(\"@{a} @{b} @{a + b} @{a * b} @{a / b} @{a - b}\")\n    println(\"@{a:.2} @{a:>12.3} @{a:<12.1}| @{a:012.4} @{a:e} @{a:?}\")\n    println(\"@{a.floor()} @{a.ceil()} @{a.round()} @{a.trunc()} @{a.abs()} @{a.sqrt()} @{(a - 1.0e10).sqrt()}\")\n    let f: f32 = @V\n    println(\"@{f} @{(f as f64)} @{f + 0.1} @{(a as f32)}\")\n    println(\"@{a.min(b)} @{a.max(b)} @{a == b} @{a < b} @{(0.0 / 0.0) == (0.0 / 0.0)}\")\n}\n"
+        .replace("@V", v).replace("@W", w)
+}
+
+fn fam_strings(st: int) -> string {
+    let s = pick(st, "héllo ß日本語 straße ǆ ΑΒΓ ñandú plain emoji🙂x")
+    "fn main() {\n    let s = \"@S\"\n    println(\"@{s.to_uppercase()} @{s.to_lowercase()} @{s.len()} @{s.chars().count()}\")\n    let mut r = \"\"\n    for c in s.chars().rev() {\n        r = r + c.to_string()\n    }\n    println(\"@{r} @{s.contains(\\\"l\\\")} @{s.starts_with(\\\"h\\\")} @{s.find(\\\"l\\\").unwrap_or(99)}\")\n    println(\"@{s.replace(\\\"l\\\", \\\"L\\\")} @{s.trim()} @{s.split(\\\"l\\\").count()} @{s == s.to_lowercase()}\")\n    let c = s.chars().next().unwrap_or('?')\n    println(\"@{c.is_alphabetic()} @{c.is_uppercase()} @{c.to_uppercase()} @{(c as u32)} @{c.len_utf8()}\")\n}\n"
+        .replace("@S", s)
+}
+
+fn fam_panic_slice(st: int) -> string {
+    let s = pick(st, "héllo 日本語 ßx")
+    let n = pick(next(st), "1 2 3 4")
+    "fn main() {\n    let s = \"@S\"\n    println(\"@{s.len()}\")\n    println(\"@{s[0..@N]}\")\n}\n"
+        .replace("@S", s).replace("@N", n)
+}
+
+fn fam_format(st: int) -> string {
+    let n = pick(st, "0 7 -7 255 1000000 -1")
+    let s = pick(next(st), "a ab abc héllo")
+    "@derive(Debug, Clone)\nstruct Item {\n    id: int,\n    name: string,\n    tags: Vec<string>,\n    maybe: Option<int>,\n}\n\nfn main() {\n    let n: i64 = @N\n    let s = \"@S\"\n    println(\"[@{n:>8}] [@{n:<8}] [@{n:^8}] [@{n:08}] [@{n:+}] [@{n:#x}] [@{n:#b}] [@{n:#o}]\")\n    println(\"[@{s:>8}] [@{s:<8}] [@{s:^8}] [@{s:*^9}] [@{s:?}]\")\n    let it = Item { id: 1, name: s, tags: [\"x\", \"y\"], maybe: Some(n) }\n    println(\"@{it:?}\")\n    println(\"@{it:#?}\")\n    println(\"@{(1, \\\"a\\\"):?} @{[Some(1), None]:?} @{(n, s):?}\")\n}\n"
+        .replace("@derive", "@" + "derive").replace("@N", n).replace("@S", s)
+}
+
+fn fam_panic_nested(st: int) -> string {
+    let kind = pick(st, "unwrap index div expect assert explicit")
+    let body = if kind == "unwrap" { "let o: Option<int> = None\n    match o {\n        Some(x) => x,\n        None => panic(\"unwrap\"),\n    }" }
+        else if kind == "index" { "let v = [1, 2, 3]\n    let i = v.len() + 2\n    v[i]" }
+        else if kind == "div" { "let z = zero()\n    10 / z" }
+        else if kind == "expect" { "let r: Result<int, string> = Err(\"bad\")\n    r.expect(\"boom\")" }
+        else if kind == "assert" { "assert_eq(1 + 1, 3)\n    0" }
+        else { "panic(\"explicit\")\n    0" }
+    "fn zero() -> int {\n    0\n}\n\nfn level3() -> int {\n    @BODY\n}\n\nfn level2() -> int {\n    level3() + 1\n}\n\nfn level1() -> int {\n    level2() * 2\n}\n\nfn main() {\n    println(\"before\")\n    println(\"@{level1()}\")\n    println(\"after\")\n}\n"
+        .replace("@BODY", body)
+}
+
+fn fam_order(st: int) -> string {
+    let a = pick(st, "true false")
+    let b = pick(next(st), "true false")
+    let c = pick(next(next(st)), "true false")
+    "fn t(tag: string, v: bool) -> bool {\n    println(\"eval @{tag}\")\n    v\n}\n\nfn n(tag: string, v: int) -> int {\n    println(\"num @{tag}\")\n    v\n}\n\nfn three(a: int, b: int, c: int) -> int {\n    a * 100 + b * 10 + c\n}\n\nstruct S {\n    x: int,\n    y: int,\n}\n\nfn main() {\n    println(\"@{t(\"a\", @A) && t(\"b\", @B) || t(\"c\", @C)}\")\n    println(\"@{t(\"a\", @A) || t(\"b\", @B) && t(\"c\", @C)}\")\n    println(\"@{three(n(\"1\", 1), n(\"2\", 2), n(\"3\", 3))}\")\n    let s = S { y: n(\"y\", 5), x: n(\"x\", 4) }\n    println(\"@{s.x} @{s.y}\")\n    let tup = (n(\"p\", 1), n(\"q\", 2))\n    println(\"@{tup.0 + tup.1}\")\n    let mut v = [0, 0, 0]\n    v[n(\"i\", 1) as usize] += n(\"j\", 7)\n    println(\"@{v[1]}\")\n    println(\"@{n(\"l\", 1) - n(\"r\", 2) * n(\"s\", 3)}\")\n}\n"
+        .replace("@A", a).replace("@B", b).replace("@C", c)
+}
+
+fn fam_closures(st: int) -> string {
+    let k = pick(st, "2 3 5")
+    "fn make_adder(k: int) -> fn(int) -> int {\n    |x: int| x + k\n}\n\nfn apply_twice(f: fn(int) -> int, x: int) -> int {\n    f(f(x))\n}\n\nfn main() {\n    let k: int = @K\n    let mut count: int = 0\n    let mut bump = || {\n        count += k\n        count\n    }\n    bump()\n    bump()\n    println(\"@{count}\")\n    let base = [1, 2, 3]\n    let total = || {\n        let mut s = 0\n        let mut j = 0\n        while j < base.len() {\n            s += base[j] * k\n            j += 1\n        }\n        s\n    }\n    println(\"@{total()} @{total()}\")\n    let add = make_adder(k)\n    println(\"@{apply_twice(add, 10)}\")\n    let name = \"outer\"\n    let name = name + \"!\"\n    let show = move || name\n    println(\"@{show()}\")\n    let mut fs: Vec<fn(int) -> int> = Vec::new()\n    for i in 0..3 {\n        fs.push(|x: int| x + 1)\n        let _unused = i\n    }\n    println(\"@{fs.len()}\")\n}\n"
+        .replace("@K", k)
+}
+
+fn fam_drop(st: int) -> string {
+    let n = pick(st, "2 3 4")
+    "struct Guard {\n    name: string,\n}\n\nimpl Drop for Guard {\n    fn drop(self) {\n        println(\"drop @{self.name}\")\n    }\n}\n\nfn make(name: string) -> Guard {\n    Guard { name: name }\n}\n\nfn consume(g: Guard) {\n    println(\"consume @{g.name}\")\n}\n\nfn main() {\n    let _a = make(\"a\")\n    let b = make(\"b\")\n    {\n        let _c = make(\"c\")\n        println(\"inner\")\n    }\n    consume(b)\n    let mut v: Vec<Guard> = Vec::new()\n    for i in 0..@N {\n        v.push(make(\"v@{i}\"))\n    }\n    println(\"end\")\n}\n"
+        .replace("@N", n)
+}
+
+fn fam_sort(st: int) -> string {
+    let m = pick(st, "2 3 4")
+    "@derive(Debug, Clone)\nstruct R {\n    key: int,\n    tag: string,\n}\n\nfn main() {\n    let mut v: Vec<R> = Vec::new()\n    let tags = [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\"]\n    for i in 0..8 {\n        v.push(R { key: i % @M, tag: tags[i as usize] })\n    }\n    v.sort_by_key(|r| r.key)\n    let mut out = \"\"\n    for r in v {\n        out = out + r.tag\n    }\n    println(\"@{out}\")\n    let mut w = [5, 3, 5, 1, 3]\n    w.sort()\n    w.dedup()\n    println(\"@{w:?}\")\n    let mut ws: Vec<string> = [\"b\", \"B\", \"a\", \"A\", \"ab\", \"\"]\n    ws.sort()\n    println(\"@{ws:?}\")\n    let mut desc = [4, 9, 1, 9]\n    desc.sort_by(|a, b| b.cmp(a))\n    println(\"@{desc:?}\")\n}\n"
+        .replace("@derive", "@" + "derive").replace("@M", m)
+}
+
+fn fam_hashorder(st: int) -> string {
+    let n = pick(st, "3 5 8")
+    "use std::collections::HashMap\n\nfn main() {\n    let mut m: HashMap<string, int> = HashMap::new()\n    let names = [\"one\", \"two\", \"three\", \"four\", \"five\", \"six\", \"seven\", \"eight\"]\n    for i in 0..@N {\n        m.insert(names[i as usize], i)\n    }\n    let mut keys: Vec<string> = Vec::new()\n    for (k, _v) in m {\n        keys.push(k)\n    }\n    keys.sort()\n    println(\"@{keys:?} @{m.len()}\")\n}\n"
+        .replace("@N", n)
+}
+
+fn fam_exit(st: int) -> string {
+    let code = pick(st, "0 1 2 3 42 255")
+    "use std::process\n\nfn main() {\n    println(\"before\")\n    process::exit(@C)\n}\n"
+        .replace("@C", code)
+}
+
+fn fam_stdin(st: int) -> string {
+    let k = pick(st, "1 2")
+    "use std::env\nuse std::io\n\nfn main() {\n    let args = env::args()\n    println(\"@{args.len()}\")\n    let mut line = \"\"\n    let _n = io::stdin().read_line(line)\n    println(\"read @{line.len()} @{@K}\")\n}\n"
+        .replace("@K", k)
+}
+
+fn fam_threads(st: int) -> string {
+    let n = pick(st, "2 3 4")
+    "use std::thread\nuse std::sync::mpsc\n\nfn work(id: int) -> int {\n    let mut s = 0\n    for i in 0..(id * 10) {\n        s += i\n    }\n    s\n}\n\nfn main() {\n    let mut hs = Vec::new()\n    for id in 1..(@N + 1) {\n        hs.push(thread::spawn(move || work(id)))\n    }\n    let mut total = 0\n    for h in hs {\n        match h.join() {\n            Ok(v) => { total += v },\n            Err(_) => {},\n        }\n    }\n    println(\"@{total}\")\n    let (tx, rx) = mpsc::channel()\n    let t = thread::spawn(move || {\n        for i in 0..@N {\n            let _sent = tx.send(i * i)\n        }\n    })\n    let _joined = t.join()\n    let mut out = \"\"\n    for _i in 0..@N {\n        match rx.recv() {\n            Ok(v) => { out = out + v.to_string() + \",\" },\n            Err(_) => { out = out + \"x,\" },\n        }\n    }\n    println(\"@{out}\")\n}\n"
+        .replace("@N", n)
+}
+
+// the recorded compiled token of `id`, or `absent` (a program added since the recording diverges until it is recorded)
+fn recorded_token(text: string, id: string) -> string {
+    for line in strings.split_lines(text) {
+        let f = strings.split(line, "\t")
+        if f.len() == 2 && f[0] == id {
+            return f[1]
+        }
+    }
+    "absent"
+}
+
+fn fam_splits(st: int) -> string {
+    // every separator shape in one program: the seed only rotates the order of the inputs
+    let all = "250_OK\\r\\n a\\nb\\n EMPTY \\n\\n \\n _a__b_ a\\r\\nb x\\n\\ny \\r\\n a,,b, tail\\n\\n a\\rb"
+    let items = strings.split(all, " ")
+    let shift = ((st / 65536) % (items.len() as int)) as usize
+    let mut listed = ""
+    let mut i: usize = 0
+    while i < items.len() {
+        let raw = items[(i + shift) % items.len()]
+        let lit = if raw == "EMPTY" { "" } else { strings.replace(raw, "_", " ") }
+        listed = listed + "\"" + lit + "\", "
+        i += 1
+    }
+    "use std::strings\n\nfn show(parts: Vec<string>) -> string {\n    let mut out = \"@{parts.len()}:\"\n    for p in parts {\n        out = out + \"[\" + p + \"]\"\n    }\n    out\n}\n\nfn main() {\n    let inputs: Vec<string> = [@LIST]\n    for s in inputs {\n        println(show(strings.split_lines(s)))\n        println(show(strings.split(s, \"\\n\")))\n        println(show(strings.split(s, \" \")))\n        println(show(strings.split(s, \",\")))\n        println(show(strings.split_whitespace(s)))\n        println(\"[@{strings.trim(s)}] [@{strings.trim_start(s)}] [@{strings.trim_end(s)}]\")\n    }\n}\n"
+        .replace("@LIST", listed)
+}
+
+fn families() -> string {
+    "intwrap panic_overflow casts divmod shifts floatfmt strings panic_slice format panic_nested order closures drop sort hashorder exit_code stdin threads splits"
+}
+
+fn program(fam: string, seed: int) -> string {
+    let st = next(seed * 104729 + 17)
+    let src = if fam == "intwrap" { fam_intwrap(st) }
+        else if fam == "panic_overflow" { fam_panic_overflow(st) }
+        else if fam == "casts" { fam_casts(st) }
+        else if fam == "divmod" { fam_divmod(st) }
+        else if fam == "shifts" { fam_shifts(st) }
+        else if fam == "floatfmt" { fam_floatfmt(st) }
+        else if fam == "strings" { fam_strings(st) }
+        else if fam == "panic_slice" { fam_panic_slice(st) }
+        else if fam == "format" { fam_format(st) }
+        else if fam == "panic_nested" { fam_panic_nested(st) }
+        else if fam == "order" { fam_order(st) }
+        else if fam == "closures" { fam_closures(st) }
+        else if fam == "drop" { fam_drop(st) }
+        else if fam == "sort" { fam_sort(st) }
+        else if fam == "hashorder" { fam_hashorder(st) }
+        else if fam == "exit_code" { fam_exit(st) }
+        else if fam == "stdin" { fam_stdin(st) }
+        else if fam == "splits" { fam_splits(st) }
+        else { fam_threads(st) }
+    finish(src)
+}
+
+fn checksum(s: string) -> string {
+    let mut h = 17
+    for b in s.as_bytes() {
+        h = (h * 31 + (b as int)) % 1000000007
+    }
+    "${s.len()}:${h}"
+}
+
+fn run(wj: string, engine: string, file: string) -> string {
+    match sh("${quote(wj)} run --interpret --no-lint --deterministic-time --engine ${engine} ${quote(file)} < /dev/null") {
+        Ok(r) => "exit${r.status}:${checksum(r.stdout)}${panic_loc(r.stderr, r.status)}",
+        Err(_) => "error",
+    }
+}
+
+// the `file.wj:line` of a panic, kept in the token so the two engines must agree on it
+fn panic_loc(stderr: string, status: int) -> string {
+    if status == 0 {
+        return ""
+    }
+    for line in strings.split_lines(stderr) {
+        match line.find(".wj:") {
+            Some(i) => {
+                let mut start = i
+                let bytes = line.as_bytes()
+                while start > 0 && bytes[start - 1] != 32 && bytes[start - 1] != 40 {
+                    start -= 1
+                }
+                let mut end = i + 4
+                while end < bytes.len() && bytes[end] >= 48 && bytes[end] <= 57 {
+                    end += 1
+                }
+                let parts = strings.split(line[start..end].to_string(), "/")
+                return "@" + parts[parts.len() - 1]
+            },
+            None => {},
+        }
+    }
+    ""
+}
+
+// an empty exit-1 run may be a starved build rather than a verdict: try again, up to three times
+fn run_compiled(wj: string, file: string) -> string {
+    let mut t = run_compiled_once(wj, file)
+    let mut tries = 1
+    while t == "exit1:0:17" && tries < 3 {
+        t = run_compiled_once(wj, file)
+        tries += 1
+    }
+    t
+}
+
+fn run_compiled_once(wj: string, file: string) -> string {
+    let w = env::var("WJ_CARGO_WRAPPER").unwrap_or("")
+    match sh("${w} ${quote(wj)} run --compiled --no-lint ${quote(file)} < /dev/null") {
+        Ok(r) => "exit${r.status}:${checksum(r.stdout)}",
+        Err(_) => "error",
+    }
+}
+
+fn rustc_verdict(wj: string, dir: string, file: string) -> string {
+    let out = "${dir}/rs_${strings.replace(file, "/", "_")}"
+    let cmd = "rm -rf ${quote(out)} && ${quote(wj)} build --no-cargo --no-lint -o ${quote(out)} ${quote(file)} > /dev/null 2>&1; f=$(ls ${quote(out)}/*.rs 2>/dev/null | head -1); if [ -z \"$f\" ]; then echo wj-build-error; else rustc --edition 2021 --emit=metadata -A warnings --out-dir ${quote(out)} \"$f\" 2>&1 | grep -o 'error\\[E[0-9]*\\]' | head -1 | tr -d 'error[]' | sed 's/^$/typechecks/'; fi"
+    match sh(cmd) {
+        Ok(r) => {
+            let v = strings.trim(r.stdout)
+            if v == "" { "typechecks" } else { v }
+        },
+        Err(_) => "error",
+    }
+}
+
+fn main() {
+    let args = env::args()
+    let wj = args[1]
+    let dir = args[2]
+    let out = args[3]
+    let mut lo = 1
+    let mut hi = 4
+    let mut compiled = false
+    let mut only = ""
+    let mut baseline_path = ""
+    let mut record_path = ""
+    let mut i = 4
+    while i < args.len() {
+        if args[i] == "--seeds" {
+            let parts = strings.split(args[i + 1], "..")
+            lo = parts[0].parse::<int>().unwrap_or(1)
+            hi = parts[1].parse::<int>().unwrap_or(4)
+            i += 1
+        } else if args[i] == "--run-compiled" {
+            compiled = true
+        } else if args[i] == "--baseline" {
+            baseline_path = args[i + 1]
+            i += 1
+        } else if args[i] == "--record" {
+            record_path = args[i + 1]
+            i += 1
+        } else if args[i] == "--only" {
+            only = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    let _ = sh("mkdir -p ${quote(dir)}")
+    // compiled results recorded by an earlier `--run-compiled --record` run (id <TAB> token)
+    let recorded_text = if baseline_path != "" { fs.read_to_string(baseline_path).unwrap_or("") } else { "" }
+    let mut recorded_out = ""
+    let mut rows = ""
+    for fam in strings.split(families(), " ") {
+        if !strings.contains(fam, only) {
+            continue
+        }
+        let mut seed = lo
+        while seed <= hi {
+            let id = "probe/${fam}-${seed}"
+            // a directory per program: a build never sees the other programs' files
+            let _ = sh("mkdir -p ${quote(dir)}/${fam}_${seed}")
+            let file = "${dir}/${fam}_${seed}/main.wj"
+            let _ = fs.write(file, program(fam, seed))
+            let w = run(wj, "walker", file)
+            let r = run(wj, "resolved", file)
+            let c = if compiled { run_compiled(wj, file) } else if baseline_path != "" { recorded_token(recorded_text, id) } else { "skip" }
+            if compiled {
+                recorded_out = recorded_out + "${id}\t${c}\n"
+            }
+            // the panic location is compared between the two engines (a `#loc` row); the compiled program has none
+            let wp = strings.split(w, "@")
+            let rp = strings.split(r, "@")
+            rows = rows + "${id}\t${wp[0]}\t${rp[0]}\t${c}\n"
+            if wp.len() > 1 || rp.len() > 1 {
+                rows = rows + "${id}#loc\t${if wp.len() > 1 { wp[1] } else { "none" }}\t${if rp.len() > 1 { rp[1] } else { "none" }}\tskip\n"
+            }
+            let expect_fail = strings.starts_with(fam, "panic_") || fam == "exit_code"
+            if !expect_fail {
+                rows = rows + "${id}#runs\t${if strings.starts_with(w, "exit0:") { "runs" } else { "broken" }}\t${if strings.starts_with(r, "exit0:") { "runs" } else { "broken" }}\truns\n"
+            }
+            // std modules (process, thread, io...) need the runtime crate: rustc alone cannot check them
+            if !(fam == "exit_code" || fam == "stdin" || fam == "threads" || fam == "splits") {
+                rows = rows + "${id}#rustc\ttypechecks\ttypechecks\t${rustc_verdict(wj, dir, file)}\n"
+            }
+            seed += 1
+        }
+    }
+    if record_path != "" && compiled {
+        // a partial run (--only) replaces only its own lines of the record
+        let mut kept = ""
+        if only != "" {
+            for line in strings.split_lines(fs.read_to_string(record_path).unwrap_or("")) {
+                let id = strings.split(line, "\t")[0]
+                if id != "" && !strings.contains(id, only) {
+                    kept = kept + line + "\n"
+                }
+            }
+        }
+        let _ = fs.write(record_path, kept + recorded_out)
+    }
+    match fs.write(out, rows) {
+        Ok(_) => println("  ${strings.split(families(), " ").len()} probe families, seeds ${lo}..${hi}"),
+        Err(e) => {
+            println("cannot write ${out}: ${e}")
+            process.exit(2)
+        },
+    }
+}
