@@ -1,4 +1,4 @@
-// A by-value receiver whose result is bound, then the receiver used again (ADR-0030 class a).
+// Control: a Clone struct whose by-value receiver is used again is cloned by the compiler, so every mode runs it.
 struct Node {
     label: string,
     next: int,

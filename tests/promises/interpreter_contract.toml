@@ -12,11 +12,10 @@ stdout_has = ["wrapping 44 cast 44 div -3 rem -1"]
 output_has = ["bottom"]
 
 [[case]]
-name = "a use after a by-value receiver is refused before running, as rustc would reject it (WJ0007)"
+name = "a value that cannot be copied is refused before running when it is used after being given away (WJ0007, as rustc E0382)"
 polarity = "negative"
 covers = ["feature interpreter-matches-compiled"]
-files = { "m.wj" = "struct Node {\n    label: string,\n    next: int,\n}\n\nimpl Node {\n    fn advance(self) -> Node {\n        Node { label: self.label, next: self.next + 1 }\n    }\n\n    fn peek(self) -> int {\n        self.next\n    }\n}\n\nfn main() {\n    println(\"start\")\n    let n = Node { label: \"a\", next: 1 }\n    let m = n.advance()\n    println(\"${m.label} ${n.peek()}\")\n}\n" }
+files = { "m.wj" = "use std::sync::mpsc\n\nstruct Inbox {\n    rx: mpsc::Receiver<int>,\n    seen: int,\n}\n\nfn drain(inbox: Inbox) -> int {\n    let r = inbox.rx\n    inbox.seen\n}\n\nfn main() {\n    let pair = mpsc::channel()\n    let inbox = Inbox { rx: pair.1, seen: 0 }\n    let n = drain(inbox)\n    println(\"${n} ${inbox.seen}\")\n}\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
 exit = 1
 output_has = ["WJ0007"]
-output_lacks = ["start"]
