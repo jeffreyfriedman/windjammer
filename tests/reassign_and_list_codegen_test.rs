@@ -279,3 +279,13 @@ fn match_on_an_integer_without_a_wildcard_panics_at_run_time_instead_of_failing_
     );
     assert!(g.contains("panic!(\"non-exhaustive match\")"), "{g}");
 }
+
+// ---- self mutability through loops and conditions ----
+
+#[test]
+fn self_mutability_reaches_a_caller_through_return_in_loop_and_while_condition() {
+    let g = typechecks(
+        "struct Srv {\n    hits: Vec<int>,\n}\n\nimpl Srv {\n    fn record(self, v: int) -> int {\n        if v > 0 {\n            self.hits.push(v)\n            return 1\n        }\n        0\n    }\n\n    fn step(self) -> bool {\n        loop {\n            return self.record(1) > 5\n        }\n    }\n\n    fn serve_client(self) -> int {\n        let mut n = 0\n        while self.step() {\n            n = n + 1\n        }\n        n\n    }\n}\n\nfn main() {\n    let s = Srv { hits: [] }\n    println(\"${s.serve_client()}\")\n}\n",
+    );
+    assert!(g.contains("fn serve_client(&mut self)") && g.contains("fn step(&mut self)"), "{g}");
+}
