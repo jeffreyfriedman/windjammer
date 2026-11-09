@@ -21,8 +21,8 @@ fn or_zero(s: Slot<i64>) -> i64 {
 }
 
 fn main() {
-    println!("{}", show(Slot::Full(7)));
+    println!("{}", show(Slot::Full(7_i64)));
     println!("{}", show(Slot::Empty));
-    println!("{}", or_zero(Slot::Full(7)));
+    println!("{}", or_zero(Slot::Full(7_i64)));
 }
 

@@ -36,7 +36,7 @@ fn test_struct_iteration() -> i32 {
 
 #[inline]
 fn test_wildcard_iteration() -> i32 {
-    let pairs = vec![(1_i32, 100_i32), (2_i32, 200_i32), (3_i32, 300_i32)];
+    let pairs = vec![(1_i32, 100_i64), (2_i32, 200_i64), (3_i32, 300_i64)];
     let mut sum = 0_i32;
     for (a, _) in pairs {
         sum += a as i32;

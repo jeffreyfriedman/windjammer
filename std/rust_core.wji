@@ -8,6 +8,8 @@
 // `tests/core_surface_rustc_test.rs`.
 
 pub trait Vec<T> {
+    fn new() -> Vec<T>;
+    fn with_capacity(capacity: usize) -> Vec<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -25,6 +27,43 @@ pub trait Vec<T> {
     fn split_off(self, at: usize) -> Vec<T>;
     fn contains(self, value: &T) -> bool;
     fn clear(self);
+    fn iter(self) -> Iterator<&T>;
+    fn iter_mut(self) -> Iterator<&mut T>;
+    fn into_iter(self) -> Iterator<T>;
+}
+
+// An iterator over `T`. A closure argument meets a `fn(..)` parameter: its parameters and result take these
+// types. `collect` and `sum` take their result type from a turbofish when one is written.
+pub trait Iterator<T> {
+    fn map<U>(self, f: fn(T) -> U) -> Iterator<U>;
+    fn filter(self, f: fn(&T) -> bool) -> Iterator<T>;
+    fn filter_map<U>(self, f: fn(T) -> Option<U>) -> Iterator<U>;
+    fn fold<A>(self, init: A, f: fn(A, T) -> A) -> A;
+    fn for_each(self, f: fn(T));
+    fn any(self, f: fn(T) -> bool) -> bool;
+    fn all(self, f: fn(T) -> bool) -> bool;
+    fn find(self, f: fn(&T) -> bool) -> Option<T>;
+    fn position(self, f: fn(T) -> bool) -> Option<usize>;
+    fn take_while(self, f: fn(&T) -> bool) -> Iterator<T>;
+    fn skip_while(self, f: fn(&T) -> bool) -> Iterator<T>;
+    fn rev(self) -> Iterator<T>;
+    fn take(self, n: usize) -> Iterator<T>;
+    fn skip(self, n: usize) -> Iterator<T>;
+    fn step_by(self, step: usize) -> Iterator<T>;
+    fn chain(self, other: Iterator<T>) -> Iterator<T>;
+    fn zip<U>(self, other: Iterator<U>) -> Iterator<(T, U)>;
+    fn enumerate(self) -> Iterator<(usize, T)>;
+    fn cloned(self) -> Iterator<T>;
+    fn copied(self) -> Iterator<T>;
+    fn count(self) -> usize;
+    fn sum(self) -> T;
+    fn product(self) -> T;
+    fn min(self) -> Option<T>;
+    fn max(self) -> Option<T>;
+    fn last(self) -> Option<T>;
+    fn next(self) -> Option<T>;
+    fn nth(self, n: usize) -> Option<T>;
+    fn collect(self) -> Vec<T>;
 }
 
 pub trait VecDeque<T> {
@@ -47,6 +86,7 @@ pub trait VecDeque<T> {
 }
 
 pub trait HashMap<K, V> {
+    fn new() -> HashMap<K, V>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -58,6 +98,7 @@ pub trait HashMap<K, V> {
 }
 
 pub trait BTreeMap<K, V> {
+    fn new() -> BTreeMap<K, V>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn get(self, key: &K) -> Option<&V>;
@@ -123,6 +164,11 @@ pub trait String {
     fn parse<F>(self) -> Result<F, String>;
     fn push_str(self, text: &str);
     fn truncate(self, len: usize);
+    fn split(self, pattern: &str) -> Iterator<&str>;
+    fn split_whitespace(self) -> Iterator<&str>;
+    fn lines(self) -> Iterator<&str>;
+    fn chars(self) -> Iterator<char>;
+    fn bytes(self) -> Iterator<u8>;
 }
 
 // Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
