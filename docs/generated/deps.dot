@@ -223,15 +223,15 @@ digraph deps {
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
   "codegen" -> "component_analyzer" [label="2"];
-  "codegen" -> "debug_env" [label="6"];
+  "codegen" -> "debug_env" [label="7"];
   "codegen" -> "decorator_registry" [label="3"];
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="393"];
+  "codegen" -> "ir" [label="394"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="682"];
+  "codegen" -> "parser" [label="685"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
