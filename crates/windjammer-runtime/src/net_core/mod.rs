@@ -141,11 +141,9 @@ impl Stream {
         self.sock.set_write_timeout(timeout_of(write_ms)).map_err(err)
     }
 
-    /// Would a read return now (buffered bytes, data on the socket, end of stream or an error)? Never blocks.
+    /// Would one read of the socket return now (data, end of stream or an error)? Never blocks. Bytes already buffered do
+    /// not count: `buffered` shows them.
     pub fn ready(&self) -> bool {
-        if !self.buf.is_empty() {
-            return true;
-        }
         if self.sock.set_nonblocking(true).is_err() {
             return true;
         }
