@@ -42,12 +42,12 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
     let (what, help, span) = match &m.kind {
         MoveKind::Receiver { method } => (
             format!("{}: `{method}` takes ownership of its receiver", after(format!("`{v}.{}()`", short(method)))),
-            format!("use the value `{}` returns, move the later use of `{v}` before the call, or call it on a copy: `{v}.clone().{}()`", short(method), short(method)),
+            format!("use the value `{}` returns, or move the later use of `{v}` before the call", short(method)),
             span_of(source, file, &format!("{v}.{}(", short(method)), |_| true),
         ),
         MoveKind::Argument { callee } => (
             format!("{} (its parameter takes ownership)", after(format!("the call to `{}`", short(callee)))),
-            format!("pass a copy (`{v}.clone()`), or make the call the last use of `{v}`"),
+            format!("make the call the last use of `{v}`, or move the later use of `{v}` before the call"),
             // a call (not the definition) whose argument list names the variable
             span_of(source, file, &format!("{}(", short(callee)), |rest| {
                 rest.split(')').next().is_some_and(|args| args.split(|c: char| !c.is_alphanumeric() && c != '_').any(|w| w == v))
@@ -57,7 +57,7 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
             let to = src_name(to);
             (
                 after(format!("`let {to} = {v}`")),
-                format!("use `{to}` from here on, or bind a copy: `let {to} = {v}.clone()`"),
+                format!("use `{to}` from here on"),
                 span_of(source, file, &format!("{to} = {v}"), |_| true),
             )
         }
@@ -65,14 +65,14 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
             let to = src_name(to);
             (
                 format!("{} (its field `{field}` is gone; `{v}` is used whole)", after(format!("`let {to} = {v}.{field}`"))),
-                format!("copy the field (`{v}.{field}.clone()`), or stop using `{v}` as a whole after taking `{field}`"),
+                format!("stop using `{v}` as a whole after taking `{field}`, or take `{field}` after the last use of `{v}`"),
                 span_of(source, file, &format!("{v}.{field}"), |_| true),
             )
         }
     };
     let mut d = Diagnostic::error("WJ0007", what)
         .with_help(help)
-        .with_note("the interpreter would run this, but the compiled program does not build: a value cannot be used after a call that took ownership of it");
+        .with_note("the compiler copies a value that is used again, but this value holds something that cannot be copied (a channel end, a handle), so it cannot be used after it was consumed; the interpreter would run this, the compiled program would not build");
     if let Some(sp) = span {
         d = d.at(sp.with_label("moved here"));
     }

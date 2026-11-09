@@ -106,3 +106,67 @@ Output:
 2 1 false
 ```
 
+
+## Visibility, nesting and imports
+
+**SPEC-MOD-006** Items are private to their module unless `pub`; a nested module reaches its parent's private items with `super::`; `use` imports an item, `as` renames it; a `pub const` of a module is read as `module::NAME` and by the module's own functions.
+
+<!-- example: tests/spec/modules/SPEC-MOD-006.wj -->
+```windjammer
+mod bank {
+    pub struct Account {
+        pub owner: string,
+        balance: int,
+    }
+
+    impl Account {
+        pub fn open(owner: string) -> Account {
+            Account { owner: owner, balance: 0 }
+        }
+        pub fn deposit(self, n: int) -> Account {
+            Account { owner: self.owner, balance: self.balance + n }
+        }
+        pub fn balance(self) -> int {
+            self.balance
+        }
+    }
+
+    pub mod audit {
+        pub fn fee(n: int) -> int {
+            super::round_up(n) / 10
+        }
+    }
+
+    fn round_up(n: int) -> int {
+        n + 9 - (n + 9) % 10
+    }
+}
+
+use bank::Account
+use bank::audit::fee as audit_fee
+
+mod util {
+    pub const LIMIT: int = 100
+
+    pub fn clamp(n: int) -> int {
+        if n > LIMIT {
+            return LIMIT
+        }
+        n
+    }
+}
+
+fn main() {
+    let a = Account::open("ann").deposit(40).deposit(25)
+    println("${a.owner} ${a.balance()}")
+    println("${audit_fee(41)} ${audit_fee(40)}")
+    println("${util::clamp(250)} ${util::clamp(7)} ${util::LIMIT}")
+}
+```
+Output:
+```text
+ann 65
+5 4
+100 7 100
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.

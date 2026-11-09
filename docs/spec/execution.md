@@ -271,7 +271,6 @@ eval m
 eval other
 200
 ```
-The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
 
 ## Assignment evaluation order
 
