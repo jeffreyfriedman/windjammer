@@ -73,6 +73,7 @@ Usage: wj build [OPTIONS] <FILE>
 | `<PATH>` | FILE |  | Path to .wj file or directory |
 | `-o`, `--output` | DIR |  | Output directory (default: ./build) |
 | `-r`, `--release` | RELEASE |  | Build in release mode |
+| `--unchecked-arithmetic` | UNCHECKED_ARITHMETIC |  | Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds and the interpreter). Same as `[build] overflow_checks = false` in wj.toml |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |

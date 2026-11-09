@@ -429,6 +429,20 @@ impl CodeGenerator<'_> {
                     }
                 }
 
+                // `v.filter(..)` on a collection is `v.iter().filter(..)`: its items are `&T`.
+                // (an iterator-valued receiver is typed as a synthetic `Vec` of its items: only a collection place counts)
+                if matches!(method.as_str(), "filter" | "skip" | "take" | "rev" | "skip_while" | "take_while")
+                    && matches!(object, Expression::Identifier { .. } | Expression::FieldAccess { .. } | Expression::Array { .. })
+                {
+                    let elem = self
+                        .infer_expression_type(object)
+                        .filter(Self::type_is_iterable_collection)
+                        .and_then(|t| Self::extract_iterator_element_type(&t));
+                    if let Some(elem) = elem {
+                        return Some(Type::Reference(Box::new(elem)));
+                    }
+                }
+
                 if let Some(item) = self
                     .lookup_method_function_signature_for_iterator_item(object, method)
                     .and_then(|sig| {
