@@ -388,7 +388,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Track Phase 2 string-optimized parameters (string type params that become &str).
         // Uses IR-backed str_ref check when cutover is enabled.
         for param in &func.parameters {
-            if param.decorators.iter().any(|d| d.name == "string_ref") {
+            if param.pins_string_ref() {
                 self.str_ref_optimized_params.remove(&param.name);
             }
         }
@@ -10233,7 +10233,7 @@ impl<'ast> CodeGenerator<'ast> {
             || matches!(param.type_, Type::Custom(ref name) if name == "string");
         if is_string {
             // @string_ref forces &String even when Phase 2 would choose &str.
-            if param.decorators.iter().any(|d| d.name == "string_ref") {
+            if param.pins_string_ref() {
                 return "&String".to_string();
             }
             // Vec::contains / binary_search need &T (= &String for Vec<String>).
@@ -10272,7 +10272,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Stale multipass `Reference(String)` must not force `&String` unless the
             // parameter genuinely needs `&String` (@string_ref / Vec::contains search).
             if registry_string_ref {
-                if param.decorators.iter().any(|d| d.name == "string_ref")
+                if param.pins_string_ref()
                     || self.param_passed_to_slice_search_string_elem(
                         func.body.as_slice(),
                         &param.name,
@@ -13038,7 +13038,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .get(emitted_idx)
                     .map(|s| s.as_str())
                     .unwrap_or("");
-                let decorator_string_ref = param.decorators.iter().any(|d| d.name == "string_ref");
+                let decorator_string_ref = param.pins_string_ref();
                 let emitted_string_ref =
                     emitted_formal.contains(": &String") || emitted_formal.contains(": &'a String");
                 string_ref_flags[reg_idx] = decorator_string_ref || emitted_string_ref;

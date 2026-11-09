@@ -1,0 +1,14 @@
+use crate::grid::SIZE
+
+fn put(x: i32) -> i32 {
+    x
+}
+
+pub fn total() -> i32 {
+    let cx = SIZE / 2
+    let mut sum = 0
+    for dx in -1..1 {
+        sum = sum + put(cx + dx)
+    }
+    sum
+}

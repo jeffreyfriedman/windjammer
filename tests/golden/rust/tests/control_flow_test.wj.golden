@@ -50,7 +50,7 @@ fn test_for_loop() {
 #[test]
 
 fn test_match_statement() {
-    let x = 2_i32;
+    let x = 2_i64;
     let result: String = match x {
         1 => String::from("one"),
         2 => String::from("two"),
@@ -63,7 +63,7 @@ fn test_match_statement() {
 #[test]
 
 fn test_match_with_default() {
-    let x = 99_i32;
+    let x = 99_i64;
     let result: String = match x {
         1 => String::from("one"),
         2 => String::from("two"),

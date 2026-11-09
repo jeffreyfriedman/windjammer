@@ -793,6 +793,7 @@ pub(crate) fn build_library_multipass(
     let step4b_analyze_start = Instant::now();
     let mut step_done = 0usize;
     let mut step4b_analyzed_count = 0usize;
+    let library_consts = std::sync::Arc::new(Analyzer::library_const_types(&parsed_programs));
     let mut step4b_skipped_count = 0usize;
     {
         let user_in_reanalysis = user_file_indices
@@ -912,6 +913,7 @@ pub(crate) fn build_library_multipass(
             &global_struct_fields,
             &struct_defining_module_paths,
             &global_analyzed_trait_methods_arc,
+            &library_consts,
             enable_lint,
         )
         .map_err(|e| anyhow::anyhow!(e))?;
@@ -1074,6 +1076,7 @@ pub(crate) fn build_library_multipass(
     {
         use crate::ir::pipeline::{DiagnosticSeverity, IrPipeline};
         let mut pipeline = IrPipeline::new();
+        let library_fields = library_field_types(&global_struct_fields, &parsed_programs);
         for (i, analysis_opt) in step4b_analyses.iter().enumerate() {
             let Some(analysis) = analysis_opt else {
                 continue;
@@ -1085,15 +1088,9 @@ pub(crate) fn build_library_multipass(
             // overwrite analyzer Owned stubs before IR expected types are set.
             let mut ir_reg =
                 SignatureRegistry::layered(std::sync::Arc::clone(&final_global_registry));
-            crate::codegen::rust::program_generation::install_program_import_alias_signatures(
-                &mut ir_reg,
-                &parsed_programs[i],
-            );
-            let module = pipeline.lower_to_ir(
-                &analysis.analyzed_functions,
-                &ir_reg,
-                Some(global_struct_fields.as_ref()),
-            );
+            crate::codegen::rust::program_generation::install_program_import_alias_signatures(&mut ir_reg, &parsed_programs[i]);
+            let fields = file_field_types(&library_fields, &parsed_programs[i]);
+            let module = pipeline.lower_to_ir(&analysis.analyzed_functions, &ir_reg, Some(&fields));
             for diag in &module.diagnostics {
                 if matches!(diag.severity, DiagnosticSeverity::Error) {
                     eprintln!("[IR ERROR] {}: {}", sources[i].0.display(), diag.message);
@@ -1349,6 +1346,7 @@ pub(crate) fn build_library_multipass(
             codegen.set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
             codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
             codegen.set_global_struct_field_types((*global_struct_fields).clone());
+            codegen.set_library_const_types(&library_consts);
             codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
             // Stdlib field/enum shapes + FQ Rust paths (`HttpMethod` →
             // `windjammer_runtime::http::HttpMethod`) so string→unit-enum coercion
@@ -1603,6 +1601,7 @@ fn analyze_file_for_step4b(
     global_analyzed_trait_methods: &std::sync::Arc<
         HashMap<String, HashMap<String, crate::analyzer::AnalyzedFunction<'static>>>,
     >,
+    library_consts: &std::sync::Arc<HashMap<String, crate::parser::ast::types::Type>>,
     enable_lint: bool,
 ) -> Result<Step4bFileAnalysis, String> {
     let (file, _source) = &sources[i];
@@ -1620,6 +1619,7 @@ fn analyze_file_for_step4b(
         struct_defining_module_paths.clone(),
     );
     analyzer.ownership_preconverged = true;
+    analyzer.seed_module_const_types(library_consts.clone());
 
     analyzer
         .register_traits_from_program(program)
@@ -1802,4 +1802,26 @@ fn keep_own_definitions(
             local.signatures.insert(name.clone(), own.clone());
         }
     }
+}
+
+type FieldTypes = HashMap<String, HashMap<String, crate::parser::ast::types::Type>>;
+
+/// Field and variant-payload types of every file of the library (an enum declared in another module types
+/// `Shape::Sphere(0.5)`), over the merged struct fields; the first declaration of a name is kept.
+fn library_field_types(global: &FieldTypes, programs: &[crate::parser::Program<'static>]) -> FieldTypes {
+    let mut out = global.clone();
+    for p in programs {
+        for (k, v) in crate::type_inference::struct_field_registry::local_struct_field_table(p) {
+            out.entry(k).or_insert(v);
+        }
+    }
+    out
+}
+
+/// The field types one file's IR is lowered with: the library's, with the file's own declarations winning over a
+/// homonym elsewhere.
+fn file_field_types(library: &FieldTypes, program: &crate::parser::Program<'static>) -> FieldTypes {
+    let mut fields = library.clone();
+    fields.extend(crate::type_inference::struct_field_registry::local_struct_field_table(program));
+    fields
 }

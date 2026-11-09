@@ -189,6 +189,8 @@ pub struct Interpreter {
     pub(crate) caps: Option<super::caps::CapGate>,
     /// Record / replay / simulate port for effects (`effect_port`); `None` = effects are live.
     pub(crate) port: Option<std::cell::RefCell<super::effect_port::EffectPort>>,
+    /// Live sockets of `std::net` (ADR-0032), shared by the run's tasks (they run on their own threads).
+    pub(crate) net: std::sync::Arc<super::builtins::std_net::NetState>,
     /// Journal of `durable fn` steps (`durable_rt`); `None` until a durable function is called or `enable_durable`.
     pub(crate) durable: Option<Box<super::durable_rt::DurableRt>>,
     /// Resource limits of a sandboxed run (`limits.rs`); `None` = unlimited.
@@ -298,6 +300,7 @@ impl Interpreter {
             http: Default::default(),
             caps: None,
             port: None,
+            net: Default::default(),
             durable: None,
             limits: None,
             mcp: None,

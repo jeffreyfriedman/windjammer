@@ -639,12 +639,12 @@ impl<'ast> Analyzer<'ast> {
         if func.parent_type.is_none() {
             for param in &func.parameters {
                 if Self::trait_param_is_owned_string(&param.type_) {
-                    if param.decorators.iter().any(|d| d.name == "str_ref") {
+                    if param.pins_str_ref() {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
                         str_ref_optimizable_params.insert(param.name.clone());
                         continue;
                     }
-                    if param.decorators.iter().any(|d| d.name == "string_ref") {
+                    if param.pins_string_ref() {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
                         str_ref_optimizable_params.remove(&param.name);
                         continue;
@@ -826,7 +826,7 @@ impl<'ast> Analyzer<'ast> {
                 if str_ref_optimizable_params.contains(&param.name) {
                     Type::Reference(Box::new(Type::Custom("str".to_string())))
                 } else if is_string
-                    && (param.decorators.iter().any(|d| d.name == "string_ref")
+                    && (param.pins_string_ref()
                         || self.param_needs_string_ref(&param.name, &func.body, registry))
                 {
                     Type::Reference(Box::new(Type::String))
@@ -857,7 +857,7 @@ impl<'ast> Analyzer<'ast> {
             cow_optimizations,
             cache_locality,
             str_ref_optimizable_params,
-            module_path: Vec::new(), module_const_types: self.module_const_types.clone(),
+            module_path: Vec::new(), module_const_types: self.module_const_types.clone(), type_aliases: self.type_aliases.clone(),
         })
     }
 

@@ -1,0 +1,237 @@
+// Runs the samples extracted from the book (`wj-docs book-extract DIR` / tests/book_test.rs).
+//
+//   wj run scripts/book/book_samples.wj -- SAMPLES_DIR WJ_BIN SCRATCH_DIR [--compiled] [--only SUBSTR]
+//
+// Interpreted pass: every NAME.wj runs with `wj run --interpret`; exit status 0 and, when NAME.expect exists,
+// stdout lines equal to it. NAME_test.wj files run with `wj test --interpret` and must pass.
+// Compiled pass (--compiled): the same programs run through `wj run --compiled`, one project each, and their
+// stdout must equal the interpreted stdout, so a sample cannot mean one thing to `wj run` and another to `wj build`.
+// Multi-file projects under SAMPLES_DIR/projects run from their .root with `wj run`; output must equal their .expect lines.
+// A sample with NAME.interp (a fence marked `interpreter_only` in the book) is not compiled.
+// Exit status 1 when any sample fails; the report names the page and line of each.
+use std::env
+use std::fs
+use std::process
+use std::strings
+
+fn quote(s: string) -> string {
+    "'" + strings.replace(s, "'", "'\\''") + "'"
+}
+
+fn lines_of(text: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    for l in strings.split(text, "\n") {
+        out.push(strings.trim_end(l))
+    }
+    while out.len() > 0 && out[out.len() - 1] == "" {
+        out.pop()
+    }
+    out
+}
+
+struct Ran {
+    status: int,
+    stdout: string,
+    stderr: string,
+}
+
+fn sh(command: string) -> Ran {
+    match process.run_with_output("sh", ["-c", command]) {
+        Ok(o) => Ran { status: o.status as int, stdout: o.stdout, stderr: o.stderr },
+        Err(e) => Ran { status: 127, stdout: "", stderr: e },
+    }
+}
+
+fn tail(text: string, n: int) -> string {
+    let ls = lines_of(text)
+    let mut from = 0
+    if ls.len() > n {
+        from = ls.len() - n
+    }
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < ls.len() {
+        out.push(ls[i])
+        i += 1
+    }
+    out.join("\n")
+}
+
+// name -> "page.md:line", from INDEX.tsv
+fn origin(index: string, name: string) -> string {
+    for l in strings.split(index, "\n") {
+        let parts = strings.split(l, "\t")
+        if parts.len() == 2 && parts[0] == name {
+            return parts[1]
+        }
+    }
+    "?"
+}
+
+fn main() {
+    let args: Vec<string> = env::args().collect()
+    if args.len() < 4 {
+        println("usage: book_samples.wj SAMPLES_DIR WJ_BIN SCRATCH_DIR [--compiled] [--only SUBSTR]")
+        process.exit(2)
+    }
+    let dir = args[1]
+    let wj = args[2]
+    let scratch = args[3]
+    let mut compiled = false
+    let mut only = ""
+    let mut i = 4
+    while i < args.len() {
+        if args[i] == "--compiled" {
+            compiled = true
+        } else if args[i] == "--only" && i + 1 < args.len() {
+            only = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    let index = fs::read_to_string(strings.replace(dir, "//", "/") + "/INDEX.tsv").unwrap_or("")
+    let mut names: Vec<string> = Vec::new()
+    match fs::read_dir(dir) {
+        Ok(entries) => {
+            for e in entries {
+                let n = e.name()
+                if n.ends_with(".wj") && (only == "" || n.contains(only)) {
+                    names.push(strings.replace(n, ".wj", ""))
+                }
+            }
+        },
+        Err(e) => {
+            println("cannot read ${dir}: ${e}")
+            process.exit(2)
+        },
+    }
+    names.sort()
+    sh("rm -rf " + quote(scratch) + " && mkdir -p " + quote(scratch) + "/run " + quote(scratch) + "/proj")
+    let mut failures: Vec<string> = Vec::new()
+    let mut passed = 0
+    let mut interpreted_out: Vec<string> = Vec::new()
+    let mut programs: Vec<string> = Vec::new()
+    for name in names {
+        let src = dir + "/" + name + ".wj"
+        let at = origin(index, name)
+        if name.ends_with("_test") {
+            let tdir = scratch + "/run/" + name
+            sh("mkdir -p " + quote(tdir) + " && cp " + quote(src) + " " + quote(tdir) + "/")
+            let r = sh("cd " + quote(tdir) + " && " + quote(wj) + " test --interpret .")
+            if r.status == 0 {
+                passed += 1
+            } else {
+                failures.push("${at}: tests failed (exit ${r.status})\n${tail(r.stdout + r.stderr, 12)}")
+            }
+            continue
+        }
+        let r = sh("cd " + quote(scratch + "/run") + " && " + quote(wj) + " run --interpret " + quote(src))
+        let mut ok = true
+        if r.status != 0 {
+            ok = false
+            failures.push("${at}: interpreter exit ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
+        } else {
+            let exp_path = dir + "/" + name + ".expect"
+            if fs::exists(exp_path) {
+                let want = lines_of(fs::read_to_string(exp_path).unwrap_or(""))
+                let got = lines_of(r.stdout)
+                if want != got {
+                    ok = false
+                    failures.push("${at}: interpreted output differs\n  expected: ${want:?}\n  got:      ${got:?}")
+                }
+            }
+        }
+        if ok {
+            passed += 1
+            if !fs::exists(dir + "/" + name + ".interp") {
+                programs.push(name)
+                interpreted_out.push(r.stdout)
+            }
+        }
+    }
+    // Multi-file projects (`projects/ID/`, written by tools/docs_truth/book_projects.rs): run in place of a sample.
+    let pdir = dir + "/projects"
+    let pindex = fs::read_to_string(pdir + "/INDEX.tsv").unwrap_or("")
+    let mut project_names: Vec<string> = Vec::new()
+    let mut project_roots: Vec<string> = Vec::new()
+    let mut project_out: Vec<string> = Vec::new()
+    let mut project_passed = 0
+    let mut pnames: Vec<string> = Vec::new()
+    if fs::exists(pdir) {
+        match fs::read_dir(pdir) {
+            Ok(entries) => {
+                for e in entries {
+                    let n = e.name()
+                    if fs::is_dir(pdir + "/" + n) && (only == "" || n.contains(only)) {
+                        pnames.push(n)
+                    }
+                }
+            },
+            Err(_) => {},
+        }
+    }
+    pnames.sort()
+    for pname in pnames {
+        let at = origin(pindex, pname)
+        let copy = scratch + "/projects/" + pname
+        sh("mkdir -p " + quote(scratch + "/projects") + " && cp -R " + quote(pdir + "/" + pname) + " " + quote(copy))
+        let root = strings.trim(fs::read_to_string(copy + "/.root").unwrap_or(""))
+        let want = lines_of(fs::read_to_string(copy + "/.expect").unwrap_or(""))
+        let proot = copy + "/" + root
+        let r = sh("cd " + quote(proot) + " && " + quote(wj) + " run --interpret")
+        if r.status != 0 {
+            failures.push("${at}: project exit ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
+        } else if lines_of(r.stdout) != want {
+            failures.push("${at}: project output differs\n  expected: ${want:?}\n  got:      ${lines_of(r.stdout):?}")
+        } else {
+            project_passed += 1
+            project_names.push(pname)
+            project_roots.push(proot)
+            project_out.push(r.stdout)
+        }
+    }
+    let mut compiled_checked = 0
+    if compiled {
+        // One project per sample: bins of one project share function signatures by name, and a sample must not
+        // see another sample's `load`.
+        let mut k = 0
+        while k < programs.len() {
+            let name = programs[k]
+            let at = origin(index, name)
+            let proj = scratch + "/iso/" + name
+            sh("mkdir -p " + quote(proj + "/src") + " && cp " + quote(dir + "/" + name + ".wj") + " " + quote(proj + "/src/main.wj"))
+            fs::write(proj + "/wj.toml", "[package]\nname = \"sample\"\nversion = \"0.1.0\"\nedition = \"2025\"\n").unwrap_or(())
+            let r = sh("cd " + quote(proj) + " && " + quote(wj) + " run --compiled")
+            if r.status != 0 {
+                failures.push("${at}: compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
+            } else if lines_of(r.stdout) != lines_of(interpreted_out[k]) {
+                failures.push("${at}: compiled output differs from interpreted\n  interpreted: ${lines_of(interpreted_out[k]):?}\n  compiled:    ${lines_of(r.stdout):?}")
+            } else {
+                compiled_checked += 1
+            }
+            k += 1
+        }
+    }
+    if compiled {
+        let mut q = 0
+        while q < project_names.len() {
+            let at = origin(pindex, project_names[q])
+            let r = sh("cd " + quote(project_roots[q]) + " && " + quote(wj) + " run --compiled")
+            if r.status != 0 {
+                failures.push("${at}: project compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
+            } else if lines_of(r.stdout) != lines_of(project_out[q]) {
+                failures.push("${at}: project compiled output differs from interpreted\n  interpreted: ${lines_of(project_out[q]):?}\n  compiled:    ${lines_of(r.stdout):?}")
+            } else {
+                compiled_checked += 1
+            }
+            q += 1
+        }
+    }
+    for f in failures {
+        println("FAIL ${f}")
+    }
+    println("book samples: ${passed} passed interpreted, ${project_passed} projects, ${compiled_checked} compiled-checked, ${failures.len()} failed")
+    if failures.len() > 0 {
+        process.exit(1)
+    }
+}
