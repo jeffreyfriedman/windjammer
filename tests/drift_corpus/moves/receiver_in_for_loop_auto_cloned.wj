@@ -1,4 +1,4 @@
-// A by-value receiver called on the same value in every iteration.
+// Control: a by-value receiver called in a for loop on a Clone struct is cloned by the compiler, so every mode runs it.
 struct Node {
     label: string,
     next: int,
