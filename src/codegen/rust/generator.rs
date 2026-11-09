@@ -918,10 +918,9 @@ impl<'ast> CodeGenerator<'ast> {
             self.lookup_method_signature_on_receiver_type(receiver_type, method, arg_count)
         {
             let mut resolved = finalize(affinity_sig);
-            if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 Some(receiver_type),
                 None,
-                self.current_function_return_type.as_ref(),
             ) {
                 crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                     &mut resolved,
@@ -1060,10 +1059,9 @@ impl<'ast> CodeGenerator<'ast> {
         }?;
 
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 Some(receiver_type),
                 None,
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -1120,10 +1118,9 @@ impl<'ast> CodeGenerator<'ast> {
         let mut sig =
             self.resolve_method_function_signature(receiver_type_name, method, arg_count)?;
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 Some(receiver_type_name),
                 receiver_ty,
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
