@@ -84,6 +84,7 @@ pub fn parse(file: &str, text: &str, out: &mut Vec<Diagnostic>) -> Option<Parsed
         }
     };
     let mut parser = Parser::new_with_source(tokens, file.to_string(), text.to_string());
+    parser.enable_span_log(); // true spans for W0016 (the `self` of a bodyless trait method)
     match quiet(|| parser.parse()) {
         Ok(Ok(program)) => Some(Parsed {
             file: file.to_string(),
@@ -132,7 +133,7 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
     if let Err(msg) = crate::analyzer::Analyzer::new().check_forbidden_rust_patterns(&p.program) {
         out.push(forbidden(&msg, &ix));
     }
-    let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file);
+    let mut leak = crate::linter::rust_leakage::RustLeakageLinter::new(&p.file).with_receiver_spans(p.parser.span_snapshot());
     leak.lint_program(&p.program);
     for d in leak.diagnostics() {
         if let Some(d) = convert::lint(d, &ix) {
