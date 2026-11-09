@@ -29,7 +29,7 @@ runs as a project in the interpreter and compiled, with the same agreement check
 | Programs that run interpreted only | 3 |
 | Chapters still to be written | 0 |
 | Pages | 37 |
-| Promises no page mentions yet | 0 |
+| Promises no page mentions yet | 1 |
 <!-- wj:end -->
 
 These numbers are generated from the book itself.
