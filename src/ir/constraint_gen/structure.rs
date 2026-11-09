@@ -595,3 +595,14 @@ fn substitute_params(t: &Type, params: &[String], args: &[Type]) -> Type {
         other => other.clone(),
     }
 }
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A built-in function (`println`, `debug`, `panic`, `assert`, ...; the registry is `intrinsics`) displays or checks its
+    /// arguments and never stores them at a width, so the call is modelled (not opaque). `assert_eq` / `assert_ne` compare
+    /// two values whose types the walk may not know (a user type's `len()`), so they stay opaque. Returns whether the
+    /// call is modelled here.
+    pub(super) fn intrinsic_call(&mut self, callee: &str, _arg_vars: &[ConstraintVar]) -> bool {
+        use crate::intrinsics::Intrinsic;
+        Intrinsic::from_call_name(callee).is_some_and(|i| !matches!(i, Intrinsic::AssertEq | Intrinsic::AssertNe))
+    }
+}
