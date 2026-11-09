@@ -3,8 +3,10 @@
 Source: `bench/agent-dx/results/pilot5/` (second task set, arms V interpreted-first and W interpreted plus one final build, 60 trials, compiler `wj` built
 from `next/v0.50.0` 03e15b0830ea, 2026-11-04) and the reference solutions in `bench/agent-dx/solutions/wj-set2/` (their authoring hit three of the same classes).
 Format as in [findings.md](findings.md): the interpreter accepts and runs the program, the compiled backend's generated Rust is rejected, so programs of this shape are
-"interpreter green, compiled red". Minimal programs: [pilot5-repros/](pilot5-repros/) (interpreter output and compiled diagnostic checked on this build). They are not in
-`tests/drift_corpus/repros/` or `known_divergences.txt`; the drift owner should move them. Counts are silent-divergence trials (10 in total: 9 in V, 1 in W) unless stated.
+"interpreter green, compiled red". Minimal programs: [pilot5-repros/](pilot5-repros/) (interpreter output and compiled diagnostic checked on this build). They are now
+cases of the drift corpus (`tests/drift_corpus/repros/`). Re-recorded live on 2026-11-09: `map_get_unwrap_or_float` and
+`map_get_in_sort_by_closure` still diverge and are ledgered in `known_divergences.txt`; the other four agree in all three modes and
+stay as regression cases. Counts are silent-divergence trials (10 in total: 9 in V, 1 in W) unless stated.
 
 ## F. Findings
 

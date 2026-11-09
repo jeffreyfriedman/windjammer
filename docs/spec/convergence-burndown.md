@@ -124,7 +124,7 @@ mutation check adds one guess of each kind to a real file and requires all three
 fails when the line below does not match the allow-list.
 
 Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps including public formals; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
-`H-NAME-MATCHES` 529, `H-MATCH-ARM-NAMES` 1129, `H-FALLBACK-LEGACY` 128 (total 1786)
+`H-NAME-MATCHES` 529, `H-MATCH-ARM-NAMES` 1128, `H-FALLBACK-LEGACY` 128 (total 1785)
 
 Breakdown at seeding (2026-11-04):
 

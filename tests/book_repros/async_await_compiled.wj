@@ -1,0 +1,13 @@
+async fn fetch(n: int) -> int {
+    n * 2
+}
+
+async fn total() -> int {
+    let a = fetch(4).await
+    let b = fetch(5).await
+    a + b
+}
+
+fn main() {
+    println("parsed")
+}

@@ -165,7 +165,7 @@ impl CodegenBackend for RustBackend {
             linter.lint_function(analyzed_func);
         }
         let diagnostics = linter.into_diagnostics();
-        for diagnostic in &diagnostics {
+        for diagnostic in diagnostics.iter().filter(|_| config.report_lints) {
             // Only print warnings and errors (not notes) to stderr
             if diagnostic.level != crate::linter::LintLevel::Allow {
                 eprintln!("{}", diagnostic);

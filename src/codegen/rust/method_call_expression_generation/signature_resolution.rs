@@ -201,10 +201,9 @@ impl<'ast> CodeGenerator<'ast> {
                         );
                     }
                 }
-                if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                     Some(tn),
                     inferred_receiver_ty.as_ref(),
-                    self.current_function_return_type.as_ref(),
                 ) {
                     crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                         &mut sig, &recv_ty,

@@ -1,4 +1,5 @@
 # Concurrency
+<!-- feature: concurrency -->
 
 Doing several things at once is how programs stay responsive and use every core. Windjammer's approach is structured
 concurrency: work you start belongs to a scope, you get a handle for each piece of work, and results come back through

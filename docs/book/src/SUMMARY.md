@@ -18,12 +18,19 @@
 - [Modules and packages](tutorial/modules.md)
 - [Collections and strings](tutorial/collections-and-strings.md)
 - [Closures](tutorial/closures.md)
+- [Pipe notation and expression-oriented style](tutorial/pipe-and-expressions.md)
+- [Decorators](tutorial/decorators.md)
+- [Defer and resource cleanup](tutorial/defer.md)
 - [Concurrency](tutorial/concurrency.md)
+- [Async and await](tutorial/async.md)
 - [Effects and capabilities](tutorial/effects.md)
 - [Interpreter or compiled](tutorial/interpreter-or-compiled.md)
 - [Rust interop](tutorial/rust-interop.md)
+- [Targets: Rust, JavaScript, WebAssembly and Go](tutorial/targets.md)
+- [Shaders](tutorial/shaders.md)
 - [Testing](tutorial/testing.md)
 - [A final project](tutorial/final-project.md)
+- [Beyond the language](tutorial/beyond.md)
 
 # Reference
 

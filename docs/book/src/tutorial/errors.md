@@ -1,4 +1,5 @@
 # Errors and Result
+<!-- feature: errors-and-options -->
 
 Windjammer has no exceptions and no null. A function that can fail says so in its return type, and the caller has to
 deal with both outcomes. Two enums carry the idea:
@@ -80,6 +81,32 @@ fn main() {
     println("${sum:?}")
 }
 ```
+
+## Defaults and chaining for optional values
+
+For a quick default, `??` takes the value inside an option, or the right-hand side when there is none. The right side is
+only evaluated when it is needed, and the operator chains to the right, so `a ?? b ?? 0` tries `a`, then `b`, then `0`.
+`T?` is another way to write `Option<T>`:
+
+```wj
+// expect: 5 7
+// expect: 3
+fn find(n: int) -> int? {
+    if n > 0 { Some(n) } else { None }
+}
+
+fn main() {
+    let a = find(5) ?? 0
+    let b = find(-1) ?? 7
+    println("${a} ${b}")
+    let c = find(-2) ?? find(3) ?? 0
+    println("${c}")
+}
+```
+
+`a?.b` goes the other way: it reads a field or calls a method through an option, giving `None` as soon as any link is
+`None`. It runs in the interpreter today and is being brought to the Rust backend; the
+[error model reference](../reference/error-model.md) has the details.
 
 ## Your own error types
 

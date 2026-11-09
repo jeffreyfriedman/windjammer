@@ -133,6 +133,23 @@ impl<'m> Js<'m> {
                 return Ok(());
             }
         }
+        if let PK::Index(obj, idx) = &*target.kind {
+            if matches!(obj.ty, Ty::Vec(_)) && !(super::expr::is_simple(obj) && super::expr::is_simple(idx)) {
+                // Rust evaluates the right-hand side first, then the place (object, then index), once.
+                let (r, o, k) = (self.fresh("r"), self.fresh("o"), self.fresh("k"));
+                self.line(&format!("const {r} = {v};"));
+                let obj_js = self.place(obj)?;
+                self.line(&format!("const {o} = {obj_js};"));
+                let idx_js = self.expr(idx)?;
+                self.line(&format!("const {k} = $ix({o}, {idx_js});"));
+                let rhs = match op {
+                    Some(op) => self.binary_js(op, &target.ty, &format!("{o}[{k}]"), &r, value)?,
+                    None => r,
+                };
+                self.line(&format!("{o}[{k}] = {rhs};"));
+                return Ok(());
+            }
+        }
         let t = self.place(target)?;
         if op.is_none() && self.is_obj_alias(target) {
             self.line(&format!("$replace({t}, {v});"));
