@@ -109,6 +109,10 @@ pub struct CodegenConfig {
     /// Statement installing the program's capability grant before `main` (ADR-0021); `None` when every sink call
     /// was proven inside the grant at compile time.
     pub capability_install: Option<String>,
+
+    /// Print the linter's findings to stderr while generating (off for in-process readers of the generated
+    /// code, such as `wj check`'s move prediction, which must not add output of their own).
+    pub report_lints: bool,
 }
 
 impl Default for CodegenConfig {
@@ -124,6 +128,7 @@ impl Default for CodegenConfig {
             include_comments: false,
             tree_shake: false,
             capability_install: None,
+            report_lints: true,
         }
     }
 }

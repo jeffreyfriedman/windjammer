@@ -29,7 +29,8 @@ pub(crate) struct Ctx {
     /// Locals reached through references, resolved to the cell that holds their value (`with_cell`): the chain
     /// is walked once per unit run instead of on every element access. Cleared before every closure-run
     /// statement, the only statements that can rebind a reference.
-    pub(crate) cells: Vec<(i64, crate::interpreter::value::Slot)>,
+    /// `None`: the local holds its value directly (also remembered, so a plain local is looked at once).
+    pub(crate) cells: Vec<(i64, Option<crate::interpreter::value::Slot>)>,
     /// Packed vectors machine code stores into without a call (`View`), by `slot % VIEWS`.
     pub(crate) views: [View; VIEWS],
     /// Stores machine code made through a view (added to `FastHits::packedstore` when the unit leaves).
@@ -476,17 +477,24 @@ fn packed_set(xs: &mut Rc<crate::interpreter::vecbody::VecBody>, k: usize, x: i6
 /// The cell a local's value lives in when the local reaches it through plain references (no projection,
 /// no lock guard), resolved once per unit run; `None`: the local holds its value directly, or the chain
 /// has a projection (the element path walks it as before).
-unsafe fn local_cell(c: *mut Ctx, slot: i64) -> Option<crate::interpreter::value::Slot> {
+unsafe fn local_cell(c: *mut Ctx, slot: i64) -> Option<usize> {
     // SAFETY: as in `with_slot`.
     let ctx = unsafe { &mut *c };
-    if let Some((_, cell)) = ctx.cells.iter().find(|(s, _)| *s == slot) {
-        return Some(cell.clone());
+    if let Some(i) = ctx.cells.iter().position(|(s, _)| *s == slot) {
+        return ctx.cells[i].1.is_some().then_some(i);
     }
     let it = unsafe { &*ctx.it };
     if it.fast_off("vecresolve") {
         return None;
     }
-    let Value::Ref(p) = it.rstack.get(ctx.base + slot as usize)? else { return None };
+    let cell = resolve_cell(it.rstack.get(ctx.base + slot as usize)?);
+    ctx.cells.push((slot, cell));
+    ctx.cells[ctx.cells.len() - 1].1.is_some().then_some(ctx.cells.len() - 1)
+}
+
+/// The innermost cell behind a chain of plain references, or `None` (a plain value, a projection or a guard).
+fn resolve_cell(v: &Value) -> Option<crate::interpreter::value::Slot> {
+    let Value::Ref(p) = v else { return None };
     if !p.path.is_empty() || p.guard.is_some() {
         return None;
     }
@@ -499,17 +507,17 @@ unsafe fn local_cell(c: *mut Ctx, slot: i64) -> Option<crate::interpreter::value
         };
         cell = next;
     }
-    ctx.cells.push((slot, cell.clone()));
     Some(cell)
 }
 
 /// `with_slot` for a read of a local that may sit behind references: through its resolved cell when it has one.
 unsafe fn with_cell(c: *mut Ctx, slot: i64, f: impl FnOnce(&Value) -> Option<i64>) -> i64 {
     match unsafe { local_cell(c, slot) } {
-        Some(cell) => {
-            // SAFETY: as in `with_slot`.
+        Some(i) => {
+            // SAFETY: as in `with_slot`; `f` sees only the value, never the context.
             let ctx = unsafe { &mut *c };
             unsafe { (*ctx.it).fast.vecresolve += 1 };
+            let cell = ctx.cells[i].1.as_ref().expect("resolved");
             match cell.try_borrow().ok().and_then(|g| f(&g)) {
                 Some(x) => x,
                 None => {
@@ -525,10 +533,11 @@ unsafe fn with_cell(c: *mut Ctx, slot: i64, f: impl FnOnce(&Value) -> Option<i64
 /// `with_slot` for a write through a local that may sit behind references (see `with_cell`).
 unsafe fn with_cell_mut(c: *mut Ctx, slot: i64, f: impl FnOnce(&mut Value) -> Option<i64>) -> i64 {
     match unsafe { local_cell(c, slot) } {
-        Some(cell) => {
-            // SAFETY: as in `with_slot`.
+        Some(i) => {
+            // SAFETY: as in `with_slot`; `f` sees only the value, never the context.
             let ctx = unsafe { &mut *c };
             unsafe { (*ctx.it).fast.vecresolve += 1 };
+            let cell = ctx.cells[i].1.as_ref().expect("resolved");
             match cell.try_borrow_mut().ok().and_then(|mut g| f(&mut g)) {
                 Some(x) => x,
                 None => {
