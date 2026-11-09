@@ -102,7 +102,7 @@ impl CodeGenerator<'_> {
         let mut shadowed = Vec::new();
         let mut slice_vars = Vec::new();
         if yields {
-            let mut names = std::collections::HashSet::new();
+            let mut names = std::collections::BTreeSet::new();
             self.extract_pattern_bindings(pattern, &mut names);
             shadowed.extend(names.into_iter().filter(|n| {
                 if self.idiom.str_slice_loop_vars.insert(n.clone()) {

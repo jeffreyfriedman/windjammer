@@ -171,7 +171,7 @@ cache, ADR-0023 measured 214 s for the bridge's runtime build) and seconds per e
    and friends map, and an owned-`String` parameter form.
 4. **Callbacks** into interpreted closures (`sort_by`, visitors): a reverse request frame on the same pipe while a
    call is in flight (the host blocks on the interpreter's answer). Needs re-entrancy in the protocol only.
-5. **Done: every interpreted entry point uses the host.** `wj run` (and `wj eval` / `wj run -`, which run through
+5. **Done: every interpreted entry point uses the host.** `wj run` (and `wj run -`, which runs through
    it), `wj test --interpret` (one host process for the whole test run) and `wj repl` (`cli::crate_host_build::host_for_path`).
 6. **Fast tier (option B)** for `@pure` scalar functions whose per-call cost dominates, behind the same
    generator, gated by the equivalence tests; **sandboxed host** (`sandbox-exec`/seccomp profile per grant) and
