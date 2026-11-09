@@ -206,14 +206,21 @@ impl Parser {
                 break;
             }
             self.advance();
-            let right = self.parse_match_value_prec(precedence + 1)?;
+            // the right operand is an entry of its own: a chain inside it starts at its first operand
+            self.span_enter();
+            let right = self.parse_match_value_prec(precedence + 1);
+            self.span_exit();
+            let right = right?;
             left = self.alloc_expr(Expression::Binary { left, op, right, location: self.current_location() });
         }
         Ok(left)
     }
 
     fn parse_match_coalesce_rhs(&mut self) -> Result<&'static Expression<'static>, String> {
-        let right = self.parse_match_value_prec(8)?;
+        self.span_enter();
+        let right = self.parse_match_value_prec(8);
+        self.span_exit();
+        let right = right?;
         if self.current_token() == &Token::QuestionQuestion {
             self.advance();
             let rest = self.parse_match_coalesce_rhs()?;

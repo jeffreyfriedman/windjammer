@@ -608,7 +608,6 @@ examples/verified/trait_default_and_override.wj W0016
 examples/verified/trait_dyn_dispatch.wj W0016
 std/enumerable.wj W0016
 std/process.wj W0004,WJ0002
-tests/book_repros/dir_module/src/main.wj WJ0002,WJ0006
 tests/book_repros/interpolation_leading_literal.wj WJ0011
 tests/book_repros/module_struct/src/main.wj WJ0002,WJ0006
 tests/check_negative/mutants/modules_trait_static__unknown_field.wj W0016,WJ0014
