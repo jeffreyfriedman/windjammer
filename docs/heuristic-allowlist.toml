@@ -11,7 +11,7 @@
 "src/analyzer/arena_escape.rs" = 5
 "src/analyzer/cache_locality.rs" = 1
 "src/analyzer/forbidden_patterns.rs" = 2
-"src/analyzer/function_analysis.rs" = 4
+"src/analyzer/function_analysis.rs" = 1
 "src/analyzer/generic_analysis.rs" = 1
 "src/analyzer/module_analysis.rs" = 4
 "src/analyzer/mutation_detection.rs" = 2
@@ -27,7 +27,6 @@
 "src/analyzer/signature_registry.rs" = 14
 "src/analyzer/spawn_capture.rs" = 4
 "src/analyzer/stdlib_method_traits.rs" = 3
-"src/analyzer/string_optimization.rs" = 2
 "src/analyzer/type_checking.rs" = 2
 "src/analyzer/usage_tracking/operation_tracking.rs" = 1
 "src/analyzer/usage_tracking/storage_tracking.rs" = 2
@@ -67,10 +66,10 @@
 "src/codegen/rust/float_type_utilities.rs" = 2
 "src/codegen/rust/for_statement_generation.rs" = 3
 "src/codegen/rust/function_extern_generation.rs" = 2
-"src/codegen/rust/function_formal_parameter_generation.rs" = 13
+"src/codegen/rust/function_formal_parameter_generation.rs" = 5
 "src/codegen/rust/function_generation.rs" = 2
 "src/codegen/rust/function_generation_body.rs" = 2
-"src/codegen/rust/function_generation_prepare.rs" = 16
+"src/codegen/rust/function_generation_prepare.rs" = 12
 "src/codegen/rust/function_generation_signature.rs" = 2
 "src/codegen/rust/function_parameterized_tests_generation.rs" = 1
 "src/codegen/rust/function_self_helpers.rs" = 1

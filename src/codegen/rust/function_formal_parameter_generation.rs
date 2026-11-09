@@ -1423,7 +1423,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && (!self.function_return_is_text(func)
                                 || self.str_ref_optimizable_param(analyzed, &param.name))
-                            && !param.decorators.iter().any(|d| d.name == "string_ref")
+                            && !param.pins_string_ref()
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
                                 &param.type_,
@@ -1510,7 +1510,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && (!self.function_return_is_text(func)
                                     || self.str_ref_optimizable_param(analyzed, &param.name))
-                                && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !param.pins_string_ref()
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
                                     &param.type_,
@@ -1544,7 +1544,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !payload_forces_owned
                             && !self.is_public_owned_non_copy_formal_api(param, func)
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
-                            && !param.decorators.iter().any(|d| d.name == "string_ref")
+                            && !param.pins_string_ref()
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                             && !analyzed.returned_parameters.contains(&param.name)
                             && !analyzed.field_extract_parameters.contains(&param.name)
@@ -2463,7 +2463,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
                                 && !cross_module_borrow_keep_owned
-                                && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !param.pins_string_ref()
                                 && !analyzed.returned_parameters.contains(&param.name)
                                 && !payload_forces_owned
                                 && !payload_stored
@@ -2580,7 +2580,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !trait_impl_owned_string
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && !analyzed.returned_parameters.contains(&param.name)
-                                && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !param.pins_string_ref()
                                 && !self.param_only_forwards_to_emitted_owned_callees(
                                     func.body.as_slice(),
                                     &param.name,
@@ -2907,10 +2907,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             self.str_ref_optimized_params.remove(&param.name);
                                             self.inferred_borrowed_params.remove(&param.name);
                                             self.type_to_rust(formal_type)
-                                        } else if param
-                                            .decorators
-                                            .iter()
-                                            .any(|d| d.name == "string_ref")
+                                        } else if param.pins_string_ref()
                                             || self.param_passed_to_slice_search_string_elem(
                                                 func.body.as_slice(),
                                                 &param.name,
@@ -2940,7 +2937,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                 crate::codegen::rust::string_utilities::param_is_rust_string_ref(ty)
                                             });
                                         if registry_string_ref {
-                                            if param.decorators.iter().any(|d| d.name == "string_ref")
+                                            if param.pins_string_ref()
                                                 || self.param_passed_to_slice_search_string_elem(
                                                     func.body.as_slice(),
                                                     &param.name,
@@ -3305,7 +3302,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.param_pub_free_string_builder_forward(func, param) {
             return true;
         }
-        if param.decorators.iter().any(|d| d.name == "string_ref") {
+        if param.pins_string_ref() {
             return false;
         }
         if !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_) {
