@@ -315,3 +315,17 @@ fn trait_default_method_returns_an_owned_string_literal() {
         "trait Shape {\n    fn area(self) -> float\n    fn name(self) -> string { \"shape\" }\n}\nstruct Sq { s: float }\nimpl Shape for Sq {\n    fn area(self) -> float { self.s * self.s }\n}\nfn main() {\n    let a = Sq { s: 2.0 }\n    println(\"${a.name()} ${a.area()}\")\n}\n",
     );
 }
+
+// ---- compiler-consumed attributes and async fn ----
+
+#[test]
+fn async_fn_keyword_is_emitted_so_await_compiles() {
+    let g = typechecks("async fn fetch(n: int) -> int {\n    n * 2\n}\n\nasync fn total() -> int {\n    let a = fetch(4).await\n    let b = fetch(5).await\n    a + b\n}\n\nfn main() {\n    println(\"parsed\")\n}\n");
+    assert!(g.contains("async fn fetch") && g.contains("async fn total"), "{g}");
+}
+
+#[test]
+fn pure_and_uses_are_consumed_by_the_compiler_not_emitted() {
+    let g = typechecks("@pure\nfn add(a: int, b: int) -> int {\n    a + b\n}\n\nfn main() {\n    println(\"${add(1, 2)}\")\n}\n");
+    assert!(!g.contains("#[pure]") && !g.contains("#[uses"), "{g}");
+}
