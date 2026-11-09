@@ -271,6 +271,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// The type of a whole loop binding over a borrowed iterable: `&T` for a sequence, `(&K, &V)` for a
+    /// map (its entries are pairs of references), so `pair.0 == key` sees a `&K`.
+    pub(in crate::codegen::rust) fn wrap_for_loop_binding_as_borrowed(&self, iterable: &Expression, elem_type: Type) -> Type {
+        use crate::codegen::rust::stdlib_method_traits::is_map_type;
+        let over_map = self.infer_expression_type(iterable).is_some_and(|t| match &t {
+            Type::Reference(inner) | Type::MutableReference(inner) => is_map_type(inner),
+            other => is_map_type(other),
+        });
+        if over_map {
+            Self::wrap_for_loop_element_as_borrowed(elem_type)
+        } else {
+            Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+        }
+    }
+
     /// Borrowed for-in over a whole element binding (`for pair in &vec`): `&T`.
     /// For tuple elements this is `&(K, V)` — matching Rust `for pair in &Vec<(K,V)>`.
     /// Do not use for map/tuple destructure (`for (k, v) in …`); that needs

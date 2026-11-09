@@ -228,7 +228,7 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="394"];
+  "codegen" -> "ir" [label="395"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "parser" [label="685"];
@@ -357,7 +357,7 @@ digraph deps {
   "ir" -> "parser" [label="95"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="5"];
-  "ir" -> "type_classification" [label="30"];
+  "ir" -> "type_classification" [label="31"];
   "ir" -> "type_display" [label="2"];
   "ir" -> "type_inference" [label="7"];
   "ir" -> "typing" [label="18"];

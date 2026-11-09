@@ -1547,7 +1547,7 @@ fn record_bare_pass_call_hints<'ast>(
     function: &'ast Expression<'ast>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
     registry: &SignatureRegistry,
-    copy_types: &std::collections::HashSet<String>,
+    _copy_types: &std::collections::HashSet<String>,
     hints: &mut Vec<(String, usize, OwnershipMode)>,
 ) {
     let Some(callee_name) = callee_name_from_expr(function) else {
@@ -1575,7 +1575,7 @@ fn record_bare_pass_call_hints<'ast>(
             ) {
                 continue;
             }
-            let Some(mode) = bare_pass_target_ownership(formal_ty, copy_types) else {
+            let Some(mode) = bare_pass_target_ownership(formal_ty) else {
                 continue;
             };
             hints.push((key.clone(), pidx, mode));
@@ -1604,25 +1604,11 @@ fn is_bare_binding_pass(expr: &Expression) -> bool {
     matches!(expr, Expression::Identifier { .. })
 }
 
-fn bare_pass_target_ownership(
-    formal_ty: &Type,
-    copy_types: &std::collections::HashSet<String>,
-) -> Option<OwnershipMode> {
-    if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
-        return Some(OwnershipMode::Borrowed);
-    }
-    if is_vec_container_type(formal_ty) {
-        return Some(OwnershipMode::Borrowed);
-    }
-    if let Type::Custom(name) = formal_ty {
-        // Copy primitives (`char`, `i64`, …) and known Copy aggregates stay owned —
-        // bare-pass demotion must not invent `&mut char` for comparison-only helpers.
-        if is_copy_formal_name(name, copy_types) {
-            return None;
-        }
-        return Some(OwnershipMode::MutBorrowed);
-    }
-    None
+/// Text and collections take a shared-borrow hint. User types take none: a guess of `&mut T` for any bare
+/// pass reached the solver through OWN-CALL-FORMAL and contradicted the callee's own mode (convergence O4).
+fn bare_pass_target_ownership(formal_ty: &Type) -> Option<OwnershipMode> {
+    let shared = crate::codegen::rust::types::is_windjammer_text_type(formal_ty) || is_vec_container_type(formal_ty);
+    shared.then_some(OwnershipMode::Borrowed)
 }
 
 fn is_copy_formal_name(name: &str, copy_types: &std::collections::HashSet<String>) -> bool {
