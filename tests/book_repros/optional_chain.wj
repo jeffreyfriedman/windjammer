@@ -1,0 +1,12 @@
+struct Inner {
+    label: string,
+}
+
+struct Outer {
+    inner: Option<Inner>,
+}
+
+fn main() {
+    let o = Outer { inner: Some(Inner { label: "x" }) }
+    println("${o.inner?.label:?}")
+}

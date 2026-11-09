@@ -1,0 +1,4 @@
+fn main() {
+    let zeros = [0; 3]
+    println("${zeros:?} ${zeros.len()}")
+}

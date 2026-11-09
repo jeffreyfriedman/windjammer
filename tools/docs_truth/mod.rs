@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 pub mod book;
+pub mod book_projects;
 pub mod claims;
 pub mod config;
 pub mod ebnf;

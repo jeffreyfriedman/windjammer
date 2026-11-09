@@ -28,6 +28,11 @@
 # Reference
 
 - [The language](reference/language.md)
+- [Types and numerics](reference/types-and-numerics.md)
+- [Ownership rules](reference/ownership-rules.md)
+- [Modules and visibility](reference/modules-and-visibility.md)
+- [The effects model](reference/effects-model.md)
+- [The error model](reference/error-model.md)
 - [Grammar](reference/grammar.md)
 - [Keywords and operators](reference/keywords.md)
 - [Standard library](reference/std.md)
