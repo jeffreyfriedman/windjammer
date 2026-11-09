@@ -59,14 +59,15 @@ shrink the ledger.
 
 ## Move shapes
 
-`tests/drift_corpus/moves/` holds use-after-move programs for ADR-0030. Windjammer clones automatically in many
-shapes, so the directory records what rustc really rejects. `must_refuse_*.wj` programs are ones rustc rejects (E0382):
-a `<program>#refused` row compares whether each side stopped on an ownership error (the interpreter's WJ0007, rustc's
-E0382 behind the compiled build); an interpreter that runs such a program diverges, and the ledger names it until the
-ADR-0030 slice that refuses it lands (then the line goes stale and is deleted). The other programs (owned argument
-reused, string moved into a struct, move in a `for`/`while` body, partial move, closure capture, push then use, reassign
-re-arms, Copy-like struct) are controls: rustc accepts them, so all three modes must run them and agree. A new shape
-that rustc rejects is added as `must_refuse_<shape>.wj`.
+`tests/drift_corpus/moves/` holds use-after-move programs for ADR-0030. The ownership rules decide what is an error:
+a move of a `Clone` value that is used again is cloned by the compiler (every mode runs it and prints the same), while a
+value that cannot be copied (it holds a channel end, for instance) and is used after being given away is an error,
+which the interpreter refuses (WJ0007) and rustc rejects (E0382). `must_refuse_*.wj` programs are the second kind (the
+fixtures of `tests/move_prediction`): a `<program>#refused` row compares whether each side stopped on an ownership
+error, so an interpreter that runs such a program diverges and the ledger names it until the ADR-0030 slice that refuses
+it lands. The other programs (owned argument reused, string moved into a struct, move in a `for`/`while` body, partial
+move, closure capture, push then use, reassign re-arms, receiver reuse, a Copy-like struct) are controls: every mode runs
+them and must agree. A new shape that rustc rejects is added as `must_refuse_<shape>.wj`.
 
 ## Coverage
 
