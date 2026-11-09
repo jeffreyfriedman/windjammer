@@ -129,7 +129,7 @@ fn main() {
         let mut ok = true
         if r.status != 0 {
             ok = false
-            failures.push("${at}: interpreter exit ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
+            failures.push("${at} [${name}]: interpreter exit ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
         } else {
             let exp_path = dir + "/" + name + ".expect"
             if fs::exists(exp_path) {
@@ -137,7 +137,7 @@ fn main() {
                 let got = lines_of(r.stdout)
                 if want != got {
                     ok = false
-                    failures.push("${at}: interpreted output differs\n  expected: ${want:?}\n  got:      ${got:?}")
+                    failures.push("${at} [${name}]: interpreted output differs\n  expected: ${want:?}\n  got:      ${got:?}")
                 }
             }
         }
@@ -180,9 +180,9 @@ fn main() {
         let proot = copy + "/" + root
         let r = sh("cd " + quote(proot) + " && " + quote(wj) + " run --interpret")
         if r.status != 0 {
-            failures.push("${at}: project exit ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
+            failures.push("${at} [${pname}]: project exit ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
         } else if lines_of(r.stdout) != want {
-            failures.push("${at}: project output differs\n  expected: ${want:?}\n  got:      ${lines_of(r.stdout):?}")
+            failures.push("${at} [${pname}]: project output differs\n  expected: ${want:?}\n  got:      ${lines_of(r.stdout):?}")
         } else {
             project_passed += 1
             project_names.push(pname)
@@ -200,12 +200,12 @@ fn main() {
             let at = origin(index, name)
             let proj = scratch + "/iso/" + name
             sh("mkdir -p " + quote(proj + "/src") + " && cp " + quote(dir + "/" + name + ".wj") + " " + quote(proj + "/src/main.wj"))
-            fs::write(proj + "/wj.toml", "[package]\nname = \"sample\"\nversion = \"0.1.0\"\nedition = \"2025\"\n").unwrap_or(())
+            fs::write(proj + "/wj.toml", "[package]\nname = \"sample_" + strings.replace(name, "-", "_") + "\"\nversion = \"0.1.0\"\nedition = \"2025\"\n").unwrap_or(())
             let r = sh("cd " + quote(proj) + " && " + quote(wj) + " run --compiled")
             if r.status != 0 {
-                failures.push("${at}: compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
+                failures.push("${at} [${name}]: compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
             } else if lines_of(r.stdout) != lines_of(interpreted_out[k]) {
-                failures.push("${at}: compiled output differs from interpreted\n  interpreted: ${lines_of(interpreted_out[k]):?}\n  compiled:    ${lines_of(r.stdout):?}")
+                failures.push("${at} [${name}]: compiled output differs from interpreted\n  interpreted: ${lines_of(interpreted_out[k]):?}\n  compiled:    ${lines_of(r.stdout):?}")
             } else {
                 compiled_checked += 1
             }
@@ -218,9 +218,9 @@ fn main() {
             let at = origin(pindex, project_names[q])
             let r = sh("cd " + quote(project_roots[q]) + " && " + quote(wj) + " run --compiled")
             if r.status != 0 {
-                failures.push("${at}: project compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
+                failures.push("${at} [${pname}]: project compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
             } else if lines_of(r.stdout) != lines_of(project_out[q]) {
-                failures.push("${at}: project compiled output differs from interpreted\n  interpreted: ${lines_of(project_out[q]):?}\n  compiled:    ${lines_of(r.stdout):?}")
+                failures.push("${at} [${pname}]: project compiled output differs from interpreted\n  interpreted: ${lines_of(project_out[q]):?}\n  compiled:    ${lines_of(r.stdout):?}")
             } else {
                 compiled_checked += 1
             }
