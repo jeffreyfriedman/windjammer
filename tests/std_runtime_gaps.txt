@@ -2,6 +2,11 @@
 # A program that calls one runs under `wj run --interpret` and fails to compile under `wj build`.
 # Shrink-only: tests/std_runtime_parity_test.rs fails on a gap that is not listed here and on a listed
 # name the runtime now has (remove the line when you add the function).
+# Methods count too (since ADR-0032): a declared method of a type the runtime implements, as `module::Type::method`.
+# The two method lines below were found when the oracle learned methods; the four platform modules (compute, dialog,
+# storage, net) left the list when it learned `platform/native/<module>.rs`.
+http::HttpMethod::from_str
+log::LogLevel::from_str
 async::block_on
 async::sleep_ms
 async::sleep_ms_blocking
@@ -20,11 +25,6 @@ basic_test::test_string_uppercase
 basic_test::test_vec_creation
 basic_test::test_vec_push
 cli::app
-compute::background
-compute::join
-compute::map_reduce
-compute::num_workers
-compute::parallel
 config::get
 config::get_backend
 config::get_or
@@ -37,11 +37,6 @@ csv::parse_with_headers
 csv::reader_with_delimiter
 csv::write_with_headers
 csv::writer_with_delimiter
-dialog::open_directory
-dialog::open_file
-dialog::save_file
-dialog::show_confirm
-dialog::show_message
 encoding::json_decode
 encoding::json_encode
 encoding::json_encode_pretty
@@ -108,12 +103,6 @@ mcp::get_raw
 mcp::get_string
 mcp::get_strings
 mcp::quote
-net::download
-net::get
-net::get_async
-net::post
-net::post_async
-net::upload
 process::execute
 process::spawn
 random::alphanumeric
@@ -126,23 +115,6 @@ random::range_inclusive
 random::sample
 random::seeded
 regex::compile_case_insensitive
-storage::clear
-storage::clear_with_backend
-storage::get
-storage::get_bytes
-storage::get_json
-storage::get_with_backend
-storage::get_with_ttl
-storage::has
-storage::keys
-storage::keys_with_backend
-storage::remove
-storage::remove_with_backend
-storage::set
-storage::set_bytes
-storage::set_json
-storage::set_with_backend
-storage::set_with_ttl
 strings::char_count
 strings::repeat
 strings::replacen

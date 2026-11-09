@@ -29,7 +29,7 @@ fn rust(t: &Type, by_ref: bool) -> String {
         Type::String => "String".into(),
         Type::Custom(n) | Type::Generic(n) => match n.as_str() {
             "T" | "V" | "F" if by_ref => "&'static i64".into(),
-            "T" | "V" | "F" => "i64".into(),
+            "T" | "V" | "F" | "U" | "A" => "i64".into(),
             "K" | "E" => "String".into(),
             "string" | "String" => "String".into(),
             other => other.to_string(),
@@ -42,9 +42,17 @@ fn rust(t: &Type, by_ref: bool) -> String {
         Type::Option(x) => format!("Option<{}>", rust(x, by_ref)),
         Type::Vec(x) => format!("Vec<{}>", rust(x, by_ref)),
         Type::Result(a, b) => format!("Result<{}, {}>", rust(a, by_ref), rust(b, by_ref)),
+        // An iterator argument: a concrete iterator over the element.
+        Type::Parameterized(n, xs) if n == "Iterator" && xs.len() == 1 => format!("std::vec::IntoIter<{}>", rust(&xs[0], by_ref)),
         Type::Parameterized(n, xs) => {
             format!("{}<{}>", n, xs.iter().map(|x| rust(x, by_ref)).collect::<Vec<_>>().join(", "))
         }
+        Type::Tuple(xs) => format!("({})", xs.iter().map(|x| rust(x, by_ref)).collect::<Vec<_>>().join(", ")),
+        Type::FunctionPointer { params, return_type } => format!(
+            "fn({}){}",
+            params.iter().map(|x| rust(x, by_ref)).collect::<Vec<_>>().join(", "),
+            return_type.as_ref().map(|r| format!(" -> {}", rust(r, by_ref))).unwrap_or_default()
+        ),
         other => panic!("surface type not mapped to Rust: {other:?}"),
     }
 }
@@ -64,21 +72,39 @@ fn every_core_surface_entry_typechecks_in_rustc() {
     let entries = surface.entries();
     assert!(!entries.is_empty());
     for (i, (ty, method)) in entries.iter().enumerate() {
+        // An associated function (`Vec::new`) is called on the type, with its generics instantiated.
+        if surface.is_static(ty, method) {
+            let (generics, _, params, ret) = surface.declared_static(ty, method).unwrap();
+            let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
+            let ret_ty = ret.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into());
+            let path = receiver(ty, &generics, false).replacen('<', "::<", 1);
+            src.push_str(&format!("fn e{i}() {{ let _x: {ret_ty} = {path}::{method}({}); }}\n", args.join(", ")));
+            continue;
+        }
         let (generics, method_generics, params, ret) = surface.declared(ty, method).unwrap();
         // `copied` / `cloned` turn an `Option<&T>` into an `Option<T>`: the receiver holds references.
         let by_ref = ty == "Option" && matches!(method.as_str(), "copied" | "cloned");
         // `Integer<T>` and `Float<T>` are the numeric types themselves (checked on `i64` and `f64`).
+        // An `Iterator<T>` is checked on a concrete iterator (over references for `cloned` / `copied`).
+        let iterator = ty == "Iterator";
         let recv = match ty.as_str() {
             "Integer" => "i64".to_string(),
             "Float" => "f64".to_string(),
+            "Iterator" if matches!(method.as_str(), "cloned" | "copied") => "std::slice::Iter<'static, i64>".to_string(),
+            "Iterator" => "std::vec::IntoIter<i64>".to_string(),
             _ => receiver(ty, &generics, by_ref),
         };
         let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
-        let turbofish = if method_generics.is_empty() { String::new() } else { "::<i64>".to_string() };
-        // The result: the declared type, except a method generic's error type is rustc's (`F::Err`).
-        let ret_ty = ret.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into());
+        // Rust's iterator adapters take their closure type as a generic too: no turbofish there.
+        let turbofish = if method_generics.is_empty() || iterator { String::new() } else { "::<i64>".to_string() };
+        // The result: the declared type, except a method generic's error type is rustc's (`F::Err`); an iterator
+        // result is collected into a `Vec` of its element.
+        let (ret_ty, tail) = match ret {
+            Some(Type::Parameterized(n, xs)) if n == "Iterator" => (format!("Vec<{}>", rust(&xs[0], false)), ".collect()"),
+            r => (r.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into()), ""),
+        };
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
-        let line = format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}); }}\n", args.join(", "));
+        let line = format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}){tail}; }}\n", args.join(", "));
         src.push_str(&if ty == "Float" { line.replace("i64", "f64") } else { line });
     }
     let dir = tempfile::TempDir::new().unwrap();

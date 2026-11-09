@@ -113,6 +113,36 @@ impl<'ast> Analyzer<'ast> {
         analyzer
     }
 
+    /// Declared types of the `const` / `static` items of the other files of a library (by name, only names
+    /// every file declares with one type). The analyzed file's own items are recorded over these.
+    pub fn seed_module_const_types(&mut self, consts: Arc<HashMap<String, Type>>) {
+        self.module_const_types = consts;
+    }
+
+    /// The declared types of every top-level `const` / `static` in `programs`, keyed by name; a name declared
+    /// with two different types is left out (its uses resolve to one of them by import, which is not modelled here).
+    pub fn library_const_types(programs: &[crate::parser::Program<'_>]) -> HashMap<String, Type> {
+        let mut out: HashMap<String, Type> = HashMap::new();
+        let mut conflicting: HashSet<String> = HashSet::new();
+        for program in programs {
+            for item in &program.items {
+                if let crate::parser::ast::core::Item::Const { name, type_, .. } | crate::parser::ast::core::Item::Static { name, type_, .. } = item {
+                    match out.get(name) {
+                        Some(t) if t != type_ => {
+                            conflicting.insert(name.clone());
+                        }
+                        Some(_) => {}
+                        None => {
+                            out.insert(name.clone(), type_.clone());
+                        }
+                    }
+                }
+            }
+        }
+        out.retain(|n, _| !conflicting.contains(n));
+        out
+    }
+
     fn new_with_shared_copy_structs(copy_structs: Arc<HashSet<String>>) -> Self {
         let mut analyzer = Analyzer::new_empty_shared(copy_structs);
         apply_stdlib_traits_bootstrap(&mut analyzer);

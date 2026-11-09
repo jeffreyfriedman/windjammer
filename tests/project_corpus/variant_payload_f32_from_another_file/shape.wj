@@ -1,0 +1,13 @@
+pub enum Shape {
+    Sphere(f32),
+    Cone(f32, f32),
+    Point,
+}
+
+pub fn size(s: Shape) -> f32 {
+    match s {
+        Shape::Sphere(r) => r,
+        Shape::Cone(a, b) => a + b,
+        Shape::Point => 0.0,
+    }
+}

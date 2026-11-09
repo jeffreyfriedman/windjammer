@@ -362,6 +362,7 @@ mod owned_but_not_returned_tests {
             str_ref_optimizable_params: HashSet::new(),
             module_path: Vec::new(),
             module_const_types: Default::default(),
+            type_aliases: Default::default(),
         };
 
         let mut linter = Linter::new();

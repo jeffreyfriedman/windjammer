@@ -1,0 +1,14 @@
+// A string moved into a struct field of an owned formal, then used again.
+struct Tag {
+    label: string,
+}
+
+fn wrap(s: string) -> Tag {
+    Tag { label: s }
+}
+
+fn main() {
+    let s = "x"
+    let t = wrap(s)
+    println("${t.label} ${s}")
+}

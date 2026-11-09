@@ -296,6 +296,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-STR-015 | strings.md | `strings/SPEC-STR-015.wj` |
 | SPEC-STR-016 | strings.md | `strings/SPEC-STR-016.wj` |
 | SPEC-STR-017 | strings.md | `strings/SPEC-STR-017.wj` |
+| SPEC-STR-018 | strings.md | `strings/SPEC-STR-018.wj` |
 | SPEC-TRT-001 | traits.md | `traits/SPEC-TRT-001.wj` |
 | SPEC-TRT-002 | traits.md | `traits/SPEC-TRT-002.wj` |
 | SPEC-TRT-003 | traits.md | `traits/SPEC-TRT-003.wj` |

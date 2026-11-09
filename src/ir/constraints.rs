@@ -15,6 +15,71 @@ impl ConstraintVar {
     }
 }
 
+/// A component of a structured type (see `Constraint::HasPart`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Part {
+    /// The element of a `Vec`, an array, or an iterator.
+    Elem,
+    /// Field `i` of a tuple.
+    Field(u8),
+    /// The payload of `Some` / `Ok`.
+    Payload,
+    /// The payload of `Err`.
+    ErrPayload,
+    /// The key of a map.
+    Key,
+    /// The value of a map.
+    Value,
+    /// Parameter `i` of a function value (a closure, a `fn(..)` formal).
+    Param(u8),
+    /// The result of a function value.
+    Ret,
+}
+
+impl Part {
+    /// This part of a known type, when the type has it and the part is fully known.
+    pub fn of(self, ty: &BaseType) -> Option<BaseType> {
+        let t = match (self, ty) {
+            (Part::Elem, BaseType::Vec(e) | BaseType::Array(e, _)) => (**e).clone(),
+            (Part::Field(i), BaseType::Tuple(ts)) => ts.get(i as usize)?.clone(),
+            (Part::Payload, BaseType::Option(t) | BaseType::Result(t, _)) => (**t).clone(),
+            (Part::ErrPayload, BaseType::Result(_, e)) => (**e).clone(),
+            (Part::Key, BaseType::HashMap(k, _)) => (**k).clone(),
+            (Part::Value, BaseType::HashMap(_, v)) => (**v).clone(),
+            (Part::Param(i), BaseType::FunctionPointer { params, .. } | BaseType::Fn(params, _)) => params.get(i as usize)?.clone(),
+            (Part::Ret, BaseType::FunctionPointer { return_type: r, .. } | BaseType::Fn(_, r)) => (**r).clone(),
+            _ => return None,
+        };
+        // A named type (a struct, or a signature's generic spelled as a name) does not type a part: only structure and
+        // numbers do.
+        (is_fully_known(&t) && !contains_named(&t)).then_some(t)
+    }
+}
+
+/// A type with no `Inferred` or type-variable component.
+pub fn is_fully_known(t: &BaseType) -> bool {
+    match t {
+        BaseType::Inferred | BaseType::TypeVar(_) => false,
+        BaseType::Vec(x) | BaseType::Option(x) | BaseType::Array(x, _) => is_fully_known(x),
+        BaseType::Result(a, b) | BaseType::HashMap(a, b) => is_fully_known(a) && is_fully_known(b),
+        BaseType::Tuple(ts) => ts.iter().all(is_fully_known),
+        BaseType::Fn(ps, r) | BaseType::FunctionPointer { params: ps, return_type: r } => ps.iter().all(is_fully_known) && is_fully_known(r),
+        _ => true,
+    }
+}
+
+/// A type with a named component (a struct, a trait, or a generic parameter spelled as a name).
+pub fn contains_named(t: &BaseType) -> bool {
+    match t {
+        BaseType::Custom(_) | BaseType::TraitObject(_) | BaseType::ImplTrait(_) => true,
+        BaseType::Vec(x) | BaseType::Option(x) | BaseType::Array(x, _) => contains_named(x),
+        BaseType::Result(a, b) | BaseType::HashMap(a, b) => contains_named(a) || contains_named(b),
+        BaseType::Tuple(ts) => ts.iter().any(contains_named),
+        BaseType::Fn(ps, r) | BaseType::FunctionPointer { params: ps, return_type: r } => ps.iter().any(contains_named) || contains_named(r),
+        _ => false,
+    }
+}
+
 /// A constraint emitted during the AST walk.
 #[derive(Debug, Clone)]
 pub enum Constraint {
@@ -33,6 +98,14 @@ pub enum Constraint {
     /// (`v[i]`). Soft: a class with no exact width resolves to `usize` instead of the `int` default;
     /// a class with an exact width keeps it (the backend converts at the site, NUM-USIZE-TO-INT).
     PrefersUsize(ConstraintVar),
+    /// `HasPart(container, part, var)`: `var` is that part of the container's type (the element of a
+    /// `Vec`/array/iterator, a tuple field, an `Option`/`Ok` payload, an `Err` payload). Structural:
+    /// two containers in one class have equal parts, and a container's known type fixes its parts' types.
+    HasPart(ConstraintVar, Part, ConstraintVar),
+    /// `FlowsInto(value, slot)`: a value passed to a std method's generic slot (`v.push(i + 1)`). It unifies like
+    /// `TypeEquals`, except that an index class (no exact width, meets an index source or use) entering a slot of an
+    /// exact integer width stays an index class and is converted at the argument (NUM-USIZE-TO-INT).
+    FlowsInto(ConstraintVar, ConstraintVar),
 
     // --- Ownership constraints ---
     /// A variable must have a specific ownership mode.
