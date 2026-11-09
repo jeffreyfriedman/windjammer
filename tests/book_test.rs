@@ -285,7 +285,7 @@ fn known_gap_directory_module_borrow_is_lost_when_compiled() {
 #[test]
 fn known_gap_idioms_fail_compiled() {
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("array_repeat.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003")] {
+    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
@@ -338,4 +338,13 @@ fn a_broken_project_fails_the_runner_interpreted() {
     s.page("```sh,verify\n$ cat > p/wj.toml <<'EOF'\n[package]\nname = \"p\"\nEOF\n$ cat > p/src/main.wj <<'EOF'\nfn main() {\n    println(\"hi\")\n}\nEOF\n$ cd p && wj run\nbye\n```\n");
     let (ok, out) = run_samples_projects(&s.ctx());
     assert!(!ok && out.contains("project output differs"), "{out}");
+}
+
+#[test]
+fn compiled_samples_do_not_see_each_other_functions() {
+    // Two samples define `load` with different signatures; each compiles on its own, so neither can break the other.
+    let s = Scratch::new();
+    s.page("```wj\n// expect: Err(\"negative\")\nfn load(n: int) -> Result<int, string> {\n    if n < 0 {\n        return Err(\"negative\")\n    }\n    Ok(n)\n}\n\nfn main() {\n    println(\"${load(-1):?}\")\n}\n```\n\n```wj\n// expect: Ok(5)\nfn load(text: string) -> Result<int, string> {\n    text.parse::<int>().map_err(|_| \"bad: ${text}\")\n}\n\nfn main() {\n    println(\"${load(\\\"5\\\"):?}\")\n}\n```\n");
+    let (ok, out) = run_samples(&s.ctx(), true);
+    assert!(ok, "{out}");
 }
