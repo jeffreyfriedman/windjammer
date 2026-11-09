@@ -339,3 +339,16 @@ impl<'ast> CodeGenerator<'ast> {
         analysis
     }
 }
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The declared types of the library's `const` / `static` items in other files (what `use` imports): a
+    /// `string` constant lowers to `&'static str` and is owned where a `String` is required, wherever it is declared.
+    pub fn set_library_const_types(&mut self, consts: &std::collections::HashMap<String, Type>) {
+        for (name, ty) in consts {
+            if crate::codegen::rust::types::is_windjammer_text_type(ty) {
+                self.module_string_consts.insert(name.clone());
+            }
+            self.module_const_types.entry(name.clone()).or_insert_with(|| ty.clone());
+        }
+    }
+}

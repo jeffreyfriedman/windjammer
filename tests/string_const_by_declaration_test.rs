@@ -24,6 +24,7 @@ pub const SCOPE_LIMIT: int = 3
 
 pub struct Note {
     pub text: string,
+    pub tags: Vec<string>,
 }
 
 pub fn notes() -> Vec<string> {
@@ -33,7 +34,7 @@ pub fn notes() -> Vec<string> {
 }
 
 pub fn note() -> Note {
-    Note { text: GREETING }
+    Note { text: GREETING, tags: vec![GREETING, GREETING] }
 }
 
 pub fn limits() -> Vec<int> {

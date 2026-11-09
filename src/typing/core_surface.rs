@@ -13,6 +13,7 @@ use crate::parser::Type;
 use std::collections::BTreeMap;
 
 const SURFACE: &str = include_str!("../../std/rust_core.wji");
+const ENUMERABLE: &str = include_str!("../../std/enumerable.wj");
 
 /// One declared method: the generics of its type and of the method, the parameter types (no receiver), the result.
 #[derive(Debug, Clone)]
@@ -21,6 +22,8 @@ struct Entry {
     method_generics: Vec<String>,
     params: Vec<Type>,
     ret: Option<Type>,
+    /// Declared without `self`: an associated function (`Vec::new()`).
+    is_static: bool,
 }
 
 /// An instantiated signature. A type the receiver or the turbofish does not fix stays `Type::Generic`.
@@ -35,40 +38,72 @@ pub struct MethodSig {
 #[derive(Debug, Clone)]
 pub struct CoreSurface {
     table: BTreeMap<(String, String), Entry>,
+    /// The enumerable methods every sequence has (`std/enumerable.wj`, trait `Enumerable<T>`), by method name.
+    enumerable: BTreeMap<String, Entry>,
 }
 
 impl CoreSurface {
     /// Parse `std/rust_core.wji` (embedded in the compiler).
     pub fn parse() -> Self {
-        let tokens = crate::lexer::Lexer::new(SURFACE).tokenize_with_locations();
-        let program = crate::parser_impl::Parser::new(tokens).parse().expect("std/rust_core.wji parses");
         let mut table = BTreeMap::new();
-        for item in &program.items {
-            if let Item::Trait { decl, .. } = item {
-                for m in &decl.methods {
-                    let entry = Entry {
-                        type_generics: decl.generics.clone(),
-                        method_generics: m.type_params.iter().map(|t| t.name.clone()).collect(),
-                        params: m.parameters.iter().filter(|p| p.name != "self").map(|p| p.type_.clone()).collect(),
-                        ret: m.return_type.clone(),
-                    };
-                    table.insert((decl.name.clone(), m.name.clone()), entry);
-                }
-            }
-        }
-        Self { table }
+        collect_entries(SURFACE, "std/rust_core.wji", &mut table);
+        let mut enumerable_table = BTreeMap::new();
+        collect_entries(ENUMERABLE, "std/enumerable.wj", &mut enumerable_table);
+        let enumerable = enumerable_table.into_iter().map(|((_, m), e)| (m, e)).collect();
+        Self { table, enumerable }
     }
 
     /// Every declared `(type, method)` pair, sorted (for the rustc agreement gate and the docs).
     pub fn entries(&self) -> Vec<(String, String)> {
         self.table.keys().cloned().collect()
     }
+}
 
+/// The trait methods declared in a surface file, keyed by (trait, method).
+fn collect_entries(source: &str, path: &str, table: &mut BTreeMap<(String, String), Entry>) {
+    let tokens = crate::lexer::Lexer::new(source).tokenize_with_locations();
+    let program = crate::parser_impl::Parser::new(tokens).parse().unwrap_or_else(|e| panic!("{path} parses: {e}"));
+    for item in &program.items {
+        if let Item::Trait { decl, .. } = item {
+            for m in &decl.methods {
+                let entry = Entry {
+                    type_generics: decl.generics.clone(),
+                    method_generics: m.type_params.iter().map(|t| t.name.clone()).collect(),
+                    params: m.parameters.iter().filter(|p| p.name != "self").map(|p| p.type_.clone()).collect(),
+                    ret: m.return_type.clone(),
+                    is_static: !m.parameters.iter().any(|p| p.name == "self"),
+                };
+                table.insert((decl.name.clone(), m.name.clone()), entry);
+            }
+        }
+    }
+}
+
+impl CoreSurface {
     /// The declared signature of `type_name::method`, uninstantiated: (type generics, method generics, params, ret).
     #[allow(clippy::type_complexity)]
     pub fn declared(&self, type_name: &str, method: &str) -> Option<(Vec<String>, Vec<String>, Vec<Type>, Option<Type>)> {
-        let e = self.table.get(&(type_name.to_string(), method.to_string()))?;
+        // A sequence also has the enumerable methods (`unique`, `sum_by`, ...), declared on its element `T`.
+        let e = self
+            .table
+            .get(&(type_name.to_string(), method.to_string()))
+            .or_else(|| is_element_container(type_name).then(|| self.enumerable.get(method)).flatten())?;
+        if e.is_static {
+            return None;
+        }
         Some((e.type_generics.clone(), e.method_generics.clone(), e.params.clone(), e.ret.clone()))
+    }
+
+    /// The declared signature of an associated function `type_name::function` (no `self`), uninstantiated.
+    #[allow(clippy::type_complexity)]
+    pub fn declared_static(&self, type_name: &str, function: &str) -> Option<(Vec<String>, Vec<String>, Vec<Type>, Option<Type>)> {
+        let e = self.table.get(&(type_name.to_string(), function.to_string())).filter(|e| e.is_static)?;
+        Some((e.type_generics.clone(), e.method_generics.clone(), e.params.clone(), e.ret.clone()))
+    }
+
+    /// Whether `type_name::name` is declared without `self` (an associated function).
+    pub fn is_static(&self, type_name: &str, name: &str) -> bool {
+        self.table.get(&(type_name.to_string(), name.to_string())).is_some_and(|e| e.is_static)
     }
 
     /// The signature of `receiver.method::<turbofish>(..)`, instantiated, or `None` when the receiver is not a
@@ -92,10 +127,47 @@ impl CoreSurface {
     }
 }
 
+/// The surface type a receiver type names (`&Vec<int>` -> `Vec`), or `None` for a type the surface does not declare.
+pub fn surface_type_name(receiver: &Type) -> Option<&'static str> {
+    head(receiver).map(|(n, _)| n)
+}
+
+/// The surface types whose one type parameter is an element (`Vec<T>`, `Iterator<T>`, the sets).
+const ELEMENT_CONTAINERS: [&str; 6] = ["Vec", "VecDeque", "HashSet", "BTreeSet", "Iterator", "List"];
+
+/// Whether a surface type name's type parameter is an element (the solver's `Part::Elem`).
+pub fn is_element_container(name: &str) -> bool {
+    ELEMENT_CONTAINERS.contains(&crate::type_classification::type_name_leaf(name))
+}
+
+/// The surface types whose two type parameters are a key and a value (the solver's `Part::Key` / `Part::Value`).
+const MAP_CONTAINERS: [&str; 2] = ["HashMap", "BTreeMap"];
+
+/// Whether a surface type name is a map (`HashMap<K, V>`, `BTreeMap<K, V>`).
+pub fn is_map_container(name: &str) -> bool {
+    MAP_CONTAINERS.contains(&crate::type_classification::type_name_leaf(name))
+}
+
+/// The receiver type of a surface type's methods, in the parser's own forms (`Vec<T>`, `Option<T>`, `Result<T, E>`).
+pub fn self_type(type_name: &str, generics: &[String]) -> Type {
+    let g: Vec<Type> = generics.iter().map(|n| Type::Generic(n.clone())).collect();
+    match (type_name, g.as_slice()) {
+        ("Vec", [t]) => Type::Vec(Box::new(t.clone())),
+        ("Option", [t]) => Type::Option(Box::new(t.clone())),
+        ("Result", [t, e]) => Type::Result(Box::new(t.clone()), Box::new(e.clone())),
+        _ => Type::Parameterized(type_name.to_string(), g),
+    }
+}
+
 /// The surface type a receiver type names, with its type arguments (`&Vec<int>` -> `Vec`, `[int]`).
 fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
-    const NAMES: [&str; 9] = ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String"];
-    let known = |n: &str| NAMES.iter().copied().find(|k| *k == crate::type_classification::type_name_leaf(n));
+    const NAMES: [&str; 11] = ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List"];
+    // Windjammer's `List<T>` (the enumerable methods' result) is the surface's `Vec<T>`.
+    const SYNONYMS: [(&str, &str); 1] = [("List", "Vec")];
+    let known = |n: &str| {
+        let k = NAMES.iter().copied().find(|k| *k == crate::type_classification::type_name_leaf(n))?;
+        Some(SYNONYMS.iter().find(|(s, _)| *s == k).map_or(k, |(_, v)| *v))
+    };
     match receiver {
         Type::Reference(t) | Type::MutableReference(t) => head(t),
         Type::Vec(t) | Type::Array(t, _) => Some(("Vec", vec![(**t).clone()])),
@@ -142,6 +214,10 @@ fn substitute(t: &Type, names: &[String], args: &[Type]) -> Type {
         Type::Result(a, b) => Type::Result(sub(a), sub(b)),
         Type::Parameterized(n, xs) => Type::Parameterized(n.clone(), xs.iter().map(|x| substitute(x, names, args)).collect()),
         Type::Tuple(xs) => Type::Tuple(xs.iter().map(|x| substitute(x, names, args)).collect()),
+        Type::FunctionPointer { params, return_type } => Type::FunctionPointer {
+            params: params.iter().map(|x| substitute(x, names, args)).collect(),
+            return_type: return_type.as_ref().map(|r| sub(r)),
+        },
         other => other.clone(),
     }
 }

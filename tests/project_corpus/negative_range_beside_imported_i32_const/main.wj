@@ -1,0 +1,10 @@
+// A module constant declared `i32` in another file: `cx = SIZE / 2` is i32, so the loop range
+// `-1..1` added to it is i32 too (the constant's declared type crosses the module boundary).
+// Expected by hand: put(31) + put(32) = 63.
+// expect: 63
+mod grid
+mod build
+
+fn main() {
+    println("${build::total()}")
+}
