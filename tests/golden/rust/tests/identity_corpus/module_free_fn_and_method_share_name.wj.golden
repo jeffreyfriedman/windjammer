@@ -9,14 +9,14 @@ pub fn put(&mut self, x: i64) {
             self.items.push(x);
 }
 }    #[inline]
-pub fn put(xs: Vec<i64>) -> i64 {
+pub fn put(xs: &Vec<i64>) -> i64 {
         xs.len() as i64
 }    #[inline]
 pub fn fill() -> i64 {
         let mut b = Bag { items: Vec::new() };
         b.put(4_i64);
         b.put(5_i64);
-        put(b.items.clone())
+        put(&b.items)
 }}
 
 fn main() {

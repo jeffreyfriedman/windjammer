@@ -43,24 +43,23 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// The formal the IR decides: the receiver spelling for `self`, else the value-formal mode.
-    pub(super) fn ir_decided_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, is_pub: bool, unused: &std::collections::HashSet<String>) -> Option<String> {
+    pub(super) fn ir_decided_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, unused: &std::collections::HashSet<String>) -> Option<String> {
         if param.name == "self" {
             return Some(self.self_receiver(analyzed).unwrap_or("&self").to_string());
         }
-        self.ir_value_formal(param, analyzed, is_pub, unused)
+        self.ir_value_formal(param, analyzed, unused)
     }
 
     /// O4 (convergence C5): a plain value formal (a non-Copy user type or a `Vec`, declared by value,
     /// no pattern or pin) is spelled from the IR mode: `&T`, `&mut T` or `T`. Text, Copy, generic and
     /// trait-impl formals keep their own spelling rules for now. `None` when the IR has no mode.
-    fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, is_pub: bool, unused: &std::collections::HashSet<String>) -> Option<String> {
+    fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, unused: &std::collections::HashSet<String>) -> Option<String> {
         let plain = matches!(&param.type_, Type::Custom(_) | Type::Vec(_) | Type::Parameterized(..))
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
             && !self.is_type_copy(&param.type_)
             && !matches!(&param.type_, Type::Custom(n) if crate::analyzer::Analyzer::is_generic_type_param(&Type::Custom(n.clone())));
-        // Public formals are an API other crates compile against (their call sites read the published
-        // signature): they keep the owned-API rules until cross-crate call sites read the IR mode too.
-        if self.in_trait_impl || is_pub || param.pattern.is_some() || !param.decorators.is_empty() || !plain {
+        // Public formals too: other crates' call sites read the emitted formals from `metadata.json`.
+        if self.in_trait_impl || param.pattern.is_some() || !param.decorators.is_empty() || !plain {
             return None;
         }
         let ty = self.type_to_rust(&param.type_);
