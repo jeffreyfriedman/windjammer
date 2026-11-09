@@ -29,7 +29,7 @@ runs as a project in the interpreter and compiled, with the same agreement check
 | Programs that run interpreted only | 4 |
 | Chapters still to be written | 0 |
 | Pages | 44 |
-| Promises no page mentions yet | 1 |
+| Promises no page mentions yet | 0 |
 | Language features in the registry | 30 |
 | Registry features no page covers yet | 0 |
 <!-- wj:end -->

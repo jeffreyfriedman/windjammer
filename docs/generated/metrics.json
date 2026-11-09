@@ -9,7 +9,7 @@
     "book.features": 30,
     "book.features_uncovered": 0,
     "book.pages": 44,
-    "book.promises_uncovered": 1,
+    "book.promises_uncovered": 0,
     "cli.subcommands": 39,
     "conformance.backends": 3,
     "conformance.programs": 156,
@@ -21,7 +21,7 @@
     "lexer.keywords": 44,
     "lints.w_codes": 7,
     "stdlib.files": 43,
-    "tests.rust_files": 2006,
-    "tests.wj_programs": 1947
+    "tests.rust_files": 2005,
+    "tests.wj_programs": 1938
   }
 }
