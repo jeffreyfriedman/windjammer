@@ -14,3 +14,4 @@ The sample runner of The Windjammer Book (`docs/book`), in interpreted Windjamme
 ## Invariants
 - The extraction (hidden `~` lines, `// expect:` lines, which fences count) is `tools/docs_truth/book.rs`; the runner knows nothing about Markdown.
 - `tests/book_test.rs` runs it with the freshly built `wj`, so a language change that breaks a sample fails the compiler's own test run; its mutation tests plant a wrong expectation and a type error and require the runner to fail.
+- The runner has one test hook, `BOOK_PLANT_COMPILED_DIFF=SUBSTR` (appends a line to the compiled output of matching samples); the compiled-gate mutation test uses it, so it needs no real compiler gap, and `mutation_tests_do_not_depend_on_known_gaps` enforces that.
