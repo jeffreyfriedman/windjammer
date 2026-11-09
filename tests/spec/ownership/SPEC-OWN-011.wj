@@ -1,5 +1,4 @@
 // spec: SPEC-OWN-011
-// xfail: Q-033
 // expect: drop old
 // expect: assigned
 // expect: pair built
