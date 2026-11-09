@@ -109,6 +109,21 @@ impl<'ast> CodeGenerator<'ast> {
     /// it, or in the next loop iteration; `ir::liveness`): the move copies instead. Everything else
     /// passes through unchanged. With the liveness mutation (nothing read again) this never fires.
     pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        // Never copy a value without `Clone`, whichever rule proposed it (a binding, a field such as a
+        // channel end): the move stays, and `wj check` reports the later use (WJ0007) instead of rustc
+        // rejecting a missing `clone` method.
+        if let Some(base) = emitted.strip_suffix(".clone()") {
+            let uncloneable = match expr {
+                crate::parser::Expression::Identifier { name, .. } => self.binding_known_uncloneable(name),
+                crate::parser::Expression::FieldAccess { .. } => {
+                    self.infer_expression_type(expr).is_some_and(|t| !self.type_known_clone(&t, 0))
+                }
+                _ => false,
+            };
+            if uncloneable {
+                return base.to_string();
+            }
+        }
         let crate::parser::Expression::Identifier { name, .. } = expr else { return emitted };
         if emitted != *name || self.auto_clone_analysis.is_none() || !self.clone_facts.plain_bindings.contains(name) {
             return emitted;
@@ -135,6 +150,12 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// The binding's type is known and has no `Clone` in the emitted Rust.
+    fn binding_known_uncloneable(&self, name: &str) -> bool {
+        let ty = self.current_function_params.iter().find(|p| p.name == name).map(|p| p.type_.clone());
+        ty.or_else(|| self.local_var_types.get(name).cloned()).is_some_and(|t| !self.type_known_clone(&t, 0))
+    }
+
     /// `ty` implements `Clone` in the emitted Rust: no field (transitively, through the program's
     /// structs) is a type the derive rules leave without `Clone` (`type_precludes_auto_debug_clone`).
     pub(in crate::codegen::rust) fn type_known_clone(&self, ty: &Type, depth: u8) -> bool {
@@ -149,6 +170,16 @@ impl<'ast> CodeGenerator<'ast> {
         match self.lookup_struct_field_types(leaf) {
             Some(fields) if depth < 4 => fields.values().all(|t| self.type_known_clone(t, depth + 1)),
             _ => true,
+        }
+    }
+
+    /// D-CLONE-REDUNDANT: a borrow the user wrote (`&a.name`) never needs a copy to borrow from:
+    /// `&a.name.clone()` becomes `&a.name`.
+    pub(in crate::codegen::rust) fn drop_clone_under_borrow(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        let is_user_borrow = matches!(expr, crate::parser::Expression::Unary { op: crate::parser::UnaryOp::Ref, .. });
+        match emitted.strip_prefix('&').and_then(|r| r.strip_suffix(".clone()")) {
+            Some(place) if is_user_borrow && !place.starts_with("mut ") && !place.contains(' ') => format!("&{place}"),
+            _ => emitted,
         }
     }
 
@@ -186,10 +217,12 @@ impl<'ast> CodeGenerator<'ast> {
         self.clone_facts.stmt_stack.push(stmt as *const Statement<'_> as *const () as usize);
         self.clone_facts.reread_stack.push(crate::ir::liveness::reread_in(stmt));
         let dying: HashSet<String> = if self.auto_clone_analysis.is_some() {
-            crate::ir::liveness::dying_in(stmt, &self.clone_facts.last_use_nodes)
-                .into_iter()
-                .filter(|n| self.binding_emits_owned_value(n))
-                .collect()
+            let mut never = crate::ir::liveness::dying_in(stmt, &self.clone_facts.last_use_nodes);
+            never.retain(|n| self.binding_emits_owned_value(n));
+            // A value without `Clone` (a struct holding a channel end) is never copied: its reuse
+            // after a move stays a move, which `wj check` reports (WJ0007), not a `.clone()` rustc rejects.
+            never.extend(crate::ir::liveness::reads_in(stmt).into_iter().filter(|n| self.binding_known_uncloneable(n)));
+            never.into_iter().collect()
         } else {
             HashSet::new()
         };

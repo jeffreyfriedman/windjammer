@@ -82,6 +82,8 @@ exemption must go (or the binding must be emitted `&'static str`).
 is read again; the corpus program builds and matches the interpreter.
 
 ## D-CLONE-REDUNDANT Clone then borrow (S2)
+**C6 (2026-11-05):** an explicit borrow never wraps a copy (`a.1.cmp(&b.1)`, not `&b.1.clone()`); the
+`prefix + &self.name.clone()` shape below is not covered yet.
 `fn label(self, prefix: string) -> string { prefix + self.name }` emits `prefix + &self.name.clone()`: the clone is
 allocated and immediately borrowed.
 

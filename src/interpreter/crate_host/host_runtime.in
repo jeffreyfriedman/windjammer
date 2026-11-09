@@ -3,7 +3,8 @@
 use std::io::{Read, Write};
 
 trait Wire: Sized {
-    fn enc(&self, o: &mut Vec<u8>);
+    /// Consumes the value: an opaque crate value moves into the handle table.
+    fn enc(self, o: &mut Vec<u8>);
     fn dec(i: &mut &[u8]) -> Result<Self, String>;
 }
 
@@ -32,9 +33,9 @@ fn put32(o: &mut Vec<u8>, n: usize) {
 macro_rules! ints {
     ($($t:ty),*) => {$(
         impl Wire for $t {
-            fn enc(&self, o: &mut Vec<u8>) {
+            fn enc(self, o: &mut Vec<u8>) {
                 o.push(1);
-                o.extend_from_slice(&(*self as i128).to_le_bytes());
+                o.extend_from_slice(&(self as i128).to_le_bytes());
             }
             fn dec(i: &mut &[u8]) -> Result<Self, String> {
                 tag(i, 1, stringify!($t))?;
@@ -47,7 +48,7 @@ macro_rules! ints {
 ints!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, usize);
 
 impl Wire for f64 {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         o.push(2);
         o.extend_from_slice(&self.to_bits().to_le_bytes());
     }
@@ -57,17 +58,17 @@ impl Wire for f64 {
     }
 }
 impl Wire for f32 {
-    fn enc(&self, o: &mut Vec<u8>) {
-        (*self as f64).enc(o)
+    fn enc(self, o: &mut Vec<u8>) {
+        (self as f64).enc(o)
     }
     fn dec(i: &mut &[u8]) -> Result<Self, String> {
         Ok(f64::dec(i)? as f32)
     }
 }
 impl Wire for bool {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         o.push(3);
-        o.push(*self as u8);
+        o.push(self as u8);
     }
     fn dec(i: &mut &[u8]) -> Result<Self, String> {
         tag(i, 3, "bool")?;
@@ -75,9 +76,9 @@ impl Wire for bool {
     }
 }
 impl Wire for char {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         o.push(4);
-        o.extend_from_slice(&(*self as u32).to_le_bytes());
+        o.extend_from_slice(&(self as u32).to_le_bytes());
     }
     fn dec(i: &mut &[u8]) -> Result<Self, String> {
         tag(i, 4, "char")?;
@@ -86,7 +87,7 @@ impl Wire for char {
     }
 }
 impl Wire for String {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         o.push(5);
         put32(o, self.len());
         o.extend_from_slice(self.as_bytes());
@@ -98,7 +99,7 @@ impl Wire for String {
     }
 }
 impl Wire for () {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         o.push(0);
     }
     fn dec(i: &mut &[u8]) -> Result<Self, String> {
@@ -106,7 +107,7 @@ impl Wire for () {
     }
 }
 impl<T: Wire> Wire for Vec<T> {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         o.push(6);
         put32(o, self.len());
         for x in self {
@@ -120,7 +121,7 @@ impl<T: Wire> Wire for Vec<T> {
     }
 }
 impl<T: Wire> Wire for Option<T> {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         match self {
             None => o.push(7),
             Some(x) => {
@@ -138,7 +139,7 @@ impl<T: Wire> Wire for Option<T> {
     }
 }
 impl<T: Wire, E: Wire> Wire for Result<T, E> {
-    fn enc(&self, o: &mut Vec<u8>) {
+    fn enc(self, o: &mut Vec<u8>) {
         match self {
             Ok(x) => {
                 o.push(9);
@@ -161,7 +162,7 @@ impl<T: Wire, E: Wire> Wire for Result<T, E> {
 macro_rules! tuples {
     ($(($n:expr; $($t:ident $i:tt),+))*) => {$(
         impl<$($t: Wire),+> Wire for ($($t,)+) {
-            fn enc(&self, o: &mut Vec<u8>) {
+            fn enc(self, o: &mut Vec<u8>) {
                 o.push(11);
                 put32(o, $n);
                 $(self.$i.enc(o);)+
@@ -183,6 +184,51 @@ tuples! {
 
 thread_local! {
     static PANIC: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+    /// Opaque crate values the program holds handles to (ADR-0031): id -> value.
+    static HANDLES: std::cell::RefCell<(u64, std::collections::HashMap<u64, Box<dyn std::any::Any>>)> =
+        std::cell::RefCell::new((0, std::collections::HashMap::new()));
+}
+
+fn hput<T: 'static>(x: T) -> u64 {
+    HANDLES.with(|h| {
+        let mut h = h.borrow_mut();
+        h.0 += 1;
+        let id = h.0;
+        h.1.insert(id, Box::new(x));
+        id
+    })
+}
+fn hid(i: &mut &[u8]) -> Result<u64, String> {
+    tag(i, 12, "handle")?;
+    Ok(u64::from_le_bytes(take(i, 8)?.try_into().unwrap()))
+}
+fn htake<T: 'static>(id: u64) -> Result<T, String> {
+    HANDLES.with(|h| {
+        let mut h = h.borrow_mut();
+        match h.1.remove(&id) {
+            None => Err(format!("handle {id} is no longer valid (it was moved into an earlier call)")),
+            Some(b) => match b.downcast::<T>() {
+                Ok(x) => Ok(*x),
+                Err(b) => {
+                    h.1.insert(id, b);
+                    Err(format!("handle {id} holds another type"))
+                }
+            },
+        }
+    })
+}
+fn hrestore<T: 'static>(id: u64, x: T) {
+    HANDLES.with(|h| {
+        h.borrow_mut().1.insert(id, Box::new(x));
+    })
+}
+fn hrelease(ids: Vec<u64>) {
+    HANDLES.with(|h| {
+        let mut h = h.borrow_mut();
+        for id in ids {
+            h.1.remove(&id);
+        }
+    })
 }
 
 fn pipes() -> (Box<dyn Read>, Box<dyn Write>) {
