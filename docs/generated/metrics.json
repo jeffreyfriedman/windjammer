@@ -8,7 +8,7 @@
     "book.examples_interpreter_only": 3,
     "book.pages": 37,
     "book.promises_uncovered": 0,
-    "cli.subcommands": 38,
+    "cli.subcommands": 39,
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
@@ -20,6 +20,6 @@
     "lints.w_codes": 7,
     "stdlib.files": 43,
     "tests.rust_files": 2003,
-    "tests.wj_programs": 1917
+    "tests.wj_programs": 1925
   }
 }
