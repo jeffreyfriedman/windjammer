@@ -1,0 +1,12 @@
+use crate::ledger::Ledger
+
+fn entry_body(entry: Ledger, extra: string) -> string {
+    let mut body = "{\"code\":\"" + entry.code + "\",\"name\":\"" + entry.name
+    body = body + "\",\"cents\":" + entry.cents.to_string()
+    body = body + extra
+    body
+}
+
+fn entry_text(entry: Ledger, extra: string) -> string {entry_body(entry, extra)}
+
+pub fn entry_json(entry: Ledger) -> string {entry_text(entry, "}")}

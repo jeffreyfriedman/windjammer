@@ -1,0 +1,63 @@
+// ==== ledger.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Ledger {
+    pub code: String,
+    pub name: String,
+    pub cents: i64,
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod ledger;
+pub mod render;
+
+// Re-export public items
+pub use ledger::*;
+pub use render::*;
+// ==== main.rs ====
+use crate::ledger::Ledger;
+mod ledger;
+mod render;
+fn main() {
+    let entry = Ledger { code: String::from("A1"), name: String::from("Cash"), cents: 250_i64 };
+    println!("{}", render::entry_json(&entry));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod ledger;
+pub mod render;
+
+// Re-export public items
+pub use ledger::*;
+pub use render::*;
+// ==== render.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::ledger::Ledger;
+#[inline]
+pub fn entry_body(entry: Ledger, extra: &str) -> String {
+    let mut body = format!("{}{}{}{}", "{\"code\":\"", entry.code, "\",\"name\":\"", entry.name);
+    body = body + "\",\"cents\":" + &entry.cents.to_string();
+    body = body + &extra;
+    body
+}
+
+#[inline]
+pub fn entry_json(entry: &Ledger) -> String {
+    entry_text(entry.clone(), "}")
+}
+
+#[inline]
+pub fn entry_text(entry: Ledger, extra: &str) -> String {
+    entry_body(entry, extra)
+}
+

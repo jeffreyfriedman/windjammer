@@ -1,0 +1,9 @@
+pub struct Request {
+    pub headers: Vec<string>,
+    pub path: string,
+}
+
+pub fn make_request(headers: Vec<string>, path: string) -> Request {
+    let kept = headers
+    Request { headers: kept, path: path }
+}

@@ -407,7 +407,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         match expr {
             Expression::Identifier { name, location } => {
                 if in_payload {
-                    if let Some(&var) = self.param_vars.get(name) {
+                    // A local in scope (`let kept = headers`) takes the requirement too; its `let` flow
+                    // edge carries it back to the parameter, as for OWN-RETURNED.
+                    let local = self.scopes.iter().rev().find_map(|s| s.get(name)).copied();
+                    if let Some(var) = local.or_else(|| self.param_vars.get(name).copied()) {
                         self.cs.add_because(
                             Constraint::OwnershipIs(var, OwnedType::Owned),
                             origin(
