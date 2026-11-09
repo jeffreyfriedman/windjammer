@@ -1,0 +1,17 @@
+use crate::ports::Inventory
+
+pub struct Shelf {
+    pub items: Vec<string>,
+}
+
+impl Inventory for Shelf {
+    fn list_items(self, tenant_id: string) -> Vec<string> {
+        let mut out: Vec<string> = Vec::new()
+        for it in self.items {
+            if it == tenant_id {
+                out.push(it)
+            }
+        }
+        out
+    }
+}

@@ -66,19 +66,12 @@ impl<'ast> CodeGenerator<'ast> {
         needs_lifetime: bool,
         unused_params: &HashSet<String>,
     ) -> Vec<String> {
-        let body_modifies = if self.in_trait_impl {
-            self.function_modifies_self(&analyzed.decl)
-        } else {
-            self.function_modifies_self_or_derived(&analyzed.decl)
-        };
         func.parameters
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
                 if param.name == "self" {
-                    if let Some(receiver) = self.ir_self_receiver(&analyzed.decl) {
-                        return receiver.to_string();
-                    }
+                    return self.self_receiver(analyzed).unwrap_or("&self").to_string();
                 }
                 if param.name != "self"
                     && (self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
@@ -1330,251 +1323,16 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}: {}", param.name, cow_type);
                 }
 
-                if param.name == "self"
-                    && !self.in_trait_impl
-                    && matches!(
-                        analyzed.inferred_ownership.get("self"),
-                        Some(OwnershipMode::MutBorrowed)
-                    )
-                    && super::self_analysis::function_returns_self_type(&analyzed.decl)
-                {
-                    self.inferred_borrowed_params.remove("self");
-                    self.inferred_mut_borrowed_params.remove("self");
-                    return "mut self".to_string();
-                }
 
-                if param.name == "self"
-                    && !self.in_trait_impl
-                    && (body_modifies
-                        || super::self_analysis::function_modifies_self(
-                            &analyzed.decl,
-                            Some(&self.signature_registry),
-                            self.current_struct_name.as_deref(),
-                            Some(&self.struct_field_types),
-                            Some(&self.self_receiver_upgrades),
-                        ))
-                    && (self.method_returns_impl_struct(func)
-                        || super::self_analysis::function_returns_self_type(&analyzed.decl))
-                {
-                    self.inferred_borrowed_params.remove("self");
-                    self.inferred_mut_borrowed_params.remove("self");
-                    self.record_self_receiver_upgrade(
-                        &func.name,
-                        self.get_param_ownership("self", analyzed),
-                        "mut self",
-                    );
-                    return "mut self".to_string();
-                }
 
-                if param.name == "self"
-                    && !self.in_trait_impl
-                    && super::self_analysis::function_return_moves_self_fields(&analyzed.decl)
-                    && body_modifies
-                    && self.method_returns_impl_struct(func)
-                {
-                    self.inferred_borrowed_params.remove("self");
-                    self.inferred_mut_borrowed_params.remove("self");
-                    self.record_self_receiver_upgrade(
-                        &func.name,
-                        self.get_param_ownership("self", analyzed),
-                        "mut self",
-                    );
-                    return "mut self".to_string();
-                }
 
-                if param.name == "self"
-                    && !self.in_trait_impl
-                    && !super::self_analysis::function_calls_owned_self_method(
-                        &analyzed.decl,
-                        &self.signature_registry,
-                        self.current_struct_name.as_deref(),
-                    )
-                    && !matches!(
-                        self.get_effective_self_ownership(&func.name, analyzed),
-                        Some(OwnershipMode::Owned)
-                    )
-                    && self.function_calls_self_with_recorded_receiver(
-                        &analyzed.decl,
-                        OwnershipMode::MutBorrowed,
-                    )
-                {
-                    // MutBorrowed sibling helpers (`setup_materials` /
-                    // `build_scene`) must not force `&mut self` when the body still
-                    // partial-moves a field into an owned ctor then assigns another.
-                    if self.self_field_partial_move_needs_owned_receiver(&analyzed.decl) {
-                        self.inferred_borrowed_params.remove("self");
-                        self.inferred_mut_borrowed_params.remove("self");
-                        self.record_self_receiver_upgrade(
-                            &func.name,
-                            self.get_param_ownership("self", analyzed),
-                            "mut self",
-                        );
-                        return "mut self".to_string();
-                    }
-                    self.inferred_mut_borrowed_params.insert("self".to_string());
-                    self.inferred_borrowed_params.remove("self");
-                    self.record_self_receiver_upgrade(
-                        &func.name,
-                        self.get_param_ownership("self", analyzed),
-                        "&mut self",
-                    );
-                    return "&mut self".to_string();
-                }
 
                 // Self-delegation fallback: if the fixed-point pre-pass recorded this
                 // method as MutBorrowed (via transitive delegation), use &mut self.
-                if param.name == "self" && !self.in_trait_impl {
-                    if let Some(sn) = self.current_struct_name.as_deref() {
-                        let qualified = format!("{}::{}", sn, func.name);
-                        if self.self_receiver_upgrades.get(&qualified)
-                            == Some(&OwnershipMode::MutBorrowed)
-                        {
-                            if super::self_analysis::function_return_moves_self_fields(&analyzed.decl)
-                                && body_modifies
-                                && self.method_returns_impl_struct(func)
-                            {
-                                self.inferred_borrowed_params.remove("self");
-                                self.inferred_mut_borrowed_params.remove("self");
-                                return "mut self".to_string();
-                            }
-                            // stale MutBorrowed upgrade must not beat owned
-                            // partial-move receivers.
-                            if self.self_field_partial_move_needs_owned_receiver(&analyzed.decl) {
-                                self.inferred_borrowed_params.remove("self");
-                                self.inferred_mut_borrowed_params.remove("self");
-                                return "mut self".to_string();
-                            }
-                            self.inferred_mut_borrowed_params.insert("self".to_string());
-                            self.inferred_borrowed_params.remove("self");
-                            return "&mut self".to_string();
-                        }
-                    }
-                }
 
                 // Handle explicit ownership hints (self, &self, &mut self)
                 let mut type_str = match &param.ownership {
                     OwnershipHint::Owned => {
-                        if param.name == "self" {
-                            let body_modifies = body_modifies;
-                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
-                                || super::self_analysis::function_return_moves_self_fields(&analyzed.decl);
-                            let eff_ownership =
-                                self.get_effective_self_ownership(&func.name, analyzed);
-                            let self_str = if let Some(ownership_mode) = eff_ownership {
-                                if crate::debug_env::enabled("WJ_DEBUG_SELF_RECV") {
-                                    eprintln!(
-                                        "[SELF-RECV] fn={} eff={:?} body_modifies={} consumes={} returns_impl={} owned_recv={}",
-                                        func.name,
-                                        ownership_mode,
-                                        body_modifies,
-                                        consumes_self,
-                                        self.method_returns_impl_struct(func),
-                                        self.owned_self_receiver(&analyzed.decl),
-                                    );
-                                }
-                                match ownership_mode {
-                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                                        if !self.in_trait_impl
-                                            && self.method_returns_impl_struct(func)
-                                            && (body_modifies
-                                                || matches!(
-                                                    ownership_mode,
-                                                    OwnershipMode::MutBorrowed
-                                                )) =>
-                                    {
-                                        "mut self"
-                                    }
-                                    // P3.707: Borrowed + consumes (e.g. owned
-                                    // `upload_camera`) must not drop `mut` when the
-                                    // body also assigns `self.field` — bare `self`
-                                    // → E0594.
-                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                                        if !self.in_trait_impl
-                                            && consumes_self
-                                            && !matches!(
-                                                ownership_mode,
-                                                OwnershipMode::MutBorrowed
-                                            ) =>
-                                    {
-                                        if body_modifies {
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        } else {
-                                            "self"
-                                        }
-                                    }
-                                    OwnershipMode::MutBorrowed => {
-                                        // P3.584: MutBorrowed upgrade / inference must not
-                                        // force `&mut self` over owned partial moves.
-                                        if !self.in_trait_impl
-                                            && (body_modifies
-                                                && super::self_analysis::function_consumes_self(
-                                                    &analyzed.decl,
-                                                )
-                                                || self.self_field_partial_move_needs_owned_receiver(
-                                                    &analyzed.decl,
-                                                ))
-                                        {
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        } else {
-                                            "&mut self"
-                                        }
-                                    }
-                                    OwnershipMode::Borrowed => {
-                                        if !self.in_trait_impl && body_modifies {
-                                            "&mut self"
-                                        } else if !self.in_trait_impl
-                                            && self.method_returns_impl_struct(func)
-                                        {
-                                            if body_modifies {
-                                                "mut self"
-                                            } else {
-                                                self.owned_self_receiver(&analyzed.decl)
-                                            }
-                                        } else {
-                                            "&self"
-                                        }
-                                    }
-                                    OwnershipMode::Owned => {
-                                        if self.in_trait_impl {
-                                            if body_modifies {
-                                                "mut self"
-                                            } else {
-                                                "self"
-                                            }
-                                        } else {
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        }
-                                    }
-                                }
-                            } else {
-                                if self.in_trait_impl {
-                                    "self"
-                                } else {
-                                    self.owned_self_receiver(&analyzed.decl)
-                                }
-                            };
-                            // Sync borrowed-params sets with actual generated receiver.
-                            match self_str {
-                                "&self" => {
-                                    self.inferred_borrowed_params.insert("self".to_string());
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                }
-                                "&mut self" => {
-                                    self.inferred_mut_borrowed_params.insert("self".to_string());
-                                    self.inferred_borrowed_params.remove("self");
-                                }
-                                _ => {
-                                    self.inferred_borrowed_params.remove("self");
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                }
-                            }
-                            self.record_self_receiver_upgrade(
-                                &func.name,
-                                eff_ownership,
-                                self_str,
-                            );
-                            return self_str.to_string();
-                        }
                         // Check if the analyzer inferred MutBorrowed (e.g., Copy type
                         // mutated through method call — caller wants mutation visible).
                         // Skip in trait impls: trait signature must match exactly.
@@ -1665,7 +1423,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && (!self.function_return_is_text(func)
                                 || self.str_ref_optimizable_param(analyzed, &param.name))
-                            && !param.decorators.iter().any(|d| d.name == "string_ref")
+                            && !param.pins_string_ref()
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
                                 &param.type_,
@@ -1689,55 +1447,6 @@ impl<'ast> CodeGenerator<'ast> {
                         return format!("mut {}: {}", param.name, self.type_to_rust(formal_type));
                     }
                     OwnershipHint::Ref => {
-                        if param.name == "self" {
-                            let body_modifies = body_modifies;
-                            let self_str = if let Some(ownership_mode) =
-                                self.get_effective_self_ownership(&func.name, analyzed)
-                            {
-                                match ownership_mode {
-                                    OwnershipMode::MutBorrowed => "&mut self",
-                                    OwnershipMode::Borrowed => {
-                                        if !self.in_trait_impl && body_modifies {
-                                            "&mut self"
-                                        } else {
-                                            "&self"
-                                        }
-                                    }
-                                    // P3.707: Ref hint + Owned (consumes via owned sibling)
-                                    // must still honor field assigns → mut/&mut self.
-                                    OwnershipMode::Owned => {
-                                        if !self.in_trait_impl && body_modifies {
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        } else {
-                                            "self"
-                                        }
-                                    }
-                                }
-                            } else if !self.in_trait_impl && body_modifies {
-                                "&mut self"
-                            } else {
-                                "&self"
-                            };
-                            match self_str {
-                                "&mut self" => {
-                                    self.inferred_mut_borrowed_params
-                                        .insert("self".to_string());
-                                    self.inferred_borrowed_params.remove("self");
-                                    self.emitted_rust_ref_formals.insert("self".to_string());
-                                }
-                                "&self" => {
-                                    self.inferred_borrowed_params.insert("self".to_string());
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                    self.emitted_rust_ref_formals.insert("self".to_string());
-                                }
-                                _ => {
-                                    self.inferred_borrowed_params.remove("self");
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                    self.emitted_rust_ref_formals.remove("self");
-                                }
-                            }
-                            return self_str.to_string();
-                        }
                         // Public API keeps owned `string` despite Ref / analyzer demotion.
                         if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && self.pub_module_api_keeps_owned_string_formal(func, param)
@@ -1778,51 +1487,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     OwnershipHint::Mut => {
-                        if param.name == "self" {
-                            let body_modifies = body_modifies;
-                            let self_str = if let Some(ownership_mode) =
-                                self.get_effective_self_ownership(&func.name, analyzed)
-                            {
-                                match ownership_mode {
-                                    OwnershipMode::Borrowed => {
-                                        if !self.in_trait_impl && body_modifies {
-                                            "&mut self"
-                                        } else {
-                                            "&self"
-                                        }
-                                    }
-                                    OwnershipMode::MutBorrowed => "&mut self",
-                                    OwnershipMode::Owned => {
-                                        if self.in_trait_impl {
-                                            "self"
-                                        } else {
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        }
-                                    }
-                                }
-                            } else {
-                                "&mut self"
-                            };
-                            match self_str {
-                                "&mut self" => {
-                                    self.inferred_mut_borrowed_params
-                                        .insert("self".to_string());
-                                    self.inferred_borrowed_params.remove("self");
-                                    self.emitted_rust_ref_formals.insert("self".to_string());
-                                }
-                                "&self" => {
-                                    self.inferred_borrowed_params.insert("self".to_string());
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                    self.emitted_rust_ref_formals.insert("self".to_string());
-                                }
-                                _ => {
-                                    self.inferred_borrowed_params.remove("self");
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                    self.emitted_rust_ref_formals.remove("self");
-                                }
-                            }
-                            return self_str.to_string();
-                        }
                         // Don't add &mut if the type is already a MutableReference
                         if matches!(formal_type, Type::MutableReference(_)) {
                             self.type_to_rust(formal_type)
@@ -1831,200 +1495,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     OwnershipHint::Inferred => {
-                        if param.name == "self" {
-                            // P3.707: early owned-sibling path used to require
-                            // `returns_impl_struct` for `mut self`, so a method that returns bool,
-                            // assigns fields and calls an owned-self method emitted bare immutable `self`.
-                            if !self.in_trait_impl
-                                && super::self_analysis::function_calls_owned_self_method(
-                                    &analyzed.decl,
-                                    &self.signature_registry,
-                                    self.current_struct_name.as_deref(),
-                                )
-                            {
-                                let body_modifies = body_modifies;
-                                let self_str = if body_modifies
-                                    && self.method_returns_impl_struct(func)
-                                {
-                                    "mut self"
-                                } else if body_modifies {
-                                    self.owned_self_receiver(&analyzed.decl)
-                                } else {
-                                    "self"
-                                };
-                                match self_str {
-                                    "&self" => {
-                                        self.inferred_borrowed_params.insert("self".to_string());
-                                        self.inferred_mut_borrowed_params.remove("self");
-                                    }
-                                    "&mut self" => {
-                                        self.inferred_mut_borrowed_params
-                                            .insert("self".to_string());
-                                        self.inferred_borrowed_params.remove("self");
-                                    }
-                                    _ => {
-                                        self.inferred_borrowed_params.remove("self");
-                                        self.inferred_mut_borrowed_params.remove("self");
-                                    }
-                                }
-                                self.record_self_receiver_upgrade(
-                                    &func.name,
-                                    Some(OwnershipMode::Owned),
-                                    self_str,
-                                );
-                                return self_str.to_string();
-                            }
-                            if !self.in_trait_impl
-                                && !matches!(param.ownership, OwnershipHint::Owned)
-                                && matches!(
-                                    analyzed.inferred_ownership.get("self"),
-                                    Some(OwnershipMode::Borrowed)
-                                )
-                                && !self.method_returns_impl_struct(func)
-                                && !super::self_analysis::function_calls_owned_self_method(
-                                    &analyzed.decl,
-                                    &self.signature_registry,
-                                    self.current_struct_name.as_deref(),
-                                )
-                            {
-                                self.inferred_borrowed_params.insert("self".to_string());
-                                self.inferred_mut_borrowed_params.remove("self");
-                                return "&self".to_string();
-                            }
-                            if !self.in_trait_impl
-                                && matches!(
-                                    analyzed.inferred_ownership.get("self"),
-                                    Some(OwnershipMode::Owned)
-                                )
-                                && (super::self_analysis::function_calls_owned_self_method(
-                                    &analyzed.decl,
-                                    &self.signature_registry,
-                                    self.current_struct_name.as_deref(),
-                                ) || super::self_analysis::function_consumes_self(&analyzed.decl))
-                            {
-                                let body_modifies = body_modifies;
-                                let self_str = if body_modifies
-                                    && self.method_returns_impl_struct(func)
-                                {
-                                    "mut self"
-                                } else {
-                                    // P3.584: may be `&mut self` (clone under mut) or
-                                    // owned `mut self` (partial move).
-                                    self.owned_self_receiver(&analyzed.decl)
-                                };
-                                // Sync borrow tracking with the *emitted* receiver —
-                                // clearing both sets left `&mut self` without Clone
-                                // on field→Owned args (notes-api `dispatch`).
-                                match self_str {
-                                    "&self" => {
-                                        self.inferred_borrowed_params.insert("self".to_string());
-                                        self.inferred_mut_borrowed_params.remove("self");
-                                    }
-                                    "&mut self" => {
-                                        self.inferred_mut_borrowed_params
-                                            .insert("self".to_string());
-                                        self.inferred_borrowed_params.remove("self");
-                                    }
-                                    _ => {
-                                        self.inferred_borrowed_params.remove("self");
-                                        self.inferred_mut_borrowed_params.remove("self");
-                                    }
-                                }
-                                self.record_self_receiver_upgrade(
-                                    &func.name,
-                                    Some(OwnershipMode::Owned),
-                                    self_str,
-                                );
-                                return self_str.to_string();
-                            }
-                            let body_modifies = body_modifies;
-                            let returns_self = self.method_returns_impl_struct(&analyzed.decl);
-                            let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
-                                || super::self_analysis::function_return_moves_self_fields(&analyzed.decl)
-                                || super::self_analysis::function_calls_owned_self_method(
-                                    &analyzed.decl,
-                                    &self.signature_registry,
-                                    self.current_struct_name.as_deref(),
-                                );
-                            let self_str = if let Some(ownership_mode) =
-                                self.get_effective_self_ownership(&func.name, analyzed)
-                            {
-                                match ownership_mode {
-                                    OwnershipMode::Owned => {
-                                        if self.in_trait_impl {
-                                            "self"
-                                        } else {
-                                            // P3.522: `body_modifies` alone is `&mut self`
-                                            // (delegate to a writeback sibling), not owned `mut self`.
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        }
-                                    }
-                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                                        if !self.in_trait_impl && (returns_self || consumes_self) =>
-                                    {
-                                        // P3.584: mutating + field-move consume → prefer
-                                        // owned_self_receiver (`&mut self` + Clone, or
-                                        // owned partial-move).
-                                        if returns_self {
-                                            if body_modifies {
-                                                "mut self"
-                                            } else {
-                                                "self"
-                                            }
-                                        } else if body_modifies {
-                                            self.owned_self_receiver(&analyzed.decl)
-                                        } else {
-                                            "self"
-                                        }
-                                    }
-                                    OwnershipMode::MutBorrowed
-                                        if consumes_self && !body_modifies =>
-                                    {
-                                        "self"
-                                    }
-                                    OwnershipMode::MutBorrowed => "&mut self",
-                                    OwnershipMode::Borrowed => {
-                                        if !self.in_trait_impl && body_modifies {
-                                            "&mut self"
-                                        } else {
-                                            "&self"
-                                        }
-                                    }
-                                }
-                            } else if body_modifies && returns_self {
-                                "mut self"
-                            } else if consumes_self {
-                                "self"
-                            } else if body_modifies {
-                                "&mut self"
-                            } else if returns_self {
-                                "self"
-                            } else {
-                                "&self"
-                            };
-                            // Sync borrowed-params sets with actual generated receiver.
-                            match self_str {
-                                "&self" => {
-                                    self.inferred_borrowed_params.insert("self".to_string());
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                }
-                                "&mut self" => {
-                                    self.inferred_mut_borrowed_params.insert("self".to_string());
-                                    self.inferred_borrowed_params.remove("self");
-                                }
-                                _ => {
-                                    self.inferred_borrowed_params.remove("self");
-                                    self.inferred_mut_borrowed_params.remove("self");
-                                }
-                            }
-                            let eff = self.get_effective_self_ownership(&func.name, analyzed);
-                            self.record_self_receiver_upgrade(
-                                &func.name,
-                                eff,
-                                self_str,
-                            );
-                            return self_str.to_string();
-                        }
 
                         if param.name != "self" {
                             let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
@@ -2040,7 +1510,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && (!self.function_return_is_text(func)
                                     || self.str_ref_optimizable_param(analyzed, &param.name))
-                                && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !param.pins_string_ref()
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
                                     &param.type_,
@@ -2074,7 +1544,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !payload_forces_owned
                             && !self.is_public_owned_non_copy_formal_api(param, func)
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
-                            && !param.decorators.iter().any(|d| d.name == "string_ref")
+                            && !param.pins_string_ref()
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                             && !analyzed.returned_parameters.contains(&param.name)
                             && !analyzed.field_extract_parameters.contains(&param.name)
@@ -2313,30 +1783,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
-                            let _debug_formal = crate::debug_env::enabled("WJ_DEBUG_FORMAL") && param.name == "grid" && func.name == "do_work";
-                            if _debug_formal {
-                                eprintln!("[FORMAL-INIT] fn={} param={} initial_mode={:?} ir_own={:?} analyzer_own={:?} registry_own={:?}",
-                                    func.name, param.name, ownership_mode,
-                                    self.get_param_ownership(&param.name, analyzed),
-                                    analyzed.inferred_ownership.get(&param.name),
-                                    registry_ownership,
-                                );
-                            }
-                            macro_rules! trace_own {
-                                ($line:expr, $mode:expr) => {
-                                    if _debug_formal {
-                                        eprintln!("[FORMAL-TRACE] line={} mode={:?}", $line, $mode);
-                                    }
-                                };
-                            }
-                            macro_rules! set_own {
-                                ($line:expr, $val:expr) => {{
-                                    ownership_mode = $val;
-                                    if _debug_formal {
-                                        eprintln!("[FORMAL-SET] line={} mode→{:?}", $line, ownership_mode);
-                                    }
-                                }};
-                            }
 
                             if matches!(
                                 analyzed.inferred_ownership.get(&param.name),
@@ -2365,7 +1811,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.param_keeps_owned_engine_key_facade(sn, param, func)
                             }) {
                                 ownership_mode = OwnershipMode::Owned;
-                                trace_own!(926, ownership_mode);
                             }
 
                             // Field-extract returns (`key.bytes` / `msg.payload`) need an owned
@@ -2456,7 +1901,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 ) || self.current_fn_mixed_forwarder_params.contains(&param.name))
                             {
                                 ownership_mode = OwnershipMode::Owned;
-                                trace_own!(976, ownership_mode);
                             }
 
                             if !self.ir_cutover.ownership {
@@ -2482,7 +1926,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 {
                                     ownership_mode = OwnershipMode::Owned;
-                                    trace_own!(999, ownership_mode);
                                 }
 
                                 // Copy aggregates pass by value unless the analyzer kept an active
@@ -2512,7 +1955,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 {
                                     ownership_mode = OwnershipMode::Owned;
-                                    trace_own!(1022, ownership_mode);
                                 }
 
                                 // Field mutation on params requires &mut when the body mutates fields.
@@ -3021,7 +2463,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
                                 && !cross_module_borrow_keep_owned
-                                && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !param.pins_string_ref()
                                 && !analyzed.returned_parameters.contains(&param.name)
                                 && !payload_forces_owned
                                 && !payload_stored
@@ -3034,13 +2476,6 @@ impl<'ast> CodeGenerator<'ast> {
                                         self.param_ownership_for_formal_demotion(&param.name, analyzed)
                                     });
                                 let copy_aggregate = self.is_type_copy(&param.type_);
-                                if _debug_formal {
-                                    eprintln!("[FORMAL-MUT-BLOCK] fn={} param={} ownership_mode_before={:?} analyzed_mode={:?} copy_aggregate={} mutated={} field_mutated={} payload_stored={} payload_forces={}",
-                                        func.name, param.name, ownership_mode, analyzed_mode, copy_aggregate,
-                                        analyzed.mutated_parameters.contains(&param.name),
-                                        analyzed.field_mutated_parameters.contains(&param.name),
-                                        payload_stored, payload_forces_owned);
-                                }
                                 // Without local field/index writes: field-method calls alone
                                 // are not `&mut` mutations (Copy AppDeps *and* non-Copy
                                 // `Writer { tag: string }` — post_journal_entry). Passthrough
@@ -3051,14 +2486,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     .param_false_mut_from_readonly_field_methods(
                                         param, func, analyzed, false,
                                     );
-                                if _debug_formal {
-                                    eprintln!("[FORMAL-FMC] false_mut_on_field_methods={} field_write={} call_arg={} direct_recv={} field_proj_mut={}",
-                                        false_mut_on_field_methods,
-                                        self.param_has_field_or_index_write(func.body.as_slice(), &param.name),
-                                        self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func),
-                                        self.param_is_direct_method_receiver(func.body.as_slice(), &param.name),
-                                        self.param_has_mut_method_via_field_projection(func.body.as_slice(), &param.name));
-                                }
                                 if false_mut_on_field_methods
                                     && matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 {
@@ -3087,9 +2514,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
-                            if _debug_formal {
-                                eprintln!("[FORMAL-POST-MUT-BLOCK] ownership_mode={:?}", ownership_mode);
-                            }
                             // Readonly unused WJ `string` formals historically demoted to `&str`
                             // for forward-ref call sites (DialogCondition → Inventory::has_item).
                             // Free functions included (wal `replay_all(path)`).
@@ -3147,9 +2571,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.str_ref_optimized_params.insert(param.name.clone());
                             }
                             if asref_fwd {
-                                if _debug_formal {
-                                    eprintln!("[FORMAL-ASREF-FWD] fn={} param={} asref_fwd=true → Owned", func.name, param.name);
-                                }
                                 // Keep owned `String` + call-site `&` for db/env/… AsRef APIs.
                                 self.str_ref_optimized_params.remove(&param.name);
                                 self.inferred_borrowed_params.remove(&param.name);
@@ -3159,7 +2580,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !trait_impl_owned_string
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && !analyzed.returned_parameters.contains(&param.name)
-                                && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !param.pins_string_ref()
                                 && !self.param_only_forwards_to_emitted_owned_callees(
                                     func.body.as_slice(),
                                     &param.name,
@@ -3279,13 +2700,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                             }
 
-                            if _debug_formal {
-                                eprintln!("[FORMAL-FINAL] fn={} param={} ownership_mode={:?} formal_type={:?} param.is_mutable={} field_mutated={} param_passed_to_owned_self_method={}",
-                                    func.name, param.name, ownership_mode, formal_type, param.is_mutable,
-                                    analyzed.field_mutated_parameters.contains(&param.name),
-                                    self.param_passed_to_owned_self_method_arg(func.body.as_slice(), &param.name, func),
-                                );
-                            }
                             if cross_module_borrow_keep_owned && !shared_forward {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.inferred_borrowed_params.remove(&param.name);
@@ -3493,10 +2907,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             self.str_ref_optimized_params.remove(&param.name);
                                             self.inferred_borrowed_params.remove(&param.name);
                                             self.type_to_rust(formal_type)
-                                        } else if param
-                                            .decorators
-                                            .iter()
-                                            .any(|d| d.name == "string_ref")
+                                        } else if param.pins_string_ref()
                                             || self.param_passed_to_slice_search_string_elem(
                                                 func.body.as_slice(),
                                                 &param.name,
@@ -3526,7 +2937,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                 crate::codegen::rust::string_utilities::param_is_rust_string_ref(ty)
                                             });
                                         if registry_string_ref {
-                                            if param.decorators.iter().any(|d| d.name == "string_ref")
+                                            if param.pins_string_ref()
                                                 || self.param_passed_to_slice_search_string_elem(
                                                     func.body.as_slice(),
                                                     &param.name,
@@ -3891,7 +3302,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.param_pub_free_string_builder_forward(func, param) {
             return true;
         }
-        if param.decorators.iter().any(|d| d.name == "string_ref") {
+        if param.pins_string_ref() {
             return false;
         }
         if !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_) {

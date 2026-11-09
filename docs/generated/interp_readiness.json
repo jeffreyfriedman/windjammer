@@ -1,23 +1,39 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-26T14:03:52Z",
- "commit": "8b6bdb63d0ebb05fd5d74a97f8edbcf8cde83c16",
+ "generated_at": "2026-11-05T09:10:57Z",
+ "commit": "45b6b021623e43261ad24c43183b7857396585dc",
  "mode": "full",
- "load_avg_1m": 79.4,
- "wj_profile": "release",
+ "load_avg_1m": 20.3,
+ "wj_profile": "unknown",
  "criteria": [
   {
    "id": "R1",
    "title": "Test suites pass interpreted",
    "target": ">= 99.0% of compiled-passing tests",
    "percent": 100.0,
-   "status": "unmeasured",
+   "status": "pass",
    "detail": {
     "projects": [
      {
+      "project": "wj-archive",
+      "interp_secs": 0.3,
+      "compiled_secs": 76.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 17,
+      "compiled_pass": 17,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-base64",
       "interp_secs": 0.0,
-      "compiled_secs": 10.9,
+      "compiled_secs": 2.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -32,8 +48,8 @@
      },
      {
       "project": "wj-cli-args",
-      "interp_secs": 0.2,
-      "compiled_secs": 7.9,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -49,7 +65,7 @@
      {
       "project": "wj-compress",
       "interp_secs": 0.1,
-      "compiled_secs": 10.0,
+      "compiled_secs": 2.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -64,8 +80,8 @@
      },
      {
       "project": "wj-config",
-      "interp_secs": 0.0,
-      "compiled_secs": 6.7,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -81,7 +97,7 @@
      {
       "project": "wj-cookie",
       "interp_secs": 0.1,
-      "compiled_secs": 4.8,
+      "compiled_secs": 2.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -96,8 +112,8 @@
      },
      {
       "project": "wj-cors",
-      "interp_secs": 0.1,
-      "compiled_secs": 11.8,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -112,8 +128,8 @@
      },
      {
       "project": "wj-cron",
-      "interp_secs": 0.2,
-      "compiled_secs": 7.1,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -128,8 +144,8 @@
      },
      {
       "project": "wj-csv",
-      "interp_secs": 0.1,
-      "compiled_secs": 6.9,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -143,9 +159,25 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-decimal",
+      "interp_secs": 0.1,
+      "compiled_secs": 5.4,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 13,
+      "compiled_pass": 13,
+      "both_pass": 13,
+      "interp_pass": 13,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-dotenv",
       "interp_secs": 0.1,
-      "compiled_secs": 4.9,
+      "compiled_secs": 3.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -160,8 +192,8 @@
      },
      {
       "project": "wj-duration",
-      "interp_secs": 0.2,
-      "compiled_secs": 7.8,
+      "interp_secs": 0.1,
+      "compiled_secs": 2.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -176,8 +208,8 @@
      },
      {
       "project": "wj-event",
-      "interp_secs": 0.1,
-      "compiled_secs": 7.0,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -192,8 +224,8 @@
      },
      {
       "project": "wj-fs-walk",
-      "interp_secs": 0.3,
-      "compiled_secs": 4.9,
+      "interp_secs": 0.1,
+      "compiled_secs": 3.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -208,8 +240,8 @@
      },
      {
       "project": "wj-gitignore",
-      "interp_secs": 0.2,
-      "compiled_secs": 3.3,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -225,7 +257,7 @@
      {
       "project": "wj-glob",
       "interp_secs": 0.1,
-      "compiled_secs": 5.2,
+      "compiled_secs": 3.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -240,8 +272,8 @@
      },
      {
       "project": "wj-hash",
-      "interp_secs": 6.1,
-      "compiled_secs": 23.1,
+      "interp_secs": 2.5,
+      "compiled_secs": 7.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -256,8 +288,8 @@
      },
      {
       "project": "wj-headers",
-      "interp_secs": 0.1,
-      "compiled_secs": 18.5,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -272,8 +304,8 @@
      },
      {
       "project": "wj-http-client",
-      "interp_secs": 0.1,
-      "compiled_secs": 11.5,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -288,8 +320,8 @@
      },
      {
       "project": "wj-inflect",
-      "interp_secs": 0.3,
-      "compiled_secs": 11.0,
+      "interp_secs": 0.1,
+      "compiled_secs": 6.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -303,9 +335,25 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-json-doc",
+      "interp_secs": 0.1,
+      "compiled_secs": 3.0,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 12,
+      "compiled_pass": 12,
+      "both_pass": 12,
+      "interp_pass": 12,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-json-util",
-      "interp_secs": 0.4,
-      "compiled_secs": 8.6,
+      "interp_secs": 0.1,
+      "compiled_secs": 2.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -321,7 +369,7 @@
      {
       "project": "wj-jwt",
       "interp_secs": 0.0,
-      "compiled_secs": 9.2,
+      "compiled_secs": 2.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -337,7 +385,7 @@
      {
       "project": "wj-log",
       "interp_secs": 0.0,
-      "compiled_secs": 6.6,
+      "compiled_secs": 2.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -351,9 +399,41 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-markdown",
+      "interp_secs": 0.1,
+      "compiled_secs": 3.9,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 7,
+      "compiled_pass": 7,
+      "both_pass": 7,
+      "interp_pass": 7,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-metrics",
+      "interp_secs": 0.1,
+      "compiled_secs": 3.4,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 11,
+      "compiled_pass": 11,
+      "both_pass": 11,
+      "interp_pass": 11,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-migrate",
       "interp_secs": 0.1,
-      "compiled_secs": 12.2,
+      "compiled_secs": 38.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -368,8 +448,8 @@
      },
      {
       "project": "wj-mime",
-      "interp_secs": 0.3,
-      "compiled_secs": 7.1,
+      "interp_secs": 0.0,
+      "compiled_secs": 3.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -385,7 +465,7 @@
      {
       "project": "wj-multipart",
       "interp_secs": 0.1,
-      "compiled_secs": 4.3,
+      "compiled_secs": 2.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -400,8 +480,8 @@
      },
      {
       "project": "wj-path",
-      "interp_secs": 0.1,
-      "compiled_secs": 3.0,
+      "interp_secs": 0.0,
+      "compiled_secs": 2.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -415,9 +495,25 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-proc",
+      "interp_secs": 0.0,
+      "compiled_secs": 2.2,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 8,
+      "compiled_pass": 8,
+      "both_pass": 8,
+      "interp_pass": 8,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-querystring",
       "interp_secs": 0.1,
-      "compiled_secs": 5.8,
+      "compiled_secs": 2.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -433,7 +529,7 @@
      {
       "project": "wj-rate-limit",
       "interp_secs": 0.0,
-      "compiled_secs": 5.1,
+      "compiled_secs": 2.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -449,7 +545,7 @@
      {
       "project": "wj-regex",
       "interp_secs": 0.0,
-      "compiled_secs": 5.0,
+      "compiled_secs": 2.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -464,24 +560,24 @@
      },
      {
       "project": "wj-retry",
-      "interp_secs": 0.2,
-      "compiled_secs": 5.7,
+      "interp_secs": 0.1,
+      "compiled_secs": 2.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
       "sets_equal": true,
       "unsupported": [],
-      "compiled_total": 26,
-      "compiled_pass": 26,
-      "both_pass": 26,
-      "interp_pass": 26,
+      "compiled_total": 27,
+      "compiled_pass": 27,
+      "both_pass": 27,
+      "interp_pass": 27,
       "mismatches": [],
       "interp_only_pass": []
      },
      {
       "project": "wj-router",
-      "interp_secs": 0.1,
-      "compiled_secs": 13.9,
+      "interp_secs": 0.0,
+      "compiled_secs": 2.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -496,8 +592,8 @@
      },
      {
       "project": "wj-semver",
-      "interp_secs": 0.1,
-      "compiled_secs": 4.0,
+      "interp_secs": 0.0,
+      "compiled_secs": 2.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -513,7 +609,7 @@
      {
       "project": "wj-sha",
       "interp_secs": 0.0,
-      "compiled_secs": 4.2,
+      "compiled_secs": 1.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -527,9 +623,25 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-stats",
+      "interp_secs": 0.0,
+      "compiled_secs": 1.9,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 5,
+      "compiled_pass": 5,
+      "both_pass": 5,
+      "interp_pass": 5,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-sync",
-      "interp_secs": 1.9,
-      "compiled_secs": 22.1,
+      "interp_secs": 0.8,
+      "compiled_secs": 7.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -543,9 +655,25 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-table",
+      "interp_secs": 0.0,
+      "compiled_secs": 1.9,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 4,
+      "compiled_pass": 4,
+      "both_pass": 4,
+      "interp_pass": 4,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-template",
-      "interp_secs": 0.3,
-      "compiled_secs": 7.2,
+      "interp_secs": 0.1,
+      "compiled_secs": 2.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -561,7 +689,7 @@
      {
       "project": "wj-timefmt",
       "interp_secs": 0.1,
-      "compiled_secs": 4.1,
+      "compiled_secs": 2.0,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -577,7 +705,7 @@
      {
       "project": "wj-toml",
       "interp_secs": 0.1,
-      "compiled_secs": 3.4,
+      "compiled_secs": 2.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -593,7 +721,7 @@
      {
       "project": "wj-url",
       "interp_secs": 0.1,
-      "compiled_secs": 3.9,
+      "compiled_secs": 2.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -609,7 +737,7 @@
      {
       "project": "wj-uuid",
       "interp_secs": 0.1,
-      "compiled_secs": 3.3,
+      "compiled_secs": 2.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -625,7 +753,7 @@
      {
       "project": "wj-validate",
       "interp_secs": 0.1,
-      "compiled_secs": 3.3,
+      "compiled_secs": 2.3,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -639,9 +767,25 @@
       "interp_only_pass": []
      },
      {
+      "project": "wj-ws",
+      "interp_secs": 0.2,
+      "compiled_secs": 2.7,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 16,
+      "compiled_pass": 16,
+      "both_pass": 16,
+      "interp_pass": 16,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
       "project": "wj-yaml",
-      "interp_secs": 0.1,
-      "compiled_secs": 3.6,
+      "interp_secs": 0.0,
+      "compiled_secs": 1.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -656,8 +800,8 @@
      },
      {
       "project": "wj-auth-api",
-      "interp_secs": 13.8,
-      "compiled_secs": 36.7,
+      "interp_secs": 7.2,
+      "compiled_secs": 13.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -672,8 +816,8 @@
      },
      {
       "project": "wj-chat",
-      "interp_secs": 0.2,
-      "compiled_secs": 12.4,
+      "interp_secs": 0.1,
+      "compiled_secs": 4.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -688,8 +832,8 @@
      },
      {
       "project": "wj-fetch",
-      "interp_secs": 0.4,
-      "compiled_secs": 11.0,
+      "interp_secs": 0.2,
+      "compiled_secs": 4.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -705,7 +849,7 @@
      {
       "project": "wj-find",
       "interp_secs": 0.1,
-      "compiled_secs": 3.1,
+      "compiled_secs": 2.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -721,7 +865,7 @@
      {
       "project": "wj-first-hour",
       "interp_secs": 0.0,
-      "compiled_secs": 4.6,
+      "compiled_secs": 2.1,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -737,7 +881,7 @@
      {
       "project": "wj-form-parse",
       "interp_secs": 0.1,
-      "compiled_secs": 3.8,
+      "compiled_secs": 2.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -752,20 +896,24 @@
      },
      {
       "project": "wj-grep",
-      "interp_secs": 0.6,
-      "compiled_secs": 13.9,
-      "measured": false,
+      "interp_secs": 0.2,
+      "compiled_secs": 4.2,
+      "measured": true,
       "compiled_cache": "warm",
-      "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results: error[E0308]: mismatched types",
-      "compiled_pass": 0,
-      "both_pass": 0,
-      "mismatches": []
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 38,
+      "compiled_pass": 38,
+      "both_pass": 38,
+      "interp_pass": 38,
+      "mismatches": [],
+      "interp_only_pass": []
      },
      {
       "project": "wj-hello",
       "interp_secs": 0.0,
-      "compiled_secs": 24.1,
+      "compiled_secs": 1.9,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -780,8 +928,8 @@
      },
      {
       "project": "wj-migrate-cli",
-      "interp_secs": 0.2,
-      "compiled_secs": 12.4,
+      "interp_secs": 0.1,
+      "compiled_secs": 6.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -796,8 +944,8 @@
      },
      {
       "project": "wj-notes-api",
-      "interp_secs": 2.6,
-      "compiled_secs": 17.9,
+      "interp_secs": 1.2,
+      "compiled_secs": 6.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -813,7 +961,7 @@
      {
       "project": "wj-pipeline",
       "interp_secs": 0.1,
-      "compiled_secs": 16.7,
+      "compiled_secs": 3.8,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -828,8 +976,8 @@
      },
      {
       "project": "wj-proxy",
-      "interp_secs": 0.3,
-      "compiled_secs": 13.2,
+      "interp_secs": 0.1,
+      "compiled_secs": 4.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -844,8 +992,8 @@
      },
      {
       "project": "wj-scheduler",
-      "interp_secs": 0.6,
-      "compiled_secs": 8.3,
+      "interp_secs": 0.2,
+      "compiled_secs": 5.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -861,7 +1009,7 @@
      {
       "project": "wj-sitegen",
       "interp_secs": 0.1,
-      "compiled_secs": 11.4,
+      "compiled_secs": 4.2,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -876,8 +1024,8 @@
      },
      {
       "project": "wj-taskflow",
-      "interp_secs": 29.5,
-      "compiled_secs": 47.2,
+      "interp_secs": 10.1,
+      "compiled_secs": 17.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -892,8 +1040,8 @@
      },
      {
       "project": "wj-todo-cli",
-      "interp_secs": 1.1,
-      "compiled_secs": 62.9,
+      "interp_secs": 0.4,
+      "compiled_secs": 6.6,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -909,44 +1057,39 @@
      {
       "project": "wj-webhook",
       "interp_secs": 0.1,
-      "compiled_secs": 30.5,
+      "compiled_secs": 3.5,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
       "sets_equal": true,
       "unsupported": [],
-      "compiled_total": 17,
-      "compiled_pass": 17,
-      "both_pass": 17,
-      "interp_pass": 17,
+      "compiled_total": 23,
+      "compiled_pass": 23,
+      "both_pass": 23,
+      "interp_pass": 23,
       "mismatches": [],
       "interp_only_pass": []
      }
     ],
-    "tests_compared": 1311,
-    "tests_agree": 1311
+    "tests_compared": 1449,
+    "tests_agree": 1449
    },
-   "blockers": [
-    {
-     "program": "wj-grep",
-     "reason": "unmeasured: compiled test run failed before reporting results: error[E0308]: mismatched types"
-    }
-   ]
+   "blockers": []
   },
   {
    "id": "R2",
    "title": "No silent divergence",
    "target": "0 divergent programs",
-   "percent": 98.2,
+   "percent": 98.5,
    "status": "fail",
    "detail": {
-    "divergences": 15,
+    "divergences": 13,
     "unmeasured": 0,
-    "checked": 839,
-    "compiled_checked": 394,
-    "generated_seeds": 312,
-    "compiled_build_failures": 102,
-    "build_failures": 102,
+    "checked": 861,
+    "compiled_checked": 444,
+    "generated_seeds": 300,
+    "compiled_build_failures": 86,
+    "build_failures": 86,
     "hash_seeds": [
      0,
      1,
@@ -960,22 +1103,13 @@
      "silent_divergence_rate": 0.433,
      "rechecked": 30,
      "compiled_error_classes": {
-      "other": 1,
-      "[E0308]": 10,
-      "[E0277]": 2
+      "other": 3,
+      "[E0308]": 10
      },
      "check_misses": 13
     }
    },
    "blockers": [
-    {
-     "program": "generated/deep_recursion.wj@115",
-     "reason": "[hash-seed 3] output depends on hash order"
-    },
-    {
-     "program": "generated/deep_recursion.wj@157",
-     "reason": "[hash-seed 3] output depends on hash order"
-    },
     {
      "program": "pilot/t006_base_convert.A.0",
      "reason": "[agent-pilot] interpreter-green, compiled fails: wrong output"
@@ -1022,131 +1156,115 @@
     },
     {
      "program": "pilot/t030_bank_ledger.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over eleme"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: wrong output"
     },
     {
      "program": "pilot/t030_bank_ledger.A.2",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over eleme"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: wrong output"
     },
     {
      "program": "verified/algo_binary_tree.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i64`, found `i32`"
     },
     {
      "program": "verified/algo_lcs.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `uint`, found `int`"
     },
     {
      "program": "verified/algo_matrix_multiply.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i64`, found `i32`"
     },
     {
      "program": "verified/algo_stack_calculator.wj",
-     "reason": "[compiled-build-failed] error[E0658]: use of unstable library feature `str_as_str`"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: use of unstable library feature `str_as_str`"
     },
     {
      "program": "verified/algo_state_machine.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`"
     },
     {
      "program": "verified/algo_word_frequency.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&S"
-    },
-    {
-     "program": "verified/basics_arithmetic.wj",
-     "reason": "[compiled-build-failed] error[E0689]: can't call method `pow` on ambiguous numeric type `{integer}`"
-    },
-    {
-     "program": "verified/enum_methods.wj",
-     "reason": "[compiled-build-failed] error[E0308]: arguments to this enum variant are incorrect"
+     "reason": "[compiled-build-failed] error[WJ0029]: cannot collect `(&String, i64)` items into `Vec<(string, i64)>`"
     },
     {
      "program": "verified/generics_function.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `clone` found for type parameter `T` in the current scope"
+     "reason": "[compiled-build-failed] error[WJ0015]: no method `clone` found for `type parameter `T`"
     },
     {
      "program": "verified/hashset_basics.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `&i64`, found `int`"
     },
     {
      "program": "verified/iter_any_all_count.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `&i64`, found `int`"
     },
     {
      "program": "verified/iter_collect_hashmap.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `HashMap<String, i64>` cannot be built from an iterator over elements of type `("
+     "reason": "[compiled-build-failed] error[WJ0029]: cannot collect `(String, usize)` items into `HashMap<string, i64>`"
     },
     {
      "program": "verified/iter_flat_map_chain.wj",
-     "reason": "[compiled-build-failed] error[E0271]: type mismatch resolving `<[i64; 2] as IntoIterator>::Item == &i64`"
-    },
-    {
-     "program": "verified/iter_fold_sum.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: type mismatch resolving `<[i64; 2] as IntoIterator>::Item == &"
     },
     {
      "program": "verified/iter_min_max_by.wj",
-     "reason": "[compiled-build-failed] error[E0061]: this method takes 1 argument but 0 arguments were supplied"
+     "reason": "[compiled-build-failed] error[WJ0013]: this method takes 1 argument but 0 arguments were supplied"
     },
     {
      "program": "verified/iter_partition_unzip.wj",
-     "reason": "[compiled-build-failed] error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not satisfied"
+     "reason": "[compiled-build-failed] error[WJ0017]: trait bound not satisfied: `Vec<i64>: Extend<i32>`"
     },
     {
      "program": "verified/iter_take_skip_rev.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
-     "program": "verified/numbers_min_max_abs.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `uint`, found `int`"
     },
     {
      "program": "verified/operators_overload.wj",
-     "reason": "[compiled-build-failed] error[E0046]: not all trait items implemented, missing: `Output`"
+     "reason": "[compiled-build-failed] error[WJ0018]: not all trait items implemented, missing: `Output`"
     },
     {
      "program": "verified/prog_event_handlers.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected a borrowed `string`, found an owned `string`"
     },
     {
      "program": "verified/prog_game_of_life.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `uint`, found `int`"
     },
     {
      "program": "verified/prog_lru_cache.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `&_`, found `string`"
     },
     {
      "program": "verified/result_collect_all_or_nothing.wj",
-     "reason": "[compiled-build-failed] error[E0282]: type annotations needed"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: type annotations needed"
     },
     {
      "program": "verified/std_env_args.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of typ"
+     "reason": "[compiled-build-failed] error[WJ0029]: cannot collect `&std::string::String` items into `Vec<std::string::string>`"
     },
     {
      "program": "verified/struct_with_vec_field.wj",
-     "reason": "[compiled-build-failed] error[E0282]: type annotations needed"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: type annotations needed"
     },
     {
      "program": "verified/vec_2d_grid.wj",
-     "reason": "[compiled-build-failed] error[E0277]: the trait bound `Vec<i32>: Copy` is not satisfied"
+     "reason": "[compiled-build-failed] error[WJ0017]: trait bound not satisfied: `Vec<i32>: Copy`"
     },
     {
      "program": "verified/vec_of_structs.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `max_by_key` found for struct `Vec<Person>` in the current scope"
+     "reason": "[compiled-build-failed] error[WJ0015]: no method `max_by_key` found for `Vec<Person>`"
     },
     {
      "program": "conformance/110_std_math.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find function `pow` in module `math`"
+     "reason": "[compiled-build-failed] error[WJ0002]: cannot find function `pow` in this scope"
     },
     {
      "program": "conformance/111_std_strings.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find function `repeat` in module `strings`"
+     "reason": "[compiled-build-failed] error[WJ0002]: cannot find function `repeat` in this scope"
     },
     {
      "program": "conformance/114_hashmap_entry_counting.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i32`, found `i64`"
     },
     {
      "program": "conformance/155_interp_string_first.wj",
@@ -1161,16 +1279,12 @@
      "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
-     "program": "conformance/170_coll_grouping.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `()` cannot be made by summing an iterator over elements of type `()`"
-    },
-    {
      "program": "conformance/170_mut_ref_value_types.wj",
      "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
      "program": "conformance/172_clos_shorthand.wj",
-     "reason": "[compiled-build-failed] error[E0507]: cannot move out of `_it0.name` which is behind a shared reference"
+     "reason": "[compiled-build-failed] error[WJ0016]: cannot move `_it0.name` out of a borrow (ownership: it is only borrowed here)"
     },
     {
      "program": "conformance/172_pretty_debug_aggregates.wj",
@@ -1185,16 +1299,12 @@
      "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
-     "program": "conformance/175_len_and_index_as_int.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
      "program": "conformance/176_from_conversions.wj",
      "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
      "program": "conformance/177_opt_chain.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `unwrap_or` found for type `!` in the current scope"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: optional chaining `?.` is not supported by the Rust backend ye"
     },
     {
      "program": "conformance/178_struct_patterns_slices.wj",
@@ -1213,24 +1323,12 @@
      "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
-     "program": "conformance/18_option_match.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
      "program": "conformance/30_iter_map_filter.wj",
      "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
-     "program": "conformance/54_shifts_bitops.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
-     "program": "conformance/61_string_split_trim.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<String>` cannot be built from an iterator over elements of type `&str`"
-    },
-    {
      "program": "conformance/62_vec_alias_semantics.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i32`, found `i64`"
     },
     {
      "program": "conformance/63_closures_capture.wj",
@@ -1242,11 +1340,11 @@
     },
     {
      "program": "conformance/72_hashmap_ops.wj",
-     "reason": "[compiled-build-failed] error[E0308]: `match` arms have incompatible types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i32`, found `i64`"
     },
     {
      "program": "conformance/74_vec_algorithms.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `&Vec<i64>`, found `&&[string]`"
     },
     {
      "program": "conformance/75_iterators.wj",
@@ -1254,55 +1352,63 @@
     },
     {
      "program": "conformance/98_bignum_factorial.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected a borrowed `string`, found an owned `string`"
     },
     {
      "program": "spec/SPEC-ATTR-001.wj",
-     "reason": "[compiled-build-failed] error: cannot find attribute `custom_tag` in this scope"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: cannot find attribute `custom_tag` in this scope"
     },
     {
      "program": "spec/SPEC-ATTR-004.wj",
-     "reason": "[compiled-build-failed] error: cannot find attribute `route` in this scope"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: cannot find attribute `route` in this scope"
     },
     {
      "program": "spec/SPEC-CLOS-001.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `filter` found for struct `Vec<User>` in the current scope"
+     "reason": "[compiled-build-failed] error[WJ0015]: no method `filter` found for `Vec<User>`"
+    },
+    {
+     "program": "spec/SPEC-CLOS-009.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "spec/SPEC-COLL-004.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i32`, found `i64`"
     },
     {
      "program": "spec/SPEC-COLL-005.wj",
-     "reason": "[compiled-build-failed] error: lifetime may not live long enough"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: lifetime may not live long enough"
     },
     {
      "program": "spec/SPEC-COLL-009.wj",
-     "reason": "[compiled-build-failed] error: lifetime may not live long enough"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: lifetime may not live long enough"
+    },
+    {
+     "program": "spec/SPEC-COLL-011.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "spec/SPEC-COLL-012.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "spec/SPEC-CONC-001.wj",
-     "reason": "[compiled-build-failed] error[E0433]: cannot find module or crate `tokio` in this scope"
+     "reason": "[compiled-build-failed] error[WJ0006]: unresolved import or path `tokio`"
     },
     {
      "program": "spec/SPEC-CONC-002.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `wait` found for `async` block `{async block@SPEC-CONC-002.rs:7:13: 7:23}` in th"
+     "reason": "[compiled-build-failed] error[WJ0015]: no method `wait` found for `async` block `{async block@SPEC-CONC-002.rs:7:13: 7:23}`"
     },
     {
      "program": "spec/SPEC-CONC-003.wj",
-     "reason": "[compiled-build-failed] error[E0433]: cannot find module or crate `tokio` in this scope"
+     "reason": "[compiled-build-failed] error[WJ0006]: unresolved import or path `tokio`"
     },
     {
      "program": "spec/SPEC-CONC-004.wj",
-     "reason": "[compiled-build-failed] error[E0277]: `Result<{integer}, RecvError>` doesn't implement `std::fmt::Display`"
+     "reason": "[compiled-build-failed] error[WJ0032]: this type has no text form: `Result<{integer}, RecvError>` doesn't implement `std::fmt::Display"
     },
     {
      "program": "spec/SPEC-ERR-002.wj",
      "reason": "[compiled-build-failed] Error: Rust leakage errors:"
-    },
-    {
-     "program": "spec/SPEC-ERR-003.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
      "program": "spec/SPEC-ERR-005.wj",
@@ -1314,79 +1420,47 @@
     },
     {
      "program": "spec/SPEC-EXPR-011.wj",
-     "reason": "[compiled-build-failed] error[E0277]: cannot add `i32` to `i64`"
+     "reason": "[compiled-build-failed] error[WJ0020]: operator cannot combine `int` and `int`"
     },
     {
      "program": "spec/SPEC-GRAM-006.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `usize`"
+     "reason": "[compiled-build-failed] error[WJ0029]: cannot collect `usize` items into `Vec<i64>`"
     },
     {
      "program": "spec/SPEC-INTR-007.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `uint`, found `int`"
     },
     {
      "program": "spec/SPEC-ITEM-006.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i64`, found `i32`"
     },
     {
      "program": "spec/SPEC-ITEM-010.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0015]: no method `clone` found for `type parameter `T`"
     },
     {
      "program": "spec/SPEC-ITEM-011.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
-     "program": "spec/SPEC-MOD-003.wj",
-     "reason": "[compiled-build-failed] error: `self` parameter is only allowed in associated functions"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i64`, found `i32`"
     },
     {
      "program": "spec/SPEC-MOD-005.wj",
      "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
-     "program": "spec/SPEC-NUM-001.wj",
-     "reason": "[compiled-build-failed] error: literal out of range for `i32`"
-    },
-    {
-     "program": "spec/SPEC-NUM-002.wj",
-     "reason": "[compiled-build-failed] error: this arithmetic operation will overflow"
-    },
-    {
-     "program": "spec/SPEC-NUM-003.wj",
-     "reason": "[compiled-build-failed] error: this arithmetic operation will overflow"
-    },
-    {
-     "program": "spec/SPEC-NUM-004.wj",
-     "reason": "[compiled-build-failed] error: this arithmetic operation will overflow"
-    },
-    {
-     "program": "spec/SPEC-NUM-006.wj",
-     "reason": "[compiled-build-failed] error: this operation will panic at runtime"
-    },
-    {
-     "program": "spec/SPEC-NUM-017.wj",
-     "reason": "[compiled-build-failed] error: literal out of range for `i32`"
+     "program": "spec/SPEC-MOD-006.wj",
+     "reason": "[compiled-build-failed] error[WJ0001]: cannot find value `LIMIT` in this scope"
     },
     {
      "program": "spec/SPEC-OPT-005.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `unwrap_or` found for type `!` in the current scope"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: optional chaining `?.` is not supported by the Rust backend ye"
     },
     {
      "program": "spec/SPEC-OPT-006.wj",
-     "reason": "[compiled-build-failed] error[E0599]: no method named `unwrap_or` found for type `!` in the current scope"
-    },
-    {
-     "program": "spec/SPEC-PAT-001.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
-     "program": "spec/SPEC-PAT-007.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0099]: the generated code was rejected: optional chaining `?.` is not supported by the Rust backend ye"
     },
     {
      "program": "spec/SPEC-PAT-009.wj",
-     "reason": "[compiled-build-failed] error[E0004]: non-exhaustive patterns: `i64::MIN..=0_i64` and `3_i64..=i64::MAX` not covered"
+     "reason": "[compiled-build-failed] error[WJ0010]: non-exhaustive match: `i64::MIN..=0_i64` and `3_i64..=i64::MAX` not covered"
     },
     {
      "program": "spec/SPEC-PIPE-006.wj",
@@ -1398,7 +1472,7 @@
     },
     {
      "program": "spec/SPEC-STMT-009.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `i32`, found `i64`"
     },
     {
      "program": "spec/SPEC-STD-001.wj",
@@ -1413,28 +1487,24 @@
      "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
-     "program": "spec/SPEC-STD-005.wj",
-     "reason": "[compiled-build-failed] error[E0689]: can't call method `abs` on ambiguous numeric type `{integer}`"
-    },
-    {
-     "program": "spec/SPEC-STR-007.wj",
-     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<String>` cannot be built from an iterator over elements of type `&str`"
-    },
-    {
      "program": "spec/SPEC-TRT-001.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`"
     },
     {
      "program": "spec/SPEC-TRT-004.wj",
-     "reason": "[compiled-build-failed] error[E0369]: cannot add `V` to `V`"
+     "reason": "[compiled-build-failed] error[WJ0020]: cannot add `V` to `V`"
+    },
+    {
+     "program": "spec/SPEC-TRT-010.wj",
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`"
+    },
+    {
+     "program": "spec/SPEC-TRT-011.wj",
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `bool`, found `&bool`"
     },
     {
      "program": "spec/SPEC-TYP-006.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
-    },
-    {
-     "program": "spec/SPEC-TYP-010.wj",
-     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+     "reason": "[compiled-build-failed] error[WJ0003]: mismatched types: expected `Vec<i64>`, found `[{integer}; 1]`"
     }
    ]
   },
@@ -1445,7 +1515,7 @@
    "percent": 100.0,
    "status": "pass",
    "detail": {
-    "invocations": 1808,
+    "invocations": 1980,
     "fallbacks": 0,
     "fallback_rate_pct": 0.0,
     "silent": [],
@@ -1457,461 +1527,505 @@
    "id": "R4",
    "title": "Fast enough",
    "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
-   "percent": 90.9,
+   "percent": 94.7,
    "status": "fail",
    "detail": {
     "projects": [
      {
+      "project": "wj-archive",
+      "interp_s": 0.3,
+      "compiled_s": 76.1,
+      "met": true
+     },
+     {
       "project": "wj-base64",
       "interp_s": 0.0,
-      "compiled_s": 10.9,
+      "compiled_s": 2.9,
       "met": true
      },
      {
       "project": "wj-cli-args",
-      "interp_s": 0.2,
-      "compiled_s": 7.9,
-      "met": true
-     },
-     {
-      "project": "wj-compress",
-      "interp_s": 0.1,
-      "compiled_s": 10.0,
-      "met": true
-     },
-     {
-      "project": "wj-config",
-      "interp_s": 0.0,
-      "compiled_s": 6.7,
-      "met": true
-     },
-     {
-      "project": "wj-cookie",
-      "interp_s": 0.1,
-      "compiled_s": 4.8,
-      "met": true
-     },
-     {
-      "project": "wj-cors",
-      "interp_s": 0.1,
-      "compiled_s": 11.8,
-      "met": true
-     },
-     {
-      "project": "wj-cron",
-      "interp_s": 0.2,
-      "compiled_s": 7.1,
-      "met": true
-     },
-     {
-      "project": "wj-csv",
-      "interp_s": 0.1,
-      "compiled_s": 6.9,
-      "met": true
-     },
-     {
-      "project": "wj-dotenv",
-      "interp_s": 0.1,
-      "compiled_s": 4.9,
-      "met": true
-     },
-     {
-      "project": "wj-duration",
-      "interp_s": 0.2,
-      "compiled_s": 7.8,
-      "met": true
-     },
-     {
-      "project": "wj-event",
-      "interp_s": 0.1,
-      "compiled_s": 7.0,
-      "met": true
-     },
-     {
-      "project": "wj-fs-walk",
-      "interp_s": 0.3,
-      "compiled_s": 4.9,
-      "met": true
-     },
-     {
-      "project": "wj-gitignore",
-      "interp_s": 0.2,
-      "compiled_s": 3.3,
-      "met": true
-     },
-     {
-      "project": "wj-glob",
-      "interp_s": 0.1,
-      "compiled_s": 5.2,
-      "met": true
-     },
-     {
-      "project": "wj-hash",
-      "interp_s": 6.1,
-      "compiled_s": 23.1,
-      "met": true
-     },
-     {
-      "project": "wj-headers",
-      "interp_s": 0.1,
-      "compiled_s": 18.5,
-      "met": true
-     },
-     {
-      "project": "wj-http-client",
-      "interp_s": 0.1,
-      "compiled_s": 11.5,
-      "met": true
-     },
-     {
-      "project": "wj-inflect",
-      "interp_s": 0.3,
-      "compiled_s": 11.0,
-      "met": true
-     },
-     {
-      "project": "wj-json-util",
-      "interp_s": 0.4,
-      "compiled_s": 8.6,
-      "met": true
-     },
-     {
-      "project": "wj-jwt",
-      "interp_s": 0.0,
-      "compiled_s": 9.2,
-      "met": true
-     },
-     {
-      "project": "wj-log",
-      "interp_s": 0.0,
-      "compiled_s": 6.6,
-      "met": true
-     },
-     {
-      "project": "wj-migrate",
-      "interp_s": 0.1,
-      "compiled_s": 12.2,
-      "met": true
-     },
-     {
-      "project": "wj-mime",
-      "interp_s": 0.3,
-      "compiled_s": 7.1,
-      "met": true
-     },
-     {
-      "project": "wj-multipart",
-      "interp_s": 0.1,
-      "compiled_s": 4.3,
-      "met": true
-     },
-     {
-      "project": "wj-path",
-      "interp_s": 0.1,
-      "compiled_s": 3.0,
-      "met": true
-     },
-     {
-      "project": "wj-querystring",
-      "interp_s": 0.1,
-      "compiled_s": 5.8,
-      "met": true
-     },
-     {
-      "project": "wj-rate-limit",
-      "interp_s": 0.0,
-      "compiled_s": 5.1,
-      "met": true
-     },
-     {
-      "project": "wj-regex",
-      "interp_s": 0.0,
-      "compiled_s": 5.0,
-      "met": true
-     },
-     {
-      "project": "wj-retry",
-      "interp_s": 0.2,
-      "compiled_s": 5.7,
-      "met": true
-     },
-     {
-      "project": "wj-router",
-      "interp_s": 0.1,
-      "compiled_s": 13.9,
-      "met": true
-     },
-     {
-      "project": "wj-semver",
-      "interp_s": 0.1,
-      "compiled_s": 4.0,
-      "met": true
-     },
-     {
-      "project": "wj-sha",
-      "interp_s": 0.0,
-      "compiled_s": 4.2,
-      "met": true
-     },
-     {
-      "project": "wj-sync",
-      "interp_s": 1.9,
-      "compiled_s": 22.1,
-      "met": true
-     },
-     {
-      "project": "wj-template",
-      "interp_s": 0.3,
-      "compiled_s": 7.2,
-      "met": true
-     },
-     {
-      "project": "wj-timefmt",
-      "interp_s": 0.1,
-      "compiled_s": 4.1,
-      "met": true
-     },
-     {
-      "project": "wj-toml",
-      "interp_s": 0.1,
-      "compiled_s": 3.4,
-      "met": true
-     },
-     {
-      "project": "wj-url",
-      "interp_s": 0.1,
-      "compiled_s": 3.9,
-      "met": true
-     },
-     {
-      "project": "wj-uuid",
-      "interp_s": 0.1,
-      "compiled_s": 3.3,
-      "met": true
-     },
-     {
-      "project": "wj-validate",
-      "interp_s": 0.1,
-      "compiled_s": 3.3,
-      "met": true
-     },
-     {
-      "project": "wj-yaml",
       "interp_s": 0.1,
       "compiled_s": 3.6,
       "met": true
      },
      {
-      "project": "wj-auth-api",
-      "interp_s": 13.8,
-      "compiled_s": 36.7,
+      "project": "wj-compress",
+      "interp_s": 0.1,
+      "compiled_s": 2.7,
       "met": true
      },
      {
-      "project": "wj-chat",
-      "interp_s": 0.2,
-      "compiled_s": 12.4,
+      "project": "wj-config",
+      "interp_s": 0.1,
+      "compiled_s": 3.3,
       "met": true
      },
      {
-      "project": "wj-fetch",
-      "interp_s": 0.4,
-      "compiled_s": 11.0,
+      "project": "wj-cookie",
+      "interp_s": 0.1,
+      "compiled_s": 2.8,
       "met": true
      },
      {
-      "project": "wj-find",
+      "project": "wj-cors",
+      "interp_s": 0.0,
+      "compiled_s": 3.0,
+      "met": true
+     },
+     {
+      "project": "wj-cron",
+      "interp_s": 0.1,
+      "compiled_s": 3.7,
+      "met": true
+     },
+     {
+      "project": "wj-csv",
+      "interp_s": 0.0,
+      "compiled_s": 3.0,
+      "met": true
+     },
+     {
+      "project": "wj-decimal",
+      "interp_s": 0.1,
+      "compiled_s": 5.4,
+      "met": true
+     },
+     {
+      "project": "wj-dotenv",
+      "interp_s": 0.1,
+      "compiled_s": 3.2,
+      "met": true
+     },
+     {
+      "project": "wj-duration",
+      "interp_s": 0.1,
+      "compiled_s": 2.8,
+      "met": true
+     },
+     {
+      "project": "wj-event",
+      "interp_s": 0.0,
+      "compiled_s": 3.2,
+      "met": true
+     },
+     {
+      "project": "wj-fs-walk",
       "interp_s": 0.1,
       "compiled_s": 3.1,
       "met": true
      },
      {
+      "project": "wj-gitignore",
+      "interp_s": 0.0,
+      "compiled_s": 3.2,
+      "met": true
+     },
+     {
+      "project": "wj-glob",
+      "interp_s": 0.1,
+      "compiled_s": 3.0,
+      "met": true
+     },
+     {
+      "project": "wj-hash",
+      "interp_s": 2.5,
+      "compiled_s": 7.6,
+      "met": true
+     },
+     {
+      "project": "wj-headers",
+      "interp_s": 0.0,
+      "compiled_s": 3.3,
+      "met": true
+     },
+     {
+      "project": "wj-http-client",
+      "interp_s": 0.0,
+      "compiled_s": 3.2,
+      "met": true
+     },
+     {
+      "project": "wj-inflect",
+      "interp_s": 0.1,
+      "compiled_s": 6.8,
+      "met": true
+     },
+     {
+      "project": "wj-json-doc",
+      "interp_s": 0.1,
+      "compiled_s": 3.0,
+      "met": true
+     },
+     {
+      "project": "wj-json-util",
+      "interp_s": 0.1,
+      "compiled_s": 2.8,
+      "met": true
+     },
+     {
+      "project": "wj-jwt",
+      "interp_s": 0.0,
+      "compiled_s": 2.8,
+      "met": true
+     },
+     {
+      "project": "wj-log",
+      "interp_s": 0.0,
+      "compiled_s": 2.6,
+      "met": true
+     },
+     {
+      "project": "wj-markdown",
+      "interp_s": 0.1,
+      "compiled_s": 3.9,
+      "met": true
+     },
+     {
+      "project": "wj-metrics",
+      "interp_s": 0.1,
+      "compiled_s": 3.4,
+      "met": true
+     },
+     {
+      "project": "wj-migrate",
+      "interp_s": 0.1,
+      "compiled_s": 38.9,
+      "met": true
+     },
+     {
+      "project": "wj-mime",
+      "interp_s": 0.0,
+      "compiled_s": 3.7,
+      "met": true
+     },
+     {
+      "project": "wj-multipart",
+      "interp_s": 0.1,
+      "compiled_s": 2.5,
+      "met": true
+     },
+     {
+      "project": "wj-path",
+      "interp_s": 0.0,
+      "compiled_s": 2.4,
+      "met": true
+     },
+     {
+      "project": "wj-proc",
+      "interp_s": 0.0,
+      "compiled_s": 2.2,
+      "met": true
+     },
+     {
+      "project": "wj-querystring",
+      "interp_s": 0.1,
+      "compiled_s": 2.6,
+      "met": true
+     },
+     {
+      "project": "wj-rate-limit",
+      "interp_s": 0.0,
+      "compiled_s": 2.4,
+      "met": true
+     },
+     {
+      "project": "wj-regex",
+      "interp_s": 0.0,
+      "compiled_s": 2.3,
+      "met": true
+     },
+     {
+      "project": "wj-retry",
+      "interp_s": 0.1,
+      "compiled_s": 2.5,
+      "met": true
+     },
+     {
+      "project": "wj-router",
+      "interp_s": 0.0,
+      "compiled_s": 2.8,
+      "met": true
+     },
+     {
+      "project": "wj-semver",
+      "interp_s": 0.0,
+      "compiled_s": 2.0,
+      "met": true
+     },
+     {
+      "project": "wj-sha",
+      "interp_s": 0.0,
+      "compiled_s": 1.8,
+      "met": true
+     },
+     {
+      "project": "wj-stats",
+      "interp_s": 0.0,
+      "compiled_s": 1.9,
+      "met": true
+     },
+     {
+      "project": "wj-sync",
+      "interp_s": 0.8,
+      "compiled_s": 7.2,
+      "met": true
+     },
+     {
+      "project": "wj-table",
+      "interp_s": 0.0,
+      "compiled_s": 1.9,
+      "met": true
+     },
+     {
+      "project": "wj-template",
+      "interp_s": 0.1,
+      "compiled_s": 2.0,
+      "met": true
+     },
+     {
+      "project": "wj-timefmt",
+      "interp_s": 0.1,
+      "compiled_s": 2.0,
+      "met": true
+     },
+     {
+      "project": "wj-toml",
+      "interp_s": 0.1,
+      "compiled_s": 2.9,
+      "met": true
+     },
+     {
+      "project": "wj-url",
+      "interp_s": 0.1,
+      "compiled_s": 2.1,
+      "met": true
+     },
+     {
+      "project": "wj-uuid",
+      "interp_s": 0.1,
+      "compiled_s": 2.1,
+      "met": true
+     },
+     {
+      "project": "wj-validate",
+      "interp_s": 0.1,
+      "compiled_s": 2.3,
+      "met": true
+     },
+     {
+      "project": "wj-ws",
+      "interp_s": 0.2,
+      "compiled_s": 2.7,
+      "met": true
+     },
+     {
+      "project": "wj-yaml",
+      "interp_s": 0.0,
+      "compiled_s": 1.9,
+      "met": true
+     },
+     {
+      "project": "wj-auth-api",
+      "interp_s": 7.2,
+      "compiled_s": 13.8,
+      "met": true
+     },
+     {
+      "project": "wj-chat",
+      "interp_s": 0.1,
+      "compiled_s": 4.2,
+      "met": true
+     },
+     {
+      "project": "wj-fetch",
+      "interp_s": 0.2,
+      "compiled_s": 4.9,
+      "met": true
+     },
+     {
+      "project": "wj-find",
+      "interp_s": 0.1,
+      "compiled_s": 2.4,
+      "met": true
+     },
+     {
       "project": "wj-first-hour",
       "interp_s": 0.0,
-      "compiled_s": 4.6,
+      "compiled_s": 2.1,
       "met": true
      },
      {
       "project": "wj-form-parse",
       "interp_s": 0.1,
-      "compiled_s": 3.8,
+      "compiled_s": 2.2,
       "met": true
      },
      {
       "project": "wj-grep",
-      "met": null
+      "interp_s": 0.2,
+      "compiled_s": 4.2,
+      "met": true
      },
      {
       "project": "wj-hello",
       "interp_s": 0.0,
-      "compiled_s": 24.1,
+      "compiled_s": 1.9,
       "met": true
      },
      {
       "project": "wj-migrate-cli",
-      "interp_s": 0.2,
-      "compiled_s": 12.4,
+      "interp_s": 0.1,
+      "compiled_s": 6.5,
       "met": true
      },
      {
       "project": "wj-notes-api",
-      "interp_s": 2.6,
-      "compiled_s": 17.9,
+      "interp_s": 1.2,
+      "compiled_s": 6.5,
       "met": true
      },
      {
       "project": "wj-pipeline",
       "interp_s": 0.1,
-      "compiled_s": 16.7,
+      "compiled_s": 3.8,
       "met": true
      },
      {
       "project": "wj-proxy",
-      "interp_s": 0.3,
-      "compiled_s": 13.2,
+      "interp_s": 0.1,
+      "compiled_s": 4.2,
       "met": true
      },
      {
       "project": "wj-scheduler",
-      "interp_s": 0.6,
-      "compiled_s": 8.3,
+      "interp_s": 0.2,
+      "compiled_s": 5.4,
       "met": true
      },
      {
       "project": "wj-sitegen",
       "interp_s": 0.1,
-      "compiled_s": 11.4,
+      "compiled_s": 4.2,
       "met": true
      },
      {
       "project": "wj-taskflow",
-      "interp_s": 29.5,
-      "compiled_s": 47.2,
+      "interp_s": 10.1,
+      "compiled_s": 17.7,
       "met": true
      },
      {
       "project": "wj-todo-cli",
-      "interp_s": 1.1,
-      "compiled_s": 62.9,
+      "interp_s": 0.4,
+      "compiled_s": 6.6,
       "met": true
      },
      {
       "project": "wj-webhook",
       "interp_s": 0.1,
-      "compiled_s": 30.5,
+      "compiled_s": 3.5,
       "met": true
      }
     ],
     "warm_loop": {
      "project": "wj-sync",
      "files": 24,
-     "median_s": 0.71
+     "median_s": 0.84
     },
     "startup": {
-     "hello_s": 0.023,
+     "hello_s": 0.049,
      "target_s": 0.25,
      "project": "wj-sync",
      "files": 24,
-     "check_s": 0.005,
-     "interp_test_s": 0.694,
+     "check_s": 0.006,
+     "interp_test_s": 0.801,
      "check_share": 0.01
     },
     "kernels": [
      {
       "kernel": "closures.wj",
-      "interp_cpu_s": 0.14,
+      "interp_cpu_s": 0.11,
       "python_cpu_s": 0.04,
-      "ratio": 3.5,
+      "ratio": 2.6,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "fib30.wj",
-      "interp_cpu_s": 0.03,
+      "interp_cpu_s": 0.05,
       "python_cpu_s": 0.13,
-      "ratio": 0.2,
+      "ratio": 0.4,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "hashmap.wj",
-      "interp_cpu_s": 0.2,
+      "interp_cpu_s": 0.1,
       "python_cpu_s": 0.05,
-      "ratio": 4.1,
+      "ratio": 1.8,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "loop5m.wj",
-      "interp_cpu_s": 0.18,
+      "interp_cpu_s": 0.06,
       "python_cpu_s": 0.91,
-      "ratio": 0.2,
+      "ratio": 0.1,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "nbody.wj",
-      "interp_cpu_s": 0.82,
-      "python_cpu_s": 0.11,
-      "ratio": 7.2,
+      "interp_cpu_s": 0.14,
+      "python_cpu_s": 0.12,
+      "ratio": 1.2,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "sieve.wj",
-      "interp_cpu_s": 0.53,
+      "interp_cpu_s": 0.07,
       "python_cpu_s": 0.36,
-      "ratio": 1.5,
+      "ratio": 0.2,
       "outputs_match": true,
-      "met": false
+      "met": true
      },
      {
       "kernel": "strings.wj",
-      "interp_cpu_s": 0.11,
+      "interp_cpu_s": 0.07,
       "python_cpu_s": 0.07,
-      "ratio": 1.6,
+      "ratio": 1.0,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "structs.wj",
-      "interp_cpu_s": 0.37,
+      "interp_cpu_s": 0.05,
       "python_cpu_s": 0.16,
-      "ratio": 2.3,
+      "ratio": 0.3,
       "outputs_match": true,
-      "met": false
+      "met": true
      }
     ],
     "compiled_cache": "warm (private target dir, reused across projects)"
    },
    "blockers": [
     {
-     "program": "wj-grep",
-     "reason": "unmeasured: compiled run unavailable"
-    },
-    {
      "program": "bench/closures.wj",
-     "reason": "interpreter 0.14s vs python 0.04s CPU (3.5x slower)"
+     "reason": "interpreter 0.11s vs python 0.04s CPU (2.6x slower)"
     },
     {
      "program": "bench/hashmap.wj",
-     "reason": "interpreter 0.20s vs python 0.05s CPU (4.1x slower)"
+     "reason": "interpreter 0.10s vs python 0.05s CPU (1.8x slower)"
     },
     {
      "program": "bench/nbody.wj",
-     "reason": "interpreter 0.82s vs python 0.11s CPU (7.2x slower)"
-    },
-    {
-     "program": "bench/sieve.wj",
-     "reason": "interpreter 0.53s vs python 0.36s CPU (1.5x slower)"
+     "reason": "interpreter 0.14s vs python 0.12s CPU (1.2x slower)"
     },
     {
      "program": "bench/strings.wj",
-     "reason": "interpreter 0.11s vs python 0.07s CPU (1.6x slower)"
-    },
-    {
-     "program": "bench/structs.wj",
-     "reason": "interpreter 0.37s vs python 0.16s CPU (2.3x slower)"
+     "reason": "interpreter 0.07s vs python 0.07s CPU (1.0x slower)"
     }
    ]
   },
@@ -1919,125 +2033,109 @@
    "id": "R5",
    "title": "Diagnostics agree",
    "target": "0 check/interpreter/build disagreements",
-   "percent": 94.2,
+   "percent": 95.1,
    "status": "fail",
    "detail": {
     "parity_checked": 300,
     "parity_agree": 300,
     "build_checked": 169,
     "negative_programs": 131,
-    "gap_headers_now_accepted": 2,
+    "gap_headers_now_accepted": 6,
     "cargo_gates": null,
     "agent_pilot_check_misses": 13
    },
    "blockers": [
     {
      "program": "examples/verified/algo_binary_tree.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `i64`, found `i32` (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/algo_lcs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `uint`, found `int (documented gap: wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ)"
     },
     {
      "program": "examples/verified/algo_matrix_multiply.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: arguments to this function are incorrect)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `i64`, found `i32` (documented gap: error[E0308]: arguments to this function are incorrect)"
     },
     {
      "program": "examples/verified/algo_stack_calculator.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0658]: use of unstable library feature `str_as_str` (documented gap: error[E0277]: can't compare 'str' with '&str')"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0099]: the generated code was rejected: use of unsta (documented gap: error[E0277]: can't compare 'str' with '&str')"
     },
     {
      "program": "examples/verified/algo_state_machine.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected an owned `string`, (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/algo_word_frequency.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: a value of type `Vec<(String, i64)>` cannot be (documented gap: error[E0599]: no method named 'map' found for struct 'HashMap<String, )"
-    },
-    {
-     "program": "examples/verified/basics_arithmetic.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0689]: can't call method `pow` on ambiguous numeric t (documented gap: error[E0689]: can't call method 'pow' on ambiguous numeric type '{inte)"
-    },
-    {
-     "program": "examples/verified/enum_methods.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: arguments to this enum variant are incorrect (documented gap: error[E0308]: arguments to this enum variant are incorrect)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0029]: cannot collect `(&String, i64)` items into `V (documented gap: error[E0599]: no method named 'map' found for struct 'HashMap<String, )"
     },
     {
      "program": "examples/verified/generics_function.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0599]: no method named `clone` found for type paramet (documented gap: error[E0599]: no method named 'clone' found for type parameter 'T' in )"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0015]: no method `clone` found for `type parameter ` (documented gap: error[E0599]: no method named 'clone' found for type parameter 'T' in )"
     },
     {
      "program": "examples/verified/hashset_basics.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `&i64`, found `int (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/iter_any_all_count.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `&i64`, found `int (documented gap: error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the)"
     },
     {
      "program": "examples/verified/iter_collect_hashmap.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: a value of type `HashMap<String, i64>` cannot  (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<String>' in )"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0029]: cannot collect `(String, usize)` items into ` (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<String>' in )"
     },
     {
      "program": "examples/verified/iter_flat_map_chain.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0271]: type mismatch resolving `<[i64; 2] as IntoIter (documented gap: error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' i)"
-    },
-    {
-     "program": "examples/verified/iter_fold_sum.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0599]: no method named 'sum' found for struct 'Vec<i32>' in the)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0099]: the generated code was rejected: type mismatc (documented gap: error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' i)"
     },
     {
      "program": "examples/verified/iter_min_max_by.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0061]: this method takes 1 argument but 0 arguments w (documented gap: error[E0061]: this method takes 1 argument but 0 arguments were suppli)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0013]: this method takes 1 argument but 0 arguments  (documented gap: error[E0061]: this method takes 1 argument but 0 arguments were suppli)"
     },
     {
      "program": "examples/verified/iter_partition_unzip.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not (documented gap: error[E0599]: no method named 'partition' found for struct 'Vec<i32>' )"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0017]: trait bound not satisfied: `Vec<i64>: Extend< (documented gap: error[E0599]: no method named 'partition' found for struct 'Vec<i32>' )"
     },
     {
      "program": "examples/verified/iter_take_skip_rev.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0599]: no method named 'take' found for struct 'Vec<i32>' in th)"
-    },
-    {
-     "program": "examples/verified/numbers_min_max_abs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0689]: can't call method 'abs' on ambiguous numeric type '{inte)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `uint`, found `int (documented gap: error[E0599]: no method named 'take' found for struct 'Vec<i32>' in th)"
     },
     {
      "program": "examples/verified/operators_overload.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0046]: not all trait items implemented, missing: `Out (documented gap: error[E0119]: conflicting implementations of trait 'PartialEq' for typ)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0018]: not all trait items implemented, missing: `Ou (documented gap: error[E0119]: conflicting implementations of trait 'PartialEq' for typ)"
     },
     {
      "program": "examples/verified/prog_event_handlers.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected a borrowed `string (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/prog_game_of_life.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `uint`, found `int (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/prog_lru_cache.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0308]: mismatched types (documented gap: error[E0308]: mismatched types)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0003]: mismatched types: expected `&_`, found `strin (documented gap: error[E0308]: mismatched types)"
     },
     {
      "program": "examples/verified/result_collect_all_or_nothing.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0282]: type annotations needed (documented gap: error[E0282]: type annotations needed)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0099]: the generated code was rejected: type annotat (documented gap: error[E0282]: type annotations needed)"
     },
     {
      "program": "examples/verified/std_env_args.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: a value of type `Vec<std::string::String>` can (documented gap: error[E0432]: unresolved import 'windjammer_runtime')"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0029]: cannot collect `&std::string::String` items i (documented gap: error[E0432]: unresolved import 'windjammer_runtime')"
     },
     {
      "program": "examples/verified/struct_with_vec_field.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0282]: type annotations needed (documented gap: error[E0282]: type annotations needed)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0099]: the generated code was rejected: type annotat (documented gap: error[E0282]: type annotations needed)"
     },
     {
      "program": "examples/verified/vec_2d_grid.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0277]: the trait bound `Vec<i32>: Copy` is not satisf (documented gap: error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0017]: trait bound not satisfied: `Vec<i32>: Copy` (documented gap: error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied)"
     },
     {
      "program": "examples/verified/vec_of_structs.wj",
-     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[E0599]: no method named `max_by_key` found for struct  (documented gap: error[E0599]: no method named 'max_by_key' found for struct 'Vec<Perso)"
+     "reason": "[check-vs-build] interpreter accepts it, the compiled build fails: error[WJ0015]: no method `max_by_key` found for `Vec<Person> (documented gap: error[E0599]: no method named 'max_by_key' found for struct 'Vec<Perso)"
     },
     {
      "program": "pilot/t006_base_convert.A.0",
@@ -2085,11 +2183,11 @@
     },
     {
      "program": "pilot/t030_bank_ledger.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator "
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: "
     },
     {
      "program": "pilot/t030_bank_ledger.A.2",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator "
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: "
     }
    ]
   },
@@ -2100,10 +2198,10 @@
    "percent": 100.0,
    "status": "pass",
    "detail": {
-    "std_declared": 258,
+    "std_declared": 273,
     "std_missing": 0,
     "unsupported_features": [],
-    "crate_dependency_projects": 1,
+    "crate_dependency_projects": 2,
     "crate_projects_uncovered": 0
    },
    "blockers": []
@@ -2122,83 +2220,83 @@
    },
    "blockers": [
     {
-     "program": "8b6bdb63d0",
-     "reason": "failed R1,R2,R4,R5"
+     "program": "45b6b02162",
+     "reason": "failed R2,R4,R5"
     },
     {
-     "program": "38457b193a",
+     "program": "7e5fdb1c80",
      "reason": "failed R1,R2,R4,R5,R6"
     },
     {
-     "program": "ac74af8094",
+     "program": "44a1f1c04a",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "2d10ec9501",
+     "program": "6ed79d644d",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "2088c1e69c",
+     "program": "e4e895eb80",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "bec953e66b",
+     "program": "93f601ef73",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "15f00f3246",
+     "program": "77532d95d6",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "ff69307b0c",
+     "program": "1cf718bc09",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "8f70969ec0",
+     "program": "3713d6239f",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "4bfe547107",
+     "program": "9e1686f5e4",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "af4f375465",
+     "program": "1ac4c7edca",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "c57b15bc74",
+     "program": "0344293830",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "7f9afe1f5f",
+     "program": "0aded6f884",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "0634ac951a",
+     "program": "04bc62e680",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "6f9b2b3d3c",
+     "program": "60e78e96a4",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "6b0cb01077",
+     "program": "658c6b2181",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "a52a35982d",
+     "program": "f1cfda00c7",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "1cff105244",
+     "program": "84f69b9258",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "04c2443b02",
+     "program": "1e09e9ba48",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "512b6e4067",
+     "program": "874278ae44",
      "reason": "no full readiness run recorded for this commit"
     }
    ]

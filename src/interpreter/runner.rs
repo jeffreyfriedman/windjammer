@@ -352,12 +352,19 @@ pub struct TestSpec {
 /// `wj test --simulate`: every test runs in the seeded world (ADR-0021 E3). With a seed range a test passes only if it passes
 /// under every seed; the first failing seed ends that test's run and is named in the message with the command that reproduces it.
 pub fn run_specs_simulated(specs: Vec<TestSpec>, sim: Option<SimRun>) -> Vec<TestResult> {
+    run_specs_with(specs, sim, None)
+}
+
+/// `run_specs_simulated` with the crate host for the project's Rust crate calls (ADR-0031): one host process
+/// serves every test of the run.
+pub fn run_specs_with(specs: Vec<TestSpec>, sim: Option<SimRun>, crates: Option<super::crate_host::CrateHost>) -> Vec<TestResult> {
     with_big_stack(move || {
+        let crates = crates.map(std::rc::Rc::new);
         let mut results = Vec::new();
         for spec in specs {
             results.push(match &sim {
-                None => run_one_test(&spec, None),
-                Some(s) => run_seeds(&spec, s),
+                None => run_one_test(&spec, None, crates.as_ref()),
+                Some(s) => run_seeds(&spec, s, crates.as_ref()),
             });
         }
         results
@@ -371,10 +378,10 @@ pub struct SimRun {
     pub faults: f64,
 }
 
-fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
+fn run_seeds(spec: &TestSpec, s: &SimRun, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>) -> TestResult {
     for seed in s.seeds.clone() {
         let cfg = super::effect_port::sim::SimConfig { seed, faults: s.faults };
-        let r = run_one_test(spec, Some(&cfg));
+        let r = run_one_test(spec, Some(&cfg), crates);
         if !r.passed {
             let faults = if s.faults > 0.0 { format!(" --faults {}", s.faults) } else { String::new() };
             let message = format!(
@@ -389,7 +396,7 @@ fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
     TestResult { file: spec.file.clone(), name: spec.display_name.clone(), passed: true, message: String::new() }
 }
 
-fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>) -> TestResult {
+fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>) -> TestResult {
     let spec = spec.clone();
     let mut it = Interpreter::new_capturing();
     let env = host_env();
@@ -417,6 +424,9 @@ fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig
     if let Some(cfg) = sim {
         let tmp = scratch.as_ref().map(|s| s.path().to_path_buf()).unwrap_or_else(std::env::temp_dir);
         install_simulation(&mut it, cfg, &super::caps::project_root(&spec.file), &tmp);
+    }
+    if let Some(h) = crates {
+        it.attach_shared_crate_host(h.clone());
     }
     let outcome = match it.load_test_program(&spec.file) {
         Ok(mut path) => {

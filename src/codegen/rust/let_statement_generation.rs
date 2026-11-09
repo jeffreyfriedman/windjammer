@@ -226,10 +226,8 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let mut output = self.indent();
         output.push_str("let ");
-
         let defaulted_type = self.unused_empty_collection_default(type_, value, location);
         let type_ = defaulted_type.as_ref().unwrap_or(type_);
-
         // Check if we need &mut for index access on borrowed fields
         // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
         let needs_mut_ref = self.should_mut_borrow_index_access(value);
@@ -566,6 +564,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             ) {
                 self.explicit_ref_let_bindings.insert(name.to_string());
+            } else if matches!(value, Expression::Identifier { name: src, .. } if self.binding_is_known_borrow(src)) {
+                self.explicit_ref_let_bindings.insert(name.to_string()); // `let s = t` of a borrowed `t` holds the borrow
             } else {
                 self.explicit_ref_let_bindings.remove(name);
             }

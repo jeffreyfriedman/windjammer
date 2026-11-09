@@ -68,8 +68,8 @@ does now.
 - `ir/explain/moves.rs` (`receiver_moves`) finds `v.m()` where the emitted `Type::m` takes `self` by value, `v` is an
   owned non-`Copy` local, and `v` is read again before any reassignment.
 - `check/moves.rs` turns each hit into WJ0007 with a span on `v.m(`.
-- The interpreted-run gate refuses the program. The `self_by_value_reuse` repro stopped before running (it has since been
-  removed: once the compiler copied a moved value that is read again, the program built):
+- The interpreted-run gate refuses the program. the `self_by_value_reuse` case of `tests/move_prediction_test.rs` now stops before
+  running:
 
   ```
   error[WJ0007]: `n` is used after `n.advance()` moved it (`Node::advance` takes `self` by value)

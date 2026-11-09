@@ -375,7 +375,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ) {
                     s = self.clone_non_copy_ref_binding_for_struct_field(e, &s);
                 }
-                s
+                self.copy_if_read_again_at(e, s, super::move_at_last_use::MoveSite::Element) // CLONE-USE-AFTER-MOVE: a tuple slot consumes its element
             })
             .collect();
         format!("({})", expr_strs.join(", "))
@@ -785,7 +785,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = true;
                 let prev_struct_assign_int = self.assignment_int_target_type.take();
                 self.assignment_int_target_type = self.struct_literal_field_int_target(field_name);
-                let mut expr_str = self.generate_expression(expr);
+                let mut expr_str = { let v = self.generate_expression(expr); self.copy_if_read_again_at(expr, v, super::move_at_last_use::MoveSite::Element) };
                 self.assignment_int_target_type = prev_struct_assign_int;
                 self.in_expression_context = prev_expr_ctx;
                 self.coerce_string_literals_to_owned = prev_coerce;

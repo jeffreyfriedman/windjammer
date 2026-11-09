@@ -239,3 +239,111 @@ Output:
 T
 ```
 
+
+## Guards, ranges, or-patterns and struct variants
+
+**SPEC-PAT-011** `match` tries arms in order; a guard (`if`) decides after the pattern binds; integer ranges (`1..=9`) and or-patterns (`10 | 20 | 30`) match literals; struct and tuple variants bind their fields, `..` ignores the rest.
+
+<!-- example: tests/spec/patterns/SPEC-PAT-011.wj -->
+```windjammer
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+    Tri { a: int, b: int, c: int },
+    Empty,
+}
+
+fn classify(s: Shape) -> string {
+    match s {
+        Shape::Circle(r) if r > 10 => "big circle",
+        Shape::Circle(_) => "circle",
+        Shape::Rect(w, h) if w == h => "square",
+        Shape::Rect(_, _) => "rect",
+        Shape::Tri { a, b, c } if a == b && b == c => "equilateral",
+        Shape::Tri { a, .. } => if a > 3 { "tall tri" } else { "tri" },
+        Shape::Empty => "empty",
+    }
+}
+
+fn bucket(n: int) -> string {
+    match n {
+        n if n < 0 => "negative",
+        0 => "zero",
+        1..=9 => "digit",
+        10 | 20 | 30 => "round",
+        _ => "large",
+    }
+}
+
+fn main() {
+    println(classify(Shape::Circle(11)))
+    println(classify(Shape::Circle(2)))
+    println(classify(Shape::Rect(3, 3)))
+    println(classify(Shape::Rect(3, 4)))
+    println(classify(Shape::Tri { a: 2, b: 2, c: 2 }))
+    println(classify(Shape::Tri { a: 5, b: 1, c: 1 }))
+    println(classify(Shape::Empty))
+    println("${bucket(-5)} ${bucket(0)} ${bucket(7)} ${bucket(20)} ${bucket(99)}")
+}
+```
+Output:
+```text
+big circle
+circle
+square
+rect
+equilateral
+tall tri
+empty
+negative zero digit round large
+```
+
+## Destructuring
+
+**SPEC-PAT-012** `let` destructures tuples, nested tuples and structs; `for` destructures tuple items; nested `Option` patterns with guards select the innermost case.
+
+<!-- example: tests/spec/patterns/SPEC-PAT-012.wj -->
+```windjammer
+struct P {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let pair = (1, ("two", 3.5))
+    let (a, (b, c)) = pair
+    println("${a} ${b} ${c}")
+    let p = P { x: 4, y: 5 }
+    let P { x, y } = p
+    println("${x + y}")
+    let v = vec![10, 20, 30, 40]
+    println("${v[0]} ${v[v.len() - 1]} ${v.len() - 2}")
+    let opt = Some(Some(3))
+    match opt {
+        Some(Some(n)) if n > 2 => println("deep ${n}"),
+        Some(Some(_)) => println("small"),
+        Some(None) => println("inner none"),
+        None => println("none"),
+    }
+    let n = 5
+    let msg = match n {
+        1..=5 => "low",
+        _ => "high",
+    }
+    println("${msg} ${n}")
+    let items = vec![(1, "a"), (2, "b")]
+    for (i, s) in items {
+        println("${i}${s}")
+    }
+}
+```
+Output:
+```text
+1 two 3.5
+9
+10 40 2
+deep 3
+low 5
+1a
+2b
+```
