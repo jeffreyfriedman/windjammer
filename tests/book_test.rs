@@ -457,8 +457,8 @@ fn the_real_registry_lists_every_spec_family() {
 }
 
 #[test]
-fn known_gap_eval_of_an_interpolated_string_literal_does_not_parse() {
+fn eval_prints_an_interpolated_string_literal() {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["eval", "\"${6 * 7} ok\""]).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    assert!(!out.status.success() && text.contains("WJ0012"), "wj eval now accepts an interpolated string: delete this test and its docs/known-gaps.md row\n{text}");
+    assert!(out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "42 ok", "{text}");
 }
