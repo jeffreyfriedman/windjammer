@@ -7,12 +7,35 @@ pub fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Every `.wj` file under the repo (examples, tests, std, benchmarks ...), sorted.
+/// Every `.wj` file git knows (tracked, or new and not ignored: examples, tests, std, benchmarks ...), sorted. The corpus is what git sees, so the
+/// result does not depend on the checkout's environment (an untracked `windjammer-ecosystem` symlink, build output, scratch
+/// files). Without git (a source archive) the directory walk is used and links are not followed.
 pub fn repo_wj_files() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    walk(&repo_root(), &mut out);
+    let mut out = tracked_wj_files().unwrap_or_else(|| {
+        let mut v = Vec::new();
+        walk(&repo_root(), &mut v);
+        v
+    });
+    out.retain(|p| !excluded(p));
     out.sort();
     out
+}
+
+fn tracked_wj_files() -> Option<Vec<PathBuf>> {
+    let o = std::process::Command::new("git").args(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.wj"]).current_dir(repo_root()).output().ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let root = repo_root();
+    let files: Vec<PathBuf> =
+        o.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| root.join(String::from_utf8_lossy(s).as_ref())).filter(|p| p.is_file()).collect();
+    (!files.is_empty()).then_some(files)
+}
+
+/// Recorded replay fixtures and the multi-file drift corpus are not part of the single-file span corpus.
+fn excluded(p: &Path) -> bool {
+    let r = rel(p);
+    r.starts_with("tests/drift_corpus/") || (r.starts_with("tests/py_ports/") && p.components().any(|c| c.as_os_str() == "tree"))
 }
 
 fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -20,6 +43,9 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     for e in rd.flatten() {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
+        if e.file_type().map(|t| t.is_symlink()).unwrap_or(false) {
+            continue; // never follow links out of the repo
+        }
         if p.is_dir() {
             if name == "target" || name.starts_with('.') || name == "node_modules"
                 || (name == "tree" && p.components().any(|c| c.as_os_str() == "py_ports"))

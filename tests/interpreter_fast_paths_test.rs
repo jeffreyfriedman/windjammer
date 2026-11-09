@@ -18,7 +18,7 @@ const CASES: &[(&str, &[&str])] = &[
     ("bench/interp/hashmap.wj", &["mapget", "mapins", "unboxed", "matchval"]),
     ("bench/interp/sieve.wj", &["packed", "packedidx", "packedstore"]),
     ("bench/interp/nbody.wj", &["vecresolve"]),
-    ("bench/interp/strings.wj", &["pushfmt"]),
+    ("bench/interp/strings.wj", &["pushfmt", "lenfast"]),
     ("bench/interp/closures.wj", &["closureenv", "closurescope"]),
     ("tests/engine_parity/str_fast.wj", &["fmt", "pushstr", "pushfmt"]),
     ("tests/engine_parity/jit_loop_inline.wj", &["inline"]),

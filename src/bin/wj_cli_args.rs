@@ -123,7 +123,8 @@ pub enum Commands {
 
     /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's
+        /// A .wj file, a directory, or `-` (the program read from stdin) (omitted: the project containing the current
+        /// directory, wj.toml), then the program's
         /// arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own
         /// flags go before PATH.
         #[arg(value_name = "PATH [ARGS]...", trailing_var_arg = true, allow_hyphen_values = true)]
@@ -284,6 +285,14 @@ pub enum Commands {
 
     /// Start the Windjammerscript REPL (interactive interpreter)
     Repl {},
+
+    /// Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`.
+    /// The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted.
+    Eval {
+        /// An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed
+        #[arg(value_name = "CODE")]
+        code: String,
+    },
 
     /// MCP tools as typed Windjammer: bindings for code mode (ADR-0021)
     Mcp {

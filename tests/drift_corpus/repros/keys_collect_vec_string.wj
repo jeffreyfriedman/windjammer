@@ -1,0 +1,10 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("b", 2)
+    m.insert("a", 1)
+    let mut names: Vec<string> = m.keys().collect()
+    names.sort()
+    println("${names[0]}")
+}

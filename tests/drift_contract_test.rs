@@ -81,3 +81,82 @@ fn the_contract_points_at_the_ledger_and_the_gate() {
         assert!(doc.contains(needle), "INTERPRETER_CONTRACT.md does not mention {needle}");
     }
 }
+
+/// Repros named by the drift findings (`docs/drift/*.md`), as `tests/drift_corpus/repros/x.wj`, `pilotN-repros/x.wj`
+/// or in a findings table's first column (`| `x` | ...`), and every file of a `docs/drift/*-repros/` directory.
+fn drift_repro_names(docs: &Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let Ok(rd) = fs::read_dir(docs) else { return out };
+    let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+    entries.sort();
+    for p in entries {
+        let from = p.file_name().unwrap().to_string_lossy().to_string();
+        if p.is_dir() && from.ends_with("-repros") {
+            for f in fs::read_dir(&p).unwrap().flatten() {
+                let n = f.file_name().to_string_lossy().to_string();
+                if let Some(stem) = n.strip_suffix(".wj") {
+                    out.push((stem.to_string(), format!("docs/drift/{from}/")));
+                }
+            }
+        } else if from.ends_with(".md") {
+            let text = fs::read_to_string(&p).unwrap();
+            for line in text.lines() {
+                // a closed finding names a repro that has left the corpus on purpose
+                if line.contains("**Closed**") || line.contains("**Fixed**") {
+                    continue;
+                }
+                for marker in ["tests/drift_corpus/repros/", "-repros/"] {
+                    let mut rest = line;
+                    while let Some(i) = rest.find(marker) {
+                        rest = &rest[i + marker.len()..];
+                        let stem: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                        if !stem.is_empty() && rest[stem.len()..].starts_with(".wj") {
+                            out.push((stem, from.clone()));
+                        }
+                    }
+                }
+                // a findings table row: `| `name` | ...` (the repro's name)
+                if let Some(cell) = line.strip_prefix("| `") {
+                    let stem: String = cell.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                    if !stem.is_empty() && cell[stem.len()..].starts_with("` |") && stem.contains('_') {
+                        out.push((stem, from.clone()));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Every repro the drift findings name runs in the drift corpus (`tests/drift_corpus/repros/`, or a value-position
+/// program in `tests/engine_parity/`): a finding outside the corpus is a divergence no gate watches.
+#[test]
+fn every_drift_finding_repro_is_in_the_corpus() {
+    // the corpus's programs: the repros, and the value-position programs it runs from tests/engine_parity
+    let corpus = [root().join("tests/drift_corpus/repros"), root().join("tests/engine_parity")];
+    let mut missing: Vec<String> = drift_repro_names(&root().join("docs/drift"))
+        .into_iter()
+        .filter(|(stem, _)| !corpus.iter().any(|d| d.join(format!("{stem}.wj")).is_file()))
+        .map(|(stem, from)| format!("{stem} (named in {from})"))
+        .collect();
+    missing.sort();
+    missing.dedup();
+    assert!(missing.is_empty(), "drift repros outside tests/drift_corpus/repros: copy each in (and record or ledger it):\n{}", missing.join("\n"));
+}
+
+/// Self-test: the scan finds each way a finding names a repro, and skips closed findings.
+#[test]
+fn the_repro_scan_reads_paths_tables_and_repro_dirs() {
+    let dir = std::env::temp_dir().join(format!("wj-drift-scan-{}", std::process::id()));
+    fs::create_dir_all(dir.join("pilot9-repros")).unwrap();
+    fs::write(dir.join("pilot9-repros/in_dir.wj"), "").unwrap();
+    fs::write(
+        dir.join("f.md"),
+        "see tests/drift_corpus/repros/by_path.wj\n| `table_row` | x |\n| `closed_one` | **Closed** |\n| `kind` | not a repro (no underscore) |\n",
+    )
+    .unwrap();
+    let mut names: Vec<String> = drift_repro_names(&dir).into_iter().map(|(s, _)| s).collect();
+    names.sort();
+    let _ = fs::remove_dir_all(&dir);
+    assert_eq!(names, ["by_path", "in_dir", "table_row"]);
+}

@@ -7738,6 +7738,39 @@
   {
     "kind": "stdlib",
     "module": "std::net::mod",
+    "name": "TcpListener",
+    "signature": "struct TcpListener",
+    "source": "std/net/mod.wj",
+    "summary": "/ A bound TCP listener.",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::net::mod",
+    "name": "TcpStream",
+    "signature": "struct TcpStream",
+    "source": "std/net/mod.wj",
+    "summary": "RAW SOCKETS (ADR-0032) Bytes are Vec<u8>; errors are strings from a fixed vocabulary (\"connection refused\", \"timed out\", \"connection reset\", \"broken pipe\", \"add",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::net::mod",
+    "name": "UdpSocket",
+    "signature": "struct UdpSocket",
+    "source": "std/net/mod.wj",
+    "summary": "/ A bound UDP socket.",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::net::mod",
     "name": "WebSocket",
     "signature": "struct WebSocket",
     "source": "std/net/mod.wj",

@@ -68,7 +68,6 @@
 "compiler->resolve src/compiler/compilation_pipeline.rs" = 4
 "compiler_config->codegen src/compiler_config.rs" = 1
 "config->ir src/config.rs" = 4
-"error_catalog->intrinsics src/error_catalog.rs" = 1
 "errors->analyzer src/errors/mutability.rs" = 2
 "errors->parser src/errors/mutability.rs" = 1
 "ffi->codegen src/ffi/idl.rs" = 1
@@ -171,10 +170,10 @@
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4009
 "src/codegen/rust/function_generation_prepare.rs" = 13000
-"src/codegen/rust/generator.rs" = 4999
+"src/codegen/rust/generator.rs" = 4996
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
-"src/codegen/rust/ir_call_site.rs" = 10435
-"src/codegen/rust/method_call_expression_generation/finalize.rs" = 2158
+"src/codegen/rust/ir_call_site.rs" = 10432
+"src/codegen/rust/method_call_expression_generation/finalize.rs" = 2156
 "src/codegen/rust/self_analysis.rs" = 2027
 "src/codegen/rust/signature_promotion.rs" = 4519
 "src/codegen/rust/statement_generation.rs" = 2434
@@ -190,7 +189,7 @@
 "src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 512
 "src/analyzer/string_optimization.rs::expr_uses_param_in_string_ref_context" = 373
 "src/auto_clone.rs::collect_usages_from_expression" = 394
-"src/bin/wj_cli_cmds.rs::run" = 316
+"src/bin/wj_cli_cmds.rs::run" = 315
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 504
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
@@ -213,7 +212,7 @@
 "src/codegen/rust/function_generation_prepare.rs::refresh_method_registry_from_emitted_formals" = 373
 "src/codegen/rust/function_wrapping_generation.rs::generate_wrapped_function_body" = 383
 "src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 390
-"src/codegen/rust/ir_call_site.rs::apply_ir_call_site_coercion" = 3813
+"src/codegen/rust/ir_call_site.rs::apply_ir_call_site_coercion" = 3811
 "src/codegen/rust/ir_call_site.rs::apply_post_ir_forwarder_owned_outer_and_reuse" = 353
 "src/codegen/rust/ir_call_site.rs::apply_registry_borrow_to_call_arg" = 302
 "src/codegen/rust/ir_call_site.rs::enforce_call_site_ownership_contract" = 383
@@ -225,8 +224,8 @@
 "src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1062
 "src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1221
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
-"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 973
-"src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2142
+"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 972
+"src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2140
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 318
 "src/codegen/rust/program_generation.rs::generate_program" = 1061
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345

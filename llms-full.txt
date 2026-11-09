@@ -467,6 +467,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
@@ -559,7 +560,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
+| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file, a directory, or `-` (the program read from stdin) (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
 | `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
 | `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
@@ -602,6 +603,18 @@ Start the Windjammerscript REPL (interactive interpreter)
 ```text
 Usage: wj repl
 ```
+
+### `wj eval`
+
+Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
+
+```text
+Usage: wj eval <CODE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CODE>` | CODE |  | An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed |
 
 ### `wj mcp`
 
@@ -1308,7 +1321,6 @@ Compiler and diagnostic findings from writing [The Windjammer Book](book/src/SUM
 | `wj explain-ownership` reports a nonsense source column for field reads inside a string with two interpolations (for example `@8:17640014`) | `wj explain-ownership` on the repro | `tests/book_repros/explain_ownership_interpolation_span.wj` |
 | Mixed-width integer arithmetic (`int + i32`) passes `wj check` and runs in both modes, although ADR-0015 asks for an explicit conversion | recorded as Q-017 in [spec/OPEN_QUESTIONS.md](spec/OPEN_QUESTIONS.md) | `tests/spec/` SPEC-TYP-003 |
 | A generic function that copies an element out of a list (`let mut best = items[0]` with `T: PartialOrd`) runs in the interpreter, but the compiled path stops with `WJ0015` ("no method `clone` found for type parameter `T`"); adding `+ Clone` to the bound is the workaround | `wj run --compiled` on the repro | `tests/book_repros/generic_largest_needs_clone.wj` |
-| A function in a directory module (`util/mod.wj`) that takes a list and only reads it: the interpreter runs the program, the compiled path rejects the call with `WJ0003` (expected `Vec<i64>`, found `&Vec<i64>`); the same function in a file module (`util.wj`) compiles | `wj run --compiled` on the repro project | `tests/book_repros/dir_module/` |
 | Three collection idioms run interpreted and fail compiled: `v.filter(|x| ...).collect()` into `Vec<int>` (`WJ0029`; `.cloned()` before `.collect()` is the workaround), `v.find(|x| x > 4)` (`WJ0003`, closure sees `&i64`), and `counts.entry(w)` with `w` taken from an array of string literals (`WJ0003`; typing the array as `Vec<string>` is the workaround) | `wj run --compiled` on each repro | `tests/book_repros/iter_filter_collect.wj`, `iter_find_closure.wj`, `hashmap_entry_literal_keys.wj` |
 | Integer literals without a type, captured by a closure or passed through tuples and options, can be typed `i32` on the compiled path while `int` is `i64` (the interpreter has one integer type); annotating the binding (`let offset: int = 10`) avoids it | the "Integer literal typing" family in [drift/findings.md](drift/findings.md) and `rust-int-literal-width-inference` in [reference/targets.md](reference/targets.md) | `tests/drift_corpus/repros/` |
 | A struct defined in a file module and only reached through a function that returns it (`let items = make()` in `main`, without `use shapes::Item`): interpreted it runs, compiled it fails with `WJ0003` (`expected module_struct::Item, found shapes::Item`); importing the type with `use shapes::Item` is the workaround | `wj run --compiled` on the repro project | `tests/book_repros/module_struct/` |
@@ -1317,3 +1329,6 @@ Compiler and diagnostic findings from writing [The Windjammer Book](book/src/SUM
 | A `pub const` of a module read from that module's own function runs interpreted and fails compiled with `WJ0001` | `wj run --compiled` on the repro | `tests/book_repros/module_const.wj` |
 | Optional chaining `a?.b` runs interpreted; the Rust backend rejects it with `WJ0099` ("not supported yet") | `wj run --compiled` on the repro | `tests/book_repros/optional_chain.wj` |
 | Looking up a string key (`groups.get(first)` with `first` a `String`) and inserting into a `BTreeMap<string, string>` runs interpreted and fails compiled with `WJ0003` (expected `&string`) | `wj run --compiled` on the repro | `tests/book_repros/map_get_string_key.wj` |
+| `async fn` with `.await` inside it runs interpreted; the Rust backend rejects the call with `WJ0099` (E0728, "`await` is only allowed inside `async` functions"): the generated function is not `async` | `wj run --compiled` on the repro | `tests/book_repros/async_await_compiled.wj` |
+| `@pure` and `@uses(..)` on a function are checked by `wj check` but reach Rust as attributes, so a compiled run fails with `WJ0099` ("cannot find attribute `pure`") | `wj run --compiled` on the repro | `tests/book_repros/pure_attribute_compiled.wj` |
+| A `defer` inside a loop body runs at the end of each pass when compiled and never when interpreted | `wj run --interpret` vs `--compiled` on the repro | `tests/book_repros/defer_in_loop.wj` |

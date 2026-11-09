@@ -984,10 +984,9 @@ impl<'ast> CodeGenerator<'ast> {
             ) {
                 let arg_count = user_arg_count.unwrap_or(arg_index + 1);
                 let inferred_recv = receiver_type_name.and_then(|rt| {
-                    crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                         Some(rt),
                         None,
-                        self.current_function_return_type.as_ref(),
                     )
                 });
                 if let Some(method_sig) = self.resolve_method_function_signature_specialized(
@@ -1312,10 +1311,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Specialize stdlib generics (`Vec::push(T)` → `push(String)` on `Vec<String>`).
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 receiver_type_name,
                 None,
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -6695,10 +6693,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Stdlib generics stay `T`/`E` until specialized from the concrete receiver
         // (`Vec<usize>::push` → `usize`). Registry base names are unparameterized (`Vec`).
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 receiver_type_name,
                 inferred_recv.as_ref(),
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(

@@ -1,4 +1,8 @@
 # Values and types
+<!-- feature: lexical-structure -->
+<!-- feature: expressions -->
+<!-- feature: statements -->
+<!-- feature: intrinsics -->
 
 A Windjammer program is a list of functions, and `main` is where it starts. There are no semicolons: a statement ends
 at the end of its line, and the last expression of a block is the block's value.
@@ -186,6 +190,41 @@ fn main() {
     println(if find([1], 9).is_none() { "no match" } else { "match" })
 }
 ```
+
+## Ranges and the built-in functions
+
+`a..b` runs from `a` up to but not including `b`, and `a..=b` includes `b`. Ranges drive `for` loops and slice strings and
+lists by position:
+
+```wj
+// expect: no newline, then a line
+// expect: 0 1 2 1 2 3
+// expect: wind
+fn main() {
+    print("no newline, ")
+    println("then a line")
+    assert(1 + 1 == 2)
+    assert_eq(2 * 2, 4)
+    assert_ne(1, 2)
+    let mut seen: Vec<string> = []
+    for i in 0..3 {
+        seen.push("${i}")
+    }
+    for i in 1..=3 {
+        seen.push("${i}")
+    }
+    println(seen.join(" "))
+    let word = "windjammer"
+    println("${word[0..4]}")
+}
+```
+
+The same example uses the built-in functions. `print` and `println` write to standard output, `eprint` and `eprintln` to
+standard error. `assert(cond)` stops the program when `cond` is false, `assert_eq(a, b)` and `assert_ne(a, b)` compare two
+values and show both on failure, each with an optional message as the last argument. `panic("...")` stops with a message,
+`todo()` marks code you have not written, `unreachable()` marks code that cannot run, and `debug(x)` prints a value with
+its source location to standard error and hands it back. They are plain functions, not macros, so there is no `!` to
+write.
 
 The next chapter looks closely at numbers; after it, [ownership](ownership.md) is the idea that makes Windjammer
 different.
