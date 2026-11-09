@@ -1,0 +1,118 @@
+// Long random differential run: generated programs (drift_gen.wj value-kind x position grid and drift_probes.wj
+// semantic probes) over a seed range for a time budget, one report. Nothing is ledgered: the report lists what a
+// person should look at (walker vs resolved differences, programs that do not run, rustc rejections of the
+// generated Rust, and with --run-compiled any difference with the compiled program's output).
+//
+//   wj run scripts/wj/drift_fuzz.wj <wj-binary> <outdir> [--minutes M] [--from SEED] [--chunk N] [--run-compiled]
+//
+// Writes <outdir>/report.md and keeps the sources of every flagged program under <outdir>/flagged/. Run it from the
+// repository root (for example from a nightly job). Exit status 1 when anything is flagged.
+use std::env
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+fn now() -> int {
+    match sh("date +%s") {
+        Ok(r) => strings.trim(r.stdout).parse::<int>().unwrap_or(0),
+        Err(_) => 0,
+    }
+}
+
+// rows of a result file that disagree, as `id  signature` lines
+fn flagged(tsv: string) -> Vec<string> {
+    let mut out = Vec::new()
+    for line in strings.split_lines(tsv) {
+        let f = strings.split(line, "\t")
+        if f.len() != 4 {
+            continue
+        }
+        let toks = [f[1], f[2], f[3]]
+        let mut first = ""
+        let mut differs = false
+        for t in toks {
+            if t == "skip" {
+                continue
+            }
+            if first == "" {
+                first = t
+            } else if t != first {
+                differs = true
+            }
+        }
+        if differs {
+            out.push("${f[0]}  walker=${f[1]} resolved=${f[2]} compiled=${f[3]}")
+        }
+    }
+    out
+}
+
+fn main() {
+    let args = env::args()
+    let wj = args[1]
+    let dir = args[2]
+    let mut minutes = 60
+    let mut from = 1000
+    let mut chunk = 20
+    let mut compiled = ""
+    let mut i = 3
+    while i < args.len() {
+        if args[i] == "--minutes" {
+            minutes = args[i + 1].parse::<int>().unwrap_or(60)
+            i += 1
+        } else if args[i] == "--from" {
+            from = args[i + 1].parse::<int>().unwrap_or(1000)
+            i += 1
+        } else if args[i] == "--chunk" {
+            chunk = args[i + 1].parse::<int>().unwrap_or(20)
+            i += 1
+        } else if args[i] == "--run-compiled" {
+            compiled = "--run-compiled"
+        }
+        i += 1
+    }
+    let _ = sh("mkdir -p ${quote(dir)}/flagged")
+    let start = now()
+    let mut seed = from
+    let mut programs = 0
+    let mut report = ""
+    let mut all_flagged = 0
+    while now() - start < minutes * 60 {
+        let hi = seed + chunk - 1
+        let gdir = "${dir}/gen_${seed}"
+        let pdir = "${dir}/probes_${seed}"
+        let _ = sh("${quote(wj)} run --interpret scripts/wj/drift_gen.wj ${quote(wj)} ${quote(gdir)} ${quote(gdir)}.tsv --seeds ${seed}..${hi} ${compiled} > /dev/null 2>&1")
+        let _ = sh("${quote(wj)} run --interpret scripts/wj/drift_probes.wj ${quote(wj)} ${quote(pdir)} ${quote(pdir)}.tsv --seeds ${seed}..${hi} ${compiled} > /dev/null 2>&1")
+        for part in [gdir, pdir] {
+            let tsv = match sh("cat ${quote(part)}.tsv 2>/dev/null") {
+                Ok(r) => r.stdout,
+                Err(_) => "",
+            }
+            // a program that does not run, and the rows where the oracles disagree
+            for line in strings.split_lines(tsv) {
+                let f = strings.split(line, "\t")
+                if f.len() == 4 && strings.ends_with(f[0], "#runs") && f[1] == "broken" {
+                    report = report + "- does not run: ${f[0]}\n"
+                    all_flagged += 1
+                }
+            }
+            for l in flagged(tsv) {
+                report = report + "- ${l}\n"
+                all_flagged += 1
+                let id = strings.split(l, "  ")[0]
+                let base = strings.replace(strings.replace(strings.split(id, "#")[0], "gen/seed-", "gen_"), "probe/", "")
+                let _ = sh("cp -R ${quote(part)}/${base}* ${quote(dir)}/flagged/ 2>/dev/null; cp ${quote(part)}/gen_${strings.replace(base, "gen_", "")}.wj ${quote(dir)}/flagged/ 2>/dev/null")
+            }
+            programs += if part == gdir { chunk } else { chunk * 18 }
+        }
+        let _ = sh("rm -rf ${quote(gdir)} ${quote(pdir)}")
+        seed += chunk
+    }
+    let head = "# Drift fuzz report\n\nseeds ${from}..${seed - 1}, ${(now() - start) / 60} minutes, ${programs} generated programs, ${all_flagged} flagged\n\n"
+    let _ = process::run_with_output("sh", ["-c", "printf %s " + quote(head + report) + " > " + quote(dir) + "/report.md"])
+    println("drift fuzz: seeds ${from}..${seed - 1}, ${programs} programs, ${all_flagged} flagged (${dir}/report.md)")
+    if all_flagged > 0 {
+        process::exit(1)
+    }
+}
