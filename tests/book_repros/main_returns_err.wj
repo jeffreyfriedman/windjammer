@@ -1,0 +1,14 @@
+fn load(n: int) -> Result<int, string> {
+    if n < 0 {
+        return Err("negative")
+    }
+    Ok(n)
+}
+
+fn main() -> Result<(), string> {
+    let a = load(2)?
+    println("a = ${a}")
+    let b = load(-1)?
+    println("b = ${b}")
+    Ok(())
+}

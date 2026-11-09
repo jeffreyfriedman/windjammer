@@ -2,7 +2,6 @@
 # <corpus path> | <first rustc error>
 examples/verified/algo_binary_tree.wj | error[E0308]: mismatched types
 examples/verified/algo_lcs.wj | error[E0308]: mismatched types
-examples/verified/algo_matrix_multiply.wj | error[E0308]: mismatched types
 examples/verified/algo_stack_calculator.wj | error[E0658]: use of unstable library feature `str_as_str`
 examples/verified/algo_state_machine.wj | error[E0308]: mismatched types
 examples/verified/algo_word_frequency.wj | error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&String, i64)`
@@ -17,7 +16,6 @@ examples/verified/iter_partition_unzip.wj | error[E0277]: the trait bound `Vec<i
 examples/verified/iter_take_skip_rev.wj | error[E0308]: mismatched types
 examples/verified/operators_overload.wj | error[E0046]: not all trait items implemented, missing: `Output`
 examples/verified/prog_event_handlers.wj | error[E0308]: mismatched types
-examples/verified/prog_game_of_life.wj | error[E0308]: mismatched types
 examples/verified/prog_lru_cache.wj | error[E0308]: mismatched types
 examples/verified/result_collect_all_or_nothing.wj | error[E0282]: type annotations needed
 examples/verified/std_env_args.wj | error[E0432]: unresolved import `windjammer_runtime`
@@ -38,9 +36,7 @@ tests/basic_test.wj | error[E0433]: cannot find module or crate `windjammer_runt
 tests/bug_newtype_wrapper_inference.wj | error[E0277]: can't compare `String` with `&String`
 tests/bug_vec_index_passed_to_function.wj | error[E0063]: missing field `data` in initializer of `Node`
 tests/codegen_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/conformance/error_handling/result_and_option.wj | error[E0308]: mismatched types
 tests/conformance/stdlib/async_runtime.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/conformance/stdlib/closures_and_iteration.wj | error[E0308]: mismatched types
 tests/conformance/stdlib/json_operations.wj | error[E0432]: unresolved import `serde`
 tests/conformance/stdlib/subprocess_echo.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/consistency_improvements.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
@@ -63,7 +59,6 @@ tests/int_inference_i32_array_index_test.wj | error[E0433]: cannot find module o
 tests/int_inference_inventory_pattern_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/int_inference_vec_remove_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/let_patterns.wj | wj build failed
-tests/loop_index_type_inference.wj | error[E0308]: mismatched types
 tests/math_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/module_declaration_test.wj | error[E0583]: file not found for module `utils`
 tests/module_import_resolution_user.wj | error[E0432]: unresolved import `module_import_resolution`

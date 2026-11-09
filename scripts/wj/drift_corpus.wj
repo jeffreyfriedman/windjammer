@@ -294,9 +294,9 @@ fn main() {
         }
         println("  ${dir}: ${ids.len()} tests")
     }
-    // value-position programs and the minimal repros of ledgered divergences
+    // value-position programs, the minimal repros of ledgered divergences and the loopback socket programs (ADR-0032)
     let mut progs = Vec::new()
-    for dir in ["tests/engine_parity", "${CORPUS}/repros"] {
+    for dir in ["tests/engine_parity", "${CORPUS}/repros", "${CORPUS}/net"] {
         match fs.read_dir(dir) {
             Ok(es) => {
                 for e in es {
@@ -328,7 +328,7 @@ fn main() {
         }
     }
     println("  ${progs.len()} programs")
-    let _ = sh("rm -f tests/engine_parity/vp_*.wj.meta ${CORPUS}/repros/*.wj.meta")
+    let _ = sh("rm -f tests/engine_parity/vp_*.wj.meta ${CORPUS}/repros/*.wj.meta ${CORPUS}/net/*.wj.meta")
     match fs.write(o.out, out) {
         Ok(_) => {},
         Err(e) => {

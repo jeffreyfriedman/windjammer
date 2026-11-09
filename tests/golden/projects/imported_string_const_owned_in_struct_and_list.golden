@@ -1,0 +1,68 @@
+// ==== grants.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::names::SCOPE_READ;
+use crate::names::SCOPE_WRITE;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Grant {
+    pub scope: String,
+    pub extra: Vec<String>,
+}
+
+#[inline]
+pub fn default_grant() -> Grant {
+    Grant { scope: SCOPE_READ.to_string(), extra: vec![SCOPE_WRITE.to_string(), SCOPE_READ.to_string()] }
+}
+
+#[inline]
+pub fn widened(g: Grant) -> Grant {
+    let mut h = g;
+    h.scope = SCOPE_WRITE.to_string();
+    h
+}
+
+#[inline]
+pub fn label_count() -> i64 {
+    let first = format!("{}{}", SCOPE_WRITE, "!");
+    let labels = vec![first, SCOPE_READ.to_string()];
+    labels.len() as i64
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod grants;
+pub mod names;
+
+// Re-export public items
+pub use grants::*;
+pub use names::*;
+// ==== main.rs ====
+mod names;
+mod grants;
+fn main() {
+    let g = grants::default_grant();
+    println!("{} {} {}", g.scope, &g.extra[0], g.extra.len());
+    let w = grants::widened(g);
+    println!("{} {}", w.scope, grants::label_count());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod grants;
+pub mod names;
+
+// Re-export public items
+pub use grants::*;
+pub use names::*;
+// ==== names.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub const SCOPE_READ: &'static str = "read";
+pub const SCOPE_WRITE: &'static str = "write";
+

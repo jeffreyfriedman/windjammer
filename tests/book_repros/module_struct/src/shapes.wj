@@ -1,0 +1,8 @@
+pub struct Item {
+    pub name: string,
+    pub size: int,
+}
+
+pub fn make() -> Vec<Item> {
+    [Item { name: "a", size: 1 }, Item { name: "b", size: 2 }]
+}

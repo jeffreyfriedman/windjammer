@@ -16,10 +16,13 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'_>,
         target: &Expression<'_>,
     ) -> bool {
+        // A struct field or element that holds a Windjammer `string` holds an owned `String` (`p.status = STATUS_POSTED`,
+        // with the struct declared in another module whose field type is not in scope here).
         self.expression_is_static_str_value(value)
-            && self
-                .infer_expression_type(target)
-                .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t))
+            && (matches!(target, Expression::FieldAccess { .. } | Expression::Index { .. })
+                || self
+                    .infer_expression_type(target)
+                    .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t)))
     }
 
     /// `expr` is a module `const NAME: string` (or a `let s = "lit"` binding): emitted as a
@@ -337,5 +340,18 @@ impl<'ast> CodeGenerator<'ast> {
             self.module_const_type_for_binding(name).is_some()
         });
         analysis
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The declared types of the library's `const` / `static` items in other files (what `use` imports): a
+    /// `string` constant lowers to `&'static str` and is owned where a `String` is required, wherever it is declared.
+    pub fn set_library_const_types(&mut self, consts: &std::collections::HashMap<String, Type>) {
+        for (name, ty) in consts {
+            if crate::codegen::rust::types::is_windjammer_text_type(ty) {
+                self.module_string_consts.insert(name.clone());
+            }
+            self.module_const_types.entry(name.clone()).or_insert_with(|| ty.clone());
+        }
     }
 }
