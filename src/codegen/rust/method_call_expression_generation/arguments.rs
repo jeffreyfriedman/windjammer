@@ -335,10 +335,9 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut method_param_ty: Option<Type> = None;
                 if let Some(sig) = sig_for_effective {
                     let mut specialized = sig.clone();
-                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                         receiver_type_name,
                         receiver_type_inferred.as_ref(),
-                        self.current_function_return_type.as_ref(),
                     ) {
                         crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                             &mut specialized,

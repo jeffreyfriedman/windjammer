@@ -355,3 +355,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 }
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The declared type of payload `index` of a tuple-variant constructor (`Shape::Points([..])` takes a `Vec<f32>`),
+    /// so a list literal argument is generated as the payload's list.
+    pub(in crate::codegen::rust) fn variant_payload_type(&self, constructor: &str, index: usize) -> Option<Type> {
+        self.lookup_enum_variant_payload_types(constructor)?.get(index).cloned()
+    }
+}

@@ -45,6 +45,12 @@ fn typechecks_at(src: &Path, name: &str) {
     );
 }
 
+/// Literals pushed into vectors of several declared widths take each vector's element width.
+#[test]
+fn push_literals_take_each_declared_vec_width() {
+    generated_rust_typechecks("push_literals_take_each_declared_vec_width");
+}
+
 /// `for d in -1..1` next to a base read from an `i32` module constant: the loop variable is `i32`.
 #[test]
 fn negative_range_beside_i32_constant() {

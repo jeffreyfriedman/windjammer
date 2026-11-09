@@ -237,7 +237,7 @@ digraph deps {
   "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
-  "codegen" -> "type_classification" [label="237"];
+  "codegen" -> "type_classification" [label="235"];
   "codegen" -> "type_inference" [label="63"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
@@ -361,7 +361,7 @@ digraph deps {
   "ir" -> "type_classification" [label="30"];
   "ir" -> "type_display" [label="2"];
   "ir" -> "type_inference" [label="7"];
-  "ir" -> "typing" [label="17"];
+  "ir" -> "typing" [label="18"];
   "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
   "linter" -> "auto_clone" [label="1"];

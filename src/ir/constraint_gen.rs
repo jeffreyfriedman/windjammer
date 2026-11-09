@@ -1001,6 +1001,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                             self.literal_vars.push(((l.line, l.column), inner));
                             self.numeric_unmodelled.negated_literals.push(inner);
                         }
+                        // `-1.0` is printed as one literal at the `-` too.
+                        if let (Expression::Literal { value: Literal::Float(_), .. }, Some(l)) = (&**operand, expr.location()) {
+                            self.literal_vars.push(((l.line, l.column), inner));
+                        }
                         self.cs.add_because(Constraint::TypeEquals(result, inner), tagged("TY-UNIFY"));
                         self.cs.add_because(Constraint::IsNumeric(inner), tagged("NUM-MIXED"));
                     }
