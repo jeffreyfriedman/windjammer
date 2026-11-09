@@ -267,10 +267,10 @@ impl<'ast> CodeGenerator<'ast> {
         variant.to_string()
     }
 
-    pub(super) fn extract_pattern_bindings(
+    pub(super) fn extract_pattern_bindings<B: BindingSet>(
         &self,
         pattern: &Pattern,
-        bindings: &mut std::collections::HashSet<String>,
+        bindings: &mut B,
     ) {
         use crate::parser::EnumPatternBinding;
         match pattern {
@@ -282,18 +282,18 @@ impl<'ast> CodeGenerator<'ast> {
                 if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
                     // not a binding
                 } else {
-                    bindings.insert(name.clone());
+                    bindings.add(name.clone());
                 }
             }
             Pattern::Reference(inner) => {
                 self.extract_pattern_bindings(inner, bindings);
             }
             Pattern::Ref(name) | Pattern::RefMut(name) => {
-                bindings.insert(name.clone());
+                bindings.add(name.clone());
             }
             Pattern::EnumVariant(_name, binding) => match binding {
                 EnumPatternBinding::Single(var_name) => {
-                    bindings.insert(var_name.clone());
+                    bindings.add(var_name.clone());
                 }
                 EnumPatternBinding::Tuple(patterns) => {
                     for pat in patterns {
@@ -574,5 +574,23 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
+    }
+}
+
+/// A set the pattern-binding walk can add names to. Callers that go on to iterate the names use a `BTreeSet`
+/// (deterministic order); callers that only test membership may keep a `HashSet`.
+pub(super) trait BindingSet {
+    fn add(&mut self, name: String);
+}
+
+impl BindingSet for std::collections::HashSet<String> {
+    fn add(&mut self, name: String) {
+        self.insert(name);
+    }
+}
+
+impl BindingSet for std::collections::BTreeSet<String> {
+    fn add(&mut self, name: String) {
+        self.insert(name);
     }
 }

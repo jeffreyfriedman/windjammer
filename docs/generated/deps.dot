@@ -183,8 +183,8 @@ digraph deps {
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
   "cli" -> "metadata" [label="1"];
-  "cli" -> "module_system" [label="8"];
-  "cli" -> "package" [label="15"];
+  "cli" -> "module_system" [label="9"];
+  "cli" -> "package" [label="16"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="6"];
@@ -200,7 +200,7 @@ digraph deps {
   "cli_commands" -> "lexer" [label="1"];
   "cli_commands" -> "parser" [label="1"];
   "cli_commands" -> "test_runner" [label="1"];
-  "cli_execution" -> "interpreter" [label="1"];
+  "cli_execution" -> "interpreter" [label="2"];
   "cli_execution" -> "linter" [label="6"];
   "cli_output" -> "error_mapper" [label="1"];
   "cli_output" -> "source_map" [label="1"];
@@ -341,8 +341,8 @@ digraph deps {
   "interpreter" -> "ir" [label="37"];
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
-  "interpreter" -> "package" [label="2"];
-  "interpreter" -> "parser" [label="124"];
+  "interpreter" -> "package" [label="3"];
+  "interpreter" -> "parser" [label="125"];
   "interpreter" -> "resolve" [label="13"];
   "interpreter" -> "source_map" [label="14"];
   "interpreter" -> "stdlib_surface" [label="1"];
@@ -422,7 +422,7 @@ digraph deps {
   "test_runner" -> "compiler_config" [label="1"];
   "test_runner" -> "config" [label="3"];
   "test_runner" -> "diagnostics" [label="1"];
-  "test_runner" -> "interpreter" [label="3"];
+  "test_runner" -> "interpreter" [label="4"];
   "test_runner" -> "lexer" [label="2"];
   "test_runner" -> "package" [label="1"];
   "test_runner" -> "parser" [label="3"];
