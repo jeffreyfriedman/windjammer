@@ -32,6 +32,11 @@ source = "README.md"
 quote = "`wj run` starts a whole multi-module project in milliseconds"
 
 [[promise]]
+id = "feature run-stdin"
+source = "docs/reference/cli.md"
+quote = "A .wj file, a directory, or `-` (the program read from stdin)"
+
+[[promise]]
 id = "feature json-diagnostics"
 source = "README.md"
 quote = "Structured JSON diagnostics, offline docs search"
@@ -430,6 +435,10 @@ statement = "Remove a dependency from wj.toml"
 [[promise]]
 id = "wj repl"
 statement = "Start the Windjammerscript REPL (interactive interpreter)"
+
+[[promise]]
+id = "wj eval"
+statement = "Evaluate Windjammer and print the result: `wj eval 'strings.to_upper(\"hi\")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted"
 
 [[promise]]
 id = "wj run"

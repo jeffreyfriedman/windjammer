@@ -1,4 +1,4 @@
-# Acceptance cases for `wj run` and `wj repl` (tests/promise_registry_test.rs).
+# Acceptance cases for `wj run` (also `wj run -`), `wj eval` and `wj repl` (tests/promise_registry_test.rs).
 
 [[case]]
 name = "run --interpret executes a file instantly"
@@ -325,3 +325,39 @@ files = { "m.wj" = "fn main() {\n    let mut t = 0\n    let mut i = 0\n    while
 args = ["run", "--interpret", "--jit-mutant"]
 exit = 2
 output_has = ["a value is required"]
+
+[[case]]
+name = "eval prints the value of an expression with std imported"
+polarity = "positive"
+args = ["eval", "let x = 6; strings.to_upper(\"ok\") + \" ${x * 7}\""]
+stdout_has = ["OK 42"]
+
+[[case]]
+name = "eval runs statements and prints nothing for a final statement"
+polarity = "positive"
+args = ["eval", "let mut n = 1\nn += 2\nprintln(\"n=${n}\")"]
+stdout_has = ["n=3"]
+
+[[case]]
+name = "eval rejects code the compiler rejects"
+polarity = "negative"
+args = ["eval", "let x: int = \"text\"; x"]
+exit = 1
+output_has = ["WJ0003"]
+
+[[case]]
+name = "run - reads the program from stdin"
+polarity = "positive"
+covers = ["feature run-stdin"]
+args = ["run", "--interpret", "-"]
+stdin = "fn main() {\n    println(\"from stdin\")\n}\n"
+stdout_has = ["from stdin"]
+
+[[case]]
+name = "run - reports a parse error in the program from stdin"
+polarity = "negative"
+covers = ["feature run-stdin"]
+args = ["run", "--interpret", "-"]
+stdin = "fn main( {\n"
+exit = 1
+output_has = ["expected parameter name"]
