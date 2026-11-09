@@ -121,3 +121,6 @@ the interpreter; both now follow `str::lines()` (SPEC-STR-018).
   typed `i32` next to `int`, a `&T` expected where an `int` is passed to a collection lookup or an iterator adapter, `String`
   against `&str` at call boundaries, and iterator chains collected into the wrong element type. Programs that reach std modules
   (`math`, `process`) cannot be checked by rustc alone and need a cargo-backed run.
+- `apps/wj-webhook` (23 cases) is the one ecosystem target still red compiled: its generated test crate fails with rustc E0596
+  (`cannot borrow `app` as mutable`): a binding that is mutated through a method call is emitted without `mut`. The HMAC
+  addition the ledger used to name has landed; `apps/wj-grep` now compiles and its 38 lines are gone.
