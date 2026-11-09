@@ -1,0 +1,5 @@
+fn main() {
+    let v = [5, 3, 8, 4]
+    let first = v.find(|x| x > 4)
+    println("${first:?}")
+}
