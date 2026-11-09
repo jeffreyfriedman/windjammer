@@ -145,13 +145,12 @@ fn map_get_unwrap_or_int_then_arithmetic() {
 }
 
 #[test]
-fn map_get_unwrap_or_in_sort_by_closure_is_not_dereferenced() {
-    // The lookups return owned values after `unwrap_or`: no `*`/`&*` on them. (Passing the comparator's
-    // `&String` parameters as map keys is still open: `Borrow<&String>`, see the report.)
-    let (g, _, _) = generate_and_typecheck(
+fn map_get_in_sort_by_closure_passes_the_comparator_parameters_as_keys() {
+    // the comparator parameters are already `&String`: the lookups take them as they are
+    let g = typechecks(
         "use std::collections::HashMap\n\nfn main() {\n    let mut totals: HashMap<string, int> = HashMap::new()\n    totals.insert(\"a\", 3)\n    totals.insert(\"b\", 5)\n    let mut names: Vec<string> = [\"a\", \"b\"]\n    names.sort_by(|x, y| {\n        let tx = totals.get(x).unwrap_or(0)\n        let ty = totals.get(y).unwrap_or(0)\n        ty.cmp(tx)\n    })\n    println(\"${names[0]}\")\n}\n",
     );
-    assert!(!g.contains("&*tx") && !g.contains("*tx"), "{g}");
+    assert!(g.contains("totals.get(x)") && !g.contains("*tx"), "{g}");
 }
 
 #[test]
@@ -247,4 +246,36 @@ fn match_over_map_get_with_default_binds_a_value_not_a_reference() {
         "use std::collections::HashMap\n\npub fn cost(g: HashMap<(i32, i32), f32>, x: i32, y: i32) -> f32 {\n    let cur = match g.get((x, y)) {\n        Some(v) => v,\n        None => 999999.0,\n    }\n    cur + 1.0\n}\nfn main() {\n    println(\"${cost(HashMap::new(), 1, 2)}\")\n}\n",
     );
     assert!(!g.contains("*cur"), "{g}");
+}
+
+// ---- optional chaining, list literals inside Ok/Some ----
+
+#[test]
+fn optional_chaining_on_a_field_and_a_method() {
+    let g = typechecks(
+        "struct Item {\n    qty: int,\n}\n\nfn main() {\n    let a: Item? = Some(Item { qty: 5 })\n    let b: Item? = None\n    let qa = a?.qty\n    let qb = b?.qty\n    println(\"${qa ?? 0} ${qa.is_some()}\")\n    println(\"${qb ?? 0} ${qb.is_none()}\")\n}\n",
+    );
+    assert!(g.contains(".as_ref().map("), "{g}");
+}
+
+#[test]
+fn optional_chaining_flattens_through_option_members_and_calls_methods() {
+    typechecks(
+        "struct Profile {\n    nick: string?,\n}\n\nstruct User {\n    name: string,\n    profile: Profile?,\n}\n\nimpl User {\n    fn name_len(self) -> int {\n        self.name.len() as int\n    }\n}\n\nfn main() {\n    let full: User? = Some(User { name: \"abc\", profile: Some(Profile { nick: Some(\"ann\") }) })\n    let no_profile: User? = Some(User { name: \"cy\", profile: None })\n    println(full?.profile?.nick ?? \"anon\")\n    println(no_profile?.profile?.nick ?? \"anon\")\n    println(\"${full?.name_len() ?? 0}\")\n}\n",
+    );
+}
+
+#[test]
+fn list_literal_inside_ok_is_a_vec() {
+    typechecks(
+        "fn wrap() -> Result<Vec<int>, string> {\n    Ok([1, 2])\n}\n\nfn main() {\n    let r: Result<Vec<int>, string> = Ok([1])\n    println(\"${r.is_ok()} ${wrap().is_ok()}\")\n}\n",
+    );
+}
+
+#[test]
+fn match_on_an_integer_without_a_wildcard_panics_at_run_time_instead_of_failing_to_build() {
+    let g = typechecks(
+        "fn f(n: int) -> string {\n    match n {\n        1 => \"one\",\n        2 => \"two\",\n    }\n}\nfn main() {\n    println(\"${f(1)}\")\n}\n",
+    );
+    assert!(g.contains("panic!(\"non-exhaustive match\")"), "{g}");
 }

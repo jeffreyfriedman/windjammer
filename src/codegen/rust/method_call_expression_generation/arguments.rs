@@ -322,6 +322,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Vec::new()
                     };
 
+                let ref_closure_names = self.mark_ref_closure_params(method, arg_to_generate);
                 let prev_closure_predicate = self.closure_predicate_typed_params;
                 if predicate_receives_ref {
                     self.closure_predicate_typed_params = true;
@@ -426,9 +427,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                for p in &closure_borrowed_params {
-                    self.borrowed_iterator_vars.remove(p);
-                }
+                self.release_closure_param_marks(&closure_borrowed_params, &ref_closure_names);
 
                 // AUTO-WRAP function pointers in iterator adapter methods (before IR call-site path).
                 let recv_for_wrap = receiver_type_name
@@ -1041,7 +1040,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        (args_vec, prev_float_target)
+        (self.unborrow_ref_closure_args(arguments, args_vec), prev_float_target)
     }
 }
 

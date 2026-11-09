@@ -13058,8 +13058,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_return_type = func.return_type.clone();
         self.idiom.text_option_locals.clear();
         self.idiom.return_position_list_literals = match func.return_type.as_ref() {
-            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && crate::type_classification::type_is_vec_container(t) =>
+            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && Self::holds_list(t) =>
             {
                 Self::collect_return_position_lists(&func.body)
             }

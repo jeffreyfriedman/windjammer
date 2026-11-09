@@ -95,6 +95,36 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
+    /// Comparator and key closures (`sort_by(|a, b| ..)`) receive `&T`: while the closure is generated its
+    /// parameters are references, so a map lookup keyed by one passes it as is (`totals.get(a)`).
+    pub(super) fn mark_ref_closure_params(&mut self, method: &str, arg: &Expression<'ast>) -> Vec<String> {
+        let Expression::Closure { parameters, .. } = arg else { return Vec::new() };
+        if !matches!(method, "sort_by" | "sort_unstable_by" | "sort_by_key" | "sort_unstable_by_key" | "binary_search_by") {
+            return Vec::new();
+        }
+        let names: Vec<String> = parameters.iter().map(|p| Self::closure_param_binding_name(p)).collect();
+        names.into_iter().filter(|n| self.idiom.ref_closure_params.insert(n.clone())).collect()
+    }
+
+    /// A comparator parameter is already `&T`: passed as a call argument it stays as it is (`totals.get(a)`),
+    /// whatever borrow the signature-driven stages put in front of it.
+    pub(super) fn unborrow_ref_closure_args(&self, arguments: &[(Option<String>, &'ast Expression<'ast>)], mut args: Vec<String>) -> Vec<String> {
+        for (arg, (_, expr)) in args.iter_mut().zip(arguments) {
+            if matches!(expr, Expression::Identifier { name, .. } if self.idiom.ref_closure_params.contains(name.as_str())) {
+                if let Some(rest) = arg.strip_prefix('&').filter(|r| !r.starts_with("mut ")) {
+                    *arg = rest.to_string();
+                }
+            }
+        }
+        args
+    }
+
+    /// Undo the per-closure parameter marks: the borrowed-iterator names and the `&T` comparator names.
+    pub(super) fn release_closure_param_marks(&mut self, borrowed: &[String], refs: &[String]) {
+        borrowed.iter().for_each(|p| { self.borrowed_iterator_vars.remove(p); });
+        refs.iter().for_each(|n| { self.idiom.ref_closure_params.remove(n); });
+    }
+
     /// `text.split(..).next()` (also `nth`, `last`, through adapters): an `Option<&str>`.
     pub(in crate::codegen::rust) fn is_text_slice_option(expr: &Expression<'ast>) -> bool {
         fn splits(e: &Expression<'_>) -> bool {
