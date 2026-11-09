@@ -338,7 +338,7 @@ digraph deps {
   "interpreter" -> "codegen" [label="1"];
   "interpreter" -> "error" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "ir" [label="37"];
+  "interpreter" -> "ir" [label="38"];
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="3"];
