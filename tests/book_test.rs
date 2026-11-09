@@ -1,0 +1,415 @@
+// consumes: docs/book/**
+//! The Windjammer Book (docs/book): the structure/link/ratchet checks, and every sample in every page run
+//! through the interpreter and the compiled path by `scripts/book/book_samples.wj`. A language change that
+//! breaks a sample fails the compiler's own test run. The second half plants each class of breakage in a
+//! scratch book and requires the gate to notice it.
+
+#![allow(clippy::duplicate_mod)]
+
+#[path = "../tools/docs_truth/mod.rs"]
+mod docs_truth;
+#[path = "../src/bin/wj_cli_args.rs"]
+mod wj_cli_args;
+
+use clap::CommandFactory;
+use docs_truth::{book, config, failures, Ctx, Finding};
+use std::path::{Path, PathBuf};
+
+fn real() -> Ctx {
+    Ctx { root: PathBuf::from(env!("CARGO_MANIFEST_DIR")), cli: wj_cli_args::Cli::command() }
+}
+
+/// Compiled runs build real Cargo crates. They get a target directory and a `wj` cache of their own (never the shared
+/// one that other tests in the same process build into, which `wj` also prunes), and run one at a time, so no other
+/// build can replace a binary between its build and its run.
+static COMPILED: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn compiled_lock() -> std::sync::MutexGuard<'static, ()> {
+    COMPILED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn isolate(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    let base = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("book-wj");
+    cmd.env("CARGO_TARGET_DIR", base.join("target")).env("WJ_CARGO_TARGET_ROOT", base.join("cache"))
+}
+
+fn compiled_cmd(wj: &str) -> std::process::Command {
+    let mut c = std::process::Command::new(wj);
+    isolate(&mut c);
+    c.args(["run", "--compiled"]);
+    c
+}
+
+/// Everything the runner printed, plus how it ended; a runner that died before its summary says so.
+fn report(out: &std::process::Output, what: &str) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let log = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("book-{what}.log"));
+    let _ = std::fs::write(&log, &text);
+    eprintln!("{text}");
+    if text.contains("book samples:") {
+        format!("{text}\n(full output: {})", log.display())
+    } else {
+        format!("THE RUNNER DID NOT FINISH (status {:?}, signal {:?}); output so far, full copy in {}:\n{text}", out.status.code(), out.status.signal(), log.display())
+    }
+}
+
+fn show(fs: &[Finding]) -> String {
+    fs.iter().map(|f| f.render()).collect::<Vec<_>>().join("\n")
+}
+
+fn check(ctx: &Ctx) -> Vec<Finding> {
+    book::check_all(ctx, &config::load(ctx))
+}
+
+/// Run the sample runner over `ctx`'s book; (success, output).
+fn run_samples(ctx: &Ctx, compiled: bool) -> (bool, String) {
+    run_samples_with(ctx, compiled, &[])
+}
+
+fn run_samples_with(ctx: &Ctx, compiled: bool, env: &[(&str, &str)]) -> (bool, String) {
+    let _g = if compiled { Some(compiled_lock()) } else { None };
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("samples");
+    let n = book::extract(ctx, &dir).unwrap();
+    assert!(n > 0, "the book has no runnable samples");
+    let scratch = tmp.path().join("scratch");
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_wj"));
+    cmd.args(["run", "--interpret"]).arg(real().root.join("scripts/book/book_samples.wj")).arg("--").arg(&dir).arg(env!("CARGO_BIN_EXE_wj")).arg(&scratch);
+    if compiled {
+        cmd.arg("--compiled");
+        isolate(&mut cmd);
+    }
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let out = cmd.current_dir(&real().root).output().expect("run scripts/book/book_samples.wj");
+    (out.status.success(), report(&out, if compiled { "compiled" } else { "interpreted" }))
+}
+
+/// Like `run_samples` (interpreted) but tolerates a book with no `wj` programs, only projects.
+fn run_samples_projects(ctx: &Ctx) -> (bool, String) {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("samples");
+    book::extract(ctx, &dir).unwrap();
+    let scratch = tmp.path().join("scratch");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["run", "--interpret"])
+        .arg(real().root.join("scripts/book/book_samples.wj"))
+        .arg("--")
+        .arg(&dir)
+        .arg(env!("CARGO_BIN_EXE_wj"))
+        .arg(&scratch)
+        .current_dir(&real().root)
+        .output()
+        .expect("run scripts/book/book_samples.wj");
+    (out.status.success(), report(&out, "projects"))
+}
+
+// ---------------------------------------------------------------------------------------------
+// The real book
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn book_structure_links_and_ratchets_hold() {
+    let fs = check(&real());
+    assert_eq!(failures(&fs), 0, "\n{}", show(&fs));
+}
+
+#[test]
+fn book_samples_run_interpreted() {
+    let (ok, out) = run_samples(&real(), false);
+    assert!(ok, "\n{out}");
+}
+
+#[test]
+fn book_samples_run_compiled_and_match_the_interpreter() {
+    let (ok, out) = run_samples(&real(), true);
+    assert!(ok, "\n{out}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Mutation self-tests on a scratch book
+// ---------------------------------------------------------------------------------------------
+
+struct Scratch {
+    dir: tempfile::TempDir,
+}
+
+const GOOD: &str = "# Page\n\n```wj\n// expect: hi\nfn main() {\n    println(\"hi\")\n}\n```\n";
+
+impl Scratch {
+    fn new() -> Scratch {
+        let s = Scratch { dir: tempfile::tempdir().unwrap() };
+        s.write("docs/docs-truth.toml", "[book]\nmax_ignored = 0\nmax_drafts = 0\nmax_uncovered_promises = 0\n");
+        s.write("docs/promises.toml", "[[promise]]\nid = \"wj frob\"\n");
+        s.write("docs/book/src/SUMMARY.md", "# Summary\n\n- [Page](page.md)\n");
+        s.write("docs/book/src/page.md", &format!("{GOOD}\nRun wj frob.\n"));
+        s.write("docs/known-gaps.md", "# Gaps\n");
+        s
+    }
+    fn ctx(&self) -> Ctx {
+        Ctx { root: self.dir.path().to_path_buf(), cli: wj_cli_args::Cli::command() }
+    }
+    fn write(&self, rel: &str, text: &str) {
+        let p = self.dir.path().join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    }
+    fn page(&self, text: &str) {
+        self.write("docs/book/src/page.md", &format!("{text}\nRun wj frob.\n"));
+    }
+    fn findings(&self) -> Vec<Finding> {
+        check(&self.ctx())
+    }
+    fn fails(&self, needle: &str) -> bool {
+        self.findings().iter().any(|f| !f.warn && f.msg.contains(needle))
+    }
+}
+
+#[test]
+fn a_clean_scratch_book_passes() {
+    let s = Scratch::new();
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+}
+
+#[test]
+fn unlisted_and_missing_pages_fail() {
+    let s = Scratch::new();
+    s.write("docs/book/src/orphan.md", "# Orphan\n");
+    assert!(s.fails("not listed in SUMMARY"));
+    let s = Scratch::new();
+    s.write("docs/book/src/SUMMARY.md", "# Summary\n\n- [Page](page.md)\n- [Gone](gone.md)\n");
+    assert!(s.fails("does not exist"));
+}
+
+#[test]
+fn broken_links_fail() {
+    let s = Scratch::new();
+    s.page(&format!("{GOOD}\n[x](nowhere.md)\n"));
+    assert!(s.fails("does not exist"));
+    s.page(&format!("{GOOD}\n[x](#no-such-heading)\n"));
+    assert!(s.fails("no heading"));
+    s.page(&format!("{GOOD}\n[x]({}docs/missing.md)\n", book::REPO_URL));
+    assert!(s.fails("does not exist"));
+    s.page(&format!("{GOOD}\n[x](../../known-gaps.md)\n"));
+    assert!(s.fails("leaves the book"));
+    s.page(&format!("{GOOD}\n[x]({}docs/known-gaps.md) and [y](#page)\n", book::REPO_URL));
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+}
+
+#[test]
+fn a_fence_without_main_fails() {
+    let s = Scratch::new();
+    s.page("```wj\nprintln(\"x\")\n```\n");
+    assert!(s.fails("no `fn main`"));
+    // hidden lines complete the program
+    s.page("```wj\n~fn main() {\nprintln(\"x\")\n~}\n```\n");
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+}
+
+#[test]
+fn ignored_fences_are_a_shrink_only_ratchet() {
+    let s = Scratch::new();
+    s.page("<!-- ignore: needs a server -->\n```wj,ignore\nfn main() {\n}\n```\n");
+    assert!(s.fails("exceeds the ratchet 0"), "{}", show(&s.findings()));
+    s.write("docs/docs-truth.toml", "[book]\nmax_ignored = 1\n");
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+    // fixing the example without lowering the ratchet is also a failure: the file must state the truth
+    s.page(GOOD);
+    assert!(s.fails("below the ratchet 1"));
+}
+
+#[test]
+fn interpreter_only_fences_need_a_reason_and_are_a_ratchet() {
+    let s = Scratch::new();
+    s.page("```wj,interpreter_only\nfn main() {\n}\n```\n");
+    assert!(s.fails("need a reason"), "{}", show(&s.findings()));
+    s.page("<!-- interpreter-only: spawn has no compiled form yet -->\n```wj,interpreter_only\nfn main() {\n}\n```\n");
+    assert!(s.fails("interpreter-only fences: 1 exceeds"), "{}", show(&s.findings()));
+    s.write("docs/docs-truth.toml", "[book]\nmax_interpreter_only = 1\n");
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+    // the marker file keeps it out of the compiled pass
+    let tmp = tempfile::tempdir().unwrap();
+    book::extract(&s.ctx(), tmp.path()).unwrap();
+    assert!(tmp.path().join("page_L2.interp").exists());
+}
+
+#[test]
+fn draft_chapters_are_a_shrink_only_ratchet() {
+    let s = Scratch::new();
+    s.write("docs/book/src/SUMMARY.md", "# Summary\n\n- [Page](page.md)\n- [Later]()\n");
+    assert!(s.fails("draft chapters: 1 exceeds"));
+}
+
+#[test]
+fn uncovered_promises_are_a_shrink_only_ratchet() {
+    let s = Scratch::new();
+    s.write("docs/promises.toml", "[[promise]]\nid = \"wj frob\"\n[[promise]]\nid = \"code W9999\"\n[[promise]]\nid = \"feature fly\"\n");
+    assert!(s.fails("uncovered promises: 2 exceeds"), "{}", show(&s.findings()));
+    s.page(&format!("{GOOD}\nW9999 <!-- promise: feature fly -->\n"));
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+}
+
+#[test]
+fn a_sample_with_wrong_output_fails_the_runner() {
+    let s = Scratch::new();
+    let ctx = s.ctx();
+    let (ok, out) = run_samples(&ctx, false);
+    assert!(ok, "{out}");
+    s.page("```wj\n// expect: bye\nfn main() {\n    println(\"hi\")\n}\n```\n");
+    let (ok, out) = run_samples(&ctx, false);
+    assert!(!ok && out.contains("page.md:1") && out.contains("output differs"), "{out}");
+    s.page("```wj\nfn main() {\n    let x: int = \"no\"\n    println(\"${x}\")\n}\n```\n");
+    let (ok, out) = run_samples(&ctx, false);
+    assert!(!ok, "{out}");
+}
+
+#[test]
+fn extraction_keeps_hidden_lines_and_expectations() {
+    let s = Scratch::new();
+    s.page("```wj\n// expect: 3\n~fn main() {\nprintln(\"3\")\n~}\n```\n");
+    let tmp = tempfile::tempdir().unwrap();
+    assert_eq!(book::extract(&s.ctx(), tmp.path()).unwrap(), 1);
+    let prog = std::fs::read_to_string(tmp.path().join("page_L1.wj")).unwrap();
+    assert!(prog.contains("fn main() {") && !prog.contains('~'), "{prog}");
+    assert_eq!(std::fs::read_to_string(tmp.path().join("page_L1.expect")).unwrap(), "3\n");
+    assert!(Path::new(tmp.path()).join("INDEX.tsv").exists());
+}
+
+// ---------------------------------------------------------------------------------------------
+// Findings from writing the book (docs/known-gaps.md, tests/book_repros/): each test passes while the
+// bug is present and fails once it is fixed, which is the cue to delete the repro and the known-gaps row.
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn known_gap_explain_ownership_span_inside_interpolation() {
+    let repro = real().root.join("tests/book_repros/explain_ownership_interpolation_span.wj");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).arg("explain-ownership").arg(&repro).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let wild = text.lines().filter_map(|l| l.split("@").nth(1)).filter_map(|r| r.split(':').nth(1)).filter_map(|c| c.split_whitespace().next()).any(|c| c.len() >= 6);
+    assert!(wild, "the span bug is fixed: delete tests/book_repros/explain_ownership_interpolation_span.wj, this test and its docs/known-gaps.md row\n{text}");
+}
+
+#[test]
+fn known_gap_generic_copy_out_of_list_fails_compiled() {
+    let _g = compiled_lock();
+    let repro = real().root.join("tests/book_repros/generic_largest_needs_clone.wj");
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
+    assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).trim() == "9", "the interpreter runs the repro");
+    let compiled = compiled_cmd(wj).arg(&repro).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
+    assert!(!compiled.status.success() && text.contains("WJ0015"), "the compiled gap is fixed: delete tests/book_repros/generic_largest_needs_clone.wj, this test and its docs/known-gaps.md row\n{text}");
+}
+
+#[test]
+fn known_gap_directory_module_borrow_is_lost_when_compiled() {
+    let _g = compiled_lock();
+    let src = real().root.join("tests/book_repros/dir_module");
+    let tmp = tempfile::tempdir().unwrap();
+    let dst = tmp.path().join("p");
+    std::fs::create_dir_all(dst.join("src/util")).unwrap();
+    for f in ["wj.toml", "src/main.wj", "src/util/mod.wj"] {
+        std::fs::copy(src.join(f), dst.join(f)).unwrap();
+    }
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).current_dir(&dst).output().unwrap();
+    assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).trim() == "2", "the interpreter runs the repro");
+    let compiled = compiled_cmd(wj).current_dir(&dst).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
+    assert!(!compiled.status.success() && text.contains("WJ0003"), "the directory-module gap is fixed: delete tests/book_repros/dir_module, this test and its docs/known-gaps.md row\n{text}");
+}
+
+#[test]
+fn known_gap_idioms_fail_compiled() {
+    let _g = compiled_lock();
+    let wj = env!("CARGO_BIN_EXE_wj");
+    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003")] {
+        let repro = real().root.join("tests/book_repros").join(file);
+        let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
+        assert!(interp.status.success(), "{file}: the interpreter runs the repro");
+        let compiled = compiled_cmd(wj).arg(&repro).output().unwrap();
+        let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
+        assert!(!compiled.status.success() && text.contains(code), "{file}: the compiled gap is fixed: delete the repro, its entry here and its docs/known-gaps.md text\n{text}");
+    }
+}
+
+#[test]
+fn known_gap_module_struct_without_import_fails_compiled() {
+    let _g = compiled_lock();
+    let src = real().root.join("tests/book_repros/module_struct");
+    let tmp = tempfile::tempdir().unwrap();
+    let dst = tmp.path().join("p");
+    std::fs::create_dir_all(dst.join("src")).unwrap();
+    for f in ["wj.toml", "src/main.wj", "src/shapes.wj"] {
+        std::fs::copy(src.join(f), dst.join(f)).unwrap();
+    }
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).current_dir(&dst).output().unwrap();
+    assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).contains("b 2"), "the interpreter runs the repro");
+    let compiled = compiled_cmd(wj).current_dir(&dst).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
+    assert!(!compiled.status.success() && text.contains("WJ0003"), "the module-struct gap is fixed: delete tests/book_repros/module_struct, this test and its docs/known-gaps.md row\n{text}");
+}
+
+#[test]
+fn known_gap_leading_string_literal_in_interpolation_does_not_parse() {
+    let repro = real().root.join("tests/book_repros/interpolation_leading_literal.wj");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).arg("check").arg(&repro).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(!out.status.success() && text.contains("WJ0011"), "the parse gap is fixed: delete tests/book_repros/interpolation_leading_literal.wj, this test and its docs/known-gaps.md row\n{text}");
+}
+
+#[test]
+fn extraction_writes_multi_file_projects() {
+    let s = Scratch::new();
+    s.page("```sh,verify\n$ mkdir -p p/src\n$ cat > p/wj.toml <<'EOF'\n[package]\nname = \"p\"\nEOF\n$ cat > p/src/main.wj <<'EOF'\nfn main() {\n    println(\"hi\")\n}\nEOF\n$ cd p && wj run\nhi\n```\n");
+    let tmp = tempfile::tempdir().unwrap();
+    book::extract(&s.ctx(), tmp.path()).unwrap();
+    let base = tmp.path().join("projects/page_L1");
+    assert!(base.join("p/wj.toml").exists() && base.join("p/src/main.wj").exists());
+    assert_eq!(std::fs::read_to_string(base.join(".root")).unwrap(), "p");
+    assert_eq!(std::fs::read_to_string(base.join(".expect")).unwrap(), "hi\n");
+}
+
+#[test]
+fn a_broken_project_fails_the_runner_interpreted() {
+    let s = Scratch::new();
+    s.page("```sh,verify\n$ cat > p/wj.toml <<'EOF'\n[package]\nname = \"p\"\nEOF\n$ cat > p/src/main.wj <<'EOF'\nfn main() {\n    println(\"hi\")\n}\nEOF\n$ cd p && wj run\nbye\n```\n");
+    let (ok, out) = run_samples_projects(&s.ctx());
+    assert!(!ok && out.contains("project output differs"), "{out}");
+}
+
+#[test]
+fn compiled_samples_do_not_see_each_other_functions() {
+    // Two samples define `load` with different signatures; each compiles on its own, so neither can break the other.
+    let s = Scratch::new();
+    s.page("```wj\n// expect: Err(\"negative\")\nfn load(n: int) -> Result<int, string> {\n    if n < 0 {\n        return Err(\"negative\")\n    }\n    Ok(n)\n}\n\nfn main() {\n    println(\"${load(-1):?}\")\n}\n```\n\n```wj\n// expect: Ok(5)\nfn load(text: string) -> Result<int, string> {\n    text.parse::<int>().map_err(|_| \"bad: ${text}\")\n}\n\nfn main() {\n    println(\"${load(\\\"5\\\"):?}\")\n}\n```\n");
+    let (ok, out) = run_samples(&s.ctx(), true);
+    assert!(ok, "{out}");
+}
+
+#[test]
+fn the_compiled_gate_fails_when_compiled_output_differs() {
+    // Mutation check for the isolated compiled pass, self-contained: the runner's own test hook makes the compiled
+    // output of one sample differ, and the gate must fail naming that sample. No compiler behaviour is involved.
+    let s = Scratch::new();
+    s.page("```wj\n// expect: hi\nfn main() {\n    println(\"hi\")\n}\n```\n");
+    let (ok, out) = run_samples_with(&s.ctx(), true, &[("BOOK_PLANT_COMPILED_DIFF", "page_L1")]);
+    assert!(!ok && out.contains("[page_L1]") && out.contains("compiled output differs"), "{out}");
+    // and without the hook the same book passes
+    let (ok, out) = run_samples(&s.ctx(), true);
+    assert!(ok, "{out}");
+}
+
+#[test]
+fn mutation_tests_do_not_depend_on_known_gaps() {
+    let text = std::fs::read_to_string(real().root.join("tests/book_test.rs")).unwrap();
+    let start = text.find("fn the_compiled_gate_fails_when_compiled_output_differs").unwrap();
+    let body = &text[start..text[start..].find("\n}\n").map(|e| start + e).unwrap()];
+    let forbidden = ["known-gaps", "known_gap", "book_repros", "OPEN_QUESTIONS", "?."];
+    for f in forbidden {
+        assert!(!body.contains(f), "the compiled-gate mutation test must not depend on a compiler gap (found {f:?}); use the runner's test hook");
+    }
+}

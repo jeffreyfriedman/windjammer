@@ -16,6 +16,7 @@ pub mod caps;
 pub mod caps_core;
 pub mod durable;
 pub mod durable_core;
+pub mod net_core;
 pub mod fs;
 #[cfg(feature = "net")]
 pub mod http;

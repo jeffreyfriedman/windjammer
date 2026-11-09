@@ -41,6 +41,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0029](0029-int-at-the-surface.md) | One type owner for widths; `usize` stays a language type | Proposed |
 | [0030](0030-interpreter-rejects-what-rustc-rejects.md) | The interpreter refuses what the compiled build refuses, from the generated Rust | Proposed |
 | [0031](0031-interpreter-crate-host.md) | The interpreter calls Rust crates through a cached crate host process | Proposed |
+| [0032](0032-raw-sockets.md) | Raw TCP and UDP sockets in `std::net` | Proposed |
 <!-- wj:end -->
 
 ## Template

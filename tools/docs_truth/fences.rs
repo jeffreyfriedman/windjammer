@@ -95,7 +95,8 @@ pub fn check_doc(file: &str, text: &str, wj_bin: Option<&std::path::Path>) -> Re
             continue;
         }
         r.checked += 1;
-        if let Err(e) = fence_run::check_wj(&f.body, &a) {
+        let body = if super::book::is_book_file(file) { super::book::unhide(&f.body) } else { f.body.clone() };
+        if let Err(e) = fence_run::check_wj(&body, &a) {
             r.raw.push(Finding::fail("fences", file, f.line, e));
         }
     }

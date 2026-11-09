@@ -1,0 +1,231 @@
+// Return-shape audit of the standard library: for every std function that returns a Result or an Option and takes
+// only plain arguments, one program calls it with a harmless argument and matches the result with `Ok`/`Err` (or
+// `Some`/`None`). The declared signature in std/*.wj is the oracle for the shape: the compiled program (which calls
+// the runtime crate) always matches; an interpreter builtin that returns a bare value instead fails the match.
+//
+//   wj run scripts/wj/drift_stdshape.wj <wj-binary> <outdir> <out.tsv> [--run-compiled] [--baseline FILE] [--record FILE]
+//
+// Rows like drift_corpus.wj: `stdshape/<module>::<fn>` with `ok`, `err`, or `exit<N>` per engine; the compiled column
+// comes from one combined program (`--run-compiled`, one build), or from a recorded file. Only modules without side
+// effects on the machine are covered, and within `fs` only the read functions.
+use std::env
+use std::fs
+use std::process
+use std::strings
+use wj_proc::sh
+use wj_proc::quote
+
+// runtime crate file -> std module; only modules whose read functions are harmless to call
+const FILES: string = "env:env fs:fs path:path json:json regex_mod:regex csv_mod:csv compress:compress random:random strings:strings math:math mime:mime"
+const FS_READS: string = "read_to_string read read_dir metadata canonicalize current_dir exists"
+const UNSAFE_WORDS: string = "write remove delete create rename copy append set_ exit kill spawn run exec connect listen send post put chdir mkdir truncate"
+
+struct Case {
+    module: string,
+    name: string,
+    ret: string,
+    args: string,
+}
+
+fn sample(pname: string, ptype: string) -> string {
+    if ptype == "string" {
+        if pname == "path" || pname == "from" || pname == "to" || pname == "dir" || pname == "file" || pname == "p" {
+            "\"/nonexistent/drift-probe\""
+        } else if pname == "pattern" {
+            "\"a+\""
+        } else if pname == "key" || pname == "name" {
+            "\"DRIFT_PROBE_UNSET\""
+        } else if pname == "format" {
+            "\"%Y\""
+        } else {
+            "\"a\""
+        }
+    } else if ptype == "bool" {
+        "true"
+    } else if ptype == "f64" {
+        "1.5"
+    } else {
+        "1"
+    }
+}
+
+// a Rust parameter type as a Windjammer one, or "" when the function is out of scope
+fn wj_type(t: string) -> string {
+    if t == "&str" || t == "String" || t == "&String" { "string" }
+    else if t == "i64" || t == "i32" || t == "u64" || t == "u32" || t == "usize" || t == "isize" { "int" }
+    else if t == "bool" { "bool" }
+    else if t == "f64" || t == "f32" { "f64" }
+    else { "" }
+}
+
+fn unsafe_name(name: string) -> bool {
+    for w in strings.split(UNSAFE_WORDS, " ") {
+        if strings.contains(name, w) {
+            return true
+        }
+    }
+    false
+}
+
+// `pub fn name(a: &str, b: i64) -> Result<..> {` of the runtime crate: the case, or None when out of scope
+fn parse_case(module: string, line: string) -> Option<Case> {
+    let t = strings.trim(line)
+    if !strings.starts_with(t, "pub fn ") || !strings.contains(t, ") -> ") {
+        return None
+    }
+    let open = t.find("(").unwrap_or(0)
+    let close = t.find(") -> ").unwrap_or(0)
+    if open == 0 || close < open {
+        return None
+    }
+    let name = strings.trim(t[7..open].to_string())
+    let params = t[open + 1..close].to_string()
+    let ret = strings.trim(t[close + 5..].to_string())
+    let kind = if strings.starts_with(ret, "Result<") { "Result" } else if strings.starts_with(ret, "Option<") { "Option" } else { "" }
+    if kind == "" || strings.contains(name, "<") || strings.contains(params, "<") || strings.contains(params, "(") || strings.contains(params, "&mut") || strings.contains(params, "self") || unsafe_name(name) {
+        return None
+    }
+    let mut args = ""
+    if strings.trim(params) != "" {
+        for p in strings.split(params, ",") {
+            let kv = strings.split(strings.trim(p), ":")
+            if kv.len() != 2 {
+                return None
+            }
+            let ptype = wj_type(strings.trim(kv[1]))
+            if ptype == "" {
+                return None
+            }
+            let one = sample(strings.trim(kv[0]), ptype)
+            args = if args == "" { one } else { args + ", " + one }
+        }
+    }
+    if module == "fs" && !FS_READS.contains(name) {
+        return None
+    }
+    Some(Case { module: module, name: name, ret: kind, args: args })
+}
+
+fn arms(c: Case, ok: string, bad: string) -> string {
+    if c.ret == "Result" { "Ok(_) => ${ok},\n        Err(_) => ${bad}," } else { "Some(_) => ${ok},\n        None => ${bad}," }
+}
+
+fn single(c: Case) -> string {
+    "use std::${c.module}\n\nfn main() {\n    match ${c.module}::${c.name}(${c.args}) {\n        ${arms(c, "println(\"ok\")", "println(\"err\")")}\n    }\n}\n"
+}
+
+fn token(status: int, stdout: string, stderr: string) -> string {
+    let o = strings.trim(stdout)
+    if status == 0 && (o == "ok" || o == "err") {
+        o
+    } else if strings.contains(stderr, "unsupported in the interpreter") || strings.contains(stderr, "cannot find function") || strings.contains(stderr, "no function") {
+        "unsupported"
+    } else if strings.contains(stderr, "no match arm matched") {
+        "wrong-shape"
+    } else {
+        "exit${status}"
+    }
+}
+
+fn run(wj: string, engine: string, file: string) -> string {
+    match sh("${quote(wj)} run --interpret --no-lint --deterministic-time --caps off --engine ${engine} ${quote(file)} < /dev/null") {
+        Ok(r) => token(r.status, r.stdout, r.stderr),
+        Err(_) => "error",
+    }
+}
+
+fn main() {
+    let args = env::args()
+    let wj = args[1]
+    let dir = args[2]
+    let out = args[3]
+    let mut compiled = false
+    let mut baseline = ""
+    let mut record = ""
+    let mut i = 4
+    while i < args.len() {
+        if args[i] == "--run-compiled" {
+            compiled = true
+        } else if args[i] == "--baseline" {
+            baseline = args[i + 1]
+            i += 1
+        } else if args[i] == "--record" {
+            record = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    let _ = sh("mkdir -p ${quote(dir)}")
+    let mut cases: Vec<Case> = Vec::new()
+    let mut used: Vec<string> = Vec::new()
+    for pair in strings.split(FILES, " ") {
+        let fm = strings.split(pair, ":")
+        let m = fm[1]
+        let text = fs.read_to_string("crates/windjammer-runtime/src/${fm[0]}.rs").unwrap_or("")
+        for line in strings.split_lines(text) {
+            match parse_case(m, line) {
+                Some(c) => {
+                    if !used.contains(m) {
+                        used.push(m)
+                    }
+                    cases.push(c)
+                },
+                None => {},
+            }
+        }
+    }
+    // one combined program for the compiled side
+    let mut combined = ""
+    for m in used {
+        combined = combined + "use std::${m}\n"
+    }
+    combined = combined + "\n"
+    let mut calls = ""
+    let mut n = 0
+    for c in cases {
+        combined = combined + "fn case_${n}() -> string {\n    match ${c.module}::${c.name}(${c.args}) {\n        ${arms(c, "\"ok\"", "\"err\"")}\n    }\n}\n\n"
+        calls = calls + "    println(\"${c.module}::${c.name}: @{case_${n}()}\")\n"
+        n += 1
+    }
+    combined = strings.replace(combined + "fn main() {\n" + calls + "}\n", "@{", "$" + "{")
+    let _ = sh("mkdir -p ${quote(dir)}/combined")
+    let _ = fs.write("${dir}/combined/main.wj", combined)
+    let mut compiled_out = ""
+    if compiled {
+        let w = env::var("WJ_CARGO_WRAPPER").unwrap_or("")
+        compiled_out = match sh("${w} ${quote(wj)} run --compiled --no-lint ${quote(dir)}/combined/main.wj < /dev/null 2>/dev/null") {
+            Ok(r) => r.stdout,
+            Err(_) => "",
+        }
+        if record != "" {
+            let _ = fs.write(record, compiled_out)
+        }
+    } else if baseline != "" {
+        compiled_out = fs.read_to_string(baseline).unwrap_or("")
+    }
+    let mut rows = ""
+    let mut k = 0
+    for c in cases {
+        let d = "${dir}/${c.module}_${c.name}_${k}"
+        let _ = sh("mkdir -p ${quote(d)}")
+        let _ = fs.write("${d}/main.wj", single(c))
+        let w = run(wj, "walker", "${d}/main.wj")
+        let r = run(wj, "resolved", "${d}/main.wj")
+        let key = "${c.module}::${c.name}: "
+        let mut ct = if compiled_out == "" { "skip" } else { "exit?" }
+        for line in strings.split_lines(compiled_out) {
+            if strings.starts_with(line, key) {
+                ct = strings.replace(line, key, "")
+            }
+        }
+        rows = rows + "stdshape/${c.module}::${c.name}\t${w}\t${r}\t${ct}\n"
+        k += 1
+    }
+    match fs.write(out, rows) {
+        Ok(_) => println("  ${cases.len()} std functions audited"),
+        Err(e) => {
+            println("cannot write ${out}: ${e}")
+            process.exit(2)
+        },
+    }
+}

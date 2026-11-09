@@ -13,6 +13,8 @@ In: the runtime crate source (resolved without depending on the current director
 - Scanning is deterministic and text-based; a line it cannot parse is skipped, never guessed.
 - A return type naming a generic runtime struct (`arena::Handle<T>`) is erased to `Type::Infer`, because the scanner
   keeps only the base name and a bare `Handle` is not a valid Rust type (`generic_returns.rs`).
+- A runtime struct without a `Clone` derive is registered non-Clone (so a user struct holding one derives neither Debug
+  nor Clone) unless the file implements `Clone` for it by hand (`clone_impls.rs`).
 
 ## Owns / never decides
 Owns: signature extraction from runtime source. Never decides ownership inference or call-site coercion.

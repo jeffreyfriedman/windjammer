@@ -1,0 +1,5 @@
+// `wrapping_shl` takes a u32 count; the literal gets the receiver's width (u16 here), so rustc rejects the call.
+fn main() {
+    let x: u16 = 5
+    println("${x.wrapping_shl(10)}")
+}
