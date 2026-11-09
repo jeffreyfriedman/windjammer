@@ -791,6 +791,17 @@ export function $radix(v, r, bits) {
   const s = u.toString(base);
   return r === "X" ? s.toUpperCase() : s;
 }
+/** Reorder values that were evaluated in written order into declaration order (struct literals). */
+export const $permute = (a, idx) => idx.map((i) => a[i]);
+/** Rust `{:e}` on an integer: exact digits, trailing zeros dropped (`255` is `2.55e2`, `1200` is `1.2e3`). */
+export function $fmtIntExp(v, o) {
+  if (o && o.prec !== undefined) return $fmtFloat(Number(v), o, false, false, true);
+  const b = BigInt(v);
+  const s = (b < 0n ? -b : b).toString();
+  const m = s.replace(/0+$/, "") || "0";
+  const mant = m.length > 1 ? m[0] + "." + m.slice(1) : m;
+  return $padNum(b < 0n, "", mant + "e" + (b === 0n ? 0 : s.length - 1), o);
+}
 export const $expFmt = (x) => x.toExponential().replace("e+", "e");
 export const $trunc = (s, p) => Array.from(s).slice(0, p).join("");
 
