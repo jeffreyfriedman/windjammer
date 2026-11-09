@@ -27,9 +27,9 @@ pub use stats::*;
 #[allow(unused_imports)]
 use super::*;
 #[inline]
-pub fn total(xs: &Vec<i64>) -> i64 {
+pub fn total(xs: Vec<i64>) -> i64 {
     let mut sum = 0_i64;
-    for x in xs.iter().copied() {
+    for x in xs {
         sum += x;
     }
     sum
