@@ -310,7 +310,7 @@ impl Parser {
                         // Desugar [..end] to .slice(0, end)
                         let end_expr = end.unwrap_or_else(|| {
                             self.alloc_synthetic(Expression::MethodCall {
-                                object: self.alloc_expr(expr.clone()),
+                                object: self.alloc_synthetic(expr.clone()),
                                 method: "len".to_string(),
                                 type_args: None,
                                 arguments: vec![],
