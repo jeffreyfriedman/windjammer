@@ -69,8 +69,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) auto_clone_counter: usize,
     // Local index within the current block (0-based; variable_is_only_field_accessed and other block-relative analyses).
     pub(crate) current_block_local_idx: usize,
-    // OPTION TAKE/REPLACE: Block-local indices of statements to skip because
-    // they were folded into a preceding `.take()` or `.replace()`.
+    // OPTION TAKE/REPLACE: Block-local indices of statements to skip because they were folded into a preceding `.take()` or `.replace()`.
     pub(crate) skip_block_indices: std::collections::HashSet<usize>,
     // IMPLICIT SELF SUPPORT: Track struct fields for implicit self references
     pub(crate) current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
@@ -121,14 +120,12 @@ pub struct CodeGenerator<'ast> {
     /// Snapshot of the outer function body at prepare time — nested blocks temporarily
     /// replace `current_function_body`; pure-forwarding refresh must not run on those.
     pub(crate) full_function_body_snapshot: Vec<&'ast Statement<'ast>>,
-    // Workspace root for source maps
-    // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
+    // Workspace root for source maps BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
     // Cell for interior mutability (needed for call-site optimization in immutable context)
     pub(crate) suppress_string_conversion: Cell<bool>,
     /// When true, string literals emit `"...".to_string()` (owned String contexts: match arms, returns, if values, etc.)
     pub(crate) coerce_string_literals_to_owned: bool,
-    // LOCAL VARIABLE TRACKING: Stack of scopes, each scope contains local variable names
-    // Enables proper variable shadowing of field names
+    // LOCAL VARIABLE TRACKING: Stack of scopes, each scope contains local variable names Enables proper variable shadowing of field names
     pub(crate) local_variable_scopes: Vec<std::collections::HashSet<String>>,
     // EXPRESSION CONTEXT: Track if we're generating code whose value will be used
     // Prevents adding semicolons to final expressions in if-else/match when used as values
@@ -149,8 +146,7 @@ pub struct CodeGenerator<'ast> {
     // MATCH STATEMENT CONTEXT: Track if we're in a match used as a statement (not expression)
     // In statement-context matches, arm blocks should have semicolons on all statements
     pub(crate) in_statement_match: bool,
-    // FOR-LOOP AUTO-BORROW: Track local variables that need `&` in for-loops
-    // because they are used after the loop (pre-computed per function body)
+    // FOR-LOOP AUTO-BORROW: Track local variables that need `&` in for-loops because they are used after the loop (pre-computed per function body)
     pub(crate) for_loop_borrow_needed: std::collections::HashSet<String>,
     /// `for x in owner.field` when `owner` is used in later statements in the same block (P3.321).
     pub(crate) for_loop_field_owner_borrow_needed: std::collections::HashSet<String>,
@@ -162,8 +158,7 @@ pub struct CodeGenerator<'ast> {
     // When true, emit `get_mut` instead of `get` for the next HashMap method call.
     // Set by statement_generation when a let-binding from .get() has a mutated downstream value.
     pub(crate) upgrade_get_to_get_mut: bool,
-    // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String>
-    // These need to be borrowed when used in String += operations
+    // OWNED STRING ITERATOR VARIABLES: Track variables from for-loops over Vec<String> These need to be borrowed when used in String += operations
     pub(crate) owned_string_iterator_vars: std::collections::HashSet<String>,
     // MATCH ARM BINDINGS: Track variables bound in match arm patterns (EnumVariant bindings)
     // These are OWNED values extracted from enums, NOT references (even with .clone())
@@ -189,8 +184,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) inferred_borrowed_params: std::collections::HashSet<String>,
     // INFERRED MUT BORROWED PARAMS: Parameters inferred to be &mut (for avoiding double &mut in passthrough)
     pub(crate) inferred_mut_borrowed_params: std::collections::HashSet<String>,
-    // PHASE 2 STRING OPTIMIZATION: Track string parameters optimized to &str
-    // These need .to_string() when passed to methods expecting owned String
+    // PHASE 2 STRING OPTIMIZATION: Track string parameters optimized to &str These need .to_string() when passed to methods expecting owned String
     pub(crate) str_ref_optimized_params: std::collections::HashSet<String>,
     /// Owned `String` formals that only flow into map/set key lookups (`get(&key)` at call sites).
     pub(crate) collection_key_owned_params: std::collections::HashSet<String>,
@@ -248,8 +242,7 @@ pub struct CodeGenerator<'ast> {
     // EXPLICIT CLONE SUPPRESSION: When the source has `.clone()` (MethodCall with method "clone"),
     // suppress auto-clone on the object expression to prevent double .clone().clone()
     pub(crate) in_explicit_clone_call: bool,
-    // FIELD CHAIN OPTIMIZATION: When accessing a Copy sub-field (e.g., .y on Vec2),
-    // suppress borrowed-iterator cloning on the intermediate object.
+    // FIELD CHAIN OPTIMIZATION: When accessing a Copy sub-field (e.g., .y on Vec2), suppress borrowed-iterator cloning on the intermediate object.
     // e.g., enemy.velocity.y → no need to clone velocity just to read .y
     pub(crate) suppress_borrowed_clone: bool,
     // TDD FIX: When true, suppress .clone() for borrowed iterator field access in call arguments
@@ -268,8 +261,7 @@ pub struct CodeGenerator<'ast> {
     /// True while generating an `if`/`while` condition expression (not branch bodies).
     pub(crate) in_if_condition: bool,
     // STRING COMPARISON CONTEXT: Track when generating operands of string comparisons
-    // Used to skip explicit * deref of &String (which becomes &str, breaking comparisons)
-    // e.g., *id == flag_id → id == flag_id (both &String)
+    // Used to skip explicit * deref of &String (which becomes &str, breaking comparisons) e.g., *id == flag_id → id == flag_id (both &String)
     pub(crate) in_string_comparison: bool,
     // RECURSION GUARD: Track traits currently being generated to prevent infinite recursion
     pub(crate) generating_traits: std::collections::HashSet<String>,
@@ -305,8 +297,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) types_with_drop: std::collections::HashSet<String>,
     pub(crate) idiom: super::program_facts::IdiomScratch, // std-idiom / closure / derive facts
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
-    // array literals should use fixed-size [...] syntax instead of vec![...],
-    // since struct fields have explicit type annotations (e.g., [f32; 3]).
+    // array literals should use fixed-size [...] syntax instead of vec![...], since struct fields have explicit type annotations (e.g., [f32; 3]).
     pub(crate) in_struct_literal_field: bool,
     /// ADR-0014: the array literal being generated is a growable list (`let x = [..]`).
     pub(crate) array_literal_as_list: bool,
@@ -333,8 +324,7 @@ pub struct CodeGenerator<'ast> {
     // Enables correct parameter type checking for stdlib methods without hard-coding method names
     pub(crate) stdlib_method_signatures:
         std::collections::HashMap<String, std::collections::HashMap<String, MethodSignature>>,
-    // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
-    // Enables string literal to String coercion in enum variant constructors
+    // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types Enables string literal to String coercion in enum variant constructors
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
     /// Stdlib type name → fully-qualified Rust path (`HttpMethod` → `windjammer_runtime::http::HttpMethod`).
     /// Used when string→unit-enum coercion must emit without a sibling `use`.
@@ -785,10 +775,8 @@ impl<'ast> CodeGenerator<'ast> {
             std::collections::HashMap<String, crate::parser::Type>,
         >,
     ) {
-        // Track simple names → all qualified sources for disambiguation.
-        // When two structs share a simple name (e.g., rpg::item::ItemStack vs
-        // inventory::item_stack::ItemStack), we only store field types under the
-        // simple name when ALL sources agree on a given field's type.
+        // Track simple names → all qualified sources for disambiguation. When two structs share a simple name (e.g., rpg::item::ItemStack vs
+        // inventory::item_stack::ItemStack), we only store field types under the simple name when ALL sources agree on a given field's type.
         let mut simple_name_fields: std::collections::HashMap<
             String,
             std::collections::HashMap<String, Vec<crate::parser::Type>>,
@@ -815,8 +803,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // For simple name entries, only store fields where ALL sources agree on the type.
-        // This prevents e.g. ItemStack.quantity being incorrectly resolved as u32 when
-        // one definition has i32 and another has u32.
+        // This prevents e.g. ItemStack.quantity being incorrectly resolved as u32 when one definition has i32 and another has u32.
         for (base_name, field_sources) in simple_name_fields {
             let mut safe_fields = std::collections::HashMap::new();
             for (field_name, types) in field_sources {
@@ -915,6 +902,12 @@ impl<'ast> CodeGenerator<'ast> {
         method: &str,
         arg_count: usize,
     ) -> Option<crate::analyzer::FunctionSignature> {
+        // A module-path receiver (`let r = store::Repo { .. }`) is its leaf type: methods register as `Repo::m`.
+        let leaf = receiver_type.rsplit_once("::").map(|(_, l)| l);
+        self.method_sig_exact(receiver_type, method, arg_count).or_else(|| self.method_sig_exact(leaf?, method, arg_count))
+    }
+
+    fn method_sig_exact(&self, receiver_type: &str, method: &str, arg_count: usize) -> Option<crate::analyzer::FunctionSignature> {
         let qualified = format!("{receiver_type}::{method}");
         let finalize =
             crate::codegen::rust::call_signature_resolution::finalize_call_site_signature;
@@ -1907,6 +1900,12 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)
             ) && crate::codegen::rust::types::is_windjammer_text_type(t)
         })
+    }
+
+    /// A bare call `f(..)` names a free function: a method registered under the same bare name
+    /// (`Port::list_items` homonym of `use_cases::list_items`) is a different callee (C3 identity).
+    pub(crate) fn resolve_bare_free_call_signature(&self, name: &str, n: usize) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
+        self.resolve_call_signature_with_global(name, None, n).filter(|r| name.contains("::") || !r.sig.has_self_receiver)
     }
 
     pub(crate) fn resolve_call_signature_with_global(

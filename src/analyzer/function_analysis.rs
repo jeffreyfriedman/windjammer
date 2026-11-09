@@ -196,11 +196,19 @@ impl<'ast> Analyzer<'ast> {
             OwnershipMode::Owned
         } else if modifies_fields || calls_mutating {
             OwnershipMode::MutBorrowed
-        } else if self.is_used_in_binary_op("self", &func.body) {
+        } else if self.is_used_in_binary_op("self", &func.body) || self.copy_value_method_returning_own_type(func) {
             OwnershipMode::Owned
         } else {
             OwnershipMode::Borrowed
         }
+    }
+
+    /// A Copy type's method that produces a new value of the same type (`fn double(self) -> Point`) takes
+    /// `self` by value: free for Copy, and the receiver mode its callers read.
+    fn copy_value_method_returning_own_type(&self, func: &FunctionDecl<'ast>) -> bool {
+        let Some(parent) = func.parent_type.as_deref() else { return false };
+        let own = matches!(&func.return_type, Some(Type::Custom(n)) if n == "Self" || n == parent);
+        own && self.is_copy_type(&Type::Custom(parent.to_string()))
     }
 
     pub(crate) fn analyze_function(
@@ -631,12 +639,12 @@ impl<'ast> Analyzer<'ast> {
         if func.parent_type.is_none() {
             for param in &func.parameters {
                 if Self::trait_param_is_owned_string(&param.type_) {
-                    if param.decorators.iter().any(|d| d.name == "str_ref") {
+                    if param.pins_str_ref() {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
                         str_ref_optimizable_params.insert(param.name.clone());
                         continue;
                     }
-                    if param.decorators.iter().any(|d| d.name == "string_ref") {
+                    if param.pins_string_ref() {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
                         str_ref_optimizable_params.remove(&param.name);
                         continue;
@@ -818,7 +826,7 @@ impl<'ast> Analyzer<'ast> {
                 if str_ref_optimizable_params.contains(&param.name) {
                     Type::Reference(Box::new(Type::Custom("str".to_string())))
                 } else if is_string
-                    && (param.decorators.iter().any(|d| d.name == "string_ref")
+                    && (param.pins_string_ref()
                         || self.param_needs_string_ref(&param.name, &func.body, registry))
                 {
                     Type::Reference(Box::new(Type::String))

@@ -1006,6 +1006,15 @@ impl Interpreter {
             }
         }
         if let Value::Native(n) = &recv {
+            if self.crate_host.is_some() {
+                if let Some(path) = self.crate_method_path(&recv, method) {
+                    // a method of an opaque crate value (ADR-0031): the receiver is the first argument
+                    let mut all = Vec::with_capacity(args.len() + 1);
+                    all.push(recv.clone());
+                    all.extend(args);
+                    return self.call_crate_fn(&path, all);
+                }
+            }
             if let Some(f) = self.builtins.native_method(n.type_name(), method) {
                 return f(self, &recv, args);
             }

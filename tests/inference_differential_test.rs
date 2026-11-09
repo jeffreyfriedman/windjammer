@@ -581,6 +581,23 @@ fn corpus_returned_field_of_borrowed_receiver_is_cloned_once() {
     assert!(!rust.contains("self.level.clone()") && !rust.contains("q.title.clone()"), "{rust}");
 }
 
+/// C6: moves inside nested blocks (an `if` body, a loop body, a `match` arm) get the clone their own
+/// liveness asks for, whatever statement index the analyzer gave them.
+#[test]
+fn corpus_nested_block_moves_are_decided_per_site() {
+    let name = "nested_block_move_sites";
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/inference_corpus").join(format!("{name}.wj"));
+    let src = std::fs::read_to_string(&path).unwrap();
+    let dir = work_dir(name);
+    let r = check_source_env(&src, &dir, &[], true, &[]);
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = r.unwrap_or_else(|f| panic!("corpus `{name}` fails oracle {}: {:?}", f.class(), f));
+    // `w` and `u` are not read after their nested move: no clone. `v` is read after the loop and in the
+    // next iteration: cloned at the move.
+    assert!(rust.contains("keep(w)") && rust.contains("keep(u)"), "{rust}");
+    assert!(rust.contains("keep(v.clone())"), "{rust}");
+}
+
 /// Mutation check: a deliberately wrong liveness (every read is a last use, so everything
 /// moves) must be caught by the oracles. If this passes the gates cannot see liveness bugs.
 #[test]

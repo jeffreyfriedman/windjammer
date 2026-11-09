@@ -200,3 +200,122 @@ Output:
 hello p
 ```
 
+
+## Default methods and dispatch
+
+**SPEC-TRT-010** A trait method with a body is a default; an implementation may override it, and the override wins. A call through a generic bound (`T: Trait`) and through a trait object (`Box<dyn Trait>`) dispatch to the same implementation.
+
+<!-- example: tests/spec/traits/SPEC-TRT-010.wj -->
+```windjammer
+trait Shape {
+    fn area(self) -> int
+    fn name(self) -> string {
+        "shape"
+    }
+}
+
+struct Sq {
+    s: int,
+}
+
+struct Rect {
+    w: int,
+    h: int,
+}
+
+impl Shape for Sq {
+    fn area(self) -> int {
+        self.s * self.s
+    }
+    fn name(self) -> string {
+        "square"
+    }
+}
+
+impl Shape for Rect {
+    fn area(self) -> int {
+        self.w * self.h
+    }
+}
+
+fn describe<T: Shape>(x: T) -> string {
+    "${x.name()}:${x.area()}"
+}
+
+fn main() {
+    println(describe(Sq { s: 3 }))
+    println(describe(Rect { w: 2, h: 5 }))
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Sq { s: 2 }), Box::new(Rect { w: 1, h: 7 })]
+    let mut total = 0
+    for sh in shapes {
+        total += sh.area()
+        println(sh.name())
+    }
+    println("${total}")
+}
+```
+Output:
+```text
+square:9
+shape:10
+square
+shape
+11
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
+
+## Traits on built-in types and bounded generic impls
+
+**SPEC-TRT-011** A trait can be implemented for `int`, `string` and `bool`, and its methods can be called on literals and values of those types; a generic struct can carry methods that require its type parameters to implement a trait.
+
+<!-- example: tests/spec/traits/SPEC-TRT-011.wj -->
+```windjammer
+trait Describe {
+    fn describe(self) -> string
+}
+
+impl Describe for int {
+    fn describe(self) -> string {
+        "int ${self}"
+    }
+}
+
+impl Describe for string {
+    fn describe(self) -> string {
+        "string ${self}"
+    }
+}
+
+impl Describe for bool {
+    fn describe(self) -> string {
+        if self { "yes" } else { "no" }
+    }
+}
+
+struct Pair<A, B> {
+    a: A,
+    b: B,
+}
+
+impl<A: Describe, B: Describe> Pair<A, B> {
+    fn show(self) -> string {
+        "(${self.a.describe()}, ${self.b.describe()})"
+    }
+}
+
+fn main() {
+    println(7.describe())
+    println("hi".describe())
+    println(true.describe())
+    let p = Pair { a: 1, b: "x" }
+    println(p.show())
+}
+```
+Output:
+```text
+int 7
+string hi
+yes
+(int 1, string x)
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.

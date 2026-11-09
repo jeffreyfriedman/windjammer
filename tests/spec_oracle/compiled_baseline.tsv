@@ -1,4 +1,4 @@
-# spec-oracle compiled results recorded with: wj 0.50.0 (commit 0aded6f88484 2026-11-04, clean, debug, built 2026-11-04T11:43:18Z)
+# spec-oracle compiled results recorded with: wj 0.50.0 (commit 6ed79d644d3f 2026-11-04, clean, release, built 2026-11-04T19:49:50Z)
 spec::arguments/SPEC-ARGS-001	ok
 spec::arguments/SPEC-ARGS-002	ok
 spec::arguments/SPEC-ARGS-003	ok
@@ -10,6 +10,7 @@ spec::closures/SPEC-CLOS-001	build-fail
 spec::closures/SPEC-CLOS-002	ok
 spec::closures/SPEC-CLOS-003	ok
 spec::closures/SPEC-CLOS-004	ok
+spec::closures/SPEC-CLOS-009	build-fail
 spec::collections/SPEC-COLL-001	ok
 spec::collections/SPEC-COLL-002	ok
 spec::collections/SPEC-COLL-003	ok
@@ -20,6 +21,8 @@ spec::collections/SPEC-COLL-007	ok
 spec::collections/SPEC-COLL-008	ok
 spec::collections/SPEC-COLL-009	build-fail
 spec::collections/SPEC-COLL-010	ok
+spec::collections/SPEC-COLL-011	build-fail
+spec::collections/SPEC-COLL-012	build-fail
 spec::concurrency/SPEC-CONC-001	build-fail
 spec::concurrency/SPEC-CONC-002	build-fail
 spec::concurrency/SPEC-CONC-003	build-fail
@@ -28,10 +31,11 @@ spec::concurrency/SPEC-CONC-005	ok
 spec::effects/SPEC-EFF-021	ok
 spec::errors/SPEC-ERR-001	ok
 spec::errors/SPEC-ERR-002	ok
-spec::errors/SPEC-ERR-003	build-fail
+spec::errors/SPEC-ERR-003	ok
 spec::errors/SPEC-ERR-004	ok
-spec::errors/SPEC-ERR-005	build-fail
+spec::errors/SPEC-ERR-005	ok
 spec::errors/SPEC-ERR-006	ok
+spec::errors/SPEC-ERR-007	ok
 spec::execution/SPEC-EXEC-001	ok
 spec::execution/SPEC-EXEC-002	ok
 spec::execution/SPEC-EXEC-003	ok
@@ -42,7 +46,7 @@ spec::execution/SPEC-EXEC-007	ok
 spec::execution/SPEC-EXEC-009	ok
 spec::execution/SPEC-EXEC-010	ok
 spec::execution/SPEC-EXEC-011	ok
-spec::execution/SPEC-EXEC-012	build-fail
+spec::execution/SPEC-EXEC-012	ok
 spec::expressions/SPEC-EXPR-001	ok
 spec::expressions/SPEC-EXPR-002	ok
 spec::expressions/SPEC-EXPR-003	ok
@@ -108,12 +112,13 @@ spec::modules/SPEC-MOD-001	ok
 spec::modules/SPEC-MOD-002	ok
 spec::modules/SPEC-MOD-003	ok
 spec::modules/SPEC-MOD-005	ok
+spec::modules/SPEC-MOD-006	build-fail
 spec::numeric/SPEC-NUM-001	ok
-spec::numeric/SPEC-NUM-002	build-fail
-spec::numeric/SPEC-NUM-003	build-fail
-spec::numeric/SPEC-NUM-004	build-fail
+spec::numeric/SPEC-NUM-002	ok
+spec::numeric/SPEC-NUM-003	ok
+spec::numeric/SPEC-NUM-004	ok
 spec::numeric/SPEC-NUM-005	ok
-spec::numeric/SPEC-NUM-006	build-fail
+spec::numeric/SPEC-NUM-006	ok
 spec::numeric/SPEC-NUM-007	ok
 spec::numeric/SPEC-NUM-008	ok
 spec::numeric/SPEC-NUM-009	ok
@@ -123,7 +128,7 @@ spec::numeric/SPEC-NUM-013	ok
 spec::numeric/SPEC-NUM-014	ok
 spec::numeric/SPEC-NUM-015	ok
 spec::numeric/SPEC-NUM-016	ok
-spec::numeric/SPEC-NUM-017	build-fail
+spec::numeric/SPEC-NUM-017	ok
 spec::numeric/SPEC-NUM-018	ok
 spec::numeric/SPEC-NUM-019	ok
 spec::numeric/SPEC-NUM-020	ok
@@ -160,6 +165,8 @@ spec::patterns/SPEC-PAT-007	ok
 spec::patterns/SPEC-PAT-008	ok
 spec::patterns/SPEC-PAT-009	build-fail
 spec::patterns/SPEC-PAT-010	ok
+spec::patterns/SPEC-PAT-011	ok
+spec::patterns/SPEC-PAT-012	ok
 spec::pipe/SPEC-PIPE-001	ok
 spec::pipe/SPEC-PIPE-002	ok
 spec::pipe/SPEC-PIPE-003	ok
@@ -197,7 +204,7 @@ spec::strings/SPEC-STR-013	ok
 spec::strings/SPEC-STR-014	ok
 spec::strings/SPEC-STR-015	ok
 spec::strings/SPEC-STR-016	ok
-spec::strings/SPEC-STR-017	build-fail
+spec::strings/SPEC-STR-017	ok
 spec::trailing-blocks/SPEC-BLOCK-001	ok
 spec::trailing-blocks/SPEC-BLOCK-002	ok
 spec::trailing-blocks/SPEC-BLOCK-003	ok
@@ -210,6 +217,8 @@ spec::traits/SPEC-TRT-006	ok
 spec::traits/SPEC-TRT-007	ok
 spec::traits/SPEC-TRT-008	ok
 spec::traits/SPEC-TRT-009	ok
+spec::traits/SPEC-TRT-010	build-fail
+spec::traits/SPEC-TRT-011	build-fail
 spec::types/SPEC-TYP-001	ok
 spec::types/SPEC-TYP-002	ok
 spec::types/SPEC-TYP-004	ok

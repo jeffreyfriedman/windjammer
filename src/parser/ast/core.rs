@@ -25,6 +25,22 @@ pub struct Parameter<'ast> {
     pub decorators: Vec<Decorator<'ast>>, // GPU builtins, etc.
 }
 
+impl Parameter<'_> {
+    /// The user pinned this text formal to `&String` with `@string_ref` (a declaration, not an inference).
+    pub fn pins_string_ref(&self) -> bool {
+        self.has_decorator("string_ref")
+    }
+
+    /// The user pinned this text formal to `&str` with `@str_ref`.
+    pub fn pins_str_ref(&self) -> bool {
+        self.has_decorator("str_ref")
+    }
+
+    pub fn has_decorator(&self, name: &str) -> bool {
+        self.decorators.iter().any(|d| d.name == name)
+    }
+}
+
 // ============================================================================
 // DECORATORS
 // ============================================================================
