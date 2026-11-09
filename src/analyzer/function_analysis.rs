@@ -140,7 +140,7 @@ impl<'ast> Analyzer<'ast> {
         let consumes_self = if has_multi_recursive {
             false
         } else {
-            self.function_moves_self_into_return(func)
+            body_moves_fields || self.function_moves_self_into_return(func)
                 || (!snapshot_factory
                     && (returns_self
                         || self.function_body_consumes_bare_self(func)
@@ -241,7 +241,7 @@ impl<'ast> Analyzer<'ast> {
                 self.function_body_moves_non_copy_self_fields(func, Some(registry));
             let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-            let consumes_self = self.function_moves_self_into_return(func)
+            let consumes_self = body_moves_fields || self.function_moves_self_into_return(func)
                 || (!snapshot_factory
                     && (returns_self
                         || self.function_body_consumes_bare_self(func)
@@ -361,7 +361,7 @@ impl<'ast> Analyzer<'ast> {
                             let snapshot_factory =
                                 self.function_returns_new_instance_from_self_fields(func);
 
-                            let consumes_self = self.function_moves_self_into_return(func)
+                            let consumes_self = self.function_body_moves_non_copy_self_fields(func, Some(registry)) || self.function_moves_self_into_return(func)
                                 || (!snapshot_factory
                                     && (returns_self
                                         || self.function_body_consumes_bare_self(func)

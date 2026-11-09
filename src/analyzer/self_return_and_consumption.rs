@@ -1206,8 +1206,11 @@ impl<'ast> Analyzer<'ast> {
 
     /// Non-Copy field value uses force owned `self`, except Windjammer text (`string`)
     /// which always clones under `&` / `&mut self` (P3.570 notes-api `public_base_url`).
+    /// Moving `self.field` out forces an owned `self` only when the field cannot be copied: a Clone field is read
+    /// through `&self` and cloned at the read (C5), but a channel end, lock guard, file or trait object has no copy to
+    /// make, so the method must consume `self` (rustc E0507 otherwise).
     fn non_copy_field_move_forces_owned_self(&self, field_type: &Type) -> bool {
-        !self.is_copy_type(field_type) && !Self::is_windjammer_text_param_type(field_type)
+        !self.is_copy_type(field_type) && !Self::is_windjammer_text_param_type(field_type) && self.field_type_cannot_be_cloned(field_type, 0)
     }
 
     fn call_formal_borrows_arg(
