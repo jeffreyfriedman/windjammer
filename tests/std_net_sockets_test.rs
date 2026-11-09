@@ -372,3 +372,55 @@ fn a_server_thread_runs_while_the_client_waits_simulated() {
 fn a_server_thread_runs_while_the_client_waits_compiled() {
     loopback("threaded_echo.wj", COMPILED, THREADED_EXPECTED);
 }
+
+/// A socket inside a user struct: the compiled struct must not derive `Clone`/`Debug` over the runtime type.
+const WRAPPED: &str = r#"use std::net::TcpListener
+use std::net::TcpStream
+
+struct Conn {
+    stream: TcpStream,
+}
+
+impl Conn {
+    fn say(self, text: string) -> Result<(), string> {
+        self.stream.write_str(text)
+    }
+
+    fn hear(self) -> Result<string, string> {
+        self.stream.read_line()
+    }
+}
+
+fn run() -> Result<(), string> {
+    let server = TcpListener::bind("127.0.0.1:0")?
+    let mut a = Conn { stream: TcpStream::connect(server.local_addr())? }
+    let mut b = Conn { stream: server.accept()? }
+    a.say("ping\n")?
+    let got = b.hear()?
+    println("got ${got.trim()}")
+    Ok(())
+}
+
+fn main() {
+    match run() {
+        Ok(_) => println("wrapped: ok"),
+        Err(e) => println("wrapped: FAILED ${e}"),
+    }
+}
+"#;
+
+fn wrapped(flags: &[&str]) {
+    let d = project(&[("wrapped.wj", WRAPPED)]);
+    let o = wj(d.path(), flags, "wrapped.wj", &[]);
+    assert!(text(&o).ends_with("got ping\nwrapped: ok\n"), "{}", show(&o));
+}
+
+#[test]
+fn a_socket_in_a_struct_interpreted() {
+    wrapped(INTERP);
+}
+
+#[test]
+fn a_socket_in_a_struct_compiled() {
+    wrapped(COMPILED);
+}
