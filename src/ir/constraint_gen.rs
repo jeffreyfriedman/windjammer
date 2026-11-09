@@ -109,6 +109,8 @@ struct AstConstraintWalker<'a, 'ast> {
     cs: ConstraintSet,
     param_vars: HashMap<String, ConstraintVar>,
     local_vars: HashMap<String, ConstraintVar>,
+    /// Locals bound straight from another binding (`let kept = headers`): a store of one moves the other.
+    let_aliases: std::collections::HashSet<String>,
     return_var: ConstraintVar,
     region_counter: u32,
     analyzed: &'a AnalyzedFunction<'ast>,
@@ -325,6 +327,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             cs,
             param_vars,
             local_vars: HashMap::new(),
+            let_aliases: Default::default(),
             return_var,
             region_counter,
             analyzed,
@@ -412,7 +415,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 if in_payload {
                     // A local in scope (`let kept = headers`) takes the requirement too; its `let` flow
                     // edge carries it back to the parameter, as for OWN-RETURNED.
-                    let local = self.scopes.iter().rev().find_map(|s| s.get(name)).copied();
+                    let local = self.scopes.iter().rev().find_map(|s| s.get(name)).copied().filter(|_| self.let_aliases.contains(name));
                     if let Some(var) = local.or_else(|| self.param_vars.get(name).copied()) {
                         self.cs.add_because(
                             Constraint::OwnershipIs(var, OwnedType::Owned),
@@ -727,6 +730,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ..
             } => {
                 let val_var = self.walk_expression(value);
+                if let (Pattern::Identifier(n) | Pattern::MutBinding(n), Expression::Identifier { .. }) = (pattern, &**value) {
+                    self.let_aliases.insert(n.clone());
+                }
                 if let (Pattern::Identifier(n) | Pattern::MutBinding(n), None) = (pattern, type_) {
                     if let Some(b) = self.receiver_declared_base(value) {
                         self.local_decl_types.insert(n.clone(), b);

@@ -1097,9 +1097,9 @@ pub(crate) fn build_library_multipass(
                 }
             }
             crate::ir::signature_bridge::sync_ir_ownership_to_registry(
-                &module.functions, &analysis.analyzed_functions,
+                &module.functions,
+                &analysis.analyzed_functions,
                 std::sync::Arc::make_mut(&mut final_global_registry),
-                sources[i].0.file_stem().and_then(|s| s.to_str()),
             );
             ir_functions_by_index[i] = Some(module.functions);
         }
