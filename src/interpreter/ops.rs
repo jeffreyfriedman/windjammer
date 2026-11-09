@@ -239,8 +239,6 @@ impl Interpreter {
 
     pub(crate) fn negate(&mut self, v: Value) -> R {
         match super::place::deref_value(v)? {
-            // `-9223372036854775808`: the literal 2^63 reaches the interpreter as i64::MIN, and its negation is itself
-            Value::Int(i, IntTy::Lit) if i == i64::MIN as i128 => Ok(Value::Int(i, IntTy::Lit)),
             Value::Int(i, t) => {
                 if t.fits(-i) {
                     Ok(Value::Int(-i, t))

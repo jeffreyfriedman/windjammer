@@ -95,7 +95,7 @@ Also on this head: `nth_cast` is fixed (its ledger line is gone, the test passes
 | `repros/pow_exponent_literal_width.wj`, `shift_count_method_literal_width.wj` | `pow` and `wrapping_shl` take a `u32` count; the literal gets the receiver's width | compiled-backend bug |
 | `repros/division_by_known_zero.wj` | a division whose divisor rustc can see is zero stops the compiled build (deny-by-default `unconditional_panic`); the interpreter runs it and panics | policy difference, ledgered |
 | `tests/conformance/types/enums_and_matching.wj` | the interpreter refuses a non-exhaustive match (WJ0010); the compiled build accepts the program | decide which is right |
-| about 50 programs of `examples/verified`, `tests/conformance*`, `tests/engine_parity` | the interpreter runs them; the compiled build rejects them (mostly WJ0003 `uint`/`int` width mismatches, e.g. `examples/verified/algo_lcs.wj`) | compiled-backend regressions in the verified corpus; not reduced |
+| the other programs of `examples/verified`, `tests/conformance*`, `tests/engine_parity` | the interpreter runs them; the compiled build rejects them (mostly WJ0003 `uint`/`int` width mismatches, e.g. `examples/verified/algo_lcs.wj`) | compiled-backend regressions in the verified corpus; not reduced |
 
 Fixed in this branch: struct literal fields ran in declaration order (rustc: as written; next had the same fix, its version was kept),
 `env::current_dir` returned a bare string, `env::current_exe` and `json::number_f64` were missing in the interpreter, and
@@ -108,3 +108,16 @@ the interpreter; both now follow `str::lines()` (SPEC-STR-018).
 |---|---|---|
 | `tests/move_prediction/receiver_non_clone.wj` | the interpreter runs a by-value receiver called on a value that cannot be copied and then used again; rustc rejects it (E0382). Its sibling fixtures (argument, let alias, loop, partial move) are refused by both; `move_prediction_test::moves_of_values_that_cannot_be_copied_are_reported_per_kind` fails on it at this head | interpreter does not refuse (ADR-0030 receiver slice) |
 | `repros/main_returns_err.wj` | `fn main() -> Result<(), string>` returning `Err` exited 0 silently when interpreted; compiled it prints `Error: "negative"` and exits 1. Fixed in the interpreter (`Error: {Debug of the error}` on stderr, exit 1); the corpus now has an `#mainerr` row comparing that line in every mode | fixed |
+
+## I. Reductions and mutation checks (wt/drift5)
+
+- `repros/explicit_ref_literal_arg.wj`: the explicit borrow of an integer literal (`set.contains(&9)`, `map.get(&3)`) is dropped by the
+  compiled backend (rustc: expected `&i64`, found `i64`). Reduced from `hashset_basics`, `map_get_match` and `match_value`.
+- `repros/i64_min_literal.wj` is fixed: the parser keeps an integer literal as `i64` bits, so `9223372036854775808` reaches the
+  interpreter as `i64::MIN`; the written literal `-9223372036854775808` now evaluates to itself in both engines, and a computed
+  `-i64::MIN` still panics (SPEC-NUM-017). The same representation explains `u64_literal_above_i64_max.wj`: the compiled
+  backend prints a `u64` literal above `i64::MAX` as a negative number.
+- The other interpreted-ok / compiled-rejected programs fall into a few families (rustc's first error): the integer literal
+  typed `i32` next to `int`, a `&T` expected where an `int` is passed to a collection lookup or an iterator adapter, `String`
+  against `&str` at call boundaries, and iterator chains collected into the wrong element type. Programs that reach std modules
+  (`math`, `process`) cannot be checked by rustc alone and need a cargo-backed run.

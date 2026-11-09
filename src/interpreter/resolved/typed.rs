@@ -237,10 +237,6 @@ pub(super) fn negate(x: I, t: IntTy, loc: Loc) -> ICode {
     Box::new(move |it, b| {
         let v = x.get(it, b)?;
         it.mark(loc);
-        // `-9223372036854775808`: the literal 2^63 reaches the interpreter as i64::MIN, and its negation is itself
-        if t == IntTy::Lit && v == i64::MIN {
-            return Ok(v);
-        }
         match v.checked_neg() {
             Some(n) if range.map_or(true, |(lo, hi)| n >= lo && n <= hi) => Ok(n),
             _ => Err(panic_ctl("attempt to negate with overflow")),
