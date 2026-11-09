@@ -313,18 +313,6 @@ impl<'ast> Analyzer<'ast> {
                             match registry.get_signature(simple) {
                                 Some(s) => s,
                                 None => {
-                                    if crate::debug_env::enabled("WJ_DEBUG_PASSTHROUGH") {
-                                        let matching: Vec<_> = registry
-                                            .all_signatures()
-                                            .filter(|(k, _)| {
-                                                k.contains("clear")
-                                                    || k.contains("place")
-                                                    || k.contains("Cache")
-                                            })
-                                            .map(|(k, _)| k.clone())
-                                            .collect();
-                                        eprintln!("[PASSTHROUGH] fn={} callee={} NOT FOUND in registry (tried simple={}). Related keys: {:?}", current_func_name, func_name, simple, matching);
-                                    }
                                     continue;
                                 }
                             }

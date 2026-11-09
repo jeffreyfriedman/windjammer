@@ -308,7 +308,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // CLONE-USE-AFTER-MOVE: a `vec![..]` element is consumed; a binding read again later is copied.
         let final_arg_strs: Vec<String> = if name == "vec" && !is_repeat {
-            final_arg_strs.into_iter().zip(args.iter()).map(|(s, a)| self.copy_element_if_read_later(a, s)).collect()
+            final_arg_strs.into_iter().zip(args.iter()).map(|(s, a)| self.copy_if_read_again_at(a, s, super::move_at_last_use::MoveSite::Element)).collect()
         } else {
             final_arg_strs
         };

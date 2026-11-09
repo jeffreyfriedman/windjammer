@@ -1783,22 +1783,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
-                            let _debug_formal = crate::debug_env::enabled("WJ_DEBUG_FORMAL") && param.name == "grid" && func.name == "do_work";
-                            if _debug_formal {
-                                eprintln!("[FORMAL-INIT] fn={} param={} initial_mode={:?} ir_own={:?} analyzer_own={:?} registry_own={:?}",
-                                    func.name, param.name, ownership_mode,
-                                    self.get_param_ownership(&param.name, analyzed),
-                                    analyzed.inferred_ownership.get(&param.name),
-                                    registry_ownership,
-                                );
-                            }
-                            macro_rules! trace_own {
-                                ($line:expr, $mode:expr) => {
-                                    if _debug_formal {
-                                        eprintln!("[FORMAL-TRACE] line={} mode={:?}", $line, $mode);
-                                    }
-                                };
-                            }
 
                             if matches!(
                                 analyzed.inferred_ownership.get(&param.name),
@@ -1827,7 +1811,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.param_keeps_owned_engine_key_facade(sn, param, func)
                             }) {
                                 ownership_mode = OwnershipMode::Owned;
-                                trace_own!(926, ownership_mode);
                             }
 
                             // Field-extract returns (`key.bytes` / `msg.payload`) need an owned
@@ -1918,7 +1901,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 ) || self.current_fn_mixed_forwarder_params.contains(&param.name))
                             {
                                 ownership_mode = OwnershipMode::Owned;
-                                trace_own!(976, ownership_mode);
                             }
 
                             if !self.ir_cutover.ownership {
@@ -1944,7 +1926,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 {
                                     ownership_mode = OwnershipMode::Owned;
-                                    trace_own!(999, ownership_mode);
                                 }
 
                                 // Copy aggregates pass by value unless the analyzer kept an active
@@ -1974,7 +1955,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 {
                                     ownership_mode = OwnershipMode::Owned;
-                                    trace_own!(1022, ownership_mode);
                                 }
 
                                 // Field mutation on params requires &mut when the body mutates fields.
@@ -2496,13 +2476,6 @@ impl<'ast> CodeGenerator<'ast> {
                                         self.param_ownership_for_formal_demotion(&param.name, analyzed)
                                     });
                                 let copy_aggregate = self.is_type_copy(&param.type_);
-                                if _debug_formal {
-                                    eprintln!("[FORMAL-MUT-BLOCK] fn={} param={} ownership_mode_before={:?} analyzed_mode={:?} copy_aggregate={} mutated={} field_mutated={} payload_stored={} payload_forces={}",
-                                        func.name, param.name, ownership_mode, analyzed_mode, copy_aggregate,
-                                        analyzed.mutated_parameters.contains(&param.name),
-                                        analyzed.field_mutated_parameters.contains(&param.name),
-                                        payload_stored, payload_forces_owned);
-                                }
                                 // Without local field/index writes: field-method calls alone
                                 // are not `&mut` mutations (Copy AppDeps *and* non-Copy
                                 // `Writer { tag: string }` — post_journal_entry). Passthrough
@@ -2513,14 +2486,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     .param_false_mut_from_readonly_field_methods(
                                         param, func, analyzed, false,
                                     );
-                                if _debug_formal {
-                                    eprintln!("[FORMAL-FMC] false_mut_on_field_methods={} field_write={} call_arg={} direct_recv={} field_proj_mut={}",
-                                        false_mut_on_field_methods,
-                                        self.param_has_field_or_index_write(func.body.as_slice(), &param.name),
-                                        self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func),
-                                        self.param_is_direct_method_receiver(func.body.as_slice(), &param.name),
-                                        self.param_has_mut_method_via_field_projection(func.body.as_slice(), &param.name));
-                                }
                                 if false_mut_on_field_methods
                                     && matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 {
@@ -2549,9 +2514,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
-                            if _debug_formal {
-                                eprintln!("[FORMAL-POST-MUT-BLOCK] ownership_mode={:?}", ownership_mode);
-                            }
                             // Readonly unused WJ `string` formals historically demoted to `&str`
                             // for forward-ref call sites (DialogCondition → Inventory::has_item).
                             // Free functions included (wal `replay_all(path)`).
@@ -2609,9 +2571,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.str_ref_optimized_params.insert(param.name.clone());
                             }
                             if asref_fwd {
-                                if _debug_formal {
-                                    eprintln!("[FORMAL-ASREF-FWD] fn={} param={} asref_fwd=true → Owned", func.name, param.name);
-                                }
                                 // Keep owned `String` + call-site `&` for db/env/… AsRef APIs.
                                 self.str_ref_optimized_params.remove(&param.name);
                                 self.inferred_borrowed_params.remove(&param.name);
@@ -2741,13 +2700,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                             }
 
-                            if _debug_formal {
-                                eprintln!("[FORMAL-FINAL] fn={} param={} ownership_mode={:?} formal_type={:?} param.is_mutable={} field_mutated={} param_passed_to_owned_self_method={}",
-                                    func.name, param.name, ownership_mode, formal_type, param.is_mutable,
-                                    analyzed.field_mutated_parameters.contains(&param.name),
-                                    self.param_passed_to_owned_self_method_arg(func.body.as_slice(), &param.name, func),
-                                );
-                            }
                             if cross_module_borrow_keep_owned && !shared_forward {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.inferred_borrowed_params.remove(&param.name);
