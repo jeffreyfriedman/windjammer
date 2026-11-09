@@ -122,6 +122,12 @@ fn label(dir: string) -> string {
     strings.replace(dir, "tests/drift_corpus/eco/", "")
 }
 
+// programs the interpreter must refuse because rustc rejects them: the move-prediction fixtures (tests/move_prediction,
+// not its accepted/ subdirectory) and anything named must_refuse_*
+fn is_must_refuse(p: string) -> bool {
+    strings.contains(p, "/must_refuse_") || (strings.contains(p, "tests/move_prediction/") && !strings.contains(p, "/accepted/"))
+}
+
 // the `Error: ...` line a `main` returning `Err` prints (the first stderr line that starts with it), or ""
 fn main_error_line(stderr: string) -> string {
     for line in strings.split_lines(stderr) {
@@ -134,7 +140,7 @@ fn main_error_line(stderr: string) -> string {
 
 // the compiled result of a program: run now, or with --refresh-failed keep every recorded verdict except a failed build
 fn compiled_program(o: Opts, file: string, baseline: TestRun) -> Outcome {
-    if o.refresh_failed && !strings.contains(file, "/must_refuse_") {
+    if o.refresh_failed && !is_must_refuse(file) {
         let old = lookup(baseline, file)
         if old.token != "exit1:0:17" && old.token != "absent" {
             return old
@@ -385,7 +391,7 @@ fn main() {
     }
     // value-position programs and the minimal repros of ledgered divergences
     let mut progs = Vec::new()
-    for dir in ["tests/engine_parity", "${CORPUS}/repros", "${CORPUS}/moves"] {
+    for dir in ["tests/engine_parity", "${CORPUS}/repros", "${CORPUS}/moves", "tests/move_prediction", "tests/move_prediction/accepted"] {
         match fs.read_dir(dir) {
             Ok(es) => {
                 for e in es {
@@ -410,7 +416,7 @@ fn main() {
         if o.compiled == "live" {
             recorded = recorded + "${p}#mainerr\t${if c.err == "" { "none" } else { c.err }}\t\n"
         }
-        if strings.contains(p, "/must_refuse_") {
+        if is_must_refuse(p) {
             // the interpreter must refuse what rustc rejects: `#refused` rows say whether each side stopped on an ownership error
             let cd = if o.compiled == "skip" { "skip" } else if o.compiled == "live" { c.diag } else { lookup(baseline, "${p}#refused").token }
             out = out + row("${p}#refused", w.diag, r.diag, cd)
