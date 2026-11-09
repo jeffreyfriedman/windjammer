@@ -26,7 +26,9 @@ impl<'ast> CodeGenerator<'ast> {
             // The comparison methods take `&Self`: an explicit `&` is the argument, not a hint.
             if let Some((_, Expression::Unary { op: UnaryOp::Ref, .. })) = arguments.first() {
                 if !args[0].starts_with('&') {
-                    args[0] = format!("&{}", args[0]);
+                    // D-CLONE-REDUNDANT: borrowing needs no copy (`&a.1`, not `&a.1.clone()`).
+                    let place = args[0].strip_suffix(".clone()").unwrap_or(&args[0]).to_string();
+                    args[0] = format!("&{place}");
                 }
             }
         }
