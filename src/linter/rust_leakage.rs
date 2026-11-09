@@ -59,6 +59,14 @@ impl<'ast> RustLeakageLinter<'ast> {
         }
     }
 
+    /// Where a bodyless trait method's `self` is written (its true span; the file start without spans).
+    fn receiver_location(&self, params: &[Parameter<'_>]) -> SourceLocation {
+        match self.spans.as_ref().and_then(|s| s.param(params, 0)) {
+            Some(sp) => SourceLocation::new(self.default_file.clone(), sp.line, sp.column),
+            None => SourceLocation::new(self.default_file.clone(), 1, 1),
+        }
+    }
+
     fn param_location(&self, func: &FunctionDecl<'ast>, index: usize, file: &str) -> SourceLocation {
         match self.spans.as_ref().and_then(|s| s.param(&func.parameters, index)) {
             Some(sp) => SourceLocation::new(file, sp.line, sp.column),
@@ -96,7 +104,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                 category: LintCategory::Correctness,
                 level: LintLevel::Warning,
                 message: format!("trait method `{}` has no body and does not declare its receiver", u.method),
-                location: to_source_location(u.location, &self.default_file),
+                location: self.receiver_location(u.params),
                 help: Some("write `&self` when no implementation changes `self`, `&mut self` when one does".to_string()),
                 note: Some("`self` alone is inferred from a body; implementations follow the trait's declared receiver".to_string()),
                 suggestion: None,
