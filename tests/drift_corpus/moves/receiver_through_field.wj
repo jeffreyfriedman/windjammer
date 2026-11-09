@@ -1,0 +1,20 @@
+// A by-value receiver called on a field, then the field read again.
+struct Node {
+    next: int,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { next: self.next + 1 }
+    }
+}
+
+struct Wrap {
+    node: Node,
+}
+
+fn main() {
+    let w = Wrap { node: Node { next: 1 } }
+    let a = w.node.advance()
+    println("${a.next} ${w.node.next}")
+}

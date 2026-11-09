@@ -148,7 +148,7 @@
     },
     "String::as_bytes": {
       "params": ["Reference(String)"],
-      "return_type": "Reference(Custom(\"u8\"))",
+      "return_type": "Reference(Vec(Custom(\"u8\")))",
       "is_associated": true,
       "parent_type": "String",
       "param_ownership": ["Borrowed"],

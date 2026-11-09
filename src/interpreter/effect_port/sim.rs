@@ -32,6 +32,8 @@ pub struct World {
     tmp: String,
     /// The one salt stream of password hashing, so a hash is a function of the seed.
     salts: rand::rngs::StdRng,
+    /// This world's virtual network (`sim_net`): its own, so concurrent simulated runs never see each other's sockets.
+    pub(crate) net: super::sim_net::Network,
 }
 
 impl World {
@@ -39,6 +41,7 @@ impl World {
     /// `tmp` is what `env::temp_dir()` returns (the run's granted scratch directory).
     pub fn new(cfg: &SimConfig, cwd: &Path, tmp: &Path) -> World {
         World {
+            net: super::sim_net::new_network(),
             seed: cfg.seed,
             faults: cfg.faults.clamp(0.0, 1.0),
             frng: rand::rngs::StdRng::seed_from_u64(cfg.seed ^ 0xFA17_FA17_FA17_FA17),
@@ -60,7 +63,7 @@ impl World {
         let _ = self.fs.create_dir_all(&tmp);
     }
 
-    fn fault(&mut self) -> bool {
+    pub(crate) fn fault(&mut self) -> bool {
         self.faults > 0.0 && self.frng.gen::<f64>() < self.faults
     }
 }
@@ -218,7 +221,7 @@ pub fn answer(it: &mut Interpreter, path: &str, args: Vec<Value>) -> Result<Valu
         }
         "fs::set_current_dir" => unit(w.fs.set_cwd(&a0)),
         "fs::current_dir" | "path::current_dir" => Value::ok(Value::str(w.fs.cwd().to_string())),
-        "env::current_dir" => Value::str(w.fs.cwd().to_string()),
+        "env::current_dir" => Value::ok(Value::str(w.fs.cwd().to_string())),
         "env::temp_dir" => Value::str(w.tmp.clone()),
         "process::pid" => Value::Int(4242, IntTy::I64),
         "env::var" => match w.env.get(&a0) {

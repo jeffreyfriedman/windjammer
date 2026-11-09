@@ -1,0 +1,34 @@
+// Raw UDP on loopback (ADR-0032): datagrams keep their boundaries and their sender; a receive times out.
+use std::net::UdpSocket
+
+fn datagrams() -> Result<(), string> {
+    let a = UdpSocket::bind("127.0.0.1:0")?
+    let b = UdpSocket::bind("127.0.0.1:0")?
+    let sent = a.send_to("ping".as_bytes().to_vec(), b.local_addr())?
+    let _ = a.send_to("second datagram".as_bytes().to_vec(), b.local_addr())?
+    println("sent ${sent} bytes")
+    let (data, from) = b.recv_from(64)?
+    println("received ${data.len()} bytes from a: ${from == a.local_addr()}")
+    match String::from_utf8(data) {
+        Ok(text) => println("text ${text}"),
+        Err(_) => println("not text"),
+    }
+    let (cut, _) = b.recv_from(6)?
+    println("a 15-byte datagram read with max 6 gives ${cut.len()}")
+    b.send_to("pong".as_bytes().to_vec(), from)?
+    let (reply, _) = a.recv_from(64)?
+    println("reply has ${reply.len()} bytes")
+    b.set_read_timeout(50)?
+    match b.recv_from(64) {
+        Ok(_) => println("unexpected datagram"),
+        Err(e) => println("empty socket: ${e}"),
+    }
+    Ok(())
+}
+
+fn main() {
+    match datagrams() {
+        Ok(_) => println("udp: ok"),
+        Err(e) => println("udp: FAILED ${e}"),
+    }
+}

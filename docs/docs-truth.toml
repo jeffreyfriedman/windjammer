@@ -49,7 +49,15 @@ require = true
 
 # Shell fences that run `wj` in these documents must be `sh,verify` (executed in CI with the built wj).
 [verify]
-required = ["README.md", "AGENTS.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "docs/agent/WINDJAMMER_REFERENCE.md", "examples/README.md", "examples/*/README.md", "templates/*/README.md"]
+required = ["docs/book/src/**/*.md", "README.md", "AGENTS.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "docs/agent/WINDJAMMER_REFERENCE.md", "examples/README.md", "examples/*/README.md", "templates/*/README.md"]
+
+# The Windjammer Book (docs/book, tools/docs_truth/book.rs). Every value is a ratchet: it may only shrink, and a
+# value above the measured count fails too, so the file always states the truth.
+[book]
+max_ignored = 0
+max_interpreter_only = 3
+max_drafts = 0
+max_uncovered_promises = 0
 
 # Rule-id namespaces: ids cited in docs must be defined in the matching files. A namespace is
 # inactive until at least one defining file exists.

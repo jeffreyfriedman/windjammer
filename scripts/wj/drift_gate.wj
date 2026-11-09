@@ -1,6 +1,6 @@
 // The drift gate: one command that fails when the interpreter and the compiled output disagree.
 //
-//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--check-env] [--compiled recorded|live|skip]
+//   wj run scripts/wj/drift_gate.wj [--wj BIN] [--fast] [--check-env] [--prune] [--compiled recorded|live|skip]
 //
 // Steps (docs/testing/DRIFT.md):
 //   selftest   the ledger comparer and the corpus tokens, against planted divergences
@@ -24,6 +24,8 @@ use wj_table::new
 use wj_table::add_row
 use wj_table::plain
 
+const PROBE_BASELINE: string = "tests/drift_corpus/probe_baseline.tsv"
+const STDSHAPE_BASELINE: string = "tests/drift_corpus/stdshape_baseline.txt"
 const LEDGER: string = "tests/drift_corpus/known_divergences.txt"
 const MIN_CASES: string = "1300"
 const SPEC_MIN_CASES: string = "200"
@@ -122,7 +124,7 @@ fn wj_step(name: string, wj: string, args: string) -> Step {
     }
 }
 
-fn corpus_step(wj: string, compiled: string) -> Step {
+fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step {
     // every file of a run lives in a directory of its own, so concurrent gate runs cannot touch each other
     let run_dir = match sh("mktemp -d /tmp/wj-drift-gate.XXXXXX") {
         Ok(r) => strings.trim(r.stdout),
@@ -163,6 +165,38 @@ fn corpus_step(wj: string, compiled: string) -> Step {
             },
         }
     }
+    // semantic probe families (integer wrapping, casts, float formatting, panics, evaluation order, drop order...)
+    if ok {
+        let live = if compiled == "live" { "--run-compiled" } else { "" }
+        match sh("${wj} run --interpret scripts/wj/drift_probes.wj ${wj} ${run_dir}/probes ${run_dir}/probes.tsv ${live} --baseline ${PROBE_BASELINE} 2>&1 && cat ${run_dir}/probes.tsv >> ${results}") {
+            Ok(r) => {
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
+    // return shapes of the standard library: interpreter builtins against the runtime crate's signatures
+    if ok {
+        let live = if compiled == "live" { "--run-compiled" } else { "" }
+        match sh("${wj} run --interpret scripts/wj/drift_stdshape.wj ${wj} ${run_dir}/stdshape ${run_dir}/stdshape.tsv ${live} --baseline ${STDSHAPE_BASELINE} 2>&1 && cat ${run_dir}/stdshape.tsv >> ${results}") {
+            Ok(r) => {
+                if r.status != 0 {
+                    ok = false
+                    detail = r.stdout
+                }
+            },
+            Err(e) => {
+                ok = false
+                detail = e
+            },
+        }
+    }
     // the ledger may only shrink against the base ref's copy (absent there: the ledger is being introduced)
     let base_ref = env::var("DRIFT_BASE_REF").unwrap_or("next/v0.50.0")
     let mut base_arg = ""
@@ -176,7 +210,7 @@ fn corpus_step(wj: string, compiled: string) -> Step {
     }
     let mut cases = ""
     if ok {
-        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} 2>&1") {
+        match sh("${wj} run --interpret scripts/wj/drift_ledger.wj ${results} ${LEDGER} --min-cases ${MIN_CASES} ${base_arg} ${if prune { "--prune" } else { "" }} ${if adopt != "" { "--adopt '" + adopt + "'" } else { "" }} 2>&1") {
             Ok(r) => {
                 let first = strings.split_lines(r.stdout)
                 if first.len() > 0 {
@@ -306,12 +340,19 @@ fn main() {
     let args = env::args()
     let mut wj = env::var("WJ").unwrap_or("target/release/wj")
     let mut check_env = false
+    let mut prune = false
+    let mut adopt = ""
     let mut fast = false
     let mut compiled = "recorded"
     let mut i = 1
     while i < args.len() {
         if args[i] == "--wj" {
             wj = args[i + 1]
+            i += 1
+        } else if args[i] == "--prune" {
+            prune = true
+        } else if args[i] == "--adopt" {
+            adopt = args[i + 1]
             i += 1
         } else if args[i] == "--check-env" {
             check_env = true
@@ -354,7 +395,7 @@ fn main() {
         steps.push(cargo_step("packed-vec", "interpreter_packed_vec_test::"))
         steps.push(cargo_step("crate-host", "interpreter_rust_crates_test::"))
     }
-    steps.push(corpus_step(wj, compiled))
+    steps.push(corpus_step(wj, compiled, prune, adopt))
     steps.push(spec_step(wj, compiled))
     let mut t = new(["step", "cases", "verdict", "seconds"])
     let mut failed = 0

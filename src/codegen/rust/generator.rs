@@ -950,8 +950,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             // Stdlib map/set key methods borrow (`HashMap::get(&K)`). A project
-            // skeleton from `std/collections.wj` (`key: K` owned) must not replace
-            // that contract — P3.647 would then clone the key into `&Q`.
+            // skeleton from `std/collections.wj` (`key: K` owned) must not replace that contract — P3.647 would then clone the key into `&Q`.
             if crate::type_classification::is_map_type_name(receiver_type)
                 || crate::type_classification::is_set_type_name(receiver_type)
             {
@@ -4035,7 +4034,8 @@ impl<'ast> CodeGenerator<'ast> {
             || self.match_arm_bindings.contains(name.as_str())
             || self.inferred_borrowed_params.contains(name.as_str())
             || self.inferred_mut_borrowed_params.contains(name.as_str())
-            || self.current_function_params.iter().any(|p| p.name == *name);
+            || self.current_function_params.iter().any(|p| p.name == *name)
+            || self.local_variable_scopes.iter().any(|scope| scope.contains(name.as_str()));
         if is_local_variable {
             return arg_str.to_string();
         }

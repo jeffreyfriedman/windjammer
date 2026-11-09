@@ -1,0 +1,12 @@
+// A parameter whose only use is inside the value of a `break` out of `loop`: the compiled backend treats it as
+// unused, renames it `_h`, and the use then fails to resolve (rustc E0425).
+fn pick(h: bool) -> int {
+    let y: int = loop {
+        break if h { 1 } else { 2 }
+    }
+    y
+}
+
+fn main() {
+    println("${pick(true)} ${pick(false)}")
+}

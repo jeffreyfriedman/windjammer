@@ -234,3 +234,132 @@ impl Server {
     }
 }
 
+
+// ============================================================================
+// RAW SOCKETS (ADR-0032)
+// ============================================================================
+// Bytes are Vec<u8>; errors are strings from a fixed vocabulary ("connection refused", "timed out",
+// "connection reset", "broken pipe", "address in use", "unexpected end of stream", "invalid address: ADDR").
+// Grants: `net.connect` on `host:port` for connect and every UDP send_to; `net.listen` for bind.
+
+/// A TCP connection. Closes when dropped; the peer then reads end of stream.
+pub struct TcpStream {
+    // Internal implementation hidden
+}
+
+impl TcpStream {
+    /// Connect to `host:port`.
+    pub fn connect(addr: string) -> NetResult<TcpStream> {
+        Err("Not implemented")
+    }
+
+    /// Connect, giving up after `timeout_ms` milliseconds (0: no limit).
+    pub fn connect_timeout(addr: string, timeout_ms: int) -> NetResult<TcpStream> {
+        Err("Not implemented")
+    }
+
+    /// Up to `max` bytes as soon as any are available; an empty vector means the peer closed its write half.
+    pub fn read(&mut self, max: int) -> NetResult<Vec<u8>> {
+        Err("Not implemented")
+    }
+
+    /// Exactly `n` bytes, or Err("unexpected end of stream").
+    pub fn read_exact(&mut self, n: int) -> NetResult<Vec<u8>> {
+        Err("Not implemented")
+    }
+
+    /// Through the next newline (kept); "" at end of stream.
+    pub fn read_line(&mut self) -> NetResult<string> {
+        Err("Not implemented")
+    }
+
+    /// Write every byte.
+    pub fn write_all(&mut self, data: Vec<u8>) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    /// Write the UTF-8 bytes of `text`.
+    pub fn write_str(&mut self, text: string) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    pub fn flush(&mut self) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    /// Half close: the peer reads end of stream, this end can still read.
+    pub fn shutdown_write(&mut self) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    /// Close both halves.
+    pub fn shutdown(&mut self) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    /// Read and write timeouts in milliseconds (0: none). A read past its timeout is Err("timed out").
+    pub fn set_timeouts(&mut self, read_ms: int, write_ms: int) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    /// The peer's `ip:port`.
+    pub fn peer_addr(&self) -> string {
+        ""
+    }
+
+    /// This end's `ip:port`.
+    pub fn local_addr(&self) -> string {
+        ""
+    }
+}
+
+/// A bound TCP listener.
+pub struct TcpListener {
+    // Internal implementation hidden
+}
+
+impl TcpListener {
+    /// Listen on `host:port` (port 0: pick a free one; `local_addr` tells which).
+    pub fn bind(addr: string) -> NetResult<TcpListener> {
+        Err("Not implemented")
+    }
+
+    /// The next incoming connection.
+    pub fn accept(&self) -> NetResult<TcpStream> {
+        Err("Not implemented")
+    }
+
+    pub fn local_addr(&self) -> string {
+        ""
+    }
+}
+
+/// A bound UDP socket.
+pub struct UdpSocket {
+    // Internal implementation hidden
+}
+
+impl UdpSocket {
+    pub fn bind(addr: string) -> NetResult<UdpSocket> {
+        Err("Not implemented")
+    }
+
+    /// Send one datagram to `addr`; the number of bytes sent.
+    pub fn send_to(&self, data: Vec<u8>, addr: string) -> NetResult<int> {
+        Err("Not implemented")
+    }
+
+    /// One datagram of at most `max` bytes, and the sender's `ip:port`.
+    pub fn recv_from(&self, max: int) -> NetResult<(Vec<u8>, string)> {
+        Err("Not implemented")
+    }
+
+    /// Receive timeout in milliseconds (0: none).
+    pub fn set_read_timeout(&self, ms: int) -> NetResult<()> {
+        Err("Not implemented")
+    }
+
+    pub fn local_addr(&self) -> string {
+        ""
+    }
+}
