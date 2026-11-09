@@ -836,3 +836,39 @@ statement = "Show this wj's identity: version, commit, commit date, dirty flag, 
 [[promise]]
 id = "wj version --json"
 statement = "Machine-readable output"
+
+[[promise]]
+id = "wj clean --older-than-hours"
+statement = "With --tmp: only directories older than this many hours"
+
+[[promise]]
+id = "wj clean --sidecars"
+statement = "Only remove legacy `*.wj.meta` sidecars next to sources under the current directory"
+
+[[promise]]
+id = "wj clean --tmp"
+statement = "Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes)"
+
+[[promise]]
+id = "wj clean --yes"
+statement = "Actually remove what --tmp lists"
+
+[[promise]]
+id = "wj rust-surface"
+statement = "Generate the signature surface of a Rust crate dependency (ADR-0026) from its source"
+
+[[promise]]
+id = "wj rust-surface --all-pub"
+statement = "Every public free function that maps (the default)"
+
+[[promise]]
+id = "wj rust-surface --fn"
+statement = "Only these functions (repeatable); the cache copy always has every function"
+
+[[promise]]
+id = "wj rust-surface --path"
+statement = "Project directory (default: the current directory)"
+
+[[promise]]
+id = "wj rust-surface --write"
+statement = "Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one)"
