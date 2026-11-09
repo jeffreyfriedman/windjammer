@@ -68,7 +68,6 @@
 "compiler->resolve src/compiler/compilation_pipeline.rs" = 4
 "compiler_config->codegen src/compiler_config.rs" = 1
 "config->ir src/config.rs" = 4
-"error_catalog->intrinsics src/error_catalog.rs" = 1
 "errors->analyzer src/errors/mutability.rs" = 2
 "errors->parser src/errors/mutability.rs" = 1
 "ffi->codegen src/ffi/idl.rs" = 1

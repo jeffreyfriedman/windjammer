@@ -1036,7 +1036,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.call_targets.push(callee_name.clone());
                     self.emit_variant_payload_types(&callee_name, &arg_vars, arguments);
                     let structural = self.prelude_constructor_parts(&callee_name, result, &arg_vars)
-                        || self.emit_surface_static_call(&callee_name, arguments, &arg_vars, result);
+                        || self.emit_surface_static_call(&callee_name, arguments, &arg_vars, result)
+                        || self.intrinsic_call(&callee_name, &arg_vars);
 
                     if structural {
                     } else if let Some(sig) = self

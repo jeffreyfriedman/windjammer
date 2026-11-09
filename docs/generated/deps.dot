@@ -70,6 +70,7 @@ digraph deps {
   }
   subgraph cluster_syntax {
     label="syntax";
+    "intrinsics";
     "lexer";
     "parser";
     "parser_impl";
@@ -88,7 +89,6 @@ digraph deps {
     "formatter";
     "ide_analysis";
     "interpreter";
-    "intrinsics";
     "linter";
     "metadata";
     "package";
@@ -288,7 +288,6 @@ digraph deps {
   "doctest" -> "parser" [label="5"];
   "ejector" -> "build_utils" [label="1"];
   "ejector" -> "compiler_config" [label="1"];
-  "error_catalog" -> "intrinsics" [label="1",color=red,fontcolor=red];
   "error_handling" -> "error_mapper" [label="1"];
   "error_mapper" -> "auto_fix" [label="2"];
   "error_mapper" -> "diagnostics" [label="2"];
@@ -348,12 +347,12 @@ digraph deps {
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="2"];
-  "intrinsics" -> "error_catalog" [label="2"];
   "intrinsics" -> "lexer" [label="1"];
   "ir" -> "analyzer" [label="51"];
   "ir" -> "auto_clone" [label="1"];
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
+  "ir" -> "intrinsics" [label="1"];
   "ir" -> "lexer" [label="24"];
   "ir" -> "parser" [label="95"];
   "ir" -> "resolve" [label="9"];
