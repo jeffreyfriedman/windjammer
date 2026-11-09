@@ -158,9 +158,9 @@ fn main() {
 }
 ```
 
-How a `main` that itself returns a `Result` reports its error is on the list of things being aligned between the
-interpreter and compiled code; see [Known gaps](https://github.com/jeffreyfriedman/windjammer/blob/main/docs/known-gaps.md). Handling the error in `main` with `match`, as above, behaves
-the same everywhere.
+A `main` can also return a `Result` itself: an `Err` is printed as `Error: ...` and the program exits with status 1, in the
+interpreter and in compiled code alike. Handling the error in `main` with `match`, as above, lets you choose the message
+and the exit code.
 
 ## Panics
 

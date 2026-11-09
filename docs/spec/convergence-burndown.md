@@ -46,7 +46,7 @@ method-call result widths, struct field widths, closure parameters.
 | O1 | `analyzer/parameter_analysis.rs` precedence chain (steps 0a-9) | ~1500 | OWN-* solver rules (OWN-CONSUMING-METHOD, OWN-RETURNED, OWN-STORED, OWN-READ-FIELD, OWN-CALL-FORMAL exist) | replaced-but-still-present as OWN-ANALYZER-SEED | D-OWN-STAGES |
 | O2 | `analyzer/string_optimization.rs` + `generator.rs::str_ref_optimizable_param` (text demotion) | ~1500 | OWN-STR-REF decided by use (solver-owned only when the trail shows the solver moved it; pub free-fn lock excluded) | replaced-but-still-present | D-OWN-STAGES |
 | O3 | `compiler/multipass_bare_pass_demotion.rs`, `codegen/rust/signature_promotion.rs` (registry `restore_*`/`promote_*` passes) | 4674 + 4519 | C3 DefId registry + solver fixed point | untouched here; owned by the C3 agent (wt/convergence-c3) | D-OWN-STAGES |
-| O4 | `codegen/rust/function_formal_parameter_generation.rs` body-walking demotion heuristics | ~3000 | solver param modes | receivers: replaced (`ir_self_receiver` spells the IR mode; the `self` arms behind it no longer fire outside trait impls and are the next deletion); field-move walk deleted (analyzer fact `field_moved_parameters`) | D-OWN-STAGES |
+| O4 | `codegen/rust/function_formal_parameter_generation.rs` body-walking demotion heuristics | ~3000 | solver param modes | receivers: replaced (`self_receiver` spells the IR mode; `self` arms deleted); plain value formals (non-Copy user types and collections, private and public) spelled from the IR mode by `ir_value_formal`, the public keep-owned walks deleted; field-move walk deleted (analyzer fact `field_moved_parameters`). Left: text, Copy, generic, pattern and trait-impl formals, and the prepare-phase registry predictions | D-OWN-STAGES |
 | O5 | `auto_clone.rs` + codegen `.clone()` surgery (`maybe_auto_clone`, ~147 sites in ir_call_site, 46 generator) | 2211 + sites | C6 liveness clone facts (owned by the C6 agent, wt/convergence-c6) | in progress elsewhere | D-CLONE-OUTSIDE-SOLVER, D-CLONE-LASTUSE |
 | O6 | `find_signature_ending_with` callers (~13 sites) and bare-name fallbacks | -- | module-qualified lookup (C3) | one site fixed (`global_signature_for_function` tries module path first); rest owned by C3 agent | D-OWN-STAGES |
 
@@ -123,8 +123,8 @@ reality (lower it with `cargo test --test all heuristic_surface_test::regenerate
 mutation check adds one guess of each kind to a real file and requires all three sections to fail. The gate also
 fails when the line below does not match the allow-list.
 
-Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
-`H-NAME-MATCHES` 530, `H-MATCH-ARM-NAMES` 1130, `H-FALLBACK-LEGACY` 128 (total 1788)
+Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps including public formals; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
+`H-NAME-MATCHES` 529, `H-MATCH-ARM-NAMES` 1129, `H-FALLBACK-LEGACY` 128 (total 1786)
 
 Breakdown at seeding (2026-11-04):
 
@@ -217,6 +217,8 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C5 receiver arms deleted: one `self_receiver` spelling rule (IR mode; trait mode in trait impls) | d76a87198 | ~620 | ~60 | D-OWN-STAGES 9 -> 9 (the deleted arms ran only where codegen and the IR already agreed); flagship-app api-check ownership errors 3 -> 1; ratchet 44 -> 43 (one stale entry) |
 | C5: delete name-gated debug traces (formal parameters `grid`/`do_work`, passthrough `clear`/`place`/`Cache`); one CLONE-USE-AFTER-MOVE decision with a `MoveSite` | this branch | ~70 | ~15 | H-NAME-MATCHES 647 -> 642 |
 | O4: the `@string_ref` / `@str_ref` pins are one AST fact (`Parameter::pins_string_ref` / `pins_str_ref`), not 17 decorator-name comparisons in the formal-parameter and analyzer code | this branch | ~25 | ~16 | H-NAME-MATCHES 642 -> 625 |
+| O4: private plain value formals (non-Copy user types and collections, declared by value, no pattern, pin or `mut`) are spelled from the IR mode (`ir_value_formal`); public formals keep the owned-API rules until cross-crate call sites read the IR mode | this branch | 0 | ~45 | D-OWN-STAGES 9 -> 8 |
+| O4: public formals join the IR rule (other crates' call sites already read the emitted formals from `metadata.json`); the keep-owned walks are deleted (`is_public_owned_non_copy_formal_api` and its 25 call sites, `pub_vec_non_copy_custom_indexed_api`, `vec_param_index_is_readonly_scan`, `vec_formal_only_forwards_as_call_arg` and its 5 call sites); external metadata roots load in name order with explicitly named crates last, so a transitive dependency's homonym cannot take a bare key | this branch | 409 | 33 | project rejects -1 (`bare_pass_vec_reader`); H-NAME-MATCHES 530 -> 529, H-MATCH-ARM-NAMES 1130 -> 1129 |
 | C2 structured types (HasPart, surface binding, closures, patterns, aliases, opaque hold, published defaults) | wt/c2 | 233 (C1 surface binder, push element-store name check, old pattern binder) | 1236 (src; codegen+analyzer +80 / -9) | 51 -> 35; rustc rejects -5; narrowing casts 11 -> 6 |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
