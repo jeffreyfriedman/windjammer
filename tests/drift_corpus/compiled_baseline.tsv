@@ -1805,3 +1805,5 @@ tests/drift_corpus/repros/shadowed_option_literal_arms.wj	exit1:0:17
 tests/drift_corpus/repros/shift_count_method_literal_width.wj	exit0:5:537151487	
 tests/drift_corpus/repros/thread_join_coalesce.wj	exit0:3:557979	
 tests/drift_corpus/repros/u64_literal_above_i64_max.wj	exit1:0:17	
+tests/drift_corpus/repros/main_returns_err.wj#mainerr	Error: "negative"	
+tests/drift_corpus/repros/main_returns_err.wj	exit1:6:895992340	
