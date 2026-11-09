@@ -75,3 +75,5 @@ tests/drift_corpus/repros/nested_vec_index_by_value.wj | walker=exit0:3:555189 r
 tests/drift_corpus/repros/option_binding_plus_literal.wj | walker=exit0:5:597335755 resolved=exit0:5:597335755 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/shadow_match_binding_literal.wj | walker=exit0:8:843311487 resolved=exit0:8:843311487 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/shadowed_option_literal_arms.wj | walker=exit0:11:92382098 resolved=exit0:11:92382098 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
+tests/drift_corpus/repros/map_get_in_sort_by_closure.wj | walker=exit0:2:19385 resolved=exit0:2:19385 compiled=exit1:0:17 | docs/drift/pilot5-findings.md (generated `totals.get(&x)` with `x` already `&String`, WJ0017)
+tests/drift_corpus/repros/map_get_unwrap_or_float.wj | walker=exit0:2:17866 resolved=exit0:2:17866 compiled=exit1:0:17 | docs/drift/pilot5-findings.md (`*cur` over an owned `f64` from `get(k).unwrap_or(0.0)`, WJ0031)
