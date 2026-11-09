@@ -1,6 +1,6 @@
 #[inline]
 fn sieve(limit: i64) -> Vec<i64> {
-    let mut is_prime = vec![true; 60];
+    let mut is_prime = vec![true; 60_usize];
     let mut primes: Vec<i64> = vec![];
     for i in 2_i64..limit {
         if is_prime[i as usize] {

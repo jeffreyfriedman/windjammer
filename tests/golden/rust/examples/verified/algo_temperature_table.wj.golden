@@ -4,7 +4,7 @@ fn c_to_f(c: f64) -> f64 {
 }
 
 fn main() {
-    for c in [-40, 0, 37, 100] {
+    for c in [-40_i64, 0_i64, 37_i64, 100_i64] {
         println!("{}C = {:.1}F", c, c_to_f(c as f64));
     }
 }

@@ -7,7 +7,7 @@
 //!   - IsNumeric/IsInteger/IsFloat **infer** (not just validate) numeric class
 //!   - SharesRegion performs real region unification via a region union-find
 
-use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar};
+use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar, Part};
 #[cfg(test)]
 use crate::ir::safety_type::Region;
 use crate::ir::safety_type::{BaseType, OwnedType};
@@ -34,6 +34,8 @@ pub struct SolverResult {
     pub class_of: Vec<u32>,
     /// Variables where two different exact integer widths met (the class has no single width).
     pub width_conflicts: Vec<ConstraintVar>,
+    /// `HasPart` structure after solving: (container class, part, a variable of the part's class).
+    pub parts: Vec<(u32, Part, ConstraintVar)>,
 }
 
 /// A diagnostic emitted by the solver.
@@ -194,6 +196,12 @@ pub struct Solver {
     region_uf: RegionUnionFind,
     /// `UsedAs(value, site)` edges: `value` must satisfy `site`'s ownership requirement.
     flows: Vec<(ConstraintVar, ConstraintVar)>,
+    /// `HasPart` structure: the variable standing for each part of each class (keyed by class root).
+    parts: std::collections::BTreeMap<(u32, Part), ConstraintVar>,
+    /// Constraints derived from structure (parts of unified containers, parts of typed containers).
+    pending: Vec<Constraint>,
+    /// `FlowsInto` edges, decided after every other constraint of pass 1.
+    deferred_flows: Vec<(ConstraintVar, ConstraintVar)>,
 }
 
 impl Solver {
@@ -212,6 +220,9 @@ impl Solver {
             defaulted_roots: std::collections::HashSet::new(),
             region_uf: RegionUnionFind::new(),
             flows: Vec::new(),
+            parts: Default::default(),
+            pending: Vec::new(),
+            deferred_flows: Vec::new(),
         }
     }
 
@@ -220,7 +231,11 @@ impl Solver {
         // Pass 1: Process all constraints
         for constraint in constraints.iter() {
             self.process_constraint(constraint);
+            while let Some(derived) = self.pending.pop() {
+                self.process_constraint(&derived);
+            }
         }
+        self.resolve_deferred_flows();
 
         // Pass 2: Resolve deferred numeric class constraints.
         // For vars that have no type yet but are constrained to be numeric,
@@ -259,7 +274,10 @@ impl Solver {
 
         let defaulted: Vec<bool> = (0..n).map(|v| self.defaulted_roots.contains(&self.uf.find(v))).collect();
         let class_of: Vec<u32> = (0..n).map(|v| self.uf.find(v)).collect();
+        let raw_parts: Vec<(u32, Part, ConstraintVar)> = self.parts.iter().map(|(&(c, p), &v)| (c, p, v)).collect();
+        let parts = raw_parts.into_iter().map(|(c, p, v)| (self.uf.find(c), p, v)).collect();
         SolverResult {
+            parts,
             width_conflicts: self.width_conflicts,
             class_of,
             defaulted,
@@ -297,6 +315,8 @@ impl Solver {
                         }
                         _ => {}
                     }
+                    self.merge_parts(if root == ra { rb } else { ra }, root);
+                    self.sync_parts(root);
                 }
             }
 
@@ -316,9 +336,26 @@ impl Solver {
                             vars: vec![*var],
                         });
                     }
-                    _ => {
+                    Some(_) => {}
+                    None => {
                         self.types[root as usize] = Some(base_type.clone());
+                        self.sync_parts(root);
                     }
+                }
+            }
+
+            Constraint::FlowsInto(value, slot) => self.deferred_flows.push((*value, *slot)),
+
+            Constraint::HasPart(container, part, var) => {
+                let root = self.uf.find(container.0);
+                match self.parts.get(&(root, *part)) {
+                    Some(&existing) => self.pending.push(Constraint::TypeEquals(existing, *var)),
+                    None => {
+                        self.parts.insert((root, *part), *var);
+                    }
+                }
+                if let Some(t) = self.types[root as usize].as_ref().and_then(|t| part.of(t)) {
+                    self.pending.push(Constraint::TypeIs(*var, t));
                 }
             }
 
@@ -427,6 +464,58 @@ impl Solver {
                 // Handled by EffectSolver/TaintSolver in pipeline
             }
         }
+    }
+
+    /// `FlowsInto` edges: unify, except an index class (no exact width, an index preference) entering a slot whose
+    /// class has an exact integer width other than `usize`: that value keeps its index class (NUM-USIZE-TO-INT
+    /// converts it at the argument).
+    fn resolve_deferred_flows(&mut self) {
+        for i in 0..self.deferred_flows.len() {
+            let (value, slot) = self.deferred_flows[i];
+            let (rv, rs) = (self.uf.find(value.0), self.uf.find(slot.0));
+            if rv == rs {
+                continue;
+            }
+            let prefs: Vec<u32> = self.usize_prefs.iter().map(|p| p.0).collect();
+            let index_class = self.types[rv as usize].is_none() && prefs.into_iter().any(|p| self.uf.find(p) == rv);
+            let exact_int = self.types[rs as usize].as_ref().is_some_and(|t| is_integer_type(t) && *t != BaseType::Usize);
+            if index_class && exact_int {
+                continue;
+            }
+            self.process_constraint(&Constraint::TypeEquals(value, slot));
+            while let Some(derived) = self.pending.pop() {
+                self.process_constraint(&derived);
+            }
+        }
+    }
+
+    /// After `old` was unioned into `root`: `old`'s parts become `root`'s, and a part both had is unified.
+    fn merge_parts(&mut self, old: u32, root: u32) {
+        if old == root {
+            return;
+        }
+        let moved: Vec<(Part, ConstraintVar)> =
+            self.parts.range((old, Part::Elem)..=(old, Part::Ret)).map(|(&(_, p), &v)| (p, v)).collect();
+        for (part, var) in moved {
+            self.parts.remove(&(old, part));
+            match self.parts.get(&(root, part)) {
+                Some(&existing) => self.pending.push(Constraint::TypeEquals(existing, var)),
+                None => {
+                    self.parts.insert((root, part), var);
+                }
+            }
+        }
+    }
+
+    /// A class with a known type fixes the types of its parts.
+    fn sync_parts(&mut self, root: u32) {
+        let Some(t) = self.types[root as usize].clone() else { return };
+        let derived: Vec<Constraint> = self
+            .parts
+            .range((root, Part::Elem)..=(root, Part::Ret))
+            .filter_map(|(&(_, p), &v)| p.of(&t).map(|pt| Constraint::TypeIs(v, pt)))
+            .collect();
+        self.pending.extend(derived);
     }
 
     fn propagate_flows(&mut self) {
@@ -1040,5 +1129,91 @@ mod tests {
             matches!(result.ownership[0], Some(OwnedType::MutRef(_))),
             "should be upgraded to MutRef"
         );
+    }
+
+    fn solve(cs: &ConstraintSet) -> SolverResult {
+        Solver::new(cs).solve(cs)
+    }
+
+    /// A container's declared type fixes its element, whether the type arrives before or after the part.
+    #[test]
+    fn container_type_fixes_its_element_in_either_order() {
+        use crate::ir::constraints::Part;
+        for type_first in [true, false] {
+            let mut cs = ConstraintSet::new();
+            let (v, e) = (cs.fresh_var(), cs.fresh_var());
+            if type_first {
+                cs.add(Constraint::TypeIs(v, BaseType::Vec(Box::new(BaseType::I32))));
+            }
+            cs.add(Constraint::HasPart(v, Part::Elem, e));
+            cs.add(Constraint::IsInteger(e));
+            if !type_first {
+                cs.add(Constraint::TypeIs(v, BaseType::Vec(Box::new(BaseType::I32))));
+            }
+            let r = solve(&cs);
+            assert_eq!(r.types[e.0 as usize], Some(BaseType::I32), "type_first={type_first}");
+            assert!(!r.defaulted[e.0 as usize]);
+        }
+    }
+
+    /// Two containers in one class share their element: a literal pushed into one has the width the
+    /// other's element is declared with (`let b = a; b.push(0)` with `a: Vec<u8>`).
+    #[test]
+    fn unified_containers_share_parts() {
+        use crate::ir::constraints::Part;
+        let mut cs = ConstraintSet::new();
+        let (a, b, ea, eb) = (cs.fresh_var(), cs.fresh_var(), cs.fresh_var(), cs.fresh_var());
+        cs.add(Constraint::HasPart(a, Part::Elem, ea));
+        cs.add(Constraint::HasPart(b, Part::Elem, eb));
+        cs.add(Constraint::IsInteger(eb));
+        cs.add(Constraint::TypeEquals(a, b));
+        cs.add(Constraint::TypeIs(ea, BaseType::U8));
+        let r = solve(&cs);
+        assert_eq!(r.types[eb.0 as usize], Some(BaseType::U8));
+        assert_eq!(r.class_of[ea.0 as usize], r.class_of[eb.0 as usize]);
+    }
+
+    /// Parts of one container are one class: the elements of an array literal unify.
+    #[test]
+    fn repeated_part_of_one_container_unifies() {
+        use crate::ir::constraints::Part;
+        let mut cs = ConstraintSet::new();
+        let (arr, x, y) = (cs.fresh_var(), cs.fresh_var(), cs.fresh_var());
+        cs.add(Constraint::HasPart(arr, Part::Elem, x));
+        cs.add(Constraint::HasPart(arr, Part::Elem, y));
+        cs.add(Constraint::IsInteger(x));
+        cs.add(Constraint::TypeIs(y, BaseType::I16));
+        assert_eq!(solve(&cs).types[x.0 as usize], Some(BaseType::I16));
+    }
+
+    /// Tuple fields and payloads are typed from the container's type; unknown parts are left alone.
+    #[test]
+    fn tuple_fields_and_payloads_follow_the_container() {
+        use crate::ir::constraints::Part;
+        let mut cs = ConstraintSet::new();
+        let (t, f0, f1, o, p) = (cs.fresh_var(), cs.fresh_var(), cs.fresh_var(), cs.fresh_var(), cs.fresh_var());
+        cs.add(Constraint::HasPart(t, Part::Field(0), f0));
+        cs.add(Constraint::HasPart(t, Part::Field(1), f1));
+        cs.add(Constraint::TypeIs(t, BaseType::Tuple(vec![BaseType::I64, BaseType::Inferred])));
+        cs.add(Constraint::IsInteger(f1));
+        cs.add(Constraint::HasPart(o, Part::Payload, p));
+        cs.add(Constraint::TypeIs(o, BaseType::Option(Box::new(BaseType::U32))));
+        let r = solve(&cs);
+        assert_eq!(r.types[f0.0 as usize], Some(BaseType::I64));
+        assert!(!r.defaulted[f0.0 as usize]);
+        assert!(r.defaulted[f1.0 as usize], "an Inferred field type does not fix the part");
+        assert_eq!(r.types[p.0 as usize], Some(BaseType::U32));
+    }
+
+    /// A part whose width disagrees with the container's declared element is a width conflict.
+    #[test]
+    fn part_width_against_container_type_is_a_conflict() {
+        use crate::ir::constraints::Part;
+        let mut cs = ConstraintSet::new();
+        let (v, e) = (cs.fresh_var(), cs.fresh_var());
+        cs.add(Constraint::TypeIs(e, BaseType::I64));
+        cs.add(Constraint::HasPart(v, Part::Elem, e));
+        cs.add(Constraint::TypeIs(v, BaseType::Vec(Box::new(BaseType::I32))));
+        assert!(!solve(&cs).width_conflicts.is_empty());
     }
 }

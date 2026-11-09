@@ -75,6 +75,8 @@ pub(crate) enum Wait {
     /// `Condvar` ticket, with an optional deadline.
     Cond(Rc<super::builtins::sync::CondState>, u64, Option<u64>),
     Barrier(Rc<super::builtins::sync::BarrierState>, u64),
+    /// Until the condition holds or the deadline passes (a socket of the simulated network, ADR-0032).
+    Poll(Rc<dyn Fn() -> bool>, Option<u64>),
 }
 
 pub(crate) struct Task {
@@ -168,13 +170,14 @@ impl Sched {
             Wait::Sleep(u) => self.clock >= *u,
             Wait::Cond(cv, ticket, dl) => cv.woken(*ticket) || dl.map_or(false, |d| self.clock >= d),
             Wait::Barrier(b, gen) => b.generation() > *gen,
+            Wait::Poll(f, dl) => f() || dl.map_or(false, |d| self.clock >= d),
         }
     }
 
     fn deadline(w: &Wait) -> Option<u64> {
         match w {
             Wait::Sleep(u) => Some(*u),
-            Wait::Recv(_, d) | Wait::Cond(_, _, d) => *d,
+            Wait::Recv(_, d) | Wait::Cond(_, _, d) | Wait::Poll(_, d) => *d,
             _ => None,
         }
     }

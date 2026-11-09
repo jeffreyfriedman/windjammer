@@ -1832,3 +1832,6 @@ tests/move_prediction/partial_non_clone.wj	exit1:0:17
 tests/move_prediction/receiver_non_clone.wj#mainerr	none	
 tests/move_prediction/receiver_non_clone.wj#refused	rejected	
 tests/move_prediction/receiver_non_clone.wj	exit1:0:17	
+tests/drift_corpus/net/loopback_tcp.wj	exit0:525:704636936	
+tests/drift_corpus/net/loopback_udp.wj	exit0:146:105390797	
+tests/drift_corpus/net/threaded_echo.wj	exit0:67:276194844	

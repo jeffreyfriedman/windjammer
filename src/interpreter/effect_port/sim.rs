@@ -32,6 +32,8 @@ pub struct World {
     tmp: String,
     /// The one salt stream of password hashing, so a hash is a function of the seed.
     salts: rand::rngs::StdRng,
+    /// This world's virtual network (`sim_net`): its own, so concurrent simulated runs never see each other's sockets.
+    pub(crate) net: super::sim_net::Network,
 }
 
 impl World {
@@ -39,6 +41,7 @@ impl World {
     /// `tmp` is what `env::temp_dir()` returns (the run's granted scratch directory).
     pub fn new(cfg: &SimConfig, cwd: &Path, tmp: &Path) -> World {
         World {
+            net: super::sim_net::new_network(),
             seed: cfg.seed,
             faults: cfg.faults.clamp(0.0, 1.0),
             frng: rand::rngs::StdRng::seed_from_u64(cfg.seed ^ 0xFA17_FA17_FA17_FA17),
@@ -60,7 +63,7 @@ impl World {
         let _ = self.fs.create_dir_all(&tmp);
     }
 
-    fn fault(&mut self) -> bool {
+    pub(crate) fn fault(&mut self) -> bool {
         self.faults > 0.0 && self.frng.gen::<f64>() < self.faults
     }
 }
