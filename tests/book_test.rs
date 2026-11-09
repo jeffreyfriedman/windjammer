@@ -304,24 +304,6 @@ fn known_gap_generic_copy_out_of_list_fails_compiled() {
 }
 
 #[test]
-fn known_gap_directory_module_borrow_is_lost_when_compiled() {
-    let _g = compiled_lock();
-    let src = real().root.join("tests/book_repros/dir_module");
-    let tmp = tempfile::tempdir().unwrap();
-    let dst = tmp.path().join("p");
-    std::fs::create_dir_all(dst.join("src/util")).unwrap();
-    for f in ["wj.toml", "src/main.wj", "src/util/mod.wj"] {
-        std::fs::copy(src.join(f), dst.join(f)).unwrap();
-    }
-    let wj = env!("CARGO_BIN_EXE_wj");
-    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).current_dir(&dst).output().unwrap();
-    assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).trim() == "2", "the interpreter runs the repro");
-    let compiled = compiled_cmd(wj).current_dir(&dst).output().unwrap();
-    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
-    assert!(!compiled.status.success() && text.contains("WJ0003"), "the directory-module gap is fixed: delete tests/book_repros/dir_module, this test and its docs/known-gaps.md row\n{text}");
-}
-
-#[test]
 fn known_gap_idioms_fail_compiled() {
     let _g = compiled_lock();
     let wj = env!("CARGO_BIN_EXE_wj");

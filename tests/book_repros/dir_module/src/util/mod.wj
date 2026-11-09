@@ -1,3 +1,0 @@
-pub fn total(prices: Vec<int>) -> int {
-    prices.len() as int
-}

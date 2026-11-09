@@ -6,7 +6,7 @@ use super::Js;
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{IntKind, Ty};
 
-fn is_simple(e: &PExpr) -> bool {
+pub(super) fn is_simple(e: &PExpr) -> bool {
     match &*e.kind {
         PK::Local(_) => true,
         PK::Field(a, _) | PK::TupleIdx(a, _) => is_simple(a),
@@ -185,12 +185,23 @@ impl<'m> Js<'m> {
 
     fn struct_lit(&mut self, name: &str, fields: &[(String, PExpr)]) -> PResult<String> {
         let Some(decl) = self.m.structs.iter().find(|s| s.name == name) else { return self.unsupported(format!("struct `{name}`")) };
-        let mut vals = Vec::new();
+        // The spec evaluates the field initialisers in the order they are written, not the declaration order.
+        let mut order = Vec::new();
         for (fname, _) in &decl.fields {
-            let Some((_, e)) = fields.iter().find(|(n, _)| n == fname) else { return self.unsupported(format!("missing field `{fname}` in `{name}` literal")) };
-            vals.push(self.expr(e)?);
+            let Some(at) = fields.iter().position(|(n, _)| n == fname) else { return self.unsupported(format!("missing field `{fname}` in `{name}` literal")) };
+            order.push(at);
         }
-        Ok(format!("new {}({})", ident(name), vals.join(", ")))
+        let mut written = Vec::new();
+        for (_, e) in fields {
+            written.push(self.expr(e)?);
+        }
+        if order.iter().enumerate().all(|(i, at)| i == *at) {
+            return Ok(format!("new {}({})", ident(name), written.join(", ")));
+        }
+        let picks: Vec<String> = order.iter().map(|i| i.to_string()).collect();
+        let permuted = format!("$permute([{}], [{}])", written.join(", "), picks.join(", "));
+        let permuted = if self.ts { format!("({permuted} as [{}])", vec!["any"; picks.len()].join(", ")) } else { permuted };
+        Ok(format!("new {}(...{permuted})", ident(name)))
     }
 
     fn closure_arrow(&mut self, params: &[(String, Ty)], body: &PBlock) -> PResult<String> {
