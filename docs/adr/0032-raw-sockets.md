@@ -69,8 +69,8 @@ The sink table (`sinks.rs`) gains:
 | Sink | Effect | Resource |
 |---|---|---|
 | `TcpStream::connect`, `TcpStream::connect_timeout` | `net.connect` | argument 0, `host:port` |
-| `TcpListener::bind`, `UdpSocket::bind` | `net.listen` | argument 0, `host:port` |
-| `UdpSocket.send_to` (method) | `net.connect` | argument 1, checked on every datagram |
+| `TcpListener::bind` | `net.listen` | argument 0, `host:port` |
+| `UdpSocket::bind` | `net.listen`, and `net.connect` as an optional scope | argument 0; the socket may send anywhere, so `send_to` checks `net.connect` on its destination (argument 1) for every datagram, and the optional scope makes a compiled program install its grant |
 
 Grants are the existing per-host allowlist (`net.connect = ["db.internal:5432", "*.example.com"]`,
 `net.listen = ["127.0.0.1"]`; no port in a pattern = any port). `accept`, `read`, `write` and `recv_from` are
@@ -127,6 +127,7 @@ Gates that keep them identical:
 - Line and binary protocol clients and servers are ordinary Windjammer, testable without a network.
 - TLS is out of scope (a later `std::tls` wraps a `TcpStream`); so are non-blocking sockets and `select` (the
   interpreter's tasks and timeouts cover concurrency for now).
+- A live socket call in the interpreter blocks its OS thread, so other interpreter tasks do not run while it waits (compiled threads do). Lockstep protocols in one task work everywhere; concurrent servers in one interpreted program are tested under `--simulate`, where reads block cooperatively. Cooperative live polling is the next rung.
 - The wasm target has no sockets: `platform/wasm/net.rs` returns `Err("sockets are not available on wasm")`.
 
 ## Kill criteria

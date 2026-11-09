@@ -32,6 +32,7 @@ mod std_legacy;
 mod std_runtime_gaps;
 mod test_assert;
 pub mod std_http;
+pub(crate) mod std_net;
 mod std_http_server;
 mod std_config;
 mod std_ordered;
@@ -175,6 +176,7 @@ impl Registry {
         std_extra::register(&mut r);
         std_http::register(&mut r);
         std_http_server::register(&mut r);
+        std_net::register(&mut r);
         std_config::register(&mut r);
         std_ordered::register(&mut r);
         std_db::register(&mut r);
