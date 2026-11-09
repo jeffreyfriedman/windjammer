@@ -5,8 +5,8 @@
 //! timeout is virtual time. A dropped or shut-down end is end of stream to its peer. UDP datagrams to an unbound
 //! address are dropped. With `--faults`, a read or a write fails with `connection reset` from the seeded fault stream.
 //!
-//! Interpreter tasks run on their own OS threads (one at a time), so the state is process-wide, one `Net` per world
-//! (`World::net`), and a handle id names its world (`OWNER`) so dropping it closes the right socket.
+//! The state belongs to the world (`World::net`), behind a mutex because interpreter tasks run on their own OS threads (one
+//! at a time); a simulated handle keeps its network, so dropping it closes the right socket.
 
 use super::super::builtins::std_net::{bytes_value, next_id};
 use super::super::engine::Interpreter;
@@ -16,8 +16,7 @@ use super::super::sched::Wait;
 use super::super::value::Value;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 type R = Result<Value, Ctl>;
 
@@ -58,7 +57,7 @@ struct VUdp {
 }
 
 #[derive(Default)]
-struct Net {
+pub(crate) struct Net {
     next_port: u16,
     streams: HashMap<i128, VStream>,
     listeners: HashMap<i128, VListener>,
@@ -67,42 +66,27 @@ struct Net {
     udp_at: HashMap<String, i128>,
 }
 
-fn nets() -> &'static Mutex<HashMap<u64, Net>> {
-    static NETS: OnceLock<Mutex<HashMap<u64, Net>>> = OnceLock::new();
-    NETS.get_or_init(Default::default)
-}
-
-fn owners() -> &'static Mutex<HashMap<i128, u64>> {
-    static OWNER: OnceLock<Mutex<HashMap<i128, u64>>> = OnceLock::new();
-    OWNER.get_or_init(Default::default)
-}
+/// One world's virtual network. Interpreter tasks run on their own OS threads (one at a time), hence the mutex.
+pub(crate) type Network = Arc<Mutex<Net>>;
 
 /// A fresh, empty network for a new world.
-pub fn new_network() -> u64 {
-    static NEXT: AtomicU64 = AtomicU64::new(1);
-    let id = NEXT.fetch_add(1, Ordering::Relaxed);
-    lock(nets()).insert(id, Net::default());
-    id
+pub(crate) fn new_network() -> Network {
+    Arc::default()
 }
 
-/// The world is gone: so is its network.
-pub fn drop_network(net: u64) {
-    lock(nets()).remove(&net);
-    lock(owners()).retain(|_, w| *w != net);
+/// The network of the running simulated world.
+pub(crate) fn network_of(it: &Interpreter) -> Option<Network> {
+    it.port.as_ref().and_then(|p| p.borrow_mut().world().map(|w| w.net.clone()))
 }
 
-/// Run `f` on network `net` (briefly: never across a scheduler switch).
-fn with_net<T>(net: u64, f: impl FnOnce(&mut Net) -> T) -> Option<T> {
-    lock(nets()).get_mut(&net).map(f)
+/// Run `f` on the network (briefly: never across a scheduler switch).
+fn with_net<T>(net: &Option<Network>, f: impl FnOnce(&mut Net) -> T) -> Option<T> {
+    net.as_ref().map(|n| f(&mut lock(n)))
 }
 
 /// A handle was dropped: its peer reads end of stream, its address is free again.
-pub fn close(id: i128) {
-    let Ok(mut owners) = owners().try_lock() else { return };
-    let Some(net) = owners.remove(&id) else { return };
-    drop(owners);
-    let Ok(mut all) = nets().try_lock() else { return };
-    let Some(n) = all.get_mut(&net) else { return };
+pub(crate) fn close(net: &Network, id: i128) {
+    let Ok(mut n) = net.try_lock() else { return };
     if let Some(s) = n.streams.remove(&id) {
         lock(&s.tx).closed = true;
         lock(&s.rx).reader_gone = true;
@@ -113,11 +97,6 @@ pub fn close(id: i128) {
     if let Some(u) = n.udps.remove(&id) {
         n.udp_at.remove(&u.addr);
     }
-}
-
-fn own(id: i128, net: u64) -> i128 {
-    lock(owners()).insert(id, net);
-    id
 }
 
 fn ok(v: Value) -> R {
@@ -194,13 +173,13 @@ fn id_arg(a: &[Value]) -> i128 {
 }
 
 /// The network of the running world, and whether this call draws a fault.
-fn world(it: &mut Interpreter, faulty: bool) -> (u64, bool) {
+fn world(it: &mut Interpreter, faulty: bool) -> (Option<Network>, bool) {
     match &it.port {
         Some(p) => match p.borrow_mut().world() {
-            Some(w) => (w.net, faulty && w.fault()),
-            None => (0, false),
+            Some(w) => (Some(w.net.clone()), faulty && w.fault()),
+            None => (None, false),
         },
-        None => (0, false),
+        None => (None, false),
     }
 }
 
@@ -214,8 +193,8 @@ fn wait(it: &mut Interpreter, ms: i64, ready: Rc<dyn Fn() -> bool>) -> Result<bo
     Ok(ready())
 }
 
-fn stream_parts(net: u64, id: i128) -> Option<(Shared<Pipe>, Shared<Pipe>, i64)> {
-    with_net(net, |n| n.streams.get(&id).map(|s| (s.rx.clone(), s.tx.clone(), s.read_ms))).flatten()
+fn stream_parts(net: &Option<Network>, id: i128) -> Option<(Shared<Pipe>, Shared<Pipe>, i64)> {
+    with_net(&net, |n| n.streams.get(&id).map(|s| (s.rx.clone(), s.tx.clone(), s.read_ms))).flatten()
 }
 
 /// A read of stream `id`: wait until `done` (or end of stream), then `take` from the pipe.
@@ -224,7 +203,7 @@ fn reading(it: &mut Interpreter, id: i128, done: fn(&Pipe) -> bool, take: impl F
     if fault {
         return err("connection reset");
     }
-    let Some((rx, _, ms)) = stream_parts(net, id) else { return err("not connected") };
+    let Some((rx, _, ms)) = stream_parts(&net, id) else { return err("not connected") };
     let p = rx.clone();
     let ready: Rc<dyn Fn() -> bool> = Rc::new(move || {
         let p = lock(&p);
@@ -244,23 +223,20 @@ fn connect(it: &mut Interpreter, a: &[Value]) -> R {
     if fault {
         return err("connection refused");
     }
-    let made = with_net(net, |n| {
+    let (cid, sid) = (next_id(it), next_id(it));
+    let made = with_net(&net, |n| {
         let lid = n.listener_for(&host, port)?;
         let (up, down): (Shared<Pipe>, Shared<Pipe>) = (Arc::default(), Arc::default());
         let local = n.port("127.0.0.1", 0, false).unwrap_or_default();
         let server_addr = n.listeners[&lid].addr.clone();
-        let (cid, sid) = (next_id(), next_id());
         n.streams.insert(cid, VStream { rx: down.clone(), tx: up.clone(), local: local.clone(), peer: server_addr.clone(), read_ms: 0 });
         n.streams.insert(sid, VStream { rx: up, tx: down, local: server_addr, peer: local, read_ms: 0 });
         lock(&n.listeners[&lid].backlog).push_back(sid);
-        Some((cid, sid))
+        Some(cid)
     })
     .flatten();
     match made {
-        Some((cid, sid)) => {
-            own(sid, net);
-            ok(int(own(cid, net)))
-        }
+        Some(cid) => ok(int(cid)),
         None => err("connection refused"),
     }
 }
@@ -269,9 +245,9 @@ fn bind(it: &mut Interpreter, a: &[Value], udp: bool) -> R {
     let addr = s_arg(a, 0);
     let Some((host, port)) = normalize(&addr) else { return err(format!("invalid address: {addr}")) };
     let (net, _) = world(it, false);
-    let made = with_net(net, |n| {
+    let id = next_id(it);
+    let made = with_net(&net, |n| {
         let at = n.port(&host, port, udp)?;
-        let id = next_id();
         if udp {
             n.udp_at.insert(at.clone(), id);
             n.udps.insert(id, VUdp { addr: at, inbox: Arc::default(), read_ms: 0 });
@@ -283,14 +259,14 @@ fn bind(it: &mut Interpreter, a: &[Value], udp: bool) -> R {
     })
     .flatten();
     match made {
-        Some(id) => ok(int(own(id, net))),
+        Some(id) => ok(int(id)),
         None => err("address in use"),
     }
 }
 
 fn accept(it: &mut Interpreter, id: i128) -> R {
     let (net, _) = world(it, false);
-    let Some(backlog) = with_net(net, |n| n.listeners.get(&id).map(|l| l.backlog.clone())).flatten() else { return err("not connected") };
+    let Some(backlog) = with_net(&net, |n| n.listeners.get(&id).map(|l| l.backlog.clone())).flatten() else { return err("not connected") };
     let b = backlog.clone();
     wait(it, 0, Rc::new(move || !lock(&b).is_empty()))?;
     let next = lock(&backlog).pop_front();
@@ -305,7 +281,7 @@ fn write(it: &mut Interpreter, id: i128, data: Vec<u8>) -> R {
     if fault {
         return err("connection reset");
     }
-    let Some((_, tx, _)) = stream_parts(net, id) else { return err("not connected") };
+    let Some((_, tx, _)) = stream_parts(&net, id) else { return err("not connected") };
     let mut tx = lock(&tx);
     if tx.reader_gone {
         return err("broken pipe");
@@ -317,8 +293,8 @@ fn write(it: &mut Interpreter, id: i128, data: Vec<u8>) -> R {
     ok(Value::Unit)
 }
 
-fn with_stream<T>(net: u64, id: i128, f: impl FnOnce(&mut VStream) -> T) -> Option<T> {
-    with_net(net, |n| n.streams.get_mut(&id).map(f)).flatten()
+fn with_stream<T>(net: &Option<Network>, id: i128, f: impl FnOnce(&mut VStream) -> T) -> Option<T> {
+    with_net(&net, |n| n.streams.get_mut(&id).map(f)).flatten()
 }
 
 fn udp_recv(it: &mut Interpreter, id: i128, max: i64) -> R {
@@ -326,7 +302,7 @@ fn udp_recv(it: &mut Interpreter, id: i128, max: i64) -> R {
         return err(format!("read size must be at least 1, got {max}"));
     }
     let (net, _) = world(it, false);
-    let Some((inbox, ms)) = with_net(net, |n| n.udps.get(&id).map(|u| (u.inbox.clone(), u.read_ms))).flatten() else { return err("not connected") };
+    let Some((inbox, ms)) = with_net(&net, |n| n.udps.get(&id).map(|u| (u.inbox.clone(), u.read_ms))).flatten() else { return err("not connected") };
     let b = inbox.clone();
     if !wait(it, ms, Rc::new(move || !lock(&b).is_empty()))? {
         return err("timed out");
@@ -347,7 +323,7 @@ fn udp_send(it: &mut Interpreter, id: i128, data: Vec<u8>, to: &str) -> R {
     if fault {
         return err("connection reset");
     }
-    let sent = with_net(net, |n| {
+    let sent = with_net(&net, |n| {
         let from = n.udps.get(&id).map(|u| u.addr.clone())?;
         let len = data.len() as i128;
         let target = n.udp_at.get(&format!("{host}:{port}")).or_else(|| n.udp_at.get(&format!("0.0.0.0:{port}")));
@@ -387,8 +363,8 @@ pub fn answer(it: &mut Interpreter, key: &str, a: &[Value]) -> R {
         "TcpListener::bind" => bind(it, a, false),
         "UdpSocket::bind" => bind(it, a, true),
         "TcpListener.accept" => accept(it, id),
-        "TcpListener.local_addr" => Ok(Value::str(with_net(net, |n| n.listeners.get(&id).map(|l| l.addr.clone())).flatten().unwrap_or_default())),
-        "UdpSocket.local_addr" => Ok(Value::str(with_net(net, |n| n.udps.get(&id).map(|u| u.addr.clone())).flatten().unwrap_or_default())),
+        "TcpListener.local_addr" => Ok(Value::str(with_net(&net, |n| n.listeners.get(&id).map(|l| l.addr.clone())).flatten().unwrap_or_default())),
+        "UdpSocket.local_addr" => Ok(Value::str(with_net(&net, |n| n.udps.get(&id).map(|u| u.addr.clone())).flatten().unwrap_or_default())),
         "TcpStream.read" => match size_ok(n_arg(a, 1)) {
             Err(e) => err(e),
             Ok(max) => reading(it, id, |p| !p.data.is_empty(), |p| {
@@ -400,7 +376,7 @@ pub fn answer(it: &mut Interpreter, key: &str, a: &[Value]) -> R {
             Err(e) => err(e),
             Ok(want) => {
                 // a pipe holds only what its writer sent: wait for `want` bytes or the end
-                let Some((rx, _, ms)) = stream_parts(net, id) else { return err("not connected") };
+                let Some((rx, _, ms)) = stream_parts(&net, id) else { return err("not connected") };
                 let p = rx.clone();
                 if !wait(it, ms, Rc::new(move || {
                     let p = lock(&p);
@@ -427,7 +403,7 @@ pub fn answer(it: &mut Interpreter, key: &str, a: &[Value]) -> R {
         "TcpStream.flush" => ok(Value::Unit),
         "TcpStream.shutdown_write" | "TcpStream.shutdown" => {
             let both = key.ends_with("shutdown");
-            unit(with_stream(net, id, |s| {
+            unit(with_stream(&net, id, |s| {
                 lock(&s.tx).closed = true;
                 if both {
                     let mut rx = lock(&s.rx);
@@ -437,9 +413,9 @@ pub fn answer(it: &mut Interpreter, key: &str, a: &[Value]) -> R {
                 }
             }))
         }
-        "TcpStream.set_timeouts" => unit(with_stream(net, id, |s| s.read_ms = n_arg(a, 1))),
-        "TcpStream.peer_addr" => Ok(Value::str(with_stream(net, id, |s| s.peer.clone()).unwrap_or_default())),
-        "TcpStream.local_addr" => Ok(Value::str(with_stream(net, id, |s| s.local.clone()).unwrap_or_default())),
+        "TcpStream.set_timeouts" => unit(with_stream(&net, id, |s| s.read_ms = n_arg(a, 1))),
+        "TcpStream.peer_addr" => Ok(Value::str(with_stream(&net, id, |s| s.peer.clone()).unwrap_or_default())),
+        "TcpStream.local_addr" => Ok(Value::str(with_stream(&net, id, |s| s.local.clone()).unwrap_or_default())),
         "UdpSocket.send_to" => {
             let to = s_arg(a, 2);
             udp_send(it, id, b_arg(a, 1), &to)
@@ -447,7 +423,7 @@ pub fn answer(it: &mut Interpreter, key: &str, a: &[Value]) -> R {
         "UdpSocket.recv_from" => udp_recv(it, id, n_arg(a, 1)),
         "UdpSocket.set_read_timeout" => {
             let ms = n_arg(a, 1);
-            unit(with_net(net, |n| n.udps.get_mut(&id).map(|u| u.read_ms = ms)).flatten())
+            unit(with_net(&net, |n| n.udps.get_mut(&id).map(|u| u.read_ms = ms)).flatten())
         }
         other => Err(Ctl::Err(Box::new(RuntimeError::new(ErrorKind::Unsupported, format!("`{other}` has no simulated socket operation"))))),
     }
@@ -467,12 +443,10 @@ mod tests {
 
     #[test]
     fn two_worlds_never_share_an_address() {
-        let (a, b) = (super::new_network(), super::new_network());
-        let pa = super::with_net(a, |n| n.port("127.0.0.1", 0, false)).flatten();
-        let pb = super::with_net(b, |n| n.port("127.0.0.1", 0, false)).flatten();
+        let (a, b) = (Some(super::new_network()), Some(super::new_network()));
+        let pa = super::with_net(&a, |n| n.port("127.0.0.1", 0, false)).flatten();
+        let pb = super::with_net(&b, |n| n.port("127.0.0.1", 0, false)).flatten();
         assert_eq!(pa, pb, "each world counts its own ports");
-        super::drop_network(a);
-        super::drop_network(b);
-        assert!(super::with_net(a, |_| ()).is_none());
+        assert!(super::with_net(&None, |_| ()).is_none());
     }
 }
