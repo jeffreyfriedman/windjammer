@@ -42,10 +42,18 @@ impl<'ast> CodeGenerator<'ast> {
         Some(receiver)
     }
 
+    /// The formal the IR decides: the receiver spelling for `self`, else the value-formal mode.
+    pub(super) fn ir_decided_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, is_pub: bool, unused: &std::collections::HashSet<String>) -> Option<String> {
+        if param.name == "self" {
+            return Some(self.self_receiver(analyzed).unwrap_or("&self").to_string());
+        }
+        self.ir_value_formal(param, analyzed, is_pub, unused)
+    }
+
     /// O4 (convergence C5): a plain value formal (a non-Copy user type or a `Vec`, declared by value,
     /// no pattern or pin) is spelled from the IR mode: `&T`, `&mut T` or `T`. Text, Copy, generic and
     /// trait-impl formals keep their own spelling rules for now. `None` when the IR has no mode.
-    pub(super) fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, is_pub: bool, unused: &std::collections::HashSet<String>) -> Option<String> {
+    fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, is_pub: bool, unused: &std::collections::HashSet<String>) -> Option<String> {
         let plain = matches!(&param.type_, Type::Custom(_) | Type::Vec(_) | Type::Parameterized(..))
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
             && !self.is_type_copy(&param.type_)
