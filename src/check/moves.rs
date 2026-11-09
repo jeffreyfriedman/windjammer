@@ -24,7 +24,7 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
 pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {
     // a generator panic is no prediction; the panic hook is left alone (files are checked in parallel, and
     // the CLI silences the default message around whole runs, as `front::quiet` does)
-    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust(program).ok()));
+    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust_source(program).ok()));
     let Some(emitted) = rust.ok().flatten().and_then(|r| crate::ir::explain::emitted::parse_emitted(&r)) else { return Vec::new() };
     crate::ir::explain::moves::moves(&emitted).into_iter().map(|m| diagnostic(&m, source, file)).collect()
 }

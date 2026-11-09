@@ -1,0 +1,28 @@
+// `x.len()` on locals the resolved engine reads in place: a string (bytes, with multi-byte characters), a
+// vector, a map, an empty value, a value changed between reads, a parameter, a captured local and a reference.
+use std::collections::HashMap
+
+fn count(xs: Vec<int>) -> int {
+    xs.len() as int
+}
+
+fn main() {
+    let mut s = "héllo"
+    let mut v: Vec<int> = Vec::new()
+    let mut m: HashMap<string, int> = HashMap::new()
+    let mut total = 0
+    let mut i = 0
+    while i < 50 {
+        s.push_str("é")
+        v.push(i)
+        if i % 3 == 0 {
+            m.insert("k${i % 7}", i)
+        }
+        total += s.len() + v.len() + m.len()
+        i += 1
+    }
+    let e = ""
+    let r = &v
+    let get = || s.len()
+    println("${total} ${e.len()} ${count(v)} ${r.len()} ${get()}")
+}
