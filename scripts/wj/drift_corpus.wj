@@ -420,8 +420,9 @@ fn main() {
         } else {
             // a program that does not run under the walker agrees with itself in every mode: it is a broken case
             // (a run that panics, exit 101, ran: the guard is against programs that never started)
-            let ran = strings.starts_with(w.token, "exit0:") || strings.starts_with(w.token, "exit101:")
-            out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") || strings.starts_with(r.token, "exit101:") { "runs" } else { "broken" }, "runs")
+            // (a `main` that returns Err exits 1 after printing `Error: ...`: it ran)
+            let ran = strings.starts_with(w.token, "exit0:") || strings.starts_with(w.token, "exit101:") || w.err != ""
+            out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") || strings.starts_with(r.token, "exit101:") || r.err != "" { "runs" } else { "broken" }, "runs")
         }
         if o.compiled == "live" {
             recorded = recorded + "${p}\t${c.token}\t\n"
