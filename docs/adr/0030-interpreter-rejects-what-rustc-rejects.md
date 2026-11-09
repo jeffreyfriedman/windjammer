@@ -68,7 +68,7 @@ does now.
 - `ir/explain/moves.rs` (`receiver_moves`) finds `v.m()` where the emitted `Type::m` takes `self` by value, `v` is an
   owned non-`Copy` local, and `v` is read again before any reassignment.
 - `check/moves.rs` turns each hit into WJ0007 with a span on `v.m(`.
-- The interpreted-run gate refuses the program. `tests/diagnostics_oracle/check/wj0007_self_by_value_reuse.wj` now stops before
+- The interpreted-run gate refuses the program. the `self_by_value_reuse` case of `tests/move_prediction_test.rs` now stops before
   running:
 
   ```
