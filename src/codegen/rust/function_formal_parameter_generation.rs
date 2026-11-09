@@ -70,7 +70,7 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
-                if let Some(formal) = self.ir_decided_formal(param, analyzed, func.is_pub, unused_params) {
+                if let Some(formal) = self.ir_decided_formal(param, analyzed, unused_params) {
                     return formal;
                 }
                 if param.name != "self"
@@ -100,21 +100,6 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
-                {
-                    self.inferred_borrowed_params.remove(&param.name);
-                    self.inferred_mut_borrowed_params.remove(&param.name);
-                    self.emitted_rust_ref_formals.remove(&param.name);
-                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
-                }
-                // Vec that only forwards as a call argument keeps the WJ owned
-                // formal even when the next sibling already demoted (`median_pair: &Vec`).
-                // Reuse sites clone into this slot; do not cascade `&Vec` up the chain.
-                if param.name != "self"
-                    && self.vec_formal_only_forwards_as_call_arg(param, func)
-                    && !matches!(
-                        &param.type_,
-                        Type::Reference(_) | Type::MutableReference(_)
                     )
                 {
                     self.inferred_borrowed_params.remove(&param.name);
@@ -239,7 +224,6 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if param.name != "self"
                     && self.multipass_global_ref_formal_demoted(func, param_idx)
-                    && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.function_return_is_text(func)
                     && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                     && !(self.pub_module_api_keeps_owned_string_formal(func, param)
@@ -412,7 +396,6 @@ impl<'ast> CodeGenerator<'ast> {
                     && !payload_forces_owned
                     && !runtime_wj_owned_keep_owned
                     && !vec_discard_only_keeps_owned
-                    && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.param_passes_to_wj_owned_sibling_call(
                         func.body.as_slice(),
                         &param.name,
@@ -479,7 +462,6 @@ impl<'ast> CodeGenerator<'ast> {
                     && !multiparam_store_keeps_owned_early
                     && !tuple_discard_keeps_owned_early
                     && !cross_module_borrow_keep_owned
-                    && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.param_single_arg_owned_self_or_field_forward(param, func)
                     && !self.param_passes_to_wj_owned_sibling_call(
                         func.body.as_slice(),
@@ -558,7 +540,6 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !analyzed.mutated_parameters.contains(&param.name)
                     && !payload_forces_owned
-                    && !self.is_public_owned_non_copy_formal_api(param, func)
                     && Self::param_is_used_inside_loop_body(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
                 {
@@ -1061,7 +1042,6 @@ impl<'ast> CodeGenerator<'ast> {
                     || asref_runtime_keep_owned
                     || runtime_wj_owned_keep_owned
                     || cross_module_borrow_keep_owned
-                    || self.is_public_owned_non_copy_formal_api(param, func)
                     || (matches!(demotion_ownership, Some(OwnershipMode::Owned))
                         && !field_proj_readonly
                         && !vec_store_borrow_ok
@@ -1381,7 +1361,6 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
-                            && !self.is_public_owned_non_copy_formal_api(param, func)
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
@@ -1542,7 +1521,6 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
-                            && !self.is_public_owned_non_copy_formal_api(param, func)
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && !param.pins_string_ref()
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
@@ -1692,17 +1670,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     sig, param_idx,
                                 )
                             });
-                            let mut ownership_mode = if self.is_public_owned_non_copy_formal_api(param, func) {
-                                OwnershipMode::Owned
-                            } else {
-                                self
-                                    .param_ownership_for_formal_demotion(&param.name, analyzed)
-                                    .or_else(|| {
-                                        analyzed.inferred_ownership.get(&param.name).copied()
-                                    })
-                                    .or(registry_ownership)
-                                    .unwrap_or(OwnershipMode::Owned)
-                            };
+                            let mut ownership_mode = self
+                                .param_ownership_for_formal_demotion(&param.name, analyzed)
+                                .or_else(|| analyzed.inferred_ownership.get(&param.name).copied())
+                                .or(registry_ownership)
+                                .unwrap_or(OwnershipMode::Owned);
                             if self.in_trait_impl
                                 && param.name != "self"
                                 && (matches!(&param.type_, Type::String)
@@ -1716,12 +1688,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                             }
-                            if self.is_public_owned_non_copy_formal_api(param, func) {
-                                self.inferred_borrowed_params.remove(&param.name);
-                                self.inferred_mut_borrowed_params.remove(&param.name);
-                                self.emitted_rust_ref_formals.remove(&param.name);
-                            }
-
                             // Converged registry MutBorrowed/Borrowed beats stale analyzed Owned
                             // (cross-module Copy passthrough: update_direction → normalize).
                             // Never let stale engine Owned win over body Borrowed (QuestId keys).
@@ -1737,7 +1703,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     reg,
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                 ) && matches!(ownership_mode, OwnershipMode::Owned)
-                                    && !self.is_public_owned_non_copy_formal_api(param, func)
                                     && !trait_impl_owned_string_formal
                                 {
                                     ownership_mode = reg;
@@ -2016,7 +1981,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 analyzed,
                                 Some(ownership_mode),
                             ) && !cross_module_borrow_keep_owned
-                                && !self.is_public_owned_non_copy_formal_api(param, func)
                                 && !self.is_type_copy(&param.type_)
                                 && !analyzed.field_extract_parameters.contains(&param.name)
                                 && !analyzed.returned_parameters.contains(&param.name)
@@ -2291,7 +2255,6 @@ impl<'ast> CodeGenerator<'ast> {
                             } else if ir_borrow.is_some()
                                 && !discard_keep_owned
                                 && !cross_module_borrow_keep_owned
-                                && !self.is_public_owned_non_copy_formal_api(param, func)
                             {
                                 false
                             } else {
@@ -2332,7 +2295,6 @@ impl<'ast> CodeGenerator<'ast> {
                                         func, param, analyzed,
                                     ))
                                 || (moves_via_struct_init && !vec_store_borrow_ok && !borrow_delegation)
-                                || self.is_public_owned_non_copy_formal_api(param, func)
                             };
                             // Mutated / MutBorrowed formals must not be forced Owned by facade
                             // keep-owned heuristics (Copy aggregate field writes need `&mut T`).
@@ -2368,7 +2330,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 if !discard_keep_owned
                                     && !self.in_trait_impl
                                     && !cross_module_borrow_keep_owned
-                                    && !self.is_public_owned_non_copy_formal_api(param, func)
                                 {
                                     ownership_mode = ir_mode;
                                 }
@@ -2396,7 +2357,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 // E0053: trait ownership already applied above — do not
                                 // demote via field-proj / vec-store / inferred Borrowed.
                             } else if !cross_module_borrow_keep_owned
-                                && !self.is_public_owned_non_copy_formal_api(param, func)
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name))
@@ -2508,7 +2468,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 } else if matches!(analyzed_mode, Some(OwnershipMode::Borrowed))
                                     && !keep_owned_contract
                                     && !copy_aggregate
-                                    && !self.is_public_owned_non_copy_formal_api(param, func)
                                 {
                                     ownership_mode = OwnershipMode::Borrowed;
                                 }
@@ -2534,7 +2493,6 @@ impl<'ast> CodeGenerator<'ast> {
                             let format_only_string =
                                 crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                     && !self.pub_module_api_keeps_owned_string_formal(func, param)
-                                    && !self.is_public_owned_non_copy_formal_api(param, func)
                                     && self.param_used_as_read_operand(
                                         func.body.as_slice(),
                                         &param.name,
@@ -3002,16 +2960,6 @@ impl<'ast> CodeGenerator<'ast> {
                                         // contract). Readonly `.get()` must not flip to `&HashMap`
                                         // while call sites still pass owned maps.
                                         self.type_to_rust(formal_type)
-                                    } else if self.is_public_owned_non_copy_formal_api(param, func)
-                                        && !self.for_loop_borrow_needed.contains(&param.name)
-                                    {
-                                        // pub module APIs keep owned Vec/Custom formals.
-                                        // Exception: `for v in vertices { f(vertices, v) }` demotes to `&Vec`.
-                                        // Clear str_ref so call sites do not over-borrow into String.
-                                        self.inferred_borrowed_params.remove(&param.name);
-                                        self.emitted_rust_ref_formals.remove(&param.name);
-                                        self.str_ref_optimized_params.remove(&param.name);
-                                        self.type_to_rust(&param.type_)
                                     } else {
                                         format!("&{}", self.type_to_rust(formal_type))
                                     }
@@ -3993,265 +3941,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         saw
-    }
-
-    fn pub_vec_non_copy_custom_indexed_api(
-        &self,
-        func: &FunctionDecl<'_>,
-        param: &Parameter,
-    ) -> bool {
-        if !(func.is_pub && func.parent_type.is_none()) {
-            return false;
-        }
-        if !Self::param_type_is_vec_container(&param.type_)
-            || Self::param_type_is_byte_vec(&param.type_)
-        {
-            return false;
-        }
-        // Name is the contract: only `Vec<NonCopyCustom>` pub index APIs stay owned.
-        // Copy-element Vecs (`i64`/`f64`/`i32`) and `Vec<string>` readonly scans demote
-        // to `&Vec<T>` (graph_pr_f64_get / get_line).
-        let elem = match &param.type_ {
-            Type::Vec(inner) => inner.as_ref(),
-            Type::Parameterized(name, args) if name == "Vec" || name.ends_with("::Vec") => {
-                match args.first() {
-                    Some(t) => t,
-                    None => return false,
-                }
-            }
-            _ => return false,
-        };
-        if !(matches!(elem, Type::Custom(_)) && !self.is_type_copy(elem)) {
-            return false;
-        }
-        // Index-only rebuild (`let rec = nodes[i]` + `out.push`) is a readonly scan.
-        // Analyzer already infers Borrowed; do not keep Owned unless the vec is consumed.
-        self.param_is_indexed_in_body(func.body.as_slice(), &param.name)
-            && !self.vec_param_index_is_readonly_scan(func, param)
-    }
-
-    /// `nodes[i]` / `nodes.len()` into a new collection — not a consume of `nodes`.
-    fn vec_param_index_is_readonly_scan(&self, func: &FunctionDecl<'_>, param: &Parameter) -> bool {
-        let body = func.body.as_slice();
-        if !self.param_is_indexed_in_body(body, &param.name) {
-            return false;
-        }
-        if self.param_consumed_as_for_loop_iterable(body, &param.name)
-            || self.param_has_owning_method_use(body, &param.name, func)
-            || self.param_stored_in_owned_payload(body, &param.name)
-        {
-            return false;
-        }
-        if self.param_passed_as_call_argument(body, &param.name, func)
-            && !self.param_call_sites_expect_borrow(body, &param.name, func)
-        {
-            return false;
-        }
-        true
-    }
-
-    /// `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay owned at
-    /// emission (product pg_wire_decode_startup, opt_dated_quiet_run_live_publishable).
-    pub(in crate::codegen::rust) fn is_public_owned_non_copy_formal_api(
-        &self,
-        param: &Parameter,
-        func: &FunctionDecl<'_>,
-    ) -> bool {
-        if param.name == "self" {
-            return false;
-        }
-        // Instance methods (`fn foo(self, …)`) still demote freely. Associated functions
-        // (`impl T { pub fn new(palette: MaterialPalette) }`) are public API like free
-        // functions — keep owned non-Copy formals (VoxelMaterialEditor::new).
-        let is_associated_fn =
-            func.parent_type.is_some() && !func.parameters.iter().any(|p| p.name == "self");
-        if func.parent_type.is_some() && !is_associated_fn {
-            return false;
-        }
-        // associated `new(T)` with owned Custom formal — keep owned before
-        // pure-forward / registry / delegation-emit demotion. Do not use the field-proj
-        // exclusion here: `palette.copy()` is currently classified as field-proj and would
-        // wrongly demote MaterialPalette (Vec-backed) constructors.
-        if is_associated_fn
-            && matches!(&param.type_, Type::Custom(_))
-            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-            && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func)
-        {
-            // Readonly field/index scans, `&self` methods, and unused bindings are
-            // `&T`. Owned-self methods and stores (`palette.copy()`, field init) stay
-            // owned.
-            let body = func.body.as_slice();
-            let consumed = self.param_has_owning_method_use(body, &param.name, func)
-                || self.param_stored_in_owned_payload(body, &param.name)
-                || self.param_passes_to_wj_owned_sibling_call(body, &param.name, func)
-                || self.param_only_forwards_to_emitted_owned_callees(body, &param.name, func);
-            let shared_only = self.param_only_used_via_field_or_index_projection(body, &param.name)
-                || self.param_call_sites_expect_borrow(body, &param.name, func)
-                || (!consumed && !self.param_passed_as_call_argument(body, &param.name, func));
-            if consumed || !shared_only {
-                return true;
-            }
-        }
-        // associated `new(data: Vec<u8>)` stored into a field must stay owned
-        // even when WJ omits `pub` (codegen may emit `pub fn`; `&Vec` + `.clone()` is wrong).
-        if is_associated_fn
-            && Self::param_type_is_owned_forward_container(&param.type_)
-            && self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
-        {
-            return true;
-        }
-        if !func.is_pub {
-            return false;
-        }
-        // P3.669: pure Custom→same-type shared-ref forwarders (`take_field` →
-        // `json.get(&Value)`) demote even when multipass promotes the helper to pub.
-        if self.param_pure_custom_same_type_shared_ref_should_demote(param, func) {
-            return false;
-        }
-        // pub `Vec` wire/decode/on_startup APIs stay owned when multipass
-        // `restore_pub_owned_non_copy_api_formals` locked the registry to Owned.
-        // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry
-        // converged to Borrowed from bare-pass caller hints.
-        if Self::param_type_is_owned_forward_container(&param.type_) {
-            let readonly_index_scan = self.vec_param_index_is_readonly_scan(func, param);
-            if !readonly_index_scan && self.pub_vec_non_copy_custom_indexed_api(func, param) {
-                return true;
-            }
-            // bare forward into owned FFI / owned siblings must keep Owned
-            // even when registry stubs are incomplete during library multipass.
-            if self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
-                || self.param_only_forwards_to_emitted_owned_callees(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                )
-            {
-                return true;
-            }
-            if func.is_pub
-                && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
-                && self
-                    .preregistered_free_function_emitted_params
-                    .values()
-                    .any(|formals| {
-                        formals
-                            .iter()
-                            .any(|s| s.contains(": Vec<") && !s.contains(": &Vec<"))
-                    })
-            {
-                return true;
-            }
-            let param_idx = func
-                .parameters
-                .iter()
-                .position(|p| p.name == param.name)
-                .unwrap_or(0);
-            if !readonly_index_scan
-                && self.global_signature_for_function(func).is_some_and(|sig| {
-                    matches!(
-                        sig.param_ownership.get(param_idx),
-                        Some(OwnershipMode::Owned)
-                    ) && sig
-                        .formal_param_types
-                        .get(param_idx)
-                        .or_else(|| sig.param_types.get(param_idx))
-                        .is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        })
-                })
-            {
-                return true;
-            }
-            return !self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
-                || self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
-                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
-        }
-        // pub Custom only when multipass restore_pub locked the global registry
-        // to owned (product live_publishable). Readonly `Graph` helpers stay demotable.
-        if matches!(&param.type_, Type::Custom(_))
-            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-            && !self.is_type_copy(&param.type_)
-        {
-            // Readonly field-projection helpers (`keys_equal(a, b) { a.bytes == b.bytes }`)
-            // demote to `&Key` even when multipass locked pub Custom formals to Owned.
-            if self.param_only_used_via_field_or_index_projection(func.body.as_slice(), &param.name)
-                && !self.param_has_field_or_index_move_binding(&param.name)
-                && !self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func)
-            {
-                return false;
-            }
-            // field/index reads + bare forward into shared-ref callees
-            // (`out_degree(view)` → `vertex_index(&view)`). Signature-driven — not a
-            // method-name heuristic; requires every call site to expect Borrowed.
-            if !self.param_has_field_or_index_move_binding(&param.name)
-                && !self.param_passes_to_wj_owned_sibling_call(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                )
-                && !self.param_only_forwards_to_emitted_owned_callees(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                )
-                && self.param_call_sites_expect_borrow(func.body.as_slice(), &param.name, func)
-                && self.param_non_call_uses_are_field_or_index_only(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                )
-            {
-                return false;
-            }
-            let param_idx = func
-                .parameters
-                .iter()
-                .position(|p| p.name == param.name)
-                .unwrap_or(0);
-            if self.global_signature_for_function(func).is_some_and(|sig| {
-                matches!(
-                    sig.param_ownership.get(param_idx),
-                    Some(OwnershipMode::Owned)
-                ) && sig
-                    .formal_param_types
-                    .get(param_idx)
-                    .or_else(|| sig.param_types.get(param_idx))
-                    .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
-            }) {
-                return true;
-            }
-            // pub associated `new(palette: MaterialPalette)` — source declared
-            // owned; keep it even when registry has not locked Owned and body only calls
-            // `palette.copy()` (owning-method detection may lag on same-crate methods).
-            if func.parent_type.is_some() {
-                return true;
-            }
-            return self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
-                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
-        }
-        // multipass restore keeps pub `string` owned when stored in payload
-        // (`pg_wire_parse` name/sql) even if per-file payload walk misses loop assignments.
-        if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
-            let param_idx = func
-                .parameters
-                .iter()
-                .position(|p| p.name == param.name)
-                .unwrap_or(0);
-            return self.global_signature_for_function(func).is_some_and(|sig| {
-                matches!(
-                    sig.param_ownership.get(param_idx),
-                    Some(OwnershipMode::Owned)
-                ) && sig
-                    .formal_param_types
-                    .get(param_idx)
-                    .or_else(|| sig.param_types.get(param_idx))
-                    .is_some_and(|t| {
-                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                            && crate::codegen::rust::types::is_windjammer_text_type(t)
-                    })
-            });
-        }
-        false
     }
 
     /// Shared guard: never demote a param that needs mutable access to shared `&T`.
