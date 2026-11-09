@@ -1,0 +1,8 @@
+# Raw-socket cases of the drift corpus (ADR-0032): loopback only, so the grant names 127.0.0.1 and nothing else.
+[package]
+name = "drift-net-cases"
+version = "0.1.0"
+
+[capabilities]
+net.connect = ["127.0.0.1"]
+net.listen = ["127.0.0.1"]

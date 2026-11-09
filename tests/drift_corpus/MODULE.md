@@ -16,6 +16,7 @@ than the interpreter's authors, run under the tree walker, the resolved engine a
 - `PROVENANCE`: source repository, commit, how it was taken
 - `compiled_baseline.tsv`, `known_divergences.txt`
 - `repros/`: minimal programs of the ledgered divergences (also run as cases; fixing one turns its ledger line stale)
+- `net/`: loopback socket programs (ADR-0032), with a `wj.toml` that grants `net.connect`/`net.listen` on 127.0.0.1 only; they open real sockets on loopback, never another host
 - `engine_probe/`: a one-test project on which the two engines differ by design; `drift_selftest.wj` requires them to differ, so the corpus can never compare an engine with itself
 
 ## Invariants
