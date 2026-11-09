@@ -392,8 +392,7 @@ impl<'ast> CodeGenerator<'ast> {
                 };
 
                 let resolved_sig = match function {
-                    Expression::Identifier { name, .. } => self
-                        .resolve_call_signature_with_global(name, None, arguments.len()),
+                    Expression::Identifier { name, .. } => self.resolve_bare_free_call_signature(name, arguments.len()),
                     Expression::FieldAccess { object, field, .. } => {
                         if let Expression::Identifier {
                             name: type_name, ..

@@ -383,3 +383,48 @@ impl Host {
     assert!(rs.contains("fn count_rows(&self"), "expected `&self`:\n{rs}");
     assert!(rs.contains("fn handle(&mut self"), "expected `&mut self`:\n{rs}");
 }
+
+/// A text binding moved into a `vec![..]` handed to an owned formal and read again afterwards is copied at the
+/// element (CLONE-USE-AFTER-MOVE covers collection, tuple and struct-literal elements, not only arguments).
+#[test]
+fn binding_moved_into_a_vec_element_and_read_again_is_copied() {
+    single_file(
+        r#"pub struct Conn {
+    pub log: Vec<string>,
+}
+
+impl Conn {
+    pub fn query(self, sql: string, params: Vec<string>) -> Result<int, string> {
+        self.log = params
+        Ok(sql.len() as int)
+    }
+}
+
+pub trait Flags {
+    fn flag(&self, party_id: string, on: bool) -> Result<string, string>
+}
+
+pub struct Repo {
+    pub n: int,
+}
+
+impl Flags for Repo {
+    fn flag(&self, party_id: string, on: bool) -> Result<string, string> {
+        let mut conn = Conn { log: Vec::new() }
+        let id = party_id
+        let w = if on { "true" } else { "false" }
+        let _ = conn.query("update", vec![w, id])?
+        let got = id
+        Ok(got)
+    }
+}
+
+pub fn pair(name: string) -> (string, string) {
+    let n = name
+    let t = (n, "x")
+    let again = n
+    (again, t.1)
+}
+"#,
+    );
+}

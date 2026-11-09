@@ -860,11 +860,11 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         }
     }
     if signature.is_none() {
-        if let Some(r) = gen.resolve_call_signature_with_global(
-            &sig_lookup_name,
-            sig_receiver_type.as_deref(),
-            arguments.len(),
-        ) {
+        let resolved = match function {
+            Expression::Identifier { .. } if sig_receiver_type.is_none() => gen.resolve_bare_free_call_signature(&sig_lookup_name, arguments.len()),
+            _ => gen.resolve_call_signature_with_global(&sig_lookup_name, sig_receiver_type.as_deref(), arguments.len()),
+        };
+        if let Some(r) = resolved {
             let method = sig_lookup_name.rsplit("::").next().unwrap_or(func_name);
             let accept = sig_receiver_type.as_ref().is_none_or(|tn| {
                 crate::codegen::rust::call_signature_resolution::accept_method_resolution_for_receiver(

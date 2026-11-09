@@ -1,0 +1,12 @@
+use crate::shelf::Shelf
+
+pub struct Deps {
+    pub shelf: Shelf,
+    pub tag: string,
+}
+
+pub fn list_items(deps: Deps, tenant_slug: string) -> Vec<string> {
+    let mut out = deps.shelf.items
+    out.push(tenant_slug)
+    out
+}
