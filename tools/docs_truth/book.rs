@@ -124,6 +124,7 @@ pub fn extract(ctx: &Ctx, dir: &std::path::Path) -> std::io::Result<usize> {
         index.push_str(&format!("{name}\t{}:{}\n", s.file, s.line));
     }
     std::fs::write(dir.join("INDEX.tsv"), index)?;
+    super::book_projects::extract(ctx, dir)?;
     Ok(inv.samples.len())
 }
 

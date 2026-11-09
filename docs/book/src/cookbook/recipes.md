@@ -193,3 +193,186 @@ HashMap
 ## Run code only when a file changes
 
 `wj run --watch` re-runs a program on every save, and `wj test --interpret --watch` does the same for tests.
+
+## Test for a palindrome
+
+Filter to letters and digits, lowercase them, then compare from both ends:
+
+```wj
+// expect: true
+// expect: false
+fn is_palindrome(text: string) -> bool {
+    let mut cleaned: Vec<char> = []
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            cleaned.push(c.to_ascii_lowercase())
+        }
+    }
+    let n = cleaned.len()
+    let mut i = 0
+    while i < n / 2 {
+        if cleaned[i] != cleaned[n - 1 - i] {
+            return false
+        }
+        i += 1
+    }
+    true
+}
+
+fn main() {
+    println("${is_palindrome("A man, a plan, a canal: Panama")}")
+    println("${is_palindrome("windjammer")}")
+}
+```
+
+## Binary search
+
+Return the position as an option, so "not found" is a value:
+
+```wj
+// expect: Some(4) None
+fn search(sorted: Vec<int>, target: int) -> int? {
+    let mut lo: int = 0
+    let mut hi: int = sorted.len() as int - 1
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2
+        if sorted[mid] == target {
+            return Some(mid)
+        }
+        if sorted[mid] < target {
+            lo = mid + 1
+        } else {
+            hi = mid - 1
+        }
+    }
+    None
+}
+
+fn main() {
+    let data = [2, 5, 8, 12, 16, 23, 38]
+    println("${search(data, 16):?} ${search(data, 7):?}")
+}
+```
+
+## Parse `key=value` lines
+
+Return a `Result` per line and let the caller decide what to do with the bad ones:
+
+```wj
+// expect: name -> demo
+// expect: port -> 8080
+// expect: expected key=value: broken line
+fn parse_line(line: string) -> Result<(string, string), string> {
+    let parts: Vec<string> = line.split("=").map(|p| p.trim().to_string()).collect()
+    if parts.len() != 2 {
+        return Err("expected key=value: ${line}")
+    }
+    Ok((parts[0], parts[1]))
+}
+
+fn main() {
+    let text = "name = demo\nport=8080\nbroken line"
+    for line in text.lines() {
+        match parse_line(line) {
+            Ok((k, v)) => println("${k} -> ${v}"),
+            Err(e) => println(e),
+        }
+    }
+}
+```
+
+## Multiply matrices
+
+A matrix is a list of rows. Nested loops with explicit sizes keep it readable:
+
+```wj
+// expect: [[19, 22], [43, 50]]
+fn multiply(a: Vec<Vec<int>>, b: Vec<Vec<int>>) -> Vec<Vec<int>> {
+    let n = a.len()
+    let m = b[0].len()
+    let k = b.len()
+    let mut out: Vec<Vec<int>> = []
+    for i in 0..n {
+        let mut row: Vec<int> = []
+        for j in 0..m {
+            let mut sum = 0
+            for t in 0..k {
+                sum += a[i][t] * b[t][j]
+            }
+            row.push(sum)
+        }
+        out.push(row)
+    }
+    out
+}
+
+fn main() {
+    let a = [[1, 2], [3, 4]]
+    let b = [[5, 6], [7, 8]]
+    println("${multiply(a, b):?}")
+}
+```
+
+## Fibonacci without recursion
+
+```wj
+// expect: 0 1 1 2 3 5 8 13 21 34
+fn fib(n: int) -> int {
+    let mut a: int = 0
+    let mut b: int = 1
+    for _ in 0..n {
+        let next = a + b
+        a = b
+        b = next
+    }
+    a
+}
+
+fn main() {
+    let mut out: Vec<string> = []
+    for i in 0..10 {
+        out.push("${fib(i)}")
+    }
+    println(out.join(" "))
+}
+```
+
+## Run another program
+
+Starting a program is the `process` effect, so a run must be allowed to. The denial tells you exactly how:
+
+```sh,verify
+$ cat > child.wj <<'EOF'
+use std::process
+
+fn main() {
+    match process::run("echo hello from a child") {
+        Ok(out) => println(out.trim()),
+        Err(e) => println("failed: ${e}"),
+    }
+}
+EOF
+$ wj run child.wj 2>&1 || true
+capability denied: process(echo)
+$ wj run --allow process=echo child.wj
+hello from a child
+```
+
+For a project, put `process = ["echo"]` under `[capabilities]` in `wj.toml`.
+
+## Read a setting from the environment, with a default
+
+```sh,verify
+$ cat > level.wj <<'EOF'
+use std::env
+
+fn main() {
+    let level = env::var("LOG_LEVEL").unwrap_or("info")
+    println("level: ${level}")
+}
+EOF
+$ wj run --allow env.read=LOG_LEVEL level.wj
+level: info
+$ LOG_LEVEL=debug wj run --allow env.read=LOG_LEVEL level.wj
+level: debug
+```

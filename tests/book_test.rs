@@ -43,6 +43,25 @@ fn run_samples(ctx: &Ctx, compiled: bool) -> (bool, String) {
     (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
 }
 
+/// Like `run_samples` (interpreted) but tolerates a book with no `wj` programs, only projects.
+fn run_samples_projects(ctx: &Ctx) -> (bool, String) {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("samples");
+    book::extract(ctx, &dir).unwrap();
+    let scratch = tmp.path().join("scratch");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["run", "--interpret"])
+        .arg(real().root.join("scripts/book/book_samples.wj"))
+        .arg("--")
+        .arg(&dir)
+        .arg(env!("CARGO_BIN_EXE_wj"))
+        .arg(&scratch)
+        .current_dir(&real().root)
+        .output()
+        .expect("run scripts/book/book_samples.wj");
+    (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+}
+
 // ---------------------------------------------------------------------------------------------
 // The real book
 // ---------------------------------------------------------------------------------------------
@@ -266,7 +285,7 @@ fn known_gap_directory_module_borrow_is_lost_when_compiled() {
 #[test]
 fn known_gap_idioms_fail_compiled() {
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003")] {
+    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("array_repeat.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
@@ -299,4 +318,24 @@ fn known_gap_leading_string_literal_in_interpolation_does_not_parse() {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).arg("check").arg(&repro).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(!out.status.success() && text.contains("WJ0011"), "the parse gap is fixed: delete tests/book_repros/interpolation_leading_literal.wj, this test and its docs/known-gaps.md row\n{text}");
+}
+
+#[test]
+fn extraction_writes_multi_file_projects() {
+    let s = Scratch::new();
+    s.page("```sh,verify\n$ mkdir -p p/src\n$ cat > p/wj.toml <<'EOF'\n[package]\nname = \"p\"\nEOF\n$ cat > p/src/main.wj <<'EOF'\nfn main() {\n    println(\"hi\")\n}\nEOF\n$ cd p && wj run\nhi\n```\n");
+    let tmp = tempfile::tempdir().unwrap();
+    book::extract(&s.ctx(), tmp.path()).unwrap();
+    let base = tmp.path().join("projects/page_L1");
+    assert!(base.join("p/wj.toml").exists() && base.join("p/src/main.wj").exists());
+    assert_eq!(std::fs::read_to_string(base.join(".root")).unwrap(), "p");
+    assert_eq!(std::fs::read_to_string(base.join(".expect")).unwrap(), "hi\n");
+}
+
+#[test]
+fn a_broken_project_fails_the_runner_interpreted() {
+    let s = Scratch::new();
+    s.page("```sh,verify\n$ cat > p/wj.toml <<'EOF'\n[package]\nname = \"p\"\nEOF\n$ cat > p/src/main.wj <<'EOF'\nfn main() {\n    println(\"hi\")\n}\nEOF\n$ cd p && wj run\nbye\n```\n");
+    let (ok, out) = run_samples_projects(&s.ctx());
+    assert!(!ok && out.contains("project output differs"), "{out}");
 }

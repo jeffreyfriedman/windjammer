@@ -18,7 +18,8 @@ such as a `fn main` around a few interesting lines. Shell blocks tagged `sh,veri
 A block marked `ignore` is not run, and it needs a reason in a comment right above it. A block marked `interpreter_only`
 runs in the interpreter and skips the compiled pass, for features whose compiled form is still arriving; it needs a reason
 too. The number of ignored blocks and of interpreter-only blocks are each a ratchet: they can go down and never up.
-Multi-file projects are shell blocks (`sh,verify`) and run in the interpreter.
+Multi-file projects are shell blocks (`sh,verify`) that write their files and end with `cd DIR && wj run`; each one also
+runs as a project in the interpreter and compiled, with the same agreement check.
 
 <!-- wj:gen name=book_stats -->
 | Measure | Count |
