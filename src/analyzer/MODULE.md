@@ -7,6 +7,7 @@ Ownership, borrow and mutability inference over the parsed AST. For every functi
 In: `parser::Program` (+ global/external `SignatureRegistry`). Out: `Vec<AnalyzedFunction>`, the `SignatureRegistry`, and trait/type info consumed by `ir` and `codegen`.
 
 ## Invariants
+- `field_cloneability.rs`: a field type with no `Clone` (channel end, lock guard, file, trait object, or a struct holding one) moved out of `self` makes the receiver owned; Clone fields are read under `&self` and cloned.
 - Analysis is read-only over the AST; results live in `AnalyzedFunction`/`SignatureRegistry`, never in the AST.
 - Multi-pass compilation re-runs the analyzer with `new_with_copy_structs` and global signatures; results must be deterministic.
 - `signature_registry.rs` is the only place that should look signatures up by name (`get_signature(&str)` is ratcheted).

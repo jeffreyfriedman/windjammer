@@ -286,6 +286,19 @@ pub(crate) fn discover_wj_import_dependency_metadata(
     out
 }
 
+/// [`find_dependency_metadata_roots`] with the crates named explicitly (`--metadata`; the library a
+/// test crate imports) last: later roots overwrite bare keys, so a transitive path dependency's
+/// homonym cannot take the slot of the crate the program imports from.
+pub(crate) fn metadata_roots_explicit_last(
+    file_parent: &Path,
+    external_paths: &HashMap<String, PathBuf>,
+    explicit: &[(&str, &Path)],
+) -> Vec<PathBuf> {
+    let mut roots = find_dependency_metadata_roots(file_parent, external_paths);
+    roots.sort_by_key(|root| explicit.iter().any(|(_, p)| *p == root.as_path()));
+    roots
+}
+
 /// Find dependency metadata roots for cross-crate inference.
 ///
 /// Merge order matters: non-`engine` metadata is loaded first, then `engine` last so
@@ -298,11 +311,10 @@ pub(crate) fn find_dependency_metadata_roots(
     let mut roots = Vec::new();
 
     let engine_path = external_paths.get("engine").cloned();
-    for (name, path) in external_paths {
-        if name != "engine" {
-            roots.push(path.clone());
-        }
-    }
+    // Name order, not hash order: later roots overwrite bare keys, so the order decides homonyms.
+    let mut named: Vec<_> = external_paths.iter().filter(|(name, _)| *name != "engine").collect();
+    named.sort();
+    roots.extend(named.into_iter().map(|(_, path)| path.clone()));
     if let Some(engine) = engine_path {
         roots.push(engine);
     }

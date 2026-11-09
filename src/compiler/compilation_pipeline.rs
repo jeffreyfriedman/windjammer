@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use super::cache_management::write_if_changed;
 use super::dependency_resolution::{
     discover_wj_import_dependency_metadata, discover_wj_toml_path_dependency_metadata,
-    find_dependency_metadata_roots, find_wj_files,
+    metadata_roots_explicit_last, find_wj_files,
 };
 use super::salsa_library_build::build_library;
 use crate::compiler_config::CompilerConfig;
@@ -191,7 +191,7 @@ pub fn build_project_with_config(
         let mut global_signatures = SignatureRegistry::new();
         let file_parent = file.parent().unwrap_or(Path::new("."));
         let mut meta_roots: Vec<&Path> = vec![file_parent];
-        let ancestor_roots = find_dependency_metadata_roots(file_parent, &external_paths);
+        let ancestor_roots = metadata_roots_explicit_last(file_parent, &external_paths, external_metadata);
         let ancestor_root_refs: Vec<&Path> = ancestor_roots.iter().map(|p| p.as_path()).collect();
         meta_roots.extend_from_slice(&ancestor_root_refs);
         crate::metadata::with_own_meta_excluded(file, || {
