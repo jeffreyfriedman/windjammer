@@ -33,6 +33,8 @@ pub fn computed(ctx: &Ctx) -> BTreeMap<String, u64> {
         m.insert("book.examples_ignored".into(), c.ignored as u64);
         m.insert("book.examples_interpreter_only".into(), c.interp_only as u64);
         m.insert("book.promises_uncovered".into(), c.uncovered as u64);
+        m.insert("book.features".into(), super::book_features::load(ctx).len() as u64);
+        m.insert("book.features_uncovered".into(), super::book_features::uncovered(ctx).len() as u64);
     }
     m
 }

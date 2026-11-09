@@ -1,4 +1,5 @@
 # Interpreter or compiled
+<!-- feature: program-execution -->
 
 <!-- promise: feature interpret-instant -->
 <!-- promise: feature multi-backend -->

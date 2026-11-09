@@ -1,4 +1,6 @@
 # Structs, enums, traits and generics
+<!-- feature: items-and-traits -->
+<!-- feature: patterns -->
 
 You build your own types from three pieces: structs group values, enums choose between alternatives, and traits describe
 behaviour that several types share. Generics let one definition work for many types.
