@@ -1,4 +1,5 @@
 # Testing
+<!-- feature: doctests -->
 
 Tests are ordinary functions that call `assert_eq` and friends. They live in files whose names end in `_test.wj`, so a
 module `geometry.wj` keeps its tests in `geometry_test.wj` beside it.
@@ -93,6 +94,32 @@ test result: FAILED. 0 passed; 1 failed
 run of a release build wants.
 
 For machine consumption, `wj test --json` prints each result with its file, name and message.
+
+## Examples in documentation comments
+
+A fenced example inside a `///` doc comment is a test too. `wj test` runs every one, in the module they document, so an
+example can call the function it sits on; `// expect:` lines are the expected output:
+
+```sh,verify
+$ cat > double.wj <<'EOF'
+/// Doubles a number.
+///
+/// ```wj
+/// // expect: 42
+/// fn main() {
+///     println("${double(21)}")
+/// }
+/// ```
+pub fn double(n: int) -> int {
+    n * 2
+}
+EOF
+$ wj test --doc .
+doctests: 1 passed, 0 failed
+```
+
+`wj test --doc` runs only the doctests, and `wj test --compiled` runs each one through the Rust backend as well and
+requires both outputs to match.
 
 ## Flaky tests, found and replayed
 
