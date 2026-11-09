@@ -13,6 +13,9 @@
 # print exactly what the walker prints (the oracle); a mismatch is reported instead of a time.
 # Times are child CPU seconds (user+sys), median of N runs (default 3), with the 1-minute load
 # average and tool versions recorded. Prints a Markdown table; --json also writes the raw numbers.
+# Quiet-machine guard: before every timed run the 1-minute load must be below 16 and swap use below
+# 50% (WJ_BENCH_MAX_LOAD / WJ_BENCH_MAX_SWAP_PCT override). With --json a breach aborts the run
+# (exit 3, nothing written), so a noisy run is never recorded; without --json it is reported at the end.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 exec python3 - "$@" <<'PY'
@@ -39,10 +42,39 @@ atexit.register(_cleanup)
 for _sig in (signal.SIGINT, signal.SIGTERM):
     signal.signal(_sig, lambda *_: sys.exit(130))
 
+MAX_LOAD = float(os.environ.get("WJ_BENCH_MAX_LOAD", "16"))
+MAX_SWAP = float(os.environ.get("WJ_BENCH_MAX_SWAP_PCT", "50"))
+peak = {"load": 0.0, "swap_pct": 0.0}
+
+def swap_pct():
+    """Swap in use, percent of the total (0 when the platform does not say)."""
+    try:
+        t = subprocess.run(["sysctl", "-n", "vm.swapusage"], capture_output=True, text=True).stdout
+        f = dict(x.split(" = ") for x in t.strip().split("  ") if " = " in x)
+        total, used = float(f["total"].rstrip("M")), float(f["used"].rstrip("M"))
+        return 100.0 * used / total if total else 0.0
+    except Exception:
+        try:
+            m = dict(l.split(":", 1) for l in open("/proc/meminfo"))
+            total, free = int(m["SwapTotal"].split()[0]), int(m["SwapFree"].split()[0])
+            return 100.0 * (total - free) / total if total else 0.0
+        except Exception:
+            return 0.0
+
+def guard():
+    """Record the machine's state before a timed run; with --json, abort the whole run when it is not quiet."""
+    load, sw = os.getloadavg()[0], swap_pct()
+    peak["load"], peak["swap_pct"] = max(peak["load"], load), max(peak["swap_pct"], sw)
+    if opt("--json") and (load >= MAX_LOAD or sw >= MAX_SWAP):
+        sys.stderr.write(f"interp_compare: machine not quiet (load {load:.1f}, limit {MAX_LOAD:g}; swap {sw:.0f}%, limit {MAX_SWAP:g}%); "
+                         f"nothing recorded. Re-run when the machine is quiet.\n")
+        sys.exit(3)
+
 def cpu(cmd, cwd=None):
     """Median child CPU seconds over `runs`, and the stdout of the first run (None on failure)."""
     times, out = [], None
     for _ in range(runs):
+        guard()
         before = resource.getrusage(resource.RUSAGE_CHILDREN)
         p = subprocess.run(cmd, cwd=cwd, capture_output=True, stdin=subprocess.DEVNULL)
         after = resource.getrusage(resource.RUSAGE_CHILDREN)
@@ -117,6 +149,9 @@ for k, v in res["kernels"].items():
 for k, v in res["kernels"].items():
     r = v["cpu_s"]
     v["ratios"] = {f"resolved_over_{o}": round(r["resolved"] / r[o], 2) for o in ("node", "python3", "walker") if r.get("resolved") and r.get(o)}
+res["peak_load_1m"], res["peak_swap_pct"] = round(peak["load"], 1), round(peak["swap_pct"])
+if peak["load"] >= MAX_LOAD or peak["swap_pct"] >= MAX_SWAP:
+    print(f"warning: the machine was not quiet (peak load {peak['load']:.1f}, peak swap {peak['swap_pct']:.0f}%): these numbers are noisy")
 out = opt("--json")
 if out:
     with open(out, "w") as fh:
