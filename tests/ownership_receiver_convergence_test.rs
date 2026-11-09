@@ -428,3 +428,17 @@ pub fn pair(name: string) -> (string, string) {
 "#,
     );
 }
+
+/// A field with no `Clone` (a channel end) cannot be copied at the read, so a method that moves it out must consume
+/// `self`; a Clone field read stays `&self` and is cloned at the read. Oracle: the emitted receiver (the Rust that
+/// results only type-checks with the runtime crate, so rustc is not run here).
+#[test]
+fn moving_an_uncloneable_field_out_consumes_self_but_a_cloneable_one_borrows() {
+    let src = "use std::sync::mpsc\n\nstruct Inbox {\n    rx: mpsc::Receiver<int>,\n    seen: int,\n}\n\nimpl Inbox {\n    fn with_seen(self, n: int) -> Inbox {\n        Inbox { rx: self.rx, seen: n }\n    }\n}\n\nstruct Names {\n    names: Vec<string>,\n    count: int,\n}\n\nimpl Names {\n    fn snapshot(self) -> Names {\n        Names { names: self.names, count: 0 }\n    }\n}\n\nfn main() {\n    let pair = mpsc::channel()\n    let inbox = Inbox { rx: pair.1, seen: 0 }\n    let next = inbox.with_seen(1)\n    println(\"${next.seen}\")\n}\n";
+    let dir = write_project(&[("m.wj", src)]);
+    let o = Command::new(WJ).args(["build", "m.wj", "--no-cargo", "--output", "out"]).current_dir(dir.path()).output().unwrap();
+    assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let rs = fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
+    assert!(rs.contains("fn with_seen(self"), "a moved channel end needs an owned receiver:\n{rs}");
+    assert!(rs.contains("fn snapshot(&self"), "a cloneable field is cloned at the read under &self:\n{rs}");
+}
