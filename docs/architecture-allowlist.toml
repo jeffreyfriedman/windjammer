@@ -171,7 +171,7 @@
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4909
 "src/codegen/rust/function_generation_prepare.rs" = 13069
-"src/codegen/rust/generator.rs" = 4999
+"src/codegen/rust/generator.rs" = 5007
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
 "src/codegen/rust/ir_call_site.rs" = 10435
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2158
@@ -190,7 +190,7 @@
 "src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 512
 "src/analyzer/string_optimization.rs::expr_uses_param_in_string_ref_context" = 373
 "src/auto_clone.rs::collect_usages_from_expression" = 394
-"src/bin/wj_cli_cmds.rs::run" = 320
+"src/bin/wj_cli_cmds.rs::run" = 323
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 504
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 476

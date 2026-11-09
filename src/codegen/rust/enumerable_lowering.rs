@@ -125,6 +125,9 @@ impl<'ast> CodeGenerator<'ast> {
         else {
             return None;
         };
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.opt_chain_type(object, arguments);
+        }
         let m = enumerable::lookup(method, arguments.len())?;
         let recv_name = self.infer_type_name(object);
         if self.receiver_defines_method(recv_name.as_deref(), method) {

@@ -142,8 +142,8 @@ spec::numeric/SPEC-NUM-027	ok
 spec::optionals/SPEC-OPT-001	ok
 spec::optionals/SPEC-OPT-002	ok
 spec::optionals/SPEC-OPT-003	ok
-spec::optionals/SPEC-OPT-005	build-fail
-spec::optionals/SPEC-OPT-006	build-fail
+spec::optionals/SPEC-OPT-005	ok
+spec::optionals/SPEC-OPT-006	ok
 spec::ownership/SPEC-OWN-001	ok
 spec::ownership/SPEC-OWN-002	ok
 spec::ownership/SPEC-OWN-003	ok
@@ -223,7 +223,7 @@ spec::types/SPEC-TYP-001	ok
 spec::types/SPEC-TYP-002	ok
 spec::types/SPEC-TYP-004	ok
 spec::types/SPEC-TYP-005	ok
-spec::types/SPEC-TYP-006	build-fail
+spec::types/SPEC-TYP-006	ok
 spec::types/SPEC-TYP-007	ok
 spec::types/SPEC-TYP-008	ok
 spec::types/SPEC-TYP-010	ok
