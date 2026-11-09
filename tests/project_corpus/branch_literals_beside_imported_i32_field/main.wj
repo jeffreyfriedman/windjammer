@@ -5,7 +5,7 @@ mod cell
 mod score
 
 fn main() {
-    let a = score::adjusted(vec![cell::Cell { weight: 4 }])
-    let b = score::adjusted(vec![cell::Cell { weight: 2 }])
+    let a = score::adjusted([cell::Cell { weight: 4 }])
+    let b = score::adjusted([cell::Cell { weight: 2 }])
     println("${a} ${b}")
 }
