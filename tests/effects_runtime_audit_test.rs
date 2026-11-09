@@ -1,4 +1,4 @@
-// consumes: crates/windjammer-runtime/src/{fs,http,env,process,subprocess,db}.rs
+// consumes: crates/windjammer-runtime/src/{fs,http,env,process,subprocess,db}.rs, platform/native/net.rs
 //! Audit of the Rust runtime (ADR-0021): every public function that touches the operating system must reach a
 //! `caps::` check, so a new std wrapper cannot silently bypass the capability model.
 //!
@@ -11,7 +11,7 @@ use std::path::Path;
 
 const OS_TOKENS: &[&str] = &[
     "std::fs::", "std::env::var", "std::env::set_var", "std::env::remove_var", "std::env::vars", "Command::new", "reqwest::", "TcpListener::bind",
-    "SqlitePoolOptions::new", "tokio::net::",
+    "SqlitePoolOptions::new", "tokio::net::", "net_core::",
 ];
 
 /// Public functions that read or act on the OS but are deliberately not capabilities (information about the
@@ -50,8 +50,8 @@ fn chunks(src: &str) -> Vec<Chunk> {
 fn every_os_touching_runtime_function_reaches_a_capability_check() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime/src");
     let mut problems = Vec::new();
-    for module in ["fs", "http", "env", "process", "subprocess", "db"] {
-        let src = std::fs::read_to_string(base.join(format!("{module}.rs"))).unwrap();
+    for (module, file) in [("fs", "fs.rs"), ("http", "http.rs"), ("env", "env.rs"), ("process", "process.rs"), ("subprocess", "subprocess.rs"), ("db", "db.rs"), ("net", "platform/native/net.rs")] {
+        let src = std::fs::read_to_string(base.join(file)).unwrap();
         let cs = chunks(&src);
         let os_names: BTreeSet<&str> = cs.iter().filter(|c| OS_TOKENS.iter().any(|t| c.text.contains(t))).map(|c| c.name.as_str()).collect();
         let calls = |c: &Chunk, name: &str| c.name != name && c.text.contains(&format!("{name}("));
@@ -155,4 +155,23 @@ fn the_fd_verified_writes_act_through_the_checked_parent() {
         assert!(guarded(&c.text) || delegates, "fs::{name} must act through the checked parent: {}", c.text);
         assert!(!c.text.contains("std::fs::write") && !c.text.contains("std::fs::create_dir") && !c.text.contains("std::fs::remove"), "fs::{name} acts on the name again: {}", c.text);
     }
+}
+
+/// The connects that decide on the name and then use one resolution (`ADDR_VERIFIED_CONNECTS`, ADR-0032) must connect through
+/// `net_core::connect_resolved` after `net_core::resolve_once`, in the compiled runtime and in the interpreter: a connect that
+/// resolved the name again after the check could reach an address the check never saw.
+#[test]
+fn the_addr_verified_connects_use_one_resolution() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let src = std::fs::read_to_string(root.join("crates/windjammer-runtime/src/platform/native/net.rs")).unwrap();
+    let cs = chunks(&src);
+    for path in windjammer::ir::effect_facts::sinks::ADDR_VERIFIED_CONNECTS {
+        let name = path.rsplit("::").next().unwrap();
+        let c = cs.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("TcpStream::{name} is not in the runtime"));
+        assert!(c.text.contains("caps::net_connect"), "{name} must check the grant: {}", c.text);
+        assert!(c.text.contains("net_core::resolve_once") && c.text.contains("net_core::connect_resolved"), "{name} must connect to one resolution: {}", c.text);
+        assert!(!c.text.contains("TcpStream::connect("), "{name} connects by name again: {}", c.text);
+    }
+    let interp = std::fs::read_to_string(root.join("src/interpreter/builtins/std_net.rs")).unwrap();
+    assert!(interp.contains("net_core::resolve_once(&addr).and_then(|xs| net_core::connect_resolved("), "the interpreter must connect to one resolution too");
 }
