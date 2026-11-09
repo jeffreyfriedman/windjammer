@@ -392,7 +392,6 @@ bench/agent-dx/solutions/wj-set2/t101_json_orders/main.wj W0005
 bench/agent-dx/solutions/wj-set2/t103_trait_pricing/main.wj W0016
 bench/agent-dx/solutions/wj-set2/t104_activity_log/main.wj W0005
 bench/agent-dx/solutions/wj/t034_shapes_trait/main.wj W0016
-bench/agent-dx/solutions/wj/t037_animal_traits/main.wj W0005
 bench/agent-dx/solutions/wj/t037_animal_traits/main.wj W0005,W0016
 examples/verified/modules_trait_static.wj W0016
 examples/verified/trait_basics.wj W0016
@@ -403,13 +402,9 @@ tests/book_repros/interpolation_leading_literal.wj parse
 tests/check_negative/mutants/modules_trait_static__unknown_field.wj W0016
 tests/check_negative/mutants/trait_default_and_override__unknown_field.wj W0016
 tests/codegen_correctness_corpus/impl_trait_for_primitive.wj W0016
-tests/conformance/types/traits_and_generics.wj W0005
 tests/conformance/types/traits_and_generics.wj W0005,W0016
-tests/conformance_programs/163_trait_generics_and_aliases.wj W0005
 tests/conformance_programs/163_trait_generics_and_aliases.wj W0005,W0016
-tests/conformance_programs/27_trait_impl.wj W0008
 tests/conformance_programs/27_trait_impl.wj W0008,W0016
-tests/conformance_programs/79_trait_dispatch.wj W0008
 tests/conformance_programs/79_trait_dispatch.wj W0008,W0016
 tests/diagnostics/cases/missing_trait_item.wj W0016
 tests/effects/corpus/env_in_trait_impl.wj W0016
@@ -427,11 +422,8 @@ tests/fixtures/traits/test_generic_trait_bound.wj W0016
 tests/fixtures/traits/test_multiple_bounds.wj W0016
 tests/fixtures/traits/test_trait_impl_consistency.wj W0016
 tests/fixtures/traits/test_trait_no_mut.wj W0016
-tests/fixtures/traits/test_ui_pattern.wj W0012
 tests/fixtures/traits/test_ui_pattern.wj W0012,W0016
-tests/generic_owned_param_test.wj W0004
 tests/generic_owned_param_test.wj W0004,W0016
-tests/interpreter_corpus/generic_static_dispatch.wj W0008
 tests/interpreter_corpus/generic_static_dispatch.wj W0008,W0016
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/port.wj W0016
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/reader.wj W0007
