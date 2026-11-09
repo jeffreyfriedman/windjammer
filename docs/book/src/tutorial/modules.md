@@ -1,4 +1,5 @@
 # Modules and packages
+<!-- feature: modules -->
 
 A module groups related items under a name. A package is a project with its own `wj.toml` that other projects can
 depend on. Both keep a growing program from becoming one long file.

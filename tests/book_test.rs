@@ -325,7 +325,7 @@ fn known_gap_directory_module_borrow_is_lost_when_compiled() {
 fn known_gap_idioms_fail_compiled() {
     let _g = compiled_lock();
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003")] {
+    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003"), ("async_await_compiled.wj", "WJ0099"), ("pure_attribute_compiled.wj", "WJ0099")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
@@ -412,4 +412,64 @@ fn mutation_tests_do_not_depend_on_known_gaps() {
     for f in forbidden {
         assert!(!body.contains(f), "the compiled-gate mutation test must not depend on a compiler gap (found {f:?}); use the runner's test hook");
     }
+}
+
+#[test]
+fn known_gap_defer_in_a_loop_body_does_not_run_interpreted() {
+    let repro = real().root.join("tests/book_repros/defer_in_loop.wj");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&repro).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success() && text.contains("pass 1") && !text.contains("end of pass"), "the interpreter now runs a loop-body defer: delete tests/book_repros/defer_in_loop.wj, this test and its docs/known-gaps.md row\n{text}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The feature registry (docs/book/features.toml)
+// ---------------------------------------------------------------------------------------------
+
+impl Scratch {
+    fn with_registry(&self, features: &str, spec: &str) {
+        self.write("docs/book/features.toml", features);
+        self.write("docs/spec/widgets.md", spec);
+    }
+}
+
+const ONE_FEATURE: &str = "[[feature]]\nid = \"widgets\"\ntitle = \"Widgets\"\nfamilies = [\"WID\"]\nspec = \"docs/spec/widgets.md\"\n";
+const ONE_RULE: &str = "# Widgets\n\n**SPEC-WID-001** A widget exists.\n";
+
+#[test]
+fn a_spec_family_missing_from_the_registry_fails() {
+    let s = Scratch::new();
+    s.with_registry(ONE_FEATURE, &format!("{ONE_RULE}\n**SPEC-GAD-001** A gadget exists.\n"));
+    s.page(&format!("{GOOD}\n<!-- feature: widgets -->\n"));
+    assert!(s.fails("SPEC-GAD is in no registry entry"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn an_unlisted_page_marker_and_a_stale_family_fail() {
+    let s = Scratch::new();
+    s.with_registry(ONE_FEATURE, ONE_RULE);
+    s.page(&format!("{GOOD}\n<!-- feature: widgets -->\n<!-- feature: gizmos -->\n"));
+    assert!(s.fails("`<!-- feature: gizmos -->`") || s.fails("gizmos"), "{}", show(&s.findings()));
+    s.with_registry(ONE_FEATURE, "# Widgets\n\n**SPEC-OTHER-001** x\n");
+    assert!(s.fails("registry names family WID"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn uncovered_features_are_a_shrink_only_ratchet() {
+    let s = Scratch::new();
+    s.with_registry(ONE_FEATURE, ONE_RULE);
+    assert!(s.fails("features no page covers: 1 exceeds the ratchet 0"), "{}", show(&s.findings()));
+    s.write("docs/docs-truth.toml", "[book]\nmax_uncovered_features = 1\n");
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+    s.page(&format!("{GOOD}\n<!-- feature: widgets -->\n"));
+    assert!(s.fails("below the ratchet 1"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn the_real_registry_lists_every_spec_family() {
+    let ctx = real();
+    assert!(!docs_truth::book_features::load(&ctx).is_empty(), "docs/book/features.toml is missing");
+    let listed: std::collections::BTreeSet<String> = docs_truth::book_features::load(&ctx).into_iter().flat_map(|f| f.families).collect();
+    let spec = docs_truth::book_features::spec_families(&ctx);
+    assert!(spec.is_subset(&listed), "unlisted spec families: {:?}", spec.difference(&listed).collect::<Vec<_>>());
 }

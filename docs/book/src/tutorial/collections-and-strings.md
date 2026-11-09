@@ -1,4 +1,6 @@
 # Collections and strings
+<!-- feature: strings -->
+<!-- feature: collections -->
 
 Most programs spend their time on lists, maps and text. This chapter covers the types you will use for them and the
 operations that make them pleasant.

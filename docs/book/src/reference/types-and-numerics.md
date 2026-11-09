@@ -1,4 +1,5 @@
 # Types and numerics
+<!-- feature: types -->
 
 This page states the rules. The [numbers tutorial](../tutorial/numbers.md) teaches them with more examples, and the
 language specification chapters on types and numeric semantics hold the rule identifiers.

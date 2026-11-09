@@ -55,9 +55,10 @@ required = ["docs/book/src/**/*.md", "README.md", "AGENTS.md", "docs/agent/WINDJ
 # value above the measured count fails too, so the file always states the truth.
 [book]
 max_ignored = 0
-max_interpreter_only = 3
+max_interpreter_only = 4
 max_drafts = 0
 max_uncovered_promises = 0
+max_uncovered_features = 0
 
 # Rule-id namespaces: ids cited in docs must be defined in the matching files. A namespace is
 # inactive until at least one defining file exists.
