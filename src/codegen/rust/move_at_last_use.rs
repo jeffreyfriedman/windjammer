@@ -69,6 +69,12 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// The binding is an owned value (not a Rust reference) in the emitted function.
+    /// A parameter or local this function emits as a reference (an alias of it is a reference too).
+    pub(in crate::codegen::rust) fn binding_is_known_borrow(&self, name: &str) -> bool {
+        let known = self.current_function_params.iter().any(|p| p.name == name) || self.local_var_types.contains_key(name);
+        known && name != "self" && !self.binding_emits_owned_value(name)
+    }
+
     fn binding_emits_owned_value(&self, name: &str) -> bool {
         let is_ref = |t: &Type| matches!(t, Type::Reference(_) | Type::MutableReference(_));
         // Emission truth only: `inferred_*` can lag signature promotion.
@@ -108,7 +114,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// its name) of a known non-Copy owned value that is read again (later in the statement, after
     /// it, or in the next loop iteration; `ir::liveness`): the move copies instead. Everything else
     /// passes through unchanged. With the liveness mutation (nothing read again) this never fires.
-    pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+    /// The one CLONE-USE-AFTER-MOVE decision, for every consuming position. `site` only says which reads
+    /// count as "again": an element of a collection, tuple or struct literal ignores other reads in the
+    /// same statement (they may be in an exclusive `match` arm: `Ok(_) => (tx, true), Err(_) => (tx, false)`).
+    pub(in crate::codegen::rust) fn copy_if_read_again_at(&self, expr: &crate::parser::Expression<'_>, emitted: String, site: MoveSite) -> String {
         // Never copy a value without `Clone`, whichever rule proposed it (a binding, a field such as a
         // channel end): the move stays, and `wj check` reports the later use (WJ0007) instead of rustc
         // rejecting a missing `clone` method.
@@ -138,7 +147,7 @@ impl<'ast> CodeGenerator<'ast> {
             return emitted;
         }
         let node = crate::ir::numeric_defaults::node_id(expr);
-        let again_in_stmt = self.clone_facts.reread_stack.last().is_some_and(|r| r.contains(&node));
+        let again_in_stmt = site == MoveSite::Argument && self.clone_facts.reread_stack.last().is_some_and(|r| r.contains(&node));
         let again_after = match self.clone_facts.stmt_stack.last() {
             Some(stmt) => self.clone_facts.read_after.get(stmt).is_some_and(|names| names.contains(name)),
             None => false,
@@ -148,6 +157,10 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             emitted
         }
+    }
+
+    pub(in crate::codegen::rust) fn copy_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        self.copy_if_read_again_at(expr, emitted, MoveSite::Argument)
     }
 
     /// The binding's type is known and has no `Clone` in the emitted Rust.
@@ -160,6 +173,13 @@ impl<'ast> CodeGenerator<'ast> {
     /// structs) is a type the derive rules leave without `Clone` (`type_precludes_auto_debug_clone`).
     pub(in crate::codegen::rust) fn type_known_clone(&self, ty: &Type, depth: u8) -> bool {
         if self.type_precludes_auto_debug_clone(ty) {
+            return false;
+        }
+        // `Clone` of a generic value (or a type applied to one) depends on a bound we cannot see.
+        if matches!(ty, Type::Generic(_))
+            || matches!(ty, Type::Vec(e) | Type::Option(e) if !self.type_known_clone(e, depth + 1))
+            || matches!(ty, Type::Parameterized(_, args) if args.iter().any(|a| !self.type_known_clone(a, depth + 1)))
+        {
             return false;
         }
         let base = match ty {
@@ -242,4 +262,11 @@ impl<'ast> CodeGenerator<'ast> {
             a.dying_here = outer;
         }
     }
+}
+
+/// Where a value is consumed (argument / receiver / `let` alias, or a literal element).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::codegen::rust) enum MoveSite {
+    Argument,
+    Element,
 }
