@@ -23,7 +23,7 @@ pub(crate) type MutRefParams = HashMap<String, HashSet<String>>;
 fn compute(program: &'static crate::parser::Program<'static>) -> Option<MutRefParams> {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
-    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust(program).ok()));
+    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust_source(program).ok()));
     std::panic::set_hook(previous);
     let file = parse_emitted(&rust.ok()??)?;
     Some(
