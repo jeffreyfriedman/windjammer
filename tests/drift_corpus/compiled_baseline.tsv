@@ -1417,3 +1417,9 @@ packages/wj-gitignore::tests/gitignore_test.wj::test_negation_reincludes_and_las
 packages/wj-gitignore::tests/gitignore_test.wj::test_cannot_reinclude_file_under_ignored_dir	pass	
 packages/wj-gitignore::tests/gitignore_test.wj::test_filter_unignored_keeps_order	pass	
 tests/engine_parity/vp_implicit_self.wj	exit0:8:701631072	
+tests/drift_corpus/repros/assign_split_word_to_mut_empty_string.wj	exit0:17:241602703	
+tests/drift_corpus/repros/dropped_branch_pop.wj	exit0:2:17866	
+tests/drift_corpus/repros/keys_collect_vec_string.wj	exit0:2:19354	
+tests/drift_corpus/repros/map_get_in_sort_by_closure.wj	exit1:0:17	
+tests/drift_corpus/repros/map_get_unwrap_or_float.wj	exit1:0:17	
+tests/drift_corpus/repros/slice_into_string_binding.wj	exit0:5:534351257	
