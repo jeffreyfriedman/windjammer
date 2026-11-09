@@ -1,0 +1,49 @@
+# Summary
+
+[Introduction](introduction.md)
+[Why Windjammer](why.md)
+
+# Getting started
+
+- [Install](getting-started/install.md)
+- [Your first project](getting-started/first-project.md)
+
+# Tutorial
+
+- [Values and types](tutorial/values-and-types.md)
+- [Numbers and sizes](tutorial/numbers.md)
+- [Ownership and borrowing, inferred](tutorial/ownership.md)
+- [Structs, enums, traits and generics](tutorial/types-and-traits.md)
+- [Errors and Result](tutorial/errors.md)
+- [Modules and packages](tutorial/modules.md)
+- [Collections and strings](tutorial/collections-and-strings.md)
+- [Closures](tutorial/closures.md)
+- [Concurrency](tutorial/concurrency.md)
+- [Effects and capabilities](tutorial/effects.md)
+- [Interpreter or compiled](tutorial/interpreter-or-compiled.md)
+- [Rust interop](tutorial/rust-interop.md)
+- [Testing](tutorial/testing.md)
+- [A final project](tutorial/final-project.md)
+
+# Reference
+
+- [The language](reference/language.md)
+- [Grammar](reference/grammar.md)
+- [Keywords and operators](reference/keywords.md)
+- [Standard library](reference/std.md)
+- [Command line](reference/cli.md)
+- [Command and flag guarantees](reference/cli-guarantees.md)
+- [Diagnostic codes](reference/diagnostic-codes.md)
+- [Compile targets](reference/targets.md)
+- [wj.toml](reference/wj-toml.md)
+
+# Cookbook
+
+- [Recipes](cookbook/recipes.md)
+
+# Appendix
+
+- [Migrating from Rust](appendix/from-rust.md)
+- [Migrating from Go](appendix/from-go.md)
+- [Migrating from TypeScript](appendix/from-typescript.md)
+- [How this book is tested](appendix/how-this-book-is-tested.md)
