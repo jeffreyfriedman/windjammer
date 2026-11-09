@@ -8,6 +8,9 @@ pub mod caps;
 // The `durable fn` journal is one source shared with `windjammer-runtime`: see crates/windjammer-runtime/src/durable_core/mod.rs.
 #[path = "../../crates/windjammer-runtime/src/durable_core/mod.rs"]
 pub mod durable_core;
+// Raw sockets (ADR-0032): one source shared with `windjammer-runtime` (crates/windjammer-runtime/src/net_core/mod.rs).
+#[path = "../../crates/windjammer-runtime/src/net_core/mod.rs"]
+pub(crate) mod net_core;
 pub mod durable_rt;
 pub mod limits;
 pub mod mcp_host;

@@ -1416,3 +1416,6 @@ packages/wj-gitignore::tests/gitignore_test.wj::test_double_star_prefix	pass
 packages/wj-gitignore::tests/gitignore_test.wj::test_negation_reincludes_and_last_rule_wins	pass	
 packages/wj-gitignore::tests/gitignore_test.wj::test_cannot_reinclude_file_under_ignored_dir	pass	
 packages/wj-gitignore::tests/gitignore_test.wj::test_filter_unignored_keeps_order	pass	
+tests/drift_corpus/net/loopback_tcp.wj	exit0:525:704636936	
+tests/drift_corpus/net/loopback_udp.wj	exit0:146:105390797	
+tests/drift_corpus/net/threaded_echo.wj	exit0:67:276194844	

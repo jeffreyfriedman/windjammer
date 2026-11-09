@@ -1,0 +1,61 @@
+// A server thread and a client on loopback (ADR-0032): the interpreter waits for a live socket on its scheduler,
+// so the server task runs while the client waits for a reply, as a compiled program's two threads do.
+use std::net::TcpListener
+use std::net::TcpStream
+use std::thread
+
+fn serve(server: TcpListener) -> int {
+    let mut conn = match server.accept() {
+        Ok(c) => c,
+        Err(e) => return -1,
+    }
+    let mut n = 0
+    loop {
+        let line = match conn.read_line() {
+            Ok(l) => l,
+            Err(e) => return -2,
+        }
+        if line == "" {
+            break
+        }
+        match conn.write_str(line.to_uppercase()) {
+            Ok(_) => {},
+            Err(e) => return -3,
+        }
+        n = n + 1
+    }
+    n
+}
+
+fn client(addr: string) -> Result<(), string> {
+    let mut c = TcpStream::connect(addr)?
+    c.set_timeouts(5000, 5000)?
+    for word in ["alpha", "beta", "gamma"] {
+        c.write_str(word + "\n")?
+        let back = c.read_line()?
+        println("echo ${back.trim()}")
+    }
+    c.shutdown_write()?
+    Ok(())
+}
+
+fn main() {
+    let server = match TcpListener::bind("127.0.0.1:0") {
+        Ok(s) => s,
+        Err(e) => {
+            println("bind failed: ${e}")
+            return
+        },
+    }
+    let addr = server.local_addr()
+    let h = thread::spawn(move || serve(server))
+    match client(addr) {
+        Ok(_) => println("client: ok"),
+        Err(e) => println("client: FAILED ${e}"),
+    }
+    let answered = match h.join() {
+        Ok(n) => n,
+        Err(_) => -9,
+    }
+    println("server answered ${answered} lines")
+}

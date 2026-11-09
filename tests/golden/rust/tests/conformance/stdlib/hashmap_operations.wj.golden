@@ -8,16 +8,16 @@ fn test_map_create() {
 #[inline]
 fn test_map_insert() {
     let mut map = HashMap::new();
-    map.insert(String::from("alice"), 30);
-    map.insert(String::from("bob"), 25);
-    map.insert(String::from("charlie"), 35);
+    map.insert(String::from("alice"), 30_i64);
+    map.insert(String::from("bob"), 25_i64);
+    map.insert(String::from("charlie"), 35_i64);
     println!("[map_insert] after inserts: len={}", map.len());
 }
 
 fn test_map_get() {
     let mut map = HashMap::new();
-    map.insert(String::from("alice"), 30);
-    map.insert(String::from("bob"), 25);
+    map.insert(String::from("alice"), 30_i64);
+    map.insert(String::from("bob"), 25_i64);
     match map.get("alice") {
         Some(age) => println!("[map_get] alice -> {}", age),
         None => println!("[map_get] alice -> not found"),
@@ -35,7 +35,7 @@ fn test_map_get() {
 #[inline]
 fn test_map_contains() {
     let mut map = HashMap::new();
-    map.insert(String::from("alice"), 30);
+    map.insert(String::from("alice"), 30_i64);
     println!("[map_contains] has alice: {}", map.contains_key("alice"));
     println!("[map_contains] has dave: {}", map.contains_key("dave"));
 }
@@ -43,9 +43,9 @@ fn test_map_contains() {
 #[inline]
 fn test_map_remove() {
     let mut map = HashMap::new();
-    map.insert(String::from("alice"), 30);
-    map.insert(String::from("bob"), 25);
-    map.insert(String::from("charlie"), 35);
+    map.insert(String::from("alice"), 30_i64);
+    map.insert(String::from("bob"), 25_i64);
+    map.insert(String::from("charlie"), 35_i64);
     println!("[map_remove] before remove: len={}", map.len());
     map.remove("bob");
     println!("[map_remove] after remove bob: len={}", map.len());
@@ -54,12 +54,12 @@ fn test_map_remove() {
 
 fn test_map_update() {
     let mut map = HashMap::new();
-    map.insert(String::from("charlie"), 35);
+    map.insert(String::from("charlie"), 35_i64);
     match map.get("charlie") {
         Some(age) => println!("[map_update] charlie age before: {}", age),
         None => println!("[map_update] charlie not found"),
     }
-    map.insert(String::from("charlie"), 36);
+    map.insert(String::from("charlie"), 36_i64);
     match map.get("charlie") {
         Some(age) => println!("[map_update] charlie age after: {}", age),
         None => println!("[map_update] charlie not found"),

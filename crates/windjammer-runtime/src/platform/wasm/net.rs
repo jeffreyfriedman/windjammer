@@ -225,3 +225,88 @@ impl WebSocket {
         Ok(())
     }
 }
+
+// Raw sockets (ADR-0032) do not exist in the browser: every constructor is an error, so no method is ever reached.
+
+/// An integer argument of a socket method (the native runtime's trait, so both platforms share one signature).
+pub trait NetInt {}
+impl<T> NetInt for T {}
+const NO_SOCKETS: &str = "sockets are not available on wasm";
+
+pub struct TcpStream;
+
+impl TcpStream {
+    pub fn connect(_addr: impl AsRef<str>) -> NetResult<TcpStream> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn connect_timeout(_addr: impl AsRef<str>, _timeout_ms: impl NetInt) -> NetResult<TcpStream> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn read(&mut self, _max: impl NetInt) -> NetResult<Vec<u8>> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn read_exact(&mut self, _n: impl NetInt) -> NetResult<Vec<u8>> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn read_line(&mut self) -> NetResult<String> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn write_all(&mut self, _data: impl AsRef<[u8]>) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn write_str(&mut self, _text: impl AsRef<str>) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn flush(&mut self) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn shutdown_write(&mut self) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn shutdown(&mut self) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn set_timeouts(&mut self, _read_ms: impl NetInt, _write_ms: impl NetInt) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn peer_addr(&self) -> String {
+        String::new()
+    }
+    pub fn local_addr(&self) -> String {
+        String::new()
+    }
+}
+
+pub struct TcpListener;
+
+impl TcpListener {
+    pub fn bind(_addr: impl AsRef<str>) -> NetResult<TcpListener> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn accept(&self) -> NetResult<TcpStream> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn local_addr(&self) -> String {
+        String::new()
+    }
+}
+
+pub struct UdpSocket;
+
+impl UdpSocket {
+    pub fn bind(_addr: impl AsRef<str>) -> NetResult<UdpSocket> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn send_to(&self, _data: impl AsRef<[u8]>, _addr: impl AsRef<str>) -> NetResult<i64> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn recv_from(&self, _max: impl NetInt) -> NetResult<(Vec<u8>, String)> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn set_read_timeout(&self, _ms: impl NetInt) -> NetResult<()> {
+        Err(NO_SOCKETS.to_string())
+    }
+    pub fn local_addr(&self) -> String {
+        String::new()
+    }
+}
