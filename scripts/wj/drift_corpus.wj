@@ -131,7 +131,8 @@ fn is_must_refuse(p: string) -> bool {
 // the `Error: ...` line a `main` returning `Err` prints (the first stderr line that starts with it), or ""
 fn main_error_line(stderr: string) -> string {
     for line in strings.split_lines(stderr) {
-        if strings.starts_with(line, "Error: ") {
+        // (not the interpreter's own refusal, "Error: not running FILE: `wj check` reports ...")
+        if strings.starts_with(line, "Error: ") && !strings.starts_with(line, "Error: not running") {
             return line
         }
     }
