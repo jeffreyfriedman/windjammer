@@ -1,0 +1,8 @@
+mod util
+
+use util::total
+
+fn main() {
+    let prices: Vec<int> = [3, 5]
+    println("${total(prices)}")
+}
