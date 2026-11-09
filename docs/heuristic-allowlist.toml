@@ -20,7 +20,7 @@
 "src/analyzer/optimization_detectors/string_optimization_detection.rs" = 1
 "src/analyzer/optimization_detectors/struct_mapping_detection.rs" = 1
 "src/analyzer/parameter_analysis.rs" = 1
-"src/analyzer/passthrough_inference.rs" = 4
+"src/analyzer/passthrough_inference.rs" = 1
 "src/analyzer/self_access_and_option_refs.rs" = 2
 "src/analyzer/self_dispatch_for_loops.rs" = 2
 "src/analyzer/self_mutating_calls.rs" = 1
@@ -67,7 +67,7 @@
 "src/codegen/rust/float_type_utilities.rs" = 2
 "src/codegen/rust/for_statement_generation.rs" = 3
 "src/codegen/rust/function_extern_generation.rs" = 2
-"src/codegen/rust/function_formal_parameter_generation.rs" = 15
+"src/codegen/rust/function_formal_parameter_generation.rs" = 13
 "src/codegen/rust/function_generation.rs" = 2
 "src/codegen/rust/function_generation_body.rs" = 2
 "src/codegen/rust/function_generation_prepare.rs" = 16
