@@ -147,6 +147,8 @@ struct AstConstraintWalker<'a, 'ast> {
     surface_typed: std::collections::HashSet<ConstraintVar>,
     /// Parameter types a typed std method gives a closure argument, keyed by (closure node, parameter index).
     closure_param_types: HashMap<(usize, usize), Type>,
+    /// The value variable of each enclosing `loop` (innermost last): a `break v` is that loop's value.
+    loop_values: Vec<ConstraintVar>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -345,6 +347,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             numeric_unmodelled: Default::default(),
             surface_typed: Default::default(),
             closure_param_types: HashMap::new(),
+            loop_values: Vec::new(),
         }
     }
 
@@ -850,7 +853,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Statement::Loop { body, .. } => {
-                self.walk_scoped(body);
+                let _ = self.walk_loop(body);
             }
 
             Statement::While {
@@ -869,7 +872,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.walk_statement(statement);
             }
 
-            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+            Statement::Break { value, .. } => self.walk_break_value(*value),
+            Statement::Continue { .. } | Statement::Use { .. } => {}
         }
     }
 
@@ -1249,6 +1253,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let value_var = self.walk_expression(value);
                 self.walk_match_arms(value_var, arms)
             }
+            Statement::Loop { body, .. } => vec![self.walk_loop(body)],
             other => {
                 self.walk_statement(other);
                 Vec::new()
