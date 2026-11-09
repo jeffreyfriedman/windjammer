@@ -115,7 +115,7 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="127"];
+  "analyzer" -> "parser" [label="130"];
   "analyzer" -> "stdlib_scanner" [label="2"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
@@ -260,12 +260,12 @@ digraph deps {
   "compiler" -> "module_system" [label="2"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="96"];
+  "compiler" -> "parser" [label="100"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
   "compiler" -> "type_classification" [label="5"];
-  "compiler" -> "type_inference" [label="5"];
+  "compiler" -> "type_inference" [label="7"];
   "compiler_config" -> "codegen" [label="1",color=red,fontcolor=red];
   "compiler_database" -> "analyzer" [label="3"];
   "compiler_database" -> "codegen" [label="2"];
@@ -355,13 +355,13 @@ digraph deps {
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
   "ir" -> "lexer" [label="24"];
-  "ir" -> "parser" [label="92"];
+  "ir" -> "parser" [label="95"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="5"];
   "ir" -> "type_classification" [label="30"];
-  "ir" -> "type_display" [label="3"];
+  "ir" -> "type_display" [label="2"];
   "ir" -> "type_inference" [label="7"];
-  "ir" -> "typing" [label="8"];
+  "ir" -> "typing" [label="17"];
   "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
   "linter" -> "auto_clone" [label="1"];
@@ -447,5 +447,5 @@ digraph deps {
   "typing" -> "lexer" [label="1"];
   "typing" -> "parser" [label="2"];
   "typing" -> "parser_impl" [label="1"];
-  "typing" -> "type_classification" [label="1"];
+  "typing" -> "type_classification" [label="3"];
 }

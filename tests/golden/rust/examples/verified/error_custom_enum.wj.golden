@@ -34,7 +34,7 @@ fn parse_amount(s: String) -> Result<i64, ParseError> {
 #[inline]
 fn double_amount(s: String) -> Result<i64, ParseError> {
     let n = parse_amount(s)?;
-    Ok(n * 2)
+    Ok(n * 2_i64)
 }
 
 fn main() {

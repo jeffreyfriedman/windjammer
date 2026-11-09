@@ -59,7 +59,7 @@ fn contains(t: Tree, v: i64) -> bool {
 #[inline]
 fn build() -> Tree {
     let mut t = Tree::Leaf;
-    for v in [5, 3, 8, 1, 9] {
+    for v in [5_i64, 3_i64, 8_i64, 1_i64, 9_i64] {
         t = insert(t, v);
     }
     t

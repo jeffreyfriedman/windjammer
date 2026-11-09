@@ -3,7 +3,7 @@ use windjammer_runtime::test::*;
 fn parse_age(s: &str) -> Result<i64, String> {
     match s.parse::<i64>() {
         Ok(n) => {
-            if n < 0 {
+            if n < 0_i64 {
                 Err(String::from("negative"))
             } else {
                 Ok(n)

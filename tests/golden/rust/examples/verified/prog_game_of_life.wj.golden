@@ -36,7 +36,7 @@ fn render(g: &Vec<Vec<bool>>) -> String {
 }
 
 fn main() {
-    let mut g = vec![vec![false; 5_i32]; 5_i32];
+    let mut g = vec![vec![false; 5_usize]; 5_usize];
     g[1][2] = true;
     g[2][2] = true;
     g[3][2] = true;
