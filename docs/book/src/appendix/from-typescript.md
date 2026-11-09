@@ -85,9 +85,9 @@ fn main() {
 
 ```wj
 // expect: Ok(42)
-// expect: Err("not a number")
+// expect: Err("not a number: forty")
 fn parse(text: string) -> Result<int, string> {
-    text.parse::<int>().map_err(|_| "not a number")
+    text.parse::<int>().map_err(|_| "not a number: ${text}")
 }
 
 fn main() {
