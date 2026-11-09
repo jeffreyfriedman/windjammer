@@ -72,7 +72,7 @@ Combinators such as `map`, `map_err` and `and_then` transform the inside of a `R
 ```wj
 // expect: Ok(3)
 fn parse(text: string) -> Result<int, string> {
-    text.parse::<int>().map_err(|_| "bad number")
+    text.parse::<int>().map_err(|_| "bad number: ${text}")
 }
 
 fn main() {

@@ -264,9 +264,9 @@ fn known_gap_directory_module_borrow_is_lost_when_compiled() {
 }
 
 #[test]
-fn known_gap_collection_idioms_fail_compiled() {
+fn known_gap_idioms_fail_compiled() {
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003")] {
+    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
