@@ -171,7 +171,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// `ty` implements `Clone` in the emitted Rust: no field (transitively, through the program's
     /// structs) is a type the derive rules leave without `Clone` (`type_precludes_auto_debug_clone`).
-    pub(in crate::codegen::rust) fn type_known_clone(&self, ty: &Type, depth: u8) -> bool {
+    fn type_known_clone(&self, ty: &Type, depth: u8) -> bool {
         if self.type_precludes_auto_debug_clone(ty) {
             return false;
         }

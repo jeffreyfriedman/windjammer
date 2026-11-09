@@ -110,7 +110,7 @@ digraph deps {
   "agent_index" -> "ir" [label="2"];
   "analyzer" -> "auto_clone" [label="2"];
   "analyzer" -> "codegen" [label="28",color=red,fontcolor=red];
-  "analyzer" -> "debug_env" [label="5"];
+  "analyzer" -> "debug_env" [label="4"];
   "analyzer" -> "embedded_assets" [label="2"];
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
@@ -223,7 +223,7 @@ digraph deps {
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
   "codegen" -> "component_analyzer" [label="2"];
-  "codegen" -> "debug_env" [label="7"];
+  "codegen" -> "debug_env" [label="5"];
   "codegen" -> "decorator_registry" [label="3"];
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
@@ -231,13 +231,13 @@ digraph deps {
   "codegen" -> "ir" [label="394"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="685"];
+  "codegen" -> "parser" [label="689"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
-  "codegen" -> "type_classification" [label="237"];
+  "codegen" -> "type_classification" [label="239"];
   "codegen" -> "type_inference" [label="63"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
