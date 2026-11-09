@@ -38,6 +38,7 @@ impl World {
     /// `cwd` is where relative paths resolve (the project directory, so the capability gate sees the same paths it would live);
     /// `tmp` is what `env::temp_dir()` returns (the run's granted scratch directory).
     pub fn new(cfg: &SimConfig, cwd: &Path, tmp: &Path) -> World {
+        super::sim_net::reset();
         World {
             seed: cfg.seed,
             faults: cfg.faults.clamp(0.0, 1.0),
@@ -60,7 +61,7 @@ impl World {
         let _ = self.fs.create_dir_all(&tmp);
     }
 
-    fn fault(&mut self) -> bool {
+    pub(crate) fn fault(&mut self) -> bool {
         self.faults > 0.0 && self.frng.gen::<f64>() < self.faults
     }
 }

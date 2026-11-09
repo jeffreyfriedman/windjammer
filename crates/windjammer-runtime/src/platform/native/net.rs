@@ -85,6 +85,7 @@ impl Request {
 
     /// Send the request (blocking)
     pub fn send(self) -> NetResult<Response> {
+        crate::caps::net_connect(&self.url);
         let client = Client::builder()
             .timeout(
                 self.timeout
@@ -154,6 +155,7 @@ impl Request {
 
     /// Send the request asynchronously
     pub async fn send_async(self) -> NetResult<Response> {
+        crate::caps::net_connect(&self.url);
         let client = reqwest::Client::builder()
             .timeout(
                 self.timeout
@@ -246,6 +248,7 @@ pub async fn post_async(url: String, body: String) -> NetResult<Response> {
 
 /// Download a file
 pub fn download(url: String, path: String) -> NetResult<()> {
+    crate::caps::fs_write(&path);
     let response = get(url)?;
     std::fs::write(&path, response.body).map_err(|e| format!("Failed to write file: {}", e))?;
     Ok(())
@@ -253,6 +256,7 @@ pub fn download(url: String, path: String) -> NetResult<()> {
 
 /// Upload a file
 pub fn upload(url: String, path: String) -> NetResult<Response> {
+    crate::caps::fs_read(&path);
     let body = std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
     post(url, body)
 }
@@ -284,7 +288,7 @@ impl WebSocket {
 // ============================================================================
 
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener as StdTcpListener, TcpStream as StdTcpStream};
 
 /// HTTP Server Request (received by server)
 #[derive(Debug, Clone)]
@@ -359,8 +363,9 @@ impl Server {
         F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
     {
         let addr = format!("{}:{}", self.address, self.port);
+        crate::caps::net_listen(&addr);
         let listener =
-            TcpListener::bind(&addr).map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
+            StdTcpListener::bind(&addr).map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
 
         println!("🚀 Server listening on http://{}", addr);
 
@@ -381,7 +386,7 @@ impl Server {
     }
 }
 
-fn handle_connection<F>(mut stream: TcpStream, handler: &F) -> NetResult<()>
+fn handle_connection<F>(mut stream: StdTcpStream, handler: &F) -> NetResult<()>
 where
     F: Fn(ServerRequest) -> ServerResponse,
 {
@@ -439,7 +444,7 @@ fn parse_request(request_str: &str) -> NetResult<ServerRequest> {
     })
 }
 
-fn send_response(stream: &mut TcpStream, response: ServerResponse) -> NetResult<()> {
+fn send_response(stream: &mut StdTcpStream, response: ServerResponse) -> NetResult<()> {
     let status_text = match response.status {
         200 => "OK",
         404 => "Not Found",
@@ -469,4 +474,125 @@ fn send_response(stream: &mut TcpStream, response: ServerResponse) -> NetResult<
         .map_err(|e| format!("Failed to flush stream: {}", e))?;
 
     Ok(())
+}
+
+// ============================================================================
+// RAW SOCKETS (ADR-0032): thin wrappers over `crate::net_core` (shared with the interpreter) plus the capability checks
+// ============================================================================
+
+use crate::net_core;
+
+/// A TCP connection (`std::net::TcpStream`).
+pub struct TcpStream {
+    inner: net_core::Stream,
+}
+
+impl TcpStream {
+    /// Connect to `host:port`. The grant is checked on the name; the connection goes only to the addresses of one resolution.
+    pub fn connect(addr: &str) -> NetResult<TcpStream> {
+        crate::caps::net_connect(addr);
+        let addrs = net_core::resolve_once(addr)?;
+        net_core::connect_resolved(&addrs, None).map(|inner| TcpStream { inner })
+    }
+
+    /// `connect`, giving up after `timeout_ms` milliseconds (zero or less: no limit).
+    pub fn connect_timeout(addr: &str, timeout_ms: i64) -> NetResult<TcpStream> {
+        crate::caps::net_connect(addr);
+        let addrs = net_core::resolve_once(addr)?;
+        net_core::connect_resolved(&addrs, net_core::timeout_of(timeout_ms)).map(|inner| TcpStream { inner })
+    }
+
+    pub fn read(&mut self, max: i64) -> NetResult<Vec<u8>> {
+        self.inner.read(max)
+    }
+
+    pub fn read_exact(&mut self, n: i64) -> NetResult<Vec<u8>> {
+        self.inner.read_exact(n)
+    }
+
+    pub fn read_line(&mut self) -> NetResult<String> {
+        self.inner.read_line()
+    }
+
+    pub fn write_all(&mut self, data: &[u8]) -> NetResult<()> {
+        self.inner.write_all(data)
+    }
+
+    pub fn write_str(&mut self, text: &str) -> NetResult<()> {
+        self.inner.write_all(text.as_bytes())
+    }
+
+    pub fn flush(&mut self) -> NetResult<()> {
+        self.inner.flush()
+    }
+
+    pub fn shutdown_write(&mut self) -> NetResult<()> {
+        self.inner.shutdown_write()
+    }
+
+    pub fn shutdown(&mut self) -> NetResult<()> {
+        self.inner.shutdown()
+    }
+
+    pub fn set_timeouts(&mut self, read_ms: i64, write_ms: i64) -> NetResult<()> {
+        self.inner.set_timeouts(read_ms, write_ms)
+    }
+
+    pub fn peer_addr(&self) -> String {
+        self.inner.peer_addr()
+    }
+
+    pub fn local_addr(&self) -> String {
+        self.inner.local_addr()
+    }
+}
+
+/// A bound TCP listener (`std::net::TcpListener`).
+pub struct TcpListener {
+    inner: net_core::Listener,
+}
+
+impl TcpListener {
+    pub fn bind(addr: &str) -> NetResult<TcpListener> {
+        crate::caps::net_listen(addr);
+        net_core::Listener::bind(addr).map(|inner| TcpListener { inner })
+    }
+
+    pub fn accept(&self) -> NetResult<TcpStream> {
+        self.inner.accept().map(|inner| TcpStream { inner })
+    }
+
+    pub fn local_addr(&self) -> String {
+        self.inner.local_addr()
+    }
+}
+
+/// A bound UDP socket (`std::net::UdpSocket`).
+pub struct UdpSocket {
+    inner: net_core::Datagrams,
+}
+
+impl UdpSocket {
+    pub fn bind(addr: &str) -> NetResult<UdpSocket> {
+        crate::caps::net_listen(addr);
+        net_core::Datagrams::bind(addr).map(|inner| UdpSocket { inner })
+    }
+
+    /// One datagram to `addr`; the destination is checked against `net.connect` on every call.
+    pub fn send_to(&self, data: &[u8], addr: &str) -> NetResult<i64> {
+        crate::caps::net_connect(addr);
+        self.inner.send_to(data, addr)
+    }
+
+    pub fn recv_from(&self, max: i64) -> NetResult<(Vec<u8>, String)> {
+        self.inner.recv_from(max)
+    }
+
+    pub fn set_read_timeout(&self, ms: i64) -> NetResult<()> {
+        self.inner.set_read_timeout(ms)
+    }
+
+    pub fn local_addr(&self) -> String {
+        self.inner.local_addr()
+    }
 }
