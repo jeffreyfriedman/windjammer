@@ -52,12 +52,12 @@ pub fn entry_body(entry: Ledger, extra: &str) -> String {
 }
 
 #[inline]
-pub fn entry_json(entry: &Ledger) -> String {
-    entry_text(entry.clone(), "}")
+pub fn entry_text(entry: Ledger, extra: &str) -> String {
+    entry_body(entry, extra)
 }
 
 #[inline]
-pub fn entry_text(entry: Ledger, extra: &str) -> String {
-    entry_body(entry, extra)
+pub fn entry_json(entry: &Ledger) -> String {
+    entry_text(entry.clone(), "}")
 }
 
