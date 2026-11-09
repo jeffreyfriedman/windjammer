@@ -1,0 +1,13 @@
+// Literals pushed into vectors of three declared widths take each vector's own element width, never the
+// enclosing function's return type (`Vec<i32>` here).
+pub fn build(limit: i32) -> Vec<i32> {
+    let mut words: Vec<u32> = Vec::new()
+    let mut slots: Vec<usize> = Vec::new()
+    let mut highs: Vec<i32> = Vec::new()
+    let mut sizes: Vec<i32> = Vec::new()
+    words.push(0u32)
+    slots.push(0)
+    highs.push(0)
+    sizes.push(limit)
+    highs
+}

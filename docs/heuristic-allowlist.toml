@@ -179,7 +179,7 @@
 "src/codegen/rust/recursive_struct_layout.rs" = 1
 "src/codegen/rust/return_statement_generation.rs" = 1
 "src/codegen/rust/statement_generation.rs" = 5
-"src/codegen/rust/stdlib_signature_specialization.rs" = 2
+"src/codegen/rust/stdlib_signature_specialization.rs" = 1
 "src/codegen/rust/trait_derivation.rs" = 6
 "src/codegen/rust/type_classification_utilities.rs" = 1
 "src/codegen/rust/types.rs" = 1

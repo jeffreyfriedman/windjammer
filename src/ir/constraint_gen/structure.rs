@@ -595,3 +595,38 @@ fn substitute_params(t: &Type, params: &[String], args: &[Type]) -> Type {
         other => other.clone(),
     }
 }
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// A built-in function (`println`, `debug`, `panic`, `assert`, ...; the registry is `intrinsics`) displays or checks its
+    /// arguments and never stores them at a width, so the call is modelled (not opaque). `assert_eq` / `assert_ne` compare
+    /// two values whose types the walk may not know (a user type's `len()`), so they stay opaque. Returns whether the
+    /// call is modelled here.
+    pub(super) fn intrinsic_call(&mut self, callee: &str, _arg_vars: &[ConstraintVar]) -> bool {
+        use crate::intrinsics::Intrinsic;
+        Intrinsic::from_call_name(callee).is_some_and(|i| !matches!(i, Intrinsic::AssertEq | Intrinsic::AssertNe))
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// `loop { .. }`: its value is the value of its `break`s (`let r = loop { .. break k * 10 }`). Returns that value.
+    pub(super) fn walk_loop(&mut self, body: &[&'ast Statement<'ast>]) -> ConstraintVar {
+        let value = self.cs.fresh_var();
+        self.loop_values.push(value);
+        self.scopes.push(HashMap::new());
+        for s in body {
+            self.walk_statement(s);
+        }
+        self.scopes.pop();
+        self.loop_values.pop();
+        value
+    }
+
+    /// `break v`: `v` is walked like any expression and is the innermost `loop`'s value.
+    pub(super) fn walk_break_value(&mut self, value: Option<&'ast Expression<'ast>>) {
+        let Some(v) = value else { return };
+        let var = self.walk_expression(v);
+        if let Some(&loop_value) = self.loop_values.last() {
+            self.cs.add_because(Constraint::TypeEquals(loop_value, var), tagged("TY-UNIFY"));
+        }
+    }
+}

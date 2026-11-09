@@ -2,7 +2,7 @@
 //!
 //! Every `"W####"` string literal anywhere in `src/` (linter, parser, CLI) must be registered here; `tests/docs_truth_test.rs`
 //! scans the sources to enforce it. W0007/W0008 are registered in the error catalog
-//! (`intrinsics::register_catalog`) and are not repeated here.
+//! (`error_catalog::register_intrinsic_codes`) and are not repeated here.
 
 #[derive(Debug, Clone, Copy)]
 pub struct LintCode {

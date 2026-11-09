@@ -1,0 +1,3 @@
+pub struct Cell {
+    pub weight: i32,
+}

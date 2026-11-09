@@ -591,7 +591,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Some(_) => return false,
             None if is_int_literal_tree(object) => false,
             None if is_float_literal_tree(object) => true,
-            None => return false,
+            // A receiver of unknown static type (`(a - b).abs()`): a method the integer and float surfaces declare
+            // alike relates its `T` arguments and result to the receiver whatever the receiver's number kind is.
+            None => return self.emit_numeric_method_either_kind(obj_var, method, arguments, arg_vars, result),
         };
         if is_int_literal_tree(object) || is_float_literal_tree(object) {
             self.numeric_unmodelled.literal_receivers.push(obj_var);
@@ -640,5 +642,35 @@ pub(super) fn contains_unfixed(t: &Type) -> bool {
         Type::Result(a, b) => contains_unfixed(a) || contains_unfixed(b),
         Type::Parameterized(_, xs) | Type::Tuple(xs) => xs.iter().any(contains_unfixed),
         other => contains_generic(other),
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// `receiver.method(..)` where the receiver's static type is unknown but numeric methods of both kinds declare the
+    /// method with the same shape over `T` (`abs`, `min`, `max`, `clamp`, ...): every `T` argument and a `T` result are
+    /// the receiver's class. A method that differs between the kinds (or takes a fixed numeric type) is not typed here.
+    fn emit_numeric_method_either_kind(
+        &mut self,
+        obj_var: ConstraintVar,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        arg_vars: &[ConstraintVar],
+        result: ConstraintVar,
+    ) -> bool {
+        let Some(surface) = self.core_surface else { return false };
+        let (Some((ip, ir)), Some((fp, fr))) = (surface.numeric_method(false, method), surface.numeric_method(true, method)) else {
+            return false;
+        };
+        let same = |t: &Type| crate::typing::core_surface::is_receiver_type(t);
+        let all_receiver = |ps: &[Type]| ps.iter().all(same);
+        let ret_receiver = |r: &Option<Type>| r.as_ref().is_some_and(same);
+        if ip.len() != arguments.len() || fp.len() != ip.len() || !all_receiver(&ip) || !all_receiver(&fp) || !ret_receiver(&ir) || !ret_receiver(&fr) {
+            return false;
+        }
+        for (&v, (_, a)) in arg_vars.iter().zip(arguments) {
+            self.cs.add_because(Constraint::TypeEquals(v, obj_var), origin("NUM-STD-SIG", format!("`.{}()` takes the receiver's type", method), &a.location()));
+        }
+        self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG"));
+        true
     }
 }
