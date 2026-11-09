@@ -16,7 +16,7 @@ use crate::interpreter::int::IntTy;
 use crate::interpreter::intrinsics::Intrinsic;
 use crate::interpreter::place::{deref_value, strip_refs};
 use crate::interpreter::value::*;
-use crate::parser::{BinaryOp, Expression, Type, UnaryOp};
+use crate::parser::{BinaryOp, Expression, Literal, Type, UnaryOp};
 use crate::source_map::Location;
 use std::rc::Rc;
 
@@ -209,6 +209,10 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
                 return None;
             }
             if matches!(op, UnaryOp::MutRef) {
+                return None;
+            }
+            // the written literal -9223372036854775808 is the walker's (see eval_expr.rs)
+            if matches!(op, UnaryOp::Neg) && matches!(operand, Expression::Literal { value: Literal::Int(i64::MIN), .. }) {
                 return None;
             }
             let v = expr_eval(cx, operand)?;
