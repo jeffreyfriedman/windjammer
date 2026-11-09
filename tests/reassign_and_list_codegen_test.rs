@@ -329,3 +329,11 @@ fn pure_and_uses_are_consumed_by_the_compiler_not_emitted() {
     let g = typechecks("@pure\nfn add(a: int, b: int) -> int {\n    a + b\n}\n\nfn main() {\n    println(\"${add(1, 2)}\")\n}\n");
     assert!(!g.contains("#[pure]") && !g.contains("#[uses"), "{g}");
 }
+
+#[test]
+fn value_returned_by_a_spawned_closure_keeps_its_result_type_through_join() {
+    let (g, _, _) = generate_and_typecheck(
+        "use std::thread\n\nfn work(n: int) -> Result<int, string> {\n    Ok(n + 1)\n}\n\nfn main() {\n    let h = thread::spawn(move || work(2))\n    match h.join() {\n        Ok(served) => println(\"${served.unwrap_or_else(|| -1)}\"),\n        Err(_) => println(\"panicked\"),\n    }\n}\n",
+    );
+    assert!(g.contains("unwrap_or_else(|_|"), "{g}");
+}
