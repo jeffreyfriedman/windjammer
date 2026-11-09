@@ -1,0 +1,10 @@
+mod shapes
+
+use shapes::make
+
+fn main() {
+    let items = make()
+    for it in items {
+        println("${it.name} ${it.size}")
+    }
+}
