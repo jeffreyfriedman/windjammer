@@ -179,13 +179,14 @@ tests/diagnostics/cases/unknown_enum_variant.wj	1a3c269a34a197b4	ok	fail
 tests/diagnostics/cases/unknown_field_access.wj	717377175b33f77a	ok	fail
 tests/diagnostics/cases/unknown_field_in_literal.wj	ab286810992c9999	ok	fail
 tests/diagnostics/cases/unknown_method_on_string.wj	ee6da9f95bbb3f93	ok	fail
+tests/diagnostics/cases/unknown_std_function.wj	7ea0e1795f5a2d73	ok	fail
 tests/diagnostics/cases/unknown_struct.wj	2b8d8e0afee7a24f	ok	fail
 tests/diagnostics/cases/unknown_type_annotation.wj	075b657e1ce14b15	ok	fail
 tests/diagnostics/cases/variable_typo.wj	5c72d51555b711b6	ok	fail
 tests/diagnostics/cases/wrong_return_type.wj	74746afaea8168e5	ok	fail
 tests/error_system/test_function_not_found.wj	1d975502e358f7eb	ok	fail
 tests/error_system/test_mutability.wj	dd4c7dae46377b9d	ok	ok
-tests/error_system/test_ownership.wj	9f203590699f4c14	ok	fail
+tests/error_system/test_ownership.wj	9f203590699f4c14	ok	ok
 tests/error_system/test_type_mismatch.wj	c107d2a5da15728e	ok	fail
 tests/error_system/test_variable_not_found.wj	a7c6aea24a0bcdec	ok	fail
 tests/error_system_e2e/test_borrow_errors.wj	677c80987c997338	ok	fail
