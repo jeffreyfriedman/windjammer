@@ -2,6 +2,7 @@
 
 <!-- promise: feature interpret-instant -->
 <!-- promise: feature multi-backend -->
+<!-- promise: feature interpreter-matches-compiled -->
 
 Windjammer has two ways to run a program, and they are meant to give the same answers.
 

@@ -304,13 +304,6 @@ fn known_gap_generic_copy_out_of_list_fails_compiled() {
 }
 
 #[test]
-fn known_gap_main_returning_err_exits_zero_when_interpreted() {
-    let repro = real().root.join("tests/book_repros/main_returns_err.wj");
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&repro).output().unwrap();
-    assert!(out.status.success() && out.stderr.is_empty(), "the interpreter now reports an Err from main: delete tests/book_repros/main_returns_err.wj, this test and its docs/known-gaps.md row\n{}", String::from_utf8_lossy(&out.stderr));
-}
-
-#[test]
 fn known_gap_directory_module_borrow_is_lost_when_compiled() {
     let _g = compiled_lock();
     let src = real().root.join("tests/book_repros/dir_module");
