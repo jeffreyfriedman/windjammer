@@ -1,6 +1,6 @@
 #[inline]
 fn knapsack(weights: &Vec<i64>, values: &Vec<i64>, cap: i64) -> i64 {
-    let mut dp = vec![0; 8];
+    let mut dp = vec![0_i64; 8_usize];
     for i in 0_usize..weights.len() {
         let mut c = cap;
         while c >= weights[i] {

@@ -1,0 +1,2 @@
+pub const SCOPE_READ: string = "read"
+pub const SCOPE_WRITE: string = "write"

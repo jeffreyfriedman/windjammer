@@ -39,10 +39,10 @@ fn test_color_match(color: Color) -> i32 {
             return 3_i32;
         },
         Color::Rgb(r, g, b) => {
-            return (r + g + b) as i32;
+            return r + g + b;
         },
         Color::Rgba(r, g, b, a) => {
-            return (r + g + b + a) as i32;
+            return r + g + b + a;
         },
     }
 }

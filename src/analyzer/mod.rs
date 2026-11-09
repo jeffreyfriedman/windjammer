@@ -105,7 +105,12 @@ pub struct AnalyzedFunction<'ast> {
     /// Declared types of the file's top-level `const` / `static` items (`const SIZE: i32`): a function body
     /// that names one reads a value of that type (NUM-DECLARED for the numeric solver).
     pub module_const_types: Arc<HashMap<String, Type>>,
+    /// The file's `type` aliases: name -> (generic parameters, target) (`type Pair<T> = (T, T)`).
+    pub type_aliases: TypeAliases,
 }
+
+/// `type` aliases by name: (the alias's generic parameters, its target type).
+pub type TypeAliases = Arc<HashMap<String, (Vec<String>, Type)>>;
 
 impl<'ast> AnalyzedFunction<'ast> {
     /// True when this is the analysis of `decl` itself, not of a same-name definition elsewhere
@@ -359,6 +364,8 @@ pub struct Analyzer<'ast> {
     global_struct_field_types: Arc<HashMap<String, HashMap<String, Type>>>,
     /// Declared types of the program's top-level `const` / `static` items.
     module_const_types: Arc<HashMap<String, Type>>,
+    /// The program's `type` aliases.
+    type_aliases: TypeAliases,
     /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
@@ -395,6 +402,7 @@ impl<'ast> Analyzer<'ast> {
             self_impl_context: None,
             global_struct_field_types: Arc::new(HashMap::new()),
             module_const_types: Arc::new(HashMap::new()),
+            type_aliases: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
             ownership_preconverged: false,
