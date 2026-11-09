@@ -7,6 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
+/// The binding `wj eval` gives the final expression's value before printing it.
+const VALUE: &str = "__wj_eval_value";
+
 /// The standard modules an `eval` expression can use without importing them.
 pub const PRELUDE: &[&str] = &[
     "use std::strings",
@@ -94,7 +97,9 @@ pub fn program(text: &str) -> String {
     for (i, p) in parts.iter().enumerate() {
         let last = i + 1 == parts.len();
         if last && is_expression(p) {
-            body.push_str(&format!("    println(\"${{{p}}}\")\n"));
+            // the value is bound first and printed by name: the expression is never spliced into a string, so
+            // one that is itself a string with `${..}` (or quotes) stays as written
+            body.push_str(&format!("    let {VALUE} = {p}\n    println(\"${{{VALUE}}}\")\n"));
         } else {
             body.push_str(&format!("    {p}\n"));
         }
@@ -118,10 +123,11 @@ mod tests {
     #[test]
     fn a_final_expression_is_printed_and_statements_are_kept() {
         let p = program("let x = 6; x * 7");
-        assert!(p.contains("    let x = 6\n    println(\"${x * 7}\")\n"), "{p}");
-        assert!(program("strings.to_upper(\"a\")").contains("println(\"${strings.to_upper(\"a\")}\")"));
+        assert!(p.contains("    let x = 6\n    let __wj_eval_value = x * 7\n    println(\"${__wj_eval_value}\")\n"), "{p}");
         let s = program("let mut n = 1\nn += 2\nprintln(\"${n}\")");
         assert!(s.ends_with("    let mut n = 1\n    n += 2\n    println(\"${n}\")\n}\n"), "{s}");
-        assert!(program("x == 3").contains("println(\"${x == 3}\")"));
+        assert!(program("x == 3").contains("let __wj_eval_value = x == 3\n"));
+        // a string literal with `${..}` is bound as written, not spliced into another interpolation
+        assert!(program("\"${6 * 7} ok\"").contains("let __wj_eval_value = \"${6 * 7} ok\"\n"));
     }
 }
