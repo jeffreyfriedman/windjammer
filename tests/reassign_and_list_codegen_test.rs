@@ -289,3 +289,29 @@ fn self_mutability_reaches_a_caller_through_return_in_loop_and_while_condition()
     );
     assert!(g.contains("fn serve_client(&mut self)") && g.contains("fn step(&mut self)"), "{g}");
 }
+
+// ---- book findings ----
+
+#[test]
+fn filter_collect_over_a_collection_copies_the_items() {
+    typechecks("fn main() {\n    let v = [5, 3, 8, 4]\n    let evens: Vec<int> = v.filter(|x| *x % 2 == 0).collect()\n    println(\"${evens.len()}\")\n}\n");
+}
+
+#[test]
+fn entry_with_a_borrowed_text_key_takes_an_owned_key() {
+    typechecks(
+        "use std::collections::HashMap\n\nfn main() {\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for w in [\"a\", \"b\", \"a\"] {\n        counts.entry(w).and_modify(|c| { *c = *c + 1 }).or_insert(1)\n    }\n    println(\"${counts.len()}\")\n}\n",
+    );
+}
+
+#[test]
+fn map_err_to_a_literal_builds_an_owned_string_error() {
+    typechecks("fn parse(text: string) -> Result<int, string> {\n    text.parse::<int>().map_err(|_| \"bad number\")\n}\nfn main() {\n    println(\"${parse(\"4\").is_ok()}\")\n}\n");
+}
+
+#[test]
+fn trait_default_method_returns_an_owned_string_literal() {
+    typechecks(
+        "trait Shape {\n    fn area(self) -> float\n    fn name(self) -> string { \"shape\" }\n}\nstruct Sq { s: float }\nimpl Shape for Sq {\n    fn area(self) -> float { self.s * self.s }\n}\nfn main() {\n    let a = Sq { s: 2.0 }\n    println(\"${a.name()} ${a.area()}\")\n}\n",
+    );
+}

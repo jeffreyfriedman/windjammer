@@ -21,6 +21,24 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(lowered) = self.mc_lower_text_option_copy(object, method, args, obj_str) {
             return Some(lowered);
         }
+        // `map_err(|_| "literal")` into a `Result<_, string>`: the error is an owned `String`
+        if method == "map_err" && args.len() == 1 {
+            if let Some((_, Expression::Closure { body: Expression::Literal { value: Literal::String(_), .. }, .. })) = arguments.first() {
+                if args[0].ends_with('"') {
+                    args[0].push_str(".to_string()");
+                }
+            }
+        }
+        // `entry(key)` takes the key by value: a text key that is a borrowed slice becomes an owned `String`
+        if method == "entry" && args.len() == 1 && !args[0].ends_with(".to_string()") && !args[0].ends_with(".clone()") && !args[0].starts_with("String::from(") {
+            if let Some((_, key)) = arguments.first() {
+                if matches!(key, Expression::Identifier { .. })
+                    && self.infer_expression_type(key).is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(crate::codegen::rust::collection_detection::peel_type_reference(&t)))
+                {
+                    args[0].push_str(".to_string()");
+                }
+            }
+        }
         // `opt.unwrap_or(&0)`: a literal behind an explicit `&` is a reference default (`Option<&T>`
         // from `map.get(k)`); the by-value call-site rules must not strip it.
         if matches!(method, "cmp" | "partial_cmp" | "eq" | "ne" | "lt" | "le" | "gt" | "ge")
@@ -224,7 +242,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Iterator-only methods (no inherent `Vec`/slice/map/set method of the same name).
-    fn is_direct_iterator_adapter(method: &str) -> bool {
+    pub(in crate::codegen::rust) fn is_direct_iterator_adapter(method: &str) -> bool {
         matches!(
             method,
             "map" | "filter" | "filter_map" | "flat_map" | "zip" | "take" | "skip" | "any" | "all"
@@ -271,7 +289,7 @@ impl<'ast> CodeGenerator<'ast> {
             || matches!(object, Expression::MacroInvocation { name, .. } if name == "vec")
     }
 
-    fn type_is_iterable_collection(ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_is_iterable_collection(ty: &Type) -> bool {
         match ty {
             Type::Vec(_) | Type::Array(..) => true,
             Type::Reference(inner) | Type::MutableReference(inner) => Self::type_is_iterable_collection(inner),
