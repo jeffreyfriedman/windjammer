@@ -24,11 +24,11 @@ runs as a project in the interpreter and compiled, with the same agreement check
 <!-- wj:gen name=book_stats -->
 | Measure | Count |
 |---|---|
-| Programs in the book | 82 |
+| Programs in the book | 98 |
 | Blocks marked `ignore` | 0 |
 | Programs that run interpreted only | 3 |
 | Chapters still to be written | 0 |
-| Pages | 32 |
+| Pages | 37 |
 | Promises no page mentions yet | 0 |
 <!-- wj:end -->
 

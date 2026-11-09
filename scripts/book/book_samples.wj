@@ -4,7 +4,7 @@
 //
 // Interpreted pass: every NAME.wj runs with `wj run --interpret`; exit status 0 and, when NAME.expect exists,
 // stdout lines equal to it. NAME_test.wj files run with `wj test --interpret` and must pass.
-// Compiled pass (--compiled): the same programs run through `wj run --compiled`, one shared project, and their
+// Compiled pass (--compiled): the same programs run through `wj run --compiled`, one project each, and their
 // stdout must equal the interpreted stdout, so a sample cannot mean one thing to `wj run` and another to `wj build`.
 // Multi-file projects under SAMPLES_DIR/projects run from their .root with `wj run`; output must equal their .expect lines.
 // A sample with NAME.interp (a fence marked `interpreter_only` in the book) is not compiled.
@@ -192,19 +192,16 @@ fn main() {
     }
     let mut compiled_checked = 0
     if compiled {
-        let proj = scratch + "/proj"
-        fs::write(proj + "/wj.toml", "[package]\nname = \"book_samples\"\nversion = \"0.1.0\"\nedition = \"2025\"\n").unwrap_or(())
+        // One project per sample: bins of one project share function signatures by name, and a sample must not
+        // see another sample's `load`.
         let mut k = 0
         while k < programs.len() {
             let name = programs[k]
-            sh("mkdir -p " + quote(proj + "/cmd/" + name) + " && cp " + quote(dir + "/" + name + ".wj") + " " + quote(proj + "/cmd/" + name + "/main.wj"))
-            k += 1
-        }
-        k = 0
-        while k < programs.len() {
-            let name = programs[k]
             let at = origin(index, name)
-            let r = sh("cd " + quote(proj) + " && " + quote(wj) + " run --compiled --bin " + name + " .")
+            let proj = scratch + "/iso/" + name
+            sh("mkdir -p " + quote(proj + "/src") + " && cp " + quote(dir + "/" + name + ".wj") + " " + quote(proj + "/src/main.wj"))
+            fs::write(proj + "/wj.toml", "[package]\nname = \"sample\"\nversion = \"0.1.0\"\nedition = \"2025\"\n").unwrap_or(())
+            let r = sh("cd " + quote(proj) + " && " + quote(wj) + " run --compiled")
             if r.status != 0 {
                 failures.push("${at}: compiled run exit ${r.status}\n${tail(r.stdout + r.stderr, 15)}")
             } else if lines_of(r.stdout) != lines_of(interpreted_out[k]) {

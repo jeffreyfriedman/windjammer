@@ -8,7 +8,7 @@ The sample runner of The Windjammer Book (`docs/book`), in interpreted Windjamme
 - Out: one `FAIL page.md:line ...` entry per failing sample and a summary line; exit status 1 when any sample fails, 2 on bad usage.
 
 ## Layout
-- `book_samples.wj`: the runner. Interpreted pass (exit status 0, stdout equal to `ID.expect` when present; `_test` files through `wj test --interpret`), then with `--compiled` one shared project with a `cmd/ID/main.wj` per sample, run with `wj run --compiled --bin ID`, whose stdout must equal the interpreted stdout.
+- `book_samples.wj`: the runner. Interpreted pass (exit status 0, stdout equal to `ID.expect` when present; `_test` files through `wj test --interpret`), then with `--compiled` one project per sample (bins of one project share function signatures by name), run with `wj run --compiled`, whose stdout must equal the interpreted stdout. Multi-file projects under `projects/` run from their `.root`, interpreted and compiled, against their `.expect` lines.
 - `wj.toml`: the capability grant (scratch space and the programs it starts).
 
 ## Invariants
