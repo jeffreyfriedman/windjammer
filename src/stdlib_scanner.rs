@@ -4,7 +4,9 @@
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
 use std::{fs, path::Path};
+mod clone_impls;
 mod generic_returns;
+use clone_impls::implements_clone_by_hand;
 
 /// Resolve `windjammer-runtime/src` for signature scanning.
 ///
@@ -206,7 +208,7 @@ fn scan_rust_file(
                     if pending_struct_derives_copy != Some(true) {
                         registry.register_runtime_non_copy_type(&struct_name);
                     }
-                    if pending_struct_derives_clone != Some(true) {
+                    if pending_struct_derives_clone != Some(true) && !implements_clone_by_hand(&content, &struct_name) {
                         registry.register_runtime_non_clone_type(&struct_name);
                     }
                     pending_struct_derives_copy = None;
