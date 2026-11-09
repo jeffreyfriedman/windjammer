@@ -61,7 +61,7 @@ impl Parser {
         frame.holes.push(pos);
         let name = hole_name(frame.holes.len() - 1);
         self.advance();
-        Ok(self.alloc_expr(Expression::Identifier { name, location }))
+        Ok(self.alloc_synthetic(Expression::Identifier { name, location }))
     }
 
     /// Parse one call argument, turning it into a closure when it contains `_` holes.
@@ -96,7 +96,7 @@ impl Parser {
         self.saw_label = true; // build the callee table so misplaced shorthand can be diagnosed (named_args.rs)
         let parameters = (0..frame.holes.len()).map(hole_name).collect();
         let location = self.token_location(frame.holes[0]); // the closure starts at its first `_`
-        Ok(self.alloc_expr(Expression::Closure { parameters, body: expr, location }))
+        Ok(self.alloc_synthetic(Expression::Closure { parameters, body: expr, location }))
     }
 
     /// Run an explicit-closure parser with the nesting depth raised (so `_` inside it is rejected).
