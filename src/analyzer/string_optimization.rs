@@ -63,8 +63,8 @@ impl<'ast> Analyzer<'ast> {
             }
 
             // Check for explicit decorators
-            let has_str_ref = param.decorators.iter().any(|d| d.name == "str_ref");
-            let has_string_ref = param.decorators.iter().any(|d| d.name == "string_ref");
+            let has_str_ref = param.pins_str_ref();
+            let has_string_ref = param.pins_string_ref();
 
             if has_str_ref {
                 // PHASE 3: Developer explicitly requested &str

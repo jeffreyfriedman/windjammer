@@ -176,11 +176,17 @@ impl Interpreter {
         }
         let mut places = Vec::new();
         let mut plain = Vec::with_capacity(args.len());
-        for (a, (_, pass, t)) in args.into_iter().zip(&sig.params) {
+        for (i, (a, (_, pass, t))) in args.into_iter().zip(&sig.params).enumerate() {
             if *pass == Pass::BorrowMut && !matches!(t, WireTy::Handle(_)) {
                 places.push(a.clone());
             }
-            plain.push(super::place::deref_value(a)?);
+            let v = super::place::deref_value(a)?;
+            // `T: AsRef<[u8]>` takes a string too: its UTF-8 bytes, as the compiled call passes them
+            let v = match v {
+                Value::Str(s) if sig.bytes_or_str.contains(&i) => Value::vec(s.bytes().map(|b| Value::Int(b as i128, super::int::IntTy::U8)).collect()),
+                v => v,
+            };
+            plain.push(v);
         }
         let result = match self.port_kind() {
             None => self.crate_call_live(&host, &sig, &plain)?,

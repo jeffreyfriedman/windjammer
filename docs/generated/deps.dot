@@ -110,7 +110,7 @@ digraph deps {
   "agent_index" -> "ir" [label="2"];
   "analyzer" -> "auto_clone" [label="2"];
   "analyzer" -> "codegen" [label="28",color=red,fontcolor=red];
-  "analyzer" -> "debug_env" [label="5"];
+  "analyzer" -> "debug_env" [label="4"];
   "analyzer" -> "embedded_assets" [label="2"];
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
@@ -183,8 +183,8 @@ digraph deps {
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
   "cli" -> "metadata" [label="1"];
-  "cli" -> "module_system" [label="8"];
-  "cli" -> "package" [label="15"];
+  "cli" -> "module_system" [label="9"];
+  "cli" -> "package" [label="16"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="6"];
@@ -200,7 +200,7 @@ digraph deps {
   "cli_commands" -> "lexer" [label="1"];
   "cli_commands" -> "parser" [label="1"];
   "cli_commands" -> "test_runner" [label="1"];
-  "cli_execution" -> "interpreter" [label="1"];
+  "cli_execution" -> "interpreter" [label="2"];
   "cli_execution" -> "linter" [label="6"];
   "cli_output" -> "error_mapper" [label="1"];
   "cli_output" -> "source_map" [label="1"];
@@ -223,15 +223,15 @@ digraph deps {
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
   "codegen" -> "component_analyzer" [label="2"];
-  "codegen" -> "debug_env" [label="7"];
+  "codegen" -> "debug_env" [label="5"];
   "codegen" -> "decorator_registry" [label="3"];
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="393"];
+  "codegen" -> "ir" [label="394"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="680"];
+  "codegen" -> "parser" [label="686"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
@@ -341,8 +341,8 @@ digraph deps {
   "interpreter" -> "ir" [label="37"];
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
-  "interpreter" -> "package" [label="2"];
-  "interpreter" -> "parser" [label="124"];
+  "interpreter" -> "package" [label="3"];
+  "interpreter" -> "parser" [label="125"];
   "interpreter" -> "resolve" [label="13"];
   "interpreter" -> "source_map" [label="14"];
   "interpreter" -> "stdlib_surface" [label="1"];
@@ -422,7 +422,7 @@ digraph deps {
   "test_runner" -> "compiler_config" [label="1"];
   "test_runner" -> "config" [label="3"];
   "test_runner" -> "diagnostics" [label="1"];
-  "test_runner" -> "interpreter" [label="3"];
+  "test_runner" -> "interpreter" [label="4"];
   "test_runner" -> "lexer" [label="2"];
   "test_runner" -> "package" [label="1"];
   "test_runner" -> "parser" [label="3"];

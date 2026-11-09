@@ -163,7 +163,7 @@ seconds column of the gate table includes waiting for a slot and for the release
 | jit-loops | 54 s run | |
 | packed-vec | 32 s run | |
 | crate-host | 56 s run | |
-| corpus (compiled: recorded) | 90 s | 1570 cases, ecosystem tests plus value-position and generated programs |
+| corpus (compiled: recorded) | 90 s | every case: ecosystem tests plus value-position and generated programs |
 | spec oracle (compiled: recorded) | 36 s | 228 cases x walker and resolved; compiled results come from the recorded baseline |
 
 About 6 minutes of work on a quiet machine; the rest of a gate run is the release build of `tests/all` (once per source
