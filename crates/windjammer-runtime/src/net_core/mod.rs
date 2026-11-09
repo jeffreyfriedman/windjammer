@@ -61,6 +61,14 @@ pub fn connect_resolved(addrs: &[SocketAddr], timeout: Option<Duration>) -> Resu
     Err(err(last))
 }
 
+/// Shutting down a connection the peer has already closed is done, not an error (macOS reports `ENOTCONN` there).
+fn quiet_shutdown(r: io::Result<()>) -> Result<(), String> {
+    match r {
+        Err(e) if e.kind() != io::ErrorKind::NotConnected => Err(err(e)),
+        _ => Ok(()),
+    }
+}
+
 fn size(n: i64) -> Result<usize, String> {
     if n < 1 {
         return Err(format!("read size must be at least 1, got {n}"));
@@ -128,11 +136,11 @@ impl Stream {
 
     /// Half close: the peer reads end of stream; this end can still read.
     pub fn shutdown_write(&mut self) -> Result<(), String> {
-        self.sock.shutdown(Shutdown::Write).map_err(err)
+        quiet_shutdown(self.sock.shutdown(Shutdown::Write))
     }
 
     pub fn shutdown(&mut self) -> Result<(), String> {
-        self.sock.shutdown(Shutdown::Both).map_err(err)
+        quiet_shutdown(self.sock.shutdown(Shutdown::Both))
     }
 
     /// Read and write timeouts in milliseconds; zero or less = none.

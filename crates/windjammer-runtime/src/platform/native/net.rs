@@ -482,6 +482,27 @@ fn send_response(stream: &mut StdTcpStream, response: ServerResponse) -> NetResu
 
 use crate::net_core;
 
+/// An integer argument of a socket method: any width, owned or borrowed (generated code may pass either).
+pub trait NetInt {
+    fn net_int(&self) -> i64;
+}
+
+macro_rules! net_int {
+    ($($t:ty),*) => { $( impl NetInt for $t { fn net_int(&self) -> i64 { i64::try_from(*self).unwrap_or(0) } } )* };
+}
+net_int!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
+
+impl<T: NetInt + ?Sized> NetInt for &T {
+    fn net_int(&self) -> i64 {
+        (**self).net_int()
+    }
+}
+
+/// The `i64` the core takes (a value out of range is 0: no timeout, or a size the core refuses).
+fn num(n: impl NetInt) -> i64 {
+    n.net_int()
+}
+
 /// A TCP connection (`std::net::TcpStream`).
 pub struct TcpStream {
     inner: net_core::Stream,
@@ -489,37 +510,39 @@ pub struct TcpStream {
 
 impl TcpStream {
     /// Connect to `host:port`. The grant is checked on the name; the connection goes only to the addresses of one resolution.
-    pub fn connect(addr: &str) -> NetResult<TcpStream> {
+    pub fn connect(addr: impl AsRef<str>) -> NetResult<TcpStream> {
+        let addr = addr.as_ref();
         crate::caps::net_connect(addr);
         let addrs = net_core::resolve_once(addr)?;
         net_core::connect_resolved(&addrs, None).map(|inner| TcpStream { inner })
     }
 
     /// `connect`, giving up after `timeout_ms` milliseconds (zero or less: no limit).
-    pub fn connect_timeout(addr: &str, timeout_ms: i64) -> NetResult<TcpStream> {
+    pub fn connect_timeout(addr: impl AsRef<str>, timeout_ms: impl NetInt) -> NetResult<TcpStream> {
+        let addr = addr.as_ref();
         crate::caps::net_connect(addr);
         let addrs = net_core::resolve_once(addr)?;
-        net_core::connect_resolved(&addrs, net_core::timeout_of(timeout_ms)).map(|inner| TcpStream { inner })
+        net_core::connect_resolved(&addrs, net_core::timeout_of(num(timeout_ms))).map(|inner| TcpStream { inner })
     }
 
-    pub fn read(&mut self, max: i64) -> NetResult<Vec<u8>> {
-        self.inner.read(max)
+    pub fn read(&mut self, max: impl NetInt) -> NetResult<Vec<u8>> {
+        self.inner.read(num(max))
     }
 
-    pub fn read_exact(&mut self, n: i64) -> NetResult<Vec<u8>> {
-        self.inner.read_exact(n)
+    pub fn read_exact(&mut self, n: impl NetInt) -> NetResult<Vec<u8>> {
+        self.inner.read_exact(num(n))
     }
 
     pub fn read_line(&mut self) -> NetResult<String> {
         self.inner.read_line()
     }
 
-    pub fn write_all(&mut self, data: &[u8]) -> NetResult<()> {
-        self.inner.write_all(data)
+    pub fn write_all(&mut self, data: impl AsRef<[u8]>) -> NetResult<()> {
+        self.inner.write_all(data.as_ref())
     }
 
-    pub fn write_str(&mut self, text: &str) -> NetResult<()> {
-        self.inner.write_all(text.as_bytes())
+    pub fn write_str(&mut self, text: impl AsRef<str>) -> NetResult<()> {
+        self.inner.write_all(text.as_ref().as_bytes())
     }
 
     pub fn flush(&mut self) -> NetResult<()> {
@@ -534,8 +557,8 @@ impl TcpStream {
         self.inner.shutdown()
     }
 
-    pub fn set_timeouts(&mut self, read_ms: i64, write_ms: i64) -> NetResult<()> {
-        self.inner.set_timeouts(read_ms, write_ms)
+    pub fn set_timeouts(&mut self, read_ms: impl NetInt, write_ms: impl NetInt) -> NetResult<()> {
+        self.inner.set_timeouts(num(read_ms), num(write_ms))
     }
 
     pub fn peer_addr(&self) -> String {
@@ -553,7 +576,8 @@ pub struct TcpListener {
 }
 
 impl TcpListener {
-    pub fn bind(addr: &str) -> NetResult<TcpListener> {
+    pub fn bind(addr: impl AsRef<str>) -> NetResult<TcpListener> {
+        let addr = addr.as_ref();
         crate::caps::net_listen(addr);
         net_core::Listener::bind(addr).map(|inner| TcpListener { inner })
     }
@@ -573,23 +597,25 @@ pub struct UdpSocket {
 }
 
 impl UdpSocket {
-    pub fn bind(addr: &str) -> NetResult<UdpSocket> {
+    pub fn bind(addr: impl AsRef<str>) -> NetResult<UdpSocket> {
+        let addr = addr.as_ref();
         crate::caps::net_listen(addr);
         net_core::Datagrams::bind(addr).map(|inner| UdpSocket { inner })
     }
 
     /// One datagram to `addr`; the destination is checked against `net.connect` on every call.
-    pub fn send_to(&self, data: &[u8], addr: &str) -> NetResult<i64> {
+    pub fn send_to(&self, data: impl AsRef<[u8]>, addr: impl AsRef<str>) -> NetResult<i64> {
+        let addr = addr.as_ref();
         crate::caps::net_connect(addr);
-        self.inner.send_to(data, addr)
+        self.inner.send_to(data.as_ref(), addr)
     }
 
-    pub fn recv_from(&self, max: i64) -> NetResult<(Vec<u8>, String)> {
-        self.inner.recv_from(max)
+    pub fn recv_from(&self, max: impl NetInt) -> NetResult<(Vec<u8>, String)> {
+        self.inner.recv_from(num(max))
     }
 
-    pub fn set_read_timeout(&self, ms: i64) -> NetResult<()> {
-        self.inner.set_read_timeout(ms)
+    pub fn set_read_timeout(&self, ms: impl NetInt) -> NetResult<()> {
+        self.inner.set_read_timeout(num(ms))
     }
 
     pub fn local_addr(&self) -> String {

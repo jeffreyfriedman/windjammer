@@ -53,6 +53,9 @@ fn main() {
         Ok(_) => println("client: ok"),
         Err(e) => println("client: FAILED ${e}"),
     }
-    let answered = h.join()
+    let answered = match h.join() {
+        Ok(n) => n,
+        Err(_) => -9,
+    }
     println("server answered ${answered} lines")
 }
