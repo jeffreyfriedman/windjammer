@@ -111,8 +111,13 @@ without touching the network, and the same test passes live on loopback and comp
 timeouts, resolution, error vocabulary. The compiled runtime's `platform/native/net.rs` wraps it with `caps::` checks;
 the interpreter includes the same file (`#[path]`, the pattern of `caps_core` and `durable_core`) behind its gate and
 port. Codegen needs no special case: `use std::net::TcpStream` already maps to
-`windjammer_runtime::platform::native::net::TcpStream`, and the scanned signatures (`&str`, `&[u8]`, `i64`) give the
-ownership facts.
+`windjammer_runtime::platform::native::net::TcpStream`. The runtime methods take `impl AsRef<str>`, `impl AsRef<[u8]>`
+and `impl NetInt` (any integer width, owned or borrowed), the convention `http::ClientRequest` already uses, so
+whichever ownership the generated call site picks compiles.
+
+State: live sockets belong to the run (`Interpreter::net`, shared by its tasks, which run on their own OS threads
+one at a time); a simulated network belongs to its world (`World::net`). Neither is a process-wide static, so
+concurrent test runs never see each other's sockets.
 
 Gates that keep them identical:
 - `tests/std_net_sockets_test.rs`: one suite of programs run interpreted, compiled, simulated and replayed, compared
