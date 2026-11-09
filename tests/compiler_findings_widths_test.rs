@@ -45,6 +45,12 @@ fn typechecks_at(src: &Path, name: &str) {
     );
 }
 
+/// A `break` value is in the class of the values it is computed from, and is the loop's value.
+#[test]
+fn loop_break_value_takes_counter_width() {
+    generated_rust_typechecks("loop_break_value_takes_counter_width");
+}
+
 /// Literals pushed into vectors of several declared widths take each vector's element width.
 #[test]
 fn push_literals_take_each_declared_vec_width() {
