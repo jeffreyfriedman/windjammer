@@ -16,7 +16,7 @@ struct Keyframe {
 
 #[inline]
 fn find_keyframe_range(keyframes: &Vec<Keyframe>, target_time: f32) -> (usize, usize) {
-    let before_idx = 0_i32;
+    let before_idx = 0_usize;
     let mut after_idx = keyframes.len() - 1_usize;
     for i in 0_usize..keyframes.len() {
         if keyframes[i].time >= target_time {

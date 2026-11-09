@@ -1,0 +1,5 @@
+use crate::usecases::{Deps, list_items}
+
+pub fn handle(deps: Deps, tenant_slug: string) -> int {
+    list_items(deps, tenant_slug).len() as int
+}

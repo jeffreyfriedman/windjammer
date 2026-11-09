@@ -37,7 +37,7 @@ fn test_param_simple(x: i32) -> i32 {
 #[inline]
 fn test_let_patterns() -> i32 {
     let (x, y) = (10_i32, 20_i32);
-    let _ = 100;
+    let _ = 100_i64;
     x + y
 }
 
@@ -91,7 +91,7 @@ fn test_nested_patterns(result: Result<Option<i32>, String>) -> i32 {
 fn test_qualified_patterns(opt: std::option::Option<i32>) -> i32 {
     match opt {
         std::option::Option::Some(x) => {
-            return x as i32;
+            return x;
         },
         std::option::Option::None => {
             return 0_i32;
@@ -106,7 +106,7 @@ fn test_struct_patterns(point: Point) -> i32 {
             return 0_i32;
         },
         Point { x, y } => {
-            return (x + y) as i32;
+            return x + y;
         },
     }
 }

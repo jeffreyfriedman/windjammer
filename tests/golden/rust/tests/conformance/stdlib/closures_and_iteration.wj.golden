@@ -122,7 +122,7 @@ fn test_enumerate() {
 }
 
 fn test_nested_iter() {
-    let matrix = vec![vec![1_i32, 2_i32, 3_i32], vec![4_i32, 5_i32, 6_i32]];
+    let matrix = vec![vec![1_i64, 2_i64, 3_i64], vec![4_i64, 5_i64, 6_i64]];
     let mut flat: Vec<i64> = vec![];
     for row in matrix {
         for item in row.iter().copied() {
