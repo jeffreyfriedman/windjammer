@@ -1,0 +1,18 @@
+// Control: the variable is reassigned from the call that moved it, so the later use is fine.
+struct Node {
+    label: string,
+    next: int,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { label: self.label, next: self.next + 1 }
+    }
+}
+
+fn main() {
+    let mut n = Node { label: "a", next: 1 }
+    n = n.advance()
+    n = n.advance()
+    println("${n.label} ${n.next}")
+}

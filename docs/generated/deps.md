@@ -7,7 +7,7 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | from \ to | analyzer | auto_clone | auto_fix | build_utils | cargo_cache | cargo_integration | cargo_toml | check | cli_args | cli_execution | cli_project_build | codegen | compilation_error_handling | compiler | compiler_config | compiler_database | component_analyzer | config | debug_env | decorator_registry | diagnostics | ejector | embedded_assets | error | error_catalog | error_codes | error_handling | error_mapper | errors | file_compilation_pipeline | file_compiler | formatter | fuzzy_matcher | inference | interpreter | intrinsics | ir | lexer | linter | metadata | module_system | optimizer | output_generation | package | parser | parser_impl | project_paths | reduce | resolve | rust_integration_tests | source_map | stdlib_scanner | stdlib_surface | syntax_highlighter | test_module_gate | test_runner | test_utils | toolchain | type_classification | type_display | type_inference | typing | wjsl |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **agent_index** (tooling) | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | | | | | |
-| **analyzer** (ownership) | | 2 | | | | | | | | | | 28! | | | | | | | 4 | | | | 2 | | | | | | | | | | | | | | 12! | 7 | | 1! | | | | | 127 | | | | | | | 2 | 1 | | | | 1 | | 34 | | 1 | | |
+| **analyzer** (ownership) | | 2 | | | | | | | | | | 28! | | | | | | | 4 | | | | 2 | | | | | | | | | | | | | | 12! | 7 | | 1! | | | | | 130 | | | | | | | 2 | 1 | | | | 1 | | 34 | | 1 | | |
 | **auto_clone** (ownership) | 15 | | | | | | | | | | | 3! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 34 | | | | | | | | | | | | | | 1 | | | | |
 | **auto_clone_tests** (ownership) | 23 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | 27 | | | | | | | | | | | | 1! | | | | | | |
 | **build_utils** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 4 | | | | | | 1 | | | 2 | | | | | 1 | 1 | | | | | | | |
@@ -19,9 +19,9 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | **cli_execution** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | 6 | | | | | | | | | | | | | | | | | | | | | | | | |
 | **cli_output** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | |
 | **cli_project_build** (driver) | 1 | | | 1 | | 1 | | | 1 | | | 1 | | 1 | 1 | | | 1 | | | | | | | | | | | | | 1 | | | | | | | 1 | | | | | | | 2 | 1 | 1 | | | | | | | | | | | | 1 | | | | |
-| **codegen** (backend) | 623 | 6 | | | | | | | | | | | | 6! | 5 | | 2 | | 5 | 3 | | | 2 | | | | | | | | | | | 2 | | 3! | 394 | 24 | 2! | | | | | | 686 | 2 | | | 3 | | 9 | | 4 | | | | 7 | | 237 | | 63 | | 3! |
+| **codegen** (backend) | 624 | 6 | | | | | | | | | | | | 6! | 5 | | 2 | | 5 | 3 | | | 2 | | | | | | | | | | | 2 | | 3! | 394 | 24 | 2! | | | | | | 686 | 2 | | | 3 | | 9 | | 4 | | | | 7 | | 237 | | 63 | | 3! |
 | **compilation_error_handling** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | |
-| **compiler** (driver) | 33 | | | 3 | | | 4 | | | | | 39 | | | 4 | 1 | | 2 | 4 | 1 | | | 2 | | | | | | | | | | | 1 | | | 8 | 4 | 2 | 47 | 2 | 1 | | 1 | 96 | | 9 | | 4! | 2 | | | | | | | | | 5 | | 5 | | |
+| **compiler** (driver) | 33 | | | 3 | | | 4 | | | | | 39 | | | 4 | 1 | | 2 | 4 | 1 | | | 2 | | | | | | | | | | | 1 | | | 8 | 4 | 2 | 47 | 2 | 1 | | 1 | 100 | | 9 | | 4! | 2 | | | | | | | | | 5 | | 7 | | |
 | **compiler_config** (support) | | | | | | | | | | | | 1! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
 | **compiler_database** (driver) | 3 | | | | | | | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | 2 | | | | 1 | | | | 1 | | | 1 | | | | | | | | | | | | | | | | | | |
 | **component_analyzer** (resolve) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 5 | | | | | | | | | | | | | | | | | | |
@@ -38,9 +38,9 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | **file_compiler** (driver) | 1 | | | | | | | | | | | 1 | 1 | | 3 | | | | | | | | 2 | | | | | | | 1 | | | | | | | 1 | 1 | | | | 1 | | | 1 | | | | | | | | | | | | | | | | | | |
 | **ide_analysis** (tooling) | 1 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | 1 | 1 | 1 | | | | | 4 | | | | | | | | | | | | | | | 1 | | | |
 | **inference** (types) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 6 | | | | | | | | | | | | 1 | | | | | | |
-| **interpreter** (tooling) | 2 | | | | | | | | | | | 1 | | | | | | | | | | | | 2 | | | | | | | | | | | | 3! | 37 | 4 | | | 8 | | | 3 | 125 | | | | 13 | | 14 | | 1 | | 1 | | | | | 2 | | | |
+| **interpreter** (tooling) | 2 | | | | | | | | | | | 1 | | | | | | | | | | | | 2 | | | | | | | | | | | | 3! | 38 | 4 | | | 8 | | | 3 | 125 | | | | 13 | | 14 | | 1 | | 1 | | | | | 2 | | | |
 | **intrinsics** (tooling) | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | | | |
-| **ir** (ir) | 51 | 1 | | | | | | | | | | 51! | | 1! | | | | | | | | | | | | | | | | | | | | | | | | 24 | | | | | | | 92 | | | | 9 | | 5 | | | | | | | | 30 | 3 | 7 | 8 | |
+| **ir** (ir) | 51 | 1 | | | | | | | | | | 51! | | 1! | | | | | | | | | | | | | | | | | | | | | | | | 24 | | | | | | | 95 | | | | 9 | | 5 | | | | | | | | 30 | 2 | 7 | 17 | |
 | **lexer** (syntax) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1! | | | | |
 | **linter** (tooling) | 4 | 1 | | | | | | | | | | | | | | | | | | | | | | 3 | | | | | | | | | | | | 1! | | 5 | | | | | | | 31 | | | | | | 5 | | | | | | | | 1 | | | | |
 | **metadata** (tooling) | 29 | | | | | | | | | | | 5 | | 5! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 19 | | | | | | | | | | | | | | 2 | | | | |
@@ -59,4 +59,4 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 | **type_display** (types) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | |
 | **type_inference** (types) | 7! | | | | | | | | | | | 7! | | | | | | | 5 | | | | | | | | | | | | | | | | | | | 2 | | 5! | | | | | 49 | 2 | | | | | 1 | | | | | | | | 18 | 1 | | | |
 | **type_registry** (resolve) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | |
-| **typing** (types) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | 2 | 1 | | | | | | | | | | | | | 1 | | | | |
+| **typing** (types) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | 2 | 1 | | | | | | | | | | | | | 3 | | | | |

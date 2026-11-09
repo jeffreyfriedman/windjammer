@@ -83,3 +83,28 @@ Repro: `collect_annotated_let_split` (test `annotated_collect_of_split_into_vec_
 
 Also on this head: `nth_cast` is fixed (its ledger line is gone, the test passes); `vp_loop_exits` had lost its
 `.clone()` workaround (a lint cleanup elsewhere) and hit `nested_vec_index_by_value`, so it now indexes `grid[r][c]` directly.
+
+## G. Found by the wider corpus, probes and fuzz run (wt/drift4)
+
+| Where | Finding | Direction |
+|---|---|---|
+| `repros/i64_min_literal.wj` | `let b: i64 = -9223372036854775808`: the interpreter evaluates `9223372036854775808` (it does not fit i64) and panics on the negation; Rust accepts the literal | interpreter bug |
+| `repros/u64_literal_above_i64_max.wj` | a `u64` literal above `i64::MAX` is emitted as `-9223372036854775808_u64` (rustc E0600) | compiled-backend bug |
+| `repros/param_used_only_in_break_value.wj` | a parameter whose only use is inside the value of a `break` out of `loop` is renamed `_h` and the use then fails to resolve (E0425) | compiled-backend bug |
+| `repros/thread_join_coalesce.wj` | `handle.join() ?? 0` emits a zero-argument closure where the Result default takes the error (E0593) | compiled-backend bug |
+| `repros/pow_exponent_literal_width.wj`, `shift_count_method_literal_width.wj` | `pow` and `wrapping_shl` take a `u32` count; the literal gets the receiver's width | compiled-backend bug |
+| `repros/division_by_known_zero.wj` | a division whose divisor rustc can see is zero stops the compiled build (deny-by-default `unconditional_panic`); the interpreter runs it and panics | policy difference, ledgered |
+| `tests/conformance/types/enums_and_matching.wj` | the interpreter refuses a non-exhaustive match (WJ0010); the compiled build accepts the program | decide which is right |
+| about 50 programs of `examples/verified`, `tests/conformance*`, `tests/engine_parity` | the interpreter runs them; the compiled build rejects them (mostly WJ0003 `uint`/`int` width mismatches, e.g. `examples/verified/algo_lcs.wj`) | compiled-backend regressions in the verified corpus; not reduced |
+
+Fixed in this branch: struct literal fields ran in declaration order (rustc: as written; next had the same fix, its version was kept),
+`env::current_dir` returned a bare string, `env::current_exe` and `json::number_f64` were missing in the interpreter, and
+`strings.split_lines` disagreed between the runtime (a final newline added an empty last element, every `\r` was dropped) and
+the interpreter; both now follow `str::lines()` (SPEC-STR-018).
+
+## H. Ownership and `main` results (wt/drift4, later passes)
+
+| Where | Finding | Direction |
+|---|---|---|
+| `tests/move_prediction/receiver_non_clone.wj` | the interpreter runs a by-value receiver called on a value that cannot be copied and then used again; rustc rejects it (E0382). Its sibling fixtures (argument, let alias, loop, partial move) are refused by both; `move_prediction_test::moves_of_values_that_cannot_be_copied_are_reported_per_kind` fails on it at this head | interpreter does not refuse (ADR-0030 receiver slice) |
+| `repros/main_returns_err.wj` | `fn main() -> Result<(), string>` returning `Err` exited 0 silently when interpreted; compiled it prints `Error: "negative"` and exits 1. Fixed in the interpreter (`Error: {Debug of the error}` on stderr, exit 1); the corpus now has an `#mainerr` row comparing that line in every mode | fixed |

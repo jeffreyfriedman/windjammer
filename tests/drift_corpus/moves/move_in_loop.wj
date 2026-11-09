@@ -1,0 +1,18 @@
+// A value declared outside a loop and passed to an owned formal inside it.
+struct Holder {
+    n: int,
+}
+
+fn keep(h: Holder) -> Holder {
+    h
+}
+
+fn main() {
+    let h = Holder { n: 1 }
+    let mut total = 0
+    for _i in 0..3 {
+        let k = keep(h)
+        total += k.n
+    }
+    println("${total}")
+}

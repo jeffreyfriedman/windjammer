@@ -1,0 +1,21 @@
+// Control: a by-value receiver called in a for loop on a Clone struct is cloned by the compiler, so every mode runs it.
+struct Node {
+    label: string,
+    next: int,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { label: self.label, next: self.next + 1 }
+    }
+}
+
+fn main() {
+    let n = Node { label: "a", next: 1 }
+    let mut total = 0
+    for _i in 0..2 {
+        let m = n.advance()
+        total += m.next
+    }
+    println("${total}")
+}

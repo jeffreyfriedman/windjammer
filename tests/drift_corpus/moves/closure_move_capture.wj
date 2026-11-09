@@ -1,0 +1,10 @@
+// A non-Copy value moved into a closure, then used outside it.
+struct Holder {
+    name: string,
+}
+
+fn main() {
+    let h = Holder { name: "a" }
+    let c = move || h.name.len()
+    println("${c()} ${h.name}")
+}

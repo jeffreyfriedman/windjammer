@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 fn bfs(grid: Vec<Vec<i64>>, n: i64) -> i64 {
-    let mut dist = vec![vec![-1; 5]; 5];
+    let mut dist = vec![vec![-1_i64; 5_usize]; 5_usize];
     let mut q: VecDeque<(i64, i64)> = VecDeque::new();
     dist[0][0] = 0_i64;
     q.push_back((0_i64, 0_i64));
@@ -15,7 +15,7 @@ fn bfs(grid: Vec<Vec<i64>>, n: i64) -> i64 {
                 let nr = r + dr;
                 let nc = c + dc;
                 if nr >= 0_i64 && nr < n && nc >= 0_i64 && nc < n {
-                    if grid[nr as usize][nc as usize] == 0_i64 && dist[nr as usize][nc as usize] == -1 {
+                    if grid[nr as usize][nc as usize] == 0_i64 && dist[nr as usize][nc as usize] == -1_i64 {
                         dist[nr as usize][nc as usize] = dist[r as usize][c as usize] + 1_i64;
                         let _ = q.push_back((nr, nc));
                     }

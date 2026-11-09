@@ -1,0 +1,10 @@
+// `env::current_dir()` returns a Result in the compiled runtime; the interpreter used to return a bare string, so the
+// match below found no arm (fixed in the interpreter: kept as a regression case).
+use std::env
+
+fn main() {
+    match env::current_dir() {
+        Ok(_) => println("ok"),
+        Err(_) => println("err"),
+    }
+}
