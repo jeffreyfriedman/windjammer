@@ -124,13 +124,13 @@ mutation check adds one guess of each kind to a real file and requires all three
 fails when the line below does not match the allow-list.
 
 Current totals (seeded 2026-11-04 from wt/names):
-`H-NAME-MATCHES` 647, `H-MATCH-ARM-NAMES` 1150, `H-FALLBACK-LEGACY` 128 (total 1925)
+`H-NAME-MATCHES` 625, `H-MATCH-ARM-NAMES` 1150, `H-FALLBACK-LEGACY` 128 (total 1903)
 
 | area | name matches | match-arm names | fallback/legacy |
 |---|---|---|---|
-| `codegen/rust` | 481 | 109 | 76 |
+| `codegen/rust` | 467 | 109 | 76 |
 | other backends (`codegen/portable`, `javascript`, `go`, shared) | 46 | 957 | 0 |
-| `analyzer` | 64 | 9 | 48 |
+| `analyzer` | 56 | 9 | 48 |
 | `ir` | 38 | 46 | 4 |
 | `type_inference` | 17 | 28 | 0 |
 | `typing` | 1 | 1 | 0 |
@@ -209,6 +209,9 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C5 receivers from the IR (`ir_self_receiver`), indexed receiver types, W0016 | cbe50d47c | 0 | ~160 | D-OWN-STAGES 21 -> 9; D-CLONE-OUTSIDE-SOLVER 14 -> 18 (snapshot methods clone fields) |
 | C5 field-move fact replaces the codegen walk | cbe50d47c, 24fe5083b | ~180 | ~70 | (same measurement) |
 | C5 self owned only when self is consumed (seed rule; field reads clone) | af2a31ce9 + next | 6 | 4 | ecosystem width gate 6/9 -> 9/9; ratchet: 3 batch3 ownership tests leave (48 -> 45 entries owned by C3/C5/C6) |
+| C5 receiver arms deleted: one `self_receiver` spelling rule (IR mode; trait mode in trait impls) | d76a87198 | ~620 | ~60 | D-OWN-STAGES 9 -> 9 (the deleted arms ran only where codegen and the IR already agreed); flagship-app api-check ownership errors 3 -> 1; ratchet 44 -> 43 (one stale entry) |
+| C5: delete name-gated debug traces (formal parameters `grid`/`do_work`, passthrough `clear`/`place`/`Cache`); one CLONE-USE-AFTER-MOVE decision with a `MoveSite` | this branch | ~70 | ~15 | H-NAME-MATCHES 647 -> 642 |
+| O4: the `@string_ref` / `@str_ref` pins are one AST fact (`Parameter::pins_string_ref` / `pins_str_ref`), not 17 decorator-name comparisons in the formal-parameter and analyzer code | this branch | ~25 | ~16 | H-NAME-MATCHES 642 -> 625 |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 

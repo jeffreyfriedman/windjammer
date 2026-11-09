@@ -416,20 +416,19 @@ pub fn run(cli: Cli) -> Result<()> {
             CacheCommand::Setup => windjammer::cli::cache::execute_setup()?,
         },
         Commands::Version { .. } | Commands::Doctor { .. } | Commands::InstallDev { .. } | Commands::SelfInstall { .. } => {}
-        Commands::Plugin(plugin_args) => {
-            if plugin_args.is_empty() {
-                anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
-            }
-
-            let plugin_name = &plugin_args[0];
-            let args = &plugin_args[1..];
-
-            let exit_code = windjammer::plugin::execute_plugin(plugin_name, args)?;
-            std::process::exit(exit_code);
-        }
+        Commands::Plugin(plugin_args) => cmd_plugin(&plugin_args)?,
     }
 
     Ok(())
+}
+
+/// `wj <plugin> <args>`: run an external plugin and exit with its status.
+fn cmd_plugin(plugin_args: &[String]) -> Result<()> {
+    if plugin_args.is_empty() {
+        anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
+    }
+    let exit_code = windjammer::plugin::execute_plugin(&plugin_args[0], &plugin_args[1..])?;
+    std::process::exit(exit_code);
 }
 
 fn cmd_generate_docs(output: &std::path::Path, format: &str) -> Result<()> {

@@ -1,0 +1,122 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod port;
+pub mod reader;
+pub mod writer;
+
+// Re-export public items
+pub use port::*;
+pub use reader::*;
+pub use writer::*;
+// ==== main.rs ====
+mod port;
+mod reader;
+mod writer;
+fn main() {
+    let lines = vec![writer::Line { code: String::from("b") }];
+    match writer::post("b", lines) {
+        Ok(()) => println!("ok"),
+        Err(e) => println!("{}", e),
+    }
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod port;
+pub mod reader;
+pub mod writer;
+
+// Re-export public items
+pub use port::*;
+pub use reader::*;
+pub use writer::*;
+// ==== port.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub trait Reader {
+    fn list(&self, slug: String) -> Vec<String>;
+}
+
+// ==== reader.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::port::Reader;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct ListReader {
+    pub n: i64,
+}
+impl ListReader {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.n.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Reader for ListReader {
+#[inline]
+fn list(&self, slug: String) -> Vec<String> {
+        vec![slug]
+}
+}
+
+// ==== writer.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::port::Reader;
+use crate::reader::ListReader;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Line {
+    pub code: String,
+}
+
+#[inline]
+pub fn lookup(tenant_slug: String, wanted: &str) -> Result<bool, String> {
+    let slug = tenant_slug;
+    let code = wanted;
+    let r = ListReader { n: 0_i64 };
+    let items = r.list(slug);
+    if items.is_empty() {
+        return Err(String::from("none"));
+    }
+    for item in items {
+        if item == code {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+#[inline]
+pub fn validate(tenant_slug: &str, lines: Vec<Line>) -> Result<(), String> {
+    let slug = tenant_slug;
+    for line in lines {
+        let code = line.code.clone();
+        match lookup(slug.clone().to_string(), &code) {
+            Ok(true) => {
+            },
+            Ok(false) => {
+                return { let _temp0 = format!("{}{}", "unknown: ", code); Err(_temp0) };
+            },
+            Err(msg) => {
+                return Err(msg);
+            },
+        }
+    }
+    Ok(())
+}
+
+#[inline]
+pub fn post(tenant: &str, lines: Vec<Line>) -> Result<(), String> {
+    validate(tenant, lines)
+}
+

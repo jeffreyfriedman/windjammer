@@ -1,0 +1,14 @@
+// WJ0007: binding `inbox` to `other` moves it; `inbox` holds a channel end and cannot be copied.
+use std::sync::mpsc
+
+struct Inbox {
+    rx: mpsc::Receiver<int>,
+    seen: int,
+}
+
+fn main() {
+    let pair = mpsc::channel()
+    let inbox = Inbox { rx: pair.1, seen: 0 }
+    let other = inbox
+    println("${other.seen} ${inbox.seen}")
+}

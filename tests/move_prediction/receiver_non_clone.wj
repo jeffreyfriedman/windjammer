@@ -1,0 +1,21 @@
+// WJ0007: `with_seen` takes `self`, so calling it consumes `inbox`; `Inbox` holds a channel end, which
+// cannot be copied, so the later read of `inbox` cannot be made valid by the compiler.
+use std::sync::mpsc
+
+struct Inbox {
+    rx: mpsc::Receiver<int>,
+    seen: int,
+}
+
+impl Inbox {
+    fn with_seen(self, n: int) -> Inbox {
+        Inbox { rx: self.rx, seen: n }
+    }
+}
+
+fn main() {
+    let pair = mpsc::channel()
+    let inbox = Inbox { rx: pair.1, seen: 0 }
+    let next = inbox.with_seen(1)
+    println("${next.seen} ${inbox.seen}")
+}
