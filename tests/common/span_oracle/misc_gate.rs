@@ -258,3 +258,13 @@ fn legacy_ast_location_reads_in_diagnostic_code_are_ratcheted() {
     }
     ratchet::enforce_counts("legacy_ast_location_reads", &counts);
 }
+
+/// The span corpus is what git knows: a linked-in checkout (`windjammer-ecosystem`, needed by the drift gate and ignored by git) and
+/// the multi-file drift corpus never enter it, so the gates give the same answer in every worktree.
+#[test]
+fn corpus_does_not_depend_on_the_checkouts_environment() {
+    let files = repo_wj_files();
+    assert!(files.len() > 500, "{} files", files.len());
+    let bad: Vec<_> = files.iter().map(|p| rel(p)).filter(|r| r.starts_with("windjammer-ecosystem/") || r.starts_with("tests/drift_corpus/") || r.starts_with("target/")).collect();
+    assert!(bad.is_empty(), "{bad:?}");
+}
