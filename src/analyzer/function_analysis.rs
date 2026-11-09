@@ -196,11 +196,19 @@ impl<'ast> Analyzer<'ast> {
             OwnershipMode::Owned
         } else if modifies_fields || calls_mutating {
             OwnershipMode::MutBorrowed
-        } else if self.is_used_in_binary_op("self", &func.body) {
+        } else if self.is_used_in_binary_op("self", &func.body) || self.copy_value_method_returning_own_type(func) {
             OwnershipMode::Owned
         } else {
             OwnershipMode::Borrowed
         }
+    }
+
+    /// A Copy type's method that produces a new value of the same type (`fn double(self) -> Point`) takes
+    /// `self` by value: free for Copy, and the receiver mode its callers read.
+    fn copy_value_method_returning_own_type(&self, func: &FunctionDecl<'ast>) -> bool {
+        let Some(parent) = func.parent_type.as_deref() else { return false };
+        let own = matches!(&func.return_type, Some(Type::Custom(n)) if n == "Self" || n == parent);
+        own && self.is_copy_type(&Type::Custom(parent.to_string()))
     }
 
     pub(crate) fn analyze_function(

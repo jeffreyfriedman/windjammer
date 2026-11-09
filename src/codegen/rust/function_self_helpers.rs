@@ -17,17 +17,24 @@ pub(super) fn declared_receiver(param: &Parameter) -> Option<&'static str> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
-    /// The receiver the IR solver decided (ADR-0001: one ownership owner; convergence C5). Codegen
-    /// only spells it: `Owned` becomes `mut self` when the body writes through `self`. `None` in trait
-    /// impls (the trait declaration decides) and when the function has no IR.
-    pub(super) fn ir_self_receiver(&mut self, func: &FunctionDecl) -> Option<&'static str> {
-        if self.in_trait_impl {
-            return None;
-        }
-        let receiver = match self.ir_param_ownership_definitive("self")? {
+    /// The one receiver decision codegen makes (convergence C5): spell a mode, never re-decide it.
+    /// Outside trait impls the mode is the IR solver's (the analyzer's only when no IR exists: isolated
+    /// unit tests); in a trait impl it is the trait's. `Owned` becomes `mut self` when the body writes
+    /// through `self`. `None` only when there is no mode at all.
+    pub(super) fn self_receiver(&mut self, analyzed: &AnalyzedFunction<'ast>) -> Option<&'static str> {
+        let func = &analyzed.decl;
+        let (mode, modifies) = if self.in_trait_impl {
+            (self.get_effective_self_ownership(&func.name, analyzed)?, self.function_modifies_self(func))
+        } else {
+            let mode = self
+                .ir_param_ownership_definitive("self")
+                .or_else(|| analyzed.inferred_ownership.get("self").copied())?;
+            (mode, self.function_modifies_self_or_derived(func))
+        };
+        let receiver = match mode {
             OwnershipMode::Borrowed => "&self",
             OwnershipMode::MutBorrowed => "&mut self",
-            OwnershipMode::Owned if self.function_modifies_self_or_derived(func) => "mut self",
+            OwnershipMode::Owned if modifies => "mut self",
             OwnershipMode::Owned => "self",
         };
         self.sync_self_borrow_tracking_from_emitted_params(&[receiver.to_string()]);
@@ -140,60 +147,6 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
-    /// Resolve the Rust receiver for a method whose analyzer ownership is `Owned`.
-    ///
-    /// The analyzer sets Owned for several reasons: match-on-self, consuming field
-    /// iteration, builder pattern, returning Self type, bare self consumption,
-    /// consuming method calls on self, non-Copy field moves, etc.
-    /// Codegen refines Owned into the appropriate Rust receiver:
-    /// - `mut self` — builder pattern (modifies + returns Self)
-    /// - `&mut self` — mutates fields only (e.g., set field to None, increment)
-    /// - `self` — all other Owned cases (the analyzer already validated consumption)
-    pub(super) fn owned_self_receiver(&self, func: &FunctionDecl) -> &'static str {
-        let body_modifies = self.function_modifies_self_or_derived(func);
-        let returns_impl_struct = self.method_returns_impl_struct(func);
-
-        if body_modifies && super::self_analysis::function_returns_self_type(func) {
-            return "mut self";
-        }
-
-        if body_modifies && returns_impl_struct {
-            "mut self"
-        } else if body_modifies && super::self_analysis::function_consumes_self(func) {
-            // P3.520: `self.buckets = put(take(self.buckets))` writes back the moved
-            // field — `&mut self` so callers can continue.
-            // move field A into a ctor then assign field B → owned `mut self`.
-            // P3.584 / P3.570: other field moves into Owned formals under a mutating
-            // method are Clone under `&mut self` (notes-api `dispatch`).
-            // P3.522: thin wrappers (`handle_http` → `handle_method(&mut self)`) are
-            // "consuming" only because the callee's WJ source still says `self`.
-            if self.self_field_partial_move_needs_owned_receiver(func) {
-                "mut self"
-            } else if super::self_analysis::function_writeback_replaces_moved_self_fields(func)
-                || self.function_calls_self_with_recorded_receiver(
-                    func,
-                    crate::analyzer::OwnershipMode::MutBorrowed,
-                )
-                || !super::self_analysis::function_calls_owned_self_method(
-                    func,
-                    &self.signature_registry,
-                    self.current_struct_name.as_deref(),
-                )
-            {
-                "&mut self"
-            } else {
-                "mut self"
-            }
-        } else if body_modifies {
-            "&mut self"
-        } else if super::self_analysis::function_matches_on_self(func)
-            || super::self_analysis::function_consumes_self(func)
-        {
-            "self"
-        } else {
-            "&self"
-        }
-    }
 
     /// Check if the struct currently being implemented is a Copy type.
     /// For Copy types, `self` (by value) is preferred over `&self` since

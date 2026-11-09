@@ -22,11 +22,11 @@ fn new() -> Transform {
         Transform { x: 0.0_f32, y: 0.0_f32, rotation: 0.0_f32 }
 }
 #[inline]
-fn translate(&self, dx: f32, dy: f32) -> Transform {
+fn translate(self, dx: f32, dy: f32) -> Transform {
         Transform { x: self.x + dx, y: self.y + dy, rotation: self.rotation }
 }
 #[inline]
-fn rotate(&self, angle: f32) -> Transform {
+fn rotate(self, angle: f32) -> Transform {
         Transform { x: self.x, y: self.y, rotation: self.rotation + angle }
 }
 }
