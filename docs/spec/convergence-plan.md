@@ -169,6 +169,15 @@ clones of unknown or Copy element type (`w[0].clone()`, `svo[0].clone()`, `f[0].
 and `s.union(other.clone())` (an explicit `&x` turned into a clone because the callee's formal resolved as owned:
 signature resolution, C3/C5). Each needs its owner first; the solver should then emit CLONE-BORROWED-TO-OWNED per site.
 
+**Remaining D-CLONE-OUTSIDE-SOLVER findings (2026-11-05, 13).** Fixed in this round: the redundant copy under an
+explicit borrow (`&a.1.clone()` in comparisons, 5) and parameter fields stored in struct literals (`Config { host:
+self.host }`, now IrFunction clone sites, 2). Left, by owner: **needs C5** (local or formal ownership decides whether an
+element/field is borrowed or copied): `let` initialisers of elements (`let node = nodes[i]`: bug_vec_index x2,
+vector_indexing_ownership, generics_function), an element passed to a closure-typed parameter (prog_event_handlers),
+`self.children.unwrap()` on a borrowed receiver (vec_index_local_var x2), `s.union(&other)` resolved to an owned formal
+(hashset_basics); **needs C4 element types**: `w[0]` from `windows` (vec_slices_windows), `svo[0]` from an external
+function (svo_convert_test x3).
+
 ## C5/C6 acceptance inputs from other streams (2026-10-11)
 * Consuming trait methods on generic parameters: `fn label<T: Into<string>>(t: T) -> string { t.into() }` must make
   `t` owned (category "consuming method" / OWN-CALL-FORMAL with `self`-by-value receivers). Ratchet test from parser-gaps2.

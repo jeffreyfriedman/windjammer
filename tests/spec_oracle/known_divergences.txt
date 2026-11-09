@@ -6,34 +6,31 @@
 spec::attributes/SPEC-ATTR-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
 spec::attributes/SPEC-ATTR-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
 spec::closures/SPEC-CLOS-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
+spec::closures/SPEC-CLOS-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): Box<dyn Fn> closure type emitted with zero parameters; i32/i64 mix in a capturing closure
 spec::collections/SPEC-COLL-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
 spec::collections/SPEC-COLL-005 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::collections/SPEC-COLL-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
+spec::collections/SPEC-COLL-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A (second round): integer widths: Vec<i64> collected from i32 / usize iterators
+spec::collections/SPEC-COLL-012 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A (second round): integer widths in iterator closures
 spec::concurrency/SPEC-CONC-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
 spec::concurrency/SPEC-CONC-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
 spec::concurrency/SPEC-CONC-003 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
 spec::concurrency/SPEC-CONC-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class E: attribute or concurrency form the compiled build does not link
-spec::errors/SPEC-ERR-003 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::errors/SPEC-ERR-005 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
-spec::execution/SPEC-EXEC-012 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::expressions/SPEC-EXPR-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
 spec::grammar/SPEC-GRAM-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
 spec::intrinsics/SPEC-INTR-007 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
 spec::items/SPEC-ITEM-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
 spec::items/SPEC-ITEM-010 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::items/SPEC-ITEM-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
-spec::numeric/SPEC-NUM-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class B: rustc rejects a statically known panic (arithmetic_overflow / unconditional_panic) that the spec says panics at run time
-spec::numeric/SPEC-NUM-003 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class B: rustc rejects a statically known panic (arithmetic_overflow / unconditional_panic) that the spec says panics at run time
-spec::numeric/SPEC-NUM-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class B: rustc rejects a statically known panic (arithmetic_overflow / unconditional_panic) that the spec says panics at run time
-spec::numeric/SPEC-NUM-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class B: rustc rejects a statically known panic (arithmetic_overflow / unconditional_panic) that the spec says panics at run time
-spec::numeric/SPEC-NUM-017 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class B: rustc rejects a statically known panic (arithmetic_overflow) that the spec says panics at run time
+spec::modules/SPEC-MOD-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): a module-level pub const is not emitted
 spec::optionals/SPEC-OPT-005 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class D: optional chaining ?. is refused by the Rust backend
 spec::optionals/SPEC-OPT-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class D: optional chaining ?. is refused by the Rust backend
 spec::patterns/SPEC-PAT-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::statements/SPEC-STMT-009 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
 spec::stdlib/SPEC-STD-002 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::stdlib/SPEC-STD-003 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class A: integer literal / method-argument width: rustc sees i32 or an ambiguous literal where the spec type is int
-spec::strings/SPEC-STR-017 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::traits/SPEC-TRT-001 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
 spec::traits/SPEC-TRT-004 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
+spec::traits/SPEC-TRT-010 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): trait default method returning a string literal is emitted as &str against String
+spec::traits/SPEC-TRT-011 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C (second round): trait implemented for string / int: receiver and impl type mismatch in the emitted Rust
 spec::types/SPEC-TYP-006 | walker=ok resolved=ok compiled=build-fail | docs/drift/spec-findings.md class C: emitted Rust is ill-typed or not borrow-clean for an ordinary program
