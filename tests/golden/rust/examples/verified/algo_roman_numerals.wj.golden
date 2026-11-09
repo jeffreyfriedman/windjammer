@@ -1,6 +1,6 @@
 #[inline]
 fn roman(n: i64) -> String {
-    let table = vec![(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")];
+    let table = vec![(1000_i64, "M"), (900_i64, "CM"), (500_i64, "D"), (400_i64, "CD"), (100_i64, "C"), (90_i64, "XC"), (50_i64, "L"), (40_i64, "XL"), (10_i64, "X"), (9_i64, "IX"), (5_i64, "V"), (4_i64, "IV"), (1_i64, "I")];
     let mut left = n;
     let mut out = String::new();
     for (value, symbol) in table {
@@ -13,7 +13,7 @@ fn roman(n: i64) -> String {
 }
 
 fn main() {
-    for n in [4, 9, 14, 1994, 2024] {
+    for n in [4_i64, 9_i64, 14_i64, 1994_i64, 2024_i64] {
         println!("{} = {}", n, roman(n));
     }
 }

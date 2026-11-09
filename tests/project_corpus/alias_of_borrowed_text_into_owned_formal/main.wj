@@ -1,0 +1,15 @@
+// A private helper aliases its text parameter (`let slug = tenant_slug`) and passes the alias to a callee
+// whose formal is owned (it hands the text to a trait method in another module). The parameter may be
+// demoted to a borrow; the call must then give the callee an owned copy. Expected by hand: "b" is listed.
+// expect: ok
+mod port
+mod reader
+mod writer
+
+fn main() {
+    let lines = [writer::Line { code: "b" }]
+    match writer::post("b", lines) {
+        Ok(()) => println("ok"),
+        Err(e) => println(e),
+    }
+}

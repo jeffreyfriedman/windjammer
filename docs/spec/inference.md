@@ -339,6 +339,36 @@ is an `int`, `line.parse::<int>().unwrap_or(0)` is an `int`, `x.min(1.0)` on an 
 parameter is an index use and a `usize` result an index source (NUM-USIZE).
 **Status.** Conforms for receivers whose static type is declared (parameters, annotated or typed initializers, fields).
 
+### NUM-ELEMENT
+**Rule (option C stage C2).** An element of a collection literal (`[a, b]`, `vec![a; n]`), of an indexed value (`v[i]`), of a
+`for` loop, of a range and of an iterator has its container's element type: a `Vec<i32>` makes every element and every
+literal in the element's class an `i32`; a collection no use types has `int` elements. A map literal's keys and values are
+the map's key and value types. The repeat count of `[x; n]` is an index use (NUM-USIZE).
+**Status.** Conforms (the solver relates a container to its parts; `ir/constraint_gen/structure.rs`).
+
+### NUM-TUPLE
+**Rule (option C stage C2).** Field `i` of a tuple literal or tuple pattern has field `i` of the tuple type it meets
+(a formal, a declared local, a return type): `take((1, 2))` with `p: (i32, u8)` emits `(1_i32, 2_u8)`.
+**Status.** Conforms.
+
+### NUM-PAYLOAD
+**Rule (option C stage C2).** The argument of `Some(x)` / `Ok(x)` and the binding of a `Some(x)` / `Ok(x)` pattern have the
+option or result type's payload type; `Err(e)` the error type. `None` is a value of any option type.
+**Status.** Conforms.
+
+### NUM-CLOSURE
+**Rule (option C stage C2).** A closure's parameters and result have the types of the function type it is used as: an
+argument of `map`, `filter`, `fold` (`std/rust_core.wji`), of an enumerable method (`std/enumerable.wj`) or of a `fn(..)`
+formal. `v.iter().map(|x| x * 2)` on a `Vec<i32>` emits `x * 2_i32`; a parameter whose type the surface fixes has that static
+type inside the body (`text.split(" ").map(|s| s.len())`: `s` is text).
+**Status.** Conforms for closures passed to the typed surface and to `fn(..)` formals.
+
+### NUM-OPERATOR-IMPL
+**Rule (option C stage C2).** `a op b` on a user type is the operator impl's method (`a * b` is `a.mul(b)`): the right
+operand has the method's declared parameter type and the result its return type (`p * 0.5` with `impl Mul<f32>` emits
+`0.5_f32`).
+**Status.** Conforms for `+ - * / %` on a left operand whose static type is a user type.
+
 ### NUM-MIXED
 **Rule (ADR-0015 section 2).** Mixed-width arithmetic requires an explicit conversion (`int(x)`, `float(x)`). The compiler
 reports an error rather than inserting a cast.

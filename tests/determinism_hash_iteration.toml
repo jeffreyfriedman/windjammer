@@ -16,7 +16,6 @@
 "src/codegen/rust/assignment_statement_generation.rs" = 1
 "src/codegen/rust/backend.rs" = 2
 "src/codegen/rust/block_generation.rs" = 4
-"src/codegen/rust/collection_detection.rs" = 1
 "src/codegen/rust/copy_semantics.rs" = 2
 "src/codegen/rust/expression_generation.rs" = 2
 "src/codegen/rust/for_statement_generation.rs" = 2

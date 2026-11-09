@@ -280,16 +280,6 @@ fn expression_contains_match_on_self(expr: &Expression) -> bool {
     }
 }
 
-/// True when the body calls `self.method(...)` where the callee requires owned `self`.
-pub fn function_calls_owned_self_method(
-    func: &FunctionDecl,
-    registry: &SignatureRegistry,
-    struct_name: Option<&str>,
-) -> bool {
-    func.body
-        .iter()
-        .any(|stmt| statement_calls_owned_self_method(stmt, registry, struct_name))
-}
 
 fn statement_calls_owned_self_method(
     stmt: &Statement,
