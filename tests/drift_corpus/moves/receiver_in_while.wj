@@ -1,0 +1,22 @@
+// A by-value receiver called in a while loop on a variable declared before it.
+struct Node {
+    next: int,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { next: self.next + 1 }
+    }
+}
+
+fn main() {
+    let n = Node { next: 1 }
+    let mut i = 0
+    let mut total = 0
+    while i < 2 {
+        let m = n.advance()
+        total += m.next
+        i += 1
+    }
+    println("${total}")
+}

@@ -221,7 +221,7 @@ pub fn answer(it: &mut Interpreter, path: &str, args: Vec<Value>) -> Result<Valu
         }
         "fs::set_current_dir" => unit(w.fs.set_cwd(&a0)),
         "fs::current_dir" | "path::current_dir" => Value::ok(Value::str(w.fs.cwd().to_string())),
-        "env::current_dir" => Value::str(w.fs.cwd().to_string()),
+        "env::current_dir" => Value::ok(Value::str(w.fs.cwd().to_string())),
         "env::temp_dir" => Value::str(w.tmp.clone()),
         "process::pid" => Value::Int(4242, IntTy::I64),
         "env::var" => match w.env.get(&a0) {

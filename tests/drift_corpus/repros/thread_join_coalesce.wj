@@ -1,0 +1,9 @@
+// `handle.join() ?? 0` on a thread handle: the compiled backend emits a zero-argument closure where the Result
+// default takes the error (rustc E0593), and types the literal as i32.
+use std::thread
+
+fn main() {
+    let h = thread::spawn(move || 40 + 2)
+    let v: int = h.join() ?? 0
+    println("${v}")
+}

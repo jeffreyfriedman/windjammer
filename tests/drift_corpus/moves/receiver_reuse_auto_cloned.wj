@@ -1,0 +1,21 @@
+// Control: a Clone struct whose by-value receiver is used again is cloned by the compiler, so every mode runs it.
+struct Node {
+    label: string,
+    next: int,
+}
+
+impl Node {
+    fn advance(self) -> Node {
+        Node { label: self.label, next: self.next + 1 }
+    }
+
+    fn peek(self) -> int {
+        self.next
+    }
+}
+
+fn main() {
+    let n = Node { label: "a", next: 4 }
+    let moved = n.advance()
+    println("${moved.label} ${n.peek()}")
+}

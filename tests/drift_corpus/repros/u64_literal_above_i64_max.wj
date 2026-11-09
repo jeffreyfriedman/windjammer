@@ -1,0 +1,6 @@
+// A u64 literal above i64::MAX: the compiled backend emits it negated (`-9223372036854775808_u64`), which rustc
+// rejects (E0600); the interpreter prints the value.
+fn main() {
+    let b: u64 = 9223372036854775808
+    println("${b}")
+}

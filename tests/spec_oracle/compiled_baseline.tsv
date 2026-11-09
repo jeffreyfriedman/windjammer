@@ -1,4 +1,4 @@
-# spec-oracle compiled results recorded with: wj 0.50.0 (commit 6ed79d644d3f 2026-11-04, clean, release, built 2026-11-04T19:49:50Z)
+# spec-oracle compiled results recorded with: wj 0.50.0 (commit 1424687a87ce 2026-11-05, dirty, release, built 2026-11-05T10:49:42Z)
 spec::arguments/SPEC-ARGS-001	ok
 spec::arguments/SPEC-ARGS-002	ok
 spec::arguments/SPEC-ARGS-003	ok
@@ -227,3 +227,4 @@ spec::types/SPEC-TYP-006	build-fail
 spec::types/SPEC-TYP-007	ok
 spec::types/SPEC-TYP-008	ok
 spec::types/SPEC-TYP-010	ok
+spec::strings/SPEC-STR-018	ok
