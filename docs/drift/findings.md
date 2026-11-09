@@ -101,3 +101,10 @@ Fixed in this branch: struct literal fields ran in declaration order (rustc: as 
 `env::current_dir` returned a bare string, `env::current_exe` and `json::number_f64` were missing in the interpreter, and
 `strings.split_lines` disagreed between the runtime (a final newline added an empty last element, every `\r` was dropped) and
 the interpreter; both now follow `str::lines()` (SPEC-STR-018).
+
+## H. Ownership and `main` results (wt/drift4, later passes)
+
+| Where | Finding | Direction |
+|---|---|---|
+| `tests/move_prediction/receiver_non_clone.wj` | the interpreter runs a by-value receiver called on a value that cannot be copied and then used again; rustc rejects it (E0382). Its sibling fixtures (argument, let alias, loop, partial move) are refused by both; `move_prediction_test::moves_of_values_that_cannot_be_copied_are_reported_per_kind` fails on it at this head | interpreter does not refuse (ADR-0030 receiver slice) |
+| `repros/main_returns_err.wj` | `fn main() -> Result<(), string>` returning `Err` exited 0 silently when interpreted; compiled it prints `Error: "negative"` and exits 1. Fixed in the interpreter (`Error: {Debug of the error}` on stderr, exit 1); the corpus now has an `#mainerr` row comparing that line in every mode | fixed |
