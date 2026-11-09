@@ -93,3 +93,9 @@ fn bare_unit_variant_pattern_in_nested_match_typechecks() {
 fn annotated_collect_of_split_into_vec_string_typechecks() {
     generated_rust_typechecks("collect_annotated_let_split.wj");
 }
+
+/// An explicit borrow of an integer literal (`contains(&9)`, `get(&3)`) must survive code generation.
+#[test]
+fn explicit_ref_of_an_integer_literal_typechecks() {
+    generated_rust_typechecks("explicit_ref_literal_arg.wj");
+}
