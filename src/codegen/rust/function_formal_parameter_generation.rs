@@ -70,8 +70,8 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
-                if param.name == "self" {
-                    return self.self_receiver(analyzed).unwrap_or("&self").to_string();
+                if let Some(formal) = self.ir_decided_formal(param, analyzed, func.is_pub, unused_params) {
+                    return formal;
                 }
                 if param.name != "self"
                     && (self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
