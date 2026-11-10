@@ -1,0 +1,7 @@
+// Matching two read-only enum parameters one inside the other and comparing / passing the Copy payloads. Expected by hand: flags equal -> 0, 3 vs 5 -> -1, mixed -> 2.
+// expect: 0 -1 2
+mod val
+
+fn main() {
+    println("${val::val_cmp(val::Val::Flag(true), val::Val::Flag(true))} ${val::val_cmp(val::Val::Num(3), val::Val::Num(5))} ${val::val_cmp(val::Val::Num(1), val::Val::Flag(false))}")
+}

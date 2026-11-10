@@ -1,0 +1,30 @@
+pub enum Item {
+    Num(i64),
+    Flag(bool),
+}
+
+pub struct Packed {
+    pub bytes: Vec<u8>,
+}
+
+impl Packed {
+    pub fn from_items(items: Vec<Item>) -> Packed {
+        Packed { bytes: pack(items) }
+    }
+}
+
+pub fn pack(items: Vec<Item>) -> Vec<u8> {
+    let mut out = Vec::new()
+    for it in items {
+        let b = pack_one(it)
+        out.push(b)
+    }
+    out
+}
+
+pub fn pack_one(it: Item) -> u8 {
+    match it {
+        Item::Num(n) => (n % 256) as u8,
+        Item::Flag(f) => if f { 1 } else { 0 },
+    }
+}

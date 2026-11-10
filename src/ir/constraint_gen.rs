@@ -549,9 +549,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     }
 
     /// C3 lexical scope: inside `mod m`, a bare free call `f` is `m::f` when `m` defines it.
+    /// A bare call names a free function: never a method of the same name (a trait's `list_webhooks(self, ..)`
+    /// beside a free `list_webhooks(deps, ..)`), and nothing at all when a parameter or local shadows the name.
     fn resolve_free_callee_signature(&self, name: &str, arg_count: usize) -> Option<&FunctionSignature> {
-        let scoped = self.registry.and_then(|r| r.scoped_key(&self.analyzed.module_path, name));
-        self.resolve_callee_signature(scoped.as_deref().unwrap_or(name), arg_count)
+        let local = !name.contains("::") && (self.param_vars.contains_key(name) || self.scopes.iter().any(|s| s.contains_key(name)));
+        let scoped = self.registry.filter(|_| !local)?.scoped_key(&self.analyzed.module_path, name);
+        self.resolve_callee_signature(scoped.as_deref().unwrap_or(name), arg_count).filter(|s| !s.has_self_receiver)
     }
 
     fn resolve_callee_signature(

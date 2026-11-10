@@ -1,0 +1,14 @@
+use crate::enc::Item
+use crate::enc::pack
+use crate::enc::Packed
+
+pub fn twice() -> usize {
+    let items = [Item::Flag(true)]
+    let a = pack(items)
+    let b = pack(items)
+    a.len() + b.len() - 1
+}
+
+pub fn once() -> usize {
+    Packed::from_items([Item::Flag(true)]).bytes.len()
+}
