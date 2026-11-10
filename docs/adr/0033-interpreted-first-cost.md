@@ -82,7 +82,7 @@ lists it.
   network (`--offline`). Grants (`WJ_CAPS`, `[capabilities]`) are not needed for compiling and are not widened: the
   background job never runs the program.
 
-### (b) `wj run --interpret --verify` (planned)
+### (b) `wj run --verify` (landed as the second slice)
 
 One command for the end of an iteration: interpret, then build (a cache hit when (a) already built this content) and,
 when it is safe, run the compiled binary and compare stdout and the exit status.
@@ -235,6 +235,25 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   - The documented workaround (`let five: int = 5`, `1 as int`) builds and is not reported.
   - Mutation check: with the width comparison of `conflict` replaced by `true`, the corpus scan, the golden
     cross-check, the project scan, the positive cases and the workaround case fail; restored, all pass.
+
+## Second slice (landed): `wj run --verify`
+
+- `wj run --verify FILE` (`src/cli/verify.rs`) runs the interpreter (`wj run --interpret` in a child process, its
+  stdout captured and printed once), then builds exactly what `wj run --compiled` builds (`run::build_native`, which
+  records the compiled verdict), then runs the compiled program a second time only when the effect analysis finds that
+  `main` reaches nothing beyond the console and a read of `/dev/stdin`, and stdin was captured (it is read once and
+  given to both runs). No grant is involved in such a run. Otherwise it reports the build's verdict:
+  `wj verify: compiled build OK; not run a second time (fs.write)`.
+- Everything it says is on stderr, prefixed `wj verify:`. Exit status: the interpreted program's when that is
+  non-zero; otherwise 1 when the build fails (`the interpreter ran the program, but the compiled build failed ...`) or
+  the compiled run differs (first differing line, both exit statuses, the contract's documented differences), else 0.
+  A program `wj check` refuses is refused once, and nothing is built.
+- It conflicts with `--compiled`, `--release`, `--watch`, `--hot`, `--record` and `--replay`, and takes only the Rust
+  target. Gates: `tests/run_verify_test.rs` (stdin replay and exit status, a file write built but not run again, a
+  family-A program whose build fails, a refused program, the difference locator, the effect rule) and the promise
+  registry entry `wj run --verify` with a positive and a negative acceptance case.
+- Not yet: the build is not speculative (option a), so a cold `--verify` costs one compiled build; the interpreted run's
+  stdout is printed when it ends rather than streamed.
 
 ## Consequences
 

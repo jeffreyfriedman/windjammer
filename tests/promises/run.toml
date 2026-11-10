@@ -361,3 +361,20 @@ args = ["run", "--interpret", "-"]
 stdin = "fn main( {\n"
 exit = 1
 output_has = ["expected parameter name"]
+
+[[case]]
+name = "run --verify interprets, builds and compares a console program"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "fn main() {\n    println(\"v ${6 * 7}\")\n}\n" }
+args = ["run", "--verify", "{w}/m.wj"]
+stdout_has = ["v 42"]
+stderr_has = ["wj verify: compiled build OK; the compiled run matches"]
+
+[[case]]
+name = "run --verify cannot be combined with --compiled"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--verify", "--compiled", "{w}/m.wj"]
+exit = 2
+output_has = ["cannot be used with"]

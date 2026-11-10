@@ -157,7 +157,7 @@ pub fn fallback_notice(e: &crate::interpreter::RuntimeError) -> String {
 
 /// What to hand the compiler for a run target: the source root when the entry is its crate root
 /// (`main.wj`), the file itself for a loose script.
-fn build_input(t: &RunTarget) -> Result<PathBuf, String> {
+pub(crate) fn build_input(t: &RunTarget) -> Result<PathBuf, String> {
     let is_main = t.entry.file_name().is_some_and(|n| n == "main.wj");
     let parent = t.entry.parent().map(Path::to_path_buf).unwrap_or_default();
     let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
