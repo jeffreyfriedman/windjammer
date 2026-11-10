@@ -14,11 +14,9 @@ mod generic_returns;
 /// inside the compiler repo and silently falls back to incomplete signatures otherwise
 /// (e.g. `strings::join` → spurious `parts.clone()` into `&[String]`).
 pub(crate) fn resolve_runtime_src_for_scan() -> Option<std::path::PathBuf> {
-    let from_finder = crate::cargo_toml::find_windjammer_runtime_path().join("src");
-    if from_finder.is_dir() {
-        return Some(from_finder);
-    }
-    None
+    // none on disk in the browser playground (ADR-0034): no file system to materialize the runtime crate into
+    let from_finder = (!cfg!(target_arch = "wasm32")).then(crate::cargo_toml::find_windjammer_runtime_path)?.join("src");
+    from_finder.is_dir().then_some(from_finder)
 }
 
 /// Scan windjammer-runtime source files and populate the registry

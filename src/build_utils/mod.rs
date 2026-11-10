@@ -10,7 +10,7 @@ pub use crate::rust_integration_tests::{
     find_project_root_with_tests, generate_tests_lib_rs, sync_rust_integration_tests,
     wire_tests_lib_into_crate_root,
 };
-pub use file_operations::strip_main_functions;
+pub use file_operations::{copy_dir_recursive, strip_main_functions};
 pub(crate) use module_generation::generate_mod_file_with_layout;
 pub use module_generation::{
     apply_library_build_post_steps, cleanup_stale_module_files,
