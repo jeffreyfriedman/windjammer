@@ -31,6 +31,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiAxNgovLyBleHBlY3Q6IDYKZm4gYWRkKHg6IGludCwgeTogaW50KSAtPiBpbnQgewogICAgeCArIHkKfQoKZm4gZG91YmxlKHg6IGludCkgLT4gaW50IHsKICAgIHggKiAyCn0KCmZuIG1haW4oKSB7CiAgICBwcmludGxuKCIkezMgfD4gYWRkKDUpIHw-IGRvdWJsZX0iKQogICAgcHJpbnRsbigiJHsxICsgMiB8PiBkb3VibGV9IikKfQo)
+
 `|>` binds more loosely than every other operator, so `1 + 2 |> double` pipes the whole sum: it is `double(1 + 2)`.
 
 Mark where the piped value goes with a single `_` when it is not the first argument:

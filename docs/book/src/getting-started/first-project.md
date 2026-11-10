@@ -103,6 +103,20 @@ $ wj test --interpret .
 test result: ok. 1 passed; 0 failed
 ```
 
+## Run it in your browser
+
+<!-- feature: playground -->
+
+You can also try Windjammer without installing anything. The [playground](../playground/index.html) runs the interpreter
+inside your browser, as WebAssembly in a Worker that the page stops if a program runs too long. Nothing you type leaves your
+machine, and a program has no files, network or clock beyond a simulated world, which is the same sandbox `wj run --sandbox
+--simulate` gives you at the command line.
+
+Programs in this book carry a **Run this in the playground** link under them. The link holds the program itself in the part
+of the address after the `#`, which a browser never sends to a server, and the book's tests check that every link still
+carries exactly the program above it; `wj-docs book-regen` refreshes them. The playground also runs TypeScript, in a sandboxed
+frame, so you can compare the two side by side.
+
 ## What is in a project
 
 A project is a directory with a `wj.toml` and a `src` folder. The file `main.wj` in it holds `fn main`; other files there

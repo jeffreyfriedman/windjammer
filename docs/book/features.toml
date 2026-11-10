@@ -208,3 +208,7 @@ title = "One source built for several targets"
 [[feature]]
 id = "showcase-interop"
 title = "Using a Rust crate from Windjammer"
+
+[[feature]]
+id = "playground"
+title = "Run Windjammer in the browser: the playground and Run links"

@@ -6,7 +6,7 @@
     "book.examples": 122,
     "book.examples_ignored": 0,
     "book.examples_interpreter_only": 4,
-    "book.features": 38,
+    "book.features": 39,
     "book.features_uncovered": 0,
     "book.pages": 52,
     "book.promises_uncovered": 0,
@@ -23,7 +23,7 @@
     "lints.w_codes": 7,
     "spec.example_files": 294,
     "stdlib.files": 43,
-    "tests.rust_files": 2012,
-    "tests.wj_programs": 1941
+    "tests.rust_files": 2011,
+    "tests.wj_programs": 1932
   }
 }
