@@ -546,6 +546,7 @@ fn known_gap_lone_script_build_of_main_drops_its_sibling_module() {
 #[test]
 fn run_links_must_carry_the_program_above_them() {
     let s = Scratch::new();
+    s.write("docs/book/playground/index.html", "<html></html>");
     s.page(&format!("```wj\n{HI}```\n\n[Run this in the playground](playground/index.html#)\n"));
     assert!(s.fails("Run link does not carry the program"), "{}", show(&s.findings()));
     // regeneration fills it in, and then the gate passes and the link decodes to the program
