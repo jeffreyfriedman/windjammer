@@ -70,8 +70,11 @@ impl View<'_> {
 fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32> {
     let view = View { result, held: BTreeSet::new() };
     let mut held = BTreeSet::new();
+    // An index use in a class of another width is held, unless it is converted where it is used (an argument at a
+    // `usize` formal: NUM-USIZE-TO-INT at the argument).
+    let converted: BTreeSet<u32> = fc.index_use_keys.iter().map(|(_, v)| v.0).collect();
     for &v in &fc.index_uses {
-        if view.int_type(v) != Some(BaseType::Usize) {
+        if view.int_type(v) != Some(BaseType::Usize) && !converted.contains(&v.0) {
             held.extend(view.class(v));
         }
     }
@@ -176,6 +179,12 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
     }
     // ... and a `usize` value passed to a std method's generic slot of another integer width (`out.push(i + 1)` on a
     // `Vec<int>`) is converted at the argument.
+    // ... and an argument of another integer width at a `usize` formal is converted where it is passed.
+    for (key, arg) in &fc.index_use_keys {
+        if view.published(*arg).is_some_and(|w| is_integer_type(&w) && w != BaseType::Usize) {
+            ir_fn.usize_conversions.insert(*key, BaseType::Usize);
+        }
+    }
     for (key, arg, slot) in &fc.element_stores {
         let Some(elem) = view.int_type(*slot) else { continue };
         if view.published(*arg) == Some(BaseType::Usize) && is_integer_type(&elem) && elem != BaseType::Usize {

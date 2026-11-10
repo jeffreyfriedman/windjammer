@@ -21,7 +21,7 @@ fn decode(s: &str) -> String {
     let mut i = 0_usize;
     while i < cs.len() {
         let n = cs[i + 1].to_digit(10).unwrap_or(0) as i64;
-        out = out + &cs[i].to_string().repeat(n as usize);
+        out = out + &cs[i].to_string().repeat((n as usize));
         i += 2;
     }
     out

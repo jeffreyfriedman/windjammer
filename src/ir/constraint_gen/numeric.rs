@@ -241,7 +241,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         let surface = self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
             || self.emit_core_surface_constraints(expr, object, obj_var, method, arguments, &arg_vars, result);
         if let Some(sig) = sig.as_ref().filter(|_| !surface) {
-            self.emit_call_site_constraints(sig, &arg_vars);
+            self.emit_call_site_constraints(sig, &arg_vars, arguments);
         } else if !surface {
             // A literal receiver keeps its default: rustc cannot infer a literal's width for a method call (E0689).
             let receiver = (!self.numeric_unmodelled.literal_receivers.contains(&obj_var)).then_some(obj_var);
