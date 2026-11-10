@@ -183,7 +183,7 @@ pub static NOT_SINKS: &[&str] = &[
     "path::as_os_str", "path::components", "path::current_dir", "path::extension", "path::file_name_path", "path::file_stem",
     "path::from_str", "path::has_extension", "path::is_absolute", "path::is_relative", "path::join_path", "path::new",
     "path::parent", "path::strip_prefix", "path::to_string", "path::to_string_lossy",
-    "fs::current_dir", "env::args", "env::current_dir", "env::temp_dir", "path::join", "path::file_name", "path::glob_match",
+    "fs::current_dir", "env::args", "env::current_dir", "env::current_exe", "env::temp_dir", "path::join", "path::file_name", "path::glob_match",
     "process::exit", "process::pid", "random::seeded",
     // refusals: they stop the run before any effect (`builtins/std_legacy.rs`)
     "random::random", "net::get", "net::get_async", "net::post", "net::post_async", "net::download", "net::upload",
