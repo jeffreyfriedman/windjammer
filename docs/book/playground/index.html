@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ADR-0034: same-origin scripts only, WebAssembly compilation allowed, no network beyond this site, frames only
+     from this site (the TypeScript sandbox, itself sandboxed to an opaque origin). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; frame-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Windjammer Playground</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d2330; --muted: #5d6675; --panel: #ffffff; --border: #d9dde4;
+    --accent: #1f5fae; --accent-fg: #ffffff; --ok: #1d7a43; --err: #b3261e; --code-bg: #f3f4f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141820; --fg: #e4e7ed; --muted: #9aa3b2; --panel: #1b202a; --border: #2e3542;
+      --accent: #6aa5ec; --accent-fg: #0d1117; --ok: #5fc58a; --err: #f2867d; --code-bg: #10141b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141820; --fg: #e4e7ed; --muted: #9aa3b2; --panel: #1b202a; --border: #2e3542;
+    --accent: #6aa5ec; --accent-fg: #0d1117; --ok: #5fc58a; --err: #f2867d; --code-bg: #10141b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p.lede { margin: 0 0 16px; color: var(--muted); }
+  a { color: var(--accent); }
+  textarea, pre { font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  textarea {
+    width: 100%; min-height: 18rem; resize: vertical; padding: 12px; tab-size: 4;
+    background: var(--code-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); }
+  button {
+    font: inherit; padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--fg); cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status { color: var(--muted); font-size: 0.9rem; }
+  #status[data-kind="ok"] { color: var(--ok); }
+  #status[data-kind="error"] { color: var(--err); }
+  pre {
+    margin: 0 0 12px; padding: 12px; min-height: 3rem; white-space: pre-wrap; overflow-wrap: anywhere;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  }
+  #stderr { color: var(--err); }
+  .label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 4px; }
+  footer { margin-top: 24px; font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Windjammer Playground</h1>
+  <p class="lede">Write a program and run it right here: Windjammer and TypeScript both run inside your browser, and your code stays on your machine.</p>
+  <div class="bar">
+    <label for="lang" class="label" style="margin:0">Language</label>
+    <select id="lang">
+      <option value="wj">Windjammer</option>
+      <option value="ts">TypeScript</option>
+    </select>
+  </div>
+  <label for="source" class="label">Program</label>
+  <textarea id="source" spellcheck="false" autocapitalize="off" autocomplete="off">struct Account {
+    owner: string,
+    balance: int,
+}
+
+impl Account {
+    fn deposit(self, amount: int) {
+        self.balance += amount
+    }
+}
+
+fn main() {
+    let mut acct = Account { owner: "Ada", balance: 0 }
+    for amount in [10, 20, 12] {
+        acct.deposit(amount)
+    }
+    println("${acct.owner} has ${acct.balance}")
+}
+</textarea>
+  <div class="bar">
+    <button id="run" class="primary" type="button" title="Ctrl+Enter or Cmd+Enter">Run</button>
+    <button id="stop" type="button" disabled>Stop</button>
+    <button id="share" type="button">Share link</button>
+    <span id="status" role="status" aria-live="polite"></span>
+  </div>
+  <div class="label">Output</div>
+  <pre id="stdout" aria-label="Program output"></pre>
+  <pre id="stderr" aria-label="Errors and diagnostics" hidden></pre>
+  <footer>
+    Programs run with no access to files, the network or the environment. Windjammer's time and random numbers come
+    from a seeded simulation, so every run of a program prints the same thing; TypeScript runs in an isolated sandbox
+    with no network and no storage. Back to <a href="../">The Windjammer Book</a>.
+  </footer>
+</main>
+<script type="module" src="playground.js"></script>
+</body>
+</html>
