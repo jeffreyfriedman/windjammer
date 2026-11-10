@@ -12,6 +12,7 @@ Minimal programs for compiler or diagnostic bugs found while writing The Windjam
 - `module_const.wj`, `map_get_string_key.wj`: constructs that run interpreted and are rejected compiled (WJ0001, WJ0003).
 - `defer_in_loop.wj`: a loop-body `defer` runs compiled and not interpreted.
 - `tuple_string_match.wj`, `join_unwrap_or_literal.wj`: run interpreted, rejected compiled (WJ0003, WJ0003).
+- `lone_script_mod/` (found by the ADR-0033 work, same discipline): `wj build main.wj` of a lone script with a sibling `mod` emits `main.rs` without the module file and with a `2_i32` literal; `wj build <dir>` and `wj run --compiled main.wj` (which builds the directory) are right.
 
 ## Invariants
 - A repro is the smallest program that shows the bug, free of project names (public hygiene).
