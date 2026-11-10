@@ -364,7 +364,7 @@ digraph deps {
   "linter" -> "auto_clone" [label="1"];
   "linter" -> "error" [label="3"];
   "linter" -> "intrinsics" [label="1",color=red,fontcolor=red];
-  "linter" -> "lexer" [label="5"];
+  "linter" -> "lexer" [label="6"];
   "linter" -> "parser" [label="34"];
   "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];

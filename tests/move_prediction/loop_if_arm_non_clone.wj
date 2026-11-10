@@ -1,0 +1,24 @@
+// WJ0007: inside the loop, an `if` picks `inbox` as the value of `arm`, which takes it away; a channel
+// end cannot be copied, so the next iteration cannot read it.
+use std::sync::mpsc
+
+struct Inbox {
+    rx: mpsc::Receiver<int>,
+    seen: int,
+}
+
+fn fresh() -> Inbox {
+    let pair = mpsc::channel()
+    Inbox { rx: pair.1, seen: 1 }
+}
+
+fn main() {
+    let pair = mpsc::channel()
+    let inbox: Inbox = Inbox { rx: pair.1, seen: 0 }
+    let mut total = 0
+    for k in 0..2 {
+        let arm = if k == 0 { inbox } else { fresh() }
+        total = total + arm.seen
+    }
+    println("${total}")
+}

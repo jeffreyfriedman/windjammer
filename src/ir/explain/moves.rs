@@ -85,7 +85,7 @@ pub fn moves(file: &EmittedFile) -> Vec<Move> {
         }
         for l in &f.lets {
             // b'. `let to = var` of a value whose type is spelled and not Copy
-            if let Some((var, seq, depth)) = &l.moved_from {
+            for (var, seq, depth) in &l.moved_from {
                 if owned_local(f, var) && var_type(f, var).is_some_and(|t| moves_type(file, &t)) {
                     push(var, *seq, *depth, MoveKind::Let { to: l.name.clone() });
                 }
