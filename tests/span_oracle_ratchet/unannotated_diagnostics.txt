@@ -13,22 +13,15 @@ bench/agent-dx/solutions/wj/t014_union_find/main.wj W0005
 bench/agent-dx/solutions/wj/t015_linked_list/main.wj W0005
 bench/agent-dx/solutions/wj/t018_word_freq/main.wj W0005
 bench/agent-dx/solutions/wj/t019_caesar/main.wj W0005
-bench/agent-dx/solutions/wj/t021_anagram_groups/main.wj W0005
-bench/agent-dx/solutions/wj/t022_csv_parse/main.wj W0005
 bench/agent-dx/solutions/wj/t025_template_render/main.wj W0005
-bench/agent-dx/solutions/wj/t027_ini_parser/main.wj W0005
 bench/agent-dx/solutions/wj/t030_bank_ledger/main.wj W0005
-bench/agent-dx/solutions/wj/t031_config_validate/main.wj W0005
 bench/agent-dx/solutions/wj/t032_checked_arith/main.wj W0005
 bench/agent-dx/solutions/wj/t033_org_chart/main.wj W0005
-bench/agent-dx/solutions/wj/t035_generic_minmax_stack/main.wj W0005
 bench/agent-dx/solutions/wj/t036_multikey_sort/main.wj W0005
 bench/agent-dx/solutions/wj/t038_vec2_ops/main.wj W0005,W0007
 bench/agent-dx/solutions/wj/t039_custom_iterators/main.wj W0005
 bench/agent-dx/solutions/wj/t040_memoizer/main.wj W0005
 bench/agent-dx/solutions/wj/t041_expr_tree/main.wj W0005
-bench/agent-dx/solutions/wj/t042_parallel_sum/main.wj W0005
-bench/agent-dx/solutions/wj/t043_channel_pipeline/main.wj W0005
 bench/agent-dx/solutions/wj/t044_shared_histogram/main.wj W0005
 bench/agent-dx/solutions/wj/t045_parallel_divisors/main.wj W0005
 bench/agent-dx/solutions/wj/t046_producer_consumer/main.wj W0005
@@ -40,7 +33,6 @@ bench/agent-dx/solutions/wj/t051_file_transform/main.wj W0005
 bench/agent-dx/solutions/wj/t052_csv_columns/main.wj W0005
 bench/agent-dx/solutions/wj/t053_cli_flags/main.wj W0005
 bench/agent-dx/solutions/wj/t055_log_summary/main.wj W0005
-bench/agent-dx/solutions/wj/t056_todo_manager/main.wj W0005
 bench/agent-dx/solutions/wj/t057_inventory/main.wj W0005
 bench/agent-dx/solutions/wj/t058_vending_machine/main.wj W0005,W0007
 bench/agent-dx/solutions/wj/t059_game_of_life/main.wj W0005
@@ -76,7 +68,6 @@ examples/syntax_tests/34_inferred_trait_bounds/main.wj W0005
 examples/syntax_tests/37_combined_features/main.wj W0005
 examples/syntax_tests/38_named_bound_sets/main.wj W0005
 examples/syntax_tests/39_stdlib_modules/main.wj W0003
-examples/syntax_tests/40_derive_decorator/main.wj W0005
 examples/testing_examples.wj W0001,W0002,W0004,W0007,W0008
 examples/tests/test_math.wj W0009
 examples/traits.wj W0001,W0004,W0007
@@ -108,8 +99,7 @@ tests/bug_function_call_deref.wj W0006
 tests/bug_method_call_deref.wj W0006
 tests/bug_method_string_arg.wj W0009
 tests/bug_newtype_wrapper_inference.wj W0009
-tests/conformance/control_flow/pipe_operator.wj W0005,W0007
-tests/conformance/values/clone_semantics.wj W0005
+tests/conformance/control_flow/pipe_operator.wj W0007
 tests/conformance_programs/01_arith_i32.wj W0008
 tests/conformance_programs/02_arith_i64.wj W0008
 tests/conformance_programs/03_arith_f64.wj W0008
@@ -127,8 +117,8 @@ tests/conformance_programs/110_std_math.wj W0008
 tests/conformance_programs/111_std_strings.wj W0008
 tests/conformance_programs/112_std_fs_roundtrip.wj W0008
 tests/conformance_programs/114_hashmap_entry_counting.wj W0007,W0008
-tests/conformance_programs/115_clone_vec_field.wj W0005,W0007,W0008
-tests/conformance_programs/11_struct_clone_independent.wj W0005,W0008
+tests/conformance_programs/115_clone_vec_field.wj W0007,W0008
+tests/conformance_programs/11_struct_clone_independent.wj W0008
 tests/conformance_programs/12_struct_pass_mutable.wj W0008
 tests/conformance_programs/13_enum_unit_match.wj W0008
 tests/conformance_programs/14_enum_data_match.wj W0008
@@ -145,7 +135,7 @@ tests/conformance_programs/171_format_flags_padding.wj W0007,W0008
 tests/conformance_programs/172_pretty_debug_aggregates.wj W0006,W0007,W0008
 tests/conformance_programs/173_type_aliases.wj W0006,W0007,W0008
 tests/conformance_programs/174_closure_mut_capture.wj W0006,W0007
-tests/conformance_programs/175_len_and_index_as_int.wj W0005,W0007
+tests/conformance_programs/175_len_and_index_as_int.wj W0007
 tests/conformance_programs/176_from_conversions.wj W0006
 tests/conformance_programs/177_deep_recursion.wj W0007
 tests/conformance_programs/178_struct_patterns_slices.wj W0006,W0007
@@ -159,7 +149,7 @@ tests/conformance_programs/20_result_question.wj W0008
 tests/conformance_programs/21_vec_ops.wj W0008
 tests/conformance_programs/22_vec_index_mutate.wj W0007,W0008
 tests/conformance_programs/23_hashmap_ops.wj W0008
-tests/conformance_programs/24_hashmap_sorted_iter.wj W0005,W0008
+tests/conformance_programs/24_hashmap_sorted_iter.wj W0008
 tests/conformance_programs/25_loops_ranges.wj W0008
 tests/conformance_programs/26_break_continue.wj W0008
 tests/conformance_programs/28_generic_fn.wj W0008
@@ -173,7 +163,7 @@ tests/conformance_programs/35_vec_of_structs.wj W0008
 tests/conformance_programs/40_prng_fnv_checksum.wj W0008
 tests/conformance_programs/41_i32_wrapping_lcg.wj W0008
 tests/conformance_programs/42_sort_checksum.wj W0005,W0008
-tests/conformance_programs/43_struct_value_semantics.wj W0005,W0008
+tests/conformance_programs/43_struct_value_semantics.wj W0008
 tests/conformance_programs/44_hashmap_counts.wj W0008
 tests/conformance_programs/45_string_ops.wj W0007,W0008
 tests/conformance_programs/46_modpow_i64.wj W0008
@@ -237,14 +227,10 @@ tests/diagnostics/cases/return_local_ref.wj W0011
 tests/diagnostics/cases/rust_string_type.wj parse-warning
 tests/diagnostics/cases/syntax_missing_expression.wj parse
 tests/diagnostics/cases/syntax_unclosed_brace.wj parse
-tests/effects/planted/p01_lost_update_test.wj W0005
-tests/effects/planted/p02_check_then_withdraw_test.wj W0005
 tests/effects/planted/p03_double_init_test.wj W0005
-tests/effects/planted/p04_queue_pop_test.wj W0005,W0007
+tests/effects/planted/p04_queue_pop_test.wj W0007
 tests/effects/planted/p05_flag_before_data_test.wj W0005
-tests/effects/planted/p06_lock_order_test.wj W0005
-tests/effects/planted/p07_shared_vec_push_test.wj W0005
-tests/effects/planted/p08_first_message_wins_test.wj W0005,W0007
+tests/effects/planted/p08_first_message_wins_test.wj W0007
 tests/effects/planted/p18_hash_order_dependency_test.wj W0003
 tests/effects/planted/p19_set_first_element_test.wj W0003
 tests/effects/replay/conc_file_writers.wj W0002
@@ -310,7 +296,7 @@ tests/inference_corpus/pin_ref_vec.wj W0001,W0007
 tests/input_keyboard_test.wj parse
 tests/interpreter_corpus/async_sequential.wj W0008
 tests/interpreter_corpus/bucket_counts.wj W0007,W0008
-tests/interpreter_corpus/closures_fold.wj W0005,W0008
+tests/interpreter_corpus/closures_fold.wj W0008
 tests/interpreter_corpus/collatz_longest.wj W0008
 tests/interpreter_corpus/deep_recursion.wj W0008
 tests/interpreter_corpus/drop_order.wj W0008
@@ -326,7 +312,7 @@ tests/interpreter_corpus/selftest/cheat_constant_output.wj W0008
 tests/interpreter_corpus/shared_cells.wj W0002,W0004,W0008
 tests/interpreter_corpus/sort_checksum.wj W0005,W0008
 tests/interpreter_corpus/state_machine.wj W0008
-tests/interpreter_corpus/threads_sync.wj W0005,W0008
+tests/interpreter_corpus/threads_sync.wj W0008
 tests/interpreter_corpus/xorshift64.wj W0008
 tests/interpreter_projects/bins_args/src/report.wj W0008,parse-warning
 tests/interpreter_projects/path_dep/textkit/src/frame.wj W0008,parse-warning
@@ -341,7 +327,6 @@ tests/spec/arguments/SPEC-ARGS-006.wj parse
 tests/spec/arguments/SPEC-ARGS-007.wj parse
 tests/spec/arguments/SPEC-ARGS-008.wj parse
 tests/spec/arguments/SPEC-ARGS-009.wj parse
-tests/spec/attributes/SPEC-ATTR-002.wj W0005
 tests/spec/closures/SPEC-CLOS-005.wj parse
 tests/spec/closures/SPEC-CLOS-006.wj parse
 tests/spec/closures/SPEC-CLOS-007.wj parse
@@ -355,13 +340,11 @@ tests/spec/grammar/SPEC-GRAM-007.wj parse
 tests/spec/guard-match/SPEC-MATCH-003.wj parse
 tests/spec/guard-match/SPEC-MATCH-004.wj parse
 tests/spec/intrinsics/SPEC-INTR-008.wj W0007,W0008
-tests/spec/items/SPEC-ITEM-002.wj W0005
 tests/spec/items/SPEC-ITEM-008.wj parse
 tests/spec/lexical/SPEC-LEX-004.wj parse
 tests/spec/modules/SPEC-MOD-005.wj W0002
 tests/spec/numeric/SPEC-NUM-011.wj parse
 tests/spec/optionals/SPEC-OPT-004.wj parse
-tests/spec/ownership/SPEC-OWN-003.wj W0005
 tests/spec/pipe/SPEC-PIPE-006.wj W0002
 tests/spec/pipe/SPEC-PIPE-007.wj parse
 tests/spec/statements/SPEC-STMT-005.wj W0003
@@ -369,7 +352,6 @@ tests/spec/stdlib/SPEC-STD-001.wj W0002
 tests/spec/stdlib/SPEC-STD-002.wj W0002,parse-warning
 tests/spec/stdlib/SPEC-STD-003.wj W0003
 tests/spec/trailing-blocks/SPEC-BLOCK-004.wj parse
-tests/spec/traits/SPEC-TRT-005.wj W0005
 tests/spec/types/SPEC-TYP-003.wj W0013
 tests/spec/types/SPEC-TYP-009.wj parse
 tests/stdlib_all_tests.wj parse
@@ -388,15 +370,10 @@ tests/windjammer_tests/regression_vec_tuple_string_push_test.wj W0006
 # Corpus files added since the last ratchet pass (specs, project corpus, bench solutions, book repros) and every file with a bodyless trait
 # method that spells a plain `self`: W0016 is a warning by owner decision (docs/spec/convergence-burndown.md: the declarations await a
 # `wj fix` migration). The subject of these files is not lint cleanliness; new files must not be added here.
-bench/agent-dx/solutions/wj-set2/t101_json_orders/main.wj W0005
 bench/agent-dx/solutions/wj-set2/t103_trait_pricing/main.wj W0016
 bench/agent-dx/solutions/wj-set2/t104_activity_log/main.wj W0005
 bench/agent-dx/solutions/wj/t034_shapes_trait/main.wj W0016
 bench/agent-dx/solutions/wj/t037_animal_traits/main.wj W0005,W0016
-examples/verified/modules_trait_static.wj W0016
-examples/verified/trait_basics.wj W0016
-examples/verified/trait_default_and_override.wj W0016
-examples/verified/trait_dyn_dispatch.wj W0016
 std/enumerable.wj W0016
 tests/check_negative/mutants/modules_trait_static__unknown_field.wj W0016
 tests/check_negative/mutants/trait_default_and_override__unknown_field.wj W0016
@@ -405,7 +382,6 @@ tests/conformance/types/traits_and_generics.wj W0005,W0016
 tests/conformance_programs/163_trait_generics_and_aliases.wj W0005,W0016
 tests/conformance_programs/27_trait_impl.wj W0008,W0016
 tests/conformance_programs/79_trait_dispatch.wj W0008,W0016
-tests/diagnostics/cases/missing_trait_item.wj W0016
 tests/effects/corpus/env_in_trait_impl.wj W0016
 tests/fixtures/formatter/generics_impl.expected.wj W0016
 tests/fixtures/formatter/generics_impl.input.wj W0016
