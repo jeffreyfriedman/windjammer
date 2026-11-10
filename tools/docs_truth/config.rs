@@ -22,6 +22,23 @@ pub struct Config {
     pub ebnf: Ebnf,
     #[serde(default)]
     pub spec_grammar: SpecGrammar,
+    #[serde(default)]
+    pub book: BookCfg,
+}
+
+/// Ratchets of the book (docs/book); each may only shrink (`tools/docs_truth/book.rs`).
+#[derive(Debug, Default, Deserialize)]
+pub struct BookCfg {
+    #[serde(default)]
+    pub max_ignored: usize,
+    #[serde(default)]
+    pub max_drafts: usize,
+    #[serde(default)]
+    pub max_interpreter_only: usize,
+    #[serde(default)]
+    pub max_uncovered_promises: usize,
+    #[serde(default)]
+    pub max_uncovered_features: usize,
 }
 
 /// Cross-check of `docs/spec/grammar.ebnf` (see `spec_grammar.rs`). There is no divergence table:

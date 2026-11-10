@@ -63,7 +63,17 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Expected element type for `vec![…]` from return type or call-arg context.
     fn vec_macro_expected_element_type(&self) -> Option<Type> {
+        // `S { items: vec![..] }`: the field's declared type.
+        let field_ty = self
+            .in_struct_literal_field
+            .then(|| {
+                let s = self.current_struct_literal_name.as_ref()?;
+                let f = self.current_struct_field_name.as_ref()?;
+                self.lookup_struct_field_types(s)?.get(f).cloned()
+            })
+            .flatten();
         for ctx_ty in [
+            field_ty.as_ref(),
             // `let v: Vec<string> = vec![..]`: the annotation is the nearest expectation.
             self.collect_target_type.as_ref(),
             self.current_function_return_type.as_ref(),
@@ -88,6 +98,10 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         if crate::codegen::rust::string_utilities::already_owned_string_expr(generated) {
             return generated.to_string();
+        }
+        // A module `const …: string` is a `&'static str`: an owned `string` slot takes its copy.
+        if crate::codegen::rust::types::is_windjammer_text_type(expected_elem) && self.expression_is_static_str_value(arg_expr) {
+            return format!("{generated}.to_string()");
         }
         let actual = self.infer_actual_safety_type(arg_expr, generated);
         let expected = safety_type_from_parser_type(expected_elem, Some(OwnershipMode::Owned));
@@ -287,12 +301,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 return self.coerce_vec_macro_element(&args[idx], s, exp_ty);
                             }
                         }
-                        // Untyped vec!: keep legacy string-literal-only coercion.
+                        // Untyped vec!: Windjammer text elements are owned `String`s (a string literal, or a module
+                        // `const …: string`, which lowers to `&'static str`), like every other `string` value.
                         if idx < args.len() {
-                            if let Expression::Literal {
-                                value: Literal::String(_),
-                                ..
-                            } = &args[idx]
+                            if matches!(args[idx], Expression::Literal { value: Literal::String(_), .. })
+                                || self.expression_is_static_str_value(args[idx])
                             {
                                 if !s.ends_with(".to_string()") {
                                     return format!("{}.to_string()", s);
@@ -306,6 +319,12 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_strs
             };
 
+        // CLONE-USE-AFTER-MOVE: a `vec![..]` element is consumed; a binding read again later is copied.
+        let final_arg_strs: Vec<String> = if name == "vec" && !is_repeat {
+            final_arg_strs.into_iter().zip(args.iter()).map(|(s, a)| self.copy_if_read_again_at(a, s, super::move_at_last_use::MoveSite::Element)).collect()
+        } else {
+            final_arg_strs
+        };
         format!(
             "{}!{}{}{}",
             name,

@@ -296,7 +296,7 @@ pub fn generate_nested_module_structure(source_dir: &Path, output_dir: &Path) ->
                                 if should_copy {
                                     let dest_dir = output_dir.join(dir_name);
                                     if let Err(e) =
-                                        crate::test_runner::copy_dir_recursive(&path, &dest_dir)
+                                        crate::build_utils::copy_dir_recursive(&path, &dest_dir)
                                     {
                                         eprintln!(
                                             "Warning: Failed to copy directory {}: {}",

@@ -169,6 +169,11 @@ impl Interpreter {
                         _ => Err(unsupported("range over non-integer values")),
                     }
                 }
+                // `-9223372036854775808`: the literal 2^63 reaches the interpreter as i64::MIN (the parser keeps i64 bits), and
+                // the literal's negation is that same value; only the written literal, never a computed one (SPEC-NUM-017)
+                UnaryOp::Neg if matches!(operand, Expression::Literal { value: Literal::Int(i64::MIN), .. }) => {
+                    Ok(Value::Int(i64::MIN as i128, IntTy::Lit))
+                }
                 UnaryOp::Neg => {
                     let v = self.eval(operand)?;
                     self.mark(location.as_ref());

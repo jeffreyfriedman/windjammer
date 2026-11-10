@@ -181,52 +181,6 @@ pub fn stream_method_intrinsic(stream: &str, method: &str) -> Option<Intrinsic> 
     }
 }
 
-/// Register the surface-syntax deprecation diagnostics in the error catalog.
-pub fn register_catalog(catalog: &mut crate::error_catalog::ErrorCatalog) {
-    use crate::error_catalog::{ErrorEntry, ErrorExample};
-    catalog.add_error(ErrorEntry {
-        code: "W0007".to_string(),
-        title: "Deprecated macro spelling (`println!`, `vec![]`, ...)".to_string(),
-        explanation: "Windjammer has no macros. print/println/panic/assert/assert_eq/assert_ne/todo/unreachable \
-            are built-in functions, `dbg!` is `debug(x)`, `eprintln!` is `stderr.println(..)`, `format!` is an \
-            interpolated string and `vec![..]` is the list literal `[..]`. The `!` forms still compile but will \
-            become errors after one release (ADR-0014)."
-            .to_string(),
-        causes: vec!["Rust-style macro syntax".to_string()],
-        solutions: vec![
-            "Run `wj fix <path>` to rewrite automatically".to_string(),
-            "Replace `name!(..)` with `name(..)`".to_string(),
-        ],
-        examples: vec![ErrorExample {
-            title: "println! macro".to_string(),
-            bad_code: "println!(\"x = {}\", x)".to_string(),
-            good_code: "println(\"x = ${x}\")".to_string(),
-            explanation: "Plain call with string interpolation".to_string(),
-        }],
-        related: vec!["W0008".to_string()],
-        severity: "warning".to_string(),
-        category: "Style".to_string(),
-    });
-    catalog.add_error(ErrorEntry {
-        code: "W0008".to_string(),
-        title: "`{}`-style format string".to_string(),
-        explanation: "Windjammer uses string interpolation (`\"${x}\"`, `\"${x:.2}\"`, `\"${x:?}\"`) instead of \
-            Rust `{}` / `{:?}` format strings with trailing arguments."
-            .to_string(),
-        causes: vec!["Rust-style format string with positional arguments".to_string()],
-        solutions: vec!["Run `wj fix <path>` or inline the arguments with `${..}`".to_string()],
-        examples: vec![ErrorExample {
-            title: "format string".to_string(),
-            bad_code: "println(\"a {} b {:?}\", x, y)".to_string(),
-            good_code: "println(\"a ${x} b ${y:?}\")".to_string(),
-            explanation: "Arguments move into the string".to_string(),
-        }],
-        related: vec!["W0007".to_string()],
-        severity: "warning".to_string(),
-        category: "Style".to_string(),
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

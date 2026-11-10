@@ -1,0 +1,33 @@
+#[inline]
+fn take(v: &Vec<i64>) -> i64 {
+    v.len() as i64
+}
+
+#[inline]
+fn keep(v: Vec<i64>) -> Vec<i64> {
+    v
+}
+
+fn main() {
+    let v: Vec<i64> = vec![1_i64, 2_i64];
+    let w: Vec<i64> = vec![3_i64];
+    let u: Vec<i64> = vec![4_i64, 5_i64, 6_i64];
+    if v.len() > 1_usize {
+        let n = take(&keep(w));
+        let _ = println!("{}", n);
+    }
+    let mut total = 0_i64;
+    for i in 0_i64..2_i64 {
+        if i == 0_i64 {
+            total += take(&keep(v.clone()));
+        } else {
+            total += v.len() as i64;
+        }
+    }
+    if let 3 = u.len() {
+        let m = take(&keep(u));
+        let _ = println!("{}", m);
+    }
+    println!("{} {}", total, v.len());
+}
+

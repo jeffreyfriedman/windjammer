@@ -23,8 +23,9 @@ pub fn lint_text(file_name: &str, source: &str) -> Option<Vec<LintDiagnostic>> {
     std::panic::catch_unwind(move || {
         let tokens = crate::lexer::Lexer::new(&t).tokenize_with_locations();
         let mut parser = crate::parser::Parser::new_with_source(tokens, n.clone(), t.clone());
+        parser.enable_span_log();
         let program = parser.parse().ok()?;
-        let mut linter = rust_leakage::RustLeakageLinter::new(&n);
+        let mut linter = rust_leakage::RustLeakageLinter::new(&n).with_receiver_spans(parser.span_snapshot());
         linter.lint_program(&program);
         linter.lint_source(&t);
         Some(linter.into_diagnostics())
@@ -362,6 +363,7 @@ mod owned_but_not_returned_tests {
             str_ref_optimizable_params: HashSet::new(),
             module_path: Vec::new(),
             module_const_types: Default::default(),
+            type_aliases: Default::default(),
         };
 
         let mut linter = Linter::new();

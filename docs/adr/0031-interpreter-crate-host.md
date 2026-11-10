@@ -166,24 +166,89 @@ cache, ADR-0023 measured 214 s for the bridge's runtime build) and seconds per e
 ## Ambition ladder
 1. **Done (this ADR):** free functions over the surface type language, any number of crates per program, panics,
    record/replay, simulate with `@pure` or stubs, grants, durable steps, copy-in/copy-out `&mut`.
-2. **Opaque handles** (ADR-0026 rung 4, designed here): a surface declares `pub struct Regex` (no fields) and
-   functions or methods over it (`fn new(p: string) -> Result<Regex, string>`, `fn is_match(self: &Regex, s: string) -> bool`).
-   The host keeps a table `u64 -> Box<dyn Any>`; a handle crosses as tag 12 + `u64`; the interpreter holds it as a
-   `Value::Native` whose drop sends a release frame (batched), so lifetimes follow Windjammer ownership. `&self`
-   methods borrow from the table, `self` methods remove the entry. Record/replay logs handles as opaque ids
-   (a replayed handle is only ever passed back to replayed calls); simulate needs stubs for constructors. First
-   experiment: `regex::Regex` (`new`, `is_match`, `find` returning `Option<(usize, usize)>`).
-   Kill criterion: handle-churn programs where release traffic exceeds 30% of calls; then batch on scope exit.
+2. **Done: opaque handles** (ADR-0026 rung 4). See "Opaque crate values" below.
 3. **Monomorphised generics** in the generator (`AsRef<str>`, `AsRef<[u8]>`, `impl Into<String>`) so hex, base64
    and friends map, and an owned-`String` parameter form.
 4. **Callbacks** into interpreted closures (`sort_by`, visitors): a reverse request frame on the same pipe while a
    call is in flight (the host blocks on the interpreter's answer). Needs re-entrancy in the protocol only.
-5. **`wj test --interpret`** and the REPL use the same host (today `wj run` builds it).
+5. **Done: every interpreted entry point uses the host.** `wj run` (and `wj run -`, which runs through
+   it), `wj test --interpret` (one host process for the whole test run) and `wj repl` (`cli::crate_host_build::host_for_path`).
 6. **Fast tier (option B)** for `@pure` scalar functions whose per-call cost dominates, behind the same
    generator, gated by the equivalence tests; **sandboxed host** (`sandbox-exec`/seccomp profile per grant) and
    **wasm hosts (option C)** for untrusted crates.
-7. **No cargo for registry crates**: a shared, signed cache of prebuilt hosts keyed by the same hash (CI builds
-   popular crate sets), so a cold start is a download.
+7. **No cargo for registry crates**: a shared, signed cache of prebuilt hosts, so a cold start is a download. See
+   "Prebuilt shared host cache (design note)" below.
+
+## Opaque crate values (implemented)
+A surface declares a crate type as a field-less struct and its methods in an `impl` block (both forms already parse;
+`pub struct T` without braces and `extern struct` do not, so the braces are the syntax):
+
+```windjammer
+// rust/regex.wji
+pub struct Regex {}
+pub struct Error {}
+
+impl Regex {
+    pub fn new(re: string) -> Result<Regex, Error>
+    pub fn is_match(&self, haystack: string) -> bool
+    pub fn shortest_match(&self, haystack: string) -> Option<usize>
+}
+
+impl Error {
+    pub fn to_string(&self) -> string
+}
+```
+
+- **Wire:** tag 12 + `u64` id. A type is a handle wherever it appears (`Result<Regex, Error>`, `Option<Self>`, `Vec<T>`).
+- **Host:** a table `u64 -> Box<dyn Any>`. `Wire::enc` consumes its value, so returning an opaque value moves it into the
+  table; decoding one by value (`self`, or an owned parameter) takes it out (later use of that handle is an error
+  naming the id). `&self` / `&T` / `&mut T` parameters take the value out after every argument decoded, call, and put it
+  back, so a failed decode loses nothing; a `&mut` handle needs no copy-out (the value never left the host).
+- **Interpreter:** a handle is a `Value::Native` (`crate_host::handle`), shared by copies; the last copy's `Drop`
+  queues the id, and the next request first sends one `__wj_release` frame with every queued id. A method call on a
+  handle (`re.is_match(s)`) dispatches to `crate::Type::method` with the receiver first; `Type::new(..)` and
+  `crate::Type::new(..)` are ordinary crate calls.
+- **Record/replay:** the effect log stores a handle as `{"handle": "regex::Regex", "id": "1"}`; replay rebuilds a handle
+  with no host behind it, and every call on it is answered from the log. Durable steps journal the same form; a step
+  resumed in a new process gets an id the new host does not know, so a call on it fails with a clear error rather
+  than a wrong result (keeping handles alive across a crash is not designed).
+- **Simulate:** `@pure` methods run; constructors of non-pure types need stubs, and a stub cannot mint a handle,
+  so a simulated program that needs a crate object is refused with the stub hint.
+- **Compiled build:** the surface metadata now publishes methods under `Type::method` with `parent_type` and
+  `has_self_receiver`, as path dependencies publish theirs, so the ownership pipeline borrows `string` arguments
+  of methods and associated functions (`Regex::new("..")` passes `&str`).
+- **Static effects:** `Type::new(..)` and `crate::f(handle)` are `ffi(<crate>)` sinks for `wj check`; a method call on
+  a handle value is not yet attributed statically (the receiver's type is not known to the effect pass), so its
+  grant is enforced only at run time by the interpreter. Next: attribute method calls whose receiver type is a
+  surfaced opaque type.
+- **Equivalence:** one engine bug surfaced: the machine-code loop tier left the last iteration's body locals in their
+  slots when the loop ended at its head, so an `Rc` value (a handle; any shared value) lived until the function
+  returned instead of dying with the loop. `resolved/jit/osr.rs` now releases them (`close_body`), and the counter
+  test checks it through a crate-side live-object count (`ctr::live()` is 1 interpreted and compiled).
+
+## Prebuilt shared host cache (design note)
+Goal: the first `wj run` of a popular crate set downloads a host instead of running cargo.
+
+- **Key.** The host key already hashes everything that determines the binary except the toolchain and target. A
+  shareable key adds `rustc -vV` (release and commit hash), the target triple and the `[profile]` of the host
+  manifest: `sha256(generator version, shim source, dependency lines with exact locked versions and features,
+  rustc commit, target)`. Path and git dependencies are never shared (their source is the user's).
+- **Source of binaries.** A CI job builds hosts for a curated list of crate sets (the pure list plus the top
+  crates agents ask for: regex, serde_json via a concrete surface, chrono, uuid, sha2) on each supported target, from
+  the generated surfaces at their published versions, and publishes them to an artifact store keyed by the hash.
+  A user's own crate set is built locally as today and can be uploaded to a team cache (same layout) by opt-in.
+- **Trust.** Each artifact carries a signature over `(key, sha256(binary))` by the CI key, verified by `wj` before
+  the binary is placed in the cache; `wj doctor` shows the trust root. A host is code that runs with the program's
+  authority: an unsigned or mismatched artifact is never used, and `WJ_CRATE_HOST_DOWNLOAD=0` disables downloads
+  (offline and audited environments). The capability gate is unaffected: it runs in the interpreter before any call.
+- **Fallback.** Miss, network error or signature failure: build locally with cargo exactly as now; the download
+  path only ever replaces a cache miss.
+- **Cost model.** A host is about 0.5 MB, so a download is a few hundred milliseconds against seconds (small
+  crates) to minutes (regex with all features, or crates with C dependencies) of cargo.
+- **First experiment.** Publish hosts for strsim, shlex, crc32fast and regex on the CI's macOS and Linux runners;
+  measure the cold `wj run` with a fresh cache root (download) against the local build. Kill criterion: if rustc
+  version skew makes the hit rate below 50% across users of one wj release, key on the wj release's pinned
+  toolchain only and ship hosts with the release instead.
 
 ## Consequences
 - `wj run` on a project that calls surfaced crates stays interpreted; the first run builds the host once.

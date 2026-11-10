@@ -18,7 +18,7 @@ Names, default panic messages, newline behaviour, template parsing, macro-to-cal
 Backend lowering (each backend/interpreter lowers an `Intrinsic`), ownership, widths.
 
 ## Allowed imports
-Layer `tooling`: `error_catalog`, `lexer`, `parser`. Contract: docs/MODULE_MAP.toml (tests/architecture.rs).
+Layer `syntax`: `lexer`, `parser`. Contract: docs/MODULE_MAP.toml (tests/architecture.rs). Its diagnostics (W0007, W0008) are registered by `error_catalog`.
 
 ## Entry points
 `Intrinsic::from_call_name`, `template::*`, `surface_fix::*` (src/intrinsics/mod.rs).

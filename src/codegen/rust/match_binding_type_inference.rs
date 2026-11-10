@@ -316,7 +316,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn lookup_enum_variant_payload_types(&self, variant_name: &str) -> Option<&Vec<Type>> {
+    pub(in crate::codegen::rust) fn lookup_enum_variant_payload_types(&self, variant_name: &str) -> Option<&Vec<Type>> {
         if let Some(types) = self.enum_variant_types.get(variant_name) {
             return Some(types);
         }
@@ -379,7 +379,11 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             if let Some(ty) = self.infer_match_arm_body_type(scrutinee, arm) {
-                return Some(ty);
+                // A scrutinee lowered to `.copied()` binds owned values: the match yields the pointee.
+                return Some(match ty {
+                    Type::Reference(p) if self.match_scrutinee_option_yields_copy(scrutinee) => *p,
+                    other => other,
+                });
             }
         }
         None

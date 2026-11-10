@@ -46,7 +46,7 @@ fn main() {
     let a = V2 { x: 1_i64, y: 2_i64 };
     let b = V2 { x: 3_i64, y: 4_i64 };
     println!("{}", show(a + b));
-    println!("{}", show(V2 { x: 1_i64, y: 2_i64 } * 3));
+    println!("{}", show(V2 { x: 1_i64, y: 2_i64 } * 3_i64));
     println!("{}", a == V2 { x: 1_i64, y: 2_i64 });
     println!("{}", a == b);
 }

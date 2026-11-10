@@ -12,6 +12,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
@@ -73,6 +74,7 @@ Usage: wj build [OPTIONS] <FILE>
 | `<PATH>` | FILE |  | Path to .wj file or directory |
 | `-o`, `--output` | DIR |  | Output directory (default: ./build) |
 | `-r`, `--release` | RELEASE |  | Build in release mode |
+| `--unchecked-arithmetic` | UNCHECKED_ARITHMETIC |  | Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds and the interpreter). Same as `[build] overflow_checks = false` in wj.toml |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
@@ -104,13 +106,14 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
+| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file, a directory, or `-` (the program read from stdin) (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
 | `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
 | `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
 | `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
+| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
 | `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
@@ -147,6 +150,18 @@ Start the Windjammerscript REPL (interactive interpreter)
 ```text
 Usage: wj repl
 ```
+
+## `wj eval`
+
+Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
+
+```text
+Usage: wj eval <CODE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CODE>` | CODE |  | An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed |
 
 ## `wj mcp`
 
@@ -586,6 +601,7 @@ Usage: wj doctor [OPTIONS]
 |---|---|---|---|
 | `--json` | JSON |  | Machine-readable output |
 | `--expect-head` | EXPECT_HEAD |  | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) |
+| `--strict` | STRICT |  | Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout |
 
 ## `wj install-dev`
 

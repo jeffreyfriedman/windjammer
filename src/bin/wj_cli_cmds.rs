@@ -25,10 +25,11 @@ fn run_toolchain(cmd: &Commands) {
     }
     if !matches!(cmd, Commands::Doctor { .. } | Commands::Version { .. } | Commands::InstallDev { .. }) {
         toolchain::stale::warn_if_stale();
+        toolchain::behind::warn_if_behind();
     }
 }
 
-fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
+fn cmd_doctor(json: bool, expect_head: bool, strict: bool) -> Result<()> {
     use windjammer::toolchain::doctor;
     let path = windjammer::toolchain::env::get("PATH").unwrap_or_default();
     if expect_head {
@@ -57,7 +58,7 @@ fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
             println!("{note}");
         }
     }
-    if !report.problems.is_empty() {
+    if !report.problems.is_empty() || (strict && !report.warnings.is_empty()) {
         std::process::exit(1);
     }
     Ok(())
@@ -98,7 +99,7 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
             let id = windjammer::toolchain::identity::current();
             Some(if *json { serde_json::to_string_pretty(&id.to_json()).map(|j| println!("{j}")).map_err(Into::into) } else { Ok(println!("{}", id.version_line())) })
         }
-        Commands::Doctor { json, expect_head } => Some(cmd_doctor(*json, *expect_head)),
+        Commands::Doctor { json, expect_head, strict } => Some(cmd_doctor(*json, *expect_head, *strict)),
         Commands::InstallDev { to, from, force, dry_run } => Some(cmd_install_dev(to.clone(), from.clone(), *force, *dry_run)),
         Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run)),
         _ => None,
@@ -116,6 +117,7 @@ pub fn run(cli: Cli) -> Result<()> {
             path,
             output,
             release,
+            unchecked_arithmetic,
             target,
             defer_drop,
             defer_drop_threshold,
@@ -137,17 +139,13 @@ pub fn run(cli: Cli) -> Result<()> {
             json,
             ir_shadow_validate,
         } => {
-            // TODO: Pass defer_drop config to compiler
             let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::build::execute(
                 &path,
                 output.as_deref(),
                 release,
                 &target,
-                windjammer::cli::build::BuildOptions {
-                    tree_shake,
-                    source_maps,
-                },
+                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic },
                 check,
                 raw_errors,
                 fix,
@@ -173,6 +171,7 @@ pub fn run(cli: Cli) -> Result<()> {
             compiled,
             release,
             watch,
+            verify,
             hot,
             sched_seed,
             hash_seed,
@@ -205,10 +204,8 @@ pub fn run(cli: Cli) -> Result<()> {
             let _ = (defer_drop, defer_drop_threshold);
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
             let (path, args) = split_path_and_args(path_and_args);
-            if watch {
-                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
-                let root = windjammer::cli::watch::watch_root(path.as_deref());
-                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            if let Some(code) = run_loop_mode(verify, watch, &target, path.as_deref(), bin.as_deref(), &args, no_lint)? {
+                std::process::exit(code);
             }
             let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some() || journal.is_some());
             let lint = windjammer::cli_execution::report_build_lints;
@@ -220,6 +217,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 std::process::exit(code);
             }
         }
+        Commands::Eval { code } => windjammer::cli::eval::exit_on_failure(windjammer::cli::eval::run(&code)?),
         Commands::Mcp { command } => match command {
             McpCommand::Bind { server, tools, stdio, only, out } => {
                 let text = match (tools, stdio) {
@@ -244,9 +242,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 }
             }
         },
-        Commands::Repl {} => {
-            run_repl()?;
-        }
+        Commands::Repl {} => run_repl()?,
         Commands::Test {
             path,
             filter,
@@ -286,7 +282,10 @@ pub fn run(cli: Cli) -> Result<()> {
             let allow_empty = allow_empty || doc_count > 0;
             if interpret {
                 let sim = sim_run(simulate, seeds, seed, faults)?;
-                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json, sim);
+                // ADR-0031: the crate host for the project's surfaced Rust crates (built once, cached)
+                let here = path.clone().unwrap_or_else(|| std::path::PathBuf::from("."));
+                let crates = if list { None } else { windjammer::cli::crate_host_build::host_for_path(&here, &mut |m| eprintln!("{m}")).map_err(|e| anyhow::anyhow!(e))? };
+                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json, sim, crates);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -413,20 +412,24 @@ pub fn run(cli: Cli) -> Result<()> {
             CacheCommand::Setup => windjammer::cli::cache::execute_setup()?,
         },
         Commands::Version { .. } | Commands::Doctor { .. } | Commands::InstallDev { .. } | Commands::SelfInstall { .. } => {}
-        Commands::Plugin(plugin_args) => {
-            if plugin_args.is_empty() {
-                anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
-            }
-
-            let plugin_name = &plugin_args[0];
-            let args = &plugin_args[1..];
-
-            let exit_code = windjammer::plugin::execute_plugin(plugin_name, args)?;
-            std::process::exit(exit_code);
-        }
+        Commands::Plugin(plugin_args) => cmd_plugin(&plugin_args)?,
     }
 
     Ok(())
+}
+
+/// `wj <plugin> <args>`: run an external plugin and exit with its status.
+fn cmd_plugin(plugin_args: &[String]) -> Result<()> {
+    if plugin_args.is_empty() {
+        anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
+    }
+    // an unknown subcommand is most often a `wj` older than the one the docs describe: say which build this is
+    let exit_code = windjammer::plugin::execute_plugin(&plugin_args[0], &plugin_args[1..]).map_err(|e| {
+        let build = windjammer::toolchain::behind::current_behind_text()
+            .unwrap_or_else(|| format!("(this is {})", windjammer::toolchain::identity::current().version_line()));
+        e.context(build)
+    })?;
+    std::process::exit(exit_code);
 }
 
 fn cmd_generate_docs(output: &std::path::Path, format: &str) -> Result<()> {
@@ -612,7 +615,12 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
 
 /// Run the Windjammerscript REPL (state persists between inputs).
 fn run_repl() -> Result<()> {
-    windjammer::interpreter::repl::run_repl_stdio();
+    // ADR-0031: calls into the surfaced Rust crates of the project around the working directory
+    let crates = windjammer::cli::crate_host_build::host_for_repl(std::path::Path::new("."), &mut |m| eprintln!("{m}")).unwrap_or_else(|e| {
+        eprintln!("wj: Rust crate calls are not available in this REPL: {e}");
+        None
+    });
+    windjammer::interpreter::repl::run_repl_with(crates);
     Ok(())
 }
 
@@ -692,6 +700,23 @@ fn engine_is_resolved(engine: &str) -> anyhow::Result<bool> {
 
 /// `wj run [flags] PATH [ARGS]...`: the first value is the path, the rest belongs to the program (a leading `--`
 /// separator, as older invocations wrote it, is dropped).
+/// `wj run --verify` (interpret, build, compare: ADR-0033) and `wj run --watch` (restart on change) take over the whole
+/// run; `None` for an ordinary run.
+fn run_loop_mode(verify: bool, watch: bool, target: &str, path: Option<&std::path::Path>, bin: Option<&str>, args: &[String], no_lint: bool) -> Result<Option<i32>> {
+    if verify {
+        if target != "rust" {
+            anyhow::bail!("`--verify` compares with the Rust build; it does not take `--target {target}`");
+        }
+        return Ok(Some(windjammer::cli::verify::execute(path, bin, args, no_lint)));
+    }
+    if watch {
+        let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+        let root = windjammer::cli::watch::watch_root(path);
+        return Ok(Some(windjammer::cli::watch::watch(&root, child_args, None)));
+    }
+    Ok(None)
+}
+
 fn split_path_and_args(mut rest: Vec<String>) -> (Option<std::path::PathBuf>, Vec<String>) {
     if rest.is_empty() {
         return (None, rest);

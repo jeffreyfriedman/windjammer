@@ -347,7 +347,9 @@ impl Grant {
     /// Check one use of `kind` on `resource` (the raw argument: a path, URL/address, variable name, program).
     pub fn check(&self, kind: &EffectKind, resource: Option<&str>) -> Result<(), Denial> {
         use std::sync::atomic::Ordering::Relaxed;
-        let cacheable_read = matches!((kind, resource), (EffectKind::FsRead, Some(_))) && !CACHE_OFF.load(Relaxed);
+        // no decision cache on wasm32: it is stamped with a clock that platform does not have (the browser playground,
+        // ADR-0034, has no file system to cache decisions about anyway)
+        let cacheable_read = matches!((kind, resource), (EffectKind::FsRead, Some(_))) && !CACHE_OFF.load(Relaxed) && !cfg!(target_arch = "wasm32");
         if cacheable_read {
             let res = resource.unwrap_or("");
             let me = TID.with(|t| *t);

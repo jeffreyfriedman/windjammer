@@ -21,6 +21,10 @@ pub struct Unmodelled {
     /// Receivers of a numeric method that are literals (`2.pow(10)`, `(-7).abs()`): rustc cannot infer their width
     /// (E0689), so their class is published even at its default (`int` / `float`).
     pub literal_receivers: Vec<ConstraintVar>,
+    /// Values used where the walk does not know the expected type: an argument or result of a call with no
+    /// signature, an argument at a generic or alias-typed formal, a struct literal field of an unknown struct, a
+    /// value passed to an unknown method. Their classes (and the parts of those classes) are not published.
+    pub opaque: Vec<ConstraintVar>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
@@ -62,8 +66,14 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             .cloned()
     }
 
-    /// `for x in v` over a declared `Vec<T>` / array binds a `T`; any other loop binding is unmodelled.
-    pub(super) fn type_loop_element(&mut self, loop_var: ConstraintVar, iterable: &'ast Expression<'ast>) {
+    /// `for x in v` binds an element of `v` (a declared `Vec<T>` / array binds a `T`). A loop over a call result
+    /// whose element the surface did not type is unmodelled.
+    pub(super) fn type_loop_element(&mut self, loop_var: ConstraintVar, iterable_var: ConstraintVar, iterable: &'ast Expression<'ast>) {
+        self.cs.add_because(Constraint::HasPart(iterable_var, crate::ir::constraints::Part::Elem, loop_var), tagged("NUM-ELEMENT"));
+        let structural = match iterable {
+            Expression::MethodCall { .. } | Expression::Call { .. } => self.surface_typed.contains(&iterable_var),
+            _ => true,
+        };
         let source = match iterable {
             Expression::Unary { operand, .. } => *operand,
             Expression::MethodCall { object, method, arguments, .. }
@@ -85,6 +95,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 );
                 emit_numeric_class_constraint(&mut self.cs, loop_var, &e);
             }
+            None if structural => {}
             None => self.numeric_unmodelled.loop_bindings.push(loop_var),
         }
     }
@@ -101,7 +112,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         for (i, (&v, (_, a))) in arg_vars.iter().zip(arguments.iter()).enumerate() {
             let Some(ty) = payload.get(&i.to_string()) else { continue };
             let base = parser_type_to_base_type(ty);
-            if base == BaseType::Inferred {
+            // A named payload type (a struct, or the enum's own generic `T`) fixes no width.
+            if base == BaseType::Inferred || crate::ir::constraints::contains_named(&base) {
                 continue;
             }
             self.cs.add_because(
@@ -157,6 +169,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> ConstraintVar {
         let receiver_type = self.receiver_type_name_for_method(object);
+        if let Expression::MethodCall { type_args, .. } = expr {
+            self.prepare_closure_param_types(object, method, arguments, type_args.as_deref().unwrap_or(&[]));
+        }
         for (i, (_, arg)) in arguments.iter().enumerate() {
             let arg_in_payload = self.method_arg_is_owned_payload_store(
                 method,
@@ -224,14 +239,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         // Option C stage C1: a method of a Rust core type is typed by `std/rust_core.wji` (index slots,
         // lengths, element and payload types); a same-named registry signature is a homonym and is not used.
         let surface = self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
-            || self.emit_core_surface_constraints(expr, object, method, arguments, &arg_vars, result);
-        if method == "push" && arguments.len() == 1 {
-            if let Some(key) = crate::ir::numeric_facts::conversion_key(arguments[0].1) {
-                self.element_stores.push((key, arg_vars[0], obj_var));
-            }
-        }
+            || self.emit_core_surface_constraints(expr, object, obj_var, method, arguments, &arg_vars, result);
         if let Some(sig) = sig.as_ref().filter(|_| !surface) {
-            self.emit_call_site_constraints(sig, &arg_vars);
+            self.emit_call_site_constraints(sig, &arg_vars, arguments);
+        } else if !surface {
+            // A literal receiver keeps its default: rustc cannot infer a literal's width for a method call (E0689).
+            let receiver = (!self.numeric_unmodelled.literal_receivers.contains(&obj_var)).then_some(obj_var);
+            self.numeric_unmodelled.opaque.extend(arg_vars.iter().copied().chain(receiver).chain([result]));
         }
         // NUM-USIZE (ADR-0028): a length or count whose user signature returns `usize` is an index source
         // (core-type lengths are typed by the surface above). An unresolved receiver may be a user type
@@ -489,62 +503,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
         }
     }
-
-    /// Option C stage C1: a method of a Rust core type, typed by `std/rust_core.wji`. A `usize` parameter is an
-    /// index use and a `usize` result an index source (soft, ADR-0028); another numeric type is exact.
-    /// Returns whether the surface typed the call (the registry's name-based signature is then not consulted).
-    pub(super) fn emit_core_surface_constraints(
-        &mut self,
-        expr: &Expression<'ast>,
-        object: &'ast Expression<'ast>,
-        method: &str,
-        arguments: &[(Option<String>, &'ast Expression<'ast>)],
-        arg_vars: &[ConstraintVar],
-        result: ConstraintVar,
-    ) -> bool {
-        let Expression::MethodCall { type_args, .. } = expr else { return false };
-        let Some(receiver) = self.static_type(object) else { return false };
-        let turbofish = type_args.as_deref().unwrap_or(&[]);
-        let Some(sig) = self.core_surface.and_then(|s| s.method_signature(&receiver, method, turbofish)) else { return false };
-        if sig.params.len() != arguments.len() {
-            return false;
-        }
-        for ((param, &v), (_, a)) in sig.params.iter().zip(arg_vars).zip(arguments) {
-            match numeric_base(param) {
-                Some(BaseType::Usize) => {
-                    self.index_uses.push(v);
-                    self.cs.add_because(Constraint::IsNumeric(v), origin("NUM-INDEX", format!("argument of `.{}()` is an index", method), &a.location()));
-                    self.cs.add_because(Constraint::PrefersUsize(v), origin("NUM-USIZE", format!("argument of `.{}()` is an index", method), &a.location()));
-                }
-                Some(base) => {
-                    self.cs.add_because(Constraint::TypeIs(v, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` takes `{}` here", method, crate::type_display::format_wj_type(param)), &a.location()));
-                    emit_numeric_class_constraint(&mut self.cs, v, &base);
-                }
-                None => {}
-            }
-        }
-        match sig.ret.as_ref().and_then(numeric_base) {
-            Some(BaseType::Usize) => {
-                if let Some(l) = expr.location() {
-                    self.index_sources.push(((l.line, l.column), result));
-                }
-                self.cs.add_because(
-                    Constraint::PrefersUsize(result),
-                    origin("NUM-USIZE", format!("`.{}()` is a length: an index class unless a width is declared", method), &expr.location()),
-                );
-            }
-            Some(base) => {
-                self.cs.add_because(Constraint::TypeIs(result, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` returns a number of the receiver's type", method), &expr.location()));
-                emit_numeric_class_constraint(&mut self.cs, result, &base);
-            }
-            None => {}
-        }
-        true
-    }
 }
 
 /// The integer or float width a (reference to a) numeric type names; `None` for every other type.
-fn numeric_base(t: &Type) -> Option<BaseType> {
+pub(super) fn numeric_base_of(t: &Type) -> Option<BaseType> {
     let b = crate::ir::node::parser_type_to_base_type(t);
     matches!(
         b,
@@ -557,6 +519,7 @@ fn numeric_base(t: &Type) -> Option<BaseType> {
 fn contains_generic(t: &Type) -> bool {
     match t {
         Type::Generic(_) => true,
+        Type::Infer => false,
         Type::Reference(x) | Type::MutableReference(x) | Type::Option(x) | Type::Vec(x) | Type::Array(x, _) => contains_generic(x),
         Type::Result(a, b) => contains_generic(a) || contains_generic(b),
         Type::Parameterized(_, xs) | Type::Tuple(xs) => xs.iter().any(contains_generic),
@@ -628,7 +591,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Some(_) => return false,
             None if is_int_literal_tree(object) => false,
             None if is_float_literal_tree(object) => true,
-            None => return false,
+            // A receiver of unknown static type (`(a - b).abs()`): a method the integer and float surfaces declare
+            // alike relates its `T` arguments and result to the receiver whatever the receiver's number kind is.
+            None => return self.emit_numeric_method_either_kind(obj_var, method, arguments, arg_vars, result),
         };
         if is_int_literal_tree(object) || is_float_literal_tree(object) {
             self.numeric_unmodelled.literal_receivers.push(obj_var);
@@ -641,7 +606,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         for ((param, &v), (_, a)) in params.iter().zip(arg_vars).zip(arguments) {
             if same(param) {
                 self.cs.add_because(Constraint::TypeEquals(v, obj_var), origin("NUM-STD-SIG", format!("`.{}()` takes the receiver's type", method), &a.location()));
-            } else if let Some(base) = numeric_base(param) {
+            } else if let Some(base) = numeric_base_of(param) {
                 self.cs.add_because(Constraint::TypeIs(v, base.clone()), origin("NUM-STD-SIG", format!("`.{}()` takes `{}` here", method, crate::type_display::format_wj_type(param)), &a.location()));
                 emit_numeric_class_constraint(&mut self.cs, v, &base);
             }
@@ -649,7 +614,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         match ret.as_ref() {
             Some(t) if same(t) => self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG")),
             Some(t) => {
-                if let Some(base) = numeric_base(t) {
+                if let Some(base) = numeric_base_of(t) {
                     self.cs.add_because(Constraint::TypeIs(result, base.clone()), tagged("NUM-STD-SIG"));
                     emit_numeric_class_constraint(&mut self.cs, result, &base);
                 }
@@ -666,5 +631,46 @@ fn is_float_literal_tree(e: &Expression<'_>) -> bool {
         Expression::Literal { value: Literal::Float(_), .. } => true,
         Expression::Unary { op: crate::parser::ast::operators::UnaryOp::Neg, operand, .. } => is_float_literal_tree(operand),
         _ => false,
+    }
+}
+
+/// A type with a part no receiver or turbofish fixed (a generic, or an inferred `_`).
+pub(super) fn contains_unfixed(t: &Type) -> bool {
+    match t {
+        Type::Infer => true,
+        Type::Reference(x) | Type::MutableReference(x) | Type::Option(x) | Type::Vec(x) | Type::Array(x, _) => contains_unfixed(x),
+        Type::Result(a, b) => contains_unfixed(a) || contains_unfixed(b),
+        Type::Parameterized(_, xs) | Type::Tuple(xs) => xs.iter().any(contains_unfixed),
+        other => contains_generic(other),
+    }
+}
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// `receiver.method(..)` where the receiver's static type is unknown but numeric methods of both kinds declare the
+    /// method with the same shape over `T` (`abs`, `min`, `max`, `clamp`, ...): every `T` argument and a `T` result are
+    /// the receiver's class. A method that differs between the kinds (or takes a fixed numeric type) is not typed here.
+    fn emit_numeric_method_either_kind(
+        &mut self,
+        obj_var: ConstraintVar,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        arg_vars: &[ConstraintVar],
+        result: ConstraintVar,
+    ) -> bool {
+        let Some(surface) = self.core_surface else { return false };
+        let (Some((ip, ir)), Some((fp, fr))) = (surface.numeric_method(false, method), surface.numeric_method(true, method)) else {
+            return false;
+        };
+        let same = |t: &Type| crate::typing::core_surface::is_receiver_type(t);
+        let all_receiver = |ps: &[Type]| ps.iter().all(same);
+        let ret_receiver = |r: &Option<Type>| r.as_ref().is_some_and(same);
+        if ip.len() != arguments.len() || fp.len() != ip.len() || !all_receiver(&ip) || !all_receiver(&fp) || !ret_receiver(&ir) || !ret_receiver(&fr) {
+            return false;
+        }
+        for (&v, (_, a)) in arg_vars.iter().zip(arguments) {
+            self.cs.add_because(Constraint::TypeEquals(v, obj_var), origin("NUM-STD-SIG", format!("`.{}()` takes the receiver's type", method), &a.location()));
+        }
+        self.cs.add_because(Constraint::TypeEquals(result, obj_var), tagged("NUM-STD-SIG"));
+        true
     }
 }

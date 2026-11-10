@@ -1,1 +1,5 @@
-{}
+{
+  "book.startup.interpret_cpu_ms": {"value": 20},
+  "book.startup.compiled_cpu_ms": {"value": 350},
+  "book.startup.machine": {"value": "Darwin arm64"}
+}

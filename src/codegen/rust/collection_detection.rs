@@ -97,19 +97,23 @@ impl CodeGenerator<'_> {
             Expression::Call { function: Expression::FieldAccess { field, .. }, .. } => {
                 STR_SLICE_METHODS.contains(&field.as_str())
             }
+            // a list of string literals yields its `&str` elements
+            Expression::Array { elements, .. } => {
+                !elements.is_empty() && elements.iter().all(|e| matches!(e, Expression::Literal { value: Literal::String(_), .. }))
+            }
             _ => false,
         };
         let mut shadowed = Vec::new();
         let mut slice_vars = Vec::new();
         if yields {
-            let mut names = std::collections::HashSet::new();
+            let mut names = std::collections::BTreeSet::new();
             self.extract_pattern_bindings(pattern, &mut names);
-            for n in &names {
+            shadowed.extend(names.into_iter().filter(|n| {
                 if self.idiom.str_slice_loop_vars.insert(n.clone()) {
                     slice_vars.push(n.clone());
                 }
-            }
-            shadowed.extend(names.into_iter().filter(|n| self.inferred_borrowed_params.remove(n)));
+                self.inferred_borrowed_params.remove(n)
+            }));
         }
         (yields, shadowed, slice_vars)
     }
@@ -426,6 +430,20 @@ impl CodeGenerator<'_> {
                                 return Some(Type::Reference(Box::new(item.clone())));
                             }
                         }
+                    }
+                }
+
+                // `v.filter(..)` on a collection is `v.iter().filter(..)`: its items are `&T`.
+                // (an iterator-valued receiver is typed as a synthetic `Vec` of its items: only a collection place counts)
+                if matches!(method.as_str(), "filter" | "skip" | "take" | "rev" | "skip_while" | "take_while")
+                    && matches!(object, Expression::Identifier { .. } | Expression::FieldAccess { .. } | Expression::Array { .. })
+                {
+                    let elem = self
+                        .infer_expression_type(object)
+                        .filter(Self::type_is_iterable_collection)
+                        .and_then(|t| Self::extract_iterator_element_type(&t));
+                    if let Some(elem) = elem {
+                        return Some(Type::Reference(Box::new(elem)));
                     }
                 }
 

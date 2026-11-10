@@ -710,7 +710,11 @@ fn call_into_dependency_borrows_a_read_only_vec_formal() {
     let app = Command::new(WJ).args(["build", "./src", "--library", "--no-cargo"]).current_dir(dir.path().join("app")).output().unwrap();
     assert!(app.status.success(), "app build failed:\n{}", String::from_utf8_lossy(&app.stderr));
     let app_rs = fs::read_to_string(dir.path().join("app/build/lib.rs")).unwrap();
-    assert!(app_rs.contains("allow_origin(origin, &allowed)"), "owned Vec passed to a borrowed formal:\n{app_rs}");
+    // Either the app keeps an owned formal and borrows at the call, or (IR mode) its formal is
+    // borrowed too and the reference passes straight through. An owned Vec into `&Vec` is the bug.
+    let owned_then_borrowed = app_rs.contains("allowed: Vec<String>") && app_rs.contains("allow_origin(origin, &allowed)");
+    let borrowed_through = app_rs.contains("allowed: &Vec<String>") && app_rs.contains("allow_origin(origin, allowed)");
+    assert!(owned_then_borrowed || borrowed_through, "owned Vec passed to a borrowed formal:\n{app_rs}");
 }
 
 /// The `int` argument of the blocking sleep reaches the runtime (compiled, then run).

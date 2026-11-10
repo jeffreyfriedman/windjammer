@@ -17,6 +17,8 @@
 //! * Severity: `ERROR`, `WARN` or `NOTE`. Code: the diagnostic code (`W0007`, ...) or the
 //!   producer class for code-less diagnostics: `parse` (parser error), `lex` (lexer failure).
 //! * Everything after the code is a message substring that must occur in the message.
+//! * `// oracle: check` on a line of its own: the markers are for the `wj check` producer only (codes such as WJ0007 that the
+//!   legacy parser/linter producers never emit); the legacy-producer test skips such a file.
 //!
 //! The harness fails on (a) a diagnostic with no marker, (b) a marker with no diagnostic, (c) a
 //! location/length/code mismatch, (d) a diagnostic without a real (line, column), and (e) in

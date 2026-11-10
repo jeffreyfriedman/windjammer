@@ -145,13 +145,12 @@ fn map_get_unwrap_or_int_then_arithmetic() {
 }
 
 #[test]
-fn map_get_unwrap_or_in_sort_by_closure_is_not_dereferenced() {
-    // The lookups return owned values after `unwrap_or`: no `*`/`&*` on them. (Passing the comparator's
-    // `&String` parameters as map keys is still open: `Borrow<&String>`, see the report.)
-    let (g, _, _) = generate_and_typecheck(
+fn map_get_in_sort_by_closure_passes_the_comparator_parameters_as_keys() {
+    // the comparator parameters are already `&String`: the lookups take them as they are
+    let g = typechecks(
         "use std::collections::HashMap\n\nfn main() {\n    let mut totals: HashMap<string, int> = HashMap::new()\n    totals.insert(\"a\", 3)\n    totals.insert(\"b\", 5)\n    let mut names: Vec<string> = [\"a\", \"b\"]\n    names.sort_by(|x, y| {\n        let tx = totals.get(x).unwrap_or(0)\n        let ty = totals.get(y).unwrap_or(0)\n        ty.cmp(tx)\n    })\n    println(\"${names[0]}\")\n}\n",
     );
-    assert!(!g.contains("&*tx") && !g.contains("*tx"), "{g}");
+    assert!(g.contains("totals.get(x)") && !g.contains("*tx"), "{g}");
 }
 
 #[test]
@@ -213,4 +212,152 @@ fn interpolated_if_and_match_produce_their_branch_values() {
         "fn t(tag: string, v: int) -> int {\n    println(\"eval ${tag}\")\n    v\n}\n\nfn main() {\n    println(\"${if t(\"c\", 1) == 1 { t(\"then\", 10) } else { t(\"else\", 20) }}\")\n    println(\"${match t(\"m\", 2) { 1 => t(\"one\", 100), _ => t(\"other\", 200) }}\")\n}\n",
     );
     assert!(!g.contains("t(\"then\", 10_i64);"), "{g}");
+}
+
+#[test]
+fn copied_on_an_option_of_string_slices_is_the_identity() {
+    let g = typechecks(
+        "fn first_word(s: string) -> bool {\n    let w = s.split(\" \").next()\n    let x = w.copied()\n    match x {\n        Some(t) => t == \"ab\",\n        None => false,\n    }\n}\n\nfn second(s: string) -> bool {\n    match s.split(\" \").last().cloned() {\n        Some(t) => t == \"cde\",\n        None => false,\n    }\n}\n\nfn main() {\n    println(\"${first_word(\"ab cd\")} ${second(\"ab cde\")}\")\n}\n",
+    );
+    assert!(!g.contains(".copied()") && !g.contains(".cloned()"), "{g}");
+}
+
+#[test]
+fn method_call_inside_interpolation_makes_the_binding_mutable() {
+    let g = typechecks(
+        "struct Counter { n: int }\nimpl Counter {\n    fn bump(self) -> int {\n        self.n = self.n + 1\n        self.n\n    }\n    fn get(self) -> int {\n        self.n\n    }\n}\nstruct Wrap { c: Counter }\nimpl Wrap {\n    fn go(self) -> int {\n        self.c.bump()\n    }\n}\nfn main() {\n    let w = Wrap { c: Counter { n: 0 } }\n    println(\"${w.go()}\")\n    let c = Counter { n: 0 }\n    println(\"${c.get()}\")\n}\n",
+    );
+    assert!(g.contains("let mut w") && g.contains("let c ="), "{g}");
+}
+
+// ---- game-engine findings (neutral ports) ----
+
+#[test]
+fn if_let_over_split_last_does_not_copy_a_string_slice() {
+    let g = typechecks(
+        "pub fn extension(path: string) -> string {\n    if let Some(ext) = path.split('.').last() {\n        return ext.to_string()\n    }\n    \"\".to_string()\n}\nfn main() {\n    println(extension(\"a.txt\"))\n}\n",
+    );
+    assert!(!g.contains(".copied()"), "{g}");
+}
+
+#[test]
+fn match_over_map_get_with_default_binds_a_value_not_a_reference() {
+    let g = typechecks(
+        "use std::collections::HashMap\n\npub fn cost(g: HashMap<(i32, i32), f32>, x: i32, y: i32) -> f32 {\n    let cur = match g.get((x, y)) {\n        Some(v) => v,\n        None => 999999.0,\n    }\n    cur + 1.0\n}\nfn main() {\n    println(\"${cost(HashMap::new(), 1, 2)}\")\n}\n",
+    );
+    assert!(!g.contains("*cur"), "{g}");
+}
+
+// ---- optional chaining, list literals inside Ok/Some ----
+
+#[test]
+fn optional_chaining_on_a_field_and_a_method() {
+    let g = typechecks(
+        "struct Item {\n    qty: int,\n}\n\nfn main() {\n    let a: Item? = Some(Item { qty: 5 })\n    let b: Item? = None\n    let qa = a?.qty\n    let qb = b?.qty\n    println(\"${qa ?? 0} ${qa.is_some()}\")\n    println(\"${qb ?? 0} ${qb.is_none()}\")\n}\n",
+    );
+    assert!(g.contains(".as_ref().map("), "{g}");
+}
+
+#[test]
+fn optional_chaining_flattens_through_option_members_and_calls_methods() {
+    typechecks(
+        "struct Profile {\n    nick: string?,\n}\n\nstruct User {\n    name: string,\n    profile: Profile?,\n}\n\nimpl User {\n    fn name_len(self) -> int {\n        self.name.len() as int\n    }\n}\n\nfn main() {\n    let full: User? = Some(User { name: \"abc\", profile: Some(Profile { nick: Some(\"ann\") }) })\n    let no_profile: User? = Some(User { name: \"cy\", profile: None })\n    println(full?.profile?.nick ?? \"anon\")\n    println(no_profile?.profile?.nick ?? \"anon\")\n    println(\"${full?.name_len() ?? 0}\")\n}\n",
+    );
+}
+
+#[test]
+fn list_literal_inside_ok_is_a_vec() {
+    typechecks(
+        "fn wrap() -> Result<Vec<int>, string> {\n    Ok([1, 2])\n}\n\nfn main() {\n    let r: Result<Vec<int>, string> = Ok([1])\n    println(\"${r.is_ok()} ${wrap().is_ok()}\")\n}\n",
+    );
+}
+
+#[test]
+fn match_on_an_integer_without_a_wildcard_panics_at_run_time_instead_of_failing_to_build() {
+    let g = typechecks(
+        "fn f(n: int) -> string {\n    match n {\n        1 => \"one\",\n        2 => \"two\",\n    }\n}\nfn main() {\n    println(\"${f(1)}\")\n}\n",
+    );
+    assert!(g.contains("panic!(\"non-exhaustive match\")"), "{g}");
+}
+
+// ---- self mutability through loops and conditions ----
+
+#[test]
+fn self_mutability_reaches_a_caller_through_return_in_loop_and_while_condition() {
+    let g = typechecks(
+        "struct Srv {\n    hits: Vec<int>,\n}\n\nimpl Srv {\n    fn record(self, v: int) -> int {\n        if v > 0 {\n            self.hits.push(v)\n            return 1\n        }\n        0\n    }\n\n    fn step(self) -> bool {\n        loop {\n            return self.record(1) > 5\n        }\n    }\n\n    fn serve_client(self) -> int {\n        let mut n = 0\n        while self.step() {\n            n = n + 1\n        }\n        n\n    }\n}\n\nfn main() {\n    let s = Srv { hits: [] }\n    println(\"${s.serve_client()}\")\n}\n",
+    );
+    assert!(g.contains("fn serve_client(&mut self)") && g.contains("fn step(&mut self)"), "{g}");
+}
+
+// ---- book findings ----
+
+#[test]
+fn filter_collect_over_a_collection_copies_the_items() {
+    typechecks("fn main() {\n    let v = [5, 3, 8, 4]\n    let evens: Vec<int> = v.filter(|x| *x % 2 == 0).collect()\n    println(\"${evens.len()}\")\n}\n");
+}
+
+#[test]
+fn entry_with_a_borrowed_text_key_takes_an_owned_key() {
+    typechecks(
+        "use std::collections::HashMap\n\nfn main() {\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for w in [\"a\", \"b\", \"a\"] {\n        counts.entry(w).and_modify(|c| { *c = *c + 1 }).or_insert(1)\n    }\n    println(\"${counts.len()}\")\n}\n",
+    );
+}
+
+#[test]
+fn map_err_to_a_literal_builds_an_owned_string_error() {
+    typechecks("fn parse(text: string) -> Result<int, string> {\n    text.parse::<int>().map_err(|_| \"bad number\")\n}\nfn main() {\n    println(\"${parse(\"4\").is_ok()}\")\n}\n");
+}
+
+#[test]
+fn trait_default_method_returns_an_owned_string_literal() {
+    typechecks(
+        "trait Shape {\n    fn area(self) -> float\n    fn name(self) -> string { \"shape\" }\n}\nstruct Sq { s: float }\nimpl Shape for Sq {\n    fn area(self) -> float { self.s * self.s }\n}\nfn main() {\n    let a = Sq { s: 2.0 }\n    println(\"${a.name()} ${a.area()}\")\n}\n",
+    );
+}
+
+// ---- compiler-consumed attributes and async fn ----
+
+#[test]
+fn async_fn_keyword_is_emitted_so_await_compiles() {
+    let g = typechecks("async fn fetch(n: int) -> int {\n    n * 2\n}\n\nasync fn total() -> int {\n    let a = fetch(4).await\n    let b = fetch(5).await\n    a + b\n}\n\nfn main() {\n    println(\"parsed\")\n}\n");
+    assert!(g.contains("async fn fetch") && g.contains("async fn total"), "{g}");
+}
+
+#[test]
+fn pure_and_uses_are_consumed_by_the_compiler_not_emitted() {
+    let g = typechecks("@pure\nfn add(a: int, b: int) -> int {\n    a + b\n}\n\nfn main() {\n    println(\"${add(1, 2)}\")\n}\n");
+    assert!(!g.contains("#[pure]") && !g.contains("#[uses"), "{g}");
+}
+
+#[test]
+fn value_returned_by_a_spawned_closure_keeps_its_result_type_through_join() {
+    let (g, _, _) = generate_and_typecheck(
+        "use std::thread\n\nfn work(n: int) -> Result<int, string> {\n    Ok(n + 1)\n}\n\nfn main() {\n    let h = thread::spawn(move || work(2))\n    match h.join() {\n        Ok(served) => println(\"${served.unwrap_or_else(|| -1)}\"),\n        Err(_) => println(\"panicked\"),\n    }\n}\n",
+    );
+    assert!(g.contains("unwrap_or_else(|_|"), "{g}");
+}
+
+#[test]
+fn match_over_a_tuple_of_text_with_literal_patterns_compiles() {
+    typechecks(
+        "fn route(method: string, path: string) -> string {\n    match (method, path) {\n        (\"GET\", \"/x\") => \"x\",\n        (\"POST\", \"/y\") => \"y\",\n        _ => \"none\",\n    }\n}\nfn main() {\n    println(\"${route(\"GET\", \"/x\")} ${route(\"PUT\", \"/z\")}\")\n}\n",
+    );
+}
+
+#[test]
+fn string_literal_with_a_format_spec_at_the_start_of_an_interpolation() {
+    let g = typechecks("fn main() {\n    println(\"${\"item\":<8}|\")\n}\n");
+    assert!(g.contains("{:<8}") && g.contains("\"item\""), "{g}");
+}
+
+#[test]
+fn const_declared_in_an_inline_module_is_emitted_and_readable() {
+    let g = typechecks("mod outer {\n    pub const LIMIT: int = 10\n\n    fn secret() -> int {\n        LIMIT * 2\n    }\n\n    pub fn reveal() -> int {\n        secret() + 1\n    }\n}\n\nfn main() {\n    println(\"${outer::reveal()} ${outer::LIMIT}\")\n}\n");
+    assert!(g.contains("const LIMIT"), "{g}");
+}
+
+#[test]
+fn map_get_with_a_text_default_over_owned_text_values_compiles() {
+    typechecks("use std::collections::BTreeMap\n\nfn main() {\n    let mut groups: BTreeMap<string, string> = BTreeMap::new()\n    let first = \"a\".to_string()\n    let so_far = groups.get(first).unwrap_or(\"\")\n    groups.insert(first, so_far + \"x\")\n    println(\"${groups.len()}\")\n}\n");
 }

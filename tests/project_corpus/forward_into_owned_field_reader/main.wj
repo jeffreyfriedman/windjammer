@@ -1,0 +1,13 @@
+// A private helper forwards a bare record into a sibling that moves its text fields into the result, and a
+// public wrapper forwards into the helper. The forwarded formal is owned like its callee's: bare-pass
+// demotion must not guess `&mut` for it (it did once the IR spelled value formals). Expected by hand.
+// expect: {"code":"A1","name":"Cash","cents":250}
+mod ledger
+mod render
+
+use crate::ledger::Ledger
+
+fn main() {
+    let entry = Ledger { code: "A1", name: "Cash", cents: 250 }
+    println(render::entry_json(entry))
+}

@@ -123,6 +123,20 @@ impl Scope {
     }
 }
 
+/// Origin of the monotonic clock. The browser host (wasm32, ADR-0034) has no clock and always runs with deterministic
+/// time, so its epoch is never read.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type Epoch = std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy)]
+pub(crate) struct Epoch;
+#[cfg(target_arch = "wasm32")]
+impl Epoch {
+    pub(crate) fn elapsed(&self) -> std::time::Duration {
+        std::time::Duration::ZERO
+    }
+}
+
 pub struct Interpreter {
     // SAFETY note for `retained`: it is declared last, so it is dropped after every field that holds `&'static` AST
     // references (fields drop in declaration order); see `retain_program`.
@@ -178,7 +192,7 @@ pub struct Interpreter {
     pub(crate) next_subprocess: u64,
     /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
     pub(crate) sched: super::sched::Sched,
-    pub(crate) epoch: std::time::Instant,
+    pub(crate) epoch: Epoch,
     /// Global random generator (`std::random`), seeded from entropy unless time is deterministic.
     pub(crate) rng: Option<rand::rngs::StdRng>,
     /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
@@ -189,6 +203,8 @@ pub struct Interpreter {
     pub(crate) caps: Option<super::caps::CapGate>,
     /// Record / replay / simulate port for effects (`effect_port`); `None` = effects are live.
     pub(crate) port: Option<std::cell::RefCell<super::effect_port::EffectPort>>,
+    /// Live sockets of `std::net` (ADR-0032), shared by the run's tasks (they run on their own threads).
+    pub(crate) net: std::sync::Arc<super::builtins::std_net::NetState>,
     /// Journal of `durable fn` steps (`durable_rt`); `None` until a durable function is called or `enable_durable`.
     pub(crate) durable: Option<Box<super::durable_rt::DurableRt>>,
     /// Resource limits of a sandboxed run (`limits.rs`); `None` = unlimited.
@@ -210,6 +226,8 @@ pub struct Interpreter {
     pub(crate) cur: Option<&'static Location>,
     pub(crate) output: Vec<String>,
     pub(crate) capture_output: bool,
+    /// Standard error captured too (`set_capture_stderr`): hosts without a process stderr, such as the browser playground.
+    pub(crate) err_output: Option<Vec<String>>,
     pub(crate) out: std::io::BufWriter<std::io::Stdout>,
     pub(crate) builtins: Registry,
     pub(crate) depth: usize,
@@ -292,12 +310,16 @@ impl Interpreter {
             subprocesses: HashMap::new(),
             next_subprocess: 0,
             sched: super::sched::Sched::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             epoch: std::time::Instant::now(),
+            #[cfg(target_arch = "wasm32")]
+            epoch: Epoch,
             rng: None,
             log_level: None,
             http: Default::default(),
             caps: None,
             port: None,
+            net: Default::default(),
             durable: None,
             limits: None,
             mcp: None,
@@ -311,6 +333,7 @@ impl Interpreter {
             cur: None,
             output: Vec::new(),
             capture_output: false,
+            err_output: None,
             out: std::io::BufWriter::new(std::io::stdout()),
             builtins: Registry::standard(),
             depth: 0,
@@ -345,6 +368,23 @@ impl Interpreter {
         let mut s = Self::new();
         s.capture_output = true;
         s
+    }
+
+    /// Keep what the program writes to standard error as well (read it with `get_err_output`).
+    pub fn set_capture_stderr(&mut self, on: bool) {
+        self.err_output = on.then(Vec::new);
+    }
+
+    /// Captured standard error (empty unless `set_capture_stderr(true)`).
+    pub fn get_err_output(&self) -> String {
+        self.err_output.as_ref().map(|v| v.join("")).unwrap_or_default()
+    }
+
+    /// Bound recursion by stack bytes from the caller's frame: for hosts that run on their own stack of a known size
+    /// (the browser playground's wasm stack) instead of `runner::with_big_stack`.
+    pub fn guard_stack_bytes(&mut self, budget: usize) {
+        let here = 0u8;
+        self.stack_guard = Some((&here as *const u8 as usize, budget));
     }
 
     /// Call first thing on the big-stack thread (see `runner::with_big_stack`).
@@ -413,6 +453,15 @@ impl Interpreter {
     }
 
     pub(crate) fn write_err(&mut self, s: &str) {
+        if self.err_output.is_some() {
+            if self.limits.is_some() {
+                self.limit_output(s.len());
+            }
+            if let Some(err) = self.err_output.as_mut() {
+                err.push(s.to_string());
+            }
+            return;
+        }
         if !self.capture_output {
             let _ = self.out.flush();
             eprint!("{}", s);
@@ -547,6 +596,8 @@ pub(crate) struct FastHits {
     pub(crate) closureenv: u64,
     /// Compiled closure calls that ran in the caller's scope (it was already the one they would install).
     pub(crate) closurescope: u64,
+    /// `x.len()` on a local string, vector or map read in place.
+    pub(crate) lenfast: u64,
     /// Machine-code element reads and writes done straight on a packed vector.
     pub(crate) packedidx: u64,
     /// Machine-code element accesses through a reference chain resolved once per unit run.

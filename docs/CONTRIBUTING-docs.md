@@ -72,6 +72,28 @@ ADRs and design docs (`[freshness] tracked`) carry front matter `status:` and `l
 `changed_lines` since that commit. Malformed metadata fails. With `[freshness] require = true` (set) missing front matter or `last_verified` fails too; an old
 `last_verified` only warns. An ADR's front matter `status` must equal its `- **Status:**` line.
 
+## 7. The book (`docs/book`)
+The Windjammer Book is an mdBook (`docs/book/book.toml`, pages under `docs/book/src/`, order in `SUMMARY.md`). Its checks live in
+`tools/docs_truth/book.rs` and `tests/book_test.rs`; the sample runner is `scripts/book/book_samples.wj` (interpreted Windjammer).
+* Every ```` ```wj ```` fence is a whole program with a `fn main`. Lines starting with `~` are part of the program but hidden in the
+  rendered page. `// expect: line` comments are the expected stdout. The runner runs each program interpreted and compiled and requires
+  the two outputs to agree. `wj,test` fences run with `wj test --interpret`. `sh,verify` fences run like everywhere else.
+* `wj,ignore` needs a `<!-- ignore: reason -->` line above it and is counted: `[book] max_ignored` in `docs/docs-truth.toml` may only
+  shrink, as may `max_drafts` (unwritten chapters, written `[Title]()` in SUMMARY) and `max_uncovered_promises`.
+* Every id in `docs/promises.toml` must be mentioned by a page: a command by `wj NAME`, a flag by `--flag`, a code by its number, a feature by
+  a `<!-- promise: feature ID -->` comment on the page that teaches it. `wj-docs book-uncovered` lists what is missing.
+* Pages under `docs/book/src/reference/` are generated (CLI, CLI guarantees from `promises.toml`, keywords, diagnostic codes, targets,
+  standard library from `std/**/*.wj`, grammar from the parser-checked `docs/spec/grammar.ebnf`); regenerate with `scripts/docs_gen.sh`.
+* Counts in prose come from `<!-- wj:gen name=metric key=book.examples -->` (keys `book.pages`, `book.drafts`, `book.examples`,
+  `book.examples_ignored`, `book.promises_uncovered`) or the `book_stats` region, never from typing.
+* Links to repository files use `https://github.com/jeffreyfriedman/windjammer/blob/main/<path>` and are checked against the tree.
+* A ```` ```rust,generated ```` (or ```` ```go,run ````, ```` ```ts,run ````) fence right after a program is a companion: the runner compares the
+  Rust with `wj build --no-cargo` output (whitespace-insensitive, contiguous) and runs the Go and TypeScript and compares their output.
+  When codegen changes, `wj-docs book-regen [--wj PATH]` rewrites every `rust,generated` fence from real output and prints the diff;
+  it builds everything first and refuses to write anything if a program does not build.
+* `wj-docs book-extract DIR` writes the samples; `wj run --interpret scripts/book/book_samples.wj -- DIR $(which wj) SCRATCH [--compiled]` runs them.
+* CI builds and deploys the site (`.github/workflows/book.yml`); locally, `mdbook build docs/book` writes `target/book`.
+
 ## Ratchets and exclusions
 `docs/docs-truth.toml`: `[[exclude]]` entries need a reason; `[baseline.fences|links|claims]` hold per-file counts of
 pre-existing problems. A file may not exceed its baseline; `scripts/docs_gen.sh --update-baseline` lowers it and refuses to raise or add one. Fix, do not raise.

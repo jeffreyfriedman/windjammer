@@ -96,6 +96,22 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 
 Always add tests for new features and bug fixes.
 
+### The book moves with the language
+
+[The Windjammer Book](docs/book) is part of the product. A change to the language, a `wj` command or flag, a
+diagnostic code or the standard library updates the book in the same pull request. Nothing here is a manual review:
+
+* every program in the book runs in the interpreter and the compiled path (`cargo test --release --test book`), so a
+  language change that breaks a sample fails the compiler's own test run;
+* the reference pages (command line, diagnostic codes, keywords, standard library, grammar, targets) are generated:
+  run `scripts/docs_gen.sh` and commit the result, and `docs_truth` fails until you do;
+* the Rust shown next to a program in a `rust,generated` fence is compared with the compiler's real output, so a codegen
+  improvement changes it: run `wj-docs book-regen` (it rebuilds every such fence with `wj build --no-cargo`, prints the diff
+  and refuses to touch anything when a program does not build), review the diff and commit it;
+* every entry of `docs/promises.toml` (each command, flag, code and feature) must be mentioned on a page of the book.
+
+See [docs/CONTRIBUTING-docs.md](docs/CONTRIBUTING-docs.md) section 7 for the details.
+
 ## 📝 Code Style
 
 - **Format code**: `cargo fmt --all`

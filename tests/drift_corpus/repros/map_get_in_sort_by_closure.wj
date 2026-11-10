@@ -1,0 +1,14 @@
+use std::collections::HashMap
+
+fn main() {
+    let mut totals: HashMap<string, int> = HashMap::new()
+    totals.insert("a", 3)
+    totals.insert("b", 5)
+    let mut names: Vec<string> = ["a", "b"]
+    names.sort_by(|x, y| {
+        let tx = totals.get(x).unwrap_or(0)
+        let ty = totals.get(y).unwrap_or(0)
+        ty.cmp(tx)
+    })
+    println("${names[0]}")
+}

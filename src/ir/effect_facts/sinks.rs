@@ -99,6 +99,12 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("http::serve", &[u(NetListen, P0)]),
     ("http::serve_fn", &[u(NetListen, P0)]),
     ("http::server_serve", &[u(NetListen, P0)]),
+    // raw sockets (ADR-0032): connect checks `host:port`; a UDP socket may send anywhere, so binding one carries the
+    // ability to connect (checked per datagram in `send_to`, which makes a compiled program install its grant)
+    ("TcpStream::connect", &[u(NetConnect, P0)]),
+    ("TcpStream::connect_timeout", &[u(NetConnect, P0)]),
+    ("TcpListener::bind", &[u(NetListen, P0)]),
+    ("UdpSocket::bind", &[u(NetListen, P0), u(NetConnect, Res::ScopeOptional)]),
     // clocks and timers
     ("time::now", &[u(Time, Res::None)]),
     ("time::utc_now", &[u(Time, Res::None)]),
@@ -158,6 +164,15 @@ static SINKS: &[(&str, &[SinkUse])] = &[
 /// naming the call, instead of replaying something that did not happen.
 pub static HANDLE_SINKS: &[&str] = &["subprocess::spawn", "http::serve", "http::serve_fn", "http::server_serve", "db::connect"];
 
+/// Sinks that return a socket handle and log their own events through the effect port (ADR-0032): the handle is an id in
+/// the log, every later operation on it is one event, and `--simulate` answers them from the virtual network. The generic
+/// port call skips them (`effect_port::routed`).
+pub static PORTED_HANDLE_SINKS: &[&str] = &["TcpStream::connect", "TcpStream::connect_timeout", "TcpListener::bind", "UdpSocket::bind"];
+
+/// Connects that resolve the name once, check the grant on the name, and connect only to the addresses of that resolution
+/// (`net_core::resolve_once` + `connect_resolved`): the answer cannot change between the decision and the use (ADR-0032).
+pub const ADDR_VERIFIED_CONNECTS: &[&str] = &["TcpStream::connect", "TcpStream::connect_timeout"];
+
 /// Library functions in effect-relevant modules that are deliberately NOT sinks (pure string/value
 /// work, handle operations on an already-authorized handle, deterministic generators).
 /// `interpreter_sinks_are_classified` (tests) requires every interpreter builtin of an authority module
@@ -203,7 +218,7 @@ pub fn mcp_effect_name(server: Option<&str>, tool: Option<&str>) -> String {
 
 /// Modules whose builtins carry authority and must therefore be classified one way or the other.
 pub static AUTHORITY_MODULES: &[&str] =
-    &["fs", "env", "process", "subprocess", "http", "net", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime", "mcp"];
+    &["fs", "env", "process", "subprocess", "http", "net", "TcpStream", "TcpListener", "UdpSocket", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime", "mcp"];
 
 /// Cheap pre-filter for hot paths: can `path` possibly be a sink? Every row is `module::function` (or a bare console
 /// intrinsic), and lookup only drops LEADING segments, so the module is always the second-to-last segment: two steps
@@ -218,7 +233,7 @@ pub fn may_be_sink(path: &str) -> bool {
     match from_end.next() {
         Some(module) => matches!(
             module,
-            "fs" | "path" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap" | "mcp"
+            "fs" | "path" | "env" | "process" | "subprocess" | "http" | "TcpStream" | "TcpListener" | "UdpSocket" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap" | "mcp"
         ),
         None => false,
     }

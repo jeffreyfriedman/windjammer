@@ -112,7 +112,8 @@ pub fn interpret_with_args(file: &Path, args: Vec<String>) -> Result<()> {
 
 /// Run the Windjammerscript REPL (Read-Eval-Print Loop)
 pub fn run_repl() -> Result<()> {
-    interpreter::repl::run_repl_stdio();
+    // The legacy driver has no Rust-crate host (the `wj` driver wires it, ADR-0031): importing `cli` here broke the layering.
+    crate::interpreter::repl::run_repl_with(None);
     Ok(())
 }
 

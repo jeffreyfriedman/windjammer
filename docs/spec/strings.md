@@ -279,7 +279,44 @@ Output:
 key -> value
 true true
 ```
-The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
+
+## Lines
+
+**SPEC-STR-018** `strings.split_lines(text)` follows `str::lines()`: `\n` and `\r\n` end a line, a final line terminator does not add an empty last element, and an empty text has no lines.
+
+<!-- example: tests/spec/strings/SPEC-STR-018.wj -->
+```windjammer
+use std::strings
+
+fn show(parts: Vec<string>) -> string {
+    let mut out = "${parts.len()}"
+    if parts.len() > 0 {
+        out = out + " "
+    }
+    for p in parts {
+        out = out + "[" + p + "]"
+    }
+    out
+}
+
+fn main() {
+    println(show(strings.split_lines("250 OK\r\n")))
+    println(show(strings.split_lines("a\nb\n")))
+    println(show(strings.split_lines("")))
+    println(show(strings.split_lines("\n\n")))
+    println(show(strings.split_lines("x\n\ny")))
+    println(show(strings.split_lines("a\r\n")))
+}
+```
+Output:
+```text
+1 [250 OK]
+2 [a][b]
+0
+2 [][]
+3 [x][][y]
+1 [a]
+```
 
 ## Byte offsets
 

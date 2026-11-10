@@ -1,0 +1,33 @@
+// oracle: check
+// A struct holding a trait object has no `Clone`: the compiler cannot copy it where it is read again, so
+// the second `take(h)` is a use after move (WJ0007 before an interpreted run, E0382 when built).
+trait Shape {
+    fn area(&self) -> int
+}
+
+struct Sq {
+    s: int,
+}
+
+impl Shape for Sq {
+    fn area(self) -> int {
+        self.s * self.s
+    }
+}
+
+struct Holder {
+    shape: Box<dyn Shape>,
+    id: int,
+}
+
+fn take(h: Holder) -> Box<dyn Shape> {
+    h.shape
+}
+
+fn main() {
+    let h = Holder { shape: Box::new(Sq { s: 2 }), id: 7 }
+    let a = take(h)
+//~@13+4 ERROR WJ0007 `h` is used after the call to `take` consumed it
+    let b = take(h)
+    println("${a.area() + b.area()}")
+}

@@ -90,6 +90,19 @@ fn main() {
     checks.push(Check { name: "an entry without a case fails", out: run_ledger(wj, dir, agree, "zz | walker=a resolved=b compiled=c | x\n", "", ""), exit: 1, needle: "not in the corpus" })
     checks.push(Check { name: "too few cases fail", out: run_ledger(wj, dir, agree, "", "--min-cases 5", ""), exit: 1, needle: "vacuous" })
     checks.push(Check { name: "an empty run fails", out: run_ledger(wj, dir, "", "", "--min-cases 1", ""), exit: 1, needle: "vacuous" })
+    // --prune removes a vanished divergence from the ledger file, and only that
+    let _ = fs.write("${dir}/p.tsv", "a\tpass\tpass\tpass\nb\tpass\tfail\tpass\n")
+    let _ = fs.write("${dir}/p.txt", "# header\na | walker=pass resolved=fail compiled=pass | fixed\nb | walker=pass resolved=fail compiled=pass | open\n")
+    let pr = sh_out("env -u DRIFT_ALLOW_GROWTH ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${dir}/p.tsv ${dir}/p.txt --prune 2>&1; echo \"exit=$?\"; cat ${dir}/p.txt")
+    checks.push(Check { name: "--prune drops a vanished divergence", out: pr, exit: 0, needle: "pruned    a" })
+    checks.push(Check { name: "--prune keeps the open divergence and the header", out: if strings.contains(pr, "b | walker") && strings.contains(pr, "# header") && !strings.contains(pr, "a | walker") { "exit=0" } else { "lost lines: ${pr}" }, exit: 0, needle: "" })
+    // --adopt appends new divergences, only when growth is allowed
+    let _ = fs.write("${dir}/a.txt", "# header\n")
+    let ad = sh_out("DRIFT_ALLOW_GROWTH=1 ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${dir}/p.tsv ${dir}/a.txt --adopt why 2>&1; echo \"exit=$?\"; cat ${dir}/a.txt")
+    checks.push(Check { name: "--adopt records a new divergence with its reason", out: ad, exit: 0, needle: "adopted" })
+    checks.push(Check { name: "--adopt wrote the ledger line", out: if strings.contains(ad, "b | walker=pass resolved=fail compiled=pass | why") { "exit=0" } else { "no line: ${ad}" }, exit: 0, needle: "" })
+    let _ = fs.write("${dir}/a2.txt", "# header\n")
+    checks.push(Check { name: "--adopt without DRIFT_ALLOW_GROWTH still fails", out: sh_out("env -u DRIFT_ALLOW_GROWTH ${quote(wj)} run --interpret scripts/wj/drift_ledger.wj ${dir}/p.tsv ${dir}/a2.txt --adopt why 2>&1; echo \"exit=$?\""), exit: 1, needle: "new       b" })
     let grown = "kept | walker=pass resolved=fail compiled=pass | old\nb | walker=pass resolved=fail compiled=pass | planted\n"
     let split2 = "kept\tpass\tfail\tpass\nb\tpass\tfail\tpass\n"
     checks.push(Check { name: "ledger growth fails", out: run_ledger(wj, dir, split2, grown, "--base-ledger ${dir}/b.txt", ""), exit: 1, needle: "grew      b" })

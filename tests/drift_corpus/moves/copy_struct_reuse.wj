@@ -1,0 +1,15 @@
+// Control: a struct of two integers is Copy, so it may be used after being passed by value.
+struct Pt {
+    x: int,
+    y: int,
+}
+
+fn flip(p: Pt) -> Pt {
+    Pt { x: p.y, y: p.x }
+}
+
+fn main() {
+    let p = Pt { x: 1, y: 2 }
+    let q = flip(p)
+    println("${q.x} ${p.x}")
+}

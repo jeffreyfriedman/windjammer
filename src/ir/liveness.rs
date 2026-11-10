@@ -483,6 +483,13 @@ pub fn reread_in(stmt: &Statement<'_>) -> BTreeSet<usize> {
     out
 }
 
+/// Names read inside `stmt`.
+pub fn reads_in(stmt: &Statement<'_>) -> BTreeSet<String> {
+    let mut c = Collector::default();
+    c.stmt(stmt);
+    c.mentions.iter().filter(|(_, ms)| ms.iter().any(|m| m.node.is_some())).map(|(n, _)| n.clone()).collect()
+}
+
 /// Bindings that are owned values in every backend: parameters and plain `let` bindings.
 pub fn plain_bindings(entry: &[&str], body: &[&Statement<'_>]) -> BTreeSet<String> {
     collect(entry, body).let_bound

@@ -210,6 +210,12 @@ impl Interpreter {
             }
             return Ok(());
         }
+        // a Rust crate the crate host serves (ADR-0031) is external, as the shared resolver binds it in projects
+        if self.crate_host.as_ref().is_some_and(|h| h.serves_crate(&segs[0])) {
+            let local = alias.map(|s| s.to_string()).unwrap_or_else(|| segs.last().unwrap().clone());
+            self.modules[module].imports.insert(local, Import::Std(segs.join("::")));
+            return Ok(());
+        }
         // Resolve the first segment to a starting module.
         let mut cur = module;
         let mut start = 0;
@@ -270,7 +276,13 @@ impl Interpreter {
                 }
                 if last {
                     let local = alias.map(|s| s.to_string()).unwrap_or(seg.clone());
-                    self.modules[module].imports.insert(local, Import::Item(cur, seg));
+                    if i == start && cur == module && local == seg {
+                        // `use name` where `name` is neither a module nor an item here: an external crate. An item
+                        // import of itself would make every `name::f` resolve back to `name` forever.
+                        self.modules[module].imports.insert(local, Import::Std(seg));
+                    } else {
+                        self.modules[module].imports.insert(local, Import::Item(cur, seg));
+                    }
                 }
                 if !last {
                     // `use Color::Red`: import the variant name as an item path

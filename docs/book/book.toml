@@ -1,0 +1,22 @@
+[book]
+title = "The Windjammer Book"
+authors = ["The Windjammer contributors"]
+description = "A guide to the Windjammer language, from first program to final project, with a complete reference."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../../target/book"
+create-missing = false
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/jeffreyfriedman/windjammer"
+edit-url-template = "https://github.com/jeffreyfriedman/windjammer/edit/main/docs/book/{path}"
+site-url = "/windjammer/"
+
+# Lines starting with `~` belong to the program but are not shown (scripts/book/MODULE.md).
+[output.html.code.hidelines]
+wj = "~"
+windjammer = "~"

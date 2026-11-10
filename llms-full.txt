@@ -467,6 +467,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
@@ -528,6 +529,7 @@ Usage: wj build [OPTIONS] <FILE>
 | `<PATH>` | FILE |  | Path to .wj file or directory |
 | `-o`, `--output` | DIR |  | Output directory (default: ./build) |
 | `-r`, `--release` | RELEASE |  | Build in release mode |
+| `--unchecked-arithmetic` | UNCHECKED_ARITHMETIC |  | Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds and the interpreter). Same as `[build] overflow_checks = false` in wj.toml |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
@@ -559,13 +561,14 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
+| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file, a directory, or `-` (the program read from stdin) (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
 | `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
 | `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
 | `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
+| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
 | `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
@@ -602,6 +605,18 @@ Start the Windjammerscript REPL (interactive interpreter)
 ```text
 Usage: wj repl
 ```
+
+### `wj eval`
+
+Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
+
+```text
+Usage: wj eval <CODE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CODE>` | CODE |  | An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed |
 
 ### `wj mcp`
 
@@ -1041,6 +1056,7 @@ Usage: wj doctor [OPTIONS]
 |---|---|---|---|
 | `--json` | JSON |  | Machine-readable output |
 | `--expect-head` | EXPECT_HEAD |  | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) |
+| `--strict` | STRICT |  | Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout |
 
 ### `wj install-dev`
 
@@ -1299,3 +1315,17 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | Is `let mut` required? | Docs say yes; codegen infers `mut` for mutated locals and parameters | [ADR-0002](adr/0002-local-mutability.md) |
 | Does ternary `c ? a : b` exist? | RFC says implemented; parser removed it | WJ-SYN-02 row in the [RFC table](proposals/rfcs/README.md) |
 | Are `use ... as` aliases and `std::http.client` submodule syntax supported? | Old docs said "future"; not verified in tests | [MODULE_SYSTEM.md](MODULE_SYSTEM.md) |
+
+### Found while writing the book
+Compiler and diagnostic findings from writing [The Windjammer Book](book/src/SUMMARY.md). Each has a minimal program under `tests/book_repros/` and a test in `tests/book_test.rs` that fails when the finding is fixed, so this table cannot go stale.
+
+| Finding | Evidence | Repro |
+|---|---|---|
+| Mixed-width integer arithmetic (`int + i32`) passes `wj check` and runs in both modes, although ADR-0015 asks for an explicit conversion | recorded as Q-017 in [spec/OPEN_QUESTIONS.md](spec/OPEN_QUESTIONS.md) | `tests/spec/` SPEC-TYP-003 |
+| A generic function that copies an element out of a list (`let mut best = items[0]` with `T: PartialOrd`) runs in the interpreter, but the compiled path stops with `WJ0015` ("no method `clone` found for type parameter `T`"); adding `+ Clone` to the bound is the workaround | `wj run --compiled` on the repro | `tests/book_repros/generic_largest_needs_clone.wj` |
+| A collection idiom runs interpreted and fails compiled: `v.find(|x| x > 4)` (`WJ0003`, the closure sees `&i64`) | `wj run --compiled` on the repro | `tests/book_repros/iter_find_closure.wj` |
+| Integer literals without a type, captured by a closure or passed through tuples and options, can be typed `i32` on the compiled path while `int` is `i64` (the interpreter has one integer type); annotating the binding (`let offset: int = 10`) avoids it | the "Integer literal typing" family in [drift/findings.md](drift/findings.md) and `rust-int-literal-width-inference` in [reference/targets.md](reference/targets.md) | `tests/drift_corpus/repros/` |
+| A struct defined in a file module and only reached through a function that returns it (`let items = make()` in `main`, without `use shapes::Item`): interpreted it runs, compiled it fails with `WJ0003` (`expected module_struct::Item, found shapes::Item`); importing the type with `use shapes::Item` is the workaround | `wj run --compiled` on the repro project | `tests/book_repros/module_struct/` |
+| A `defer` inside a loop body runs at the end of each pass when compiled and never when interpreted | `wj run --interpret` vs `--compiled` on the repro | `tests/book_repros/defer_in_loop.wj` |
+| `a.join().unwrap_or(0) + b.join().unwrap_or(0)` on thread handles runs interpreted and fails compiled with `WJ0003` (the literal is typed `i32`, the result `i64`); binding `let zero: int = 0` first works | `wj run --compiled` on the repro | `tests/book_repros/join_unwrap_or_literal.wj` |
+| `wj build main.wj` on a lone script (no `wj.toml`) whose `main.wj` declares a sibling file module (`mod counter`) emits only `main.rs`: it declares `mod counter;` but no `counter.rs` is written (rustc E0583), and a literal passed to the module's method is typed `2_i32`. `wj build <dir>` and `wj run --compiled main.wj` (which builds the directory) are right; a tool that builds the entry file alone (the width predictions of `wj check` do) reads this reduced program | `wj build --no-cargo -o out main.wj` on the repro | `tests/book_repros/lone_script_mod/` |

@@ -203,8 +203,18 @@ pub fn register(r: &mut Registry) {
         std::env::remove_var(arg_str(&a, 0, "remove")?.as_str());
         Ok(Value::Unit)
     });
+    // a Result, as the runtime's `current_dir() -> Result<String, String>`
     r.func("env::current_dir", |_, _| {
-        Ok(Value::str(std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()))
+        Ok(match std::env::current_dir() {
+            Ok(p) => Value::ok(Value::str(p.to_string_lossy().to_string())),
+            Err(e) => Value::err(Value::str(e.to_string())),
+        })
+    });
+    r.func("env::current_exe", |_, _| {
+        Ok(match std::env::current_exe() {
+            Ok(p) => Value::ok(Value::str(p.to_string_lossy().to_string())),
+            Err(e) => Value::err(Value::str(e.to_string())),
+        })
     });
     r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
     // a sandboxed test/REPL session has a private scratch directory (ADR-0021); everyone else gets the system one

@@ -13,6 +13,7 @@ pub mod codec;
 pub mod log;
 pub mod sim;
 pub mod sim_fs;
+pub mod sim_net;
 
 use super::engine::Interpreter;
 use super::error::{Ctl, ErrorKind, RuntimeError};
@@ -56,6 +57,10 @@ fn is_handle_sink(path: &str) -> bool {
 
 /// Does `path` go through the port?
 pub fn routed(path: &str) -> bool {
+    // socket constructors log their own events (handle ids, ADR-0032): the generic port call would try to log the handle
+    if sinks::PORTED_HANDLE_SINKS.iter().any(|h| path.ends_with(h)) {
+        return false;
+    }
     if path.ends_with("mcp::call") {
         return true;
     }
@@ -409,7 +414,12 @@ mod tests {
         ("builtins/std_http_server.rs", "std::net::", "http::serve* are HANDLE_SINKS: refused under the port"),
         ("builtins/std_http_server.rs", "TcpListener", "http::serve* are HANDLE_SINKS: refused under the port"),
         ("builtins/std_http_server.rs", "TcpStream", "http::serve* are HANDLE_SINKS: refused under the port"),
+        ("builtins/std_net.rs", "TcpStream", "every socket operation is one net_op: logged by --record, answered by --replay, virtual under --simulate (ADR-0032)"),
+        ("builtins/std_net.rs", "TcpListener", "every socket operation is one net_op: logged by --record, answered by --replay, virtual under --simulate (ADR-0032)"),
+        ("builtins/std_net.rs", "UdpSocket", "every socket operation is one net_op: logged by --record, answered by --replay, virtual under --simulate (ADR-0032)"),
+        ("builtins/std_net.rs", "Instant::now()", "the real-time read timeout of a cooperative live socket wait (no port is set); the program never reads it"),
         ("caps.rs", "env::current_dir", "resolving the project directory for the grant"),
+        ("error.rs", "env::current_dir", "shortens a source path in an error message for display; the directory never becomes a program value"),
         ("engine.rs", "env::vars(", "a doc comment on `set_env_snapshot`; the snapshot is the runner's and `env::vars()` reads it through the port"),
         ("limits.rs", "Instant::now()", "the start of the wall-clock limit: a resource limit the program cannot read"),
         ("runner.rs", "env::vars(", "the one read of the process environment, handed to the interpreter as the snapshot `env::vars()` returns"),

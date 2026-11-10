@@ -1,0 +1,35 @@
+// Value position: a method written without `self` that assigns `self.field` changes its receiver, as the
+// compiled `&mut self` method does; one that only reads `self` leaves it alone, and a copy of the receiver
+// taken before the call keeps its old value.
+struct Counter {
+    count: int,
+    label: string,
+}
+
+impl Counter {
+    fn bump() {
+        self.count = self.count + 1
+    }
+
+    fn rename(to: string) {
+        self.label = to
+    }
+
+    fn get() -> int {
+        self.count
+    }
+}
+
+fn main() {
+    let mut c = Counter { count: 0, label: "a" }
+    let before = c.get()
+    c.bump()
+    c.bump()
+    c.rename("b")
+    let mut i = 0
+    while i < 3 {
+        c.bump()
+        i += 1
+    }
+    println("${before} ${c.count} ${c.get()} ${c.label}")
+}

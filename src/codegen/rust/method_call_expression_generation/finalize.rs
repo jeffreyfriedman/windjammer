@@ -48,10 +48,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Some(ms) = self.lookup_method_signature(rt, method) {
                     let mut reg_sig = ms.to_function_signature();
-                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                         Some(rt),
                         inferred_receiver_ty.as_ref(),
-                        self.current_function_return_type.as_ref(),
                     ) {
                         crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                             &mut reg_sig,
@@ -70,10 +69,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             if let Some(recv_ty) =
-                crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                     receiver_type_name.as_deref(),
                     inferred_receiver_ty.as_ref(),
-                    self.current_function_return_type.as_ref(),
                 )
             {
                 crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -2006,7 +2004,7 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arg_str| needs_format_temp(arg_str));
 
-        self.lower_option_default_and_cmp(object, method, inferred_receiver_ty.as_ref(), &mut obj_str, &mut processed_args);
+        self.lower_option_default_and_cmp(object, method, inferred_receiver_ty.as_ref(), &mut obj_str, &mut processed_args); processed_args = self.unborrow_ref_closure_args(arguments, processed_args);
         let base_expr = if has_format_arg {
             // Extract format!() macros to temp variables
             let mut temp_decls = String::new();

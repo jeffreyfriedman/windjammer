@@ -15,6 +15,22 @@ impl<'ast> CodeGenerator<'ast> {
     /// Scrutinee text: `text.clone().as_str()` over an owned `String` keeps its `&str` borrow when the arms
     /// are string literals (the clone is only there to satisfy ownership).
     fn generate_match_scrutinee_expr(&mut self, value: &'ast Expression<'ast>, arms: &[MatchArm<'ast>]) -> String {
+        // `match (method, path) { ("GET", "/x") => .. }`: the columns that literal text patterns test are
+        // compared as `&str` (an owned `String` column cannot match a string literal pattern)
+        if let Expression::Tuple { elements, .. } = value {
+            let text_column = |i: usize| arms.iter().any(|a| matches!(&a.pattern, Pattern::Tuple(ps) if ps.get(i).is_some_and(Self::pattern_has_str_literal)));
+            if (0..elements.len()).any(text_column) {
+                let parts: Vec<String> = elements
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        let s = self.generate_expression(e);
+                        if text_column(i) && !s.starts_with('&') { format!("&*{s}") } else { s }
+                    })
+                    .collect();
+                return format!("({})", parts.join(", "));
+            }
+        }
         if let Expression::MethodCall { object, method, arguments, .. } = value {
             if method == "as_str" && arguments.is_empty() && arms.iter().any(|a| Self::pattern_has_str_literal(&a.pattern)) {
                 let base = self.generate_expression(object);
@@ -719,7 +735,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.generate_expression(value)
             }
         } else {
-            self.generate_expression(value)
+            self.generate_match_scrutinee_expr(value, arms)
         };
         self.suppress_borrowed_clone = prev_suppress_scrutinee;
 
@@ -1454,12 +1470,32 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.in_statement_match = old_in_statement_match;
+        self.close_match(&mut output, value, arms);
+        output
+    }
 
+    /// Close a `match`. A scalar scrutinee (integer, string) whose arms are all literals or ranges, with no
+    /// wildcard, gets a panicking fallback arm: the spec says a value no arm covers panics at run time, and
+    /// rustc cannot see that ranges plus a missing wildcard are the program's own gap.
+    fn close_match(&mut self, output: &mut String, value: &Expression<'ast>, arms: &[MatchArm<'ast>]) {
+        fn literal_or_range(p: &Pattern<'_>) -> bool {
+            match p {
+                Pattern::Literal(_) | Pattern::Range { .. } => true,
+                Pattern::Or(ps) => ps.iter().all(literal_or_range),
+                _ => false,
+            }
+        }
+        let literal_only = !arms.is_empty() && arms.iter().all(|a| a.guard.is_none() && literal_or_range(&a.pattern));
+        let scalar = literal_only
+            && self.infer_expression_type(value).is_some_and(|t| {
+                Self::int_type_from_assignment_target(&t).is_some() || crate::codegen::rust::types::is_windjammer_text_type(&t)
+            });
+        if scalar {
+            output.push_str(&format!("{}_ => panic!(\"non-exhaustive match\"),\n", self.indent()));
+        }
         self.indent_level -= 1;
-
         output.push_str(&self.indent());
         output.push_str("}\n");
-        output
     }
 
     /// When the generated arm body borrows `&mut binding`, the pattern must bind `mut`.

@@ -37,7 +37,11 @@ pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
 /// so the limit does not depend on debug/release frame sizes.
 /// Name of the big-stack thread; an interpreter created on it bounds recursion by stack bytes.
 pub(crate) const BIG_STACK_THREAD: &str = "wj-interpreter";
+#[cfg(target_pointer_width = "64")]
 pub(crate) const STACK_BYTES: usize = 4 << 30;
+/// 32-bit hosts (the wasm playground, ADR-0034) cannot address 4 GiB of stack.
+#[cfg(not(target_pointer_width = "64"))]
+pub(crate) const STACK_BYTES: usize = 512 << 20;
 pub(crate) const STACK_HEADROOM: usize = 256 << 20;
 
 /// Run `f` on a thread with a large stack (deeply recursive programs).
@@ -221,7 +225,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             it.enable_hot_reload();
         }
         let code = match it.call_main() {
-            Ok(_) => 0,
+            Ok(v) => main_result_code(&mut it, &v),
             Err(e) => {
                 if !matches!(e.kind, ErrorKind::Exit(_)) {
                     eprintln!("{}", e.render());
@@ -233,8 +237,8 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if it.jit_debug {
             let f = it.fast;
             eprintln!(
-                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} matchval {} argcopy {}",
-                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.matchval, f.argcopy
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} matchval {} argcopy {} lenfast {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.matchval, f.argcopy, f.lenfast
             );
         }
         if let Some(p) = &opts.result_json {
@@ -246,6 +250,21 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         }
         RunOutcome::Exited(code)
     })
+}
+
+/// `fn main() -> Result<..>` returning `Err(e)`: like the compiled program, print `Error: {e:?}` on stderr and exit 1.
+pub fn main_result_code(it: &mut Interpreter, v: &Value) -> i32 {
+    if let Value::Enum(e) = v {
+        if &*e.ty == "Result" && &*e.variant == "Err" {
+            if let super::value::Payload::Tuple(items) = &e.payload {
+                let text = items.first().map(|x| it.debug_string(x).unwrap_or_default()).unwrap_or_default();
+                it.flush();
+                it.write_err(&format!("Error: {text}\n"));
+                return 1;
+            }
+        }
+    }
+    0
 }
 
 /// `--bind` and `--limits` (ADR-0021 section 12): the tool bridge and the resource limits of a code-mode run.
@@ -352,12 +371,19 @@ pub struct TestSpec {
 /// `wj test --simulate`: every test runs in the seeded world (ADR-0021 E3). With a seed range a test passes only if it passes
 /// under every seed; the first failing seed ends that test's run and is named in the message with the command that reproduces it.
 pub fn run_specs_simulated(specs: Vec<TestSpec>, sim: Option<SimRun>) -> Vec<TestResult> {
+    run_specs_with(specs, sim, None)
+}
+
+/// `run_specs_simulated` with the crate host for the project's Rust crate calls (ADR-0031): one host process
+/// serves every test of the run.
+pub fn run_specs_with(specs: Vec<TestSpec>, sim: Option<SimRun>, crates: Option<super::crate_host::CrateHost>) -> Vec<TestResult> {
     with_big_stack(move || {
+        let crates = crates.map(std::rc::Rc::new);
         let mut results = Vec::new();
         for spec in specs {
             results.push(match &sim {
-                None => run_one_test(&spec, None),
-                Some(s) => run_seeds(&spec, s),
+                None => run_one_test(&spec, None, crates.as_ref()),
+                Some(s) => run_seeds(&spec, s, crates.as_ref()),
             });
         }
         results
@@ -371,10 +397,10 @@ pub struct SimRun {
     pub faults: f64,
 }
 
-fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
+fn run_seeds(spec: &TestSpec, s: &SimRun, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>) -> TestResult {
     for seed in s.seeds.clone() {
         let cfg = super::effect_port::sim::SimConfig { seed, faults: s.faults };
-        let r = run_one_test(spec, Some(&cfg));
+        let r = run_one_test(spec, Some(&cfg), crates);
         if !r.passed {
             let faults = if s.faults > 0.0 { format!(" --faults {}", s.faults) } else { String::new() };
             let message = format!(
@@ -389,7 +415,7 @@ fn run_seeds(spec: &TestSpec, s: &SimRun) -> TestResult {
     TestResult { file: spec.file.clone(), name: spec.display_name.clone(), passed: true, message: String::new() }
 }
 
-fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>) -> TestResult {
+fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig>, crates: Option<&std::rc::Rc<super::crate_host::CrateHost>>) -> TestResult {
     let spec = spec.clone();
     let mut it = Interpreter::new_capturing();
     let env = host_env();
@@ -417,6 +443,9 @@ fn run_one_test(spec: &TestSpec, sim: Option<&super::effect_port::sim::SimConfig
     if let Some(cfg) = sim {
         let tmp = scratch.as_ref().map(|s| s.path().to_path_buf()).unwrap_or_else(std::env::temp_dir);
         install_simulation(&mut it, cfg, &super::caps::project_root(&spec.file), &tmp);
+    }
+    if let Some(h) = crates {
+        it.attach_shared_crate_host(h.clone());
     }
     let outcome = match it.load_test_program(&spec.file) {
         Ok(mut path) => {

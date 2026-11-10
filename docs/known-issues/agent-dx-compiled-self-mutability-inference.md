@@ -23,3 +23,36 @@ impl Iterator for Counter {
 
 3. A method whose only mutation is `self.change(from, -amount)?` (a call to another mutating method wrapped in `?`) is emitted as `&self`
    (E0596 "cannot borrow `*self` as mutable"); inlining the mutation fixes it. (t030)
+
+4. A method that calls a mutating method only from a `return` inside a `loop` is inferred `&mut self`, but its own caller is
+   emitted as `&self` (E0596): the mutation does not propagate one more level. Found with the `wj-redis` example of ADR-0032
+   (`TestServer::serve_client` -> `serve_one` -> `execute`); `wj build s.wj --no-cargo` shows `fn step(&mut self)` and
+   `fn serve_client(&self)` with the base compiler and with the ADR-0032 branch alike.
+
+```windjammer
+struct Srv { hits: Vec<int> }
+
+impl Srv {
+    fn record(self, v: int) -> int {
+        if v > 0 {
+            self.hits.push(v)
+            return 1
+        }
+        0
+    }
+
+    fn step(self) -> bool {
+        loop {
+            return self.record(1) > 5
+        }
+    }
+
+    fn serve_client(self) -> int {
+        let mut n = 0
+        while self.step() {
+            n = n + 1
+        }
+        n
+    }
+}
+```

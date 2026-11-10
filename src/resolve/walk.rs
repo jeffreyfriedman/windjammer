@@ -225,7 +225,8 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             Expression::Closure {
                 parameters, body, ..
             } => self.scoped(|w| {
-                parameters.iter().for_each(|p| w.bind(p));
+                // a typed parameter is written `name: type` (`f: fn(int) -> int`): the binding is the name
+                parameters.iter().for_each(|p| w.bind(p.split(':').next().unwrap_or(p).trim().trim_start_matches("mut ")));
                 w.expr(body);
             }),
             Expression::Block { statements, .. } => self.block(statements),
