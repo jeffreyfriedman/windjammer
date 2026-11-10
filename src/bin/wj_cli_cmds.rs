@@ -171,6 +171,7 @@ pub fn run(cli: Cli) -> Result<()> {
             compiled,
             release,
             watch,
+            verify,
             hot,
             sched_seed,
             hash_seed,
@@ -203,10 +204,8 @@ pub fn run(cli: Cli) -> Result<()> {
             let _ = (defer_drop, defer_drop_threshold);
             use windjammer::cli::run_dev::{execute, Mode, RunOptions};
             let (path, args) = split_path_and_args(path_and_args);
-            if watch {
-                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
-                let root = windjammer::cli::watch::watch_root(path.as_deref());
-                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            if let Some(code) = run_loop_mode(verify, watch, &target, path.as_deref(), bin.as_deref(), &args, no_lint)? {
+                std::process::exit(code);
             }
             let mode = run_mode(compiled, release, interpret || hot || record.is_some() || replay.is_some() || journal.is_some());
             let lint = windjammer::cli_execution::report_build_lints;
@@ -701,6 +700,23 @@ fn engine_is_resolved(engine: &str) -> anyhow::Result<bool> {
 
 /// `wj run [flags] PATH [ARGS]...`: the first value is the path, the rest belongs to the program (a leading `--`
 /// separator, as older invocations wrote it, is dropped).
+/// `wj run --verify` (interpret, build, compare: ADR-0033) and `wj run --watch` (restart on change) take over the whole
+/// run; `None` for an ordinary run.
+fn run_loop_mode(verify: bool, watch: bool, target: &str, path: Option<&std::path::Path>, bin: Option<&str>, args: &[String], no_lint: bool) -> Result<Option<i32>> {
+    if verify {
+        if target != "rust" {
+            anyhow::bail!("`--verify` compares with the Rust build; it does not take `--target {target}`");
+        }
+        return Ok(Some(windjammer::cli::verify::execute(path, bin, args, no_lint)));
+    }
+    if watch {
+        let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+        let root = windjammer::cli::watch::watch_root(path);
+        return Ok(Some(windjammer::cli::watch::watch(&root, child_args, None)));
+    }
+    Ok(None)
+}
+
 fn split_path_and_args(mut rest: Vec<String>) -> (Option<std::path::PathBuf>, Vec<String>) {
     if rest.is_empty() {
         return (None, rest);

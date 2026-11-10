@@ -166,7 +166,7 @@ digraph deps {
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="26"];
   "cli" -> "cargo_toml" [label="5"];
-  "cli" -> "check" [label="15"];
+  "cli" -> "check" [label="20"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="3"];
   "cli" -> "compiler_config" [label="3"];
@@ -179,11 +179,11 @@ digraph deps {
   "cli" -> "formatter" [label="1"];
   "cli" -> "interpreter" [label="17"];
   "cli" -> "intrinsics" [label="2"];
-  "cli" -> "ir" [label="6"];
+  "cli" -> "ir" [label="7"];
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
   "cli" -> "metadata" [label="1"];
-  "cli" -> "module_system" [label="10"];
+  "cli" -> "module_system" [label="12"];
   "cli" -> "package" [label="16"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
