@@ -12,6 +12,7 @@ Minimal programs for compiler or diagnostic bugs found while writing The Windjam
 - `map_err_literal.wj`: `map_err(|_| "literal")` into `Result<int, string>`; interpreted fine, compiled WJ0003.
 - `module_const.wj`, `optional_chain.wj`, `map_get_string_key.wj`: constructs that run interpreted and are rejected compiled (WJ0001, WJ0099, WJ0003).
 - `async_await_compiled.wj`, `pure_attribute_compiled.wj`: constructs that run interpreted and are rejected compiled (WJ0099, WJ0099). `defer_in_loop.wj`: a loop-body `defer` runs compiled and not interpreted.
+- `tuple_string_match.wj`, `join_unwrap_or_literal.wj`: run interpreted, rejected compiled (WJ0003, WJ0003).
 
 ## Invariants
 - A repro is the smallest program that shows the bug, free of project names (public hygiene).

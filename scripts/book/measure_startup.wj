@@ -1,0 +1,117 @@
+// Measures how long a first result takes: `wj run --interpret` on a small program versus a compiled build of the same
+// program in a fresh project, and records the CPU time in docs/generated/measured.json (read by the book's
+// `wj:gen name=metric` regions, never typed by hand).
+//
+//   wj run --interpret scripts/book/measure_startup.wj -- WJ_BIN OUT_JSON [--runs N]
+//
+// CPU time (user + system, from `/usr/bin/time -p`, 10 ms resolution, child processes included) is used instead of wall
+// time, so a busy machine does not change the answer much. The load guard: the script refuses to record when the
+// interpreted runs disagree by more than a factor of three, which means the machine was too noisy to say anything.
+use std::env
+use std::fs
+use std::process
+use std::strings
+
+fn quote(s: string) -> string {
+    "'" + strings.replace(s, "'", "'\\''") + "'"
+}
+
+struct Timed {
+    ok: bool,
+    cpu_ms: int,
+}
+
+fn cpu_of(wj: string, args: Vec<string>) -> Timed {
+    let mut all: Vec<string> = ["-p", wj]
+    for a in args {
+        all.push(a)
+    }
+    match process::run_with_output("/usr/bin/time", all) {
+        Ok(o) => {
+            let mut user = 0.0
+            let mut sys = 0.0
+            for line in strings.split(o.stderr, "\n") {
+                let parts = strings.split_whitespace(line)
+                if parts.len() == 2 && parts[0] == "user" {
+                    user = parts[1].parse::<f64>() ?? 0.0
+                } else if parts.len() == 2 && parts[0] == "sys" {
+                    sys = parts[1].parse::<f64>() ?? 0.0
+                }
+            }
+            Timed { ok: o.status == 0, cpu_ms: ((user + sys) * 1000.0) as int }
+        },
+        Err(_) => Timed { ok: false, cpu_ms: 0 },
+    }
+}
+
+fn median(values: Vec<int>) -> int {
+    let mut v = values
+    v.sort()
+    v[v.len() / 2]
+}
+
+fn main() {
+    let args: Vec<string> = env::args().collect()
+    if args.len() < 3 {
+        println("usage: measure_startup.wj WJ_BIN OUT_JSON [--runs N]")
+        process::exit(2)
+    }
+    let wj = args[1]
+    let out = args[2]
+    let mut runs: int = 7
+    if args.len() >= 5 && args[3] == "--runs" {
+        runs = args[4].parse::<int>() ?? 7
+    }
+    let scratch = env::temp_dir() + "/wj-book-startup"
+    process::run("rm -rf " + quote(scratch) + " && mkdir -p " + quote(scratch))
+    let hello = scratch + "/hello.wj"
+    fs::write(hello, "fn main() {\n    println(\"hello\")\n}\n").unwrap_or(())
+
+    let mut interp: Vec<int> = Vec::new()
+    let mut i: int = 0
+    while i < runs + 1 {
+        let t = cpu_of(wj, ["run", "--interpret", hello])
+        if !t.ok {
+            println("the interpreted run failed")
+            process::exit(1)
+        }
+        if i > 0 {
+            interp.push(t.cpu_ms)
+        }
+        i += 1
+    }
+    let mut compiled: Vec<int> = Vec::new()
+    let compiled_runs: int = 3
+    let mut k: int = 0
+    while k < compiled_runs {
+        let dir = scratch + "/proj" + "${k}"
+        process::run("mkdir -p " + quote(dir + "/src"))
+        fs::write(dir + "/wj.toml", "[package]\nname = \"startup" + "${k}" + "\"\nversion = \"0.1.0\"\n").unwrap_or(())
+        fs::write(dir + "/src/main.wj", "fn main() {\n    println(\"hello\")\n}\n").unwrap_or(())
+        let t = cpu_of("sh", ["-c", "cd " + quote(dir) + " && " + quote(wj) + " run --compiled"])
+        if !t.ok {
+            println("the compiled run failed")
+            process::exit(1)
+        }
+        compiled.push(t.cpu_ms)
+        k += 1
+    }
+    let mut lo = interp[0]
+    let mut hi = interp[0]
+    for v in interp {
+        if v < lo {
+            lo = v
+        }
+        if v > hi {
+            hi = v
+        }
+    }
+    if hi > 3 * (lo + 10) {
+        println("too noisy to record: interpreted runs ranged ${lo} to ${hi} ms of CPU")
+        process::exit(1)
+    }
+    let machine = process::run("uname -sm").unwrap_or("unknown").trim()
+    let json = "{\n  \"book.startup.interpret_cpu_ms\": {\"value\": ${median(interp)}},\n  \"book.startup.compiled_cpu_ms\": {\"value\": ${median(compiled)}},\n  \"book.startup.machine\": {\"value\": \"${machine}\"}\n}\n"
+    fs::write(out, json).unwrap_or(())
+    println("interpreted ${median(interp)} ms, compiled ${median(compiled)} ms of CPU on ${machine}; wrote ${out}")
+}
