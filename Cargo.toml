@@ -551,3 +551,9 @@ path = "tests/release_overflow_checks_test.rs"
 [[test]]
 name = "try_binding_method_args"
 path = "tests/try_binding_method_args_test.rs"
+
+# W0005 stays quiet for a clone the compiler would not insert (the value is used again)
+#   cargo test --release --test lint_clone_need
+[[test]]
+name = "lint_clone_need"
+path = "tests/lint_clone_need_test.rs"
