@@ -283,15 +283,6 @@ fn extraction_keeps_hidden_lines_and_expectations() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn known_gap_explain_ownership_span_inside_interpolation() {
-    let repro = real().root.join("tests/book_repros/explain_ownership_interpolation_span.wj");
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).arg("explain-ownership").arg(&repro).output().unwrap();
-    let text = String::from_utf8_lossy(&out.stdout);
-    let wild = text.lines().filter_map(|l| l.split("@").nth(1)).filter_map(|r| r.split(':').nth(1)).filter_map(|c| c.split_whitespace().next()).any(|c| c.len() >= 6);
-    assert!(wild, "the span bug is fixed: delete tests/book_repros/explain_ownership_interpolation_span.wj, this test and its docs/known-gaps.md row\n{text}");
-}
-
-#[test]
 fn known_gap_generic_copy_out_of_list_fails_compiled() {
     let _g = compiled_lock();
     let repro = real().root.join("tests/book_repros/generic_largest_needs_clone.wj");
@@ -333,14 +324,6 @@ fn known_gap_module_struct_without_import_fails_compiled() {
     let compiled = compiled_cmd(wj).current_dir(&dst).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
     assert!(!compiled.status.success() && text.contains("WJ0003"), "the module-struct gap is fixed: delete tests/book_repros/module_struct, this test and its docs/known-gaps.md row\n{text}");
-}
-
-#[test]
-fn known_gap_leading_string_literal_in_interpolation_does_not_parse() {
-    let repro = real().root.join("tests/book_repros/interpolation_leading_literal.wj");
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).arg("check").arg(&repro).output().unwrap();
-    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    assert!(!out.status.success() && text.contains("WJ0011"), "the parse gap is fixed: delete tests/book_repros/interpolation_leading_literal.wj, this test and its docs/known-gaps.md row\n{text}");
 }
 
 #[test]
