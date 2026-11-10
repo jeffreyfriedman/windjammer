@@ -1,4 +1,5 @@
 # Ownership and borrowing, inferred
+<!-- feature: ownership -->
 
 <!-- promise: feature ownership-inferred -->
 <!-- promise: feature ownership-visible -->

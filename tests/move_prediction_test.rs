@@ -77,6 +77,9 @@ fn predictions_across_the_corpora() {
         wj_files(&root.join(d), &mut files);
     }
     files.sort();
+    // The drift corpus is a copy of whole multi-file projects (their types live in sibling files): one file of it read
+    // alone cannot be judged, and the drift corpus has its own compiled baseline.
+    files.retain(|f| !f.starts_with(root.join("tests/drift_corpus")));
     let mut hits = Vec::new();
     for f in &files {
         let d = windjammer::check::moves::predicted_moves(f);

@@ -918,10 +918,9 @@ impl<'ast> CodeGenerator<'ast> {
             self.lookup_method_signature_on_receiver_type(receiver_type, method, arg_count)
         {
             let mut resolved = finalize(affinity_sig);
-            if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 Some(receiver_type),
                 None,
-                self.current_function_return_type.as_ref(),
             ) {
                 crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                     &mut resolved,
@@ -951,8 +950,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             // Stdlib map/set key methods borrow (`HashMap::get(&K)`). A project
-            // skeleton from `std/collections.wj` (`key: K` owned) must not replace
-            // that contract — P3.647 would then clone the key into `&Q`.
+            // skeleton from `std/collections.wj` (`key: K` owned) must not replace that contract — P3.647 would then clone the key into `&Q`.
             if crate::type_classification::is_map_type_name(receiver_type)
                 || crate::type_classification::is_set_type_name(receiver_type)
             {
@@ -1060,10 +1058,9 @@ impl<'ast> CodeGenerator<'ast> {
         }?;
 
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 Some(receiver_type),
                 None,
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -1120,10 +1117,9 @@ impl<'ast> CodeGenerator<'ast> {
         let mut sig =
             self.resolve_method_function_signature(receiver_type_name, method, arg_count)?;
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 Some(receiver_type_name),
                 receiver_ty,
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -1568,13 +1564,6 @@ impl<'ast> CodeGenerator<'ast> {
         param_idx: usize,
     ) -> bool {
         if self.library_source_root.is_none() {
-            return false;
-        }
-        if func
-            .parameters
-            .get(param_idx)
-            .is_some_and(|p| self.is_public_owned_non_copy_formal_api(p, func))
-        {
             return false;
         }
         let Some(sig) = self.global_signature_for_function(func) else {
@@ -4038,7 +4027,8 @@ impl<'ast> CodeGenerator<'ast> {
             || self.match_arm_bindings.contains(name.as_str())
             || self.inferred_borrowed_params.contains(name.as_str())
             || self.inferred_mut_borrowed_params.contains(name.as_str())
-            || self.current_function_params.iter().any(|p| p.name == *name);
+            || self.current_function_params.iter().any(|p| p.name == *name)
+            || self.local_variable_scopes.iter().any(|scope| scope.contains(name.as_str()));
         if is_local_variable {
             return arg_str.to_string();
         }

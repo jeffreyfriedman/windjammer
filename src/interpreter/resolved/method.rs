@@ -40,6 +40,19 @@ pub(super) fn method_call(
     arguments: &'static [(Option<String>, E)],
     loc: Option<&'static Location>,
 ) -> Option<X> {
+    let generic = method_call_generic(cx, whole, object, method, type_args, arguments, loc)?;
+    Some(len_fast(cx, object, method, arguments, generic))
+}
+
+fn method_call_generic(
+    cx: &mut Cx,
+    whole: E,
+    object: E,
+    method: &'static str,
+    type_args: Option<&'static Vec<Type>>,
+    arguments: &'static [(Option<String>, E)],
+    loc: Option<&'static Location>,
+) -> Option<X> {
     // `x.parse::<T>()` parser quirk, legacy `Type.f()` / `module.f()` spellings, `&mut` arguments
     if method.is_empty() || arguments.iter().any(|(_, a)| matches!(a, Expression::Unary { op: UnaryOp::MutRef, .. })) {
         return None;
@@ -224,5 +237,43 @@ impl SiteCache {
         let c = it.compiled_for(f);
         *self.compiled.borrow_mut() = Some((f.clone(), c.clone()));
         c
+    }
+}
+
+/// `s.len()` on a local string, vector or map when no user type has a `len` method: the length read in place,
+/// without the receiver's place, clone and method dispatch (the builtins' `Value::usize`). Anything else, a
+/// box in use or a lock guard takes the generic call.
+fn len_fast(cx: &mut Cx, object: E, method: &str, arguments: &[(Option<String>, E)], generic: X) -> X {
+    let Expression::Identifier { name, .. } = object else { return generic };
+    let Some(slot) = cx.local(name) else { return generic };
+    if method != "len" || !arguments.is_empty() || cx.it.methods.keys().any(|(_, m)| m == "len") {
+        return generic;
+    }
+    let generic = generic.code();
+    X::R(Box::new(move |it, b| {
+        if !it.fast_off("lenfast") {
+            let n = match &it.rstack[b + slot] {
+                Value::Ref(p) if p.path.is_empty() && p.guard.is_none() => match p.slot.try_borrow() {
+                    Ok(v) => length(&v),
+                    Err(_) => None,
+                },
+                v => length(v),
+            };
+            if let Some(n) = n {
+                it.fast.lenfast += 1;
+                return Ok(Value::usize(n));
+            }
+        }
+        generic(it, b)
+    }))
+}
+
+/// The length of a string (bytes), vector or map held directly.
+fn length(v: &Value) -> Option<usize> {
+    match v {
+        Value::Str(s) => Some(s.len()),
+        Value::Vec(xs) => Some(xs.len()),
+        Value::Map(m) => Some(m.len()),
+        _ => None,
     }
 }

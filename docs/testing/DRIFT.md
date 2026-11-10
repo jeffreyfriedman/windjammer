@@ -41,15 +41,78 @@ A test missing from the baseline is `absent` and therefore a divergence: record 
 
 ## The generated programs
 
-`scripts/wj/drift_gen.wj` writes seeded programs (default seeds 1..40) whose cells put a value of one kind
-(`Option<int>`, `Option<int>` from a map lookup, `Result`, an enum with unit/tuple/struct variants, `Option<string>`)
-in one value position (match arm result, return, return from a loop, closure, struct field, nested match, shadowing,
-`Vec` element, if-expression, bool match), on a hit and on a miss. Every integer literal goes through `num(..)`, so
+`scripts/wj/drift_gen.wj` writes seeded programs (default seeds 1..60, 8 cells each) whose cells put a value of one kind
+(`Option<int>`, `Option<int>` from a map lookup, `Result`, an enum with unit/tuple/struct variants, a nested enum, a
+tuple, `Option<string>`, `Option<char>`, `string`) in one of 16 value positions (match arm result, return, return from
+a loop, closure, struct field, nested match, shadowing, `Vec` element, if-expression, bool match, by-value method
+receiver, `break` with a value, nested loops with a labelled `continue`, early `return` from a `for`, a closure built
+from an argument, a closure with an early `return`), on a hit and on a miss. Every integer literal goes through `num(..)`, so
 literal typing is not what the grid probes. Oracles: the walker for the resolved engine (`gen/seed-N`: stdout and exit
 status), and rustc for the compiled backend (`gen/seed-N#rustc`: the generated Rust must type-check; `--run-compiled`
 also runs it). The rows join the corpus rows, so the same ledger applies. `DRIFT_GEN_BARE=1` switches on bare
 unit-variant patterns (a known divergence, `repros/bare_unit_pattern_in_let_match.wj`). Seeds beyond the default:
 `wj run scripts/wj/drift_gen.wj BIN DIR OUT.tsv --seeds 41..400`.
+
+After a re-record (`drift_corpus.wj ... --compiled live --record`), `wj run scripts/wj/drift_gate.wj --fast --prune`
+deletes the ledger lines of fixed cases and lists them; new and changed divergences still fail, so a prune can only
+shrink the ledger.
+
+## Move shapes
+
+`tests/drift_corpus/moves/` holds use-after-move programs for ADR-0030. The ownership rules decide what is an error:
+a move of a `Clone` value that is used again is cloned by the compiler (every mode runs it and prints the same), while a
+value that cannot be copied (it holds a channel end, for instance) and is used after being given away is an error,
+which the interpreter refuses (WJ0007) and rustc rejects (E0382). `must_refuse_*.wj` programs are the second kind (the
+fixtures of `tests/move_prediction`): a `<program>#refused` row compares whether each side stopped on an ownership
+error, so an interpreter that runs such a program diverges and the ledger names it until the ADR-0030 slice that refuses
+it lands. The other programs (owned argument reused, string moved into a struct, move in a `for`/`while` body, partial
+move, closure capture, push then use, reassign re-arms, receiver reuse, a Copy-like struct) are controls: every mode runs
+them and must agree. A new shape that rustc rejects is added as `must_refuse_<shape>.wj`.
+
+## Coverage
+
+The differential corpus runs, besides the ecosystem tests, every repository program that has a `main`, deterministic
+output and no expected failure: `tests/conformance_programs`, `tests/conformance`, `tests/interpreter_corpus`,
+`tests/engine_parity` and `examples/verified`, plus the value-position, move-shape and repro programs. `drift_corpus.wj`
+prints the share of the repository's `.wj` programs with a `main` that it covers (outside the ecosystem snapshot). The spec programs are run
+with their `// expect:` oracle by `scripts/wj/spec_oracle.wj`. What is left is deliberate: the
+negative cases (`tests/check_negative`, diagnostics and effects fixtures, `// expect-error:` specs), programs that read
+stdin, the clock, randomness or the network, and seeded corpus templates (run by the cargo parity test). Each corpus
+program gets a `#accepted` row (the interpreter did not refuse it: it is compared with the compiled build accepting
+it) and, when it carries `// expect:` lines, an `#expect` row (stdout equals the lines).
+
+## Verdicts by semantic class
+
+`scripts/wj/drift_probes.wj` writes one program per (class, seed), four seeds per class, and compares walker, resolved
+engine and compiled backend (stdout, exit status; for panics the `file.wj:line` between the two engines). Verdicts at
+the time of writing; the ledger is the source of truth.
+
+| Class (probe family) | Walker vs resolved | Interpreter vs compiled | Verdict |
+|---|---|---|---|
+| wrapping / saturating / checked ops, i8..u64 (`intwrap`) | agree | agree | agree |
+| overflow panics (`panic_overflow`) | agree, same location | agree (exit 101) | agree |
+| `as` casts: int widths, float to int (saturating, NaN), char, bool (`casts`) | agree | agree | agree |
+| division, modulo, `rem_euclid`, `div_euclid` of negatives (`divmod`) | agree | agree | agree |
+| shifts, bit operations, `count_ones` and friends (`shifts`) | agree | agree | agree |
+| float formatting: `{}`, `{:.2}`, `{:>12.3}`, `{:e}`, `{:?}`, NaN, inf, -0.0, f32 (`floatfmt`) | agree | agree | agree |
+| strings and chars: UTF-8 length, case mapping of non-ASCII, reverse, find (`strings`) | agree | agree | agree |
+| slicing a string inside a character (`panic_slice`) | agree, same location | agree (exit 101) | agree |
+| `${x:?}`, `{:#?}`, width/fill/sign/radix specs (`format`) | agree | agree | agree |
+| panics in nested calls: index, division, `expect`, `assert_eq`, explicit (`panic_nested`) | agree, same location | agree | agree |
+| evaluation order: `&&`/`||`, arguments, tuples, `v[i()] += j()`, struct literal fields (`order`) | agree | **was a bug**: struct literal fields ran in declaration order, rustc runs them as written | fixed in both engines (`interpreter: struct literal fields run in written order`) |
+| closures: FnMut counters, captures, returned closures (`closures`) | agree | agree | agree |
+| drop order: scopes, moved values, vectors (`drop`) | agree | agree | agree |
+| sort stability, `dedup`, string order (`sort`) | agree | agree | agree |
+| `HashMap` iteration (`hashorder`) | agree | agree when the program sorts the keys | documented divergence (D6): raw iteration order is unspecified, the interpreter uses key order |
+| process exit codes (`exit_code`) | agree | agree | agree |
+| stdin at EOF and `args()` (`stdin`) | agree | compiled build rejects `read_line(..) ?? 0` (usize vs int); probe uses the value only | agree after the probe fix; the ill-typed form is a finding |
+| threads: spawn/join, channel order (`threads`) | agree | `h.join() ?? 0` does not compile (zero-argument closure), see `repros/thread_join_coalesce.wj` | agree for the supported forms; one compiled-backend bug |
+| std return shapes: interpreter builtin vs runtime signature (`drift_stdshape.wj`) | agree | `env::current_dir` returned a bare string (fixed); `env::current_exe` and `json::number_f64` are not implemented in the interpreter | one bug fixed, two gaps ledgered |
+
+Mutation checks: the evaluation-order class is a real bug (the gate diverged from the compiled baseline until fixed).
+The value-position classes have three engine mutants (`docs/drift/generator-audit.md`). The shared-builtin classes
+(integer, float, string, format) have no mutant of their own: the walker and resolved engine share those builtins, so
+only the compiled baseline can see a change in them, and the baseline is recorded from the compiled backend.
 
 ## The drift budget
 

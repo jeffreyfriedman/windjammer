@@ -1,0 +1,11 @@
+// A struct pushed into a Vec, then used.
+struct Holder {
+    n: int,
+}
+
+fn main() {
+    let h = Holder { n: 1 }
+    let mut v: Vec<Holder> = Vec::new()
+    v.push(h)
+    println("${v.len()} ${h.n}")
+}

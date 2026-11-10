@@ -3,7 +3,7 @@
 //! Pure functions over `FunctionSignature` and `Type` — no codegen state.
 
 use crate::analyzer::FunctionSignature;
-use crate::parser::Type;
+use crate::parser::{Parameter, Type};
 
 /// Windjammer text types (`string`, `String`, `str`, and references thereto).
 pub fn is_windjammer_text_type(t: &Type) -> bool {
@@ -121,4 +121,20 @@ mod tests {
         };
         assert!(formal_is_plain_windjammer_string_for_call_arg(&sig, 1));
     }
+}
+
+/// A by-value formal whose Rust spelling is the IR mode (convergence O4): a user type or collection other
+/// than text, a map or a set, declared without a pattern or a pin. Copy and generic types are excluded by
+/// the emitter, which knows them; codegen and the registry sync read this one shape test.
+pub fn ir_spells_value_formal(param: &Parameter) -> bool {
+    use crate::type_classification::{is_map_type_name, is_set_type_name};
+    let keyed = match &param.type_ {
+        Type::Parameterized(base, _) | Type::Custom(base) => is_map_type_name(base) || is_set_type_name(base),
+        _ => false,
+    };
+    matches!(&param.type_, Type::Custom(_) | Type::Vec(_) | Type::Parameterized(..))
+        && !is_windjammer_text_type(&param.type_)
+        && !keyed
+        && param.pattern.is_none()
+        && param.decorators.is_empty()
 }

@@ -342,7 +342,8 @@ fn every_machine_code_check_is_load_bearing() {
 /// reference variable by `r = &mut x` (`refwrite`: written through instead), and the machine-code loop's fresh
 /// resolution of a vector after closure code rebinds the reference to it (`vecstale`), and its in-place stores into
 /// a packed vector (`viewidx`: every element written at index 0), and the compiled code's by-value passing of a parameter
-/// that is only reassigned (`paramassign`: always `&mut`).
+/// that is only reassigned (`paramassign`: always `&mut`), and the receiver's place for a method without `self` that
+/// assigns `self.field` (`implicitself`: by value again).
 #[test]
 #[cfg(debug_assertions)]
 fn every_corpus_check_is_load_bearing() {
@@ -354,6 +355,7 @@ fn every_corpus_check_is_load_bearing() {
         ("refwrite", "vp_ref_rebind.wj"),
         ("vecstale", "vp_ref_rebind.wj"),
         ("viewidx", "packed_vecs.wj"),
+        ("implicitself", "vp_implicit_self.wj"),
         ("paramassign", "vp_param_reassign.wj"),
     ] {
         let p = root.join(file);

@@ -32,6 +32,8 @@ pub struct RustLeakageLinter<'ast> {
     /// legacy AST `location`, which is the position of the token *after* a node (an inference
     /// identity key, not a diagnostic span) or, for parameters, the file start.
     spans: Option<crate::parser::SpanSnapshot>,
+    /// True spans used only for W0016 (the `self` of a bodyless trait method); other lints keep their legacy locations.
+    receiver_spans: Option<crate::parser::SpanSnapshot>,
     _phantom: std::marker::PhantomData<&'ast ()>,
 }
 
@@ -42,8 +44,15 @@ impl<'ast> RustLeakageLinter<'ast> {
             default_file: default_file.into(),
             in_trait_impl: false,
             spans: None,
+            receiver_spans: None,
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Locate W0016 with the parser's true spans (see `Parser::enable_span_log`).
+    pub fn with_receiver_spans(mut self, spans: crate::parser::SpanSnapshot) -> Self {
+        self.receiver_spans = Some(spans);
+        self
     }
 
     /// Locate diagnostics with the parser's true spans (see `Parser::enable_span_log`).
@@ -56,6 +65,14 @@ impl<'ast> RustLeakageLinter<'ast> {
         match self.spans.as_ref().and_then(|s| s.expr(expr)) {
             Some(sp) => SourceLocation::new(self.default_file.clone(), sp.line, sp.column),
             None => to_source_location(legacy.clone(), &self.default_file),
+        }
+    }
+
+    /// Where a bodyless trait method's `self` is written (its true span; the file start without spans).
+    fn receiver_location(&self, params: &[Parameter<'_>]) -> SourceLocation {
+        match self.receiver_spans.as_ref().or(self.spans.as_ref()).and_then(|s| s.param(params, 0)) {
+            Some(sp) => SourceLocation::new(self.default_file.clone(), sp.line, sp.column),
+            None => SourceLocation::new(self.default_file.clone(), 1, 1),
         }
     }
 
@@ -96,7 +113,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                 category: LintCategory::Correctness,
                 level: LintLevel::Warning,
                 message: format!("trait method `{}` has no body and does not declare its receiver", u.method),
-                location: to_source_location(u.location, &self.default_file),
+                location: self.receiver_location(u.params),
                 help: Some("write `&self` when no implementation changes `self`, `&mut self` when one does".to_string()),
                 note: Some("`self` alone is inferred from a body; implementations follow the trait's declared receiver".to_string()),
                 suggestion: None,

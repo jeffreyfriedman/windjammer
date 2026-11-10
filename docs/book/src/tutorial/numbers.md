@@ -1,4 +1,5 @@
 # Numbers and sizes
+<!-- feature: numerics -->
 
 Windjammer has two everyday number types and a full family of sized ones. You reach for `int` and `float` almost
 always, and for the sized types exactly where the size matters: file formats, network protocols, hardware, and

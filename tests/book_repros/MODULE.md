@@ -12,6 +12,7 @@ Minimal programs for compiler or diagnostic bugs found while writing The Windjam
 - `module_struct/`: a struct from a file module reaches `main` only through a function result; interpreted prints two lines, compiled fails with WJ0003 unless `main` imports the type.
 - `interpolation_leading_literal.wj`: a string literal at the start of an interpolation fails to parse (WJ0011).
 - `module_const.wj`, `map_get_string_key.wj`: constructs that run interpreted and are rejected compiled (WJ0001, WJ0003).
+- `defer_in_loop.wj`: a loop-body `defer` runs compiled and not interpreted.
 
 ## Invariants
 - A repro is the smallest program that shows the bug, free of project names (public hygiene).

@@ -221,7 +221,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             it.enable_hot_reload();
         }
         let code = match it.call_main() {
-            Ok(_) => 0,
+            Ok(v) => main_result_code(&mut it, &v),
             Err(e) => {
                 if !matches!(e.kind, ErrorKind::Exit(_)) {
                     eprintln!("{}", e.render());
@@ -233,8 +233,8 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         if it.jit_debug {
             let f = it.fast;
             eprintln!(
-                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} matchval {} argcopy {}",
-                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.matchval, f.argcopy
+                "[fast] inline {} mapget {} mapins {} packed {} unboxed {} fmt {} pushstr {} closureenv {} closurescope {} packedidx {} vecresolve {} pushfmt {} packedstore {} matchval {} argcopy {} lenfast {}",
+                f.inline, f.mapget, f.mapins, f.packed, f.unboxed, f.fmt, f.pushstr, f.closureenv, f.closurescope, f.packedidx, f.vecresolve, f.pushfmt, f.packedstore, f.matchval, f.argcopy, f.lenfast
             );
         }
         if let Some(p) = &opts.result_json {
@@ -246,6 +246,21 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         }
         RunOutcome::Exited(code)
     })
+}
+
+/// `fn main() -> Result<..>` returning `Err(e)`: like the compiled program, print `Error: {e:?}` on stderr and exit 1.
+fn main_result_code(it: &mut Interpreter, v: &Value) -> i32 {
+    if let Value::Enum(e) = v {
+        if &*e.ty == "Result" && &*e.variant == "Err" {
+            if let super::value::Payload::Tuple(items) = &e.payload {
+                let text = items.first().map(|x| it.debug_string(x).unwrap_or_default()).unwrap_or_default();
+                it.flush();
+                eprintln!("Error: {text}");
+                return 1;
+            }
+        }
+    }
+    0
 }
 
 /// `--bind` and `--limits` (ADR-0021 section 12): the tool bridge and the resource limits of a code-mode run.

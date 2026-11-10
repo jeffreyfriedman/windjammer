@@ -30,22 +30,10 @@ pub fn split<S: AsRef<str>>(s: S, delimiter: &str) -> Vec<String> {
     s.as_ref().split(delimiter).map(|s| s.to_string()).collect()
 }
 
-/// Split text into lines (`\n` / `\r\n` — no `.as_bytes()` needed in Windjammer).
+/// Split text into lines with `str::lines()` semantics: `\n` and `\r\n` end a line (a lone `\r` stays), and a final
+/// newline does not add an empty last element (`"a\nb\n"` is `["a", "b"]`, `""` is `[]`).
 pub fn split_lines<S: AsRef<str>>(text: S) -> Vec<String> {
-    let mut lines: Vec<String> = Vec::new();
-    let mut current = String::new();
-    for ch in text.as_ref().chars() {
-        if ch == '\n' {
-            lines.push(current);
-            current = String::new();
-        } else if ch != '\r' {
-            current.push(ch);
-        }
-    }
-    if !current.is_empty() || text.as_ref().ends_with('\n') {
-        lines.push(current);
-    }
-    lines
+    text.as_ref().lines().map(String::from).collect()
 }
 
 /// Split on ASCII whitespace (space / tab).
@@ -179,7 +167,11 @@ mod tests {
     #[test]
     fn test_split_lines() {
         let lines = split_lines("a\nb\r\nc\n");
-        assert_eq!(lines, vec!["a", "b", "c", ""]);
+        assert_eq!(lines, vec!["a", "b", "c"]);
+        assert_eq!(split_lines("250 OK\r\n"), vec!["250 OK"]);
+        assert_eq!(split_lines(""), Vec::<String>::new());
+        assert_eq!(split_lines("\n\n"), vec!["", ""]);
+        assert_eq!(split_lines("a\rb"), vec!["a\rb"]);
     }
 
     #[test]

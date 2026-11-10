@@ -82,6 +82,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj new --template` | Project template (cli, web, lib, wasm) | tested |
 | `wj remove` | Remove a dependency from wj.toml | tested |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) | tested |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted | tested |
 | `wj run` | Compile and run a Windjammer file | tested |
 | `wj run --defer-drop` | Defer drop optimization mode (auto, always, never) | tested |
 | `wj run --defer-drop-threshold` | Defer drop threshold in bytes (default: 102400 = 100KB) | tested |
