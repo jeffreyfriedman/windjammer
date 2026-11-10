@@ -49,7 +49,6 @@ crypto::argon2id_raw
 db::open
 db::open_postgres
 db::open_sqlite
-env::current_exe
 http::parse_query_string
 http::post_json
 io::buf_reader
@@ -69,7 +68,6 @@ io::write_str
 json::get_bool
 json::get_number
 json::get_string
-json::number_f64
 json::string
 sync::arc
 sync::arc_mutex
