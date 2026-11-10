@@ -368,7 +368,7 @@ digraph deps {
   "linter" -> "parser" [label="34"];
   "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];
-  "metadata" -> "analyzer" [label="29"];
+  "metadata" -> "analyzer" [label="30"];
   "metadata" -> "codegen" [label="5"];
   "metadata" -> "compiler" [label="5",color=red,fontcolor=red];
   "metadata" -> "parser" [label="19"];
