@@ -2,7 +2,7 @@
 
 use crate::parser::*;
 
-use super::CodeGenerator;
+use super::{expression_helpers, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn generate_const_statement(
@@ -59,5 +59,33 @@ impl<'ast> CodeGenerator<'ast> {
             ));
         }
         output
+    }
+
+    /// A module-level `const`/`static` declaration line (top level or inside an inline `mod`).
+    pub(in crate::codegen::rust) fn generate_const_or_static_item(&mut self, item: &Item<'ast>) -> String {
+        match item {
+            Item::Const { name, is_pub, type_, value, .. } => {
+                let pub_prefix = if *is_pub { "pub " } else { "" };
+                // string constants are `&'static str`, not `String`
+                let rust_type = if matches!(type_, Type::String) && matches!(value, Expression::Literal { value: Literal::String(_), .. }) {
+                    "&'static str".to_string()
+                } else {
+                    self.type_to_rust(type_)
+                };
+                format!("{pub_prefix}const {name}: {rust_type} = {};\n", self.generate_expression_immut(value))
+            }
+            Item::Static { name, mutable, type_, value, .. } => {
+                let ty = self.type_to_rust(type_);
+                let v = self.generate_expression_immut(value);
+                if *mutable {
+                    format!("static mut {name}: {ty} = {v};\n")
+                } else {
+                    // a compile-time evaluable static is promoted to `const`
+                    let keyword = if expression_helpers::is_const_evaluable(value) { "const" } else { "static" };
+                    format!("{keyword} {name}: {ty} = {v};\n")
+                }
+            }
+            _ => String::new(),
+        }
     }
 }

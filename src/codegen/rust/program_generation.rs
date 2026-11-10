@@ -657,68 +657,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Generate const and static declarations
         for item in &program.items {
             match item {
-                Item::Const {
-                    name,
-                    is_pub,
-                    type_,
-                    value,
-                    ..
-                } => {
-                    let pub_prefix = if *is_pub { "pub " } else { "" };
-
-                    // Special case: string constants should use &'static str, not String
-                    let rust_type = if matches!(type_, Type::String)
-                        && matches!(
-                            value,
-                            Expression::Literal {
-                                value: Literal::String(_),
-                                ..
-                            }
-                        ) {
-                        "&'static str".to_string()
-                    } else {
-                        self.type_to_rust(type_)
-                    };
-
-                    body.push_str(&format!(
-                        "{}const {}: {} = {};\n",
-                        pub_prefix,
-                        name,
-                        rust_type,
-                        self.generate_expression_immut(value)
-                    ));
-                }
-                Item::Static {
-                    name,
-                    mutable,
-                    type_,
-                    value,
-                    ..
-                } => {
-                    if *mutable {
-                        body.push_str(&format!(
-                            "static mut {}: {} = {};\n",
-                            name,
-                            self.type_to_rust(type_),
-                            self.generate_expression_immut(value)
-                        ));
-                    } else {
-                        // PHASE 7: Promote static to const if value is compile-time evaluable
-                        let keyword = if expression_helpers::is_const_evaluable(value) {
-                            "const" // Zero runtime overhead!
-                        } else {
-                            "static"
-                        };
-
-                        body.push_str(&format!(
-                            "{} {}: {} = {};\n",
-                            keyword,
-                            name,
-                            self.type_to_rust(type_),
-                            self.generate_expression_immut(value)
-                        ));
-                    }
-                }
+                Item::Const { .. } | Item::Static { .. } => body.push_str(&self.generate_const_or_static_item(item)),
                 // Type aliases that name user structs/enums must emit *after* those
                 // definitions (P3.333 / `wj-sync` SharedInt = Shared<int>). Skip here;
                 // emit in the post-struct pass below.

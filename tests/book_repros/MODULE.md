@@ -7,7 +7,6 @@ Minimal programs for compiler or diagnostic bugs found while writing The Windjam
 - `generic_largest_needs_clone.wj`: a generic function that copies `items[0]` out of a `Vec<T>` with `T: PartialOrd` runs interpreted and fails compiled with WJ0015.
 - `iter_find_closure.wj`: a collection idiom that runs interpreted and is rejected compiled (WJ0003).
 - `module_struct/`: a struct from a file module reaches `main` only through a function result; interpreted prints two lines, compiled fails with WJ0003 unless `main` imports the type.
-- `module_const.wj`, `map_get_string_key.wj`: constructs that run interpreted and are rejected compiled (WJ0001, WJ0003).
 - `defer_in_loop.wj`: a loop-body `defer` runs compiled and not interpreted.
 - `join_unwrap_or_literal.wj`: runs interpreted, rejected compiled (WJ0003).
 
