@@ -297,30 +297,31 @@ fn replay_answers_crate_calls_from_the_log_without_the_host() {
     assert!(!live.status.success(), "{}", text(&live));
 }
 
-/// A crate call inside a `durable fn` is a journaled step (its effect is `ffi(strsim)`): after a crash that came after the
-/// step, the resumed run takes the result from the journal and never starts the crate host.
+/// A crate call inside a `durable fn` is a journaled step when its effect is `ffi(<crate>)` (a `@pure` crate function, such as
+/// strsim's, performs nothing and is not a step): after a crash that came after the step, the resumed run takes the result from
+/// the journal and never starts the crate host.
 #[test]
 fn a_crate_call_in_a_durable_fn_is_a_journaled_step_and_resumes_without_the_host() {
-    let main = "use strsim\ndurable fn run() -> int {\n    let d = strsim::levenshtein(\"kitten\", \"sitting\")\n    println(\"distance ${d}\")\n    d as int\n}\nfn main() {\n    println(\"result ${run()}\")\n}\n";
-    let p = Project::new("strsim = \"0.11\"\n", main).private_cache();
-    let allow = ["--allow", "ffi=strsim", "--journal", "j"];
+    let main = "use shapes\ndurable fn run() -> string {\n    let s = shapes::shout(\"abc\")\n    println(\"shouted ${s}\")\n    s\n}\nfn main() {\n    println(\"result ${run()}\")\n}\n";
+    let p = Project::shapes(main, "").private_cache();
+    let allow = ["--journal", "j"];
     // the clean run, to know the output
-    let clean = p.interp(&["--allow", "ffi=strsim"]);
+    let clean = p.interp(&[]);
     assert!(clean.status.success(), "{}", text(&clean));
     let want = stdout(&clean);
-    assert!(want.contains("distance 3") && want.contains("result 3"), "{want}");
+    assert!(want.contains("shouted ABC") && want.contains("result ABC"), "{want}");
     // crash right after the first step (the crate call) was journaled
     let mut crash = allow.to_vec();
     crash.extend_from_slice(&["--crash-after", "1"]);
     let first = p.interp(&crash);
     assert_eq!(first.status.code(), Some(137), "{}", text(&first));
     let journal = std::fs::read_dir(p.root.join("j")).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect::<String>();
-    assert!(journal.contains("strsim::levenshtein"), "the crate call is not a journaled step: {journal}");
+    assert!(journal.contains("shout"), "the crate call is not a journaled step: {journal}");
     // resume with a host that cannot answer: the journaled result stands in for the call
     poison(&p.hosts());
     let resumed = p.interp(&allow);
     assert!(resumed.status.success(), "{}", text(&resumed));
-    assert!(stdout(&resumed).ends_with(&want[want.find("distance").unwrap()..]) || stdout(&resumed).contains("result 3"), "{}", text(&resumed));
+    assert!(stdout(&resumed).contains("result ABC"), "{}", text(&resumed));
     assert!(!String::from_utf8_lossy(&resumed.stderr).contains("poisoned"), "the host ran on resume: {}", text(&resumed));
 }
 
