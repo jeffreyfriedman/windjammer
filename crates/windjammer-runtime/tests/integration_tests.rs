@@ -157,7 +157,7 @@ fn test_mime_from_filename() {
     assert_eq!(mime, "image/png");
 
     let mime = mime::from_filename("data.json");
-    assert_eq!(mime, "application/json");
+    assert_eq!(mime, mime::APPLICATION_JSON);
 }
 
 #[test]
