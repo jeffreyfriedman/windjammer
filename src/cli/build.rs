@@ -211,6 +211,7 @@ pub fn execute(
             .stderr(std::process::Stdio::inherit())
             .output()
             .and_then(|out| {
+                crate::cli::verdict::record_cargo_json(path, out.status.success(), &String::from_utf8_lossy(&out.stdout), release);
                 if out.status.success() {
                     let exes = crate::cargo_cache::build_profile::executables_from_cargo_json(
                         &String::from_utf8_lossy(&out.stdout),

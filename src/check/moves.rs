@@ -22,10 +22,20 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
 
 /// WJ0007 diagnostics for one parsed file.
 pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {
+    generate(program).map_or_else(Vec::new, |rust| predict_from(&rust, source, file))
+}
+
+/// The Rust the compiler generates for one parsed file, in-process; `None` when the generator fails.
+pub fn generate(program: &crate::parser::Program<'_>) -> Option<String> {
     // a generator panic is no prediction; the panic hook is left alone (files are checked in parallel, and
     // the CLI silences the default message around whole runs, as `front::quiet` does)
     let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust_source(program).ok()));
-    let Some(emitted) = rust.ok().flatten().and_then(|r| crate::ir::explain::emitted::parse_emitted(&r)) else { return Vec::new() };
+    rust.ok().flatten()
+}
+
+/// WJ0007 diagnostics from a file's generated Rust.
+pub fn predict_from(rust: &str, source: &str, file: &str) -> Vec<Diagnostic> {
+    let Some(emitted) = crate::ir::explain::emitted::parse_emitted(rust) else { return Vec::new() };
     crate::ir::explain::moves::moves(&emitted).into_iter().map(|m| diagnostic(&m, source, file)).collect()
 }
 
