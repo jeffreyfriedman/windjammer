@@ -21,6 +21,9 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(lowered) = self.mc_lower_text_option_copy(object, method, args, obj_str) {
             return Some(lowered);
         }
+        if let Some(lowered) = self.mc_lower_ref_text_option_unwrap_or(object, method, args, obj_str) {
+            return Some(lowered);
+        }
         // `map_err(|_| "literal")` into a `Result<_, string>`: the error is an owned `String`
         if method == "map_err" && args.len() == 1 {
             if let Some((_, Expression::Closure { body: Expression::Literal { value: Literal::String(_), .. }, .. })) = arguments.first() {

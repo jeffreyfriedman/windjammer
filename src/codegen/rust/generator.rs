@@ -2313,6 +2313,7 @@ impl<'ast> CodeGenerator<'ast> {
                     String::new()
                 }
             }
+            Item::Const { .. } | Item::Static { .. } => self.generate_const_or_static_item(item),
             Item::Struct { decl, .. } => self.generate_struct(decl),
             Item::Enum { decl, .. } => self.generate_enum(decl),
             Item::Trait { decl, .. } => self.generate_trait_with_analysis(decl, analyzed),
