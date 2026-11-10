@@ -1,4 +1,4 @@
-# spec-oracle compiled results recorded with: wj 0.50.0 (commit 6ed79d644d3f 2026-11-04, clean, release, built 2026-11-04T19:49:50Z)
+# spec-oracle compiled results recorded with: wj 0.50.0 (commit 0ac2d7f19a2e 2026-11-09, clean, release, built 2026-11-09T15:27:40Z)
 spec::arguments/SPEC-ARGS-001	ok
 spec::arguments/SPEC-ARGS-002	ok
 spec::arguments/SPEC-ARGS-003	ok
@@ -14,7 +14,7 @@ spec::closures/SPEC-CLOS-009	build-fail
 spec::collections/SPEC-COLL-001	ok
 spec::collections/SPEC-COLL-002	ok
 spec::collections/SPEC-COLL-003	ok
-spec::collections/SPEC-COLL-004	build-fail
+spec::collections/SPEC-COLL-004	ok
 spec::collections/SPEC-COLL-005	build-fail
 spec::collections/SPEC-COLL-006	ok
 spec::collections/SPEC-COLL-007	ok
@@ -22,7 +22,7 @@ spec::collections/SPEC-COLL-008	ok
 spec::collections/SPEC-COLL-009	build-fail
 spec::collections/SPEC-COLL-010	ok
 spec::collections/SPEC-COLL-011	build-fail
-spec::collections/SPEC-COLL-012	build-fail
+spec::collections/SPEC-COLL-012	ok
 spec::concurrency/SPEC-CONC-001	build-fail
 spec::concurrency/SPEC-CONC-002	build-fail
 spec::concurrency/SPEC-CONC-003	build-fail
@@ -57,19 +57,19 @@ spec::expressions/SPEC-EXPR-007	ok
 spec::expressions/SPEC-EXPR-008	ok
 spec::expressions/SPEC-EXPR-009	ok
 spec::expressions/SPEC-EXPR-010	ok
-spec::expressions/SPEC-EXPR-011	build-fail
+spec::expressions/SPEC-EXPR-011	ok
 spec::expressions/SPEC-EXPR-012	ok
 spec::expressions/SPEC-EXPR-013	ok
 spec::expressions/SPEC-EXPR-014	ok
 spec::expressions/SPEC-EXPR-015	ok
-spec::expressions/SPEC-EXPR-016	ok
+spec::expressions/SPEC-EXPR-016	build-fail
 spec::expressions/SPEC-EXPR-018	ok
 spec::expressions/SPEC-EXPR-019	ok
 spec::grammar/SPEC-GRAM-002	ok
 spec::grammar/SPEC-GRAM-003	ok
 spec::grammar/SPEC-GRAM-004	ok
 spec::grammar/SPEC-GRAM-005	ok
-spec::grammar/SPEC-GRAM-006	build-fail
+spec::grammar/SPEC-GRAM-006	ok
 spec::grammar/SPEC-GRAM-008	ok
 spec::grammar/SPEC-GRAM-009	ok
 spec::guard-match/SPEC-MATCH-001	ok
@@ -80,7 +80,7 @@ spec::intrinsics/SPEC-INTR-003	ok
 spec::intrinsics/SPEC-INTR-004	ok
 spec::intrinsics/SPEC-INTR-005	ok
 spec::intrinsics/SPEC-INTR-006	ok
-spec::intrinsics/SPEC-INTR-007	build-fail
+spec::intrinsics/SPEC-INTR-007	ok
 spec::intrinsics/SPEC-INTR-008	ok
 spec::intrinsics/SPEC-INTR-009	ok
 spec::items/SPEC-ITEM-001	ok
@@ -88,11 +88,11 @@ spec::items/SPEC-ITEM-002	ok
 spec::items/SPEC-ITEM-003	ok
 spec::items/SPEC-ITEM-004	ok
 spec::items/SPEC-ITEM-005	ok
-spec::items/SPEC-ITEM-006	build-fail
+spec::items/SPEC-ITEM-006	ok
 spec::items/SPEC-ITEM-007	ok
 spec::items/SPEC-ITEM-009	ok
 spec::items/SPEC-ITEM-010	build-fail
-spec::items/SPEC-ITEM-011	build-fail
+spec::items/SPEC-ITEM-011	ok
 spec::lexical/SPEC-LEX-001	ok
 spec::lexical/SPEC-LEX-002	ok
 spec::lexical/SPEC-LEX-003	ok
@@ -163,7 +163,7 @@ spec::patterns/SPEC-PAT-005	ok
 spec::patterns/SPEC-PAT-006	ok
 spec::patterns/SPEC-PAT-007	ok
 spec::patterns/SPEC-PAT-008	ok
-spec::patterns/SPEC-PAT-009	build-fail
+spec::patterns/SPEC-PAT-009	ok
 spec::patterns/SPEC-PAT-010	ok
 spec::patterns/SPEC-PAT-011	ok
 spec::patterns/SPEC-PAT-012	ok
@@ -180,12 +180,12 @@ spec::statements/SPEC-STMT-005	ok
 spec::statements/SPEC-STMT-006	ok
 spec::statements/SPEC-STMT-007	ok
 spec::statements/SPEC-STMT-008	ok
-spec::statements/SPEC-STMT-009	build-fail
+spec::statements/SPEC-STMT-009	ok
 spec::statements/SPEC-STMT-010	ok
 spec::statements/SPEC-STMT-011	ok
 spec::stdlib/SPEC-STD-001	ok
 spec::stdlib/SPEC-STD-002	build-fail
-spec::stdlib/SPEC-STD-003	build-fail
+spec::stdlib/SPEC-STD-003	ok
 spec::stdlib/SPEC-STD-004	ok
 spec::stdlib/SPEC-STD-005	ok
 spec::strings/SPEC-STR-001	ok
@@ -208,7 +208,7 @@ spec::strings/SPEC-STR-017	ok
 spec::trailing-blocks/SPEC-BLOCK-001	ok
 spec::trailing-blocks/SPEC-BLOCK-002	ok
 spec::trailing-blocks/SPEC-BLOCK-003	ok
-spec::traits/SPEC-TRT-001	build-fail
+spec::traits/SPEC-TRT-001	ok
 spec::traits/SPEC-TRT-002	ok
 spec::traits/SPEC-TRT-003	ok
 spec::traits/SPEC-TRT-004	build-fail
@@ -217,7 +217,7 @@ spec::traits/SPEC-TRT-006	ok
 spec::traits/SPEC-TRT-007	ok
 spec::traits/SPEC-TRT-008	ok
 spec::traits/SPEC-TRT-009	ok
-spec::traits/SPEC-TRT-010	build-fail
+spec::traits/SPEC-TRT-010	ok
 spec::traits/SPEC-TRT-011	build-fail
 spec::types/SPEC-TYP-001	ok
 spec::types/SPEC-TYP-002	ok
