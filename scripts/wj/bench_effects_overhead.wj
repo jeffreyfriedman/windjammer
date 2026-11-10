@@ -103,16 +103,18 @@ fn main() {
     let mut w = 0
     while w < progs.len() {
         let prog = progs[w]
-        let _ = run_once(wj, prog, base, mode)
-        let _ = run_once(wj, prog, test, mode)
+        let _ = run_once(wj.clone(), prog.clone(), base.clone(), mode.clone())
+        let _ = run_once(wj.clone(), prog.clone(), test.clone(), mode.clone())
         let mut base_t: Vec<f64> = Vec::new()
         let mut test_t: Vec<f64> = Vec::new()
         let mut outs: Vec<string> = Vec::new()
         let mut r = 0
         while r < runs {
-            for arm in [base, test, test, base] {
-                let x = run_once(wj, prog, arm, mode)
-                if arm == base {
+            // interleaved: base, test, test, base (0 is the base arm)
+            for k in [0, 1, 1, 0] {
+                let arm = if k == 0 { base.clone() } else { test.clone() }
+                let x = run_once(wj.clone(), prog.clone(), arm, mode.clone())
+                if k == 0 {
                     base_t.push(x.cpu)
                 } else {
                     test_t.push(x.cpu)
