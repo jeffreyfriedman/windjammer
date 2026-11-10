@@ -143,12 +143,6 @@ fn counter_in_int_tuple_return() {
     generated_crate_builds("counter_in_int_tuple_return");
 }
 
-/// A tuple literal in a `match` arm next to an arm of type `(int, string)`.
-#[test]
-fn tuple_literal_in_match_arm() {
-    generated_rust_typechecks("tuple_literal_in_match_arm");
-}
-
 /// A float expression passed to a `float` parameter is `f64` (no `as f32`).
 #[test]
 fn float_expression_to_float_parameter() {

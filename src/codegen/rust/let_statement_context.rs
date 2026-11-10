@@ -31,7 +31,11 @@ impl<'ast> CodeGenerator<'ast> {
         if let (Pattern::Identifier(n) | Pattern::MutBinding(n), true) = (pattern, Self::is_text_slice_option(value)) {
             self.idiom.text_option_locals.insert(n.clone());
         }
+        // `let rows: Vec<(string, int)> = [("a", 1)]`: the annotation gives each tuple its slot types
+        let slots = type_.as_ref().filter(|_| matches!(value, Expression::Array { .. })).and_then(Self::list_element_tuple_slots);
+        let outer_slots = std::mem::replace(&mut self.idiom.list_elem_tuple_slots, slots);
         let out = self.generate_let_statement(pattern, mutable, type_, value, location);
+        self.idiom.list_elem_tuple_slots = outer_slots;
         self.idiom.next_closure_borrows_captures = false;
         out
     }

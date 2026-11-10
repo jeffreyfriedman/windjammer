@@ -545,6 +545,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || self.match_expression_binds_refs(value)
                         || self.expression_type_contains_reference(value));
 
+                let sibling_tuple = self.sibling_arm_tuple_slots(value, arms);
                 for arm in arms.iter() {
                     // When the scrutinee has a & prefix (not when cloned to owned),
                     // enum bindings become references.
@@ -568,7 +569,6 @@ impl<'ast> CodeGenerator<'ast> {
                             self.match_arm_bindings.insert(var.clone());
                         }
                     }
-                    // Also try infer_match_bound_types for richer type info
                     let match_bound_type_entries = if use_copied_option {
                         self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
                     } else {
@@ -579,6 +579,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .insert(var_name.clone(), var_type.clone());
                     }
 
+                    self.offer_arm_tuple_slots(arm.body, &sibling_tuple);
                     let body_str = self.generate_expression(arm.body);
 
                     for (var_name, _) in &match_bound_type_entries {
@@ -601,7 +602,6 @@ impl<'ast> CodeGenerator<'ast> {
                     arm_strings.push((body_str, is_string_literal));
                 }
 
-                // Restore flag
                 self.in_match_arm_needing_string = old_in_match_arm;
 
                 // For direct string literals, we still need to apply .to_string()

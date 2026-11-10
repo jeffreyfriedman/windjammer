@@ -1141,8 +1141,8 @@ impl<'ast> CodeGenerator<'ast> {
             !match_scrutinee_ref_prefix.is_empty() || borrow_break_as_ref
         };
 
+        let sibling_tuple = self.sibling_arm_tuple_slots(value, arms);
         for arm in arms {
-            // Upgrade pattern bindings to `mut` when the arm body mutates them
             let body_stmts: &[&Statement<'ast>] =
                 if let Expression::Block { statements, .. } = arm.body {
                     statements.as_slice()
@@ -1275,7 +1275,6 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // Clone bound_vars before moving it, so we can clean up match_arm_bindings later
             let bound_vars_for_cleanup = bound_vars.clone();
 
             self.local_variable_scopes.push(bound_vars);
@@ -1334,6 +1333,7 @@ impl<'ast> CodeGenerator<'ast> {
             if has_void_arm {
                 self.in_void_block = true;
             }
+            self.offer_arm_tuple_slots(arm.body, &sibling_tuple);
             let mut arm_str = self.generate_expression(arm.body);
             self.in_void_block = old_void_block;
             self.cast_usize_arm_to_return_int(&mut arm_str, arm.body);
