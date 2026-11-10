@@ -1,5 +1,6 @@
 trait Meter {
     fn bump(self)
+//~@13+4 WARN W0016 trait method `Meter::bump` has no body and does not declare its receiver
 }
 
 pub struct Counter {

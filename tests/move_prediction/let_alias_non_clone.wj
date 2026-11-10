@@ -1,3 +1,4 @@
+// oracle: check
 // WJ0007: binding `inbox` to `other` moves it; `inbox` holds a channel end and cannot be copied.
 use std::sync::mpsc
 
@@ -10,5 +11,6 @@ fn main() {
     let pair = mpsc::channel()
     let inbox = Inbox { rx: pair.1, seen: 0 }
     let other = inbox
+//~@17+5 ERROR WJ0007 `inbox` is used after `let other = inbox` consumed it
     println("${other.seen} ${inbox.seen}")
 }
