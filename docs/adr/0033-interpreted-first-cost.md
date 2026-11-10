@@ -125,11 +125,15 @@ types certain.
     used as a value. Needs receiver types of collections; same walker.
   - C: a `String` parameter (of the file's own function or closure) given a `&str` literal or a `&str` binding, and
     `String + String`. Needs `String`/`&str` in the walker's type view.
-  - D (E0596): `let x = ...` without `mut` followed by `x.m()` where the file's inherent `m` takes `&mut self`. Exact
-    from the generated text; it covers the one red ecosystem app.
+  - D (E0596): `let x = ...` without `mut` followed by `x.m()` where `m` takes `&mut self`. Investigated after the
+    first slice: `wj build` infers the `mut` correctly both for a single file and for a multi-file program (a method
+    that mutates `self` declared in another module), so the Rust a build emits has nothing to predict. The ledger's
+    E0596 cases (the `wj-webhook` app) come from the test crate `wj test` generates for an app's `tests/`, where the
+    library's receiver modes are not visible to the auto-mut inference. That is a backend fix in the test-crate path,
+    not a prediction; it moves out of this list.
   - E (E0382): ADR-0030.
 
-### (d) Permissiveness policy: what an interpreted run does with a certain prediction
+### (d) Permissiveness policy: what an interpreted run does with a certain prediction (Decided, 2026-11-09)
 
 The interpreted-run gate (`cli::check::require_clean`) refuses every error `wj check` reports, including ADR-0030's
 WJ0007 (a language rule: the program is wrong). The families of (c) are different: the program is right and the
@@ -141,8 +145,12 @@ backend is wrong. Two policies were tried on this slice:
 - **Warn** (the prediction is printed as a warning before the program's output, the program runs). The agent sees
   the same text, at the same moment, with the workaround; a script that is never built keeps working.
 
-Policy adopted for the slice: certain predictions of backend defects are **errors in `wj check`** (exit status 1,
-so a check-then-run loop stops) and **warnings before an interpreted run**. Uncertain shapes are never reported;
+**Decided by the owner (2026-11-09): warn mode.** Certain predictions of backend defects are **errors in `wj check`**
+(exit status 1, so a check-then-run loop stops) and **warnings in `wj run --interpret`, which then runs the program**.
+The warning says plainly what happened: the program is correct and ran fine in the interpreter; rustc is stricter
+than the interpreter and would not accept the Rust the compiler generates, so `wj build` would fail. It is a build
+error, not a crash. The warning goes to stderr only; stdout and the exit status are the program's
+(`tests/width_prediction_test.rs::the_interpreted_warning_never_changes_stdout_or_the_exit_status`). Uncertain shapes are never reported;
 (a) and (b) report the build's verdict instead. Language-rule predictions (WJ0007) keep refusing. A backend fix for a
 family turns its predictions off by construction: the generated text no longer mixes widths. Revisit after the next
 pilot: if agents run without reading warnings, switch interpreted runs to refuse unless the program is a declared
@@ -150,7 +158,7 @@ script (a `wj.toml` setting).
 
 ## Decision proposed
 
-1. **Adopt (c) with the policy of (d), family by family, in the order A, D, B, C.** Each family is one slice with a
+1. **Adopt (c) with the policy of (d), family by family, in the order A, B, C** (D is a backend fix, see above). Each family is one slice with a
    precision scan (rustc on the generated code is the oracle) and a pinned list; any false positive that one revision
    cannot remove drops the family. The prediction reads the Rust the build emits, never a parallel analysis.
 2. **Adopt the compiled-verdict cache now** (`src/cli/verdict.rs`) as the substrate of (a) and (b): every compiled build
@@ -236,6 +244,6 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
 
 ## Decision needed from: project owner
 
-1. The policy in (d): certain predictions of backend defects are `wj check` errors and interpreted-run warnings (or
-   should interpreted runs refuse them, with scripts exempted by a manifest setting?).
-2. The order of the next slices (family D, then `--verify`, then B and C, then the opt-in background build).
+1. Decided: the policy in (d), warn mode.
+2. The order of the next slices: `--verify`, then B and C, then the opt-in background build; D goes to the backend
+   (auto-mut in the `wj test` crate).

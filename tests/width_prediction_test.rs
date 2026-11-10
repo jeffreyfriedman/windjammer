@@ -143,7 +143,28 @@ fn check_errs_and_the_interpreted_run_warns_and_runs() {
     let err = String::from_utf8_lossy(&r.stderr);
     assert_eq!(r.status.code(), Some(0), "{err}");
     assert_eq!(String::from_utf8_lossy(&r.stdout), "6\n");
-    assert!(err.contains("warning[WJ0003]: the compiled build would reject this"), "{err}");
+    assert!(err.contains("warning[WJ0003]: this runs interpreted, but the compiled build would reject it"), "{err}");
+    assert!(err.contains("the interpreter runs it; rustc is stricter"), "{err}");
+}
+
+/// The warning goes to stderr only: stdout and the exit status are exactly those of the same program without the
+/// predicted clash (the documented workaround), including a non-zero exit.
+#[test]
+fn the_interpreted_warning_never_changes_stdout_or_the_exit_status() {
+    let tmp = tempfile::tempdir().unwrap();
+    let body = |five: &str| format!("use std::process\n\nfn main() {{\n    {five}\n    let add5 = |x: int| x + five\n    println(\"${{add5(1)}}\")\n    process::exit(3)\n}}\n");
+    let warned = tmp.path().join("warned.wj");
+    let clean = tmp.path().join("clean.wj");
+    std::fs::write(&warned, body("let five = 5")).unwrap();
+    std::fs::write(&clean, body("let five: int = 5")).unwrap();
+    let run = |f: &Path| std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(f).output().unwrap();
+    let (w, c) = (run(&warned), run(&clean));
+    assert!(String::from_utf8_lossy(&w.stderr).contains("warning[WJ0003]"), "the clash is predicted: {}", String::from_utf8_lossy(&w.stderr));
+    assert!(!String::from_utf8_lossy(&c.stderr).contains("WJ0003"), "the workaround is not: {}", String::from_utf8_lossy(&c.stderr));
+    assert_eq!(w.stdout, b"6\n");
+    assert_eq!(w.stdout, c.stdout, "stdout is the program's alone");
+    assert_eq!(w.status.code(), Some(3));
+    assert_eq!(w.status.code(), c.status.code(), "the exit status is the program's");
 }
 
 #[test]
