@@ -88,6 +88,12 @@ fn repo_wide_check_diagnostics_are_annotated_or_ratcheted() {
     ratchet::enforce("unannotated_check_diagnostics", &unannotated);
 }
 
+/// A file that declares `// oracle: check` is annotated for the `wj check` producer only (it reports codes the legacy producers
+/// never emit, such as WJ0007); the legacy-producer test leaves it to `repo_wide_check_diagnostics_are_annotated_or_ratcheted`.
+fn check_only(src: &str) -> bool {
+    src.lines().any(|l| l.trim() == "// oracle: check")
+}
+
 /// Legacy producers (parser warnings + rust-leakage linter) on every repo file.
 #[test]
 fn repo_wide_diagnostics_are_annotated_or_ratcheted() {
@@ -96,7 +102,7 @@ fn repo_wide_diagnostics_are_annotated_or_ratcheted() {
     for p in repo_wj_files() {
         let Ok(src) = std::fs::read_to_string(&p) else { continue };
         let name = rel(&p);
-        if name.starts_with("tests/diagnostics_oracle/check/") {
+        if name.starts_with("tests/diagnostics_oracle/check/") || check_only(&src) {
             continue;
         }
         let has_markers = src.lines().any(is_marker_line);
