@@ -180,7 +180,7 @@
 "src/codegen/rust/stdlib_method_traits.rs" = 2430
 "src/codegen/rust/string_utilities.rs" = 2038
 "src/compiler/multipass_bare_pass_demotion.rs" = 4051
-"src/stdlib_scanner.rs" = 2155
+"src/stdlib_scanner.rs" = 2153
 
 [long_functions]
 "src/analyzer/function_analysis.rs::analyze_function" = 649

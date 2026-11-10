@@ -1,0 +1,106 @@
+// Builds the browser playground's interpreter and holds it to the native one on the book's own samples (ADR-0034).
+//
+//   wj run scripts/book/playground_check.wj -- WJ_BIN WJ_DOCS_BIN SCRATCH_DIR [--skip-build] [--only SUBSTR]
+//
+// 1. `cargo build --release --target wasm32-unknown-unknown` in crates/windjammer-playground, copied to
+//    docs/book/playground/windjammer_playground.wasm (skipped with --skip-build; the file must then exist);
+// 2. docs/book/playground/ts-sandbox.html is what build-ts-sandbox.mjs generates from its sources;
+// 3. the book's samples (`WJ_DOCS_BIN book-extract`) run through scripts/book/book_samples.wj with --wasm (every
+//    Windjammer program: playground == native `wj run --interpret --sandbox --simulate`) and --ts-playground (every
+//    `ts,run` companion: playground == `node --experimental-strip-types`).
+// Run from the repository root. Exit status 1 when any step fails.
+use std::env
+use std::process
+use std::strings
+
+fn quote(s: string) -> string {
+    "'" + strings.replace(s, "'", "'\\''") + "'"
+}
+
+fn sh(command: string) -> int {
+    match process.run_with_output("sh", ["-c", command]) {
+        Ok(o) => {
+            print(o.stdout)
+            eprint(o.stderr)
+            o.status as int
+        },
+        Err(e) => {
+            eprintln("cannot run sh: ${e}")
+            127
+        },
+    }
+}
+
+// stdout of a command, trimmed ("" on failure)
+fn capture(command: string) -> string {
+    match process.run_with_output("sh", ["-c", command]) {
+        Ok(o) => strings.trim(o.stdout),
+        Err(_) => "",
+    }
+}
+
+fn main() {
+    let args: Vec<string> = env::args().collect()
+    if args.len() < 4 {
+        println("usage: playground_check.wj WJ_BIN WJ_DOCS_BIN SCRATCH_DIR [--skip-build] [--only SUBSTR]")
+        process.exit(2)
+    }
+    let wj = args[1]
+    let docs = args[2]
+    let scratch = args[3]
+    let mut build = true
+    let mut only = ""
+    let mut i = 4
+    while i < args.len() {
+        if args[i] == "--skip-build" {
+            build = false
+        } else if args[i] == "--only" && i + 1 < args.len() {
+            only = args[i + 1]
+            i += 1
+        }
+        i += 1
+    }
+    // absolute: the sample runner starts the hosts from its scratch directories
+    let site = capture("pwd") + "/docs/book/playground"
+    let wasm = site + "/windjammer_playground.wasm"
+    if build {
+        let target = env::var("CARGO_TARGET_DIR").unwrap_or("crates/windjammer-playground/target") // its own workspace
+        let built = target + "/wasm32-unknown-unknown/release/windjammer_playground.wasm"
+        let code = sh("cd crates/windjammer-playground && cargo build --release --target wasm32-unknown-unknown")
+        if code != 0 {
+            println("FAIL the wasm build exited ${code}")
+            process.exit(1)
+        }
+        if sh("cp " + quote(built) + " " + quote(wasm)) != 0 {
+            println("FAIL cannot copy ${built}")
+            process.exit(1)
+        }
+    }
+    if sh("test -f " + quote(wasm)) != 0 {
+        println("FAIL ${wasm} is missing (run without --skip-build)")
+        process.exit(1)
+    }
+    sh("ls -l " + quote(wasm))
+    if sh("node " + quote(site + "/build-ts-sandbox.mjs") + " --check") != 0 {
+        println("FAIL ts-sandbox.html is stale")
+        process.exit(1)
+    }
+    let samples = scratch + "/samples"
+    sh("rm -rf " + quote(scratch) + " && mkdir -p " + quote(scratch))
+    if sh(quote(docs) + " book-extract " + quote(samples)) != 0 {
+        println("FAIL book-extract")
+        process.exit(1)
+    }
+    let mut cmd = quote(wj) + " run --interpret scripts/book/book_samples.wj -- " + quote(samples) + " " + quote(wj) + " " + quote(scratch + "/runs")
+    cmd = cmd + " --wasm " + quote(site + "/run-node.mjs") + " --wasm-known scripts/book/playground_known_gaps.txt"
+    cmd = cmd + " --ts-playground " + quote(site + "/run-ts-node.mjs")
+    if only != "" {
+        cmd = cmd + " --only " + quote(only)
+    }
+    let code = sh(cmd)
+    if code != 0 {
+        println("FAIL playground samples (exit ${code})")
+        process.exit(1)
+    }
+    println("playground check: ok")
+}

@@ -36,6 +36,8 @@ pub(crate) mod std_net;
 mod std_http_server;
 mod std_config;
 mod std_ordered;
+// SQLite is C: not in the browser playground's wasm build (ADR-0034); `db::*` is an unknown function there
+#[cfg(not(target_arch = "wasm32"))]
 mod std_db;
 pub(crate) mod std_sys;
 pub(crate) mod sync;
@@ -179,6 +181,7 @@ impl Registry {
         std_net::register(&mut r);
         std_config::register(&mut r);
         std_ordered::register(&mut r);
+        #[cfg(not(target_arch = "wasm32"))]
         std_db::register(&mut r);
         channel::register(&mut r);
         sync::register(&mut r);

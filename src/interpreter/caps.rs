@@ -315,6 +315,9 @@ impl Interpreter {
         if self.limits.is_some() && uses.iter().any(|u| u.effect != EffectKind::Console) {
             self.limit_call()?;
         }
+        // Fd-verified file calls decide on the descriptor they open (`cap_open_read`, `Grant::open_write`). Under a
+        // simulating or replaying port nothing is opened, so they are decided by name here like every other sink.
+        let opens_live = self.port_kind().map_or(true, |k| k == super::effect_port::Kind::Record);
         for u in uses {
             let resource: Option<String> = match u.res {
                 // minting a capability value: `cap_mint` checks it (against the minting package's scope)
@@ -330,13 +333,13 @@ impl Interpreter {
                 Res::CmdArg(n) => Some(crate::ir::effect_facts::scope_match::parse_command(&arg_text(args.get(n))).0),
             };
             // the file reads that open the path themselves decide on the open file (`cap_open_read`), not on the name
-            if u.effect == EffectKind::FsRead && sinks::FD_VERIFIED_READS.contains(&sinks::canonical(path).as_str()) {
+            if opens_live && u.effect == EffectKind::FsRead && sinks::FD_VERIFIED_READS.contains(&sinks::canonical(path).as_str()) {
                 if let Some(g) = self.caps.as_mut() {
                     g.seen.insert(EffectKind::FsRead);
                 }
                 continue;
             }
-            if u.effect == EffectKind::FsWrite && sinks::FD_VERIFIED_WRITES.contains(&sinks::canonical(path).as_str()) {
+            if opens_live && u.effect == EffectKind::FsWrite && sinks::FD_VERIFIED_WRITES.contains(&sinks::canonical(path).as_str()) {
                 if let Some(g) = self.caps.as_mut() {
                     g.seen.insert(EffectKind::FsWrite);
                 }

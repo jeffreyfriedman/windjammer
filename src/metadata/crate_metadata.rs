@@ -99,6 +99,10 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
 /// Directory holding analysis metadata for manifest-less trees: `wj-meta` under the OS temp dir (honours
 /// `TMPDIR`). It is a cache: losing it costs a cold build, never correctness.
 pub fn global_meta_cache_dir() -> PathBuf {
+    // the browser playground (ADR-0034) has no temp dir (std panics there); its cache reads and writes just fail
+    if cfg!(target_arch = "wasm32") {
+        return PathBuf::from("/wj-meta");
+    }
     std::env::temp_dir().join("wj-meta")
 }
 
