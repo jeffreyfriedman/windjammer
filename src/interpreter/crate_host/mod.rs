@@ -100,11 +100,6 @@ impl CrateHost {
             let _ = self.process.borrow_mut().call(&req);
         }
     }
-
-    /// Calls sent to the host process so far (replayed calls are not sent).
-    pub fn calls_sent(&self) -> u64 {
-        self.process.borrow().calls
-    }
 }
 
 fn fail(kind: ErrorKind, msg: String) -> Ctl {

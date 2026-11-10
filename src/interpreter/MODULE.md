@@ -39,14 +39,14 @@ the interpreter must never print something the compiled program would not print.
 - Names are bound by `crate::resolve`: a `use` means the same thing interpreted and compiled. Every `Unsupported` registry feature has a preflight detector. Function-body `use`: an overlay module per statement (snapshot of the enclosing module, statics via `fallback`). `use std::m::*` fills `Module::std_globs` (bare names resolve to `m::name`, shadowing intrinsics). `Interpreter::dep_crates` are named from any module; `crate::` inside one is its root. A module re-exports its children's public items (`resolve::lookup_child_reexports`).
 
 ## Owns / never decides
-Owns evaluation semantics, value model, native stdlib registry, CLI port. Browser host: `crates/windjammer-playground` (ADR-0034) builds this module for wasm32-unknown-unknown: host-only crates (SQLite, ring, libloading) are `cfg(not(target_arch = "wasm32"))`, the `mem` limit reads linear memory there, and `set_capture_stderr`/`guard_stack_bytes` serve hosts without a process stderr or big-stack thread. Under `--simulate`/`--replay` the gate decides fd-verified file calls by name (nothing is opened). Never decides compiled-path behaviour (mirrors Rust).
+Owns evaluation semantics, value model, native stdlib registry, CLI port. Browser host: `crates/windjammer-playground` (ADR-0034) builds this module for wasm32-unknown-unknown: host-only crates (SQLite, ring, libloading) are `cfg(not(target_arch = "wasm32"))`, the `mem` limit reads linear memory there, and `set_capture_stderr`/`guard_stack_bytes` serve hosts without a process stderr or big-stack thread (`guard_stack_bytes` lives in `host_api.rs`, the entry points for embedding hosts). Under `--simulate`/`--replay` the gate decides fd-verified file calls by name (nothing is opened). Never decides compiled-path behaviour (mirrors Rust).
 
 ## Allowed imports
 `crate::parser`, `crate::lexer`, `crate::source_map::Location`, `crate::resolve` + `crate::module_system`, `crate::package`,
 `crate::type_display`, `crate::intrinsics` (names only; ratcheted), std, libloading. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*`, `Interpreter`.
 
 ## Entry points
-`runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
+`runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `Interpreter::{new, new_capturing, run, run_checked}`.
 
 ## Intrinsics
 Names come only from `crate::intrinsics::Intrinsic`; do not register them in `builtins/`. Panic text mirrors rustc; unmodelled

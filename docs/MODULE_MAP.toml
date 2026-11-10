@@ -560,6 +560,9 @@ known_violations = []
 [library_api]
 "src/codegen/rust/copy_semantics.rs" = "Rust auto-deref/auto-copy model (CopySemantics, DerefContext): specified by copy_semantics_test and rust_coercion_rules_test, not yet consulted by codegen"
 "src/type_registry.rs" = "type name -> defining module registry: specified by the type_registry_* tests, not yet consulted by import generation"
+"src/check/test_api.rs" = "entry points for the test suites and tools that no `wj` command calls: `compiler_identity_of` (verdict-cache tests key entries by the binary they run) and `predicted_moves` (the WJ0007 precision gates)"
+"src/compiler_database.rs" = "Salsa query pipeline (tokenize .. generate_rust, compile_file) specified by its in-file tests; only `CompilerDatabase::new` is called (salsa_library_build), the main pipeline does not consult the queries yet"
+"src/interpreter/host_api.rs" = "entry points for hosts outside src/ that embed the interpreter: `guard_stack_bytes` is called by crates/windjammer-playground (the wasm host)"
 "src/ffi/" = "experimental C header / IDL generation from module metadata (WJ-IMPL-02, ADR-0012); no `wj` command exposes it yet"
 "src/test_utils.rs" = "arena AST builders for integration tests"
 "src/parser/span_log.rs" = "span log of the parser: `expr_span`/`stmt_span` are the oracle the span-oracle gates (tests/common/span_oracle) compare the AST against; no `wj` command calls them"

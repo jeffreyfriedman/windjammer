@@ -102,11 +102,6 @@ fn new_repl_interpreter(scratch: Option<&super::caps::Scratch>) -> Interpreter {
     it
 }
 
-/// Interactive loop on stdin/stdout. Prompts are only printed when stdin is a terminal.
-pub fn run_repl_stdio() -> i32 {
-    run_repl_with(None)
-}
-
 /// The REPL with a crate host for the project's surfaced Rust crates (ADR-0031); it survives `:reset`.
 pub fn run_repl_with(crates: Option<super::crate_host::CrateHost>) -> i32 {
     use std::io::{BufRead, IsTerminal, Write};

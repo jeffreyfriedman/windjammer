@@ -10,6 +10,8 @@ pub mod files;
 mod file_cache;
 mod fix;
 mod front;
+mod test_api;
+pub use test_api::compiler_identity_of;
 pub mod moves;
 pub mod locate;
 mod project;
@@ -107,11 +109,6 @@ pub fn program_inputs(path: &Path) -> Result<Vec<(String, String)>> {
 /// check caches use.
 pub fn compiler_identity() -> String {
     cache::identity()
-}
-
-/// `compiler_identity` of another `wj` executable (tests key entries for the binary they run).
-pub fn compiler_identity_of(exe: &Path) -> String {
-    cache::identity_of(Some(exe))
 }
 
 /// ADR-0026: errors in calls into Rust crates that have a signature surface (and in the surfaces themselves),

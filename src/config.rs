@@ -140,11 +140,6 @@ impl WjConfig {
 }
 
 impl ReleaseProfile {
-    /// Render a `[profile.release]` block (overflow checks on).
-    pub fn to_cargo_toml_section(&self) -> String {
-        self.render(self.overflow_checks.unwrap_or(true))
-    }
-
     fn render(&self, overflow_checks: bool) -> String {
         let mut lines = vec![
             "[profile.release]".to_string(),
