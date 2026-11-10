@@ -196,6 +196,36 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// A call on `var_name` that is known to need `&mut self`, anywhere inside `expr` (arguments, operands,
+    /// receivers). Stricter than the statement-level check: an unknown method inside an argument is not
+    /// assumed to mutate.
+    fn nested_mutating_call_on_var(&self, expr: &Expression, var_name: &str) -> bool {
+        match expr {
+            Expression::MethodCall { object, arguments, .. } => {
+                if matches!(&**object, Expression::Identifier { name, .. } if name == var_name) {
+                    // the same signature-registry decision the statement-level check makes, for types the
+                    // program declares (the standard collections' method names are ambiguous)
+                    let declared = self.infer_type_name(object).or_else(|| self.infer_local_var_type_from_body(var_name)).is_some_and(|t| {
+                        let base = t.split('<').next().unwrap_or(&t);
+                        self.user_declared_struct_names.contains(base.rsplit("::").next().unwrap_or(base))
+                    });
+                    if declared && self.expression_mutates_variable_field(expr, var_name) {
+                        return true;
+                    }
+                }
+                self.nested_mutating_call_on_var(object, var_name)
+                    || arguments.iter().any(|(_, a)| self.nested_mutating_call_on_var(a, var_name))
+            }
+            Expression::MacroInvocation { args, .. } => args.iter().any(|a| self.nested_mutating_call_on_var(a, var_name)),
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, a)| self.nested_mutating_call_on_var(a, var_name)),
+            Expression::Binary { left, right, .. } => {
+                self.nested_mutating_call_on_var(left, var_name) || self.nested_mutating_call_on_var(right, var_name)
+            }
+            Expression::Unary { operand, .. } => self.nested_mutating_call_on_var(operand, var_name),
+            _ => false,
+        }
+    }
+
     fn expression_nonreadonly_method_call_on_var(&self, expr: &Expression, var_name: &str) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
@@ -210,6 +240,13 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 false
+            }
+            // `println("${w.go()}")`, `f(w.go())`: the call sits inside the arguments of a macro or a call.
+            Expression::MacroInvocation { args, .. } => {
+                args.iter().any(|a| self.nested_mutating_call_on_var(a, var_name))
+            }
+            Expression::Call { arguments, .. } => {
+                arguments.iter().any(|(_, a)| self.nested_mutating_call_on_var(a, var_name))
             }
             Expression::Block { statements, .. } => statements
                 .iter()

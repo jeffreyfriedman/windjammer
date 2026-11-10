@@ -1999,7 +1999,7 @@ impl<'ast> CodeGenerator<'ast> {
                     Type::Reference(r) => Some(r.as_ref()),
                     _ => None,
                 };
-                if let Some(pointee) = pointee {
+                if let Some(pointee) = pointee.filter(|p| !crate::codegen::rust::types::is_windjammer_text_type(p)) { // `Option<&str>` has no `.copied()`
                     if self.is_type_copy(pointee) {
                         return true;
                     }

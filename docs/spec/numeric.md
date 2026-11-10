@@ -27,6 +27,8 @@ Output:
 
 **SPEC-NUM-002** Arithmetic (`+ - *`, unary `-`) on integers that overflows the result type panics with a message containing `overflow`; it never wraps silently. Exit status 101.
 
+This holds in every execution mode, release builds included: `wj build --release` writes `overflow-checks = true` into the generated `[profile.release]`. Hot code that wants wrapping arithmetic opts out with `[build] overflow_checks = false` in `wj.toml` or `wj build --unchecked-arithmetic`.
+
 <!-- example: tests/spec/numeric/SPEC-NUM-002.wj -->
 ```windjammer
 fn main() {

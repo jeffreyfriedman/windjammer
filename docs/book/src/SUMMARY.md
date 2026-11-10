@@ -3,6 +3,17 @@
 [Introduction](introduction.md)
 [Why Windjammer](why.md)
 
+# Why Windjammer, in practice
+
+- [Side by side](showcase/side-by-side.md)
+- [No annotations, the same Rust](showcase/ownership.md)
+- [A fast edit-run loop](showcase/fast-loop.md)
+- [Programs that ask for what they need](showcase/authority.md)
+- [Made for agents](showcase/agents.md)
+- [How the interpreter stays honest](showcase/trust.md)
+- [One source, many targets](showcase/one-source.md)
+- [Your Rust crates, as they are](showcase/rust-crates.md)
+
 # Getting started
 
 - [Install](getting-started/install.md)

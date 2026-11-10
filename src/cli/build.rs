@@ -44,6 +44,7 @@ fn stop_on_rust_crate_errors(path: &Path) -> Result<()> {
 pub struct BuildOptions {
     pub tree_shake: bool,
     pub source_maps: bool,
+    pub unchecked_arithmetic: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -73,6 +74,7 @@ pub fn execute(
     let config = crate::compiler_config::CompilerConfig::from_env()
         .with_shadow_validate_strict(ir_shadow_validate)
         .with_skip_cargo_toml_generation(no_generate_cargo_toml)
+        .with_unchecked_arithmetic(options.unchecked_arithmetic)
         .with_emit_source_maps(options.source_maps || check);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
     if !path.exists() {
@@ -209,6 +211,7 @@ pub fn execute(
             .stderr(std::process::Stdio::inherit())
             .output()
             .and_then(|out| {
+                crate::cli::verdict::record_cargo_json(path, out.status.success(), &String::from_utf8_lossy(&out.stdout), release);
                 if out.status.success() {
                     let exes = crate::cargo_cache::build_profile::executables_from_cargo_json(
                         &String::from_utf8_lossy(&out.stdout),
