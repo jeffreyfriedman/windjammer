@@ -20,6 +20,7 @@ pub mod auto_clone;
 pub mod auto_fix;
 pub mod cargo_toml;
 pub mod check;
+#[cfg(feature = "cli")]
 pub mod reduce; // `wj reduce`: automatic test-case reducer
 pub mod diagnostics;
 pub mod codegen;
@@ -74,9 +75,7 @@ pub mod type_registry;
 pub mod wjsl;
 
 // CLI-related modules (required for wj binary)
-#[cfg(feature = "cli")]
 pub mod build_utils;
-#[cfg(feature = "cli")]
 pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 #[cfg(feature = "cli")]

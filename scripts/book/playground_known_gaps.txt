@@ -1,0 +1,8 @@
+# Book samples the browser playground cannot run yet (ADR-0034). Shrink-only: scripts/book/book_samples.wj --wasm-known
+# fails when a listed sample starts agreeing with the native interpreter, so a fixed gap must delete its line.
+# Format: SAMPLE_ID  reason
+showcase_side-by-side_L200  threads: tasks are OS threads (src/interpreter/sched.rs); wasm32-unknown-unknown has none
+tutorial_async_L24  threads: tasks are OS threads (src/interpreter/sched.rs); wasm32-unknown-unknown has none
+tutorial_async_L60  threads: tasks are OS threads (src/interpreter/sched.rs); wasm32-unknown-unknown has none
+tutorial_concurrency_L18  threads: tasks are OS threads (src/interpreter/sched.rs); wasm32-unknown-unknown has none
+tutorial_concurrency_L40  threads: tasks are OS threads (src/interpreter/sched.rs); wasm32-unknown-unknown has none

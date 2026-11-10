@@ -38,4 +38,3 @@ tests/spec/trailing-blocks/SPEC-BLOCK-004.wj
 tests/spec/types/SPEC-TYP-009.wj
 tests/stdlib_all_tests.wj
 tests/type_registry_imports_test.wj
-tests/book_repros/interpolation_leading_literal.wj

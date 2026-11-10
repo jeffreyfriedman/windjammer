@@ -1,0 +1,13 @@
+pub struct Counter {
+    n: int,
+}
+
+impl Counter {
+    pub fn new() -> Counter {
+        Counter { n: 0 }
+    }
+    pub fn bump(self, k: int) -> int {
+        self.n = self.n + k
+        self.n
+    }
+}

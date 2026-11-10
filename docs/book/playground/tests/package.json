@@ -1,0 +1,12 @@
+{
+  "name": "windjammer-playground-browser-tests",
+  "private": true,
+  "description": "Browser tests of the book playground (ADR-0034): sandbox escapes, limits, both languages, in headless Chrome.",
+  "type": "module",
+  "scripts": {
+    "test": "node browser.test.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

@@ -47,8 +47,9 @@ fn report(out: &std::process::Output, what: &str) -> String {
     let log = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("book-{what}.log"));
     let _ = std::fs::write(&log, &text);
     eprintln!("{text}");
+    let hint = if text.contains("not what the compiler generates") { "\nThe compiler's output changed. Refresh every `rust,generated` fence with `wj-docs book-regen` (cargo run --release --bin wj-docs -- book-regen --wj <path to wj>) and review the diff." } else { "" };
     if text.contains("book samples:") {
-        format!("{text}\n(full output: {})", log.display())
+        format!("{text}{hint}\n(full output: {})", log.display())
     } else {
         format!("THE RUNNER DID NOT FINISH (status {:?}, signal {:?}); output so far, full copy in {}:\n{text}", out.status.code(), out.status.signal(), log.display())
     }
@@ -496,4 +497,82 @@ fn a_companion_fence_needs_a_program_before_it() {
     let s = Scratch::new();
     s.page("```go,run\npackage main\n\nfunc main() {}\n```\n");
     assert!(s.fails("must follow the Windjammer program"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn book_regen_rewrites_a_stale_generated_fence_and_refuses_a_broken_program() {
+    let s = Scratch::new();
+    let stale = format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"stale\");\n}}\n```\n");
+    s.page(&stale);
+    let (ok, _) = run_samples(&s.ctx(), false);
+    assert!(!ok, "a stale excerpt fails before regeneration");
+    let wj = std::path::Path::new(env!("CARGO_BIN_EXE_wj"));
+    let report = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap();
+    assert!(report.contains("-    println!(\"stale\");") && report.contains("+    println!(\"hi\");"), "{report}");
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(ok, "after regeneration the page passes: {out}");
+    assert_eq!(docs_truth::book_regen::regen(&s.ctx(), wj).unwrap(), "every rust,generated fence and Run link already matches\n");
+    // a program that does not build: nothing is rewritten and the error says so
+    let broken = "```wj\nfn main( {\n```\n\n```rust,generated\nfn main() {}\n```\n";
+    s.page(broken);
+    let before = std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap();
+    let err = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap_err();
+    assert!(err.contains("does not build, nothing was rewritten"), "{err}");
+    assert_eq!(std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap(), before);
+}
+
+#[test]
+fn known_gap_lone_script_build_of_main_drops_its_sibling_module() {
+    let src = real().root.join("tests/book_repros/lone_script_mod");
+    let tmp = tempfile::tempdir().unwrap();
+    for f in ["main.wj", "counter.wj"] {
+        std::fs::copy(src.join(f), tmp.path().join(f)).unwrap();
+    }
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(tmp.path().join("main.wj")).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&interp.stdout), "2\n", "the interpreter runs the repro");
+    let out = tmp.path().join("out");
+    let b = std::process::Command::new(wj).args(["build", "--no-cargo", "-o"]).arg(&out).arg(tmp.path().join("main.wj")).output().unwrap();
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+    let main = std::fs::read_to_string(out.join("main.rs")).unwrap_or_default();
+    let gap = main.contains("mod counter;") && !out.join("counter.rs").exists() && main.contains("bump(2_i32)");
+    assert!(gap, "the lone-script build is fixed: delete tests/book_repros/lone_script_mod/, this test and its docs/known-gaps.md row\n{main}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Run links (the playground)
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn run_links_must_carry_the_program_above_them() {
+    let s = Scratch::new();
+    s.write("docs/book/playground/index.html", "<html></html>");
+    s.page(&format!("```wj\n{HI}```\n\n[Run this in the playground](playground/index.html#)\n"));
+    assert!(s.fails("Run link does not carry the program"), "{}", show(&s.findings()));
+    // regeneration fills it in, and then the gate passes and the link decodes to the program
+    docs_truth::book_playground::regen(&s.ctx()).unwrap();
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+    let page = std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap();
+    let code = page.split("code=").nth(1).unwrap().split(')').next().unwrap();
+    assert_eq!(docs_truth::book_playground::decode(code).unwrap(), HI);
+    // editing the program makes the link stale again
+    s.page(&format!("```wj\n{}```\n\n{}\n", HI.replace("hi", "bye"), page.lines().find(|l| l.starts_with("[Run")).unwrap()));
+    assert!(s.fails("Run link does not carry the program"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn a_run_link_without_a_program_is_rejected() {
+    let s = Scratch::new();
+    s.page("Some prose.\n\n[Run this in the playground](playground/index.html#lang=wj&code=AAAA)\n");
+    assert!(s.fails("Run link must follow the Windjammer program"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn book_pages_may_link_to_the_playground_page() {
+    let s = Scratch::new();
+    s.write("docs/book/playground/index.html", "<html></html>");
+    s.page(&format!("{GOOD}\n[the playground](playground/index.html)\n"));
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+    std::fs::remove_file(s.dir.path().join("docs/book/playground/index.html")).unwrap();
+    assert!(s.fails("playground file"), "{}", show(&s.findings()));
 }

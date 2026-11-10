@@ -105,6 +105,9 @@ diagnostic code or the standard library updates the book in the same pull reques
   language change that breaks a sample fails the compiler's own test run;
 * the reference pages (command line, diagnostic codes, keywords, standard library, grammar, targets) are generated:
   run `scripts/docs_gen.sh` and commit the result, and `docs_truth` fails until you do;
+* the Rust shown next to a program in a `rust,generated` fence is compared with the compiler's real output, so a codegen
+  improvement changes it: run `wj-docs book-regen` (it also refreshes the "Run this in the playground" links; it rebuilds every such fence with `wj build --no-cargo`, prints the diff
+  and refuses to touch anything when a program does not build), review the diff and commit it;
 * every entry of `docs/promises.toml` (each command, flag, code and feature) must be mentioned on a page of the book.
 
 See [docs/CONTRIBUTING-docs.md](docs/CONTRIBUTING-docs.md) section 7 for the details.

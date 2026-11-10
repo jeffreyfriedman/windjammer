@@ -1,0 +1,97 @@
+//! `wj run --verify` (ADR-0033 option b): interpret, build compiled, and run the compiled program a second time
+//! only when its effects reach nothing beyond the console and stdin (which is captured once and given to both runs).
+//! Everything `--verify` says is on stderr; stdout carries the program's output exactly once.
+
+use std::io::Write;
+use std::path::Path;
+use std::process::{Command, Stdio};
+
+const WJ: &str = env!("CARGO_BIN_EXE_wj");
+
+fn verify(file: &Path, stdin: &str) -> (String, String, Option<i32>) {
+    let mut child = Command::new(WJ)
+        .args(["run", "--verify"])
+        .arg(file)
+        .current_dir(file.parent().unwrap())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+    let o = child.wait_with_output().unwrap();
+    (String::from_utf8_lossy(&o.stdout).into(), String::from_utf8_lossy(&o.stderr).into(), o.status.code())
+}
+
+fn program(dir: &Path, name: &str, text: &str) -> std::path::PathBuf {
+    let f = dir.join(name);
+    std::fs::write(&f, text).unwrap();
+    f
+}
+
+#[test]
+fn a_console_program_with_stdin_is_compared_and_printed_once() {
+    let d = tempfile::tempdir().unwrap();
+    let f = program(
+        d.path(),
+        "echo.wj",
+        "use std::fs\nuse std::process\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        println(\"got ${line}\")\n    }\n    process::exit(3)\n}\n",
+    );
+    let (out, err, code) = verify(&f, "a\nb\n");
+    assert_eq!(out, "got a\ngot b\n", "stdout once, from the interpreted run: {err}");
+    assert_eq!(code, Some(3), "the program's exit status: {err}");
+    assert!(err.contains("wj verify: compiled build OK; the compiled run matches"), "{err}");
+}
+
+#[test]
+fn a_program_with_other_effects_is_built_but_not_run_again() {
+    let d = tempfile::tempdir().unwrap();
+    let f = program(d.path(), "w.wj", "use std::fs\n\nfn main() {\n    let _ = fs::write(\"out.txt\", \"one\")\n    println(\"wrote\")\n}\n");
+    let (out, err, code) = verify(&f, "");
+    assert_eq!(out, "wrote\n", "{err}");
+    assert_eq!(code, Some(0), "{err}");
+    assert!(err.contains("compiled build OK; not run a second time (fs.write)"), "{err}");
+    assert_eq!(std::fs::read_to_string(d.path().join("out.txt")).unwrap(), "one");
+}
+
+#[test]
+fn a_build_the_interpreter_runs_but_rustc_rejects_fails_verification() {
+    let d = tempfile::tempdir().unwrap();
+    // drift family A: the backend types `five` as i32 beside the i64 parameter (ledgered, docs/drift/findings.md)
+    let f = program(d.path(), "five.wj", "fn main() {\n    let five = 5\n    let add5 = |x: int| x + five\n    println(\"${add5(1)}\")\n}\n");
+    let (out, err, code) = verify(&f, "");
+    assert_eq!(out, "6\n", "{err}");
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("the interpreter ran the program, but the compiled build failed"), "{err}");
+}
+
+#[test]
+fn a_program_check_refuses_is_not_built() {
+    let d = tempfile::tempdir().unwrap();
+    let f = program(d.path(), "bad.wj", "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n");
+    let (out, err, code) = verify(&f, "");
+    assert_eq!(out, "");
+    assert_eq!(code, Some(1));
+    assert!(err.contains("not running"), "{err}");
+    assert!(!err.contains("wj verify:"), "nothing to verify after a refusal: {err}");
+}
+
+#[test]
+fn differences_are_located_by_line() {
+    assert_eq!(windjammer::cli::verify::first_difference("a\nb\n", "a\nb\n"), None);
+    let (line, i, c) = windjammer::cli::verify::first_difference("a\nb\n", "a\nc\n").unwrap();
+    assert_eq!((line, i.as_str(), c.as_str()), (2, "b", "c"));
+    let (line, _, c) = windjammer::cli::verify::first_difference("a\n", "a\nextra\n").unwrap();
+    assert_eq!((line, c.as_str()), (2, "extra"));
+}
+
+#[test]
+fn rerun_is_allowed_only_for_console_and_stdin() {
+    let d = tempfile::tempdir().unwrap();
+    let ok = program(d.path(), "ok.wj", "use std::fs\n\nfn main() {\n    let t = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    println(\"${t.len()}\")\n}\n");
+    assert_eq!(windjammer::cli::verify::rerun_blockers(&ok), Ok(()));
+    let other = program(d.path(), "other.wj", "use std::fs\n\nfn main() {\n    let t = fs::read_to_string(\"data.txt\").unwrap_or(\"\")\n    println(\"${t.len()}\")\n}\n");
+    assert_eq!(windjammer::cli::verify::rerun_blockers(&other), Err(vec!["fs.read".to_string()]));
+    let env = program(d.path(), "env.wj", "use std::env\n\nfn main() {\n    println(\"${env::var(\"HOME\").unwrap_or(\"\")}\")\n}\n");
+    assert!(windjammer::cli::verify::rerun_blockers(&env).is_err());
+}

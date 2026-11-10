@@ -9,11 +9,11 @@ fn main() {
 
 #[inline]
 fn find(xs: &Vec<i64>, needle: i64) -> i64 {
-    let mut i = 0_usize;
-    let n = xs.len();
+    let mut i = 0_i64;
+    let n = (xs.len() as i64);
     while i < n {
-        if at(xs, i) == needle {
-            return i as i64;
+        if at(xs, (i as usize)) == needle {
+            return i;
         }
         i += 1;
     }

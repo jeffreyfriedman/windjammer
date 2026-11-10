@@ -39,7 +39,7 @@ the interpreter must never print something the compiled program would not print.
 - Names are bound by `crate::resolve`: a `use` means the same thing interpreted and compiled. Every `Unsupported` registry feature has a preflight detector. Function-body `use`: an overlay module per statement (snapshot of the enclosing module, statics via `fallback`). `use std::m::*` fills `Module::std_globs` (bare names resolve to `m::name`, shadowing intrinsics). `Interpreter::dep_crates` are named from any module; `crate::` inside one is its root. A module re-exports its children's public items (`resolve::lookup_child_reexports`).
 
 ## Owns / never decides
-Owns evaluation semantics, value model, native stdlib registry, CLI port. Never decides compiled-path behaviour (mirrors Rust).
+Owns evaluation semantics, value model, native stdlib registry, CLI port. Browser host: `crates/windjammer-playground` (ADR-0034) builds this module for wasm32-unknown-unknown: host-only crates (SQLite, ring, libloading) are `cfg(not(target_arch = "wasm32"))`, the `mem` limit reads linear memory there, and `set_capture_stderr`/`guard_stack_bytes` serve hosts without a process stderr or big-stack thread. Under `--simulate`/`--replay` the gate decides fd-verified file calls by name (nothing is opened). Never decides compiled-path behaviour (mirrors Rust).
 
 ## Allowed imports
 `crate::parser`, `crate::lexer`, `crate::source_map::Location`, `crate::resolve` + `crate::module_system`, `crate::package`,
