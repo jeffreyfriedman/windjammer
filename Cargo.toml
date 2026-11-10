@@ -510,6 +510,12 @@ path = "tests/move_prediction_test.rs"
 name = "reassign_list_codegen"
 path = "tests/reassign_and_list_codegen_test.rs"
 
+# `wj explain-ownership` reports source columns inside interpolations
+#   cargo test --release --test explain_ownership_columns
+[[test]]
+name = "explain_ownership_columns"
+path = "tests/explain_ownership_columns_test.rs"
+
 # std::http::request builder: interpreted and compiled, against a local silent server
 #   cargo test --release --test http_request_builder
 [[test]]
