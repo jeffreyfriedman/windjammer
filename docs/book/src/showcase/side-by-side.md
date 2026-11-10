@@ -40,7 +40,7 @@ fn main() {
     let words: Vec<String> = text.split(" ").map(|w| w.to_string()).collect::<Vec<_>>();
     let mut counts: HashMap<String, i64> = HashMap::new();
     for w in words {
-        counts.entry(w).and_modify(|c| {
+        counts.entry(w.to_string()).and_modify(|c| {
             *c += 1;
         }).or_insert(1);
     }

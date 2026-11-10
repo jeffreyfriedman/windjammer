@@ -87,6 +87,10 @@ The Windjammer Book is an mdBook (`docs/book/book.toml`, pages under `docs/book/
 * Counts in prose come from `<!-- wj:gen name=metric key=book.examples -->` (keys `book.pages`, `book.drafts`, `book.examples`,
   `book.examples_ignored`, `book.promises_uncovered`) or the `book_stats` region, never from typing.
 * Links to repository files use `https://github.com/jeffreyfriedman/windjammer/blob/main/<path>` and are checked against the tree.
+* A ```` ```rust,generated ```` (or ```` ```go,run ````, ```` ```ts,run ````) fence right after a program is a companion: the runner compares the
+  Rust with `wj build --no-cargo` output (whitespace-insensitive, contiguous) and runs the Go and TypeScript and compares their output.
+  When codegen changes, `wj-docs book-regen [--wj PATH]` rewrites every `rust,generated` fence from real output and prints the diff;
+  it builds everything first and refuses to write anything if a program does not build.
 * `wj-docs book-extract DIR` writes the samples; `wj run --interpret scripts/book/book_samples.wj -- DIR $(which wj) SCRATCH [--compiled]` runs them.
 * CI builds and deploys the site (`.github/workflows/book.yml`); locally, `mdbook build docs/book` writes `target/book`.
 
