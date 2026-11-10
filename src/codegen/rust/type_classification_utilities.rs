@@ -113,10 +113,14 @@ pub fn maybe_cast_int_arg_to_float(
     param_type: &Type,
     arg_type: Option<&Type>,
 ) -> bool {
-    let param_is_f32 =
-        matches!(param_type, Type::Float) || matches!(param_type, Type::Custom(n) if n == "f32");
-    let param_is_f64 = matches!(param_type, Type::Custom(n) if n == "f64");
+    // Windjammer `float` is f64.
+    let param_is_f32 = matches!(param_type, Type::Custom(n) if n == "f32");
+    let param_is_f64 = matches!(param_type, Type::Float) || matches!(param_type, Type::Custom(n) if n == "f64");
     if !param_is_f32 && !param_is_f64 {
+        return false;
+    }
+    // A float argument is not an integer to convert (`is_huge(2.0 * 10.0)` is already a float).
+    if contains_float_literal(arg_expr) || arg_type.is_some_and(|t| crate::codegen::rust::type_classification_utilities::is_float_type(t)) {
         return false;
     }
 
@@ -203,5 +207,15 @@ mod string_vec_tests {
         assert!(!type_is_string_element_vec(&Type::Custom("Vec<Vec<string>>".into())));
         assert!(!type_is_string_element_vec(&Type::Custom("Vec<Labelstring>".into())));
         assert!(!type_is_string_element_vec(&Type::Custom("Vec<(int, string)>".into())));
+    }
+}
+
+/// An arithmetic expression over a float literal (`2.0 * x`, `-1.5`): its value is a float.
+fn contains_float_literal(e: &Expression) -> bool {
+    match e {
+        Expression::Literal { value: Literal::Float(_), .. } => true,
+        Expression::Unary { operand, .. } => contains_float_literal(operand),
+        Expression::Binary { left, right, .. } => contains_float_literal(left) || contains_float_literal(right),
+        _ => false,
     }
 }
