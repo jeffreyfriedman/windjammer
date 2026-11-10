@@ -178,6 +178,29 @@ fn the_gate_still_applies_in_the_simulation() {
     assert_eq!(o.code, 126, "{o:?}");
 }
 
+/// The file calls that the live interpreter checks on the descriptor it opens (fd-verified) open nothing in the
+/// simulation, so the gate must decide them by name there; otherwise `--simulate` reads past the grant (found by the
+/// browser playground, ADR-0034).
+#[test]
+fn the_gate_decides_fd_verified_reads_and_writes_in_the_simulation() {
+    for (what, body) in [
+        ("read", "match fs::read_to_string(\"/etc/hosts\") {\n        Ok(t) => println(\"read ${t.len()}\"),\n        Err(e) => println(\"err ${e}\"),\n    }"),
+        ("write", "match fs::write(\"/etc/wj-sim-probe\", \"x\") {\n        Ok(_) => println(\"wrote\"),\n        Err(e) => println(\"err ${e}\"),\n    }"),
+    ] {
+        let d = program_dir(&format!("use std::fs\n\nfn main() {{\n    {body}\n}}\n"));
+        let o = run_sim(d.path(), 1, 0.0, &[]);
+        assert_eq!(o.code, 126, "{what} outside the grant must be denied: {o:?}");
+        assert!(o.stderr.contains("capability denied"), "{what}: {o:?}");
+        let sandboxed = wj(d.path(), &["run", "--interpret", "--no-lint", "--sandbox", "--simulate", "main.wj"]);
+        assert_eq!(sandboxed.code, 126, "{what} under --sandbox --simulate: {sandboxed:?}");
+    }
+    // inside the project the grant allows it, and the simulated file system answers
+    let d = program_dir("use std::fs\n\nfn main() {\n    fs::write(\"note.txt\", \"hi\").unwrap()\n    println(fs::read_to_string(\"note.txt\").unwrap())\n}\n");
+    let o = run_sim(d.path(), 1, 0.0, &[]);
+    assert_eq!((o.code, o.stdout.as_str()), (0, "hi\n"), "{o:?}");
+    assert!(!d.path().join("note.txt").exists(), "the simulation must not touch the host");
+}
+
 fn faults_of(src: &str) -> String {
     src.lines().take_while(|l| l.starts_with("//")).find_map(|l| l.trim_start_matches("//").trim().strip_prefix("faults:").map(|v| v.trim().to_string())).unwrap_or_else(|| "0".into())
 }

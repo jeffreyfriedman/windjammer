@@ -28,6 +28,7 @@ pub const LOCAL_PROFILE_MODE: CapMode = CapMode::Enforce;
 /// What a gated write found: the checked handle, the finished operation, its error, or "do it by name" (no gate applies).
 pub enum WriteOpen {
     File(std::fs::File),
+    Copied(u64),
     Done,
     Failed(std::io::Error),
     ByName,
@@ -315,6 +316,9 @@ impl Interpreter {
         if self.limits.is_some() && uses.iter().any(|u| u.effect != EffectKind::Console) {
             self.limit_call()?;
         }
+        // Fd-verified file calls decide on the descriptor they open (`cap_open_read`, `Grant::open_write`). Under a
+        // simulating or replaying port nothing is opened, so they are decided by name here like every other sink.
+        let opens_live = self.port_kind().map_or(true, |k| k == super::effect_port::Kind::Record);
         for u in uses {
             let resource: Option<String> = match u.res {
                 // minting a capability value: `cap_mint` checks it (against the minting package's scope)
@@ -330,13 +334,13 @@ impl Interpreter {
                 Res::CmdArg(n) => Some(crate::ir::effect_facts::scope_match::parse_command(&arg_text(args.get(n))).0),
             };
             // the file reads that open the path themselves decide on the open file (`cap_open_read`), not on the name
-            if u.effect == EffectKind::FsRead && sinks::FD_VERIFIED_READS.contains(&sinks::canonical(path).as_str()) {
+            if opens_live && u.effect == EffectKind::FsRead && sinks::FD_VERIFIED_READS.contains(&sinks::canonical(path).as_str()) {
                 if let Some(g) = self.caps.as_mut() {
                     g.seen.insert(EffectKind::FsRead);
                 }
                 continue;
             }
-            if u.effect == EffectKind::FsWrite && sinks::FD_VERIFIED_WRITES.contains(&sinks::canonical(path).as_str()) {
+            if opens_live && u.effect == EffectKind::FsWrite && sinks::FD_VERIFIED_WRITES.contains(&sinks::canonical(path).as_str()) {
                 if let Some(g) = self.caps.as_mut() {
                     g.seen.insert(EffectKind::FsWrite);
                 }
@@ -415,6 +419,21 @@ impl Interpreter {
     /// `mkdir`, `unlink`, `rmdir` of one name under the gate (see `Grant::entry_op`); `Done` carries the operation's own result.
     pub(crate) fn cap_entry_op(&mut self, path: &str, op: crate::ir::effect_facts::grant::EntryOp) -> R<WriteOpen> {
         self.cap_checked_write(|g| g.entry_op(path, op).map(|o| o.map(|()| WriteOpen::Done)))
+    }
+
+    /// `rename` decided on both parent directories (see `Grant::rename_op`).
+    pub(crate) fn cap_rename(&mut self, from: &str, to: &str) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.rename_op(from, to).map(|o| o.map(|()| WriteOpen::Done)))
+    }
+
+    /// `copy` between two checked handles (see `Grant::copy_op`).
+    pub(crate) fn cap_copy(&mut self, from: &str, to: &str) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.copy_op(from, to).map(|o| o.map(WriteOpen::Copied)))
+    }
+
+    /// `create_dir_all` / `remove_dir_all` decided descriptor by descriptor (see `Grant::dir_all_op`).
+    pub(crate) fn cap_dir_all(&mut self, path: &str, op: crate::ir::effect_facts::grant::DirAllOp) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.dir_all_op(path, op).map(|o| o.map(|()| WriteOpen::Done)))
     }
 
     fn cap_checked_write(&mut self, run: impl FnOnce(&Grant) -> Result<Option<WriteOpen>, crate::ir::effect_facts::grant::OpenError>) -> R<WriteOpen> {

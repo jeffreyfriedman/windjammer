@@ -585,24 +585,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         let prev_owned_context = gen.in_owned_value_context;
         let generated_args: Vec<String> = arguments
             .iter()
-            .map(|(_label, arg)| {
-                let is_explicit_ref = matches!(
-                    arg,
-                    Expression::Unary {
-                        op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
-                        ..
-                    }
-                );
-                if !is_explicit_ref {
-                    gen.in_owned_value_context = true;
-                }
-                let prev_in_call_arg = gen.in_call_argument_generation;
-                gen.in_call_argument_generation = true;
-                let result = gen.generate_value_operand(arg);
-                gen.in_call_argument_generation = prev_in_call_arg;
-                gen.in_owned_value_context = prev_owned_context;
-                result
-            })
+            .enumerate()
+            .map(|(i, (_label, arg))| gen.generate_payload_constructor_argument(func_name, i, arg, prev_owned_context))
             .collect();
 
         let has_format_arg = generated_args

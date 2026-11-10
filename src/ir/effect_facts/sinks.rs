@@ -183,7 +183,7 @@ pub static NOT_SINKS: &[&str] = &[
     "path::as_os_str", "path::components", "path::current_dir", "path::extension", "path::file_name_path", "path::file_stem",
     "path::from_str", "path::has_extension", "path::is_absolute", "path::is_relative", "path::join_path", "path::new",
     "path::parent", "path::strip_prefix", "path::to_string", "path::to_string_lossy",
-    "fs::current_dir", "env::args", "env::current_dir", "env::temp_dir", "path::join", "path::file_name", "path::glob_match",
+    "fs::current_dir", "env::args", "env::current_dir", "env::current_exe", "env::temp_dir", "path::join", "path::file_name", "path::glob_match",
     "process::exit", "process::pid", "random::seeded",
     // refusals: they stop the run before any effect (`builtins/std_legacy.rs`)
     "random::random", "net::get", "net::get_async", "net::post", "net::post_async", "net::download", "net::upload",
@@ -204,10 +204,10 @@ pub static DYNAMIC_SINKS: &[&str] = &["mcp::call"];
 /// The effect `mcp::call` performs for these (possibly non-literal) arguments: `mcp.<server>.<tool>`, or `mcp.*` when either is computed.
 /// File reads that open the path themselves and decide on the open file (`Grant::open_read`), not on the name: no check by name
 /// runs before them. Each one must call `cap_open_read` (and the compiled runtime's `caps::open_read`) for its file.
-pub const FD_VERIFIED_READS: &[&str] = &["fs::read_to_string", "fs::read", "fs::read_bytes"];
+pub const FD_VERIFIED_READS: &[&str] = &["fs::read_to_string", "fs::read", "fs::read_bytes", "fs::copy"];
 
 /// File writes that decide on the parent directory's descriptor (`Grant::open_write`, `Grant::entry_op`): no check by name runs before them.
-pub const FD_VERIFIED_WRITES: &[&str] = &["fs::write", "fs::append", "fs::write_string", "fs::write_bytes", "fs::create_dir", "fs::remove_file", "fs::remove_dir"];
+pub const FD_VERIFIED_WRITES: &[&str] = &["fs::write", "fs::append", "fs::write_string", "fs::write_bytes", "fs::create_dir", "fs::remove_file", "fs::remove_dir", "fs::create_dir_all", "fs::remove_dir_all", "fs::rename", "fs::copy"];
 
 pub fn mcp_effect_name(server: Option<&str>, tool: Option<&str>) -> String {
     match (server, tool) {

@@ -24,6 +24,10 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 - `path_deps::build_missing` (called by `wj build` and `wj test`): a Windjammer package linked as `path = "../pkg/build"` is built (`wj build src --no-cargo` in the package, depth first) before its dependent when `pkg/build/Cargo.toml` is missing or older than the sources; an in-progress marker makes dependency cycles terminate. Gate: `ecosystem_findings2::path_dependencies_build_before_their_dependents`.
 
+- `widths_gate.rs` (ADR-0033): WJ0003 width predictions; the in-process generated Rust of each file is a trigger, and only clashes in the Rust `wj build --no-cargo --no-lint` emits are reported (`wj check`: errors; `wj run --interpret`: warnings before the run). Gate: tests/width_prediction_test.rs.
+- `verify.rs` (ADR-0033): `wj run --verify`: interpreted run (child, stdout captured once), the build `wj run --compiled` does (`run::build_native`, via `run_dev::build_input`), and a second, compiled run only when `main`'s effects are console and `/dev/stdin` and stdin was captured; reports on stderr. Gate: tests/run_verify_test.rs.
+- `verdict.rs` (ADR-0033): compiled-build verdicts keyed on SHA-256 of the compiler identity and every program input (`check::program_inputs`), one JSON file each under `<cache root>/verdicts/` (newest 512 kept). `wj build` and `wj run --compiled` record success or rustc errors (a failure without a rustc error records nothing); `wj run --interpret` prints a stderr note after the program when the compiled build of the same content failed. Gate: tests/verdict_cache_test.rs.
+
 ## Entry points
 Each `cli/<cmd>.rs::execute` (src/cli/mod.rs routes). `run_dev::execute`: `wj run` policy (interpret by default,
 compiled fallback on a preflight hit, `--compiled`/`--release`, ADR-0019); `watch::watch`: `--watch` restart loop;

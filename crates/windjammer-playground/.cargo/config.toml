@@ -1,0 +1,7 @@
+# Browser build (ADR-0034): `cargo build --release --target wasm32-unknown-unknown` from this directory.
+[target.wasm32-unknown-unknown]
+rustflags = [
+    '--cfg', 'getrandom_backend="custom"',
+    # interpreter recursion lives on the wasm shadow stack; the run's stack guard keeps 8 MiB of headroom
+    '-C', 'link-arg=-zstack-size=33554432',
+]

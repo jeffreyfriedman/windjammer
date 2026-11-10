@@ -76,3 +76,8 @@ scripts/**/__pycache__/
 /tests/tmp_p335/
 /tests/tmp_p335_manual/
 /tests/tmp_stdlib_dump_test.rs
+
+# Book playground (ADR-0034): the wasm interpreter is a build output (scripts/book/playground_check.wj); test deps
+docs/book/playground/*.wasm
+docs/book/playground/tests/node_modules/
+crates/windjammer-playground/target/

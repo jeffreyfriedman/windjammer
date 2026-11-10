@@ -23,6 +23,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiA1Ci8vIGV4cGVjdDogOApmbiBtYWluKCkgewogICAgbGV0IHdpZHRoID0gNQogICAgcHJpbnRsbigiJHt3aWR0aH0iKQogICAgbGV0IG11dCB0b3RhbCA9IHdpZHRoCiAgICB0b3RhbCArPSAzCiAgICBwcmludGxuKCIke3RvdGFsfSIpCn0K)
+
 The compiler infers the type of every binding, so annotations are optional. Write one when it helps the reader, or
 when a literal could mean several types:
 
@@ -36,6 +38,8 @@ fn main() {
     println("${name}, ${age}, ${ratio}, ${ready}")
 }
 ```
+
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBBZGEsIDM2LCAxLjUsIHRydWUKZm4gbWFpbigpIHsKICAgIGxldCBuYW1lOiBzdHJpbmcgPSAiQWRhIgogICAgbGV0IGFnZTogaW50ID0gMzYKICAgIGxldCByYXRpbzogZmxvYXQgPSAxLjUKICAgIGxldCByZWFkeTogYm9vbCA9IHRydWUKICAgIHByaW50bG4oIiR7bmFtZX0sICR7YWdlfSwgJHtyYXRpb30sICR7cmVhZHl9IikKfQo)
 
 Assigning to a binding that is not `mut` is reported as `WJ0004`, with an automatic fix: `wj explain WJ0004` shows it.
 Write `let mut` for anything you change; the diagnostic is a warning today and becomes an error as the explicit-`mut`

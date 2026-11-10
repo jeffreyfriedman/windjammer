@@ -275,6 +275,13 @@ fn links_check(ctx: &Ctx) -> Vec<Finding> {
                 } else {
                     let (target, anchor) = l.split_once('#').unwrap_or((&l, ""));
                     match normalize(dir, target) {
+                        // the built site serves docs/book/playground next to the pages (see .github/workflows/book.yml)
+                        Some(p) if p.starts_with("docs/book/src/playground/") => {
+                            let real = p.replacen("docs/book/src/playground/", "docs/book/playground/", 1);
+                            if !util::exists(&ctx.root, &real) {
+                                out.push(Finding::fail("book", file, ln, format!("playground file {real} does not exist")));
+                            }
+                        }
                         Some(p) if p.starts_with(SRC) && util::exists(&ctx.root, &p) => {
                             if !anchor.is_empty() && !anchors(&ctx.read(&p)).contains(anchor) {
                                 out.push(Finding::fail("book", file, ln, format!("{target} has no heading for #{anchor}")));
@@ -366,6 +373,7 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let inv = inventory(ctx);
     out.extend(sample_shape(&inv));
     out.extend(super::book_features::check(ctx, cfg));
+    out.extend(super::book_playground::check(ctx));
     for (file, line) in &inv.orphans {
         out.push(Finding::fail("book", file, *line, "a `go,run`, `ts,run` or `rust,generated` fence must follow the Windjammer program it belongs to"));
     }

@@ -1,0 +1,30 @@
+[package]
+name = "windjammer-playground"
+version = "0.50.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "The Windjammer interpreter for the browser playground of the Windjammer Book (ADR-0034)."
+
+# A workspace of its own: the native build, its Cargo.lock and its gates never see this crate (ADR-0034).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+windjammer = { path = "../..", default-features = false }
+serde_json = "1.0"
+
+# The playground has no entropy source: every random byte is a function of the run's seed (ADR-0034).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom02 = { package = "getrandom", version = "0.2", features = ["custom"] }
+getrandom03 = { package = "getrandom", version = "0.3" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

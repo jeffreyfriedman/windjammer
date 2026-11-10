@@ -159,6 +159,11 @@ pub enum Commands {
         #[arg(long)]
         watch: bool,
 
+        /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
+        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr
+        #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
+        verify: bool,
+
         /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
         hot: bool,

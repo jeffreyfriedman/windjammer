@@ -113,6 +113,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
+| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
 | `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
