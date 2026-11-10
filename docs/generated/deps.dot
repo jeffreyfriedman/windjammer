@@ -335,10 +335,10 @@ digraph deps {
   "interpreter" -> "codegen" [label="1"];
   "interpreter" -> "error" [label="2"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "interpreter" -> "ir" [label="38"];
+  "interpreter" -> "ir" [label="44"];
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
-  "interpreter" -> "package" [label="3"];
+  "interpreter" -> "package" [label="4"];
   "interpreter" -> "parser" [label="125"];
   "interpreter" -> "resolve" [label="13"];
   "interpreter" -> "source_map" [label="14"];
