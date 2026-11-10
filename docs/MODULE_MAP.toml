@@ -514,6 +514,9 @@ module_md = "crates/windjammer-lsp/MODULE.md"
 [crates.windjammer-mcp]
 module_md = "crates/windjammer-mcp/MODULE.md"
 
+[crates.windjammer-playground]
+module_md = "crates/windjammer-playground/MODULE.md"
+
 [crates.windjammer-runtime]
 module_md = "crates/windjammer-runtime/MODULE.md"
 
