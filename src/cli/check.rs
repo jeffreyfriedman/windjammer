@@ -129,6 +129,7 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
         // are only ever interpreted keep working)
         for mut d in super::widths_gate::predicted_widths(path) {
             d.severity = crate::diagnostics::Severity::Warning;
+            d.message = d.message.replacen("the compiled build would reject this", "this runs interpreted, but the compiled build would reject it", 1);
             for sp in d.primary_span.iter_mut() {
                 sp.file = short(&sp.file);
             }

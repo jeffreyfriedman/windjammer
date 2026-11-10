@@ -184,7 +184,8 @@ fn diagnostic(c: &Clash, source: &str, file: &str) -> Diagnostic {
         "WJ0003",
         format!("the compiled build would reject this: `{}` needs one integer type but gets `{a}` and `{b}` (in `fn {}` of the generated code)", c.expr, c.function),
     )
-    .with_help("give the literal or the binding it comes from the type `int` (`let five: int = 5`, `1 as int`); the interpreter runs the program, the compiled build does not")
+    .with_help("give the literal or the binding it comes from the type `int` (`let five: int = 5`, `1 as int`), and both the interpreter and the compiled build accept it")
+    .with_note("the program is correct and the interpreter runs it; rustc is stricter: it would not accept the Rust the compiler generates here, so `wj build` would fail (a build error, not a crash)")
     .with_note("`int` is `i64`; the compiled backend typed one side of this expression `i32` (or another width), and Rust never converts integer widths implicitly. The backend defect is tracked as family A in docs/drift/findings.md");
     if let Some(sp) = locate(c, source, file) {
         d = d.at(sp.with_label("widths differ here"));
