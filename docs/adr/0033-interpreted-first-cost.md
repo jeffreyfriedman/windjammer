@@ -211,8 +211,8 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   --interpret` prints them as warnings and runs. Gate: `tests/width_prediction_test.rs`.
   - Reported: `let_literal_captured_by_closure`, `literal_in_option_field_arm`, `shadow_match_binding_literal`,
     `shadowed_option_literal_arms`, `62_vec_alias_semantics`, the value-position programs `closure_params`,
-    `closures_compiled` and `option_arm_values`, the inference-corpus program `closure_len_width`, a library fixture
-    and a compute shader written as `.wj`; outside the scanned corpora, `scripts/wj/spec_oracle.wj` (its build emits
+    `closures_compiled` and `option_arm_values`, the inference-corpus program `closure_len_width`, a library fixture,
+    a spec program (`SPEC-CLOS-009`) and a compute shader written as `.wj`; outside the scanned corpora, `scripts/wj/spec_oracle.wj` (its build emits
     `-1_usize`).
   - Precision: the scan over every `.wj` file under `examples/` and `tests/` (with the drift corpus's single-file
     repros; multi-file programs of `tests/project_corpus` judged whole from their `main.wj`) reports only the pinned
@@ -225,6 +225,8 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   - Cost: a clean program pays the trigger only (no measurable change in `wj check` time on `bench/interp/structs.wj`,
     0.00 to 0.03 s of user time before and after); a flagged program pays one transpile (about 1.1 s of CPU).
   - The documented workaround (`let five: int = 5`, `1 as int`) builds and is not reported.
+  - Mutation check: with the width comparison of `conflict` replaced by `true`, the corpus scan, the golden
+    cross-check, the project scan, the positive cases and the workaround case fail; restored, all pass.
 
 ## Consequences
 
