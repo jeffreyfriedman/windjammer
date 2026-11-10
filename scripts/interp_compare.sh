@@ -13,9 +13,13 @@
 # print exactly what the walker prints (the oracle); a mismatch is reported instead of a time.
 # Times are child CPU seconds (user+sys), median of N runs (default 3), with the 1-minute load
 # average and tool versions recorded. Prints a Markdown table; --json also writes the raw numbers.
-# Quiet-machine guard: before every timed run the 1-minute load must be below 16 and swap use below
-# 50% (WJ_BENCH_MAX_LOAD / WJ_BENCH_MAX_SWAP_PCT override). With --json a breach aborts the run
-# (exit 3, nothing written), so a noisy run is never recorded; without --json it is reported at the end.
+# Quiet-machine guard, before every timed run (overrides in parentheses):
+#   - 1-minute load average below 16                                   (WJ_BENCH_MAX_LOAD)
+#   - memory free at least 20% (macOS `memory_pressure -Q`)             (WJ_BENCH_MIN_FREE_PCT)
+#   - pageouts below 50 per second (`vm_stat`, over the 10 s before the first run, then since the last check)
+#                                                                       (WJ_BENCH_MAX_PAGEOUTS)
+# Swap in use is not a signal: it stays high long after memory pressure ends. With --json a breach aborts
+# the run (exit 3, nothing written), so a noisy run is never recorded; without --json it is reported at the end.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 exec python3 - "$@" <<'PY'
@@ -43,31 +47,53 @@ for _sig in (signal.SIGINT, signal.SIGTERM):
     signal.signal(_sig, lambda *_: sys.exit(130))
 
 MAX_LOAD = float(os.environ.get("WJ_BENCH_MAX_LOAD", "16"))
-MAX_SWAP = float(os.environ.get("WJ_BENCH_MAX_SWAP_PCT", "50"))
-peak = {"load": 0.0, "swap_pct": 0.0}
+MIN_FREE = float(os.environ.get("WJ_BENCH_MIN_FREE_PCT", "20"))
+MAX_PAGEOUTS = float(os.environ.get("WJ_BENCH_MAX_PAGEOUTS", "50"))
+peak = {"load": 0.0, "min_free_pct": 100.0, "pageouts_per_s": 0.0}
 
-def swap_pct():
-    """Swap in use, percent of the total (0 when the platform does not say)."""
+def free_pct():
+    """System-wide memory free percentage (100 when the platform does not say)."""
     try:
-        t = subprocess.run(["sysctl", "-n", "vm.swapusage"], capture_output=True, text=True).stdout
-        f = dict(x.split(" = ") for x in t.strip().split("  ") if " = " in x)
-        total, used = float(f["total"].rstrip("M")), float(f["used"].rstrip("M"))
-        return 100.0 * used / total if total else 0.0
+        t = subprocess.run(["memory_pressure", "-Q"], capture_output=True, text=True).stdout
+        line = next(l for l in t.splitlines() if "free percentage" in l)
+        return float(line.rsplit(":", 1)[1].strip().rstrip("%"))
     except Exception:
         try:
             m = dict(l.split(":", 1) for l in open("/proc/meminfo"))
-            total, free = int(m["SwapTotal"].split()[0]), int(m["SwapFree"].split()[0])
-            return 100.0 * (total - free) / total if total else 0.0
+            return 100.0 * int(m["MemAvailable"].split()[0]) / int(m["MemTotal"].split()[0])
         except Exception:
-            return 0.0
+            return 100.0
+
+def pageouts():
+    """Pages written out to swap so far (0 when the platform does not say)."""
+    try:
+        t = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+        return int(next(l for l in t.splitlines() if l.startswith("Pageouts")).split(":")[1].strip().rstrip("."))
+    except Exception:
+        try:
+            return int(next(l for l in open("/proc/vmstat") if l.startswith("pswpout")).split()[1])
+        except Exception:
+            return 0
+
+import time
+_last = {"pageouts": pageouts(), "t": time.time()}
 
 def guard():
     """Record the machine's state before a timed run; with --json, abort the whole run when it is not quiet."""
-    load, sw = os.getloadavg()[0], swap_pct()
-    peak["load"], peak["swap_pct"] = max(peak["load"], load), max(peak["swap_pct"], sw)
-    if opt("--json") and (load >= MAX_LOAD or sw >= MAX_SWAP):
-        sys.stderr.write(f"interp_compare: machine not quiet (load {load:.1f}, limit {MAX_LOAD:g}; swap {sw:.0f}%, limit {MAX_SWAP:g}%); "
-                         f"nothing recorded. Re-run when the machine is quiet.\n")
+    if peak["pageouts_per_s"] == 0.0 and _last["t"] > time.time() - 10:
+        time.sleep(max(0.0, 10 - (time.time() - _last["t"])))  # the first rate is measured over 10 s
+    now, po = time.time(), pageouts()
+    rate = (po - _last["pageouts"]) / max(now - _last["t"], 1e-3)
+    _last["pageouts"], _last["t"] = po, now
+    load, free = os.getloadavg()[0], free_pct()
+    peak["load"] = max(peak["load"], load)
+    peak["min_free_pct"] = min(peak["min_free_pct"], free)
+    peak["pageouts_per_s"] = max(peak["pageouts_per_s"], rate, 1e-9)
+    if opt("--json") and (load >= MAX_LOAD or free < MIN_FREE or rate >= MAX_PAGEOUTS):
+        sys.stderr.write(
+            f"interp_compare: machine not quiet: load {load:.1f} (limit < {MAX_LOAD:g}), memory free {free:.0f}% "
+            f"(limit >= {MIN_FREE:g}%), pageouts {rate:.0f}/s (limit < {MAX_PAGEOUTS:g}/s); nothing recorded. "
+            f"Re-run when the machine is quiet.\n")
         sys.exit(3)
 
 def cpu(cmd, cwd=None):
@@ -149,9 +175,10 @@ for k, v in res["kernels"].items():
 for k, v in res["kernels"].items():
     r = v["cpu_s"]
     v["ratios"] = {f"resolved_over_{o}": round(r["resolved"] / r[o], 2) for o in ("node", "python3", "walker") if r.get("resolved") and r.get(o)}
-res["peak_load_1m"], res["peak_swap_pct"] = round(peak["load"], 1), round(peak["swap_pct"])
-if peak["load"] >= MAX_LOAD or peak["swap_pct"] >= MAX_SWAP:
-    print(f"warning: the machine was not quiet (peak load {peak['load']:.1f}, peak swap {peak['swap_pct']:.0f}%): these numbers are noisy")
+res["peak_load_1m"], res["min_free_pct"], res["peak_pageouts_per_s"] = round(peak["load"], 1), round(peak["min_free_pct"]), round(peak["pageouts_per_s"], 1)
+if peak["load"] >= MAX_LOAD or peak["min_free_pct"] < MIN_FREE or peak["pageouts_per_s"] >= MAX_PAGEOUTS:
+    print(f"warning: the machine was not quiet (peak load {peak['load']:.1f}, lowest memory free {peak['min_free_pct']:.0f}%, "
+          f"peak pageouts {peak['pageouts_per_s']:.0f}/s): these numbers are noisy")
 out = opt("--json")
 if out:
     with open(out, "w") as fh:
