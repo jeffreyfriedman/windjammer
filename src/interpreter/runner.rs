@@ -37,7 +37,11 @@ pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
 /// so the limit does not depend on debug/release frame sizes.
 /// Name of the big-stack thread; an interpreter created on it bounds recursion by stack bytes.
 pub(crate) const BIG_STACK_THREAD: &str = "wj-interpreter";
+#[cfg(target_pointer_width = "64")]
 pub(crate) const STACK_BYTES: usize = 4 << 30;
+/// 32-bit hosts (the wasm playground, ADR-0034) cannot address 4 GiB of stack.
+#[cfg(not(target_pointer_width = "64"))]
+pub(crate) const STACK_BYTES: usize = 512 << 20;
 pub(crate) const STACK_HEADROOM: usize = 256 << 20;
 
 /// Run `f` on a thread with a large stack (deeply recursive programs).
@@ -249,13 +253,13 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
 }
 
 /// `fn main() -> Result<..>` returning `Err(e)`: like the compiled program, print `Error: {e:?}` on stderr and exit 1.
-fn main_result_code(it: &mut Interpreter, v: &Value) -> i32 {
+pub fn main_result_code(it: &mut Interpreter, v: &Value) -> i32 {
     if let Value::Enum(e) = v {
         if &*e.ty == "Result" && &*e.variant == "Err" {
             if let super::value::Payload::Tuple(items) = &e.payload {
                 let text = items.first().map(|x| it.debug_string(x).unwrap_or_default()).unwrap_or_default();
                 it.flush();
-                eprintln!("Error: {text}");
+                it.write_err(&format!("Error: {text}\n"));
                 return 1;
             }
         }

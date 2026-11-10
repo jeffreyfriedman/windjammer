@@ -115,11 +115,21 @@ fn content_hash(table: &[(&str, &[u8])]) -> u64 {
 /// Materialize `asset` and return its directory. Idempotent and safe under concurrent
 /// `wj` processes (write to a private temp sibling, then rename into place).
 pub fn materialize(asset: Asset) -> std::io::Result<PathBuf> {
+    no_file_system()?;
     materialize_in(asset, &cache_root())
+}
+
+/// The browser playground (ADR-0034) has no file system to materialize into (and std panics on `temp_dir` there).
+fn no_file_system() -> std::io::Result<()> {
+    if cfg!(target_arch = "wasm32") {
+        return Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system on wasm32"));
+    }
+    Ok(())
 }
 
 /// [`materialize`] under an explicit cache root.
 pub fn materialize_in(asset: Asset, root: &Path) -> std::io::Result<PathBuf> {
+    no_file_system()?;
     let dir = root.join(cache_dir_name(asset.slug(), env!("CARGO_PKG_VERSION"), asset.hash()));
     if dir.join(".complete").is_file() {
         return Ok(dir);
@@ -160,6 +170,7 @@ fn try_populate(asset: Asset, dir: &Path) -> std::io::Result<()> {
 pub fn materialize_or_warn(asset: Asset) -> Option<PathBuf> {
     match materialize(asset) {
         Ok(p) => Some(p),
+        Err(e) if e.kind() == std::io::ErrorKind::Unsupported => None,
         Err(e) => {
             eprintln!("warning: cannot materialize embedded {}: {e}", asset.slug());
             None

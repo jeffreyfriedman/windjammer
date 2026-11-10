@@ -43,14 +43,22 @@ impl LimitSpec {
 
 pub struct Limits {
     spec: LimitSpec,
-    started: Instant,
+    /// Read only when a wall limit is set: a host without a clock (wasm32-unknown-unknown) runs fuel-only limits.
+    started: Option<Instant>,
     pub steps: u64,
     pub out_bytes: usize,
     pub calls_made: usize,
     exceeded: Option<String>,
 }
 
+/// Linear memory of the WebAssembly instance in MiB (the browser playground, ADR-0034).
+#[cfg(target_arch = "wasm32")]
+fn rss_mb() -> u64 {
+    (core::arch::wasm32::memory_size(0) as u64 * 65536) / (1024 * 1024)
+}
+
 /// Resident set size of this process in MiB (0 when unknown).
+#[cfg(not(target_arch = "wasm32"))]
 fn rss_mb() -> u64 {
     // SAFETY: getrusage fills a plain struct; the pointer is valid for the call.
     unsafe {
@@ -73,7 +81,8 @@ fn limit_error(msg: String) -> Ctl {
 
 impl Interpreter {
     pub fn set_limits(&mut self, spec: LimitSpec) {
-        self.limits = Some(Box::new(Limits { spec, started: Instant::now(), steps: 0, out_bytes: 0, calls_made: 0, exceeded: None }));
+        let started = spec.wall.map(|_| Instant::now());
+        self.limits = Some(Box::new(Limits { spec, started, steps: 0, out_bytes: 0, calls_made: 0, exceeded: None }));
     }
 
     /// Steps, effect calls and output bytes used so far (for `--result-json`).
@@ -95,8 +104,8 @@ impl Interpreter {
             }
         }
         if l.steps % 1024 == 0 {
-            if let Some(w) = l.spec.wall {
-                if l.started.elapsed() > w {
+            if let (Some(w), Some(started)) = (l.spec.wall, l.started) {
+                if started.elapsed() > w {
                     return Err(limit_error(format!("limit exceeded: wall time ({:.1}s); raise it with --limits wall=SECONDS", w.as_secs_f64())));
                 }
             }
