@@ -31,6 +31,8 @@ pub(crate) struct CloneFacts {
     pub(crate) returned_fields: BTreeMap<usize, String>,
     pub(crate) clone_sites: BTreeMap<usize, String>,
     pub(crate) element_reads: BTreeMap<usize, String>,
+    /// CLONE-USE-AFTER-MOVE for partial moves (`IrFunction::field_copy_sites`).
+    pub(crate) field_copy_sites: BTreeMap<usize, String>,
 }
 
 impl<'ast> CodeGenerator<'ast> {
@@ -46,6 +48,7 @@ impl<'ast> CodeGenerator<'ast> {
             returned_fields: ir.map(|f| f.returned_fields.clone()).unwrap_or_default(),
             clone_sites: ir.map(|f| f.clone_sites.clone()).unwrap_or_default(),
             element_reads: ir.map(|f| f.element_reads.clone()).unwrap_or_default(),
+            field_copy_sites: if always_move { BTreeMap::new() } else { ir.map(|f| f.field_copy_sites.clone()).unwrap_or_default() },
             ..CloneFacts::default()
         };
     }
@@ -133,6 +136,9 @@ impl<'ast> CodeGenerator<'ast> {
                 return base.to_string();
             }
         }
+        if let crate::parser::Expression::FieldAccess { .. } = expr {
+            return self.copy_field_if_root_read_again(expr, emitted, site);
+        }
         let crate::parser::Expression::Identifier { name, .. } = expr else { return emitted };
         if emitted != *name || self.auto_clone_analysis.is_none() || !self.clone_facts.plain_bindings.contains(name) {
             return emitted;
@@ -154,6 +160,38 @@ impl<'ast> CodeGenerator<'ast> {
         };
         if again_in_stmt || again_after {
             format!("{name}.clone()")
+        } else {
+            emitted
+        }
+    }
+
+    /// CLONE-USE-AFTER-MOVE for a partial move: `p.f` emitted as a move out of an owned plain binding
+    /// `p` at a site the IR marked (`IrFunction::field_copy_sites`: `p` is read again afterwards, as in
+    /// `Event { id: proposal.id }` then `let next = proposal`): the field is copied, so `p` stays whole.
+    /// A Copy field, a reference, or a field without `Clone` passes through.
+    fn copy_field_if_root_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String, site: MoveSite) -> String {
+        let mut root = expr;
+        let mut path = Vec::new();
+        while let crate::parser::Expression::FieldAccess { object, field, .. } = root {
+            path.push(field.as_str());
+            root = object;
+        }
+        let crate::parser::Expression::Identifier { name, .. } = root else { return emitted };
+        path.reverse();
+        if emitted != format!("{name}.{}", path.join(".")) || self.auto_clone_analysis.is_none() || name == "self" {
+            return emitted;
+        }
+        if !self.clone_facts.plain_bindings.contains(name) || !self.binding_emits_owned_value(name) {
+            return emitted;
+        }
+        let Some(ty) = self.infer_expression_type(expr) else { return emitted };
+        if self.is_type_copy(&ty) || matches!(ty, Type::Reference(_) | Type::MutableReference(_)) || !self.type_known_clone(&ty, 0) {
+            return emitted;
+        }
+        // The decision is the IR's (`field_copy_sites`, from liveness); this only prints it.
+        let _ = site;
+        if self.clone_facts.field_copy_sites.contains_key(&crate::ir::numeric_defaults::node_id(expr)) {
+            format!("{emitted}.clone()")
         } else {
             emitted
         }
