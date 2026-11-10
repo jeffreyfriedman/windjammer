@@ -84,13 +84,13 @@ fn every_os_touching_runtime_function_reaches_a_capability_check() {
 
 #[test]
 fn the_scanner_sees_the_guards_it_is_meant_to_see() {
-    // a mutation check on the oracle itself: removing the guard from `fs::rename` must make the scan fail
+    // a mutation check on the oracle itself: removing the guard from `fs::set_current_dir` must make the scan fail
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime/src");
     let src = std::fs::read_to_string(base.join("fs.rs")).unwrap();
     let cs = chunks(&src);
-    let read = cs.iter().find(|c| c.name == "rename").expect("fs::rename");
-    assert!(read.text.contains("caps::fs_write"), "{}", read.text);
-    let stripped = read.text.replace("caps::fs_write", "removed");
+    let read = cs.iter().find(|c| c.name == "metadata").expect("fs::metadata");
+    assert!(read.text.contains("caps::fs_read"), "{}", read.text);
+    let stripped = read.text.replace("caps::fs_read", "removed");
     assert!(OS_TOKENS.iter().any(|t| stripped.contains(t)) && !stripped.contains("caps::"));
 }
 
@@ -135,7 +135,7 @@ fn the_fd_verified_reads_open_through_the_checked_handle() {
         let name = path.strip_prefix("fs::").unwrap();
         let c = cs.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("fs::{name} is not in the runtime"));
         let delegates = cs.iter().any(|d| d.name != name && c.text.contains(&format!("{}(", d.name)) && d.text.contains("caps::open_read"));
-        assert!(c.text.contains("caps::open_read") || delegates, "fs::{name} must open through caps::open_read: {}", c.text);
+        assert!(c.text.contains("caps::open_read") || c.text.contains("caps::copy") || delegates, "fs::{name} must open through caps::open_read: {}", c.text);
         assert!(!c.text.contains("std::fs::read"), "fs::{name} reads the name again: {}", c.text);
     }
 }
@@ -150,10 +150,10 @@ fn the_fd_verified_writes_act_through_the_checked_parent() {
     for path in windjammer::ir::effect_facts::sinks::FD_VERIFIED_WRITES {
         let name = path.strip_prefix("fs::").unwrap();
         let c = cs.iter().find(|c| c.name == name).unwrap_or_else(|| panic!("fs::{name} is not in the runtime"));
-        let guarded = |t: &str| t.contains("caps::open_write") || t.contains("caps::entry_op");
+        let guarded = |t: &str| ["caps::open_write", "caps::entry_op", "caps::rename", "caps::copy", "caps::dir_all"].iter().any(|g| t.contains(g));
         let delegates = cs.iter().any(|d| d.name != name && c.text.contains(&format!("{}(", d.name)) && guarded(&d.text));
         assert!(guarded(&c.text) || delegates, "fs::{name} must act through the checked parent: {}", c.text);
-        assert!(!c.text.contains("std::fs::write") && !c.text.contains("std::fs::create_dir") && !c.text.contains("std::fs::remove"), "fs::{name} acts on the name again: {}", c.text);
+        assert!(!["std::fs::write", "std::fs::create_dir", "std::fs::remove", "std::fs::rename", "std::fs::copy"].iter().any(|t| c.text.contains(t)), "fs::{name} acts on the name again: {}", c.text);
     }
 }
 

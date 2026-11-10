@@ -85,6 +85,9 @@ pub struct EffectFacts {
     pub fns: BTreeMap<DefId, FnEffects>,
     /// Call graph (caller -> callees) the pass propagated along.
     pub calls: BTreeMap<DefId, BTreeSet<DefId>>,
+    /// What calls into Rust crate dependencies perform (the table the pass attributed them with), so the passes that run after
+    /// it (the durable steps) classify a crate call the way the pass did.
+    pub crates: super::crates::CrateEffects,
 }
 
 impl EffectFacts {
@@ -160,7 +163,7 @@ pub fn analyze(r: &ResolvedProgram<'_>) -> EffectFacts {
 pub fn analyze_with(r: &ResolvedProgram<'_>, crates: &super::crates::CrateEffects) -> EffectFacts {
     let defs = r.defs();
     let decls = &r.collected.decls;
-    let mut facts = EffectFacts::default();
+    let mut facts = EffectFacts { crates: crates.clone(), ..EffectFacts::default() };
     for def in defs.iter() {
         if matches!(def.kind, DefKind::Fn | DefKind::Method { .. } | DefKind::AssocFn { .. } | DefKind::ExternFn | DefKind::TraitMethod { .. }) {
             facts.fns.insert(

@@ -126,8 +126,7 @@ pub fn create_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
 
 /// Create a directory and all parent directories
 pub fn create_dir_all<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    crate::caps::fs_write(&path);
-    std::fs::create_dir_all(path).map_err(|e| e.to_string())
+    crate::caps::dir_all(path, crate::caps_core::grant::DirAllOp::Create).map_err(|e| e.to_string())
 }
 
 /// Remove a file
@@ -142,22 +141,17 @@ pub fn remove_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
 
 /// Remove a directory and all its contents
 pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    crate::caps::fs_write(&path);
-    std::fs::remove_dir_all(path).map_err(|e| e.to_string())
+    crate::caps::dir_all(path, crate::caps_core::grant::DirAllOp::Remove).map_err(|e| e.to_string())
 }
 
 /// Copy a file
 pub fn copy<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64, String> {
-    crate::caps::fs_read(&from);
-    crate::caps::fs_write(&to);
-    std::fs::copy(from, to).map_err(|e| e.to_string())
+    crate::caps::copy(from, to).map_err(|e| e.to_string())
 }
 
 /// Rename a file or directory
 pub fn rename<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), String> {
-    crate::caps::fs_write(&from);
-    crate::caps::fs_write(&to);
-    std::fs::rename(from, to).map_err(|e| e.to_string())
+    crate::caps::rename(from, to).map_err(|e| e.to_string())
 }
 
 /// Directory entry wrapper

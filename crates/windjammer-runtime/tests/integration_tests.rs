@@ -149,14 +149,15 @@ fn test_json_array_operations() {
 
 #[test]
 fn test_mime_from_filename() {
+    // html carries its charset (`mime::TEXT_HTML`, from the mime/yaml parity change); the other types are bare
     let mime = mime::from_filename("test.html");
-    assert_eq!(mime, "text/html");
+    assert_eq!(mime, mime::TEXT_HTML);
 
     let mime = mime::from_filename("image.png");
     assert_eq!(mime, "image/png");
 
     let mime = mime::from_filename("data.json");
-    assert_eq!(mime, "application/json");
+    assert_eq!(mime, mime::APPLICATION_JSON);
 }
 
 #[test]

@@ -141,10 +141,18 @@ pub enum MethodImpl {
     Place(PlaceFn),
 }
 
+/// A registered function and, once asked, whether a call to it goes through the effect port (decided once from its registered
+/// path; the answer depends on the path alone).
+struct Entry {
+    f: FnImpl,
+    /// 0: not decided yet, 1: not routed, 2: routed.
+    routed: std::sync::atomic::AtomicU8,
+}
+
 #[derive(Default)]
 pub struct Registry {
     methods: HashMap<(Kind, &'static str), MethodImpl>,
-    funcs: HashMap<&'static str, FnImpl>,
+    funcs: HashMap<&'static str, Entry>,
     consts: HashMap<String, Value>,
     types: HashSet<&'static str>,
     /// Field names of host struct types a program may construct with a struct literal (test requests).
@@ -210,7 +218,7 @@ impl Registry {
         self.mutating.insert(name);
     }
     pub fn func(&mut self, path: &'static str, f: FnImpl) {
-        self.funcs.insert(path, f);
+        self.funcs.insert(path, Entry { f, routed: std::sync::atomic::AtomicU8::new(0) });
     }
     pub fn add_const(&mut self, path: impl Into<String>, v: Value) {
         self.consts.insert(path.into(), v);
@@ -251,16 +259,37 @@ impl Registry {
     /// Look a function up by path, dropping leading segments (`std::collections::HashMap::new`
     /// matches `HashMap::new`).
     pub fn function(&self, path: &str) -> Option<FnImpl> {
+        self.entry(path).map(|(_, e)| e.f)
+    }
+
+    fn entry(&self, path: &str) -> Option<(&'static str, &Entry)> {
         let mut p = path;
         loop {
-            if let Some(f) = self.funcs.get(p) {
-                return Some(*f);
+            if let Some((k, e)) = self.funcs.get_key_value(p) {
+                return Some((*k, e));
             }
             match p.split_once("::") {
                 Some((_, rest)) => p = rest,
                 None => return None,
             }
         }
+    }
+
+    /// The function for `path` and whether calling it goes through the effect port. One lookup serves both: the routing answer is
+    /// kept with the registered function, so a call does not decide it again by name (`effect_port::routed` runs once per function).
+    pub fn function_routed(&self, path: &str) -> Option<(FnImpl, bool)> {
+        use std::sync::atomic::Ordering::Relaxed;
+        let (key, e) = self.entry(path)?;
+        let routed = match e.routed.load(Relaxed) {
+            1 => false,
+            2 => true,
+            _ => {
+                let r = super::effect_port::routed(key);
+                e.routed.store(if r { 2 } else { 1 }, Relaxed);
+                r
+            }
+        };
+        Some((e.f, routed))
     }
     /// Every method name the interpreter implements (builtin kinds and host-object methods), sorted and deduplicated.
     /// The method-parity gate (`tests/interpreter_method_parity_test.rs`) holds each one against the surface table.
@@ -362,3 +391,23 @@ pub(crate) fn ordering_of(v: &Value) -> Option<std::cmp::Ordering> {
     }
 }
 
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+
+    /// A function registered once carries the routing answer that deciding by name gives, however the call path is spelled.
+    #[test]
+    fn the_routing_kept_with_a_function_is_the_routing_by_name() {
+        let r = Registry::standard();
+        let mut checked = 0;
+        for key in r.funcs.keys().copied().collect::<Vec<_>>() {
+            for spelled in [key.to_string(), format!("std::{key}"), format!("a::b::{key}")] {
+                let (_, routed) = r.function_routed(&spelled).unwrap_or_else(|| panic!("{spelled} does not resolve"));
+                assert_eq!(routed, crate::interpreter::effect_port::routed(&spelled), "{spelled}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 1000, "{checked}");
+    }
+}
