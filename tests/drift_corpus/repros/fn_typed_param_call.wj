@@ -1,0 +1,35 @@
+// A call to a function with a function-typed parameter is not adapted like other calls: integer literals are typed i32
+// (rustc E0308, expected i64) and a queue held in an immutable local is not borrowed where the callee mutates it.
+struct Queue {
+    items: Vec<string>,
+}
+
+impl Queue {
+    fn take(self) -> string {
+        if self.items.len() == 0 {
+            return ""
+        }
+        self.items.remove(0)
+    }
+}
+
+fn within(lo: int, hi: int, accept: fn(int) -> bool) -> bool {
+    accept(lo) && accept(hi)
+}
+
+fn drain_while(q: Queue, limit: int, keep: fn(string) -> bool) -> int {
+    let mut n = 0
+    while n < limit {
+        if !keep(q.take()) {
+            return n
+        }
+        n = n + 1
+    }
+    n
+}
+
+fn main() {
+    println("${within(1, 9, |n| n > 0)}")
+    let q = Queue { items: ["a", "b", "stop"] }
+    println("${drain_while(q, 10, |s| s != "stop")}")
+}

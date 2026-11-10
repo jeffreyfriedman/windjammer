@@ -1,0 +1,30 @@
+// `items(n)?.len()` inside a struct literal: the lexer reads `?.` as optional chaining, so the interpreter reports
+// `a Result has no method __opt_chain` and the Rust backend refuses `?.`.
+struct Summary {
+    name: string,
+    count: int,
+}
+
+fn items(n: int) -> Result<Vec<int>, string> {
+    if n < 0 {
+        return Err("negative")
+    }
+    let mut v: Vec<int> = Vec::new()
+    let mut i = 0
+    while i < n {
+        v.push(i)
+        i = i + 1
+    }
+    Ok(v)
+}
+
+fn summarize(n: int) -> Result<Summary, string> {
+    Ok(Summary { name: "x", count: items(n)?.len() as int })
+}
+
+fn main() {
+    match summarize(3) {
+        Ok(s) => println("${s.name} ${s.count}"),
+        Err(e) => println(e),
+    }
+}
