@@ -25,6 +25,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiA4Ci8vIGV4cGVjdDogMTUKZm4gYXBwbHkoZjogZm4oaW50KSAtPiBpbnQsIHg6IGludCkgLT4gaW50IHsKICAgIGYoeCkKfQoKZm4gbWFpbigpIHsKICAgIGxldCBkb3VibGUgPSB8eHwgeCAqIDIKICAgIHByaW50bG4oIiR7ZG91YmxlKDQpfSIpCgogICAgbGV0IG9mZnNldDogaW50ID0gMTAKICAgIGxldCBzaGlmdCA9IHx4OiBpbnR8IHggKyBvZmZzZXQKICAgIHByaW50bG4oIiR7YXBwbHkoc2hpZnQsIDUpfSIpCn0K)
+
 A parameter of function type is written `fn(int) -> int`. Any closure with that shape fits, whatever it captures.
 
 ## Capturing variables

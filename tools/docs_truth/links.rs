@@ -139,6 +139,12 @@ pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str, known: &BTreeS
             } else {
                 normalize(&format!("{dir}/{path}"))
             };
+            // The built site serves docs/book/playground next to the book's pages (.github/workflows/book.yml); the book's own
+            // checks (book.rs) hold those links to the program above them.
+            let rel = match rel.strip_prefix("docs/book/src/playground/") {
+                Some(rest) => format!("docs/book/playground/{rest}"),
+                None => rel,
+            };
             if !util::exists(&ctx.root, &rel) {
                 fail(ln, format!("dead link: `{t}` -> {rel} does not exist"));
             } else if let Some(fr) = frag {
