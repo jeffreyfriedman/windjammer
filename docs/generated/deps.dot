@@ -216,7 +216,7 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="624"];
+  "codegen" -> "analyzer" [label="625"];
   "codegen" -> "auto_clone" [label="6"];
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
@@ -226,7 +226,7 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="397"];
+  "codegen" -> "ir" [label="396"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "parser" [label="693"];
@@ -240,7 +240,7 @@ digraph deps {
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
   "compilation_error_handling" -> "parser" [label="1"];
-  "compiler" -> "analyzer" [label="33"];
+  "compiler" -> "analyzer" [label="35"];
   "compiler" -> "build_utils" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
   "compiler" -> "codegen" [label="39"];
@@ -251,18 +251,18 @@ digraph deps {
   "compiler" -> "decorator_registry" [label="1"];
   "compiler" -> "embedded_assets" [label="2"];
   "compiler" -> "inference" [label="1"];
-  "compiler" -> "ir" [label="8"];
+  "compiler" -> "ir" [label="14"];
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
   "compiler" -> "metadata" [label="47"];
   "compiler" -> "module_system" [label="2"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
-  "compiler" -> "parser" [label="100"];
+  "compiler" -> "parser" [label="101"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
-  "compiler" -> "type_classification" [label="5"];
+  "compiler" -> "type_classification" [label="7"];
   "compiler" -> "type_inference" [label="7"];
   "compiler_config" -> "codegen" [label="1",color=red,fontcolor=red];
   "compiler_database" -> "analyzer" [label="3"];

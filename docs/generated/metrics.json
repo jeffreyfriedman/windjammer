@@ -14,7 +14,7 @@
     "conformance.backends": 3,
     "conformance.programs": 156,
     "conformance.unsupported_pairs": 27,
-    "drift.corpus_cases": 1876,
+    "drift.corpus_cases": 1891,
     "errors.codes_total": 69,
     "interpreter.features_supported": 44,
     "interpreter.features_unsupported": 0,
@@ -24,6 +24,6 @@
     "spec.example_files": 294,
     "stdlib.files": 43,
     "tests.rust_files": 2014,
-    "tests.wj_programs": 1942
+    "tests.wj_programs": 1969
   }
 }
