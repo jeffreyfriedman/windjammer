@@ -630,3 +630,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 }
+
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    /// An argument at a `usize` formal (`substring(s, start, end)`) is an index use: its class keeps its own width and,
+    /// when that width is another integer type, the argument is converted where it is passed (NUM-USIZE-TO-INT).
+    pub(super) fn index_slot_argument(&mut self, arg: ConstraintVar, arg_expr: Option<&Expression<'ast>>) {
+        self.cs.add_because(Constraint::IsNumeric(arg), tagged("NUM-INDEX"));
+        self.index_uses.push(arg);
+        self.cs.add_because(Constraint::PrefersUsize(arg), tagged("NUM-USIZE"));
+        if let Some(key) = arg_expr.and_then(crate::ir::numeric_facts::conversion_key) {
+            self.index_use_keys.push((key, arg));
+        }
+    }
+}
