@@ -156,7 +156,7 @@ tests/diagnostics/cases/lint_unwrap.wj	832da8219efe23c5	fail	skip
 tests/diagnostics/cases/macro_println.wj	768b128e88ae6113	ok	ok
 tests/diagnostics/cases/macro_vec.wj	6038ee7bce96cebf	ok	ok
 tests/diagnostics/cases/missing_field.wj	751e69e60b719e95	ok	fail
-tests/diagnostics/cases/missing_trait_item.wj	c218114070892ba9	ok	fail
+tests/diagnostics/cases/missing_trait_item.wj	0140a389c43dbb95	ok	fail
 tests/diagnostics/cases/no_such_method.wj	09aa61d2d142d9a5	ok	fail
 tests/diagnostics/cases/non_bool_condition.wj	9e86d31e98c9cf13	ok	fail
 tests/diagnostics/cases/non_exhaustive_match.wj	51f9ad0f0768afa0	ok	fail
