@@ -398,7 +398,6 @@ examples/verified/trait_basics.wj W0016
 examples/verified/trait_default_and_override.wj W0016
 examples/verified/trait_dyn_dispatch.wj W0016
 std/enumerable.wj W0016
-tests/book_repros/interpolation_leading_literal.wj parse
 tests/check_negative/mutants/modules_trait_static__unknown_field.wj W0016
 tests/check_negative/mutants/trait_default_and_override__unknown_field.wj W0016
 tests/codegen_correctness_corpus/impl_trait_for_primitive.wj W0016
