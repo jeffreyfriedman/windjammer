@@ -599,6 +599,7 @@ Usage: wj doctor [OPTIONS]
 |---|---|---|---|
 | `--json` | JSON |  | Machine-readable output |
 | `--expect-head` | EXPECT_HEAD |  | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) |
+| `--strict` | STRICT |  | Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout |
 
 ## `wj install-dev`
 

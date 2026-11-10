@@ -1,6 +1,7 @@
 //! Toolchain identity, pin enforcement, staleness warnings, `wj doctor` and `wj install-dev`.
 //! See MODULE.md.
 
+pub mod behind;
 pub mod doctor;
 pub mod env;
 pub mod identity;
