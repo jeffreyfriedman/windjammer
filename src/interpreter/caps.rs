@@ -28,6 +28,7 @@ pub const LOCAL_PROFILE_MODE: CapMode = CapMode::Enforce;
 /// What a gated write found: the checked handle, the finished operation, its error, or "do it by name" (no gate applies).
 pub enum WriteOpen {
     File(std::fs::File),
+    Copied(u64),
     Done,
     Failed(std::io::Error),
     ByName,
@@ -418,6 +419,21 @@ impl Interpreter {
     /// `mkdir`, `unlink`, `rmdir` of one name under the gate (see `Grant::entry_op`); `Done` carries the operation's own result.
     pub(crate) fn cap_entry_op(&mut self, path: &str, op: crate::ir::effect_facts::grant::EntryOp) -> R<WriteOpen> {
         self.cap_checked_write(|g| g.entry_op(path, op).map(|o| o.map(|()| WriteOpen::Done)))
+    }
+
+    /// `rename` decided on both parent directories (see `Grant::rename_op`).
+    pub(crate) fn cap_rename(&mut self, from: &str, to: &str) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.rename_op(from, to).map(|o| o.map(|()| WriteOpen::Done)))
+    }
+
+    /// `copy` between two checked handles (see `Grant::copy_op`).
+    pub(crate) fn cap_copy(&mut self, from: &str, to: &str) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.copy_op(from, to).map(|o| o.map(WriteOpen::Copied)))
+    }
+
+    /// `create_dir_all` / `remove_dir_all` decided descriptor by descriptor (see `Grant::dir_all_op`).
+    pub(crate) fn cap_dir_all(&mut self, path: &str, op: crate::ir::effect_facts::grant::DirAllOp) -> R<WriteOpen> {
+        self.cap_checked_write(|g| g.dir_all_op(path, op).map(|o| o.map(|()| WriteOpen::Done)))
     }
 
     fn cap_checked_write(&mut self, run: impl FnOnce(&Grant) -> Result<Option<WriteOpen>, crate::ir::effect_facts::grant::OpenError>) -> R<WriteOpen> {

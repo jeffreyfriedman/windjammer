@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use windjammer::ir::effect_facts::grant::{EntryOp, OpenError};
+use windjammer::ir::effect_facts::grant::{DirAllOp, EntryOp, OpenError};
 use windjammer::ir::effect_facts::{EffectKind, Grant};
 
 const STRESS: Duration = Duration::from_millis(1500);
@@ -41,6 +41,7 @@ impl World {
     }
     fn write_grant(&self) -> Grant {
         let mut g = Grant::sandbox(&self.dir);
+        g.allow(EffectKind::FsRead, "./granted/**");
         g.allow(EffectKind::FsWrite, "./granted/**");
         g
     }
@@ -247,6 +248,88 @@ fn unlink_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
         Ok(_) => None,
         Err(OpenError::Denied(_)) => Some(false),
         Err(OpenError::Io(_)) => None,
+    }
+}
+
+fn rename_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    // into the link: the file must land in `granted`, never in `denied`; out of the link: the denied victim must survive
+    let _ = std::fs::write(dir.join("granted/src.txt"), "s");
+    let _ = std::fs::write(dir.join("denied/victim.txt"), "keep");
+    let _ = std::fs::write(dir.join("granted/victim.txt"), "go");
+    let into = g.rename_op(&dir.join("granted/src.txt").to_string_lossy(), &format!("{via}/moved.txt"));
+    let out = g.rename_op(&format!("{via}/victim.txt"), &dir.join("granted/elsewhere.txt").to_string_lossy());
+    let leaked = dir.join("denied/moved.txt").exists() || !dir.join("denied/victim.txt").exists();
+    let _ = std::fs::remove_file(dir.join("denied/moved.txt"));
+    let _ = std::fs::remove_file(dir.join("granted/moved.txt"));
+    let _ = std::fs::remove_file(dir.join("granted/elsewhere.txt"));
+    if leaked {
+        return Some(true);
+    }
+    match (into, out) {
+        (Err(OpenError::Denied(_)), _) | (_, Err(OpenError::Denied(_))) => Some(false),
+        _ => None,
+    }
+}
+
+fn copy_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    // out of the link into `granted`: the denied content must never arrive; into the link: nothing may appear in `denied`
+    let _ = std::fs::remove_file(dir.join("granted/copied.txt"));
+    let from = g.copy_op(&format!("{via}/f.txt"), &dir.join("granted/copied.txt").to_string_lossy());
+    let arrived = std::fs::read_to_string(dir.join("granted/copied.txt")).is_ok_and(|t| t == "DENIED-SECRET");
+    let to = g.copy_op(&dir.join("granted/f.txt").to_string_lossy(), &format!("{via}/copied.txt"));
+    let leaked = arrived || dir.join("denied/copied.txt").exists();
+    let _ = std::fs::remove_file(dir.join("denied/copied.txt"));
+    let _ = std::fs::remove_file(dir.join("granted/copied.txt"));
+    if leaked {
+        return Some(true);
+    }
+    match (from, to) {
+        (Err(OpenError::Denied(_)), _) | (_, Err(OpenError::Denied(_))) => Some(false),
+        _ => None,
+    }
+}
+
+fn create_all_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    let r = g.dir_all_op(&format!("{via}/x/y"), DirAllOp::Create);
+    let leaked = dir.join("denied/x").exists();
+    let _ = std::fs::remove_dir_all(dir.join("denied/x"));
+    let _ = std::fs::remove_dir_all(dir.join("granted/x"));
+    if leaked {
+        return Some(true);
+    }
+    match r {
+        Err(OpenError::Denied(_)) => Some(false),
+        _ => None,
+    }
+}
+
+fn remove_all_through(g: &Grant, via: &str, dir: &Path) -> Option<bool> {
+    for d in ["denied", "granted"] {
+        let _ = std::fs::create_dir_all(dir.join(d).join("tree/sub"));
+        let _ = std::fs::write(dir.join(d).join("tree/sub/f.txt"), "keep");
+    }
+    let r = g.dir_all_op(&format!("{via}/tree"), DirAllOp::Remove);
+    let leaked = !dir.join("denied/tree/sub/f.txt").exists();
+    let _ = std::fs::remove_dir_all(dir.join("denied/tree"));
+    let _ = std::fs::remove_dir_all(dir.join("granted/tree"));
+    if leaked {
+        return Some(true);
+    }
+    match r {
+        Err(OpenError::Denied(_)) => Some(false),
+        _ => None,
+    }
+}
+
+#[test]
+fn rename_copy_and_directory_trees_never_touch_the_denied_directory() {
+    let w = World::new("w2");
+    type Act = dyn Fn(&Grant, &str, &Path) -> Option<bool>;
+    for (name, act) in [("rename", &rename_through as &Act), ("copy", &copy_through), ("create_dir_all", &create_all_through), ("remove_dir_all", &remove_all_through)] {
+        let t = run_writer(&w, act);
+        eprintln!("fd-verified {name}: {t:?}");
+        assert_eq!(t.leaks, 0, "a {name} reached the denied directory: {t:?}");
+        assert!(t.denied > 50 && t.io > 50, "the swap never raced with the {name}s: {t:?}");
     }
 }
 

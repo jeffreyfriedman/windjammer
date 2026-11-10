@@ -231,7 +231,14 @@ impl Pass<'_, '_> {
         match &c.res {
             Res::Def(id) => fn_effectful(id),
             Res::MethodCandidates(ids) | Res::Ambiguous(ids) => ids.iter().any(fn_effectful),
-            Res::Unresolved(Reason::External(p)) | Res::Prim(p) => !sink_uses(&full_path(p, &c.callee), c).is_empty(),
+            Res::Unresolved(Reason::External(p)) | Res::Prim(p) => {
+                let full = full_path(p, &c.callee);
+                // a call into a Rust crate performs what its surface declares, else `ffi(<crate>)`: a step unless `@pure`
+                match self.facts.crates.uses(&full) {
+                    Some(u) => !u.is_empty(),
+                    None => !sink_uses(&full, c).is_empty(),
+                }
+            }
             Res::Unresolved(Reason::NotFound(_)) if c.kind == CallKind::Free => !sink_uses(&c.callee, c).is_empty(),
             Res::Unresolved(Reason::Dynamic) | Res::Local(_) => true,
             _ => false,
