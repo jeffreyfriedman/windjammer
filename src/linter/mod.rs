@@ -7,6 +7,7 @@
 //!
 //! This follows the Rust/Clippy model: code compiles, but warnings guide toward better patterns.
 
+pub mod clone_use;
 pub mod codes;
 pub mod rust_leakage;
 pub mod surface_syntax;
@@ -25,7 +26,7 @@ pub fn lint_text(file_name: &str, source: &str) -> Option<Vec<LintDiagnostic>> {
         let mut parser = crate::parser::Parser::new_with_source(tokens, n.clone(), t.clone());
         parser.enable_span_log();
         let program = parser.parse().ok()?;
-        let mut linter = rust_leakage::RustLeakageLinter::new(&n).with_receiver_spans(parser.span_snapshot());
+        let mut linter = rust_leakage::RustLeakageLinter::new(&n).with_receiver_spans(parser.span_snapshot()).with_source(&t);
         linter.lint_program(&program);
         linter.lint_source(&t);
         Some(linter.into_diagnostics())

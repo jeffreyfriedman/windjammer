@@ -112,7 +112,8 @@ fn main() {
         while r < runs {
             // interleaved: base, test, test, base (0 is the base arm)
             for k in [0, 1, 1, 0] {
-                let arm = if k == 0 { base } else { test }
+                // the clones are needed: without them the String moves out of `base` or `test` on every pass of the loop (rustc E0382)
+                let arm = if k == 0 { base.clone() } else { test.clone() }
                 let x = run_once(wj, prog, arm, mode)
                 if k == 0 {
                     base_t.push(x.cpu)
