@@ -13,9 +13,11 @@ use crate::lexer::{Lexer, StringPart, Token};
 /// Is the `.clone()` whose expression starts at `line`/`column` (1-based) a clone of a local that is used again?
 pub fn receiver_is_used_again(source: &str, line: usize, column: usize) -> bool {
     let toks = Lexer::new(source).tokenize_with_locations();
-    // the first `x . clone ( )` at or after the expression start
+    // the `x . clone ( )` that the position falls in
+    // the position may be the receiver's start or the method name (`clone`): either lies inside `x.clone()`
     let site = (0..toks.len().saturating_sub(4)).find(|&i| {
-        (toks[i].line, toks[i].column) >= (line, column)
+        (toks[i].line, toks[i].column) <= (line, column)
+            && (line, column) <= (toks[i + 2].line, toks[i + 2].column)
             && matches!(&toks[i].token, Token::Ident(_))
             && toks[i + 1].token == Token::Dot
             && matches!(&toks[i + 2].token, Token::Ident(m) if m == "clone")
@@ -108,6 +110,14 @@ mod tests {
         // the position of the first `.clone()` receiver
         let (line, col) = src.lines().enumerate().find_map(|(l, t)| t.find(".clone()").map(|c| (l + 1, t[..c].rfind(|ch: char| !(ch.is_alphanumeric() || ch == '_')).map_or(0, |p| p + 1) + 1))).unwrap();
         receiver_is_used_again(src, line, col)
+    }
+
+    #[test]
+    fn the_position_may_be_the_method_name() {
+        let src = "fn f(a: string) -> int {\n    let b = a.clone()\n    take(b) + a.len()\n}\n";
+        // line 2: `    let b = a.clone()`: `a` is column 13, `clone` column 15
+        assert!(receiver_is_used_again(src, 2, 13));
+        assert!(receiver_is_used_again(src, 2, 15));
     }
 
     #[test]
