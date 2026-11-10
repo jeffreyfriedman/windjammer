@@ -75,7 +75,10 @@ pub fn regen(ctx: &Ctx, wj: &Path) -> Result<String, String> {
             std::fs::write(ctx.root.join(&file), text).map_err(|e| e.to_string())?;
         }
     }
-    Ok(if report.is_empty() { "every rust,generated fence already matches the compiler\n".to_string() } else { report })
+    for f in super::book_playground::regen(ctx)? {
+        report.push_str(&format!("{f}: Run links refreshed\n"));
+    }
+    Ok(if report.is_empty() { "every rust,generated fence and Run link already matches\n".to_string() } else { report })
 }
 
 #[cfg(test)]
