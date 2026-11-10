@@ -522,6 +522,12 @@ path = "tests/reassign_and_list_codegen_test.rs"
 name = "explain_ownership_columns"
 path = "tests/explain_ownership_columns_test.rs"
 
+# Incremental library builds keep the signature registry the size of a full build
+#   cargo test --release --test incremental_registry_size
+[[test]]
+name = "incremental_registry_size"
+path = "tests/incremental_registry_size_test.rs"
+
 # std::http::request builder: interpreted and compiled, against a local silent server
 #   cargo test --release --test http_request_builder
 [[test]]

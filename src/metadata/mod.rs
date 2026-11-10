@@ -271,6 +271,17 @@ pub fn merge_wj_meta_signatures_from_dir_inner_pub(
     load_project_root_metadata(root, registry, copy_structs, all_struct_fields);
 }
 
+/// Merge one cached `.wj.meta` file and nothing else. `merge_wj_meta_signatures_from_dir_inner_pub` treats its
+/// argument as a source root and merges the whole project cache, which makes a per-file call quadratic.
+pub fn merge_wj_meta_signatures_from_file_pub(
+    meta_file: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    copy_structs: &mut Vec<String>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+) {
+    merge_single_wj_meta_file(meta_file, registry, copy_structs, all_struct_fields);
+}
+
 fn merge_wj_meta_signatures_from_dir_inner(
     root: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
