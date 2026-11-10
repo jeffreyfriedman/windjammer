@@ -12,7 +12,9 @@ its panic equal those of the same program built and run by the compiled backend,
 Three things follow.
 
 - **A refusal is not a divergence.** The interpreter refuses (exits before running) what `wj check` rejects, and it
-  also refuses ownership errors that rustc would report (ADR-0030, WJ0007). Refusing early is the promise working.
+  also refuses ownership errors that rustc would report (ADR-0030, WJ0007). Integer widths the compiled build would mix
+  (a backend defect, ADR-0033) are an error in `wj check` and a warning before an interpreted run. Refusing early is the
+  promise working.
 - **The ledger is the only escape hatch and it only shrinks.** A divergence that is not in the ledger fails the drift
   gate; a ledgered one that is fixed fails the gate until its line is deleted. The ledger has a ceiling
   (`tests/drift_corpus/ledger_ceiling.txt`) that `tests/drift_contract_test.rs` enforces in the default test run, so
