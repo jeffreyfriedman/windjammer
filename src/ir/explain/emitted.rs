@@ -84,8 +84,9 @@ pub struct EmittedLet {
     /// The bound value's type when the emitted code spells it: an annotation, a struct literal, `vec![..]`,
     /// `String::from`/`format!`/`.to_string()`.
     pub ty: Option<String>,
-    /// `let x = y` with `y` a bare variable: `(y, seq, loop_depth)`, a move of `y` unless it is `Copy`.
-    pub moved_from: Option<(String, usize, usize)>,
+    /// `let x = y` with `y` a bare variable, or `let x = if c { y } else { z }` (every branch tail that
+    /// is a bare variable): `(y, seq, loop_depth)`, a move of `y` unless it is `Copy`.
+    pub moved_from: Vec<(String, usize, usize)>,
     /// `let x = y.f` with `y` a bare variable: `(y, f, seq, loop_depth)`, a partial move of `y`.
     pub field_from: Option<(String, String, usize, usize)>,
 }
@@ -241,6 +242,30 @@ struct BodyVisitor<'a> {
     nodes: usize,
 }
 
+/// The bare variables an expression's value can be: `y`, or the branch tails of an `if`/`match`/block
+/// (`if c { y } else { z }`). Each is moved into the binding.
+fn value_tail_vars(e: &syn::Expr, out: &mut Vec<String>) {
+    match e {
+        syn::Expr::Path(p) if p.path.segments.len() == 1 => out.push(p.path.segments[0].ident.to_string()),
+        syn::Expr::Paren(p) => value_tail_vars(&p.expr, out),
+        syn::Expr::Block(b) => block_tail_vars(&b.block, out),
+        syn::Expr::If(i) => {
+            block_tail_vars(&i.then_branch, out);
+            if let Some((_, e)) = &i.else_branch {
+                value_tail_vars(e, out);
+            }
+        }
+        syn::Expr::Match(m) => m.arms.iter().for_each(|a| value_tail_vars(&a.body, out)),
+        _ => {}
+    }
+}
+
+fn block_tail_vars(b: &syn::Block, out: &mut Vec<String>) {
+    if let Some(syn::Stmt::Expr(e, None)) = b.stmts.last() {
+        value_tail_vars(e, out);
+    }
+}
+
 fn root_ident(e: &syn::Expr) -> Option<String> {
     match e {
         syn::Expr::Path(p) if p.path.segments.len() == 1 => Some(p.path.segments[0].ident.to_string()),
@@ -369,10 +394,11 @@ impl<'ast, 'a> Visit<'ast> for BodyVisitor<'a> {
                 _ => l.init.as_ref().and_then(|i| type_of_init(&i.expr)),
             };
             let (seq, depth) = (self.seq, self.loop_depth);
-            let moved_from = match l.init.as_ref().map(|i| &*i.expr) {
-                Some(syn::Expr::Path(p)) if p.path.segments.len() == 1 => Some((p.path.segments[0].ident.to_string(), seq, depth)),
-                _ => None,
-            };
+            let mut tails = Vec::new();
+            if let Some(i) = &l.init {
+                value_tail_vars(&i.expr, &mut tails);
+            }
+            let moved_from = tails.into_iter().map(|v| (v, seq, depth)).collect();
             let field_from = match l.init.as_ref().map(|i| &*i.expr) {
                 Some(syn::Expr::Field(f)) => match (&*f.base, &f.member) {
                     (syn::Expr::Path(p), syn::Member::Named(m)) if p.path.segments.len() == 1 => {

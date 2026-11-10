@@ -1,8 +1,9 @@
 //! W0005 precision: an explicit `.clone()` is reported as redundant only where the compiler would not need it.
 //!
-//! The recorded case: a `string` moved into an `if` branch inside a loop. The compiler emits the move without a clone and rustc rejects
-//! it (E0382, reported as WJ0007), so the clone the author wrote is the only thing that keeps the program building. W0005 used to ask
-//! the author to delete it ("the compiler copies values when they are used again"), which led straight into the error.
+//! The recorded case: a `string` moved into an `if` branch inside a loop. The compiler used to emit the move without a clone, and rustc
+//! rejected it (E0382), so the clone the author wrote was the only thing that kept the program building; W0005 asked the author to
+//! delete it. Since C6 the compiler copies there itself (liveness: the next iteration reads the value again), so without the clone the
+//! program builds too; W0005's token rule still stays quiet for such a clone (a missed warning, never a wrong one).
 
 use std::path::Path;
 use std::process::Command;
@@ -30,14 +31,14 @@ fn rust_of(d: &Path) -> String {
     std::fs::read_to_string(d.join("out/main.rs")).unwrap()
 }
 
-/// The oracle for "the clone is needed": without it the generated Rust moves a `String` out of a variable in a loop.
+/// C6: without the clone the compiler copies the value itself in the branch, because the next iteration reads it again.
 #[test]
-fn without_the_clone_the_compiler_emits_a_move_in_the_loop() {
+fn without_the_clone_the_compiler_copies_in_the_loop() {
     let d = project(&LOOP_MOVE.replace("BASE", "base").replace("TEST", "test"));
     let rs = rust_of(d.path());
     let arm = &rs[rs.find("let arm").unwrap()..];
     let arm = &arm[..arm.find("};").unwrap()];
-    assert!(arm.contains("base") && arm.contains("test") && !arm.contains(".clone()"), "{arm}");
+    assert!(arm.contains("base.clone()") && arm.contains("test.clone()"), "{arm}");
 }
 
 #[test]
