@@ -1,0 +1,36 @@
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Proposal {
+    pub id: String,
+    pub status: String,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Event {
+    pub proposal_id: String,
+    pub actor: String,
+}
+
+#[inline]
+fn approve(proposal: Proposal, actor: String) -> (Proposal, Event) {
+    let event = Event { proposal_id: proposal.id.clone(), actor };
+    let mut next = proposal;
+    next.status = String::from("approved");
+    (next, event)
+}
+
+#[inline]
+fn note_of(proposal: Proposal) -> Event {
+    Event { proposal_id: proposal.note, actor: String::from("system") }
+}
+
+fn main() {
+    let p = Proposal { id: String::from("p1"), status: String::from("proposed"), note: String::from("n") };
+    let (next, event) = approve(p, "owner".to_string());
+    println!("{} {} {}", next.id, next.status, event.proposal_id);
+    let e = note_of(next);
+    println!("{}", e.proposal_id);
+}
+
