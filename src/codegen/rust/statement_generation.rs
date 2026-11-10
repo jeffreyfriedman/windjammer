@@ -953,9 +953,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(root) = self.root_identifier_of_field_or_index_chain(value) else {
             return;
         };
-        if root == "self" {
-            return;
-        }
+        if root == "self" || self.clone_field_of_borrowed_root(value, value_str) { return; }
         let is_owned_param = self.current_function_params.iter().any(|p| {
             p.name == root
                 && !self.inferred_borrowed_params.contains(&p.name)

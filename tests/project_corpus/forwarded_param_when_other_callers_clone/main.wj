@@ -1,0 +1,8 @@
+// `Packed::from_items` only forwards its parameter to `pack`, which consumes it; another module calls `pack` with a clone. Expected by hand: pack([Flag(true)]) = [1], twice, and from_items gives 1 byte (printed as "twice once").
+// expect: 1 1
+mod enc
+mod user
+
+fn main() {
+    println("${user::twice()} ${user::once()}")
+}

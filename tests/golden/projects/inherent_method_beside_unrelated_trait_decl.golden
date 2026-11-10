@@ -1,0 +1,53 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod meter;
+
+// Re-export public items
+pub use meter::*;
+// ==== main.rs ====
+mod meter;
+fn main() {
+    let mut c = meter::Counter { n: 0_u64 };
+    c.bump();
+    c.bump();
+    println!("{}", c.n);
+}
+
+// ==== meter.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub trait Meter {
+    fn bump(&self);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Counter {
+    pub n: u64,
+}
+impl Counter {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.n.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Counter {
+#[inline]
+pub fn bump(&mut self) {
+        self.n += 1;
+}
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod meter;
+
+// Re-export public items
+pub use meter::*;

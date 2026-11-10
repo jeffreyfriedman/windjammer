@@ -274,7 +274,7 @@ impl<'ast> CodeGenerator<'ast> {
                 other => self.generate_pattern(other),
             }
         } else {
-            self.generate_pattern(pattern)
+            self.generate_let_pattern(pattern, value)
         };
         output.push_str(&pattern_str);
 

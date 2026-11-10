@@ -342,16 +342,14 @@ pub struct CodeGenerator<'ast> {
     pub(crate) type_defining_modules: std::collections::HashMap<String, Vec<Vec<String>>>,
     /// `(parent_module, symbol)` → child module segment defining that symbol (multipass FFI layout).
     pub(crate) extern_submodule_qualifiers: std::collections::HashMap<(String, String), String>,
-    /// Import aliases: maps alias name → original path.
-    /// e.g., `use std::collections::HashMap as Map` → { "Map": "std::collections::HashMap" }
-    /// Prevents stdlib type mappings from overriding user-defined aliases.
+    /// Import alias names (`use std::collections::HashMap as Map` → "Map"): stdlib type mappings never override them.
     pub(crate) import_aliases: std::collections::HashSet<String>,
-    /// Module alias map: alias → last segment of the original module path.
-    /// e.g., `use crate::ffi::gpu_safe as gpu` → { "gpu": "gpu_safe" }
-    /// Used to resolve qualified calls through aliases for signature lookup.
+    /// Module alias → last segment of the original path (`use crate::ffi::gpu_safe as gpu` → { "gpu": "gpu_safe" }),
+    /// to resolve qualified calls through aliases for signature lookup.
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
     /// Function import alias → fully qualified path (`use dep::fn as alias`).
     pub(crate) import_fn_alias_map: std::collections::HashMap<String, String>,
+    pub(crate) imported_fn_names: std::collections::HashSet<String>, // `use crate::ops::double` leaves: a bare call names the import
     /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
     /// Used to emit `module::fn` instead of `module.fn` for free functions.
     pub(crate) runtime_std_module_imports: std::collections::HashSet<String>,
@@ -747,6 +745,7 @@ impl<'ast> CodeGenerator<'ast> {
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
             import_fn_alias_map: std::collections::HashMap::new(),
+            imported_fn_names: Default::default(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
@@ -1302,11 +1301,11 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .map(|t| format!("{t}::{func_name}"))
             .unwrap_or_else(|| func_name.to_string());
-        // Identity first (same module path, C3), so `b::take` never reads `a::take`'s IR.
-        let named = |f: &&crate::ir::node::IrFunction| f.name == qualified || f.name == func_name;
+        // Identity first: `Type::method` before a bare name (a same-named trait declaration is another function),
+        // and the same module path (C3), so `b::take` never reads `a::take`'s IR.
         let fns = &self.ir_module_functions;
-        let own = fns.iter().filter(named).find(|f| f.module_path == self.current_module_path);
-        self.current_ir_function = own.or_else(|| fns.iter().find(named)).cloned();
+        let pick = |name: &str| fns.iter().filter(|f| f.name == name).find(|f| f.module_path == self.current_module_path).or_else(|| fns.iter().find(|f| f.name == name));
+        self.current_ir_function = pick(&qualified).or_else(|| pick(func_name)).cloned();
     }
 
     /// Get parameter ownership, preferring IR data when cutover is enabled.
@@ -1891,10 +1890,11 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// A bare call `f(..)` names a free function: a method registered under the same bare name
-    /// (`Port::list_items` homonym of `use_cases::list_items`) is a different callee (C3 identity).
+    /// A bare call `f(..)` names a free function, never a same-named method (C3 identity), and a parameter or
+    /// local of that name (`accept: fn(int) -> bool`) shadows every function: no registry signature then.
     pub(crate) fn resolve_bare_free_call_signature(&self, name: &str, n: usize) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
-        self.resolve_call_signature_with_global(name, None, n).filter(|r| name.contains("::") || !r.sig.has_self_receiver)
+        let shadowed = !name.contains("::") && (self.current_function_params.iter().any(|p| p.name == name) || self.local_variable_scopes.iter().any(|s| s.contains(name)));
+        self.resolve_call_signature_with_global(name, None, n).filter(|r| !shadowed && (name.contains("::") || !r.sig.has_self_receiver))
     }
 
     pub(crate) fn resolve_call_signature_with_global(

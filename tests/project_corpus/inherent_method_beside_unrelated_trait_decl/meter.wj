@@ -1,0 +1,13 @@
+trait Meter {
+    fn bump(self)
+}
+
+pub struct Counter {
+    pub n: u64,
+}
+
+impl Counter {
+    pub fn bump(self) {
+        self.n = self.n + 1
+    }
+}

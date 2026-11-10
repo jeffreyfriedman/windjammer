@@ -425,6 +425,10 @@ impl<'ast> CodeGenerator<'ast> {
     pub(super) fn match_expression_binds_refs(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => {
+                // A parameter or loop binding emitted as a reference (`b: &Val`) binds its payloads by reference.
+                if name != "self" && (self.emitted_rust_ref_formals.contains(name) || self.borrowed_iterator_vars.contains(name)) {
+                    return true;
+                }
                 if let Some(ty) = self.local_var_types.get(name) {
                     return matches!(ty, Type::Reference(_) | Type::MutableReference(_));
                 }

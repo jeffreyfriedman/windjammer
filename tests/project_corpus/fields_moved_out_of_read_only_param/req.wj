@@ -1,0 +1,15 @@
+pub struct Who {
+    pub name: string,
+    pub id: string,
+}
+
+pub struct Req {
+    pub who: Who,
+    pub depth: u32,
+}
+
+pub fn label(r: Req) -> string {
+    let a = r.who.name
+    let b = r.who.id
+    a + ":" + b
+}

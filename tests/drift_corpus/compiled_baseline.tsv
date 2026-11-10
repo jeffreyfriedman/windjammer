@@ -1878,3 +1878,15 @@ apps/wj-webhook::tests/webhook_test.wj::test_cors_preflight_allowed_origin	fail
 apps/wj-webhook::tests/webhook_test.wj::test_cors_preflight_rejects_unknown_origin	fail	
 apps/wj-webhook::tests/webhook_test.wj::test_post_webhook_rejects_empty_event	fail	
 apps/wj-webhook::tests/webhook_test.wj::test_post_webhook_rejects_oversized_event	fail	
+tests/drift_corpus/repros/env_temp_dir_call.wj#mainerr	none	
+tests/drift_corpus/repros/env_temp_dir_call.wj	exit1:0:17	
+tests/drift_corpus/repros/fn_typed_param_call.wj#mainerr	none	
+tests/drift_corpus/repros/fn_typed_param_call.wj	exit1:0:17	
+tests/drift_corpus/repros/mut_receiver_transitive_in_expr.wj#mainerr	none	
+tests/drift_corpus/repros/mut_receiver_transitive_in_expr.wj	exit0:2:17897	
+tests/drift_corpus/repros/mut_receiver_tuple_binding.wj#mainerr	none	
+tests/drift_corpus/repros/mut_receiver_tuple_binding.wj	exit0:3:555096	
+tests/drift_corpus/repros/try_then_method_chain.wj#mainerr	none	
+tests/drift_corpus/repros/try_then_method_chain.wj	exit1:0:17	
+tests/drift_corpus/repros/vec_contains_local_ref.wj#mainerr	none	
+tests/drift_corpus/repros/vec_contains_local_ref.wj	exit1:0:17	

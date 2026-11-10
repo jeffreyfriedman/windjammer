@@ -453,9 +453,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if path.len() >= 2 {
                     if let Some(last) = path.last() {
                         if last.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
-                            if !path.first().is_some_and(|seg| {
-                                matches!(seg.as_str(), "std" | "crate" | "super" | "self")
-                            }) {
+                            self.imported_fn_names.insert(last.clone());
+                            if !path.first().is_some_and(|seg| matches!(seg.as_str(), "std" | "crate" | "super" | "self")) {
                                 self.import_fn_alias_map
                                     .insert(last.clone(), path.join("::"));
                             }

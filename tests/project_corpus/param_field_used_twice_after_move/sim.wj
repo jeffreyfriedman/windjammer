@@ -1,0 +1,12 @@
+pub struct Sim {
+    pub left: u32,
+    pub addr: string,
+}
+
+pub fn advance(sim: Sim) -> (string, Sim) {
+    if sim.left > 0 {
+        let next = Sim { left: sim.left - 1, addr: sim.addr }
+        return (sim.addr, next)
+    }
+    (sim.addr, Sim { left: 0, addr: "" })
+}

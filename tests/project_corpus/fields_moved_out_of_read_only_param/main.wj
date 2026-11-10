@@ -1,0 +1,8 @@
+// A parameter that is only read, whose String fields are bound to locals and concatenated. Expected by hand: ann:7.
+// expect: ann:7
+mod req
+
+fn main() {
+    let r = req::Req { who: req::Who { name: "ann", id: "7" }, depth: 1 }
+    println("${req::label(r)}")
+}
