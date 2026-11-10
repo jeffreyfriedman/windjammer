@@ -631,7 +631,7 @@ impl<'ast> CodeGenerator<'ast> {
                     (None, None) => None,
                 }
             }
-            // Cast expressions: the target type is explicit
+            Expression::TryOp { expr, .. } => self.try_payload_type(expr),
             Expression::Cast { type_, .. } => Some(type_.clone()),
             // Call expressions: Type::method(args) → look up return type from signature registry
             // This is critical for Copy-type inference: let u = MathHelper::fade(x) → u is f32
@@ -1105,5 +1105,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         payload.clone()
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `call()?` is the success payload of a `Result` / `Option` (`let client = Client::connect(..)?`).
+    fn try_payload_type(&self, expr: &Expression<'ast>) -> Option<Type> {
+        match self.infer_expression_type(expr)? {
+            Type::Result(ok, _) => Some(*ok),
+            Type::Option(inner) => Some(*inner),
+            _ => None,
+        }
     }
 }

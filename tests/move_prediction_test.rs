@@ -58,6 +58,17 @@ fn moves_the_compiler_turns_into_clones_are_not_reported() {
     }
 }
 
+/// A value without `Clone` (a struct holding a trait object or a channel end) is never copied: reading it
+/// again after a move is reported as WJ0007.
+#[test]
+fn moved_values_without_clone_are_still_reported() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/rejected");
+    let d = windjammer::check::moves::predicted_moves(&root.join("box_dyn_holder_reuse.wj"));
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].code, "WJ0007");
+    assert!(d[0].message.contains("`h`"), "{}", d[0].message);
+}
+
 #[test]
 fn predictions_across_the_corpora() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -85,6 +96,7 @@ fn predictions_across_the_corpora() {
         "tests/move_prediction/loop_non_clone.wj 1",
         "tests/move_prediction/partial_non_clone.wj 1",
         "tests/move_prediction/receiver_non_clone.wj 1",
+        "tests/move_prediction/rejected/box_dyn_holder_reuse.wj 1",
     ];
     assert_eq!(hits, expected, "{} files scanned", files.len());
 }

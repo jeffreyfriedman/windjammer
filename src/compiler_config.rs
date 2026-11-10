@@ -47,6 +47,8 @@ pub struct CompilerConfig {
     /// Gate self-test only (`WJ_LIVENESS_MUTATION=always-move`): a deliberately wrong liveness
     /// fact that marks every read a last use, so the convergence gates can prove they catch it.
     pub liveness_mutation_always_move: bool,
+    /// Release builds let integer arithmetic wrap (`wj build --unchecked-arithmetic`); off by default (SPEC-NUM-002).
+    pub unchecked_arithmetic: bool,
 }
 
 impl Default for CompilerConfig {
@@ -68,6 +70,7 @@ impl Default for CompilerConfig {
             durable_steps: Default::default(),
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: false,
+            unchecked_arithmetic: false,
         }
     }
 }
@@ -107,6 +110,7 @@ impl CompilerConfig {
             durable_steps: Default::default(),
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
+            unchecked_arithmetic: false,
         }
     }
 
@@ -142,6 +146,11 @@ impl CompilerConfig {
 
     pub fn with_skip_cargo_toml_generation(mut self, on: bool) -> Self {
         self.skip_cargo_toml_generation = on;
+        self
+    }
+
+    pub fn with_unchecked_arithmetic(mut self, on: bool) -> Self {
+        self.unchecked_arithmetic = on;
         self
     }
 

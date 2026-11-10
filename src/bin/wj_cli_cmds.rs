@@ -117,6 +117,7 @@ pub fn run(cli: Cli) -> Result<()> {
             path,
             output,
             release,
+            unchecked_arithmetic,
             target,
             defer_drop,
             defer_drop_threshold,
@@ -138,17 +139,13 @@ pub fn run(cli: Cli) -> Result<()> {
             json,
             ir_shadow_validate,
         } => {
-            // TODO: Pass defer_drop config to compiler
             let _ = (defer_drop, defer_drop_threshold);
             windjammer::cli::build::execute(
                 &path,
                 output.as_deref(),
                 release,
                 &target,
-                windjammer::cli::build::BuildOptions {
-                    tree_shake,
-                    source_maps,
-                },
+                windjammer::cli::build::BuildOptions { tree_shake, source_maps, unchecked_arithmetic },
                 check,
                 raw_errors,
                 fix,

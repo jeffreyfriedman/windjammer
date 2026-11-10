@@ -18,6 +18,27 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(lowered) = self.mc_lower_string_vec_contains(object, method, arguments, obj_str, args) {
             return Some(lowered);
         }
+        if let Some(lowered) = self.mc_lower_text_option_copy(object, method, args, obj_str) {
+            return Some(lowered);
+        }
+        // `map_err(|_| "literal")` into a `Result<_, string>`: the error is an owned `String`
+        if method == "map_err" && args.len() == 1 {
+            if let Some((_, Expression::Closure { body: Expression::Literal { value: Literal::String(_), .. }, .. })) = arguments.first() {
+                if args[0].ends_with('"') {
+                    args[0].push_str(".to_string()");
+                }
+            }
+        }
+        // `entry(key)` takes the key by value: a text key that is a borrowed slice becomes an owned `String`
+        if method == "entry" && args.len() == 1 && !args[0].ends_with(".to_string()") && !args[0].ends_with(".clone()") && !args[0].starts_with("String::from(") {
+            if let Some((_, key)) = arguments.first() {
+                if matches!(key, Expression::Identifier { .. })
+                    && self.infer_expression_type(key).is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(crate::codegen::rust::collection_detection::peel_type_reference(&t)))
+                {
+                    args[0].push_str(".to_string()");
+                }
+            }
+        }
         // `opt.unwrap_or(&0)`: a literal behind an explicit `&` is a reference default (`Option<&T>`
         // from `map.get(k)`); the by-value call-site rules must not strip it.
         if matches!(method, "cmp" | "partial_cmp" | "eq" | "ne" | "lt" | "le" | "gt" | "ge")
@@ -92,6 +113,76 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
+    /// Comparator and key closures (`sort_by(|a, b| ..)`) receive `&T`: while the closure is generated its
+    /// parameters are references, so a map lookup keyed by one passes it as is (`totals.get(a)`).
+    pub(super) fn mark_ref_closure_params(&mut self, method: &str, arg: &Expression<'ast>) -> Vec<String> {
+        let Expression::Closure { parameters, .. } = arg else { return Vec::new() };
+        if !matches!(method, "sort_by" | "sort_unstable_by" | "sort_by_key" | "sort_unstable_by_key" | "binary_search_by") {
+            return Vec::new();
+        }
+        let names: Vec<String> = parameters.iter().map(|p| Self::closure_param_binding_name(p)).collect();
+        names.into_iter().filter(|n| self.idiom.ref_closure_params.insert(n.clone())).collect()
+    }
+
+    /// A comparator parameter is already `&T`: passed as a call argument it stays as it is (`totals.get(a)`),
+    /// whatever borrow the signature-driven stages put in front of it.
+    pub(super) fn unborrow_ref_closure_args(&self, arguments: &[(Option<String>, &'ast Expression<'ast>)], mut args: Vec<String>) -> Vec<String> {
+        for (arg, (_, expr)) in args.iter_mut().zip(arguments) {
+            if matches!(expr, Expression::Identifier { name, .. } if self.idiom.ref_closure_params.contains(name.as_str())) {
+                if let Some(rest) = arg.strip_prefix('&').filter(|r| !r.starts_with("mut ")) {
+                    *arg = rest.to_string();
+                }
+            }
+        }
+        args
+    }
+
+    /// Undo the per-closure parameter marks: the borrowed-iterator names and the `&T` comparator names.
+    pub(super) fn release_closure_param_marks(&mut self, borrowed: &[String], refs: &[String]) {
+        borrowed.iter().for_each(|p| { self.borrowed_iterator_vars.remove(p); });
+        refs.iter().for_each(|n| { self.idiom.ref_closure_params.remove(n); });
+    }
+
+    /// `text.split(..).next()` (also `nth`, `last`, through adapters): an `Option<&str>`.
+    pub(in crate::codegen::rust) fn is_text_slice_option(expr: &Expression<'ast>) -> bool {
+        fn splits(e: &Expression<'_>) -> bool {
+            match e {
+                Expression::MethodCall { object, method, .. } => {
+                    matches!(
+                        method.as_str(),
+                        "split" | "rsplit" | "lines" | "split_whitespace" | "split_terminator" | "splitn" | "rsplitn"
+                            | "split_ascii_whitespace"
+                    ) || splits(object)
+                }
+                _ => false,
+            }
+        }
+        matches!(expr, Expression::MethodCall { object, method, .. }
+            if matches!(method.as_str(), "next" | "nth" | "last" | "next_back") && splits(object))
+    }
+
+    /// `.copied()` / `.cloned()` on an option of string slices (`s.split(" ").next()`, a local of type
+    /// `Option<&str>`): a piece of text is already a value in Windjammer (the interpreter treats both as the
+    /// identity) and Rust has no `Option<&str>::copied`.
+    fn mc_lower_text_option_copy(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        args: &[String],
+        obj_str: &str,
+    ) -> Option<String> {
+        if !matches!(method, "copied" | "cloned") || !args.is_empty() {
+            return None;
+        }
+        let slice_option = matches!(self.infer_expression_type(object),
+            Some(Type::Option(inner)) if matches!(inner.as_ref(), Type::Reference(p) if matches!(p.as_ref(), Type::Custom(n) if n == "str")));
+        let known_slice = slice_option
+            || self.receiver_is_text_iterator_next(object)
+            || Self::is_text_slice_option(object)
+            || matches!(object, Expression::Identifier { name, .. } if self.idiom.text_option_locals.contains(name));
+        known_slice.then(|| obj_str.to_string())
+    }
+
     /// `Vec<string>.contains(x)` with a text argument (`&str` formal, literal, `String`): `Vec<String>::contains`
     /// only accepts `&String`, so compare elements by value: `v.iter().any(|m| *m == *x)`.
     fn mc_lower_string_vec_contains(
@@ -151,7 +242,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Iterator-only methods (no inherent `Vec`/slice/map/set method of the same name).
-    fn is_direct_iterator_adapter(method: &str) -> bool {
+    pub(in crate::codegen::rust) fn is_direct_iterator_adapter(method: &str) -> bool {
         matches!(
             method,
             "map" | "filter" | "filter_map" | "flat_map" | "zip" | "take" | "skip" | "any" | "all"
@@ -198,7 +289,7 @@ impl<'ast> CodeGenerator<'ast> {
             || matches!(object, Expression::MacroInvocation { name, .. } if name == "vec")
     }
 
-    fn type_is_iterable_collection(ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_is_iterable_collection(ty: &Type) -> bool {
         match ty {
             Type::Vec(_) | Type::Array(..) => true,
             Type::Reference(inner) | Type::MutableReference(inner) => Self::type_is_iterable_collection(inner),

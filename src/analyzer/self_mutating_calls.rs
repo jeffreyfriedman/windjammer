@@ -50,9 +50,13 @@ impl<'ast> Analyzer<'ast> {
                         })
                     })
             }
-            Statement::While { body, .. } => body
-                .iter()
-                .any(|s| self.statement_calls_mutating_self_methods(s, registry, visited)),
+            // the condition is evaluated every iteration (`while self.step() { .. }`); `loop` has only a body
+            Statement::While { condition, body, .. } => {
+                self.expression_calls_mutating_self_methods(condition, registry, visited)
+                    || body.iter().any(|s| self.statement_calls_mutating_self_methods(s, registry, visited))
+            }
+            Statement::Loop { body, .. } => body.iter().any(|s| self.statement_calls_mutating_self_methods(s, registry, visited)),
+            Statement::Return { value: Some(e), .. } => self.expression_calls_mutating_self_methods(e, registry, visited),
             Statement::For { iterable, body, .. } => {
                 self.expression_calls_mutating_self_methods(iterable, registry, visited)
                     || body

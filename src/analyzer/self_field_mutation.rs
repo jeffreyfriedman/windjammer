@@ -39,9 +39,11 @@ impl<'ast> Analyzer<'ast> {
                             .any(|s| self.statement_modifies_self_fields(s, registry, visited))
                     })
             }
-            Statement::While { body, .. } => body
-                .iter()
-                .any(|s| self.statement_modifies_self_fields(s, registry, visited)),
+            Statement::While { condition, body, .. } => {
+                self.expression_mutates_self_fields(condition, registry, visited)
+                    || body.iter().any(|s| self.statement_modifies_self_fields(s, registry, visited))
+            }
+            Statement::Loop { body, .. } => body.iter().any(|s| self.statement_modifies_self_fields(s, registry, visited)),
             Statement::For {
                 pattern,
                 iterable,
