@@ -530,7 +530,7 @@ fn book_regen_rewrites_a_stale_generated_fence_and_refuses_a_broken_program() {
     assert!(ok, "after regeneration the page passes: {out}");
     assert_eq!(docs_truth::book_regen::regen(&s.ctx(), wj).unwrap(), "every rust,generated fence already matches the compiler\n");
     // a program that does not build: nothing is rewritten and the error says so
-    let broken = "```wj\nfn main() {\n    let x: int = \"no\"\n}\n```\n\n```rust,generated\nfn main() {}\n```\n";
+    let broken = "```wj\nfn main( {\n```\n\n```rust,generated\nfn main() {}\n```\n";
     s.page(broken);
     let before = std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap();
     let err = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap_err();
