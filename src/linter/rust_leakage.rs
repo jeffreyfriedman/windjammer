@@ -34,6 +34,8 @@ pub struct RustLeakageLinter<'ast> {
     spans: Option<crate::parser::SpanSnapshot>,
     /// True spans used only for W0016 (the `self` of a bodyless trait method); other lints keep their legacy locations.
     receiver_spans: Option<crate::parser::SpanSnapshot>,
+    /// The source text, when the caller has it: lets W0005 stay silent for a clone the compiler would not replace (`clone_use`).
+    source: Option<String>,
     _phantom: std::marker::PhantomData<&'ast ()>,
 }
 
@@ -45,8 +47,16 @@ impl<'ast> RustLeakageLinter<'ast> {
             in_trait_impl: false,
             spans: None,
             receiver_spans: None,
+            source: None,
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    /// Give the linter the source text, so W0005 does not ask for a clone to be deleted where deleting it would leave a value used after
+    /// a move (`clone_use`).
+    pub fn with_source(mut self, source: &str) -> Self {
+        self.source = Some(source.to_string());
+        self
     }
 
     /// Locate W0016 with the parser's true spans (see `Parser::enable_span_log`).
@@ -59,6 +69,13 @@ impl<'ast> RustLeakageLinter<'ast> {
     pub fn with_spans(mut self, spans: crate::parser::SpanSnapshot) -> Self {
         self.spans = Some(spans);
         self
+    }
+
+    /// W0005 only: is this clone of a local that is used again? Then the compiler may not replace it, and the warning stays quiet.
+    fn clone_may_be_needed(&self, expr: &Expression<'ast>, legacy: &Option<Location>) -> bool {
+        let Some(source) = &self.source else { return false };
+        let loc = self.loc_for_expr(expr, legacy);
+        super::clone_use::receiver_is_used_again(source, loc.line, loc.column)
     }
 
     fn loc_for_expr(&self, expr: &Expression<'ast>, legacy: &Option<Location>) -> SourceLocation {
@@ -365,6 +382,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                 // W0005: .clone() - Rust leakage, compiler handles cloning automatically
                 if crate::type_classification::is_language_level_explicit_clone(method)
                     && arguments.is_empty()
+                    && !self.clone_may_be_needed(expr, location)
                 {
                     let loc = self.loc_for_expr(expr, location);
                     self.collector.add(LintDiagnostic {
@@ -594,6 +612,10 @@ pub fn run_lint_if_enabled(
     }
     let file_name = file.to_string_lossy().to_string();
     let mut linter = RustLeakageLinter::new(&file_name);
+    // the text lets W0005 stay quiet for a clone the compiler would not replace (`clone_use`)
+    if let Ok(source) = std::fs::read_to_string(file) {
+        linter = linter.with_source(&source);
+    }
     linter.lint_program(program);
     let mut has_errors = false;
     for diag in linter.diagnostics() {
