@@ -4,7 +4,7 @@
 // expect: Meow
 // expect: Rex says Woof
 trait Speak {
-    fn sound(self) -> string
+    fn sound(&self) -> string
     fn speak(self, name: string) -> string {
         "${name} says ${self.sound()}"
     }

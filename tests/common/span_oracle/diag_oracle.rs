@@ -272,7 +272,7 @@ fn collect_inner(file: &str, src: &str) -> Vec<Found> {
                     message: w.message.clone(),
                 });
             }
-            let mut linter = windjammer::linter::rust_leakage::RustLeakageLinter::new(file).with_spans(parser.span_snapshot());
+            let mut linter = windjammer::linter::rust_leakage::RustLeakageLinter::new(file).with_spans(parser.span_snapshot()).with_source(src);
             linter.lint_program(&program);
             linter.lint_source(src);
             for d in linter.into_diagnostics() {

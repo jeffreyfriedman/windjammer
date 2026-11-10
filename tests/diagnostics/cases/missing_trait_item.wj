@@ -1,6 +1,6 @@
 // expect: WJ0018
 trait Shape {
-    fn area(self) -> float
+    fn area(&self) -> float
 }
 
 struct Dot {}

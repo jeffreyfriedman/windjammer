@@ -3,7 +3,7 @@
 // expect: Circle r=2
 // expect: Square s=3
 trait Named {
-    fn label(self) -> string
+    fn label(&self) -> string
 }
 
 struct Circle { r: int }
