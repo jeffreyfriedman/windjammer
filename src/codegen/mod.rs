@@ -88,16 +88,6 @@ pub fn generate_rust_source(program: &Program) -> Result<String> {
     Ok(backend::create_backend(Target::Rust).generate(program, &config)?.source)
 }
 
-/// Generate JavaScript code
-pub fn generate_javascript(program: &Program) -> Result<CodegenOutput> {
-    generate(program, Target::JavaScript, None)
-}
-
-/// Generate WebAssembly code
-pub fn generate_wasm(program: &Program) -> Result<CodegenOutput> {
-    generate(program, Target::WebAssembly, None)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,7 +106,7 @@ mod tests {
     #[test]
     fn test_generate_javascript() {
         let program = create_test_program();
-        let result = generate_javascript(&program);
+        let result = generate(&program, Target::JavaScript, None);
         assert!(result.is_ok());
 
         if let Ok(output) = result {
@@ -128,7 +118,7 @@ mod tests {
     #[test]
     fn test_generate_wasm() {
         let program = create_test_program();
-        let result = generate_wasm(&program);
+        let result = generate(&program, Target::WebAssembly, None);
         assert!(result.is_ok());
     }
 

@@ -380,13 +380,6 @@ impl Interpreter {
         self.err_output.as_ref().map(|v| v.join("")).unwrap_or_default()
     }
 
-    /// Bound recursion by stack bytes from the caller's frame: for hosts that run on their own stack of a known size
-    /// (the browser playground's wasm stack) instead of `runner::with_big_stack`.
-    pub fn guard_stack_bytes(&mut self, budget: usize) {
-        let here = 0u8;
-        self.stack_guard = Some((&here as *const u8 as usize, budget));
-    }
-
     /// Call first thing on the big-stack thread (see `runner::with_big_stack`).
     pub fn guard_stack(&mut self) {
         let here = 0u8;
