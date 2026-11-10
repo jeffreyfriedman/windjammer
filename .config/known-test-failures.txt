@@ -41,6 +41,16 @@ svo_bfs_layout_test::test_bfs_svo_windjammer_compiles_and_layout_holds
 type_inference_vec3_f32_test::test_vec3_cross_module_inference
 windjammer_fixtures_integration::regression_vec_tuple_string_push
 # Ownership, owner: convergence C3 (module-qualified signature registry) / C5 (call-site borrow) / C6 (liveness clones).
+# Classified 2026-11-05 (wt/ownership-recv); none is stale, none a regression of this stream. Known-unfixed, by owner:
+#   C6 call-site borrow/clone (a borrowed formal is passed a clone, or an owned formal a borrow): dogfood_wal_ffi_*,
+#     dogfood_substrate_*, module_file_owned_startup_*, cross_module_trait_field_access_*, hashmap_str_key_no_to_string,
+#     tuple_writeback_must_not_clone, hashset_contains_no_double_borrow_*, match_borrow_break_* (2),
+#     static_self_method_borrows_vec_param_not_clone, dogfood_authz_owned_store_*, path_bytes_* (3), serve_closure_*.
+#   C5 parameter formals (O2 text demotion / O4 codegen re-decision): shadow_validation_clean_for_borrowed_string_param,
+#     corpus_explicit_ref_pin_is_not_double_borrowed, corpus_closure_mutating_capture_is_mutable, test_if_let_method_return_option,
+#     sender_send_string_channel_still_converts_literals.
+#   Not ownership: graph_bfs_hashmap_compiles (i64 vs i32 width: C4); wj_test_crate_* (2: the test crate cannot resolve
+#     `crate::domain`, a test-runner module-layout bug).
 bug_module_file_feed_unified_owned_startup_must_not_borrow_test::module_file_owned_startup_must_not_receive_ref_args
 codegen_wj_test_crate_str_formal_format_temp_test::wj_test_crate_format_temps_must_match_demoted_str_formals
 codegen_wj_test_crate_str_formal_format_temp_test::wj_test_crate_hashmap_formal_must_accept_borrowed_query
@@ -48,7 +58,6 @@ cross_module_ownership_test::cross_module_trait_field_access_inferred_borrowed
 ecosystem_findings2_test::sender_send_string_channel_still_converts_literals
 inference_differential_test::corpus_closure_mutating_capture_is_mutable
 inference_differential_test::corpus_explicit_ref_pin_is_not_double_borrowed
-inference_differential_test::corpus_string_literal_variable_moved_then_used
 ir_shadow_validation_test::shadow_validation_clean_for_borrowed_string_param
 library_multipass_map_key_codegen_test::test_library_multipass_graph_bfs_hashmap_compiles
 library_multipass_map_key_codegen_test::test_library_multipass_hashmap_str_key_no_to_string
@@ -86,13 +95,7 @@ ir::signature_bridge::tests::analyzer_borrowed_bare_string_formal_stays_owned_wi
 ir::signature_bridge::tests::free_fn_plain_string_borrows_at_call_site
 # Width findings from a large multi-module program, a database project and the ecosystem (tests/compiler_findings_widths/),
 # owner: option C (typed collection literals and operator impls, C2) / the numeric solver.
-compiler_findings_widths_test::float_list_in_f32_enum_payload
-compiler_findings_widths_test::float_literal_times_f32_operator
-compiler_findings_widths_test::float_tuple_literals_follow_f32_use
-compiler_findings_widths_test::push_literal_takes_local_vec_width
-compiler_findings_widths_test::untyped_int_list_element_to_i32_parameter
-compiler_findings_widths_test::substring_bound_from_int_variables
-compiler_findings_widths_test::counter_in_int_tuple_return
 compiler_findings_widths_test::tuple_literal_in_match_arm
 compiler_findings_widths_test::float_expression_to_float_parameter
 compiler_findings_widths_test::float_literal_to_f32_crate_parameter
+drift_repros_test::explicit_ref_of_an_integer_literal_typechecks

@@ -16,10 +16,13 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'_>,
         target: &Expression<'_>,
     ) -> bool {
+        // A struct field or element that holds a Windjammer `string` holds an owned `String` (`p.status = STATUS_POSTED`,
+        // with the struct declared in another module whose field type is not in scope here).
         self.expression_is_static_str_value(value)
-            && self
-                .infer_expression_type(target)
-                .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t))
+            && (matches!(target, Expression::FieldAccess { .. } | Expression::Index { .. })
+                || self
+                    .infer_expression_type(target)
+                    .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t)))
     }
 
     /// `expr` is a module `const NAME: string` (or a `let s = "lit"` binding): emitted as a
@@ -337,5 +340,54 @@ impl<'ast> CodeGenerator<'ast> {
             self.module_const_type_for_binding(name).is_some()
         });
         analysis
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The declared types of the library's `const` / `static` items in other files (what `use` imports): a
+    /// `string` constant lowers to `&'static str` and is owned where a `String` is required, wherever it is declared.
+    pub fn set_library_const_types(&mut self, consts: &std::collections::HashMap<String, Type>) {
+        for (name, ty) in consts {
+            if crate::codegen::rust::types::is_windjammer_text_type(ty) {
+                self.module_string_consts.insert(name.clone());
+            }
+            self.module_const_types.entry(name.clone()).or_insert_with(|| ty.clone());
+        }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The declared type of payload `index` of a tuple-variant constructor (`Shape::Points([..])` takes a `Vec<f32>`),
+    /// so a list literal argument is generated as the payload's list.
+    pub(in crate::codegen::rust) fn variant_payload_type(&self, constructor: &str, index: usize) -> Option<Type> {
+        self.lookup_enum_variant_payload_types(constructor)?.get(index).cloned()
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// One argument of a payload constructor (`Some(x)`, `Shape::Points([..])`, a tuple struct): an owned value (unless
+    /// written as an explicit reference), generated against the declared payload type when one is known.
+    pub(in crate::codegen::rust) fn generate_payload_constructor_argument(
+        &mut self,
+        constructor: &str,
+        index: usize,
+        arg: &Expression<'ast>,
+        prev_owned_context: bool,
+    ) -> String {
+        let prev_expected = self.call_arg_expected_type.clone();
+        if let Some(payload) = self.variant_payload_type(constructor, index) {
+            self.call_arg_expected_type = Some(payload);
+        }
+        let is_explicit_ref =
+            matches!(arg, Expression::Unary { op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef, .. });
+        if !is_explicit_ref {
+            self.in_owned_value_context = true;
+        }
+        let prev_in_call_arg = std::mem::replace(&mut self.in_call_argument_generation, true);
+        let result = self.generate_value_operand(arg);
+        self.in_call_argument_generation = prev_in_call_arg;
+        self.in_owned_value_context = prev_owned_context;
+        self.call_arg_expected_type = prev_expected;
+        result
     }
 }

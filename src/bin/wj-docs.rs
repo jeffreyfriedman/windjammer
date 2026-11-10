@@ -2,6 +2,9 @@
 //!
 //!   wj-docs gen [--check]      rewrite (or verify) generated files and `wj:gen` regions
 //!   wj-docs check [NAME..]     run all checks (or: gen regions fences links claims freshness proposal ebnf spec-grammar)
+//!   wj-docs book-extract DIR  write the book's runnable samples (scripts/book/book_samples.wj runs them)
+//!   wj-docs book-regen [--wj PATH]  rewrite every `rust,generated` fence from real `wj build --no-cargo` output
+//!   wj-docs book-uncovered     promises (docs/promises.toml) no book page mentions yet
 //!   wj-docs update-baseline    lower ratchet baselines to the current counts; refuses to raise or add any
 //!   wj-docs stamp FILE [STATUS]  set front matter `last_verified` to HEAD
 
@@ -14,7 +17,7 @@ mod docs_truth;
 #[path = "wj_cli_args.rs"]
 mod wj_cli_args;
 
-use docs_truth::{claims, config, ebnf, failures, fences, freshness, genfiles, links, proposal, regions, spec_grammar, Ctx, Finding};
+use docs_truth::{book, book_regen, claims, config, ebnf, failures, fences, freshness, genfiles, links, proposal, regions, spec_grammar, Ctx, Finding};
 
 fn main() {
     std::panic::set_hook(Box::new(|_| {})); // the parser/lexer panic on junk snippets; checks catch it
@@ -25,6 +28,39 @@ fn main() {
         Some("gen") => gen(&ctx, args.iter().any(|a| a == "--check")),
         Some("check") => check(&ctx, &args[1..]),
         Some("update-baseline") => update_baseline(&ctx),
+        Some("book-extract") if args.len() == 2 => match book::extract(&ctx, std::path::Path::new(&args[1])) {
+            Ok(n) => {
+                println!("{n} samples written to {}", args[1]);
+                0
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                1
+            }
+        },
+        Some("book-regen") => {
+            let wj = args.iter().position(|a| a == "--wj").and_then(|i| args.get(i + 1)).map(PathBuf::from).or_else(|| std::env::var_os("WJ_BIN").map(PathBuf::from)).or_else(|| std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("wj"))));
+            match wj.filter(|p| p.exists()) {
+                None => {
+                    eprintln!("book-regen needs the compiler: pass --wj PATH or set WJ_BIN");
+                    2
+                }
+                Some(wj) => match book_regen::regen(&ctx, &wj) {
+                    Ok(report) => {
+                        print!("{report}");
+                        0
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                        1
+                    }
+                },
+            }
+        }
+        Some("book-uncovered") => {
+            println!("{}", book::report_uncovered(&ctx));
+            0
+        }
         Some("stamp") if args.len() >= 2 => match freshness::stamp(&ctx, &args[1], args.get(2).map(|s| s.as_str()).unwrap_or("current")) {
             Ok(()) => 0,
             Err(e) => {
@@ -33,7 +69,7 @@ fn main() {
             }
         },
         _ => {
-            eprintln!("usage: wj-docs gen [--check] | check [gen|regions|fences|links|claims|freshness|proposal|ebnf|spec-grammar].. | update-baseline | stamp FILE [STATUS]");
+            eprintln!("usage: wj-docs gen [--check] | check [gen|regions|fences|links|claims|freshness|proposal|ebnf|spec-grammar|book].. | book-extract DIR | book-regen [--wj PATH] | book-uncovered | update-baseline | stamp FILE [STATUS]");
             2
         }
     };
@@ -94,6 +130,7 @@ fn check(ctx: &Ctx, which: &[String]) -> i32 {
             "proposal" => fs.extend(proposal::check_all(ctx)),
             "ebnf" => fs.extend(ebnf::check_all(ctx, &cfg)),
             "spec-grammar" => fs.extend(spec_grammar::check_all(ctx, &cfg)),
+            "book" => fs.extend(book::check_all(ctx, &cfg)),
             other => {
                 eprintln!("unknown check {other}");
                 return 2;

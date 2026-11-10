@@ -37,8 +37,22 @@ pub struct RunOptions {
     pub no_lint: bool,
 }
 
-/// Run once; returns the process exit status.
+/// Run once; returns the process exit status. A path of `-` reads the program from stdin (`wj run -`).
 pub fn execute(opts: &RunOptions) -> i32 {
+    let script = match super::eval::stdin_script(opts.path.as_deref()) {
+        Ok(Some(file)) => file,
+        Ok(None) => return execute_path(opts),
+        Err(e) => {
+            eprintln!("error: cannot read the program from stdin: {e}");
+            return 1;
+        }
+    };
+    let code = execute_path(&RunOptions { path: Some(script.clone()), ..opts.clone() });
+    super::eval::remove(&script);
+    code
+}
+
+fn execute_path(opts: &RunOptions) -> i32 {
     let cwd = std::env::current_dir().unwrap_or_default();
     let target = match resolve_run_target(opts.path.as_deref(), &cwd, opts.bin.as_deref()) {
         Ok(t) => t,
@@ -87,7 +101,14 @@ pub fn execute(opts: &RunOptions) -> i32 {
             interp.durable_sites = crate::check::durable_sites::discover(&target.entry).unwrap_or_default();
             let eo = runner::EntryOptions { fallback: auto, host, crates, hot: opts.hot, run: interp };
             match runner::run_entry(&target.entry, opts.args.clone(), eo) {
-                RunOutcome::Exited(c) => c,
+                RunOutcome::Exited(c) => {
+                    // the compiled build of exactly this content already failed: say so after the program's
+                    // output (stderr; stdout stays the program's), ADR-0033
+                    if let Some(note) = crate::cli::verdict::lookup(&target.entry).as_ref().and_then(crate::cli::verdict::footer) {
+                        eprintln!("{note}");
+                    }
+                    c
+                }
                 RunOutcome::NeedsCompiled(e) => {
                     eprintln!("{}", fallback_notice(&e));
                     run_compiled(&target, &opts.args, &opts.target, false)
@@ -125,7 +146,7 @@ fn crate_host(t: &RunTarget) -> Result<Option<crate::interpreter::crate_host::Cr
     let files = crate::interpreter::loader::program_files(&t.entry).map_err(|e| e.message)?;
     let texts: Vec<String> = files.iter().filter_map(|f| std::fs::read_to_string(&f.file).ok()).collect();
     let p = super::crate_host_build::ensure(&root, &texts, &mut |m| eprintln!("{}", m))?;
-    Ok(p.map(|p| crate::interpreter::crate_host::CrateHost::new(p.exe, p.key, p.sigs).with_stubs(p.stubs)))
+    Ok(p.map(super::crate_host_build::Prepared::into_host))
 }
 
 /// The one-line notice printed (to stderr) when `wj run` switches to the compiled path.
@@ -136,7 +157,7 @@ pub fn fallback_notice(e: &crate::interpreter::RuntimeError) -> String {
 
 /// What to hand the compiler for a run target: the source root when the entry is its crate root
 /// (`main.wj`), the file itself for a loose script.
-fn build_input(t: &RunTarget) -> Result<PathBuf, String> {
+pub(crate) fn build_input(t: &RunTarget) -> Result<PathBuf, String> {
     let is_main = t.entry.file_name().is_some_and(|n| n == "main.wj");
     let parent = t.entry.parent().map(Path::to_path_buf).unwrap_or_default();
     let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());

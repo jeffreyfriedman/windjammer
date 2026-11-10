@@ -1,0 +1,17 @@
+// The payload of an Option moved out in a match arm, then the Option used.
+struct Holder {
+    n: int,
+}
+
+fn eat(h: Holder) -> int {
+    h.n
+}
+
+fn main() {
+    let o: Option<Holder> = Some(Holder { n: 4 })
+    let r = match o {
+        Some(x) => eat(x),
+        None => 0,
+    }
+    println("${r} ${o.is_some()}")
+}

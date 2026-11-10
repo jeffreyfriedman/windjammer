@@ -22,10 +22,20 @@ pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
 
 /// WJ0007 diagnostics for one parsed file.
 pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {
+    generate(program).map_or_else(Vec::new, |rust| predict_from(&rust, source, file))
+}
+
+/// The Rust the compiler generates for one parsed file, in-process; `None` when the generator fails.
+pub fn generate(program: &crate::parser::Program<'_>) -> Option<String> {
     // a generator panic is no prediction; the panic hook is left alone (files are checked in parallel, and
     // the CLI silences the default message around whole runs, as `front::quiet` does)
-    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust(program).ok()));
-    let Some(emitted) = rust.ok().flatten().and_then(|r| crate::ir::explain::emitted::parse_emitted(&r)) else { return Vec::new() };
+    let rust = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| crate::codegen::generate_rust_source(program).ok()));
+    rust.ok().flatten()
+}
+
+/// WJ0007 diagnostics from a file's generated Rust.
+pub fn predict_from(rust: &str, source: &str, file: &str) -> Vec<Diagnostic> {
+    let Some(emitted) = crate::ir::explain::emitted::parse_emitted(rust) else { return Vec::new() };
     crate::ir::explain::moves::moves(&emitted).into_iter().map(|m| diagnostic(&m, source, file)).collect()
 }
 
@@ -42,12 +52,12 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
     let (what, help, span) = match &m.kind {
         MoveKind::Receiver { method } => (
             format!("{}: `{method}` takes ownership of its receiver", after(format!("`{v}.{}()`", short(method)))),
-            format!("use the value `{}` returns, move the later use of `{v}` before the call, or call it on a copy: `{v}.clone().{}()`", short(method), short(method)),
+            format!("use the value `{}` returns, or move the later use of `{v}` before the call", short(method)),
             span_of(source, file, &format!("{v}.{}(", short(method)), |_| true),
         ),
         MoveKind::Argument { callee } => (
             format!("{} (its parameter takes ownership)", after(format!("the call to `{}`", short(callee)))),
-            format!("pass a copy (`{v}.clone()`), or make the call the last use of `{v}`"),
+            format!("make the call the last use of `{v}`, or move the later use of `{v}` before the call"),
             // a call (not the definition) whose argument list names the variable
             span_of(source, file, &format!("{}(", short(callee)), |rest| {
                 rest.split(')').next().is_some_and(|args| args.split(|c: char| !c.is_alphanumeric() && c != '_').any(|w| w == v))
@@ -57,7 +67,7 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
             let to = src_name(to);
             (
                 after(format!("`let {to} = {v}`")),
-                format!("use `{to}` from here on, or bind a copy: `let {to} = {v}.clone()`"),
+                format!("use `{to}` from here on"),
                 span_of(source, file, &format!("{to} = {v}"), |_| true),
             )
         }
@@ -65,18 +75,42 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
             let to = src_name(to);
             (
                 format!("{} (its field `{field}` is gone; `{v}` is used whole)", after(format!("`let {to} = {v}.{field}`"))),
-                format!("copy the field (`{v}.{field}.clone()`), or stop using `{v}` as a whole after taking `{field}`"),
+                format!("stop using `{v}` as a whole after taking `{field}`, or take `{field}` after the last use of `{v}`"),
                 span_of(source, file, &format!("{v}.{field}"), |_| true),
             )
         }
     };
     let mut d = Diagnostic::error("WJ0007", what)
         .with_help(help)
-        .with_note("the interpreter would run this, but the compiled program does not build: a value cannot be used after a call that took ownership of it");
+        .with_note("the compiler copies a value that is used again, but this value holds something that cannot be copied (a channel end, a handle), so it cannot be used after it was consumed; the interpreter would run this, the compiled program would not build");
     if let Some(sp) = span {
         d = d.at(sp.with_label("moved here"));
     }
     d
+}
+
+/// Byte `at` lies in a `//` comment or a string literal of its line (the call the prediction names is code).
+fn in_comment_or_string(source: &str, at: usize) -> bool {
+    let line_start = source[..at].rfind('\n').map_or(0, |n| n + 1);
+    let (mut in_str, mut escaped) = (false, false);
+    let mut prev = ' ';
+    for c in source[line_start..at].chars() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+        } else if c == '"' {
+            in_str = true;
+        } else if c == '/' && prev == '/' {
+            return true;
+        }
+        prev = c;
+    }
+    in_str
 }
 
 /// The first occurrence of `needle` at a word boundary, not in a `fn` definition, for which `ok` holds of the
@@ -85,7 +119,7 @@ fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) ->
     let bytes = source.as_bytes();
     let byte = source.match_indices(needle).map(|(i, _)| i).find(|i| {
         let boundary = *i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
-        boundary && !source[..*i].ends_with("fn ") && ok(&source[i + needle.len()..])
+        boundary && !source[..*i].ends_with("fn ") && !in_comment_or_string(source, *i) && ok(&source[i + needle.len()..])
     })?;
     let line = source[..byte].matches('\n').count() + 1;
     let line_start = source[..byte].rfind('\n').map_or(0, |n| n + 1);
@@ -101,4 +135,26 @@ fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) ->
         col_end: col + text.chars().count(),
         label: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_in_a_comment_or_a_string_is_not_the_call() {
+        let src = "// the second take(h) is a use after move\nlet s = \"take(h)\"\nlet a = take(h) // take(h)\n";
+        let at = |needle: &str, nth: usize| src.match_indices(needle).nth(nth).unwrap().0;
+        assert!(in_comment_or_string(src, at("take(h)", 0)), "comment line");
+        assert!(in_comment_or_string(src, at("take(h)", 1)), "string literal");
+        assert!(!in_comment_or_string(src, at("take(h)", 2)), "code");
+        assert!(in_comment_or_string(src, at("take(h)", 3)), "trailing comment");
+    }
+
+    #[test]
+    fn the_prediction_points_at_the_call_not_at_a_comment_mentioning_it() {
+        let src = "// take(h) twice\nfn main() {\n    let a = take(h)\n}\n";
+        let sp = span_of(src, "t.wj", "take(", |rest| rest.starts_with("h)")).expect("found");
+        assert_eq!((sp.line_start, sp.col_start), (3, 13));
+    }
 }

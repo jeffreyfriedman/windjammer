@@ -39,6 +39,11 @@ pub enum Commands {
         #[arg(short, long)]
         release: bool,
 
+        /// Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds
+        /// and the interpreter). Same as `[build] overflow_checks = false` in wj.toml.
+        #[arg(long)]
+        unchecked_arithmetic: bool,
+
         /// Target platform (rust, javascript, wasm)
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
@@ -123,7 +128,8 @@ pub enum Commands {
 
     /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's
+        /// A .wj file, a directory, or `-` (the program read from stdin) (omitted: the project containing the current
+        /// directory, wj.toml), then the program's
         /// arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own
         /// flags go before PATH.
         #[arg(value_name = "PATH [ARGS]...", trailing_var_arg = true, allow_hyphen_values = true)]
@@ -152,6 +158,11 @@ pub enum Commands {
         /// Re-run on every source change (restarts long-running programs)
         #[arg(long)]
         watch: bool,
+
+        /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
+        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr
+        #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
+        verify: bool,
 
         /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
@@ -284,6 +295,14 @@ pub enum Commands {
 
     /// Start the Windjammerscript REPL (interactive interpreter)
     Repl {},
+
+    /// Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`.
+    /// The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted.
+    Eval {
+        /// An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed
+        #[arg(value_name = "CODE")]
+        code: String,
+    },
 
     /// MCP tools as typed Windjammer: bindings for code mode (ADR-0021)
     Mcp {
@@ -725,6 +744,10 @@ pub enum Commands {
         /// Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate)
         #[arg(long)]
         expect_head: bool,
+
+        /// Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout
+        #[arg(long)]
+        strict: bool,
     },
 
     /// Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup

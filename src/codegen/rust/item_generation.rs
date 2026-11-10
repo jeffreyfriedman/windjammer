@@ -841,7 +841,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // (it's the implicit return value of the default implementation)
                         if let Statement::Expression { expr, .. } = stmt {
                             output.push_str(&self.indent());
-                            output.push_str(&self.generate_expression(expr));
+                            output.push_str(&self.trait_default_tail(expr, &method.return_type));
                             output.push('\n');
                         }
                     } else {
@@ -1532,5 +1532,17 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => {}
         }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The tail of a trait method's default body: a text literal is an owned `String` when the method returns `string`.
+    fn trait_default_tail(&mut self, expr: &Expression<'ast>, return_type: &Option<Type>) -> String {
+        let owned = super::string_utilities::return_type_expects_owned_string(return_type);
+        let previous = self.coerce_string_literals_to_owned;
+        self.coerce_string_literals_to_owned = owned || previous;
+        let out = self.generate_expression(expr);
+        self.coerce_string_literals_to_owned = previous;
+        out
     }
 }

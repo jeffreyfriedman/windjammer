@@ -976,8 +976,18 @@ impl Interpreter {
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         if !has_self {
             // `fn render() -> T` written without `self` but called on an instance: the body may
-            // still mention `self` (implicit receiver), so bind it
-            return self.call_func(f, args, Some(recv));
+            // still mention `self` (implicit receiver), so bind it. A body that writes `self.x` changes
+            // the receiver, as the compiled `&mut self` does: it gets the receiver's place.
+            // (test-only mutant `implicitself`, debug builds: the receiver by value again)
+            let by_value = cfg!(debug_assertions) && self.jit_mutant.as_deref() == Some("implicitself");
+            let self_val = match place {
+                Some(p) if self.self_mutation(f) && !by_value => {
+                    drop(recv);
+                    Value::Ref(Box::new(p))
+                }
+                _ => recv,
+            };
+            return self.call_func(f, args, Some(self_val));
         }
         let self_val = if place.is_some() && self.self_mutation(f) {
             // release our clone of the receiver so in-place mutation stays copy-free
@@ -1011,6 +1021,15 @@ impl Interpreter {
             }
         }
         if let Value::Native(n) = &recv {
+            if self.crate_host.is_some() {
+                if let Some(path) = self.crate_method_path(&recv, method) {
+                    // a method of an opaque crate value (ADR-0031): the receiver is the first argument
+                    let mut all = Vec::with_capacity(args.len() + 1);
+                    all.push(recv.clone());
+                    all.extend(args);
+                    return self.call_crate_fn(&path, all);
+                }
+            }
             if let Some(f) = self.builtins.native_method(n.type_name(), method) {
                 return f(self, &recv, args);
             }

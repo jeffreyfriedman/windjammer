@@ -6,34 +6,35 @@
 //! single source: `&self` or `&mut self` (`self` stays by-value when the return type mentions `Self`).
 
 use crate::parser::ast::core::{Item, Program};
+use crate::parser::ast::core::Parameter;
 use crate::parser::ast::ownership::OwnershipHint;
-use crate::source_map::Location;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UndeclaredReceiver {
+#[derive(Debug, Clone)]
+pub struct UndeclaredReceiver<'p> {
     /// `Trait::method`
     pub method: String,
-    pub location: Option<Location>,
+    /// The method's parameters: the diagnostic points at `params[0]` (the `self`) by its true span.
+    pub params: &'p [Parameter<'p>],
 }
 
 /// Bodyless trait methods whose `self` receiver carries no declared mode, in source order.
-pub fn undeclared_receivers(program: &Program) -> Vec<UndeclaredReceiver> {
+pub fn undeclared_receivers<'p>(program: &'p Program) -> Vec<UndeclaredReceiver<'p>> {
     let mut out = Vec::new();
     collect(&program.items, &mut out);
     out
 }
 
-fn collect(items: &[Item], out: &mut Vec<UndeclaredReceiver>) {
+fn collect<'p>(items: &'p [Item], out: &mut Vec<UndeclaredReceiver<'p>>) {
     for item in items {
         match item {
-            Item::Trait { decl, location } => {
+            Item::Trait { decl, .. } => {
                 for m in decl.methods.iter().filter(|m| m.body.is_none()) {
                     let undeclared = m
                         .parameters
                         .first()
                         .is_some_and(|p| p.name == "self" && p.ownership == OwnershipHint::Inferred);
                     if undeclared {
-                        out.push(UndeclaredReceiver { method: format!("{}::{}", decl.name, m.name), location: location.clone() });
+                        out.push(UndeclaredReceiver { method: format!("{}::{}", decl.name, m.name), params: &m.parameters });
                     }
                 }
             }

@@ -247,6 +247,8 @@ impl CodeGenerator<'_> {
             Type::Custom(name) => {
                 crate::type_classification::is_std_non_auto_debug_clone_type(name)
                     || self.trait_object_types.contains(name)
+                    // a scanned runtime struct without `Clone` (a socket, a connection): deriving over it cannot compile
+                    || self.type_is_runtime_non_clone(type_)
             }
             _ => false,
         }

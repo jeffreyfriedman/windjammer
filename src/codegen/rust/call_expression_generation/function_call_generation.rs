@@ -585,24 +585,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         let prev_owned_context = gen.in_owned_value_context;
         let generated_args: Vec<String> = arguments
             .iter()
-            .map(|(_label, arg)| {
-                let is_explicit_ref = matches!(
-                    arg,
-                    Expression::Unary {
-                        op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
-                        ..
-                    }
-                );
-                if !is_explicit_ref {
-                    gen.in_owned_value_context = true;
-                }
-                let prev_in_call_arg = gen.in_call_argument_generation;
-                gen.in_call_argument_generation = true;
-                let result = gen.generate_value_operand(arg);
-                gen.in_call_argument_generation = prev_in_call_arg;
-                gen.in_owned_value_context = prev_owned_context;
-                result
-            })
+            .enumerate()
+            .map(|(i, (_label, arg))| gen.generate_payload_constructor_argument(func_name, i, arg, prev_owned_context))
             .collect();
 
         let has_format_arg = generated_args
@@ -736,7 +720,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         result
                     }
                 } else {
-                    result
+                    owned_field_payload(gen, arg, result)
                 }
             })
             .collect();
@@ -860,11 +844,11 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         }
     }
     if signature.is_none() {
-        if let Some(r) = gen.resolve_call_signature_with_global(
-            &sig_lookup_name,
-            sig_receiver_type.as_deref(),
-            arguments.len(),
-        ) {
+        let resolved = match function {
+            Expression::Identifier { .. } if sig_receiver_type.is_none() => gen.resolve_bare_free_call_signature(&sig_lookup_name, arguments.len()),
+            _ => gen.resolve_call_signature_with_global(&sig_lookup_name, sig_receiver_type.as_deref(), arguments.len()),
+        };
+        if let Some(r) = resolved {
             let method = sig_lookup_name.rsplit("::").next().unwrap_or(func_name);
             let accept = sig_receiver_type.as_ref().is_none_or(|tn| {
                 crate::codegen::rust::call_signature_resolution::accept_method_resolution_for_receiver(
@@ -1194,4 +1178,19 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     } else {
         call_result
     }
+}
+
+/// A payload (`Some(pair.1)`) is owned: a field typed `&T` with `T` not Copy (an entry of a map iterated by
+/// reference) is cloned, unless the function returns a reference payload (`Option<&T>`).
+fn owned_field_payload(gen: &CodeGenerator<'_>, arg: &Expression<'_>, result: String) -> String {
+    let returns_ref_payload = match &gen.current_function_return_type {
+        Some(Type::Option(inner)) | Some(Type::Result(inner, _)) => matches!(**inner, Type::Reference(_) | Type::MutableReference(_)),
+        _ => false,
+    };
+    let ref_to_non_copy = matches!(arg, Expression::FieldAccess { .. })
+        && gen.infer_expression_type(arg).is_some_and(|t| matches!(&t, Type::Reference(inner) if !gen.is_type_copy(inner)));
+    if ref_to_non_copy && !returns_ref_payload && !result.ends_with(".clone()") {
+        return format!("{result}.clone()");
+    }
+    result
 }

@@ -195,6 +195,7 @@ type Free = unsafe extern "C" fn(*mut u8, usize);
 
 /// A loaded bridge library and the signatures it provides.
 pub struct HostLib {
+    #[cfg(not(target_arch = "wasm32"))]
     _lib: libloading::Library,
     shims: HashMap<String, (Shim, ExternSig)>,
     free: Free,
@@ -202,6 +203,12 @@ pub struct HostLib {
 
 impl HostLib {
     /// Load `path` and resolve one shim per signature; a missing shim is an error naming the function.
+    #[cfg(target_arch = "wasm32")]
+    pub fn open(path: &std::path::Path, _sigs: &[ExternSig]) -> Result<HostLib, String> {
+        Err(format!("cannot load host bridge {}: the browser playground loads no native code (ADR-0034)", path.display()))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn open(path: &std::path::Path, sigs: &[ExternSig]) -> Result<HostLib, String> {
         // SAFETY: the library is the bridge crate wj generated for exactly these signatures.
         let lib = unsafe { libloading::Library::new(path) }

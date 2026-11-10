@@ -37,7 +37,7 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
             Some(output_dir),
             false,
             target_str,
-            crate::cli::build::BuildOptions { tree_shake: false, source_maps: false },
+            crate::cli::build::BuildOptions { tree_shake: false, source_maps: false, unchecked_arithmetic: false },
             false, // check
             false, // raw_errors
             false, // fix
@@ -77,6 +77,36 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     }
 
     // Rust/wasm: a stable per-source directory keeps the program crate warm between runs.
+    let (workdir, failed) = build_native(path, target_str, release)?;
+    if let Some(code) = failed {
+        return Ok(code);
+    }
+    let status = compiled_command(&workdir, release, args).status()?;
+    Ok(status.code().unwrap_or(1))
+}
+
+/// The command that runs a program `build_native` built (cargo's own build is then a no-op), with its arguments.
+pub fn compiled_command(workdir: &Path, release: bool, args: &[String]) -> Command {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--quiet", "--manifest-path"]).arg(workdir.join("Cargo.toml"));
+    if release {
+        cmd.arg("--release");
+    }
+    if !release {
+        crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cmd);
+    }
+    crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared);
+    // Forward arguments to the program
+    if !args.is_empty() {
+        cmd.arg("--").args(args);
+    }
+    cmd
+}
+
+/// Transpile and `cargo build` the program into its stable per-source directory, without running it (`wj run
+/// --compiled` and `wj run --verify`). Returns the directory and, when the build failed, the exit status to use (the
+/// diagnostics are already printed). Records the compiled verdict (ADR-0033).
+pub fn build_native(path: &Path, target_str: &str, release: bool) -> Result<(std::path::PathBuf, Option<i32>)> {
     let workdir = crate::cargo_cache::build_profile::run_workdir(path);
     let output_dir = workdir.as_path();
     // Build to temp directory (build_project handles both files and directories)
@@ -103,26 +133,8 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     // Compile first with machine-readable output, so a rustc error reaches the user as a Windjammer
     // diagnostic on the `.wj` source (code, hint, location) and never as raw Rust compiler text.
     let _ = crate::cargo_cache::reclaim();
-    if let Some(code) = compile_or_report(output_dir, release, path)? {
-        return Ok(code);
-    }
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--quiet", "--manifest-path"]).arg(output_dir.join("Cargo.toml"));
-    if release {
-        cmd.arg("--release");
-    }
-    if !release {
-        crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cmd);
-    }
-    crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared);
-
-    // Forward arguments to the program
-    if !args.is_empty() {
-        cmd.arg("--").args(args);
-    }
-
-    let status = cmd.status()?;
-    Ok(status.code().unwrap_or(1))
+    let failed = compile_or_report(output_dir, release, path)?;
+    Ok((workdir, failed))
 }
 
 /// Transpile with the compiler's progress output on stderr, so `wj run --compiled` keeps stdout for the program
@@ -192,11 +204,18 @@ fn compile_or_report(output_dir: &Path, release: bool, source: &Path) -> Result<
     crate::cargo_cache::configure_cargo_command(&mut build, crate::cargo_cache::TargetKind::Shared);
     let out = build.output()?;
     if out.status.success() {
+        crate::cli::verdict::record(source, crate::cli::verdict::Outcome::Accepted, release);
         return Ok(None);
     }
     let text = format!("{}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
     let diags = crate::cli::build_json::map_cargo_failure_in(output_dir, &text, Some(if source.is_dir() { source } else { source.parent().unwrap_or(Path::new(".")) }));
     let only_unparsed = diags.len() == 1 && diags[0].message.contains("could not be parsed");
+    if !only_unparsed && !diags.is_empty() {
+        // a compile error is a property of the content and the compiler: later interpreted runs mention it (ADR-0033)
+        let errors = diags.iter().filter(|d| d.is_error()).count().max(1);
+        let first = diags.first().map(crate::cli::verdict::summary);
+        crate::cli::verdict::record(source, crate::cli::verdict::Outcome::Rejected { errors, first }, release);
+    }
     for d in &diags {
         eprint!("{}", crate::diagnostics::render::render(d, &|f| std::fs::read_to_string(f).ok()));
     }

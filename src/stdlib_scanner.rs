@@ -4,6 +4,7 @@
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
 use std::{fs, path::Path};
+mod clone_impls;
 mod generic_returns;
 
 /// Resolve `windjammer-runtime/src` for signature scanning.
@@ -13,11 +14,9 @@ mod generic_returns;
 /// inside the compiler repo and silently falls back to incomplete signatures otherwise
 /// (e.g. `strings::join` → spurious `parts.clone()` into `&[String]`).
 pub(crate) fn resolve_runtime_src_for_scan() -> Option<std::path::PathBuf> {
-    let from_finder = crate::cargo_toml::find_windjammer_runtime_path().join("src");
-    if from_finder.is_dir() {
-        return Some(from_finder);
-    }
-    None
+    // none on disk in the browser playground (ADR-0034): no file system to materialize the runtime crate into
+    let from_finder = (!cfg!(target_arch = "wasm32")).then(crate::cargo_toml::find_windjammer_runtime_path)?.join("src");
+    from_finder.is_dir().then_some(from_finder)
 }
 
 /// Scan windjammer-runtime source files and populate the registry
@@ -206,9 +205,7 @@ fn scan_rust_file(
                     if pending_struct_derives_copy != Some(true) {
                         registry.register_runtime_non_copy_type(&struct_name);
                     }
-                    if pending_struct_derives_clone != Some(true) {
-                        registry.register_runtime_non_clone_type(&struct_name);
-                    }
+                    if clone_impls::is_non_clone(&content, &struct_name, pending_struct_derives_clone == Some(true)) { registry.register_runtime_non_clone_type(&struct_name); }
                     pending_struct_derives_copy = None;
                     pending_struct_derives_clone = None;
                     current_struct = Some(struct_name);

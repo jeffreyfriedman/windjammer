@@ -12,7 +12,7 @@ fn parse_line(line: &str) -> Result<Row, String> {
     if f.len() != 3_usize {
         return Err(String::from("wrong field count"));
     }
-    let age = f[1].parse::<i64>().map_err(|_| "bad age")?;
+    let age = f[1].parse::<i64>().map_err(|_| "bad age".to_string())?;
     Ok(Row { name: f[0].clone(), age, city: f[2].clone() })
 }
 

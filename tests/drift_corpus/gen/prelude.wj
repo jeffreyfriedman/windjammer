@@ -9,6 +9,11 @@ enum Shape3 {
     C { n: int },
 }
 
+enum Outer {
+    Plain,
+    Wrap(Shape3),
+}
+
 fn num(n: int) -> int {
     n
 }
@@ -39,5 +44,36 @@ fn show_ostr(x: Option<string>) -> string {
     match x {
         Some(s) => "some ${s}",
         None => "none",
+    }
+}
+
+fn show_tup(x: (int, string)) -> string {
+    match x {
+        (a, s) => "tup ${a} ${s}",
+    }
+}
+
+fn show_outer(x: Outer) -> string {
+    match x {
+        Outer::Plain => "plain",
+        Outer::Wrap(s) => "wrap ${show_enm(s)}",
+    }
+}
+
+fn show_ochar(x: Option<char>) -> string {
+    match x {
+        Some(c) => "some ${c}",
+        None => "none",
+    }
+}
+
+fn show_str(x: string) -> string {
+    "str ${x}"
+}
+
+fn bang(x: string) -> string {
+    match x.len() {
+        0 => x,
+        _ => x + "!",
     }
 }

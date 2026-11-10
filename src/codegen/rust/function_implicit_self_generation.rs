@@ -105,84 +105,9 @@ impl<'ast> CodeGenerator<'ast> {
                 });
 
         if (has_inferred_self || needs_self_from_trait) && !has_explicit_self && !is_constructor {
-            if let Some(receiver) = self.ir_self_receiver(&analyzed.decl) {
-                params.push(receiver.to_string());
-                return;
-            }
-            let ownership = self.get_effective_self_ownership(&func.name, analyzed).or({
-                // Trait has method but no self in analyzed - default to &mut self (trait convention)
-                if needs_self_from_trait {
-                    Some(OwnershipMode::MutBorrowed)
-                } else {
-                    None
-                }
-            });
-
-            if let Some(ownership) = ownership {
-                let body_modifies = if self.in_trait_impl {
-                    self.function_modifies_self(&analyzed.decl)
-                } else {
-                    self.function_modifies_self_or_derived(&analyzed.decl)
-                };
-                let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
-                let matches_on_self =
-                    super::self_analysis::function_matches_on_self(&analyzed.decl);
-                let self_param = match ownership {
-                    OwnershipMode::Borrowed
-                        if !self.in_trait_impl && (consumes_self || matches_on_self) =>
-                    {
-                        if body_modifies {
-                            "mut self"
-                        } else {
-                            "self"
-                        }
-                    }
-                    OwnershipMode::Borrowed => {
-                        if !self.in_trait_impl && body_modifies {
-                            "&mut self"
-                        } else if !self.in_trait_impl
-                            && (self.current_struct_is_copy() || matches_on_self)
-                        {
-                            "self"
-                        } else {
-                            "&self"
-                        }
-                    }
-                    OwnershipMode::MutBorrowed if !self.in_trait_impl && consumes_self => {
-                        if body_modifies {
-                            "mut self"
-                        } else {
-                            "self"
-                        }
-                    }
-                    OwnershipMode::MutBorrowed => "&mut self",
-                    OwnershipMode::Owned => {
-                        if self.in_trait_impl {
-                            "self"
-                        } else {
-                            self.owned_self_receiver(&analyzed.decl)
-                        }
-                    }
-                };
-                // TDD FIX: Sync borrowed-params sets with actual generated receiver.
-                // The analyzer may infer Owned but codegen promotes to &self/&mut self.
-                // Without this, for-loop borrow detection fails for implicit self methods.
-                match self_param {
-                    "&self" => {
-                        self.inferred_borrowed_params.insert("self".to_string());
-                        self.inferred_mut_borrowed_params.remove("self");
-                    }
-                    "&mut self" => {
-                        self.inferred_mut_borrowed_params.insert("self".to_string());
-                        self.inferred_borrowed_params.remove("self");
-                    }
-                    _ => {
-                        self.inferred_borrowed_params.remove("self");
-                        self.inferred_mut_borrowed_params.remove("self");
-                    }
-                }
-                params.push(self_param.to_string());
-            }
+            // A trait method with no recorded receiver keeps the trait convention (`&mut self`).
+            let receiver = self.self_receiver(analyzed).unwrap_or("&mut self");
+            params.push(receiver.to_string());
         }
         // Priority 2: Fallback to old field-based analysis (for backwards compatibility)
         else if self.in_impl_block

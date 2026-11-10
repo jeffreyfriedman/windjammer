@@ -42,6 +42,9 @@ pub struct Report {
     pub binaries: Vec<Binary>,
     pub cache: CacheState,
     pub problems: Vec<Problem>,
+    /// Not failures of the machine, but worth acting on: a `wj` built from an older commit than the compiler
+    /// checkout it runs in (`behind`). `wj doctor --strict` fails on these too.
+    pub warnings: Vec<Problem>,
 }
 
 // ---- discovery ----
@@ -343,6 +346,7 @@ pub fn collect(path_env: &str) -> Report {
         checkout: checkout.as_deref(),
         cache: &cache,
     });
+    let warnings = behind_warnings(checkout.as_deref(), &binaries);
     Report {
         current,
         current_exe,
@@ -350,6 +354,21 @@ pub fn collect(path_env: &str) -> Report {
         binaries,
         cache,
         problems,
+        warnings,
+    }
+}
+
+/// The first `wj` on PATH (the one a command runs) built from an older commit than the checkout's HEAD.
+fn behind_warnings(checkout: Option<&Path>, binaries: &[Binary]) -> Vec<Problem> {
+    let Some(head) = checkout.and_then(super::behind::checkout_head) else { return Vec::new() };
+    let Some((b, id)) = binaries.first().and_then(|b| b.identity.as_ref().map(|id| (b, id))) else { return Vec::new() };
+    match super::behind::behind_text(id, &head) {
+        Some(line) => vec![Problem {
+            kind: "behind",
+            message: format!("{} {}", b.found.display(), line.trim_start_matches("wj: ")),
+            fix: vec!["cargo build --release --bin wj && target/release/wj install-dev (in the checkout)".into()],
+        }],
+        None => Vec::new(),
     }
 }
 
@@ -456,6 +475,12 @@ pub fn render_text(r: &Report) -> String {
             (true, None) => "present".to_string(),
         }
     ));
+    for w in &r.warnings {
+        s.push_str(&format!("\nwarning [{}]: {}\n", w.kind, w.message));
+        for f in &w.fix {
+            s.push_str(&format!("      fix: {f}\n"));
+        }
+    }
     if r.problems.is_empty() {
         s.push_str("\nno problems found\n");
     } else {
@@ -484,6 +509,7 @@ pub fn render_json(r: &Report) -> Value {
         })).collect::<Vec<_>>(),
         "cache": { "dir": r.cache.dir, "exists": r.cache.exists, "age_days": r.cache.age_days },
         "problems": r.problems.iter().map(|p| json!({ "kind": p.kind, "message": p.message, "fix": p.fix })).collect::<Vec<_>>(),
+        "warnings": r.warnings.iter().map(|p| json!({ "kind": p.kind, "message": p.message, "fix": p.fix })).collect::<Vec<_>>(),
         "ok": r.problems.is_empty(),
     })
 }

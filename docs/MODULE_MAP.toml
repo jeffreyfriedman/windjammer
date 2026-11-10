@@ -198,7 +198,7 @@ layer = "tooling"
 owner_stage = "tooling support"
 module_md = ""
 allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "optimizer", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "stdlib_surface"]
-known_violations = ["intrinsics"]
+known_violations = []
 
 [modules.error_codes]
 layer = "support"
@@ -288,7 +288,7 @@ known_violations = ["intrinsics"]
 layer = "ir"
 owner_stage = "typed IR construction and IR-level solvers (stage 5)"
 module_md = "src/ir/MODULE.md"
-allowed_imports = ["analyzer", "typing", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
+allowed_imports = ["analyzer", "typing", "intrinsics", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
 known_violations = ["codegen", "compiler"]
 
 [modules.lexer]
@@ -514,6 +514,9 @@ module_md = "crates/windjammer-lsp/MODULE.md"
 [crates.windjammer-mcp]
 module_md = "crates/windjammer-mcp/MODULE.md"
 
+[crates.windjammer-playground]
+module_md = "crates/windjammer-playground/MODULE.md"
+
 [crates.windjammer-runtime]
 module_md = "crates/windjammer-runtime/MODULE.md"
 
@@ -546,10 +549,10 @@ allowed_imports = ["stdlib_surface"]
 known_violations = []
 
 [modules.intrinsics]
-layer = "tooling"
+layer = "syntax"
 owner_stage = "built-in function registry (print/assert/panic/debug) and surface-syntax rewriter"
 module_md = "src/intrinsics/MODULE.md"
-allowed_imports = ["compiler_config", "debug_env", "error_catalog", "lexer", "parser", "parser_impl", "stdlib_surface"]
+allowed_imports = ["compiler_config", "debug_env", "lexer", "parser", "parser_impl", "stdlib_surface"]
 known_violations = []
 
 # Library API that no driver (wj, wj-lint, LSP, MCP) reaches on purpose: "src path prefix" = "who uses it".

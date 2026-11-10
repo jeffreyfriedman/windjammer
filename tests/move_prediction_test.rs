@@ -18,6 +18,28 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Values that cannot be copied (they hold a channel end) are the moves WJ0007 still reports, one per
+/// kind: an owned receiver, an owning argument, a `let` alias, a move inside a loop, a partial move.
+#[test]
+fn moves_of_values_that_cannot_be_copied_are_reported_per_kind() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction");
+    let cases = [
+        ("receiver_non_clone.wj", "`inbox` is used after `inbox.with_seen()` consumed it: `Inbox::with_seen` takes ownership of its receiver"),
+        ("argument_non_clone.wj", "`inbox` is used after the call to `drain` consumed it (its parameter takes ownership)"),
+        ("let_alias_non_clone.wj", "`inbox` is used after `let other = inbox` consumed it"),
+        ("loop_non_clone.wj", "`inbox` is moved by the call to `drain` in every iteration of the loop"),
+        ("partial_non_clone.wj", "its field `chan` is gone"),
+    ];
+    for (f, want) in cases {
+        let d = windjammer::check::moves::predicted_moves(&root.join(f));
+        assert_eq!(d.len(), 1, "{f}: {d:?}");
+        assert_eq!(d[0].code, "WJ0007", "{f}");
+        assert!(d[0].message.contains(want), "{f}: {}", d[0].message);
+        let help = d[0].help.join(" ");
+        assert!(!help.contains(".clone()"), "{f}: a copy is impossible, the help must not offer one: {help}");
+    }
+}
+
 /// The compiler clones where a moved value is used again; those programs build and nothing is reported.
 #[test]
 fn moves_the_compiler_turns_into_clones_are_not_reported() {
@@ -36,6 +58,17 @@ fn moves_the_compiler_turns_into_clones_are_not_reported() {
     }
 }
 
+/// A value without `Clone` (a struct holding a trait object or a channel end) is never copied: reading it
+/// again after a move is reported as WJ0007.
+#[test]
+fn moved_values_without_clone_are_still_reported() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction/rejected");
+    let d = windjammer::check::moves::predicted_moves(&root.join("box_dyn_holder_reuse.wj"));
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].code, "WJ0007");
+    assert!(d[0].message.contains("`h`"), "{}", d[0].message);
+}
+
 #[test]
 fn predictions_across_the_corpora() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -44,6 +77,9 @@ fn predictions_across_the_corpora() {
         wj_files(&root.join(d), &mut files);
     }
     files.sort();
+    // The drift corpus is a copy of whole multi-file projects (their types live in sibling files): one file of it read
+    // alone cannot be judged, and the drift corpus has its own compiled baseline.
+    files.retain(|f| !f.starts_with(root.join("tests/drift_corpus")));
     let mut hits = Vec::new();
     for f in &files {
         let d = windjammer::check::moves::predicted_moves(f);
@@ -54,7 +90,14 @@ fn predictions_across_the_corpora() {
     // each confirmed with rustc on the generated code (E0382). Since C6 the compiler copies a moved
     // value that is read again (`string_literal_move_then_use`, `test_ownership` and the former WJ0007
     // fixtures now build), so no single-file corpus program is predicted to fail.
-    let expected: &[&str] = &[];
+    let expected: &[&str] = &[
+        "tests/move_prediction/argument_non_clone.wj 1",
+        "tests/move_prediction/let_alias_non_clone.wj 1",
+        "tests/move_prediction/loop_non_clone.wj 1",
+        "tests/move_prediction/partial_non_clone.wj 1",
+        "tests/move_prediction/receiver_non_clone.wj 1",
+        "tests/move_prediction/rejected/box_dyn_holder_reuse.wj 1",
+    ];
     assert_eq!(hits, expected, "{} files scanned", files.len());
 }
 

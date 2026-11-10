@@ -220,8 +220,7 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         // Same-crate bare names (`touch`, `join`) are decided by local registry + IR.
-        // Treating them as "dep shared" re-prefixes `&` onto already-`&T` formals
-        // (`run(csr: &DenseCsr) { touch(&csr) }`).
+        // Treating them as "dep shared" re-prefixes `&` onto already-`&T` formals (`run(csr: &DenseCsr) { touch(&csr) }`).
         if !self.callee_is_path_qualified_or_import_alias(callee_name) {
             return false;
         }
@@ -985,10 +984,9 @@ impl<'ast> CodeGenerator<'ast> {
             ) {
                 let arg_count = user_arg_count.unwrap_or(arg_index + 1);
                 let inferred_recv = receiver_type_name.and_then(|rt| {
-                    crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                         Some(rt),
                         None,
-                        self.current_function_return_type.as_ref(),
                     )
                 });
                 if let Some(method_sig) = self.resolve_method_function_signature_specialized(
@@ -1313,10 +1311,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Specialize stdlib generics (`Vec::push(T)` → `push(String)` on `Vec<String>`).
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 receiver_type_name,
                 None,
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -6696,10 +6693,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Stdlib generics stay `T`/`E` until specialized from the concrete receiver
         // (`Vec<usize>::push` → `usize`). Registry base names are unparameterized (`Vec`).
         if let Some(recv_ty) =
-            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                 receiver_type_name,
                 inferred_recv.as_ref(),
-                self.current_function_return_type.as_ref(),
             )
         {
             crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
@@ -8862,7 +8858,8 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> SafetyType {
         if arg_str.ends_with(".clone()") {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if self.emitted_rust_ref_formals.contains(name)
+                let text_alias = self.explicit_ref_let_bindings.contains(name) && self.local_var_types.get(name).is_some_and(crate::codegen::rust::types::is_windjammer_text_type); // `let s = t` of a borrowed text `t`
+                if text_alias || self.emitted_rust_ref_formals.contains(name)
                     || (self.inferred_borrowed_params.contains(name)
                         && self.current_function_params.iter().any(|p| {
                             p.name == *name

@@ -322,6 +322,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Vec::new()
                     };
 
+                let ref_closure_names = self.mark_ref_closure_params(method, arg_to_generate);
                 let prev_closure_predicate = self.closure_predicate_typed_params;
                 if predicate_receives_ref {
                     self.closure_predicate_typed_params = true;
@@ -335,10 +336,9 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut method_param_ty: Option<Type> = None;
                 if let Some(sig) = sig_for_effective {
                     let mut specialized = sig.clone();
-                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                         receiver_type_name,
                         receiver_type_inferred.as_ref(),
-                        self.current_function_return_type.as_ref(),
                     ) {
                         crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                             &mut specialized,
@@ -426,9 +426,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                for p in &closure_borrowed_params {
-                    self.borrowed_iterator_vars.remove(p);
-                }
+                self.release_closure_param_marks(&closure_borrowed_params, &ref_closure_names);
 
                 // AUTO-WRAP function pointers in iterator adapter methods (before IR call-site path).
                 let recv_for_wrap = receiver_type_name
@@ -873,7 +871,7 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = coerced.trim_start_matches('&').to_string();
                         }
-                        return self.copy_if_read_again(arg_to_generate, coerced); // CLONE-USE-AFTER-MOVE
+                        return self.copy_if_read_again(arg_to_generate, self.drop_clone_under_borrow(arg_to_generate, coerced)); // C6
                     }
                     debug_assert!(
                         false,
@@ -1041,7 +1039,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        (args_vec, prev_float_target)
+        (self.unborrow_ref_closure_args(arguments, args_vec), prev_float_target)
     }
 }
 

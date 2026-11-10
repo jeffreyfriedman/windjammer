@@ -4,7 +4,7 @@ fn main() {
     println!("{:?}", v);
     v.dedup();
     println!("{:?}", v);
-    v.sort_by(|a, b| b.cmp(&a));
+    v.sort_by(|a, b| b.cmp(a));
     println!("{:?}", v);
 }
 

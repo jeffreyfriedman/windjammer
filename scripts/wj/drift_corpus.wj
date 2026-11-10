@@ -24,6 +24,8 @@ use wj_proc::sh
 use wj_proc::quote
 
 const CORPUS: string = "tests/drift_corpus"
+// deterministic corpus programs: a `main`, no markers of an expected failure, no input, clock, randomness or network
+const WIDE_LIST: string = "git ls-files tests/conformance_programs tests/conformance tests/interpreter_corpus tests/engine_parity examples/verified | grep '[.]wj$' | grep -v '/vp_' | while read f; do grep -q 'fn main' \"$f\" && ! grep -qE 'expect-error:|xfail:|seeds:|__SEED__|stdin|env::args|random|Instant|SystemTime|sleep|http|net::|time::now' \"$f\" && echo \"$f\"; done"
 const BASELINE: string = "tests/drift_corpus/compiled_baseline.tsv"
 
 struct Opts {
@@ -33,6 +35,8 @@ struct Opts {
     compiled: string,
     record: bool,
     only: string,
+    wide: bool,
+    refresh_failed: bool,
 }
 
 // ---- tokens ----
@@ -72,10 +76,13 @@ fn loc_of(text: string) -> string {
 struct Outcome {
     token: string,
     loc: string,
+    diag: string,
+    out: string,
+    err: string,
 }
 
 fn none_outcome() -> Outcome {
-    Outcome { token: "absent", loc: "" }
+    Outcome { token: "absent", loc: "", diag: "", out: "", err: "" }
 }
 
 struct TestRun {
@@ -103,7 +110,7 @@ fn parse_tests(target: string, stdout: string) -> TestRun {
                 let status = as_str(get(t, "status") ?? object()) ?? ""
                 let ok = (as_bool(get(t, "passed") ?? object()) ?? false) || status == "passed"
                 run.ids.push("${target}::${strings.replace(file, "./", "")}::${name}")
-                run.outs.push(Outcome { token: if ok { "pass" } else { "fail" }, loc: loc_of(msg) })
+                run.outs.push(Outcome { token: if ok { "pass" } else { "fail" }, loc: loc_of(msg), diag: "", out: "", err: "" })
             }
         },
         Err(_) => {},
@@ -113,6 +120,34 @@ fn parse_tests(target: string, stdout: string) -> TestRun {
 
 fn label(dir: string) -> string {
     strings.replace(dir, "tests/drift_corpus/eco/", "")
+}
+
+// programs the interpreter must refuse because rustc rejects them: the move-prediction fixtures (tests/move_prediction,
+// not its accepted/ subdirectory) and anything named must_refuse_*
+fn is_must_refuse(p: string) -> bool {
+    strings.contains(p, "/must_refuse_") || (strings.contains(p, "tests/move_prediction/") && !strings.contains(p, "/accepted/"))
+}
+
+// the `Error: ...` line a `main` returning `Err` prints (the first stderr line that starts with it), or ""
+fn main_error_line(stderr: string) -> string {
+    for line in strings.split_lines(stderr) {
+        // (not the interpreter's own refusal, "Error: not running FILE: `wj check` reports ...")
+        if strings.starts_with(line, "Error: ") && !strings.starts_with(line, "Error: not running") {
+            return line
+        }
+    }
+    ""
+}
+
+// the compiled result of a program: run now, or with --refresh-failed keep every recorded verdict except a failed build
+fn compiled_program(o: Opts, file: string, baseline: TestRun) -> Outcome {
+    if o.refresh_failed && !is_must_refuse(file) {
+        let old = lookup(baseline, file)
+        if old.token != "exit1:0:17" && old.token != "absent" {
+            return old
+        }
+    }
+    run_program(o, file, "compiled")
 }
 
 fn lookup(run: TestRun, id: string) -> Outcome {
@@ -149,19 +184,38 @@ fn live_tests(o: Opts, dir: string) -> TestRun {
     }
 }
 
+// A compiled run that exits 1 without a word of output may be a build that was killed or starved (memory pressure,
+// a build-directory race), not a verdict: run it again, up to three times, before believing it.
 fn run_program(o: Opts, file: string, mode: string) -> Outcome {
+    let mut out = run_program_once(o, file, mode)
+    let mut tries = 1
+    while mode == "compiled" && out.token == "exit1:0:17" && tries < 3 {
+        out = run_program_once(o, file, mode)
+        tries += 1
+    }
+    out
+}
+
+fn run_program_once(o: Opts, file: string, mode: string) -> Outcome {
     let cmd = if mode == "compiled" {
         "${wrapper()} ${quote(o.wj)} run --compiled --no-lint ${quote(file)}"
     } else {
-        "${quote(o.wj)} run --interpret --no-lint --deterministic-time --engine ${mode} ${quote(file)} < /dev/null"
+        "${quote(o.wj)} run --interpret --no-lint --deterministic-time --caps off --engine ${mode} ${quote(file)} < /dev/null"
     }
     match sh(cmd) {
         Ok(r) => {
             let no_loc = mode == "compiled" || r.status == 0
             let loc = if no_loc { "" } else { loc_of(r.stderr) }
-            Outcome { token: "exit${r.status}:${checksum(r.stdout)}", loc: loc }
+            // did the run stop on an ownership error (the interpreter's WJ0007, or rustc's E0382 behind the compiled build)?
+            let said = strings.contains(r.stderr, "WJ0007") || strings.contains(r.stderr, "E0382") || strings.contains(r.stdout, "E0382") || strings.contains(r.stdout, "WJ0007")
+            let rejected = r.status != 0 && (strings.contains(r.stderr, "error[WJ") || strings.contains(r.stderr, "Error: not running") || strings.contains(r.stdout, "error[WJ"))
+            let diag = if rejected { "rejected" } else if r.status != 0 && said { "refused" } else { "ran" }
+            // the compiled build refuses deprecated surface forms (`println("{}")`, `vec![]`, `.iter()`) as lint errors even
+            // though the interpreter runs them with --no-lint: that is a policy difference, not a behavioural one
+            let linted = mode == "compiled" && r.status != 0 && (strings.contains(r.stderr, "Rust leakage") || strings.contains(r.stdout, "Rust leakage"))
+            Outcome { token: if linted { "lint" } else { "exit${r.status}:${checksum(r.stdout)}" }, loc: loc, diag: diag, out: r.stdout, err: main_error_line(r.stderr) }
         },
-        Err(e) => Outcome { token: "error", loc: "" },
+        Err(e) => Outcome { token: "error", loc: "", diag: "error", out: "", err: "" },
     }
 }
 
@@ -175,13 +229,50 @@ fn read_baseline() -> TestRun {
                 let f = strings.split(line, "\t")
                 if f.len() == 3 {
                     run.ids.push(f[0])
-                    run.outs.push(Outcome { token: f[1], loc: f[2] })
+                    run.outs.push(Outcome { token: f[1], loc: f[2], diag: "", out: "", err: "" })
                 }
             }
         },
         Err(_) => {},
     }
     run
+}
+
+// the `// expect:` lines of a spec program joined as stdout, or ""
+fn expected_stdout(file: string) -> string {
+    let text = fs.read_to_string(file).unwrap_or("")
+    let mut out = ""
+    let mut any = false
+    for line in strings.split_lines(text) {
+        if strings.starts_with(line, "// expect: ") {
+            out = out + strings.replace(line, "// expect: ", "") + "\n"
+            any = true
+        } else if line == "// expect:" {
+            out = out + "\n"
+            any = true
+        }
+    }
+    if any { out } else { "" }
+}
+
+// share of the repository's programs (files with a `main`, outside the pinned ecosystem snapshot) in the corpus
+fn coverage_line() {
+    match sh("t=$(git ls-files '*.wj' | grep -v '^tests/drift_corpus/eco/' | while read f; do grep -q 'fn main' \"$f\" && echo x; done | wc -l); echo $t") {
+        Ok(r) => println("  repository programs with a main: ${strings.trim(r.stdout)}"),
+        Err(_) => {},
+    }
+}
+
+// `<id>#mainerr` rows: the `Error: ...` line of a `main` that returns `Err`, per mode ("none" when nothing was printed);
+// the compiled one comes from this run or from the baseline (absent there means none)
+fn mainerr_rows(o: Opts, id: string, w: Outcome, r: Outcome, c: Outcome, baseline: TestRun) -> string {
+    let ce = if o.compiled == "skip" { "skip" } else if o.compiled == "live" { if c.err == "" { "none" } else { c.err } } else { let b = lookup(baseline, "${id}#mainerr").token; if b == "absent" { "none" } else { b } }
+    let we = if w.err == "" { "none" } else { w.err }
+    let re = if r.err == "" { "none" } else { r.err }
+    if we == "none" && re == "none" && (ce == "none" || ce == "skip") {
+        return ""
+    }
+    row("${id}#mainerr", we, re, ce)
 }
 
 fn row(id: string, w: string, r: string, c: string) -> string {
@@ -206,7 +297,7 @@ fn sorted_dirs(parent: string) -> Vec<string> {
 
 fn main() {
     let args = env::args()
-    let mut o = Opts { scratch: "", wj: args[1], out: args[2], compiled: "recorded", record: false, only: "" }
+    let mut o = Opts { scratch: "", wj: args[1], out: args[2], compiled: "recorded", record: false, only: "", wide: true, refresh_failed: false }
     let mut i = 3
     while i < args.len() {
         if args[i] == "--compiled" {
@@ -214,6 +305,11 @@ fn main() {
             i += 1
         } else if args[i] == "--record" {
             o.record = true
+        } else if args[i] == "--refresh-failed" {
+            o.refresh_failed = true
+        } else if args[i] == "--programs" {
+            o.wide = args[i + 1] != "off"
+            i += 1
         } else if args[i] == "--only" {
             o.only = args[i + 1]
             i += 1
@@ -282,7 +378,7 @@ fn main() {
         for id in ids {
             let wo = lookup(w, id)
             let ro = lookup(r, id)
-            let co = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else { lookup(c, id) }
+            let co = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "", err: "" } } else { lookup(c, id) }
             out = out + row(id, wo.token, ro.token, co.token)
             if wo.loc != "" || ro.loc != "" || co.loc != "" {
                 let cl = if o.compiled == "skip" { "skip" } else { "loc:${co.loc}" }
@@ -294,9 +390,9 @@ fn main() {
         }
         println("  ${dir}: ${ids.len()} tests")
     }
-    // value-position programs and the minimal repros of ledgered divergences
+    // value-position programs, the minimal repros of ledgered divergences and the loopback socket programs (ADR-0032)
     let mut progs = Vec::new()
-    for dir in ["tests/engine_parity", "${CORPUS}/repros"] {
+    for dir in ["tests/engine_parity", "${CORPUS}/repros", "${CORPUS}/moves", "${CORPUS}/net", "tests/move_prediction", "tests/move_prediction/accepted"] {
         match fs.read_dir(dir) {
             Ok(es) => {
                 for e in es {
@@ -315,11 +411,26 @@ fn main() {
     for p in progs {
         let w = run_program(o, p, "walker")
         let r = run_program(o, p, "resolved")
-        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "" } } else if o.compiled == "live" { run_program(o, p, "compiled") } else { lookup(baseline, p) }
+        let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "", err: "" } } else if o.compiled == "live" { compiled_program(o, p, baseline) } else { lookup(baseline, p) }
         out = out + row(p, w.token, r.token, c.token)
-        // a program that does not run under the walker agrees with itself in every mode: it is a broken case
-        let ran = strings.starts_with(w.token, "exit0:")
-        out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") { "runs" } else { "broken" }, "runs")
+        out = out + mainerr_rows(o, p, w, r, c, baseline)
+        if o.compiled == "live" {
+            recorded = recorded + "${p}#mainerr\t${if c.err == "" { "none" } else { c.err }}\t\n"
+        }
+        if is_must_refuse(p) {
+            // the interpreter must refuse what rustc rejects: `#refused` rows say whether each side stopped on an ownership error
+            let cd = if o.compiled == "skip" { "skip" } else if o.compiled == "live" { c.diag } else { lookup(baseline, "${p}#refused").token }
+            out = out + row("${p}#refused", w.diag, r.diag, cd)
+            if o.compiled == "live" {
+                recorded = recorded + "${p}#refused\t${c.diag}\t\n"
+            }
+        } else {
+            // a program that does not run under the walker agrees with itself in every mode: it is a broken case
+            // (a run that panics, exit 101, ran: the guard is against programs that never started)
+            // (a `main` that returns Err exits 1 after printing `Error: ...`: it ran)
+            let ran = strings.starts_with(w.token, "exit0:") || strings.starts_with(w.token, "exit101:") || w.err != ""
+            out = out + row("${p}#runs", if ran { "runs" } else { "broken" }, if strings.starts_with(r.token, "exit0:") || strings.starts_with(r.token, "exit101:") || r.err != "" { "runs" } else { "broken" }, "runs")
+        }
         if o.compiled == "live" {
             recorded = recorded + "${p}\t${c.token}\t\n"
         }
@@ -328,7 +439,52 @@ fn main() {
         }
     }
     println("  ${progs.len()} programs")
-    let _ = sh("rm -f tests/engine_parity/vp_*.wj.meta ${CORPUS}/repros/*.wj.meta")
+    // every deterministic program of the repository's corpora (conformance programs,
+    // verified examples, the interpreter corpus and the engine parity programs outside vp_*)
+    let mut wide_count = 0
+    let mut wide_unrecorded = 0
+    if o.wide {
+        let listing = match sh(WIDE_LIST) {
+            Ok(r) => r.stdout,
+            Err(_) => "",
+        }
+        let mut files = strings.split_lines(listing)
+        files.sort()
+        for f in files {
+            if f == "" || !strings.contains(f, o.only) || progs.contains(f) {
+                continue
+            }
+            let w = run_program(o, f, "walker")
+            let r = run_program(o, f, "resolved")
+            let c = if o.compiled == "skip" { Outcome { token: "skip", loc: "", diag: "skip", out: "", err: "" } } else if o.compiled == "live" { compiled_program(o, f, baseline) } else { lookup(baseline, f) }
+            // no recorded compiled result yet: not compared (counted in the summary), unlike the pinned programs above
+            let ct = if c.token == "absent" || c.token == "lint" { "skip" } else { c.token }
+            out = out + row(f, w.token, r.token, ct)
+            out = out + mainerr_rows(o, f, w, r, c, baseline)
+            if o.compiled == "live" {
+                recorded = recorded + "${f}#mainerr\t${if c.err == "" { "none" } else { c.err }}\t\n"
+            }
+            out = out + row("${f}#accepted", if w.diag == "rejected" { "rejected" } else { "accepted" }, if r.diag == "rejected" { "rejected" } else { "accepted" }, "accepted")
+            let expect = expected_stdout(f)
+            if expect != "" {
+                out = out + row("${f}#expect", if w.out == expect { "match" } else { "mismatch" }, if r.out == expect { "match" } else { "mismatch" }, "match")
+            }
+            if o.compiled == "live" {
+                recorded = recorded + "${f}\t${c.token}\t\n"
+            }
+            if w.loc != "" || r.loc != "" {
+                out = out + row("${f}#loc", "loc:${w.loc}", "loc:${r.loc}", "skip")
+            }
+            if ct == "skip" && o.compiled != "skip" {
+                wide_unrecorded += 1
+            }
+            wide_count += 1
+        }
+    }
+    println("  ${wide_count} corpus programs (${wide_unrecorded} without a recorded compiled result)")
+    coverage_line()
+
+    let _ = sh("rm -f tests/engine_parity/vp_*.wj.meta ${CORPUS}/repros/*.wj.meta ${CORPUS}/net/*.wj.meta")
     match fs.write(o.out, out) {
         Ok(_) => {},
         Err(e) => {

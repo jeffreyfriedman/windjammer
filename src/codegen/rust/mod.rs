@@ -92,6 +92,7 @@ pub mod self_analysis;
 pub mod signature_promotion;
 pub mod simd_transform;
 pub mod list_literal_context;
+pub mod optional_chain_lowering;
 pub mod match_scrutinee_borrow;
 pub mod method_receiver_resolution;
 pub mod statement_generation;

@@ -383,6 +383,9 @@ pub fn is_mem_take_stdlib_base(name: &str) -> bool {
 // Drop / Lifetime Classification
 // =============================================================================
 
+/// The handle type `thread::spawn` returns.
+pub const JOIN_HANDLE: &str = "JoinHandle";
+
 /// Types with important `Drop` semantics (not safe to defer dropping).
 pub fn has_significant_drop(name: &str) -> bool {
     matches!(

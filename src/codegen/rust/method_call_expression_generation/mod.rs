@@ -8,6 +8,7 @@ mod arguments;
 mod finalize;
 mod idiom_lowering;
 mod receiver;
+mod ref_text_option;
 mod std_idiom_fixups;
 mod signature_resolution;
 
@@ -24,7 +25,7 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
         if method == crate::parser::optional_chain::OPT_CHAIN {
-            return self.unsupported_optional_chain();
+            return self.lower_optional_chain(object, arguments);
         }
         if method == "find" && arguments.len() == 1 {}
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.

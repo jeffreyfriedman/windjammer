@@ -26,10 +26,15 @@ struct Entry {
 
 /// Cheap build identity: version + executable path, size and mtime (no content hashing).
 pub(super) fn identity() -> String {
+    std::env::current_exe().map_or_else(|_| identity_of(None), |exe| identity_of(Some(&exe)))
+}
+
+/// The identity of the compiler executable at `exe` (this crate's version).
+pub(super) fn identity_of(exe: Option<&Path>) -> String {
     let mut h = DefaultHasher::new();
-    if let Ok(exe) = std::env::current_exe() {
-        exe.hash(&mut h);
-        if let Ok(m) = std::fs::metadata(&exe) {
+    if let Some(exe) = exe {
+        exe.to_path_buf().hash(&mut h);
+        if let Ok(m) = std::fs::metadata(exe) {
             m.len().hash(&mut h);
             m.modified().ok().hash(&mut h);
         }

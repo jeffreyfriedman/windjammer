@@ -90,6 +90,7 @@ impl<'m> Js<'m> {
         let o = opts.clone().unwrap_or_else(|| "undefined".into());
         if let Some(radix) = spec.radix {
             return match &e.ty {
+                Ty::Int(_) if radix == 'e' => Ok(format!("$fmtIntExp({v}, {o})")),
                 Ty::Int(k) => Ok(format!("$fmtInt({v}, {o}, \"{radix}\", {})", k.bits())),
                 Ty::F64 | Ty::F32 if radix == 'e' => Ok(match opts {
                     Some(o) => format!("$fmtFloat({v}, {o}, false, false, true)"),

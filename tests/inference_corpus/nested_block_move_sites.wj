@@ -1,0 +1,32 @@
+// C6: clone decisions in nested blocks. The analyzer keys its clone sites by (name, statement index)
+// over every statement of the function; a mismatch between its index and the backend's would clone the
+// wrong statement. Each move here is decided by liveness at its own site.
+fn take(v: Vec<int>) -> int { v.len() as int }
+
+fn keep(v: Vec<int>) -> Vec<int> { v }
+
+fn main() {
+    let v: Vec<int> = [1, 2]
+    let w: Vec<int> = [3]
+    let u: Vec<int> = [4, 5, 6]
+    if v.len() > 1 {
+        let n = take(keep(w))
+        println("${n}")
+    }
+    let mut total = 0
+    for i in 0..2 {
+        if i == 0 {
+            total = total + take(keep(v))
+        } else {
+            total = total + v.len() as int
+        }
+    }
+    match u.len() {
+        3 => {
+            let m = take(keep(u))
+            println("${m}")
+        }
+        _ => {}
+    }
+    println("${total} ${v.len()}")
+}

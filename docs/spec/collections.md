@@ -184,3 +184,105 @@ Output:
 ```text
 3 3
 ```
+
+## Slices and ranges
+
+**SPEC-COLL-011** `v[a..b]`, `v[..b]`, `v[a..]` and `v[..]` are views of a list; an empty or reversed range (`5..5`, `3..1`) has no elements; `step_by`, `rev`, `windows`, `chunks`, `split_at`, `first`, `last`, `get` and `position` follow Rust's definitions.
+
+<!-- example: tests/spec/collections/SPEC-COLL-011.wj -->
+```windjammer
+fn main() {
+    let v = vec![10, 20, 30, 40, 50]
+    println("${v[1..3].len()} ${v[..2].len()} ${v[3..].len()} ${v[..].len()}")
+    let s = &v[1..4]
+    println("${s[0]} ${s[2]} ${s.len()}")
+    println("${v[1..4].len()}")
+    let mut total = 0
+    for i in (0..10).step_by(3) {
+        total += i
+    }
+    println("${total}")
+    let rev: Vec<int> = (1..=4).rev().collect()
+    println("${rev[0]}${rev[1]}${rev[2]}${rev[3]}")
+    let empty: Vec<int> = (5..5).collect()
+    println("${empty.len()} ${(3..1).collect::<Vec<int>>().len()}")
+    let w: Vec<int> = v.windows(2).map(|p| p[1] - p[0]).collect()
+    println("${w.len()} ${w[0]}")
+    let c: Vec<int> = v.chunks(2).map(|p| p.len()).collect()
+    println("${c.len()} ${c[0]} ${c[2]}")
+    println("${v.first().unwrap_or(0)} ${v.last().unwrap_or(0)} ${v.get(9).is_none()}")
+    let (l, r) = v.split_at(2)
+    println("${l.len()} ${r.len()}")
+    println("${v.contains(30)} ${v.iter().position(|x| *x == 40).unwrap_or(99)}")
+}
+```
+Output:
+```text
+2 2 2 5
+20 40 3
+3
+18
+4321
+0 0
+4 10
+3 2 1
+10 50 true
+2 3
+true 3
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.
+
+## Iterator adapters: laziness and order
+
+**SPEC-COLL-012** Adapters (`filter`, `map`, `take_while`, `skip`, `step_by`, `zip`, `enumerate`, `chain`, `flatten`) apply in source order and are lazy: `find` stops at the first match, so an earlier `map` side effect runs only for the elements examined.
+
+<!-- example: tests/spec/collections/SPEC-COLL-012.wj -->
+```windjammer
+fn main() {
+    let calls = vec![0]
+    let v = vec![1, 2, 3, 4, 5, 6]
+    let mut log: Vec<string> = Vec::new()
+    let evens: Vec<int> = v.iter().filter(|x| *x % 2 == 0).map(|x| x * 10).collect()
+    println("${evens.len()} ${evens[0]} ${evens[2]}")
+    let firsts: Vec<int> = v.iter().take_while(|x| **x < 4).map(|x| *x).collect()
+    println("${firsts.len()}")
+    let s: int = v.iter().skip(2).step_by(2).sum()
+    println("${s}")
+    let z: Vec<(int, string)> = v.iter().zip(vec!["a", "b", "c"]).map(|(n, t)| (*n, t.to_string())).collect()
+    println("${z.len()} ${z[2].0}${z[2].1}")
+    let en: Vec<int> = v.iter().enumerate().map(|(i, x)| (i as int) * x).collect()
+    println("${en[5]}")
+    let ch: Vec<int> = v.iter().take(2).chain(v.iter().skip(4)).map(|x| *x).collect()
+    println("${ch.len()} ${ch[2]}")
+    let folded = v.iter().fold(0, |acc, x| acc * 2 + x)
+    println("${folded}")
+    println("${v.iter().any(|x| *x > 5)} ${v.iter().all(|x| *x > 1)} ${v.iter().count()}")
+    println("${v.iter().max().unwrap_or(&0)} ${v.iter().min().unwrap_or(&0)}")
+    let found = v.iter().find(|x| **x > 3)
+    println("${found.unwrap_or(&0)}")
+    let mut seen = 0
+    let first_big = v.iter().map(|x| { seen += 1; *x }).find(|x| *x > 2)
+    println("${first_big.unwrap_or(0)} ${seen}")
+    let flat: Vec<int> = vec![vec![1], vec![], vec![2, 3]].into_iter().flatten().collect()
+    println("${flat.len()}")
+    log.push("done")
+    println("${log.len()} ${calls.len()}")
+}
+```
+Output:
+```text
+3 20 60
+3
+8
+3 3c
+30
+4 5
+120
+true false 6
+6 1
+4
+3 3
+3
+1 1
+```
+The compiled backend cannot build this program yet (docs/drift/spec-findings.md); the output above is that of the equivalent Rust program.

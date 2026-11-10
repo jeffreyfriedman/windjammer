@@ -1,0 +1,11 @@
+[package]
+name = "book-samples"
+version = "0.1.0"
+edition = "2025"
+
+# Runs the book's samples (scripts/book/MODULE.md). Reads the extracted samples, writes scratch projects, starts `wj`.
+[capabilities]
+fs.read = ["./**", "/tmp/**", "/var/folders/**", "/private/**"]
+fs.write = ["./docs/generated/measured.json", "../../docs/generated/measured.json", "/tmp/**", "/var/folders/**", "/private/**", "/tmp/**/*.wj", "/tmp/**/wj.toml", "/var/folders/**/*.wj", "/var/folders/**/wj.toml", "/private/**/*.wj", "/private/**/wj.toml"]
+process = ["sh", "env", "time", "/usr/bin/time", "rm", "mkdir", "uname"]
+env.read = ["*"]

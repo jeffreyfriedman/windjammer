@@ -6220,6 +6220,17 @@
   {
     "kind": "stdlib",
     "module": "std::http",
+    "name": "ClientRequest",
+    "signature": "struct ClientRequest",
+    "source": "std/http.wj",
+    "summary": "Request with options: `http.request(\"GET\", url).header(k, v).timeout_secs(5).send()`",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::http",
     "name": "Headers",
     "signature": "struct Headers",
     "source": "std/http.wj",
@@ -6376,6 +6387,17 @@
     "module": "std::http",
     "name": "put",
     "signature": "fn put(url: string, body: string) -> Result<Response, string>",
+    "source": "std/http.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::http",
+    "name": "request",
+    "signature": "fn request(method: string, url: string) -> ClientRequest",
     "source": "std/http.wj",
     "summary": "",
     "tags": [
@@ -7709,6 +7731,39 @@
     "signature": "struct ServerResponse",
     "source": "std/net/mod.wj",
     "summary": "/ HTTP Server Response (sent by server)",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::net::mod",
+    "name": "TcpListener",
+    "signature": "struct TcpListener",
+    "source": "std/net/mod.wj",
+    "summary": "/ A bound TCP listener.",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::net::mod",
+    "name": "TcpStream",
+    "signature": "struct TcpStream",
+    "source": "std/net/mod.wj",
+    "summary": "RAW SOCKETS (ADR-0032) Bytes are Vec<u8>; errors are strings from a fixed vocabulary (\"connection refused\", \"timed out\", \"connection reset\", \"broken pipe\", \"add",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::net::mod",
+    "name": "UdpSocket",
+    "signature": "struct UdpSocket",
+    "source": "std/net/mod.wj",
+    "summary": "/ A bound UDP socket.",
     "tags": [
       "struct"
     ]

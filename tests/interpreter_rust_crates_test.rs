@@ -387,3 +387,191 @@ fn a_crate_without_a_bridgeable_surface_still_falls_back() {
     assert_eq!(i.status.code(), Some(2), "{}", text(&i));
     assert!(String::from_utf8_lossy(&i.stderr).contains("`shapes::tally`"), "{}", text(&i));
 }
+
+// ---- the other interpreted entry points: `wj test --interpret`, `wj repl` ----
+
+#[test]
+fn wj_test_interpret_calls_crates_through_one_host() {
+    let p = Project::new("strsim = \"0.11\"\n", "fn main() {}\n");
+    std::fs::create_dir_all(p.root.join("tests")).unwrap();
+    let tests = "\
+use strsim
+
+fn test_levenshtein_textbook() {
+    assert_eq(strsim::levenshtein(\"kitten\", \"sitting\"), 3)
+}
+
+fn test_jaro_is_close_to_17_18() {
+    let j = strsim::jaro(\"martha\", \"marhta\")
+    assert(j > 0.944 && j < 0.945)
+}
+";
+    std::fs::write(p.root.join("tests/distance_test.wj"), tests).unwrap();
+    let o = p.wj(&["test", "--interpret", "tests"]);
+    assert!(o.status.success(), "{}", text(&o));
+    let out = text(&o);
+    assert!(out.contains("test_levenshtein_textbook") && out.contains("test_jaro_is_close_to_17_18"), "{out}");
+    // the oracle is not the host: a wrong expectation must fail
+    std::fs::write(p.root.join("tests/distance_test.wj"), tests.replace("\"sitting\"), 3)", "\"sitting\"), 4)")).unwrap();
+    let bad = p.wj(&["test", "--interpret", "tests"]);
+    assert!(!bad.status.success(), "{}", text(&bad));
+}
+
+#[test]
+fn the_repl_calls_crates() {
+    let p = Project::new("strsim = \"0.11\"\n", "fn main() {}\n");
+    let mut c = Command::new(WJ);
+    c.arg("repl").current_dir(&p.root).env_remove("WJ_CAPS").stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    use std::io::Write;
+    child.stdin.take().unwrap().write_all(b"use strsim\nlet d = strsim::levenshtein(\"kitten\", \"sitting\")\nprintln(\"lev ${d}\")\n").unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert!(stdout(&o).contains("lev 3"), "{}", text(&o));
+}
+
+// ---- opaque crate values (handles) ----
+
+const CTR_LIB: &str = r#"
+use std::sync::atomic::{AtomicI64, Ordering};
+static LIVE: AtomicI64 = AtomicI64::new(0);
+pub struct Counter { n: i64 }
+impl Drop for Counter {
+    fn drop(&mut self) { LIVE.fetch_sub(1, Ordering::SeqCst); }
+}
+impl Counter {
+    pub fn new(start: i64) -> Counter { LIVE.fetch_add(1, Ordering::SeqCst); Counter { n: start } }
+    pub fn bump(&mut self) -> i64 { self.n += 1; self.n }
+    pub fn get(&self) -> i64 { self.n }
+}
+pub fn total(c: &Counter, extra: i64) -> i64 { c.get() + extra }
+/// Counters alive in this process: the release protocol keeps it at what the program still holds.
+pub fn live() -> i64 { LIVE.load(Ordering::SeqCst) }
+"#;
+
+const CTR_SURFACE: &str = "\
+pub struct Counter {}
+
+impl Counter {
+    pub fn new(start: i64) -> Counter
+    pub fn bump(&mut self) -> i64
+    pub fn get(&self) -> i64
+}
+
+pub fn total(c: &Counter, extra: i64) -> i64
+pub fn live() -> i64
+";
+
+const CTR_MAIN: &str = "\
+use ctr
+use ctr::Counter
+
+fn main() {
+    let mut c = Counter::new(5)
+    c.bump()
+    let n = c.bump()
+    println(\"${n} ${c.get()} ${ctr::total(c, 10)}\")
+    let mut sum = 0
+    let mut i = 0
+    while i < 300 {
+        let mut t = Counter::new(i)
+        sum += t.bump()
+        i += 1
+    }
+    println(\"${sum} ${c.get()} live ${ctr::live()}\")
+}
+";
+
+fn ctr_project() -> Project {
+    let p = Project::new("ctr = { path = \"../ctr\" }\n", CTR_MAIN);
+    let c = p.root.parent().unwrap().join("ctr");
+    std::fs::create_dir_all(c.join("src")).unwrap();
+    std::fs::write(c.join("Cargo.toml"), "[package]\nname = \"ctr\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(c.join("src/lib.rs"), CTR_LIB).unwrap();
+    std::fs::create_dir_all(p.root.join("rust")).unwrap();
+    std::fs::write(p.root.join("rust/ctr.wji"), CTR_SURFACE).unwrap();
+    Project { allow: Some("ffi=ctr"), ..p }
+}
+
+#[test]
+fn opaque_values_live_in_the_host_and_match_the_compiled_build() {
+    let p = ctr_project();
+    let i = p.interp(&[]);
+    assert!(i.status.success(), "{}", text(&i));
+    // 5 -> 6 -> 7; total = 7 + 10; sum over i of (i + 1) for i < 300 = 45150
+    assert_eq!(stdout(&i), "7 7 17\n45150 7 live 1\n", "{}", text(&i));
+    equivalent(&i, &p.compiled()).unwrap();
+}
+
+#[test]
+fn replay_answers_handle_calls_without_the_host() {
+    let p = ctr_project().private_cache();
+    let rec = p.interp(&["--record", "run.wjlog"]);
+    assert!(rec.status.success(), "{}", text(&rec));
+    poison(&p.hosts());
+    let rep = p.interp(&["--replay", "run.wjlog"]);
+    assert!(rep.status.success(), "{}", text(&rep));
+    assert_eq!(stdout(&rep), stdout(&rec));
+}
+
+const REGEX_SURFACE: &str = "\
+pub struct Regex {}
+pub struct Error {}
+
+impl Regex {
+    pub fn new(re: string) -> Result<Regex, Error>
+    pub fn is_match(&self, haystack: string) -> bool
+    pub fn shortest_match(&self, haystack: string) -> Option<usize>
+    pub fn captures_len(&self) -> usize
+}
+
+impl Error {
+    pub fn to_string(&self) -> string
+}
+";
+
+#[test]
+fn regex_end_to_end_matches_the_compiled_build() {
+    let main = "\
+use regex
+use regex::Regex
+
+fn main() {
+    match Regex::new(\"^([a-z]+)([0-9]{2})$\") {
+        Ok(re) => {
+            println(\"${re.is_match(\"abc12\")} ${re.is_match(\"abc1\")} ${re.captures_len()}\")
+            match re.shortest_match(\"abc12\") {
+                Some(n) => println(\"shortest ${n}\"),
+                None => println(\"no match\"),
+            }
+        }
+        Err(e) => println(\"error ${e.to_string()}\"),
+    }
+    match Regex::new(\"(unclosed\") {
+        Ok(_) => println(\"compiled\"),
+        Err(e) => println(\"rejected: ${e.to_string().len() > 0}\"),
+    }
+}
+";
+    let p = Project::new("regex = \"1\"\n", main);
+    std::fs::create_dir_all(p.root.join("rust")).unwrap();
+    std::fs::write(p.root.join("rust/regex.wji"), REGEX_SURFACE).unwrap();
+    let p = Project { allow: Some("ffi=regex"), ..p };
+    let i = p.interp(&[]);
+    assert!(i.status.success(), "{}", text(&i));
+    assert_eq!(stdout(&i), "true false 3\nshortest 5\nrejected: true\n", "{}", text(&i));
+    equivalent(&i, &p.compiled()).unwrap();
+}
+
+#[test]
+fn an_unknown_crate_in_the_repl_is_an_error_not_a_stack_overflow() {
+    // `use name` of something that is neither a module nor an item used to import itself, so `name::f` recursed forever
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut c = Command::new(WJ);
+    c.arg("repl").current_dir(tmp.path()).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    use std::io::Write;
+    child.stdin.take().unwrap().write_all(b"use nosuchcrate\nnosuchcrate::f(1)\nprintln(\"alive\")\n").unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert_eq!(o.status.code(), Some(0), "{}", text(&o));
+    assert!(stdout(&o).contains("alive") && String::from_utf8_lossy(&o.stderr).contains("nosuchcrate::f"), "{}", text(&o));
+}

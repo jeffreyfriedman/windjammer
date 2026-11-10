@@ -9,7 +9,7 @@
 #   through the installed binary (codes: >=1 negative case whose expected output contains the code).
 # - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
 
-max_pending = 38
+max_pending = 37
 
 [[promise]]
 id = "feature ownership-inferred"
@@ -22,9 +22,19 @@ source = "README.md"
 quote = "`wj build --no-cargo FILE` writes out the Rust"
 
 [[promise]]
+id = "feature interpreter-matches-compiled"
+source = "docs/testing/INTERPRETER_CONTRACT.md"
+quote = "its standard output, its exit status and the source location of"
+
+[[promise]]
 id = "feature interpret-instant"
 source = "README.md"
 quote = "`wj run` starts a whole multi-module project in milliseconds"
+
+[[promise]]
+id = "feature run-stdin"
+source = "docs/reference/cli.md"
+quote = "A .wj file, a directory, or `-` (the program read from stdin)"
 
 [[promise]]
 id = "feature json-diagnostics"
@@ -103,7 +113,6 @@ pending = "`wj check` does not emit it yet and only cargo-backed `wj build --che
 
 [[promise]]
 id = "code WJ0007"
-pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0008"
@@ -234,6 +243,10 @@ statement = "Enable tree shaking (dead code elimination)"
 id = "wj build --verbose"
 statement = "Show verbose error output (includes all notes and suggestions)"
 pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
+
+[[promise]]
+id = "wj build --unchecked-arithmetic"
+statement = "Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds and the interpreter); same as `[build] overflow_checks = false` in wj.toml"
 
 [[promise]]
 id = "wj cache"
@@ -428,6 +441,10 @@ id = "wj repl"
 statement = "Start the Windjammerscript REPL (interactive interpreter)"
 
 [[promise]]
+id = "wj eval"
+statement = "Evaluate Windjammer and print the result: `wj eval 'strings.to_upper(\"hi\")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted"
+
+[[promise]]
 id = "wj run"
 statement = "Compile and run a Windjammer file"
 
@@ -438,6 +455,10 @@ statement = "Defer drop optimization mode (auto, always, never)"
 [[promise]]
 id = "wj run --defer-drop-threshold"
 statement = "Defer drop threshold in bytes (default: 102400 = 100KB)"
+
+[[promise]]
+id = "wj run --verify"
+statement = "Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr"
 
 [[promise]]
 id = "wj run --interpret"
@@ -806,6 +827,10 @@ id = "wj doctor --expect-head"
 statement = "Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate)"
 
 [[promise]]
+id = "wj doctor --strict"
+statement = "Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout"
+
+[[promise]]
 id = "wj doctor --json"
 statement = "Machine-readable output"
 
@@ -836,3 +861,39 @@ statement = "Show this wj's identity: version, commit, commit date, dirty flag, 
 [[promise]]
 id = "wj version --json"
 statement = "Machine-readable output"
+
+[[promise]]
+id = "wj clean --older-than-hours"
+statement = "With --tmp: only directories older than this many hours"
+
+[[promise]]
+id = "wj clean --sidecars"
+statement = "Only remove legacy `*.wj.meta` sidecars next to sources under the current directory"
+
+[[promise]]
+id = "wj clean --tmp"
+statement = "Remove stale `wj-*` scratch directories from the OS temp dir (dry run unless --yes)"
+
+[[promise]]
+id = "wj clean --yes"
+statement = "Actually remove what --tmp lists"
+
+[[promise]]
+id = "wj rust-surface"
+statement = "Generate the signature surface of a Rust crate dependency (ADR-0026) from its source"
+
+[[promise]]
+id = "wj rust-surface --all-pub"
+statement = "Every public free function that maps (the default)"
+
+[[promise]]
+id = "wj rust-surface --fn"
+statement = "Only these functions (repeatable); the cache copy always has every function"
+
+[[promise]]
+id = "wj rust-surface --path"
+statement = "Project directory (default: the current directory)"
+
+[[promise]]
+id = "wj rust-surface --write"
+statement = "Write an editable copy to rust/<crate>.wji (source: commit it, it wins over the generated one)"

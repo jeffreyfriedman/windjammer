@@ -1,0 +1,12 @@
+// The value of a `loop` is the value of its `break`: `break k * 10` is in the class of `k` (an `int`), so the
+// literal is an `int` too, and so is the loop's result.
+pub fn show_first_multiple() {
+    let mut k = 0
+    let r = loop {
+        k += 1
+        if k == 4 {
+            break k * 10
+        }
+    }
+    println("${r}")
+}

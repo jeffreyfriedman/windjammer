@@ -1,0 +1,9 @@
+// An enum declared in another file with `f32` payloads: a float literal passed to its variant is an `f32`
+// (the payload's declared type crosses the module boundary). Expected by hand: 0.5 + 1.0 + 2.0 = 3.5.
+// expect: 3.5
+mod shape
+mod build
+
+fn main() {
+    println("${build::total()}")
+}

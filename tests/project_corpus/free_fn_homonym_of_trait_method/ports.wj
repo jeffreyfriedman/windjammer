@@ -1,0 +1,3 @@
+pub trait Inventory {
+    fn list_items(self, tenant_id: string) -> Vec<string>
+}

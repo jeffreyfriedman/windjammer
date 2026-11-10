@@ -73,7 +73,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli", "safety_typed_ir", "jit"]
-cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
+cli = ["dep:syntect", "dep:tempfile", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
 # Interpreter: Cranelift tier for hot integer functions (ADR-0020 step 7; on by default, `wj run --no-jit`
@@ -108,7 +108,8 @@ anyhow = "1.0"
 thiserror = "1.0"
 typed-arena = "2.0"
 colored = "2.0"
-chrono = "0.4"
+# no `wasmbind`: the browser playground (ADR-0034) imports nothing from JavaScript; native builds are unaffected
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "oldtime"] }
 # interpreter std modules (regex, crypto, csv, url): same crates the runtime uses
 regex = "1"
 sha2 = "0.10"
@@ -125,28 +126,33 @@ serde_yaml = "0.9"
 flate2 = "1"
 bcrypt = "0.17"
 argon2 = { version = "0.5", features = ["std", "password-hash", "rand"] }
-jsonwebtoken = "9"
 url = "2"
 csv = "1"
-# std::db in the interpreter (SQLite; the same library sqlx bundles for windjammer-runtime)
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 once_cell = "1.19"
 rayon = "1.10"
 smallvec = "1.13"
 syn = { version = "2", default-features = false, features = ["full", "parsing", "visit", "printing", "clone-impls", "proc-macro"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
-libloading = "0.8"
 cranelift-codegen = { version = "0.130", optional = true }
 cranelift-frontend = { version = "0.130", optional = true }
 cranelift-jit = { version = "0.130", optional = true }
 cranelift-module = { version = "0.130", optional = true }
 cranelift-native = { version = "0.130", optional = true }
 
+# incremental compilation database (compiler_database.rs): the build path needs it with or without the CLI
+salsa = "0.24"
 tempfile = { version = "3.10", optional = true }
 syntect = { version = "5.2", optional = true }
-salsa = { version = "0.24", optional = true }
 env_logger = { version = "0.11", optional = true }
+
+# Host-only dependencies: C code (ring, SQLite) or dynamic loading that the browser playground's
+# wasm32-unknown-unknown build cannot link (ADR-0034). Native builds see exactly the same dependency set.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+jsonwebtoken = "9"
+# std::db in the interpreter (SQLite; the same library sqlx bundles for windjammer-runtime)
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+libloading = "0.8"
 
 [dev-dependencies]
 tempfile = "3.0"
@@ -385,6 +391,12 @@ path = "tests/effects_packages_test.rs"
 name = "effects_soundness"
 path = "tests/effects_soundness_test.rs"
 
+# The Windjammer Book: structure, links, samples run interpreted and compiled: cargo test --release --test book
+[[test]]
+name = "book"
+path = "tests/book_test.rs"
+required-features = ["cli"]
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"
@@ -504,6 +516,12 @@ path = "tests/move_prediction_test.rs"
 name = "reassign_list_codegen"
 path = "tests/reassign_and_list_codegen_test.rs"
 
+# `wj explain-ownership` reports source columns inside interpolations
+#   cargo test --release --test explain_ownership_columns
+[[test]]
+name = "explain_ownership_columns"
+path = "tests/explain_ownership_columns_test.rs"
+
 # std::http::request builder: interpreted and compiled, against a local silent server
 #   cargo test --release --test http_request_builder
 [[test]]
@@ -521,3 +539,15 @@ path = "tests/std_runtime_parity_test.rs"
 [[test]]
 name = "compiled_constant_panics"
 path = "tests/compiled_constant_panics_test.rs"
+
+# Release builds check integer overflow by default (SPEC-NUM-002); opt-out switches
+#   cargo test --release --test release_overflow_checks
+[[test]]
+name = "release_overflow_checks"
+path = "tests/release_overflow_checks_test.rs"
+
+# `let x = call()?` has the call's success type (method arguments see their formals in a test crate)
+#   cargo test --release --test try_binding_method_args
+[[test]]
+name = "try_binding_method_args"
+path = "tests/try_binding_method_args_test.rs"

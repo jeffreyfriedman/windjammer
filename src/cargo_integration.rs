@@ -11,7 +11,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use crate::cargo_toml::{find_windjammer_runtime_path_with, path_to_toml_string};
-use crate::test_runner;
 use crate::{error_mapper, source_map, CompilationTarget};
 pub enum RustFileType {
     Test,    // Contains #[test] functions
@@ -213,7 +212,7 @@ pub fn create_cargo_toml_with_deps(
                                     let new_line = format!(
                                         "{}{}{}",
                                         before,
-                                        test_runner::path_to_toml_string(&abs_path),
+                                        crate::cargo_toml::sanitize_path_for_toml(&abs_path),
                                         after
                                     );
                                     new_line
@@ -357,7 +356,7 @@ pub fn create_cargo_toml_with_deps(
                 if game_path.exists() {
                     external_deps.push(format!(
                         "game-host = {{ path = \"{}\" }}",
-                        test_runner::path_to_toml_string(&game_path)
+                        crate::cargo_toml::sanitize_path_for_toml(&game_path)
                     ));
                     continue; // Skip the crates.io fallback
                 }
@@ -440,7 +439,7 @@ pub fn create_cargo_toml_with_deps(
                 external_deps.push(format!(
                     "{} = {{ path = \"{}\" }}",
                     crate_name_normalized,
-                    test_runner::path_to_toml_string(&final_path)
+                    crate::cargo_toml::sanitize_path_for_toml(&final_path)
                 ));
                 continue; // Skip the crates.io fallback
             }
@@ -587,7 +586,7 @@ pub fn create_cargo_toml_with_deps(
     };
 
     let wj_config = crate::cargo_toml::find_wj_config(source_dir);
-    let release_profile = wj_config.profile.release.to_cargo_toml_section();
+    let release_profile = wj_config.release_profile_section(false);
 
     let cargo_toml = format!(
         r#"[package]
@@ -695,7 +694,7 @@ lto = true
         if uses_platform_apis {
             format!(
                 "windjammer-runtime = {{ path = \"{}\", features = [\"wasm\"] }}",
-                test_runner::path_to_toml_string(&windjammer_runtime_path)
+                crate::cargo_toml::sanitize_path_for_toml(&windjammer_runtime_path)
             )
         } else {
             String::new()

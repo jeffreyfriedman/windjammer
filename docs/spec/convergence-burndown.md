@@ -46,7 +46,7 @@ method-call result widths, struct field widths, closure parameters.
 | O1 | `analyzer/parameter_analysis.rs` precedence chain (steps 0a-9) | ~1500 | OWN-* solver rules (OWN-CONSUMING-METHOD, OWN-RETURNED, OWN-STORED, OWN-READ-FIELD, OWN-CALL-FORMAL exist) | replaced-but-still-present as OWN-ANALYZER-SEED | D-OWN-STAGES |
 | O2 | `analyzer/string_optimization.rs` + `generator.rs::str_ref_optimizable_param` (text demotion) | ~1500 | OWN-STR-REF decided by use (solver-owned only when the trail shows the solver moved it; pub free-fn lock excluded) | replaced-but-still-present | D-OWN-STAGES |
 | O3 | `compiler/multipass_bare_pass_demotion.rs`, `codegen/rust/signature_promotion.rs` (registry `restore_*`/`promote_*` passes) | 4674 + 4519 | C3 DefId registry + solver fixed point | untouched here; owned by the C3 agent (wt/convergence-c3) | D-OWN-STAGES |
-| O4 | `codegen/rust/function_formal_parameter_generation.rs` body-walking demotion heuristics | ~3000 | solver param modes | receivers: replaced (`ir_self_receiver` spells the IR mode; the `self` arms behind it no longer fire outside trait impls and are the next deletion); field-move walk deleted (analyzer fact `field_moved_parameters`) | D-OWN-STAGES |
+| O4 | `codegen/rust/function_formal_parameter_generation.rs` body-walking demotion heuristics | ~3000 | solver param modes | receivers: replaced (`self_receiver` spells the IR mode; `self` arms deleted); plain value formals (non-Copy user types and collections, private and public) spelled from the IR mode by `ir_value_formal`, the public keep-owned walks deleted; field-move walk deleted (analyzer fact `field_moved_parameters`). Left: text, Copy, generic, pattern and trait-impl formals, and the prepare-phase registry predictions | D-OWN-STAGES |
 | O5 | `auto_clone.rs` + codegen `.clone()` surgery (`maybe_auto_clone`, ~147 sites in ir_call_site, 46 generator) | 2211 + sites | C6 liveness clone facts (owned by the C6 agent, wt/convergence-c6) | in progress elsewhere | D-CLONE-OUTSIDE-SOLVER, D-CLONE-LASTUSE |
 | O6 | `find_signature_ending_with` callers (~13 sites) and bare-name fallbacks | -- | module-qualified lookup (C3) | one site fixed (`global_signature_for_function` tries module path first); rest owned by C3 agent | D-OWN-STAGES |
 
@@ -123,14 +123,16 @@ reality (lower it with `cargo test --test all heuristic_surface_test::regenerate
 mutation check adds one guess of each kind to a real file and requires all three sections to fail. The gate also
 fails when the line below does not match the allow-list.
 
-Current totals (seeded 2026-11-04 from wt/names):
-`H-NAME-MATCHES` 647, `H-MATCH-ARM-NAMES` 1150, `H-FALLBACK-LEGACY` 128 (total 1925)
+Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps including public formals; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
+`H-NAME-MATCHES` 528, `H-MATCH-ARM-NAMES` 1128, `H-FALLBACK-LEGACY` 128 (total 1784)
+
+Breakdown at seeding (2026-11-04):
 
 | area | name matches | match-arm names | fallback/legacy |
 |---|---|---|---|
-| `codegen/rust` | 481 | 109 | 76 |
+| `codegen/rust` | 467 | 109 | 76 |
 | other backends (`codegen/portable`, `javascript`, `go`, shared) | 46 | 957 | 0 |
-| `analyzer` | 64 | 9 | 48 |
+| `analyzer` | 56 | 9 | 48 |
 | `ir` | 38 | 46 | 4 |
 | `type_inference` | 17 | 28 | 0 |
 | `typing` | 1 | 1 | 0 |
@@ -142,7 +144,9 @@ to target spellings and should come from the declared std surface; fallback/lega
 (the C3 bare-name searches), `signature_promotion.rs` 17, `ir_call_site.rs` 16.
 
 Solver meters at the same time (next, 2026-11-04): `D-WIDTH-OWNERS` 51, `D-OWN-STAGES` 9, `D-CLONE-OUTSIDE-SOLVER` 19,
-golden rustc rejects 86.
+golden rustc rejects 86. After stage C2 (wt/c2, 2026-11-09): `D-WIDTH-OWNERS` 35, golden rustc
+rejects 5 fewer, compiler-inserted narrowing casts 11 -> 6; the 8 spec class-A cases (COLL-004, STD-003, STMT-009,
+ITEM-006, ITEM-011, EXPR-011, INTR-007, GRAM-006) compile.
 
 Net growth of the deciding code: `src/codegen` + `src/analyzer`, 2026-11-01 (9c14e598e, last first-parent commit
 before 2026-11-02) to wt/names 585b70904: 1728 lines added, 1289 deleted, net +439
@@ -158,16 +162,17 @@ measured by `D-WIDTH-OWNERS` / `D-OWN-STAGES` and this ratchet.
 | rule (site) | the solver hands back when ... | retired by |
 |---|---|---|
 | index-use hold (`ir/numeric_facts.rs` `held_classes`, `index_uses`) | an index use sits in a class that resolved to a width other than `usize` (needs a conversion at the index) | C4: NUM-USIZE-TO-INT at the index, as already done at index sources |
-| unbound-name hold (`held_classes`, `var_map.locals` not in `binding_vars`) | a class contains a name the walk met without a binding: a closure parameter or a global | **C2** closure parameter types (closure params get binding vars); typed module constants are already modelled (NUM-DECLARED) |
+| unbound-name hold (`held_classes`, `var_map.locals` not in `binding_vars`) | a class contains a name the walk met without a binding: a closure parameter or a global | **retired for closure parameters (C2, wt/c2)**: closure parameters are bindings (NUM-CLOSURE); a typed module constant of any file of a library is modelled (NUM-DECLARED); globals remain |
 | width-conflict hold (`result.width_conflicts`, c4-regress) | two exact integer widths meet in one class | C4: a conversion fact at the meeting point, or a diagnostic when the program is wrong |
 | negated-unsigned hold (`unmodelled.negated_literals`, c4-regress) | a negated literal sits in an unsigned class | C4: a diagnostic (the program is wrong), never a silent legacy width |
-| loop-binding hold (`unmodelled.loop_bindings`, c4-regress) | a `for` binding's element width is unknown | **C2** collection-literal element types and element types of declared collections |
+| loop-binding hold (`unmodelled.loop_bindings`, c4-regress) | a `for` binding's element width is unknown | **narrowed (C2, wt/c2)**: a loop binding is the iterable's element (NUM-ELEMENT); held only when the iterable is a call result the surface did not type |
 | unknown-length hold (`unmodelled.unknown_lengths`, c4-regress) | `len()` on a receiver of unknown type | **C2** type aliases, then C3 cross-module receiver types |
 | unknown-field-read hold (`unmodelled.unknown_fields`, c4-regress) | a field read whose declared type the walk cannot see (another module's struct, a generic) | C3 (cross-module declared field types by DefId) and **C2** (generic arguments through aliases) |
 | lexical-scope publish-if-agree (`binding_widths`, NUM-LOCAL-WIDTH) | bindings of one name carry different widths: no name-keyed fact, the classes stay legacy | C4: facts keyed by binding node identity instead of name (replaces the W8 (line,col) collectors) |
 | borrowed-binding skip (`unmodelled.borrowed_bindings`) | a local is bound to a borrow: no width fact for the name | C5: reference types in the ownership solver |
-| defaulted-class withhold (`View::published`, `defaulted`) | the class has no use that fixes a width (`int` default); the legacy paint may still pick i32 | **C2**: publish defaults once closure, collection and std-argument uses are modelled (the 2026-11-02 experiment showed 31 rejects without them) |
-| defaulted-float withhold (`View::published_float`) | a float class has no `f32`/`f64` use | **C2**: the float class follows the same default rule |
+| defaulted-class withhold (`View::published`, `defaulted`) | the class has no use that fixes a width (`int` default); the legacy paint may still pick i32 | **retired (C2, wt/c2)**: defaulted classes are published at `int`; replaced by the opaque-use hold below, which holds only classes that reach a use the walk cannot type |
+| defaulted-float withhold (`View::published_float`) | a float class has no `f32`/`f64` use | **retired (C2, wt/c2)**: defaulted float classes are published at `float` |
+| opaque-use hold (`unmodelled.opaque`, C2) | a value is passed to a call with no signature, to a generic or named formal, or to an unknown method; the hold covers the parts of its class (an opaque `Vec` holds its elements) | C3 (callee identity for every call), then the remaining unknown methods become surface entries |
 | codegen operand hand-back (`codegen/rust/solver_widths.rs` `solver_operand_width` / `solver_agrees` answering `None`/false; the `!solver_agreed` branches of `binary_expression_generation.rs`) | any hold above applies to an operand | follows the holds: each retired hold deletes the `!solver_agreed` branch it feeds (W3/W4) |
 | analyzer seeds (`OWN-ANALYZER-SEED`, `OWN-MUT-ANALYZER`, `OWN-COPY-SEED`, `TY-ANALYZER-SEED` in `ir/constraint_gen.rs`) | the solver starts from the analyzer's pre-decision instead of deriving it | C5 (ownership from uses; O1/O2), C3 for `TY-ANALYZER-SEED` |
 | `CLONE-ANALYZER` (auto-clone pass sites) | clone sites come from `auto_clone.rs` | C6 liveness clone facts |
@@ -209,6 +214,13 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | C5 receivers from the IR (`ir_self_receiver`), indexed receiver types, W0016 | cbe50d47c | 0 | ~160 | D-OWN-STAGES 21 -> 9; D-CLONE-OUTSIDE-SOLVER 14 -> 18 (snapshot methods clone fields) |
 | C5 field-move fact replaces the codegen walk | cbe50d47c, 24fe5083b | ~180 | ~70 | (same measurement) |
 | C5 self owned only when self is consumed (seed rule; field reads clone) | af2a31ce9 + next | 6 | 4 | ecosystem width gate 6/9 -> 9/9; ratchet: 3 batch3 ownership tests leave (48 -> 45 entries owned by C3/C5/C6) |
+| C5 receiver arms deleted: one `self_receiver` spelling rule (IR mode; trait mode in trait impls) | d76a87198 | ~620 | ~60 | D-OWN-STAGES 9 -> 9 (the deleted arms ran only where codegen and the IR already agreed); flagship-app api-check ownership errors 3 -> 1; ratchet 44 -> 43 (one stale entry) |
+| C5: delete name-gated debug traces (formal parameters `grid`/`do_work`, passthrough `clear`/`place`/`Cache`); one CLONE-USE-AFTER-MOVE decision with a `MoveSite` | this branch | ~70 | ~15 | H-NAME-MATCHES 647 -> 642 |
+| O4: the `@string_ref` / `@str_ref` pins are one AST fact (`Parameter::pins_string_ref` / `pins_str_ref`), not 17 decorator-name comparisons in the formal-parameter and analyzer code | this branch | ~25 | ~16 | H-NAME-MATCHES 642 -> 625 |
+| O4: private plain value formals (non-Copy user types and collections, declared by value, no pattern, pin or `mut`) are spelled from the IR mode (`ir_value_formal`); public formals keep the owned-API rules until cross-crate call sites read the IR mode | this branch | 0 | ~45 | D-OWN-STAGES 9 -> 8 |
+| O4: public formals join the IR rule (other crates' call sites already read the emitted formals from `metadata.json`); the keep-owned walks are deleted (`is_public_owned_non_copy_formal_api` and its 25 call sites, `pub_vec_non_copy_custom_indexed_api`, `vec_param_index_is_readonly_scan`, `vec_formal_only_forwards_as_call_arg` and its 5 call sites); external metadata roots load in name order with explicitly named crates last, so a transitive dependency's homonym cannot take a bare key | this branch | 409 | 33 | project rejects -1 (`bare_pass_vec_reader`); H-NAME-MATCHES 530 -> 529, H-MATCH-ARM-NAMES 1130 -> 1129 |
+| O4 follow-up (flagship regressions 3 -> 0): bare-pass demotion (O3) no longer guesses `&mut T` / `&Vec` for collections and user types, which the solver read through OWN-CALL-FORMAL; OWN-STORED reaches a parameter through a `let` alias; a loop over a borrowed map binds `(&K, &V)` and an owned payload clones a `&T` field; maps and sets keep their legacy spelling; an owned value formal the body writes through is `mut` | this branch | 21 | ~60 | project corpus +3 cases (one, `stored_through_let_alias`, ratcheted: a caller lowered before its callee's file reads the pre-IR mode) |
+| C2 structured types (HasPart, surface binding, closures, patterns, aliases, opaque hold, published defaults) | wt/c2 | 233 (C1 surface binder, push element-store name check, old pattern binder) | 1236 (src; codegen+analyzer +80 / -9) | 51 -> 35; rustc rejects -5; narrowing casts 11 -> 6 |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 

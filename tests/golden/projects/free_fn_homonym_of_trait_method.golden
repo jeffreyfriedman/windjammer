@@ -1,0 +1,98 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod ports;
+pub mod routes;
+pub mod shelf;
+pub mod usecases;
+
+// Re-export public items
+pub use ports::*;
+pub use routes::*;
+pub use shelf::*;
+pub use usecases::*;
+// ==== main.rs ====
+mod ports;
+mod shelf;
+mod usecases;
+mod routes;
+fn main() {
+    let deps = usecases::Deps { shelf: shelf::Shelf { items: vec!["a".to_string(), "b".to_string()] }, tag: String::from("t") };
+    println!("{}", routes::handle(&deps, "t"));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod ports;
+pub mod routes;
+pub mod shelf;
+pub mod usecases;
+
+// Re-export public items
+pub use ports::*;
+pub use routes::*;
+pub use shelf::*;
+pub use usecases::*;
+// ==== ports.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub trait Inventory {
+    fn list_items(&self, tenant_id: String) -> Vec<String>;
+}
+
+// ==== routes.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::usecases::{Deps, list_items};
+#[inline]
+pub fn handle(deps: &Deps, tenant_slug: &str) -> i64 {
+    list_items(deps, tenant_slug).len() as i64
+}
+
+// ==== shelf.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::ports::Inventory;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Shelf {
+    pub items: Vec<String>,
+}
+
+impl Inventory for Shelf {
+#[inline]
+fn list_items(&self, tenant_id: String) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for it in &self.items {
+            if *it == tenant_id {
+                let _ = out.push(it.clone());
+            }
+        }
+        out
+}
+}
+
+// ==== usecases.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::shelf::Shelf;
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct Deps {
+    pub shelf: Shelf,
+    pub tag: String,
+}
+
+#[inline]
+pub fn list_items(deps: Deps, tenant_slug: String) -> Vec<String> {
+    let mut out: Vec<String> = deps.shelf.items;
+    out.push(tenant_slug);
+    out
+}
+
