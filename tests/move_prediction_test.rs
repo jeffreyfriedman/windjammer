@@ -28,6 +28,7 @@ fn moves_of_values_that_cannot_be_copied_are_reported_per_kind() {
         ("argument_non_clone.wj", "`inbox` is used after the call to `drain` consumed it (its parameter takes ownership)"),
         ("let_alias_non_clone.wj", "`inbox` is used after `let other = inbox` consumed it"),
         ("loop_non_clone.wj", "`inbox` is moved by the call to `drain` in every iteration of the loop"),
+        ("loop_if_arm_non_clone.wj", "`inbox` is moved by `let arm = inbox` in every iteration of the loop"),
         ("partial_non_clone.wj", "its field `chan` is gone"),
     ];
     for (f, want) in cases {
@@ -93,6 +94,7 @@ fn predictions_across_the_corpora() {
     let expected: &[&str] = &[
         "tests/move_prediction/argument_non_clone.wj 1",
         "tests/move_prediction/let_alias_non_clone.wj 1",
+        "tests/move_prediction/loop_if_arm_non_clone.wj 1",
         "tests/move_prediction/loop_non_clone.wj 1",
         "tests/move_prediction/partial_non_clone.wj 1",
         "tests/move_prediction/receiver_non_clone.wj 1",

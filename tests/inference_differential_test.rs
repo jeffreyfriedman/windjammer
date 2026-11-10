@@ -613,6 +613,20 @@ fn corpus_partial_move_then_whole_value_copies_the_field() {
     assert!(rust.contains("proposal_id: proposal.note,") || rust.contains("proposal_id: proposal.note "), "{rust}");
 }
 
+/// C6 loops: a value an `if` expression picks inside a nested loop is read again on the next iteration,
+/// so the branch copies it (was a move: rustc E0382 on the next pass).
+#[test]
+fn corpus_loop_if_arm_copies_a_value_read_next_iteration() {
+    let name = "loop_if_arm_reuse";
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/inference_corpus").join(format!("{name}.wj"));
+    let src = std::fs::read_to_string(&path).unwrap();
+    let dir = work_dir(name);
+    let r = check_source_env(&src, &dir, &[], true, &[]);
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = r.unwrap_or_else(|f| panic!("corpus `{name}` fails oracle {}: {:?}", f.class(), f));
+    assert!(rust.contains("base.clone()") && rust.contains("test.clone()"), "{rust}");
+}
+
 /// Mutation check: a deliberately wrong liveness (every read is a last use, so everything
 /// moves) must be caught by the oracles. If this passes the gates cannot see liveness bugs.
 #[test]

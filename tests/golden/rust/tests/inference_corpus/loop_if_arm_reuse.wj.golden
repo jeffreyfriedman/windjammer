@@ -1,0 +1,32 @@
+#[inline]
+fn run_once(arm: &str) -> i64 {
+    arm.len() as i64
+}
+
+fn main() {
+    let base: String = String::from("baseline");
+    let test: String = {
+        if true {
+            String::from("enforce")
+        } else {
+            String::from("replay")
+        }
+    };
+    let mut total = 0_i64;
+    let mut r = 0_i64;
+    while r < 2_i64 {
+        for k in [0_i64, 1_i64, 1_i64, 0_i64] {
+            let arm = {
+                if k == 0_i64 {
+                    base.clone()
+                } else {
+                    test.clone()
+                }
+            };
+            total += run_once(&arm);
+        }
+        r += 1;
+    }
+    println!("{} {} {}", total, base, test);
+}
+
