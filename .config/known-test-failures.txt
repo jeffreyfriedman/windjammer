@@ -95,9 +95,13 @@ ir::signature_bridge::tests::analyzer_borrowed_bare_string_formal_stays_owned_wi
 ir::signature_bridge::tests::free_fn_plain_string_borrows_at_call_site
 # Width findings from a large multi-module program, a database project and the ecosystem (tests/compiler_findings_widths/),
 # owner: option C (typed collection literals and operator impls, C2) / the numeric solver.
-compiler_findings_widths_test::tuple_literal_in_match_arm
 compiler_findings_widths_test::float_expression_to_float_parameter
+# Crate-surface formals in the numeric solver: the `rust/<crate>.wji` signature reaches the build metadata with `f32`, but
+# the registry entry the IR resolves (`half`) carries `float`; owner: C3 (callee identity by DefId, one signature per callee).
 compiler_findings_widths_test::float_literal_to_f32_crate_parameter
+# Owned-string coercion of a string literal in a tuple (here a match arm beside an `(int, string)` arm), not a width;
+# owner: the stream 7 string-ownership work (string literals in tuples converted to owned String).
+compiler_findings_widths_test::tuple_literal_in_match_arm
 drift_repros_test::explicit_ref_of_an_integer_literal_typechecks
 # owner: ownership inference (docs/drift/findings.md section L) and call adaptation.
 drift_repros_test::contains_with_a_borrowed_local_typechecks
