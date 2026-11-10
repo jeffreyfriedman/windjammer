@@ -4,7 +4,7 @@
 use crate::parser::*;
 
 use crate::codegen::rust::CodeGenerator;
-use crate::typing::core_surface::CoreSurface;
+use crate::ir::stdlib_tables::CoreSurface;
 
 impl<'ast> CodeGenerator<'ast> {
     /// A call on an `Option<&String>` whose declared parameter (`std/rust_core.wji`) is the option's payload,

@@ -97,6 +97,10 @@ impl CodeGenerator<'_> {
             Expression::Call { function: Expression::FieldAccess { field, .. }, .. } => {
                 STR_SLICE_METHODS.contains(&field.as_str())
             }
+            // a list of string literals yields its `&str` elements
+            Expression::Array { elements, .. } => {
+                !elements.is_empty() && elements.iter().all(|e| matches!(e, Expression::Literal { value: Literal::String(_), .. }))
+            }
             _ => false,
         };
         let mut shadowed = Vec::new();

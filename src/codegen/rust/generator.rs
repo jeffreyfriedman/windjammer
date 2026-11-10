@@ -2325,12 +2325,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 // Nested inline module
-                let mut output = String::new();
-                if *is_public {
-                    output.push_str(&format!("pub mod {} {{\n", name));
-                } else {
-                    output.push_str(&format!("mod {} {{\n", name));
-                }
+                let mut output = format!("{}mod {} {{\n", if *is_public { "pub " } else { "" }, name);
 
                 self.indent_level += 1;
                 for nested_item in items {
