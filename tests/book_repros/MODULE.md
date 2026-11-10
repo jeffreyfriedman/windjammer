@@ -11,7 +11,7 @@ Minimal programs for compiler or diagnostic bugs found while writing The Windjam
 - `interpolation_leading_literal.wj`: a string literal at the start of an interpolation fails to parse (WJ0011).
 - `module_const.wj`, `map_get_string_key.wj`: constructs that run interpreted and are rejected compiled (WJ0001, WJ0003).
 - `defer_in_loop.wj`: a loop-body `defer` runs compiled and not interpreted.
-- `tuple_string_match.wj`, `join_unwrap_or_literal.wj`: run interpreted, rejected compiled (WJ0003, WJ0003).
+- `join_unwrap_or_literal.wj`: runs interpreted, rejected compiled (WJ0003).
 
 ## Invariants
 - A repro is the smallest program that shows the bug, free of project names (public hygiene).
