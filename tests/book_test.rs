@@ -520,3 +520,21 @@ fn book_regen_rewrites_a_stale_generated_fence_and_refuses_a_broken_program() {
     assert!(err.contains("does not build, nothing was rewritten"), "{err}");
     assert_eq!(std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap(), before);
 }
+
+#[test]
+fn known_gap_lone_script_build_of_main_drops_its_sibling_module() {
+    let src = real().root.join("tests/book_repros/lone_script_mod");
+    let tmp = tempfile::tempdir().unwrap();
+    for f in ["main.wj", "counter.wj"] {
+        std::fs::copy(src.join(f), tmp.path().join(f)).unwrap();
+    }
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(tmp.path().join("main.wj")).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&interp.stdout), "2\n", "the interpreter runs the repro");
+    let out = tmp.path().join("out");
+    let b = std::process::Command::new(wj).args(["build", "--no-cargo", "-o"]).arg(&out).arg(tmp.path().join("main.wj")).output().unwrap();
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+    let main = std::fs::read_to_string(out.join("main.rs")).unwrap_or_default();
+    let gap = main.contains("mod counter;") && !out.join("counter.rs").exists() && main.contains("bump(2_i32)");
+    assert!(gap, "the lone-script build is fixed: delete tests/book_repros/lone_script_mod/, this test and its docs/known-gaps.md row\n{main}");
+}

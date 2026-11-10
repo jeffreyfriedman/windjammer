@@ -57,6 +57,17 @@ pub fn predicted_widths(path: &Path) -> Vec<Diagnostic> {
 /// Generate the program as `wj build --no-cargo` does. Inside the `wj` binary in a child process (the build
 /// prints progress on stdout, which belongs to the program in an interpreted run); elsewhere in-process.
 fn emit(path: &Path, out: &Path) -> bool {
+    // a crate root `main.wj` is built as its source root, as `wj run --compiled` does (building the file alone drops
+    // its sibling modules: docs/known-gaps.md, `tests/book_repros/lone_script_mod/`)
+    let root_dir = (path.is_file() && path.file_name().is_some_and(|n| n == "main.wj")).then(|| {
+        use crate::module_system::project;
+        project::source_root_for(path, project::find_manifest_dir(path).as_deref())
+    });
+    let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let path = match &root_dir {
+        Some(r) if path.parent().is_some_and(|d| canon(d) == canon(r)) => r.as_path(),
+        _ => path,
+    };
     let exe = std::env::current_exe().ok().filter(|e| e.file_stem().is_some_and(|s| s == "wj"));
     match exe {
         Some(exe) => std::process::Command::new(exe)
