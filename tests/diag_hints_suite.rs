@@ -347,8 +347,10 @@ fn predicted_move_explains_ownership_without_rust_terms() {
     for rust in ["E0382", "rustc", "by value", "borrow checker", "Clone"] {
         assert!(!t.contains(rust), "Rust term `{rust}` in: {t}");
     }
-    // The span is on the call that consumes the receiver, line 19 of the fixture.
-    assert_eq!(d.primary_span.as_ref().unwrap().line_start, 19, "{d:?}");
+    // The span is on the call that consumes the receiver.
+    let src = std::fs::read_to_string(&p).unwrap();
+    let call = src.lines().position(|l| l.contains("let next = inbox.with_seen(1)")).unwrap() + 1;
+    assert_eq!(d.primary_span.as_ref().unwrap().line_start, call, "{d:?}");
     // No machine fix: `.clone()` would trade this error for lint W0005, so the hint is text only.
     assert!(d.fixes.is_empty());
 }
