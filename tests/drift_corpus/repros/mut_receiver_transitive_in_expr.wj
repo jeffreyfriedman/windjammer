@@ -1,0 +1,17 @@
+// A method that mutates only by calling another mutating method inside an expression (`1 + self.step()`): the caller's
+// `let g` is emitted without `mut` (rustc E0596). The interpreter has no such rule and runs it.
+struct Gen { state: int }
+impl Gen {
+    fn step(self) -> int {
+        self.state = self.state + 1
+        self.state
+    }
+    fn plus_one(self) -> int {
+        1 + self.step()
+    }
+}
+fn main() {
+    let g = Gen { state: 0 }
+    let r = g.plus_one()
+    println("${r}")
+}

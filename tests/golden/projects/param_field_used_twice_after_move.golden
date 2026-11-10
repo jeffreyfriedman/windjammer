@@ -1,0 +1,42 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod sim;
+
+// Re-export public items
+pub use sim::*;
+// ==== main.rs ====
+mod sim;
+fn main() {
+    let r = sim::advance(sim::Sim { left: 2_u32, addr: String::from("a") });
+    println!("{} {}", r.0, r.1.left);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod sim;
+
+// Re-export public items
+pub use sim::*;
+// ==== sim.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Sim {
+    pub left: u32,
+    pub addr: String,
+}
+
+#[inline]
+pub fn advance(sim: Sim) -> (String, Sim) {
+    if sim.left > 0_u32 {
+        let next = Sim { left: sim.left - 1_u32, addr: sim.addr.clone() };
+        return (sim.addr.clone(), next);
+    }
+    (sim.addr, Sim { left: 0_u32, addr: String::new() })
+}
+

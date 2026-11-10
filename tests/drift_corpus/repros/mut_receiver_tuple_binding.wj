@@ -1,0 +1,16 @@
+// A binding taken out of a tuple pattern and then mutated through a method (`let (c, k) = p; c.bump()`): the binding is
+// emitted without `mut` (rustc E0596). The interpreter runs it.
+struct Counter { n: int }
+impl Counter {
+    fn bump(self) {
+        self.n = self.n + 1
+    }
+}
+fn via_tuple(p: (Counter, int)) -> int {
+    let (c, k) = p
+    c.bump()
+    c.n + k
+}
+fn main() {
+    println("${via_tuple((Counter { n: 1 }, 10))}")
+}
