@@ -12984,13 +12984,12 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 impl<'ast> CodeGenerator<'ast> {
-    /// Record the function's return type and which list literals sit in its return position (ADR-0014: a
-    /// list literal returned from a `Vec` function is a `Vec`).
+    /// Record the return type and the return-position list literals (ADR-0014: they are `Vec`s); reset per-function locals.
     fn set_return_type_and_list_positions(&mut self, func: &FunctionDecl<'ast>) {
         self.current_function_return_type = func.return_type.clone();
+        self.idiom.text_option_locals.clear();
         self.idiom.return_position_list_literals = match func.return_type.as_ref() {
-            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && crate::type_classification::type_is_vec_container(t) =>
+            Some(t) if !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && Self::holds_list(t) =>
             {
                 Self::collect_return_position_lists(&func.body)
             }

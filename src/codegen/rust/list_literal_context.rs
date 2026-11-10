@@ -56,6 +56,12 @@ impl<'ast> CodeGenerator<'ast> {
                     out.insert(elements.as_ptr() as usize);
                 }
                 Expression::Block { statements, .. } => stmts(statements, tail, out),
+                // `Ok([1])` / `Some([1])` returned from a `Result<Vec<_>, _>` / `Option<Vec<_>>` function
+                Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. }
+                    if matches!(name.as_str(), "Ok" | "Some" | "Err") && arguments.len() == 1 =>
+                {
+                    expr(arguments[0].1, tail, out)
+                }
                 _ => {}
             }
         }
@@ -64,10 +70,23 @@ impl<'ast> CodeGenerator<'ast> {
         out
     }
 
+    /// The type is a `Vec`, or a `Result` / `Option` holding one (`Ok([1])` is then a list too).
+    pub(in crate::codegen::rust) fn holds_list(t: &Type) -> bool {
+        match t {
+            Type::Result(ok, _) => crate::type_classification::type_is_vec_container(ok),
+            Type::Option(inner) => crate::type_classification::type_is_vec_container(inner),
+            other => crate::type_classification::type_is_vec_container(other),
+        }
+    }
+
     /// Should list literals in `value` be generated as `Vec`s? `declared` is the annotated type, if any.
     pub(in crate::codegen::rust) fn list_literal_wanted(value: &Expression<'ast>, declared: Option<&Type>) -> bool {
-        (matches!(value, Expression::Array { .. }) || Self::if_arms_yield_list_literals(value))
-            && declared.is_none_or(crate::type_classification::type_is_vec_container)
+        let wrapped = matches!(value, Expression::Call { function: Expression::Identifier { name, .. }, arguments, .. }
+            if matches!(name.as_str(), "Ok" | "Some" | "Err") && matches!(arguments.first(), Some((_, Expression::Array { .. }))))
+            && declared.is_some_and(Self::holds_list);
+        wrapped
+            || (matches!(value, Expression::Array { .. }) || Self::if_arms_yield_list_literals(value))
+                && declared.is_none_or(crate::type_classification::type_is_vec_container)
     }
 
     /// Generate `value` assigned to a place of type `target`: list literals are `Vec`s unless the place is a fixed array.

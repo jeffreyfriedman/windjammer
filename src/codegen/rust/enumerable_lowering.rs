@@ -125,6 +125,12 @@ impl<'ast> CodeGenerator<'ast> {
         else {
             return None;
         };
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.opt_chain_type(object, arguments);
+        }
+        if let Some(t) = self.thread_call_type(object, method, arguments) {
+            return Some(t);
+        }
         let m = enumerable::lookup(method, arguments.len())?;
         let recv_name = self.infer_type_name(object);
         if self.receiver_defines_method(recv_name.as_deref(), method) {
@@ -142,5 +148,25 @@ mod tests {
         assert!(m.starts_with("#[allow(dead_code, clippy::all)]\nmod wj_enumerable {"));
         assert!(m.contains("pub trait WjIterExt") && m.contains("pub trait WjCollExt"));
         assert!(!m.contains("mod tests"));
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `thread::spawn(|| body)` is a `JoinHandle` of the body's type, and `handle.join()` is a `Result` of it:
+    /// the value a spawned closure returns keeps its type (`served.unwrap_or_else(|_| ..)` needs the `Result`).
+    fn thread_call_type(&self, object: &Expression<'ast>, method: &str, arguments: &[(Option<String>, &'ast Expression<'ast>)]) -> Option<Type> {
+        match (method, object) {
+            ("spawn", Expression::Identifier { name, .. }) if name == "thread" => {
+                let (_, Expression::Closure { body, .. }) = arguments.first()? else { return None };
+                Some(Type::Parameterized("JoinHandle".to_string(), vec![self.infer_expression_type(body)?]))
+            }
+            ("join", _) if arguments.is_empty() => match self.infer_expression_type(object)? {
+                Type::Parameterized(n, args) if n == "JoinHandle" && args.len() == 1 => {
+                    Some(Type::Result(Box::new(args[0].clone()), Box::new(Type::String)))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
     }
 }

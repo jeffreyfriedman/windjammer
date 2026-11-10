@@ -1,8 +1,0 @@
-@pure
-fn add(a: int, b: int) -> int {
-    a + b
-}
-
-fn main() {
-    println("${add(1, 2)}")
-}

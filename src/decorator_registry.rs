@@ -44,7 +44,8 @@ impl DecoratorRegistry {
                 "invariant",
             ],
             wasm_only_decorators: vec!["export"],
-            internal_decorators: vec!["async", "durable"],
+            // consumed by the compiler: `@pure` / `@uses(..)` declare effects (ADR-0021), never Rust attributes
+            internal_decorators: vec!["async", "durable", "pure", "uses"],
         }
     }
 

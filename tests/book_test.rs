@@ -307,7 +307,7 @@ fn known_gap_generic_copy_out_of_list_fails_compiled() {
 fn known_gap_idioms_fail_compiled() {
     let _g = compiled_lock();
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003"), ("async_await_compiled.wj", "WJ0099"), ("pure_attribute_compiled.wj", "WJ0099"), ("tuple_string_match.wj", "WJ0003"), ("join_unwrap_or_literal.wj", "WJ0003")] {
+    for (file, code) in [("iter_find_closure.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("map_get_string_key.wj", "WJ0003"), ("tuple_string_match.wj", "WJ0003"), ("join_unwrap_or_literal.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");

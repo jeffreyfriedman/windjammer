@@ -55,7 +55,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Check for @async decorator
-        let is_async = func.decorators.iter().any(|d| d.name == "async");
+        let is_async = func.is_async || func.decorators.iter().any(|d| d.name == "async");
         if is_async && func.name == "main" {
             output.push_str("#[tokio::main]\n");
         }

@@ -527,3 +527,15 @@ path = "tests/std_runtime_parity_test.rs"
 [[test]]
 name = "compiled_constant_panics"
 path = "tests/compiled_constant_panics_test.rs"
+
+# Release builds check integer overflow by default (SPEC-NUM-002); opt-out switches
+#   cargo test --release --test release_overflow_checks
+[[test]]
+name = "release_overflow_checks"
+path = "tests/release_overflow_checks_test.rs"
+
+# `let x = call()?` has the call's success type (method arguments see their formals in a test crate)
+#   cargo test --release --test try_binding_method_args
+[[test]]
+name = "try_binding_method_args"
+path = "tests/try_binding_method_args_test.rs"
