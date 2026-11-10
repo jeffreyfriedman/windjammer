@@ -26,6 +26,7 @@ fn take(h: Holder) -> Box<dyn Shape> {
 fn main() {
     let h = Holder { shape: Box::new(Sq { s: 2 }), id: 7 }
     let a = take(h)
+//~@13+4 ERROR WJ0007 `h` is used after the call to `take` consumed it
     let b = take(h)
     println("${a.area() + b.area()}")
 }
