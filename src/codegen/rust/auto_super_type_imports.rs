@@ -112,7 +112,7 @@ impl<'ast> CodeGenerator<'ast> {
         existing_imports: &str,
         program: &Program<'ast>,
     ) -> String {
-        if !self.is_module || self.type_defining_modules.is_empty() {
+        if !self.is_module {
             return String::new();
         }
         let local_types = crate::analyzer::type_collector::collect_local_type_names(program);
@@ -176,6 +176,11 @@ impl<'ast> CodeGenerator<'ast> {
             };
             let rust_path = if let Some(r) = resolved {
                 r
+            } else if let Some(fq) = runtime_std_module_for_type(&type_name)
+                .and_then(|_| SignatureRegistry::stdlib().runtime_rust_path_for_type(&type_name))
+            {
+                // a runtime type an inferred annotation names (`Vec<Row>`) comes from the runtime crate
+                fq
             } else {
                 let expanded = self.expand_crate_path_string(&format!("crate::{type_name}"));
                 if expanded == format!("crate::{type_name}") {
