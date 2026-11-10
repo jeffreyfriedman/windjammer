@@ -1,0 +1,7 @@
+// `env.temp_dir()` is declared in std and runs interpreted; the compiled runtime's env module has no `temp_dir` (rustc E0425).
+use std::env
+
+fn main() {
+    let dir = env.temp_dir()
+    println("${dir.len() > 0}")
+}

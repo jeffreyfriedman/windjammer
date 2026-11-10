@@ -1,0 +1,13 @@
+// The runtime feature groups are decided from the library's generated Rust; a test file that is the only user of
+// `std::db` gets `use windjammer_runtime::db;` with the `db` feature left out (E0432 "configured out").
+use crate::one
+use std::db
+
+fn test_in_memory_database() {
+    let conn = match db.connect(":memory:") {
+        Ok(c) => c,
+        Err(e) => return assert(false, e),
+    }
+    assert_eq(one(), 1)
+    conn.close()
+}

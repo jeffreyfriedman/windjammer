@@ -130,3 +130,40 @@ the interpreter; both now follow `str::lines()` (SPEC-STR-018).
 - `apps/wj-webhook` (23 cases) is the one ecosystem target still red compiled: its generated test crate fails with rustc E0596
   (`cannot borrow `app` as mutable`): a binding that is mutated through a method call is emitted without `mut`. The HMAC
   addition the ledger used to name has landed; `apps/wj-grep` now compiles and its 38 lines are gone.
+
+## L. Ecosystem findings 9-14 and the `mut` receiver (wt/drift7)
+
+Reproduced on `next` (`wj` built from the merge of green7, c2, ownership O4 and the book registry). Each has a neutral repro in
+`tests/drift_corpus/repros` (a corpus row, so the ledger names it) or, when it needs a package, in
+`tests/drift_corpus/repro_packages`. In each case the interpreter runs the program and the compiled build does not.
+
+| Ecosystem item | Repro | Compiled result | Owner |
+|---|---|---|---|
+| 9 `picked.contains(&i)` loses the `&` | `repros/vec_contains_local_ref.wj` (+ test `contains_with_a_borrowed_local_typechecks`) | rustc E0308, expected `&i64` found `i64` | width/ownership agents, same family as section I `explicit_ref_literal_arg` |
+| 10 `env.temp_dir()` missing from the compiled runtime | `repros/env_temp_dir_call.wj` | rustc E0425, no `temp_dir` in the runtime `env` module | runtime agent (add `temp_dir` to the runtime `env`) |
+| 11 function-typed parameter calls mis-adapt arguments | `repros/fn_typed_param_call.wj` (+ test) | rustc E0308, literals typed `i32` / `&lo` passed to an `i64` parameter | call-adaptation owner |
+| 12 db connect under explicit capabilities refused | `repro_packages/db_sqlite_url_capability` | the compiled run cannot get past 13 first; interpreted passes | runtime / effects owner |
+| 13 runtime feature groups from library output only | `repro_packages/runtime_feature_from_tests_only` | rustc E0432, `windjammer_runtime::db` configured out | build-pipeline owner (decide features from every compiled crate, tests included) |
+| 14 `items(n)?.len()` in a struct literal | `repros/try_then_method_chain.wj` | the lexer reads `?.` as optional chaining: the interpreter reports WJ0015 (`a Result has no method __opt_chain`), the Rust backend refuses `?.` | parser/lexer owner: a `?` followed by `.method()` must be postfix try, then a method call |
+
+Item 12 stays a package repro: the capability check needs a `[capabilities]` grant and the compiled test crate, and item 13
+hides it. Re-check it once 13 is fixed.
+
+### The `mut` receiver (wj-prop E0596, reproduced)
+
+The ecosystem report was that the interpreter accepts a mutating method call through a `let` that is not `let mut`. On `next`:
+
+- The interpreter accepting it is the documented state (Q-007, ADR-0002): the language infers `mut` for locals, and the Rust backend
+  does that (`let c = Counter {..}; c.bump()` compiles). Making the interpreter refuse it would disagree with the compiler, so that
+  is not the fix.
+- The real drift is the compiler's inference missing two shapes, both rustc E0596 (`WJ0008` through `wj run --compiled`), both running
+  interpreted: a receiver whose method mutates only through another mutating call inside an expression
+  (`repros/mut_receiver_transitive_in_expr.wj`: `1 + self.step()`), and a binding taken from a tuple pattern
+  (`repros/mut_receiver_tuple_binding.wj`). wj-prop itself compiles and passes on current `next`.
+- Decision: fix the inference (`src/codegen/rust/variable_analysis/mut_inference.rs`, the signature registry already knows each
+  method's receiver mode from its declaration) so the generated `let` carries `mut`; no warning is needed because the compiled
+  program is then correct. `wj check` does not see the problem today (it reports 0 errors); a certain check is possible only if
+  inference is kept as is and the declaration rule of ADR-0002 is enforced (Q-007). That is a language decision for the owner: it
+  turns every program that relies on inference into an error until `wj fix` inserts the `mut`. If the owner chooses it, the wording
+  follows ADR-0033 (error in `wj check`, warning in `wj run --interpret`, stdout and exit status unchanged).
+- Owner: ownership agent (a7a9f9cae99e4cd3a), the same hand-off as section J's `test_crate_mut_receiver`.

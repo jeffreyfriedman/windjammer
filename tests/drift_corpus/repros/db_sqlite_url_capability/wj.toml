@@ -1,0 +1,11 @@
+[package]
+name = "repro"
+version = "0.1.0"
+edition = "2025"
+
+[lib]
+
+# An explicit grant: scratch directory writes are allowed by the runner, the URL form is still refused.
+[capabilities]
+fs.read = ["./**", "/tmp/**"]
+fs.write = ["/tmp/**"]

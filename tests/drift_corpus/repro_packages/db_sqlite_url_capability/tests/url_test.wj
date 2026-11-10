@@ -1,0 +1,14 @@
+// `db.connect("sqlite:<absolute path>")` is the documented URL form. With an explicit [capabilities] grant the check sees
+// `./sqlite:/private/var/...` (the scheme is read as part of a relative path) and refuses a database in the test scratch
+// directory that the plain path opens without trouble.
+use std::db
+use std::env
+
+@test
+fn test_sqlite_url_in_the_scratch_directory() {
+    let path = env.temp_dir() + "/url-capability.db"
+    let by_path = db.connect(path + "?mode=rwc")
+    assert(by_path.is_ok(), "plain path works")
+    let by_url = db.connect("sqlite:" + path + "?mode=rwc")
+    assert(by_url.is_ok(), "sqlite: URL form is refused")
+}

@@ -99,3 +99,27 @@ fn annotated_collect_of_split_into_vec_string_typechecks() {
 fn explicit_ref_of_an_integer_literal_typechecks() {
     generated_rust_typechecks("explicit_ref_literal_arg.wj");
 }
+
+/// `seen.contains(&i)` with a local `i` must keep the borrow (ecosystem finding 9).
+#[test]
+fn contains_with_a_borrowed_local_typechecks() {
+    generated_rust_typechecks("vec_contains_local_ref.wj");
+}
+
+/// A call to a function with a function-typed parameter is adapted like any other call (ecosystem finding 11).
+#[test]
+fn call_with_a_function_typed_parameter_typechecks() {
+    generated_rust_typechecks("fn_typed_param_call.wj");
+}
+
+/// A method that mutates by calling a mutating method inside an expression makes its receiver binding `mut`.
+#[test]
+fn receiver_of_a_transitively_mutating_method_is_mut() {
+    generated_rust_typechecks("mut_receiver_transitive_in_expr.wj");
+}
+
+/// A binding taken from a tuple pattern and mutated through a method is declared `mut`.
+#[test]
+fn tuple_pattern_binding_mutated_by_a_method_is_mut() {
+    generated_rust_typechecks("mut_receiver_tuple_binding.wj");
+}
