@@ -192,11 +192,18 @@ fn compile_or_report(output_dir: &Path, release: bool, source: &Path) -> Result<
     crate::cargo_cache::configure_cargo_command(&mut build, crate::cargo_cache::TargetKind::Shared);
     let out = build.output()?;
     if out.status.success() {
+        crate::cli::verdict::record(source, crate::cli::verdict::Outcome::Accepted, release);
         return Ok(None);
     }
     let text = format!("{}{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
     let diags = crate::cli::build_json::map_cargo_failure_in(output_dir, &text, Some(if source.is_dir() { source } else { source.parent().unwrap_or(Path::new(".")) }));
     let only_unparsed = diags.len() == 1 && diags[0].message.contains("could not be parsed");
+    if !only_unparsed && !diags.is_empty() {
+        // a compile error is a property of the content and the compiler: later interpreted runs mention it (ADR-0033)
+        let errors = diags.iter().filter(|d| d.is_error()).count().max(1);
+        let first = diags.first().map(crate::cli::verdict::summary);
+        crate::cli::verdict::record(source, crate::cli::verdict::Outcome::Rejected { errors, first }, release);
+    }
     for d in &diags {
         eprint!("{}", crate::diagnostics::render::render(d, &|f| std::fs::read_to_string(f).ok()));
     }

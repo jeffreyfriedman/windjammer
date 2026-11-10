@@ -33,5 +33,7 @@ pub mod self_install;
 pub mod test;
 pub mod tmp_janitor;
 pub mod update;
+pub mod verdict;
 pub mod watch;
+pub mod widths_gate;
 
