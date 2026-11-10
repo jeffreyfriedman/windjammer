@@ -18,6 +18,39 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Every WJ0007 shape points at the move: a primary span on the line that consumes the value, and, for a
+/// move inside a loop, a secondary span on the loop header.
+#[test]
+fn every_predicted_move_has_a_span_and_loop_moves_name_the_loop() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/move_prediction");
+    let mut files = Vec::new();
+    wj_files(&root, &mut files);
+    files.retain(|f| !f.to_string_lossy().contains("/accepted/"));
+    files.sort();
+    let mut n = 0;
+    for f in &files {
+        let src = std::fs::read_to_string(f).unwrap();
+        for d in windjammer::check::moves::predicted_moves(f) {
+            n += 1;
+            let s = d.primary_span.as_ref().unwrap_or_else(|| panic!("{}: no span: {}", f.display(), d.message));
+            let line = src.lines().nth(s.line_start - 1).unwrap_or("");
+            let var = d.message.split('`').nth(1).unwrap_or("");
+            assert!(line.contains(var), "{}: span line {} does not mention `{var}`: {line}", f.display(), s.line_start);
+            // a `let` move (alias or field) points at that `let`, not at a read of the same text elsewhere
+            if let Some(l) = d.message.split('`').find(|p| p.starts_with("let ")) {
+                let head = l.split(" =").next().unwrap_or(l);
+                assert!(line.contains(head), "{}: span line {} is not `{head}`: {line}", f.display(), s.line_start);
+            }
+            if d.message.contains("every iteration of the loop") {
+                let l = d.secondary_spans.first().unwrap_or_else(|| panic!("{}: loop move without the loop: {}", f.display(), d.message));
+                let header = src.lines().nth(l.line_start - 1).unwrap_or("").trim_start();
+                assert!(["for ", "while ", "loop"].iter().any(|k| header.starts_with(k)), "{}: {header}", f.display());
+            }
+        }
+    }
+    assert!(n >= 7, "only {n} predictions");
+}
+
 /// Values that cannot be copied (they hold a channel end) are the moves WJ0007 still reports, one per
 /// kind: an owned receiver, an owning argument, a `let` alias, a move inside a loop, a partial move.
 #[test]

@@ -60,7 +60,8 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
             (
                 after(format!("`let {to} = {v}`")),
                 format!("use `{to}` from here on"),
-                span_of(source, file, &format!("{to} = {v}"), |_| true),
+                // `let to = v`, or a branch of `let to = if .. { v } else { .. }`: the `v` after `let to`
+                word_after(source, file, &format!("let {to}"), v).or_else(|| span_of(source, file, &format!("{to} = {v}"), |_| true)),
             )
         }
         MoveKind::Field { field, to } => {
@@ -68,7 +69,8 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
             (
                 format!("{} (its field `{field}` is gone; `{v}` is used whole)", after(format!("`let {to} = {v}.{field}`"))),
                 format!("stop using `{v}` as a whole after taking `{field}`, or take `{field}` after the last use of `{v}`"),
-                span_of(source, file, &format!("{v}.{field}"), |_| true),
+                // the `v.field` of `let to = v.field`, not a `v.field` read elsewhere (another function's body)
+                word_after(source, file, &format!("let {to}"), &format!("{v}.{field}")).or_else(|| span_of(source, file, &format!("{v}.{field}"), |_| true)),
             )
         }
     };
@@ -76,9 +78,68 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
         .with_help(help)
         .with_note("the compiler copies a value that is used again, but this value holds something that cannot be copied (a channel end, a handle), so it cannot be used after it was consumed; the interpreter would run this, the compiled program would not build");
     if let Some(sp) = span {
+        if m.in_loop {
+            if let Some(l) = enclosing_loop(source, file, sp.byte_start) {
+                d = d.with_secondary(l.with_label("the loop that repeats the move"));
+            }
+        }
         d = d.at(sp.with_label("moved here"));
     }
     d
+}
+
+/// The first whole-word `word` on the line of the first `anchor` (`let arm` .. `inbox`), outside comments.
+fn word_after(source: &str, file: &str, anchor: &str, word: &str) -> Option<Span> {
+    let whole = |rest: &str| !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_');
+    let a = span_of(source, file, anchor, whole).or_else(|| span_of(source, file, &anchor.replacen("let ", "let mut ", 1), whole))?;
+    let line_end = source[a.byte_end..].find('\n').map_or(source.len(), |n| a.byte_end + n);
+    let rest = &source[a.byte_end..line_end];
+    let bytes = rest.as_bytes();
+    let is_word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    let off = rest.match_indices(word).map(|(i, _)| i).find(|&i| {
+        (i == 0 || !is_word(bytes[i - 1])) && bytes.get(i + word.len()).is_none_or(|c| !is_word(*c))
+    })?;
+    let byte = a.byte_end + off;
+    let col = a.col_start + source[a.byte_start..byte].chars().count();
+    Some(Span { byte_start: byte, byte_end: byte + word.len(), col_start: col, col_end: col + word.chars().count(), ..a })
+}
+
+/// The header of the innermost loop around `byte`: the nearest earlier line, less indented than the move's line, that starts
+/// with `for`, `while` or `loop`.
+fn enclosing_loop(source: &str, file: &str, byte: usize) -> Option<Span> {
+    let indent = |l: &str| l.len() - l.trim_start().len();
+    let line_start = source[..byte].rfind('\n').map_or(0, |n| n + 1);
+    let mut limit = indent(&source[line_start..]);
+    let mut end = line_start;
+    while end > 0 {
+        let start = source[..end - 1].rfind('\n').map_or(0, |n| n + 1);
+        let line = &source[start..end - 1];
+        let t = line.trim_start();
+        if !t.is_empty() && indent(line) < limit {
+            if t.starts_with("for ") || t.starts_with("while ") || t.starts_with("loop") {
+                let col = indent(line) + 1;
+                let kw = t.split_whitespace().next().unwrap_or("for");
+                let b = start + indent(line);
+                let line_no = source[..b].matches('\n').count() + 1;
+                return Some(Span {
+                    file: file.to_string(),
+                    byte_start: b,
+                    byte_end: b + kw.len(),
+                    line_start: line_no,
+                    col_start: col,
+                    line_end: line_no,
+                    col_end: col + kw.chars().count(),
+                    label: None,
+                });
+            }
+            if t.starts_with("fn ") || t.starts_with("pub fn ") {
+                return None;
+            }
+            limit = indent(line);
+        }
+        end = start;
+    }
+    None
 }
 
 /// Byte `at` lies in a `//` comment or a string literal of its line (the call the prediction names is code).
