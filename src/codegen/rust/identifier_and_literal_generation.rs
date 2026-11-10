@@ -363,3 +363,31 @@ impl<'ast> CodeGenerator<'ast> {
         self.lookup_enum_variant_payload_types(constructor)?.get(index).cloned()
     }
 }
+
+impl<'ast> CodeGenerator<'ast> {
+    /// One argument of a payload constructor (`Some(x)`, `Shape::Points([..])`, a tuple struct): an owned value (unless
+    /// written as an explicit reference), generated against the declared payload type when one is known.
+    pub(in crate::codegen::rust) fn generate_payload_constructor_argument(
+        &mut self,
+        constructor: &str,
+        index: usize,
+        arg: &Expression<'ast>,
+        prev_owned_context: bool,
+    ) -> String {
+        let prev_expected = self.call_arg_expected_type.clone();
+        if let Some(payload) = self.variant_payload_type(constructor, index) {
+            self.call_arg_expected_type = Some(payload);
+        }
+        let is_explicit_ref =
+            matches!(arg, Expression::Unary { op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef, .. });
+        if !is_explicit_ref {
+            self.in_owned_value_context = true;
+        }
+        let prev_in_call_arg = std::mem::replace(&mut self.in_call_argument_generation, true);
+        let result = self.generate_value_operand(arg);
+        self.in_call_argument_generation = prev_in_call_arg;
+        self.in_owned_value_context = prev_owned_context;
+        self.call_arg_expected_type = prev_expected;
+        result
+    }
+}
