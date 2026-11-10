@@ -204,12 +204,23 @@ fn sibling_modules(file: &str, src: &str) -> Vec<(String, String)> {
 pub fn check_diagnostics(file: &str, src: &str) -> Vec<windjammer::diagnostics::Diagnostic> {
     windjammer::error::span_check::set_strict(true);
     let (f, s) = (file.to_string(), src.to_string());
-    let mut sources = vec![(f.clone(), s)];
-    sources.extend(sibling_modules(file, src));
+    let siblings = sibling_modules(file, src);
+    // With sibling modules the program is checked as a project rooted at its directory (module paths are relative to the root:
+    // `counter.wj` next to `main.wj` is module `counter`); without them the file keeps its repo-relative name.
+    let (root, sources, own_name) = if siblings.is_empty() {
+        (std::path::PathBuf::from("."), vec![(f.clone(), s)], f)
+    } else {
+        let dir = std::path::Path::new(file).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let rel = |p: &str| std::path::Path::new(p).strip_prefix(&dir).map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| p.to_string());
+        let main = rel(file);
+        let mut v = vec![(main.clone(), s)];
+        v.extend(siblings.into_iter().map(|(p, t)| (rel(&p), t)));
+        (dir, v, main)
+    };
     // only this file's own findings are judged against its markers; a sibling is a corpus file of its own
-    let own = move |d: &windjammer::diagnostics::Diagnostic| d.primary_span.as_ref().is_none_or(|s| s.file == f);
+    let own = move |d: &windjammer::diagnostics::Diagnostic| d.primary_span.as_ref().is_none_or(|s| s.file == own_name);
     std::panic::catch_unwind(move || {
-        windjammer::check::check_sources(std::path::Path::new("."), &sources).into_iter().filter(|d| own(d)).collect::<Vec<_>>()
+        windjammer::check::check_sources(&root, &sources).into_iter().filter(|d| own(d)).collect::<Vec<_>>()
     })
     .unwrap_or_else(|p| {
         let msg = p.downcast_ref::<String>().cloned().or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
