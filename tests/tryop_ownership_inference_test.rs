@@ -103,6 +103,39 @@ struct Payload {
     pub items: Vec<i32>,
 }
 
+// `process` hands `data` back inside its result: the call consumes it
+fn process(data: Payload) -> Result<Payload, string> {
+    Ok(data)
+}
+
+fn run(data: Payload) -> Result<i32, string> {
+    let moved = process(data)?
+    Ok(moved.items.len() as i32)
+}
+"#;
+
+    let rust_code = test_utils::compile_single(source);
+
+    // data is passed as an argument to process() inside a TryOp, and process consumes it,
+    // so it should stay owned (consumed by the call)
+    assert!(
+        !rust_code.contains("fn run(data: &Payload)"),
+        "data should NOT be &Payload when passed to process(data)?.\n\
+         Generated:\n{}",
+        rust_code
+    );
+    assert!(rust_code.contains("fn run(data: Payload)"), "run keeps the owned formal.\nGenerated:\n{rust_code}");
+}
+
+/// The other half: when the callee only reads its argument, the formal is a borrow all the way through the `?`
+/// (`process(data)?` with `data: &Payload` is valid Rust), so `run` may take `&Payload` too.
+#[test]
+fn test_tryop_argument_to_a_reading_callee_is_borrowed_consistently() {
+    let source = r#"
+struct Payload {
+    pub items: Vec<i32>,
+}
+
 fn process(data: Payload) -> Result<i32, string> {
     Ok(data.items.len() as i32)
 }
@@ -112,15 +145,8 @@ fn run(data: Payload) -> Result<i32, string> {
     Ok(result)
 }
 "#;
-
     let rust_code = test_utils::compile_single(source);
-
-    // data is passed as an argument to process() inside a TryOp,
-    // so it should stay owned (consumed by the call)
-    assert!(
-        !rust_code.contains("fn run(data: &Payload)"),
-        "data should NOT be &Payload when passed to process(data)?.\n\
-         Generated:\n{}",
-        rust_code
-    );
+    let process_borrows = rust_code.contains("fn process(data: &Payload)");
+    let run_borrows = rust_code.contains("fn run(data: &Payload)");
+    assert_eq!(process_borrows, run_borrows, "caller and callee must agree on the formal.\nGenerated:\n{rust_code}");
 }
