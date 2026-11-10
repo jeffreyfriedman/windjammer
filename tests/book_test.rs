@@ -484,7 +484,7 @@ const HI: &str = "// expect: hi\nfn main() {\n    println(\"hi\")\n}\n";
 #[test]
 fn rust_shown_must_be_what_the_compiler_generates() {
     let s = Scratch::new();
-    s.page(&format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"{{}}\", \"hi\");\n}}\n```\n"));
+    s.page(&format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"hi\");\n}}\n```\n"));
     let (ok, out) = run_samples(&s.ctx(), false);
     assert!(ok, "a correct excerpt passes: {out}");
     s.page(&format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"not what is generated\");\n}}\n```\n"));
