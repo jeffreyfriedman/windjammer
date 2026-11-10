@@ -18,6 +18,7 @@ mod rust_surface_health;
 mod std_calls;
 mod semantic;
 pub mod watch;
+pub mod widths;
 
 use crate::diagnostics::{Diagnostic, Report};
 use anyhow::Result;
@@ -47,21 +48,7 @@ pub struct Checked {
 /// Check a `.wj` file or a project directory. No cargo, no rustc, no generated code.
 pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     let start = Instant::now();
-    let paths = files::collect(path)?;
-    let mut sources: Vec<(String, String)> = Vec::with_capacity(paths.len());
-    for p in &paths {
-        sources.push((p.display().to_string(), std::fs::read_to_string(p)?));
-    }
-    // inputs that change what the effect pass reports: the manifest, the lock file and dependency sources, Rust crate surfaces (ADR-0026)
-    let mut keyed = sources.clone();
-    if let Some(manifest) = effects::manifest_path(path) {
-        let dir = manifest.parent().unwrap_or(path).to_path_buf();
-        for extra in [manifest.clone(), dir.join(crate::ir::effect_facts::lock::LOCK_FILE)].into_iter().chain(dep_sources::input_paths(&dir)).chain(crate::package::rust_surface::surface_files(&dir)) {
-            if let Ok(t) = std::fs::read_to_string(&extra) {
-                keyed.push((extra.display().to_string(), t));
-            }
-        }
-    }
+    let (sources, keyed) = inputs(path)?;
     let fp = cache::fingerprint(&keyed);
     let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
     let was_cached = cached.is_some();
@@ -83,6 +70,48 @@ pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
         report,
         sources: sources.into_iter().collect(),
     })
+}
+
+/// The program at `path`: its `.wj` sources, and every input of a check of it (sources, the manifest, the lock
+/// file, dependency sources, Rust crate surfaces), as (path, text) pairs.
+fn inputs(path: &Path) -> Result<(Vec<(String, String)>, Vec<(String, String)>)> {
+    let paths = files::collect(path)?;
+    let mut sources: Vec<(String, String)> = Vec::with_capacity(paths.len());
+    for p in &paths {
+        sources.push((p.display().to_string(), std::fs::read_to_string(p)?));
+    }
+    // inputs that change what the effect pass reports: the manifest, the lock file and dependency sources, Rust crate surfaces (ADR-0026)
+    let mut keyed = sources.clone();
+    if let Some(manifest) = effects::manifest_path(path) {
+        let dir = manifest.parent().unwrap_or(path).to_path_buf();
+        for extra in [manifest.clone(), dir.join(crate::ir::effect_facts::lock::LOCK_FILE)].into_iter().chain(dep_sources::input_paths(&dir)).chain(crate::package::rust_surface::surface_files(&dir)) {
+            if let Ok(t) = std::fs::read_to_string(&extra) {
+                keyed.push((extra.display().to_string(), t));
+            }
+        }
+    }
+    Ok((sources, keyed))
+}
+
+/// Every input of the program at `path` (see `inputs`) with canonical paths, so that two spellings of one
+/// program (`main.wj`, `./main.wj`, an absolute path) give the same list. Used to key compiled verdicts.
+pub fn program_inputs(path: &Path) -> Result<Vec<(String, String)>> {
+    let (_, keyed) = inputs(path)?;
+    let canon = |f: String| std::fs::canonicalize(&f).map(|p| p.display().to_string()).unwrap_or(f);
+    let mut out: Vec<(String, String)> = keyed.into_iter().map(|(f, t)| (canon(f), t)).collect();
+    out.sort();
+    Ok(out)
+}
+
+/// Identity of this compiler build (version, executable path, size and modification time), the same one the
+/// check caches use.
+pub fn compiler_identity() -> String {
+    cache::identity()
+}
+
+/// `compiler_identity` of another `wj` executable (tests key entries for the binary they run).
+pub fn compiler_identity_of(exe: &Path) -> String {
+    cache::identity_of(Some(exe))
 }
 
 /// ADR-0026: errors in calls into Rust crates that have a signature surface (and in the surfaces themselves),

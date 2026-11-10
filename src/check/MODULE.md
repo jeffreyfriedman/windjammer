@@ -17,6 +17,9 @@ In: a `.wj` file or project directory. Out: `Checked { report, sources }` in the
 
 - `rust_calls.rs` (ADR-0026): calls into a Rust crate with a surface are checked against it (`WJ0050` undeclared or malformed surface, `WJ0013` arity, `WJ0003` literal kind); `rust_crate_calls` is the subset `wj build` stops on. Calls into a crate with no surface: `W0014` with the `wj rust-surface` command; a skipped generated function: `WJ0050` with the generator's reason. `std_calls.rs`: `WJ0002` for a call to a function a std module does not provide (`strings.index_of` after `use std::strings`; locals shadow the module name; gate tests/std_calls_check_test.rs). `rust_surface_health.rs`: `W0015` when a generated surface names another crate version than `Cargo.lock`. Surface files (hand-written and cached) and lock files are inputs of the result cache.
 
+- `moves.rs` (ADR-0030, WJ0007): uses after a move predicted from the Rust generated in the per-file analysis phase. `widths/` (ADR-0033, WJ0003): a walker over generated Rust that finds two integer widths that must be one type, only where both are certain (drift family A); pure text in, clashes out. The driver (`cli/widths_gate.rs`) runs it on the build's emitted Rust, because the in-process generator's widths differ from the build's. Gates: tests/move_prediction_test.rs, tests/width_prediction_test.rs (precision scans with rustc as the oracle, pinned lists).
+- `program_inputs`/`compiler_identity`: the input list and build identity that also key compiled verdicts (`cli/verdict.rs`).
+
 ## Owns
 Check orchestration, effect findings (`effects.rs`: WJ0040-WJ0048 from `ir::effect_facts`, `durable_sites.rs`: journaled step positions for the interpreter, `wj.toml [capabilities]`/`[policy]`, per-dependency grants via `dep_sources.rs`), file discovery, source locating (`locate.rs`), semantic checks (`semantic/`), result caches (`cache.rs`, `file_cache.rs`, `ambient.rs`), watch loop, fix application.
 
