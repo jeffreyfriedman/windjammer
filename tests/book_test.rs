@@ -47,8 +47,9 @@ fn report(out: &std::process::Output, what: &str) -> String {
     let log = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("book-{what}.log"));
     let _ = std::fs::write(&log, &text);
     eprintln!("{text}");
+    let hint = if text.contains("not what the compiler generates") { "\nThe compiler's output changed. Refresh every `rust,generated` fence with `wj-docs book-regen` (cargo run --release --bin wj-docs -- book-regen --wj <path to wj>) and review the diff." } else { "" };
     if text.contains("book samples:") {
-        format!("{text}\n(full output: {})", log.display())
+        format!("{text}{hint}\n(full output: {})", log.display())
     } else {
         format!("THE RUNNER DID NOT FINISH (status {:?}, signal {:?}); output so far, full copy in {}:\n{text}", out.status.code(), out.status.signal(), log.display())
     }
@@ -513,4 +514,26 @@ fn a_companion_fence_needs_a_program_before_it() {
     let s = Scratch::new();
     s.page("```go,run\npackage main\n\nfunc main() {}\n```\n");
     assert!(s.fails("must follow the Windjammer program"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn book_regen_rewrites_a_stale_generated_fence_and_refuses_a_broken_program() {
+    let s = Scratch::new();
+    let stale = format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"stale\");\n}}\n```\n");
+    s.page(&stale);
+    let (ok, _) = run_samples(&s.ctx(), false);
+    assert!(!ok, "a stale excerpt fails before regeneration");
+    let wj = std::path::Path::new(env!("CARGO_BIN_EXE_wj"));
+    let report = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap();
+    assert!(report.contains("-    println!(\"stale\");") && report.contains("+    println!(\"hi\");"), "{report}");
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(ok, "after regeneration the page passes: {out}");
+    assert_eq!(docs_truth::book_regen::regen(&s.ctx(), wj).unwrap(), "every rust,generated fence already matches the compiler\n");
+    // a program that does not build: nothing is rewritten and the error says so
+    let broken = "```wj\nfn main( {\n```\n\n```rust,generated\nfn main() {}\n```\n";
+    s.page(broken);
+    let before = std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap();
+    let err = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap_err();
+    assert!(err.contains("does not build, nothing was rewritten"), "{err}");
+    assert_eq!(std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap(), before);
 }
