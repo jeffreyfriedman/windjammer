@@ -15,11 +15,34 @@ type LibraryDependency = (String, String, PathBuf, PathBuf);
 /// Windjammer test sources use `use crate::module::...` (same as in-crate unit tests).
 /// When the harness compiles tests into a separate `windjammer-tests` crate, rewrite those
 /// paths to the library under test (e.g. `foobar_api::domain::...`).
-pub fn rewrite_test_crate_imports(rust_code: &str, lib_crate_name: &str) -> String {
+pub fn rewrite_test_crate_imports(rust_code: &str, lib_crate_name: &str, test_modules: &[String]) -> String {
     let mut out = rust_code.to_string();
     // `pub use crate::` must be rewritten before bare `use crate::`.
     out = out.replace("pub use crate::", &format!("pub use {}::", lib_crate_name));
     out = out.replace("use crate::", &format!("use {}::", lib_crate_name));
+    rewrite_crate_qualified_paths(&out, lib_crate_name, test_modules)
+}
+
+/// `crate::module::Type { .. }` and `-> crate::module::Type` in a test body name the library under test, like the
+/// `use` lines do. A path into one of the test crate's own modules (`crate::model_test::helper`) stays.
+fn rewrite_crate_qualified_paths(code: &str, lib_crate_name: &str, test_modules: &[String]) -> String {
+    const PATH: &str = "crate::";
+    let mut out = String::with_capacity(code.len());
+    let mut rest = code;
+    while let Some(at) = rest.find(PATH) {
+        let (before, tail) = rest.split_at(at);
+        out.push_str(before);
+        let standalone = !before.ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == ':');
+        let segment: String = tail[PATH.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+        if standalone && !segment.is_empty() && !test_modules.iter().any(|m| *m == segment) {
+            out.push_str(lib_crate_name);
+            out.push_str("::");
+        } else {
+            out.push_str(PATH);
+        }
+        rest = &tail[PATH.len()..];
+    }
+    out.push_str(rest);
     out
 }
 
@@ -1027,7 +1050,7 @@ pub(crate) fn generate_test_harness(
             let output_file = output_dir.join(format!("{module_name}.rs"));
             if output_file.exists() {
                 let rust_code = fs::read_to_string(&output_file)?;
-                let rewritten = rewrite_test_crate_imports(&rust_code, lib_crate_name);
+                let rewritten = rewrite_test_crate_imports(&rust_code, lib_crate_name, &module_names);
                 fs::write(&output_file, rewritten)?;
             }
         }
@@ -1153,7 +1176,7 @@ mod rewrite_import_tests {
     #[test]
     fn rewrites_use_crate_paths_to_library_crate() {
         let input = "use crate::domain::item::Item;\nuse crate::application::reports::build_summary_report;";
-        let out = rewrite_test_crate_imports(input, "foobar_api");
+        let out = rewrite_test_crate_imports(input, "foobar_api", &[]);
         assert!(out.contains("use foobar_api::domain::item::Item;"));
         assert!(out.contains("use foobar_api::application::reports::build_summary_report;"));
         assert!(!out.contains("use crate::"));
@@ -1162,14 +1185,30 @@ mod rewrite_import_tests {
     #[test]
     fn rewrites_pub_use_crate_paths() {
         let input = "pub use crate::domain::*;";
-        let out = rewrite_test_crate_imports(input, "test_lib");
+        let out = rewrite_test_crate_imports(input, "test_lib", &[]);
         assert_eq!(out, "pub use test_lib::domain::*;");
+    }
+
+    #[test]
+    fn rewrites_crate_qualified_struct_literals_and_types_in_bodies() {
+        let input = "fn draft(name: String) -> crate::model::Account {\n    let a = crate::model::Account { name: name };\n    a\n}";
+        let out = rewrite_test_crate_imports(input, "tcrepro", &[]);
+        assert!(out.contains("-> tcrepro::model::Account"), "{out}");
+        assert!(out.contains("let a = tcrepro::model::Account {"), "{out}");
+        assert!(!out.contains("crate::"), "{out}");
+    }
+
+    #[test]
+    fn keeps_paths_into_the_test_crates_own_modules() {
+        let input = "let x = crate::model_test::helper(1);\nlet y = my_crate::model::f();";
+        let out = rewrite_test_crate_imports(input, "tcrepro", &["model_test".to_string()]);
+        assert_eq!(out, input);
     }
 
     #[test]
     fn leaves_non_crate_imports_unchanged() {
         let input = "use windjammer_runtime::test;\nuse std::collections::HashMap;";
-        let out = rewrite_test_crate_imports(input, "foobar_api");
+        let out = rewrite_test_crate_imports(input, "foobar_api", &[]);
         assert_eq!(out, input);
     }
 }

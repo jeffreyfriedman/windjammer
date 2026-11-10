@@ -229,13 +229,13 @@ digraph deps {
   "codegen" -> "ir" [label="396"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="693"];
+  "codegen" -> "parser" [label="696"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
-  "codegen" -> "type_classification" [label="239"];
+  "codegen" -> "type_classification" [label="240"];
   "codegen" -> "type_inference" [label="63"];
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
