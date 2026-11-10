@@ -337,3 +337,27 @@ fn value_returned_by_a_spawned_closure_keeps_its_result_type_through_join() {
     );
     assert!(g.contains("unwrap_or_else(|_|"), "{g}");
 }
+
+#[test]
+fn match_over_a_tuple_of_text_with_literal_patterns_compiles() {
+    typechecks(
+        "fn route(method: string, path: string) -> string {\n    match (method, path) {\n        (\"GET\", \"/x\") => \"x\",\n        (\"POST\", \"/y\") => \"y\",\n        _ => \"none\",\n    }\n}\nfn main() {\n    println(\"${route(\"GET\", \"/x\")} ${route(\"PUT\", \"/z\")}\")\n}\n",
+    );
+}
+
+#[test]
+fn string_literal_with_a_format_spec_at_the_start_of_an_interpolation() {
+    let g = typechecks("fn main() {\n    println(\"${\"item\":<8}|\")\n}\n");
+    assert!(g.contains("{:<8}") && g.contains("\"item\""), "{g}");
+}
+
+#[test]
+fn const_declared_in_an_inline_module_is_emitted_and_readable() {
+    let g = typechecks("mod outer {\n    pub const LIMIT: int = 10\n\n    fn secret() -> int {\n        LIMIT * 2\n    }\n\n    pub fn reveal() -> int {\n        secret() + 1\n    }\n}\n\nfn main() {\n    println(\"${outer::reveal()} ${outer::LIMIT}\")\n}\n");
+    assert!(g.contains("const LIMIT"), "{g}");
+}
+
+#[test]
+fn map_get_with_a_text_default_over_owned_text_values_compiles() {
+    typechecks("use std::collections::BTreeMap\n\nfn main() {\n    let mut groups: BTreeMap<string, string> = BTreeMap::new()\n    let first = \"a\".to_string()\n    let so_far = groups.get(first).unwrap_or(\"\")\n    groups.insert(first, so_far + \"x\")\n    println(\"${groups.len()}\")\n}\n");
+}

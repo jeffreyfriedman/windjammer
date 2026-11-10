@@ -18,7 +18,7 @@ fn name(s: State) -> String {
 
 #[inline]
 fn next(s: State, event: String) -> State {
-    match (s, event) {
+    match (s, &*event) {
         (State::Idle, "start") => State::Running,
         (State::Running, "pause") => State::Paused,
         (State::Paused, "resume") => State::Running,

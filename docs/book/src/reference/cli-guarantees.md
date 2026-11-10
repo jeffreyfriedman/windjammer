@@ -34,6 +34,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj build --target` | Target platform (rust, javascript, wasm) | tested |
 | `wj build --tree-shake` | Enable tree shaking (dead code elimination) | tested |
 | `wj build --verbose` | Show verbose error output (includes all notes and suggestions) | preview |
+| `wj build --unchecked-arithmetic` | Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds and the interpreter); same as `[build] overflow_checks = false` in wj.toml | tested |
 | `wj cache` | Manage the shared Cargo target cache (outside application repos) | tested |
 | `wj cache path` | Print the shared (or --verify) Cargo target directory | tested |
 | `wj cache path --verify` | Use the ephemeral verify cache (integration / codegen cargo checks) | tested |

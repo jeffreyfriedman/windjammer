@@ -35,7 +35,26 @@ impl Lexer {
         while let Some(c) = self.peek(i) {
             match c {
                 '\\' => i += 2,
-                '"' => return matches!(self.peek(i + 1), Some('.') | Some('[')),
+                '"' => {
+                    return match self.peek(i + 1) {
+                        Some('.') | Some('[') => true,
+                        // `${"item":<8}`: a literal with a format specifier up to the closing brace
+                        Some(':') => {
+                            let mut j = i + 2;
+                            while let Some(c) = self.peek(j) {
+                                if c == '}' {
+                                    return j > i + 2;
+                                }
+                                if !(c.is_ascii_alphanumeric() || "<>^=+#.?_-".contains(c)) {
+                                    return false;
+                                }
+                                j += 1;
+                            }
+                            false
+                        }
+                        _ => false,
+                    };
+                }
                 '\n' => return false,
                 _ => i += 1,
             }

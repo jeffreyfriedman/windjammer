@@ -242,3 +242,24 @@ polarity = "negative"
 files = { "m.wj" = "fn main( {\n" }
 args = ["build", "{w}/m.wj", "--no-cargo", "--tree-shake", "-o", "{w}/out"]
 output_has = ["Parse error"]
+
+[[case]]
+name = "build --unchecked-arithmetic turns release overflow checks off"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--unchecked-arithmetic", "-o", "{w}/out"]
+file_has = { "out/Cargo.toml" = "overflow-checks = false" }
+
+[[case]]
+name = "build without --unchecked-arithmetic keeps release overflow checks on"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hi\")\n}\n" }
+args = ["build", "{w}/m.wj", "--no-cargo", "-o", "{w}/out"]
+file_has = { "out/Cargo.toml" = "overflow-checks = true" }
+
+[[case]]
+name = "build --unchecked-arithmetic of a missing file fails instead of reporting success"
+polarity = "negative"
+args = ["build", "{w}/nope.wj", "--no-cargo", "--unchecked-arithmetic", "-o", "{w}/out"]
+output_has = ["path not found"]
+output_lacks = ["Success"]
