@@ -199,7 +199,7 @@
 "src/codegen/rust/block_generation.rs::generate_block" = 307
 "src/codegen/rust/block_generation.rs::generate_block_expr" = 503
 "src/codegen/rust/call_expression_generation/argument_generation/regular_call_arguments.rs::collect_regular_function_arguments" = 905
-"src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 754
+"src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 738
 "src/codegen/rust/call_expression_generation/trait_call_generation.rs::generate_call_on_field_access" = 699
 "src/codegen/rust/call_signature_resolution.rs::effective_param_ownership" = 314
 "src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 373

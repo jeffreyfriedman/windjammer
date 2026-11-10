@@ -102,6 +102,8 @@ pub struct FunctionConstraints {
     pub index_uses: Vec<ConstraintVar>,
     /// A value passed to a std method's generic slot (`v.push(x)`): (its conversion key, its var, the slot's var).
     pub element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
+    /// Index uses whose expression can carry a conversion (`v[i]`, an argument at a `usize` formal): (key, var).
+    pub index_use_keys: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar)>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -128,6 +130,7 @@ struct AstConstraintWalker<'a, 'ast> {
     index_sources: Vec<((usize, usize), ConstraintVar)>,
     index_uses: Vec<ConstraintVar>,
     element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
+    index_use_keys: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar)>,
     /// Declared types of annotated locals (`let q: VecDeque<int> = ...`), for receiver classification.
     local_decl_types: HashMap<String, BaseType>,
     /// Names bound by `for v in a..b`.
@@ -340,6 +343,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             index_sources: Vec::new(),
             index_uses: Vec::new(),
             element_stores: Vec::new(),
+            index_use_keys: Vec::new(),
             local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: std::collections::BTreeMap::new(),
@@ -471,7 +475,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     }
 
     /// Unify call-site argument vars with callee formal expectations.
-    fn emit_call_site_constraints(&mut self, sig: &FunctionSignature, arg_vars: &[ConstraintVar]) {
+    fn emit_call_site_constraints(&mut self, sig: &FunctionSignature, arg_vars: &[ConstraintVar], arguments: &[(Option<String>, &'ast Expression<'ast>)]) {
         for (arg_index, &arg_var) in arg_vars.iter().enumerate() {
             let param_idx = sig.arg_param_index(arg_index);
             let expected_var = self.cs.fresh_var();
@@ -482,7 +486,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             {
                 let base = parser_type_to_base_type(&structure::expand_aliases(ty, &self.analyzed.type_aliases));
                 self.note_opaque_formal(&base, arg_var);
-                if base != BaseType::Inferred {
+                if base == BaseType::Usize {
+                    // A `usize` formal is an index slot (ADR-0028): the argument keeps its class and is converted here.
+                    self.index_slot_argument(arg_var, arguments.get(arg_index).map(|(_, a)| *a));
+                } else if base != BaseType::Inferred {
                     self.cs.add_because(Constraint::TypeIs(expected_var, base), tagged("NUM-PROPAGATE"));
                 }
             } else {
@@ -1057,7 +1064,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         .resolve_free_callee_signature(&callee_name, arguments.len())
                         .cloned()
                     {
-                        self.emit_call_site_constraints(&sig, &arg_vars);
+                        self.emit_call_site_constraints(&sig, &arg_vars, arguments);
                         self.emit_call_result_type_constraints(result, Some(&sig), None);
                     } else if !self.call_is_modelled(&callee_name) {
                         self.numeric_unmodelled.opaque.extend(arg_vars.iter().copied().chain([result]));
@@ -1468,6 +1475,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             index_sources: self.index_sources,
             index_uses: self.index_uses,
             element_stores: self.element_stores,
+            index_use_keys: self.index_use_keys,
             execution_constraints: self.execution_constraints,
         }
     }
