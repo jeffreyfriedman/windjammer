@@ -68,6 +68,7 @@ fn wrap(name: string) -> Holder {
         usize_conversions: Default::default(),
         last_uses: Default::default(),
         element_reads: Default::default(),
+        field_copy_sites: Default::default(),
         module_path: Vec::new(),
         returned_fields: Default::default(),
         clone_sites: Default::default(),

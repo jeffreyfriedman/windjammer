@@ -399,6 +399,16 @@ pub fn clone_reports(
                 dropped: false,
             });
         }
+        if ir_fn.field_copy_sites.values().any(|r| *r == name) {
+            reasons.push(Reason {
+                rule: "CLONE-USE-AFTER-MOVE".into(),
+                detail: format!("a field of `{}` is copied: `{}` is read again after the field is taken", name, name),
+                line: None,
+                col: None,
+                binding: true,
+                dropped: false,
+            });
+        }
         if ir_fn.element_reads.values().any(|r| *r == name) {
             reasons.push(Reason {
                 rule: "CLONE-BORROWED-TO-OWNED".into(),
