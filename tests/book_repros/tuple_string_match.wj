@@ -1,0 +1,16 @@
+fn handle(method: string, path: string) -> string {
+    match (method, path) {
+        ("GET", "/") => "200 welcome",
+        ("GET", "/health") => "200 ok",
+        ("POST", "/items") => "201 created",
+        (_, "/items") => "405 method not allowed",
+        _ => "404 not found",
+    }
+}
+
+fn main() {
+    println(handle("GET", "/"))
+    println(handle("POST", "/items"))
+    println(handle("DELETE", "/items"))
+    println(handle("GET", "/missing"))
+}

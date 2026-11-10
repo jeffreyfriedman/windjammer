@@ -176,3 +176,35 @@ title = "Compiling to Rust, JavaScript, WebAssembly and Go"
 [[feature]]
 id = "shaders"
 title = "WJSL shaders and the WGSL backend"
+
+[[feature]]
+id = "showcase-side-by-side"
+title = "Side-by-side programs in Windjammer, generated Rust, Go and TypeScript"
+
+[[feature]]
+id = "showcase-ownership"
+title = "Inferred ownership with the generated Rust beside it"
+
+[[feature]]
+id = "showcase-fast-loop"
+title = "Measured edit-run loop: interpreted versus compiled"
+
+[[feature]]
+id = "showcase-authority"
+title = "Effects and grants versus ambient authority"
+
+[[feature]]
+id = "showcase-agents"
+title = "Machine-readable diagnostics, fixes and offline docs for agents"
+
+[[feature]]
+id = "showcase-trust"
+title = "How the interpreter is checked against the compiled backend"
+
+[[feature]]
+id = "showcase-targets"
+title = "One source built for several targets"
+
+[[feature]]
+id = "showcase-interop"
+title = "Using a Rust crate from Windjammer"
