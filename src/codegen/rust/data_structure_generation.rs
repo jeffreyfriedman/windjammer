@@ -63,10 +63,10 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
-    pub(in crate::codegen::rust) fn generate_tuple(
-        &mut self,
-        elements: &[&Expression<'ast>],
-    ) -> String {
+    /// Slot types of the tuple literal about to be generated: the enclosing list element or sibling match arm
+    /// first, then the function's return type, then the call-argument formal. The list-element slots are
+    /// returned too so the caller can restore them for the next element.
+    fn tuple_literal_slot_types(&mut self) -> (Option<Vec<Type>>, Option<Vec<Type>>) {
         let return_tuple_types = match &self.current_function_return_type {
             Some(Type::Tuple(types)) => Some(types.clone()),
             Some(Type::Result(ok, _)) => match ok.as_ref() {
@@ -85,8 +85,7 @@ impl<'ast> CodeGenerator<'ast> {
             },
             _ => None,
         };
-        // Call-arg expected type (e.g. specialized `Vec<(String,String)>::push` param)
-        // drives nested tuple slot ownership the same way return types do.
+        // call-arg expected type drives slot ownership like return types do
         let call_arg_tuple_types = match &self.call_arg_expected_type {
             Some(Type::Tuple(types)) => Some(types.clone()),
             Some(Type::Reference(inner) | Type::MutableReference(inner)) => match inner.as_ref() {
@@ -95,7 +94,16 @@ impl<'ast> CodeGenerator<'ast> {
             },
             _ => None,
         };
-        let tuple_slot_types = return_tuple_types.or(call_arg_tuple_types);
+        // slots from the enclosing list element / sibling match arm win; nested tuples do not inherit them
+        let list_ctx = self.idiom.list_elem_tuple_slots.take();
+        (self.idiom.expected_tuple_slots.take().or(list_ctx.clone()).or(return_tuple_types).or(call_arg_tuple_types), list_ctx)
+    }
+
+    pub(in crate::codegen::rust) fn generate_tuple(
+        &mut self,
+        elements: &[&Expression<'ast>],
+    ) -> String {
+        let (tuple_slot_types, list_ctx) = self.tuple_literal_slot_types();
 
         // Peer-drive bare int literals from sibling non-literal slots (match-arm
         // unification). Without this, `(true, *v)` vs `(false, 0)` emits `0_i32`
@@ -378,6 +386,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.copy_if_read_again_at(e, s, super::move_at_last_use::MoveSite::Element) // CLONE-USE-AFTER-MOVE: a tuple slot consumes its element
             })
             .collect();
+        self.idiom.list_elem_tuple_slots = list_ctx;
         format!("({})", expr_strs.join(", "))
     }
 
@@ -442,10 +451,15 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    pub(in crate::codegen::rust) fn generate_array(
-        &mut self,
-        elements: &[&Expression<'ast>],
-    ) -> String {
+    pub(in crate::codegen::rust) fn generate_array(&mut self, elements: &[&Expression<'ast>]) -> String {
+        let slots = self.idiom.list_elem_tuple_slots.take().or_else(|| self.return_or_argument_element_tuple_slots(elements));
+        let outer = std::mem::replace(&mut self.idiom.list_elem_tuple_slots, slots);
+        let generated = self.generate_array_elements(elements);
+        self.idiom.list_elem_tuple_slots = outer;
+        generated
+    }
+
+    fn generate_array_elements(&mut self, elements: &[&Expression<'ast>]) -> String {
         use crate::parser::Literal;
         // ADR-0014: `[a, b]` is the list literal. It lowers to a growable `Vec` when the context
         // determines a list (`let x = [..]`, a `Vec` struct field), exactly like `vec![a, b]`.
