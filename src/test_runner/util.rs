@@ -10,24 +10,5 @@ pub fn path_to_toml_string(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
-/// Recursively copy a directory
-pub fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    if !dst.exists() {
-        std::fs::create_dir_all(dst)?;
-    }
-
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if ty.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            std::fs::copy(&src_path, &dst_path)?;
-        }
-    }
-
-    Ok(())
-}
+/// Recursively copy a directory (lives in `build_utils`, which the library needs without the CLI).
+pub use crate::build_utils::copy_dir_recursive;

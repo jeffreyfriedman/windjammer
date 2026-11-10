@@ -36,14 +36,38 @@ fn sign(it: &Interpreter, mut claims: Claims, secret: &str, ttl: i64) -> Value {
         return Value::err(s("JWT ttl must be positive"));
     }
     claims.exp = (it.wall_ns() / 1_000_000_000) as i64 + ttl;
-    match jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-        &claims,
-        &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
-    ) {
+    match hs256_encode(&claims, secret) {
         Ok(t) => Value::ok(s(&t)),
-        Err(e) => Value::err(s(&e.to_string())),
+        Err(e) => Value::err(s(&e)),
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn hs256_encode(claims: &Claims, secret: &str) -> Result<String, String> {
+    let key = jsonwebtoken::EncodingKey::from_secret(secret.as_bytes());
+    jsonwebtoken::encode(&jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256), claims, &key).map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn hs256_decode(token: &str, secret: &str) -> Result<Claims, String> {
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+    validation.validate_exp = false; // checked by the caller against the interpreter clock
+    let key = jsonwebtoken::DecodingKey::from_secret(secret.as_bytes());
+    jsonwebtoken::decode::<Claims>(token, &key, &validation).map(|d| d.claims).map_err(|e| e.to_string())
+}
+
+// The browser playground (ADR-0034) cannot link ring, the C code under jsonwebtoken.
+#[cfg(target_arch = "wasm32")]
+const NO_JWT: &str = "std::jwt is not available in the browser playground";
+
+#[cfg(target_arch = "wasm32")]
+fn hs256_encode(_: &Claims, _: &str) -> Result<String, String> {
+    Err(NO_JWT.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn hs256_decode(_: &str, _: &str) -> Result<Claims, String> {
+    Err(NO_JWT.to_string())
 }
 
 pub fn register(r: &mut Registry) {
@@ -165,16 +189,12 @@ pub fn register(r: &mut Registry) {
         if token.trim().is_empty() {
             return Ok(Value::err(s("JWT token is empty")));
         }
-        let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
-        validation.validate_exp = false; // checked below against the interpreter clock
-        let data = jsonwebtoken::decode::<Claims>(token.trim(), &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()), &validation);
-        Ok(match data {
-            Ok(d) => {
+        Ok(match hs256_decode(token.trim(), &secret) {
+            Ok(c) => {
                 let now = (it.wall_ns() / 1_000_000_000) as i64;
-                if d.claims.exp < now {
+                if c.exp < now {
                     return Ok(Value::err(s("ExpiredSignature")));
                 }
-                let c = d.claims;
                 let opt = |o: Option<String>| Value::option(o.map(|t| s(&t)));
                 Value::ok(Value::Struct(Rc::new(StructVal {
                     name: Rc::from("JwtClaims"),
@@ -190,7 +210,7 @@ pub fn register(r: &mut Registry) {
                     uid: 0,
                 })))
             }
-            Err(e) => Value::err(s(&e.to_string())),
+            Err(e) => Value::err(s(&e)),
         })
     });
     let _ = opt_str;

@@ -173,7 +173,7 @@ pub use toml_generation::infer_configured_package_name;
 pub use toml_generation::infer_project_name_from;
 
 pub(crate) use dependency_management::{
-    find_windjammer_runtime_path, find_windjammer_runtime_path_with, path_to_toml_string,
+    find_windjammer_runtime_path, find_windjammer_runtime_path_with, path_to_toml_string, sanitize_path_for_toml,
 };
 
 #[cfg(test)]
