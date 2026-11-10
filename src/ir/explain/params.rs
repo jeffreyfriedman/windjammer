@@ -138,7 +138,7 @@ fn reason_from(o: Option<&ConstraintOrigin>, fallback: &str) -> (String, String,
             o.rule.to_string(),
             o.detail.clone(),
             o.at.map(|a| a.0),
-            o.at.map(|a| a.1),
+            o.at.map(|a| crate::source_map::display_column(a.1)),
         ),
         None => ("UNTAGGED".into(), fallback.into(), None, None),
     }

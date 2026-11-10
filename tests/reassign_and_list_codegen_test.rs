@@ -344,3 +344,9 @@ fn match_over_a_tuple_of_text_with_literal_patterns_compiles() {
         "fn route(method: string, path: string) -> string {\n    match (method, path) {\n        (\"GET\", \"/x\") => \"x\",\n        (\"POST\", \"/y\") => \"y\",\n        _ => \"none\",\n    }\n}\nfn main() {\n    println(\"${route(\"GET\", \"/x\")} ${route(\"PUT\", \"/z\")}\")\n}\n",
     );
 }
+
+#[test]
+fn string_literal_with_a_format_spec_at_the_start_of_an_interpolation() {
+    let g = typechecks("fn main() {\n    println(\"${\"item\":<8}|\")\n}\n");
+    assert!(g.contains("{:<8}") && g.contains("\"item\""), "{g}");
+}

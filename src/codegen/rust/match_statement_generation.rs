@@ -735,7 +735,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.generate_expression(value)
             }
         } else {
-            self.generate_expression(value)
+            self.generate_match_scrutinee_expr(value, arms)
         };
         self.suppress_borrowed_clone = prev_suppress_scrutinee;
 
