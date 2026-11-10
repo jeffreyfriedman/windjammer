@@ -183,11 +183,46 @@ pub fn collect_check(file: &str, src: &str) -> Vec<Found> {
         .collect()
 }
 
+/// File modules a program declares with a bodiless `mod name` line: the sibling `name.wj` or `name/mod.wj` next to `file`, when it
+/// exists. The checker needs them to resolve `use name::Item`, as `wj check` loads them from the project.
+fn sibling_modules(file: &str, src: &str) -> Vec<(String, String)> {
+    let dir = std::path::Path::new(file).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+    let mut out = Vec::new();
+    for line in src.lines() {
+        let Some(name) = line.strip_prefix("mod ").map(str::trim).filter(|n| !n.is_empty() && n.chars().all(|c| c.is_alphanumeric() || c == '_')) else { continue };
+        for cand in [dir.join(format!("{name}.wj")), dir.join(name).join("mod.wj")] {
+            if let Ok(text) = std::fs::read_to_string(&cand) {
+                out.push((cand.to_string_lossy().replace('\\', "/"), text));
+                break;
+            }
+        }
+    }
+    out
+}
+
 /// The raw diagnostics of `check_sources` (panics inside the checker become one `panic` diagnostic).
 pub fn check_diagnostics(file: &str, src: &str) -> Vec<windjammer::diagnostics::Diagnostic> {
     windjammer::error::span_check::set_strict(true);
     let (f, s) = (file.to_string(), src.to_string());
-    std::panic::catch_unwind(move || windjammer::check::check_sources(std::path::Path::new("."), &[(f, s)])).unwrap_or_else(|p| {
+    let siblings = sibling_modules(file, src);
+    // With sibling modules the program is checked as a project rooted at its directory (module paths are relative to the root:
+    // `counter.wj` next to `main.wj` is module `counter`); without them the file keeps its repo-relative name.
+    let (root, sources, own_name) = if siblings.is_empty() {
+        (std::path::PathBuf::from("."), vec![(f.clone(), s)], f)
+    } else {
+        let dir = std::path::Path::new(file).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let rel = |p: &str| std::path::Path::new(p).strip_prefix(&dir).map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| p.to_string());
+        let main = rel(file);
+        let mut v = vec![(main.clone(), s)];
+        v.extend(siblings.into_iter().map(|(p, t)| (rel(&p), t)));
+        (dir, v, main)
+    };
+    // only this file's own findings are judged against its markers; a sibling is a corpus file of its own
+    let own = move |d: &windjammer::diagnostics::Diagnostic| d.primary_span.as_ref().is_none_or(|s| s.file == own_name);
+    std::panic::catch_unwind(move || {
+        windjammer::check::check_sources(&root, &sources).into_iter().filter(|d| own(d)).collect::<Vec<_>>()
+    })
+    .unwrap_or_else(|p| {
         let msg = p.downcast_ref::<String>().cloned().or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
         vec![windjammer::diagnostics::Diagnostic::error("WJ0099", format!("checker panicked: {msg}"))]
     })
