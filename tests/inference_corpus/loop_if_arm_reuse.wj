@@ -1,0 +1,18 @@
+// CLONE-USE-AFTER-MOVE in loops (C6): a value chosen by an `if` expression inside a nested loop is read
+// again on the next iteration, so the chosen branch copies it.
+fn run_once(arm: string) -> int { arm.len() as int }
+
+fn main() {
+    let base = "baseline"
+    let test = if true { "enforce" } else { "replay" }
+    let mut total = 0
+    let mut r = 0
+    while r < 2 {
+        for k in [0, 1, 1, 0] {
+            let arm = if k == 0 { base } else { test }
+            total = total + run_once(arm)
+        }
+        r = r + 1
+    }
+    println("${total} ${base} ${test}")
+}

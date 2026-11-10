@@ -1736,6 +1736,9 @@ tests/move_prediction/argument_non_clone.wj	exit1:0:17
 tests/move_prediction/let_alias_non_clone.wj#mainerr	none	
 tests/move_prediction/let_alias_non_clone.wj#refused	rejected	
 tests/move_prediction/let_alias_non_clone.wj	exit1:0:17	
+tests/move_prediction/loop_if_arm_non_clone.wj#mainerr	none	
+tests/move_prediction/loop_if_arm_non_clone.wj#refused	rejected	
+tests/move_prediction/loop_if_arm_non_clone.wj	exit1:0:17	
 tests/move_prediction/loop_non_clone.wj#mainerr	none	
 tests/move_prediction/loop_non_clone.wj#refused	rejected	
 tests/move_prediction/loop_non_clone.wj	exit1:0:17	
