@@ -1,0 +1,93 @@
+// ==== enc.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Clone, Debug, PartialEq, Copy)]
+pub enum Item {
+    Num(i64),
+    Flag(bool),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Packed {
+    pub bytes: Vec<u8>,
+}
+
+impl Packed {
+#[inline]
+pub fn from_items(items: Vec<Item>) -> Packed {
+        Packed { bytes: pack(items) }
+}
+}
+
+#[inline]
+pub fn pack(items: Vec<Item>) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    for it in items {
+        let b = pack_one(it);
+        out.push(b);
+    }
+    out
+}
+
+#[inline]
+pub fn pack_one(it: Item) -> u8 {
+    match it {
+        Item::Num(n) => (n % 256_i64) as u8,
+        Item::Flag(f) => {
+            if f {
+                1_u8
+            } else {
+                0_u8
+            }
+        },
+    }
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod enc;
+pub mod user;
+
+// Re-export public items
+pub use enc::*;
+pub use user::*;
+// ==== main.rs ====
+mod enc;
+mod user;
+fn main() {
+    println!("{} {}", user::twice(), user::once());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod enc;
+pub mod user;
+
+// Re-export public items
+pub use enc::*;
+pub use user::*;
+// ==== user.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::enc::Item;
+use crate::enc::pack;
+use crate::enc::Packed;
+#[inline]
+pub fn twice() -> usize {
+    let items = vec![Item::Flag(true)];
+    let a: Vec<u8> = pack(items.clone());
+    let b: Vec<u8> = pack(items);
+    a.len() + b.len() - 1_usize
+}
+
+#[inline]
+pub fn once() -> usize {
+    Packed::from_items(vec![Item::Flag(true)]).bytes.len()
+}
+

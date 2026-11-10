@@ -57,4 +57,44 @@ impl<'ast> CodeGenerator<'ast> {
         out.push_str("};\n");
         out
     }
+
+    /// The pattern of a `let`. A tuple destructure (`let (c, k) = p`) binds each part with the type of the
+    /// value's element, and a part the body mutates (`c.bump()` with `&mut self`) is bound `mut`.
+    pub(in crate::codegen::rust) fn generate_let_pattern(&mut self, pattern: &Pattern<'ast>, value: &Expression<'ast>) -> String {
+        let Pattern::Tuple(parts) = pattern else {
+            return self.generate_pattern(pattern);
+        };
+        if let Some(Type::Tuple(types)) = self.infer_expression_type(value) {
+            for (part, ty) in parts.iter().zip(types) {
+                if let Pattern::Identifier(n) = part {
+                    self.local_var_types.insert(n.clone(), ty);
+                }
+            }
+        }
+        let parts: Vec<Pattern<'ast>> = parts
+            .iter()
+            .map(|part| match part {
+                Pattern::Identifier(n) if self.variable_needs_mut(n) => Pattern::MutBinding(n.clone()),
+                other => other.clone(),
+            })
+            .collect();
+        self.generate_pattern(&Pattern::Tuple(parts))
+    }
+
+    /// A non-Copy field bound out of a borrowed root (`let a = r.who.name` with `r: &Req`) cannot move: it is
+    /// cloned. True when the root is behind a reference (whatever the field's type), so callers stop there.
+    pub(in crate::codegen::rust) fn clone_field_of_borrowed_root(&self, value: &Expression<'ast>, value_str: &mut String) -> bool {
+        if !self.field_access_root_is_behind_reference(value) {
+            return false;
+        }
+        let ty = self.infer_expression_type(value);
+        let bare = ty.as_ref().map(|t| match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        });
+        if bare.is_some_and(|t| !self.is_type_copy(t)) && !value_str.ends_with(".clone()") && !value_str.starts_with('&') {
+            *value_str = format!("{value_str}.clone()");
+        }
+        true
+    }
 }

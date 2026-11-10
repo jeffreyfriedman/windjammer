@@ -1,0 +1,47 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod req;
+
+// Re-export public items
+pub use req::*;
+// ==== main.rs ====
+mod req;
+fn main() {
+    let r = req::Req { who: req::Who { name: String::from("ann"), id: String::from("7") }, depth: 1_u32 };
+    println!("{}", req::label(&r));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod req;
+
+// Re-export public items
+pub use req::*;
+// ==== req.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Who {
+    pub name: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+pub struct Req {
+    pub who: Who,
+    pub depth: u32,
+}
+
+#[inline]
+pub fn label(r: &Req) -> String {
+    let a = r.who.name.clone();
+    let b = r.who.id.clone();
+    format!("{}{}{}", a, ":", b)
+}
+

@@ -1071,37 +1071,34 @@ pub(crate) fn build_library_multipass(
     // Step 4B-a-IR: Lower converged analyses to IR using the merged global registry.
     // Cross-file call constraints resolve against final_global_registry.
     let step4b_ir_start = Instant::now();
+    let formal_scope = super::value_formal_fixed_point::FormalScope::new(&parsed_programs, &global_copy_structs);
     let mut ir_functions_by_index: Vec<Option<Vec<crate::ir::node::IrFunction>>> =
         vec![None; sources.len()];
     {
         use crate::ir::pipeline::{DiagnosticSeverity, IrPipeline};
         let mut pipeline = IrPipeline::new();
         let library_fields = library_field_types(&global_struct_fields, &parsed_programs);
-        for (i, analysis_opt) in step4b_analyses.iter().enumerate() {
-            let Some(analysis) = analysis_opt else {
-                continue;
-            };
-            if analysis.analyzed_functions.is_empty() {
-                continue;
-            }
-            // Per-file import aliases (`qs_get` → `wj_querystring::get`) must
-            // overwrite analyzer Owned stubs before IR expected types are set.
-            let mut ir_reg =
-                SignatureRegistry::layered(std::sync::Arc::clone(&final_global_registry));
-            crate::codegen::rust::program_generation::install_program_import_alias_signatures(&mut ir_reg, &parsed_programs[i]);
-            let fields = file_field_types(&library_fields, &parsed_programs[i]);
-            let module = pipeline.lower_to_ir(&analysis.analyzed_functions, &ir_reg, Some(&fields));
-            for diag in &module.diagnostics {
-                if matches!(diag.severity, DiagnosticSeverity::Error) {
-                    eprintln!("[IR ERROR] {}: {}", sources[i].0.display(), diag.message);
+        // Rounds until callers and callees agree on value-formal modes (value_formal_fixed_point).
+        for round in 1..=super::value_formal_fixed_point::MAX_ROUNDS {
+            let mut ir_errors = Vec::new();
+            for (i, analysis_opt) in step4b_analyses.iter().enumerate() {
+                let Some(analysis) = analysis_opt.as_ref().filter(|a| !a.analyzed_functions.is_empty()) else { continue };
+                // Per-file import aliases (`qs_get` → `wj_querystring::get`) overwrite analyzer Owned stubs before IR expected types are set.
+                let mut ir_reg = SignatureRegistry::layered(std::sync::Arc::clone(&final_global_registry));
+                crate::codegen::rust::program_generation::install_program_import_alias_signatures(&mut ir_reg, &parsed_programs[i]);
+                let fields = file_field_types(&library_fields, &parsed_programs[i]);
+                let module = pipeline.lower_to_ir(&analysis.analyzed_functions, &ir_reg, Some(&fields));
+                for diag in module.diagnostics.iter().filter(|d| matches!(d.severity, DiagnosticSeverity::Error)) {
+                    ir_errors.push(format!("[IR ERROR] {}: {}", sources[i].0.display(), diag.message));
                 }
+                crate::ir::signature_bridge::sync_ir_ownership_to_registry(&module.functions, &analysis.analyzed_functions, std::sync::Arc::make_mut(&mut final_global_registry));
+                ir_functions_by_index[i] = Some(module.functions);
             }
-            crate::ir::signature_bridge::sync_ir_ownership_to_registry(
-                &module.functions,
-                &analysis.analyzed_functions,
-                std::sync::Arc::make_mut(&mut final_global_registry),
-            );
-            ir_functions_by_index[i] = Some(module.functions);
+            let published = publish_value_formals(&formal_scope, std::sync::Arc::make_mut(&mut final_global_registry), &sources, &ir_functions_by_index, &step4b_analyses);
+            if !published || round == super::value_formal_fixed_point::MAX_ROUNDS {
+                ir_errors.iter().for_each(|e| eprintln!("{e}"));
+                break;
+            }
         }
     }
     // IR sync can re-promote field-forward helpers to MutBorrowed from analyzer
@@ -1120,6 +1117,9 @@ pub(crate) fn build_library_multipass(
         // 4B-a / `.wj.meta` alias inserts re-apply `strings.wj` owned stubs
         // (`len` → `strings::len`). Runtime AsRef/&str must win before codegen.
         reg.restore_runtime_borrowed_strings_signatures();
+        // The restores above predict formals; the spelled value formals are the IR's: it has the last word.
+        publish_value_formals(&formal_scope, reg, &sources, &ir_functions_by_index, &step4b_analyses);
+        publish_into_file_registries(&formal_scope, &sources, &ir_functions_by_index, &mut step4b_analyses);
     }
     profile_phase("Step 4B-a-IR: IR lowering", step4b_ir_start);
 
@@ -1824,4 +1824,41 @@ fn file_field_types(library: &FieldTypes, program: &crate::parser::Program<'stat
     let mut fields = library.clone();
     fields.extend(crate::type_inference::struct_field_registry::local_struct_field_table(program));
     fields
+}
+
+/// Publish every file's solved value-formal modes (convergence O4); true when one changed.
+fn publish_value_formals(
+    scope: &super::value_formal_fixed_point::FormalScope,
+    registry: &mut SignatureRegistry,
+    sources: &[(PathBuf, String)],
+    ir_functions: &[Option<Vec<crate::ir::node::IrFunction>>],
+    analyses: &[Option<Step4bFileAnalysis>],
+) -> bool {
+    let mut changed = false;
+    for (i, (ir, analysis)) in ir_functions.iter().zip(analyses).enumerate() {
+        if let (Some(ir), Some(analysis)) = (ir, analysis) {
+            let stem = sources[i].0.file_stem().and_then(|s| s.to_str());
+            changed |= scope.publish(registry, stem, ir, &analysis.analyzed_functions);
+        }
+    }
+    changed
+}
+
+/// Each file's codegen overlays its own analysis-time registry on the global one: its copies of other files'
+/// signatures must carry the published value-formal modes too.
+fn publish_into_file_registries(
+    scope: &super::value_formal_fixed_point::FormalScope,
+    sources: &[(PathBuf, String)],
+    ir_functions: &[Option<Vec<crate::ir::node::IrFunction>>],
+    analyses: &mut [Option<Step4bFileAnalysis>],
+) {
+    for j in 0..analyses.len() {
+        let Some(mut registry) = analyses[j].as_mut().map(|a| std::mem::take(&mut a.registry)) else {
+            continue;
+        };
+        publish_value_formals(scope, &mut registry, sources, ir_functions, analyses);
+        if let Some(a) = analyses[j].as_mut() {
+            a.registry = registry;
+        }
+    }
 }

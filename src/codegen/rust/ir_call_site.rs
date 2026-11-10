@@ -279,8 +279,8 @@ impl<'ast> CodeGenerator<'ast> {
             return None;
         }
 
-        // Bare same-crate name (`parse`, `get`, `stringify`): local exact wins.
-        // A global `url::parse` / `HashMap::get` must not steal the slot.
+        // Bare same-crate name (`parse`, `get`): local exact wins; a global `url::parse` never steals it, nor a method.
+        let from_reg = |reg: &crate::analyzer::SignatureRegistry, key: &str| from_reg(reg, key).filter(|s| !s.has_self_receiver);
         if let Some(s) = from_reg(&self.signature_registry, callee_name)
             .or_else(|| from_reg(&self.signature_registry, lookup_ref))
             .or_else(|| from_reg(&self.signature_registry, simple))
@@ -288,7 +288,7 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(s);
         }
         if let Some(g) = self.global_signature_registry.as_ref() {
-            if let Some(s) = g.find_unique_signature_ending_with(simple).cloned() {
+            if let Some(s) = g.find_unique_signature_ending_with(simple).filter(|s| !s.has_self_receiver).cloned() {
                 return Some(s);
             }
             if let Some(s) = from_reg(g, callee_name)

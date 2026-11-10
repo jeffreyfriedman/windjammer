@@ -102,5 +102,3 @@ drift_repros_test::explicit_ref_of_an_integer_literal_typechecks
 # owner: ownership inference (docs/drift/findings.md section L) and call adaptation.
 drift_repros_test::contains_with_a_borrowed_local_typechecks
 drift_repros_test::call_with_a_function_typed_parameter_typechecks
-drift_repros_test::receiver_of_a_transitively_mutating_method_is_mut
-drift_repros_test::tuple_pattern_binding_mutated_by_a_method_is_mut

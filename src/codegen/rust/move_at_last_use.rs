@@ -110,6 +110,26 @@ impl<'ast> CodeGenerator<'ast> {
         Some(!copy)
     }
 
+    /// CLONE-USE-AFTER-MOVE for a field path of an owned binding (`Sim { addr: sim.addr }` and `sim.addr` read
+    /// later): the path liveness of `auto_clone_analysis` decides, as for a `let` of a parameter's field.
+    fn copy_field_if_read_again(&self, expr: &crate::parser::Expression<'_>, emitted: String) -> String {
+        fn field_path(e: &crate::parser::Expression<'_>) -> Option<String> {
+            match e {
+                crate::parser::Expression::Identifier { name, .. } => Some(name.clone()),
+                crate::parser::Expression::FieldAccess { object, field, .. } => Some(format!("{}.{field}", field_path(object)?)),
+                _ => None,
+            }
+        }
+        let Some(path) = field_path(expr) else { return emitted };
+        let root = path.split('.').next().unwrap_or(&path);
+        if emitted != path || !self.clone_facts.plain_bindings.contains(root) || !self.binding_emits_owned_value(root) {
+            return emitted;
+        }
+        let copy = self.infer_expression_type(expr).is_none_or(|t| self.is_type_copy(&t) || !self.type_known_clone(&t, 0));
+        let again = self.auto_clone_analysis.as_ref().is_some_and(|a| a.needs_clone(&path, self.current_statement_idx).is_some());
+        if again && !copy { format!("{emitted}.clone()") } else { emitted }
+    }
+
     /// CLONE-USE-AFTER-MOVE (C6): `expr` is a bare plain binding emitted as a move (`emitted` is just
     /// its name) of a known non-Copy owned value that is read again (later in the statement, after
     /// it, or in the next loop iteration; `ir::liveness`): the move copies instead. Everything else
@@ -132,6 +152,9 @@ impl<'ast> CodeGenerator<'ast> {
             if uncloneable {
                 return base.to_string();
             }
+        }
+        if let crate::parser::Expression::FieldAccess { .. } = expr {
+            return self.copy_field_if_read_again(expr, emitted);
         }
         let crate::parser::Expression::Identifier { name, .. } = expr else { return emitted };
         if emitted != *name || self.auto_clone_analysis.is_none() || !self.clone_facts.plain_bindings.contains(name) {

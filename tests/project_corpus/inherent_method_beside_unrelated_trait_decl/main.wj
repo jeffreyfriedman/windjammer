@@ -1,0 +1,10 @@
+// `Counter` has an inherent `bump` that mutates self; an unrelated trait declares a bodyless `bump` that Counter never implements. Expected by hand: 2.
+// expect: 2
+mod meter
+
+fn main() {
+    let mut c = meter::Counter { n: 0 }
+    c.bump()
+    c.bump()
+    println("${c.n}")
+}

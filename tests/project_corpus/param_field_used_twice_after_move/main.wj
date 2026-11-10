@@ -1,0 +1,8 @@
+// A field of a by-value parameter is moved into a new struct and then used again in the returned tuple. Expected by hand: "a" 1 left.
+// expect: a 1
+mod sim
+
+fn main() {
+    let r = sim::advance(sim::Sim { left: 2, addr: "a" })
+    println("${r.0} ${r.1.left}")
+}

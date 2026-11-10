@@ -25,7 +25,7 @@ mod ledger;
 mod render;
 fn main() {
     let entry = Ledger { code: String::from("A1"), name: String::from("Cash"), cents: 250_i64 };
-    println!("{}", render::entry_json(&entry));
+    println!("{}", render::entry_json(entry));
 }
 
 // ==== mod.rs ====
@@ -52,12 +52,12 @@ pub fn entry_body(entry: Ledger, extra: &str) -> String {
 }
 
 #[inline]
-pub fn entry_text(entry: Ledger, extra: &str) -> String {
-    entry_body(entry, extra)
+pub fn entry_json(entry: Ledger) -> String {
+    entry_text(entry, "}")
 }
 
 #[inline]
-pub fn entry_json(entry: &Ledger) -> String {
-    entry_text(entry.clone(), "}")
+pub fn entry_text(entry: Ledger, extra: &str) -> String {
+    entry_body(entry, extra)
 }
 
