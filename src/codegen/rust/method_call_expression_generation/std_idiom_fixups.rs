@@ -36,7 +36,9 @@ impl<'ast> CodeGenerator<'ast> {
         if method == "entry" && args.len() == 1 && args[0].chars().all(|c| c.is_alphanumeric() || c == '_') {
             if let Some((_, key)) = arguments.first() {
                 if matches!(key, Expression::Identifier { .. })
-                    && self.infer_expression_type(key).is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(crate::codegen::rust::collection_detection::peel_type_reference(&t)))
+                    && (self.expression_produces_str_ref(key)
+                        || matches!(key, Expression::Identifier { name, .. } if self.idiom.str_slice_loop_vars.contains(name))
+                        || self.infer_expression_type(key).is_some_and(|t| matches!(&t, Type::Reference(p) if crate::codegen::rust::types::is_windjammer_text_type(p))))
                 {
                     args[0].push_str(".to_string()");
                 }

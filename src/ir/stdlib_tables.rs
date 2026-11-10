@@ -5,7 +5,7 @@
 
 use super::effects::{stdlib_effect_declarations, EffectConstraint};
 use super::taint::{stdlib_sinks, stdlib_taint_sources, TaintConstraint};
-use crate::typing::core_surface::CoreSurface;
+pub use crate::typing::core_surface::CoreSurface;
 
 #[derive(Debug, Clone)]
 pub struct StdlibTables {
