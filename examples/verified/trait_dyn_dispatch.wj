@@ -3,7 +3,7 @@
 // expect: 12
 // expect: 6
 // expect: 12
-trait Shape { fn area(self) -> int }
+trait Shape { fn area(&self) -> int }
 
 struct Sq { s: int }
 struct Rc { w: int, h: int }

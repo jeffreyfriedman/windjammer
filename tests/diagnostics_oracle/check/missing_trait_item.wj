@@ -1,7 +1,6 @@
 // expect: WJ0018
 trait Shape {
-    fn area(self) -> float
-//~@13+4 WARN W0016 trait method `Shape::area` has no body
+    fn area(&self) -> float
 }
 
 struct Dot {}
