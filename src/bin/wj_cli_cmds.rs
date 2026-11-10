@@ -25,10 +25,11 @@ fn run_toolchain(cmd: &Commands) {
     }
     if !matches!(cmd, Commands::Doctor { .. } | Commands::Version { .. } | Commands::InstallDev { .. }) {
         toolchain::stale::warn_if_stale();
+        toolchain::behind::warn_if_behind();
     }
 }
 
-fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
+fn cmd_doctor(json: bool, expect_head: bool, strict: bool) -> Result<()> {
     use windjammer::toolchain::doctor;
     let path = windjammer::toolchain::env::get("PATH").unwrap_or_default();
     if expect_head {
@@ -57,7 +58,7 @@ fn cmd_doctor(json: bool, expect_head: bool) -> Result<()> {
             println!("{note}");
         }
     }
-    if !report.problems.is_empty() {
+    if !report.problems.is_empty() || (strict && !report.warnings.is_empty()) {
         std::process::exit(1);
     }
     Ok(())
@@ -98,7 +99,7 @@ fn toolchain_pre(cmd: &Commands) -> Option<Result<()>> {
             let id = windjammer::toolchain::identity::current();
             Some(if *json { serde_json::to_string_pretty(&id.to_json()).map(|j| println!("{j}")).map_err(Into::into) } else { Ok(println!("{}", id.version_line())) })
         }
-        Commands::Doctor { json, expect_head } => Some(cmd_doctor(*json, *expect_head)),
+        Commands::Doctor { json, expect_head, strict } => Some(cmd_doctor(*json, *expect_head, *strict)),
         Commands::InstallDev { to, from, force, dry_run } => Some(cmd_install_dev(to.clone(), from.clone(), *force, *dry_run)),
         Commands::SelfInstall { dry_run } => Some(windjammer::cli::self_install::execute(*dry_run)),
         _ => None,
@@ -426,7 +427,12 @@ fn cmd_plugin(plugin_args: &[String]) -> Result<()> {
     if plugin_args.is_empty() {
         anyhow::bail!("Plugin name required. Usage: wj <plugin> <args>");
     }
-    let exit_code = windjammer::plugin::execute_plugin(&plugin_args[0], &plugin_args[1..])?;
+    // an unknown subcommand is most often a `wj` older than the one the docs describe: say which build this is
+    let exit_code = windjammer::plugin::execute_plugin(&plugin_args[0], &plugin_args[1..]).map_err(|e| {
+        let build = windjammer::toolchain::behind::current_behind_text()
+            .unwrap_or_else(|| format!("(this is {})", windjammer::toolchain::identity::current().version_line()));
+        e.context(build)
+    })?;
     std::process::exit(exit_code);
 }
 

@@ -734,6 +734,10 @@ pub enum Commands {
         /// Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate)
         #[arg(long)]
         expect_head: bool,
+
+        /// Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout
+        #[arg(long)]
+        strict: bool,
     },
 
     /// Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup
