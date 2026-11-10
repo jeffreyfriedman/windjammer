@@ -571,8 +571,8 @@ tests/windjammer_tests/regression_outer_inner_area_test.wj W0006
 tests/windjammer_tests/regression_strings_split_pipe_delimiter_test.wj W0009
 tests/windjammer_tests/regression_strings_starts_with_literal_test.wj W0009
 tests/windjammer_tests/regression_vec_tuple_string_push_test.wj W0006
-# Corpus files added since the last ratchet pass, the W0016 files (warning by owner decision, see unannotated_diagnostics.txt), the
-# WJ0007 move_prediction fixtures (they exist to be predicted), and examples that call std functions the new WJ0002 check does not know.
+# Corpus files added since the last ratchet pass, the W0016 files (warning by owner decision, see unannotated_diagnostics.txt),
+# and examples that call std functions the new WJ0002 check does not know.
 # New files must not be added here.
 bench/agent-dx/solutions/wj-set2/t103_trait_pricing/main.wj W0016
 bench/agent-dx/solutions/wj-set2/t104_activity_log/main.wj W0005
@@ -612,12 +612,6 @@ tests/fixtures/traits/test_trait_no_mut.wj W0016
 tests/fixtures/traits/test_ui_pattern.wj W0016
 tests/generic_owned_param_test.wj W0004,W0016
 tests/interpreter_corpus/generic_static_dispatch.wj W0008,W0016
-tests/move_prediction/argument_non_clone.wj WJ0007
-tests/move_prediction/let_alias_non_clone.wj WJ0007
-tests/move_prediction/loop_non_clone.wj WJ0007
-tests/move_prediction/loop_if_arm_non_clone.wj WJ0007
-tests/move_prediction/partial_non_clone.wj WJ0007
-tests/move_prediction/receiver_non_clone.wj WJ0007
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/port.wj W0016
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/reader.wj W0007
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/writer.wj WJ0015

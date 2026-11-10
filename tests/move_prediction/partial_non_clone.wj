@@ -1,3 +1,4 @@
+// oracle: check
 // WJ0007: taking the field `chan` out of `inbox` (a channel end cannot be copied), then passing `inbox` whole.
 use std::sync::mpsc
 
@@ -18,5 +19,6 @@ fn main() {
     let pair = mpsc::channel()
     let inbox: Inbox = Inbox { chan: Chan { rx: pair.1 }, seen: 0 }
     let c = inbox.chan
+//~@13+10 ERROR WJ0007 `inbox` is used after `let c = inbox.chan` consumed it
     let again = close(inbox)
 }

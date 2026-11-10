@@ -1,3 +1,4 @@
+// oracle: check
 // WJ0007: passing `inbox` to `drain` gives it away; `inbox` holds a channel end and cannot be copied.
 use std::sync::mpsc
 
@@ -15,5 +16,6 @@ fn main() {
     let pair = mpsc::channel()
     let inbox = Inbox { rx: pair.1, seen: 0 }
     let n = drain(inbox)
+//~@13+5 ERROR WJ0007 `inbox` is used after the call to `drain` consumed it
     println("${n} ${inbox.seen}")
 }
