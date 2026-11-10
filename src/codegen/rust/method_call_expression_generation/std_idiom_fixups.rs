@@ -21,7 +21,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(lowered) = self.mc_lower_text_option_copy(object, method, args, obj_str) {
             return Some(lowered);
         }
-        if let Some(lowered) = self.mc_lower_ref_text_option_unwrap_or(object, method, args, obj_str) {
+        if let Some(lowered) = self.mc_lower_ref_text_option_default(object, method, arguments, args, obj_str) {
             return Some(lowered);
         }
         // `map_err(|_| "literal")` into a `Result<_, string>`: the error is an owned `String`
@@ -33,7 +33,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // `entry(key)` takes the key by value: a text key that is a borrowed slice becomes an owned `String`
-        if method == "entry" && args.len() == 1 && !args[0].ends_with(".to_string()") && !args[0].ends_with(".clone()") && !args[0].starts_with("String::from(") {
+        if method == "entry" && args.len() == 1 && args[0].chars().all(|c| c.is_alphanumeric() || c == '_') {
             if let Some((_, key)) = arguments.first() {
                 if matches!(key, Expression::Identifier { .. })
                     && self.infer_expression_type(key).is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(crate::codegen::rust::collection_detection::peel_type_reference(&t)))
@@ -63,7 +63,6 @@ impl<'ast> CodeGenerator<'ast> {
         if method == "unwrap_or" && args.len() == 1 {
             if let Some((_, Expression::Literal { value: Literal::String(_), .. })) = arguments.first() {
                 let recv_is_str_ref = obj_str.contains(".lines()")
-                    || obj_str.contains(".split(")
                     || obj_str.contains(".split_whitespace()")
                     || self.infer_expression_type(object).is_some_and(|t| {
                         matches!(&t, Type::Option(inner)
@@ -71,21 +70,13 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     || Self::receiver_is_text_iterator_next(self, object);
                 if recv_is_str_ref {
-                    if let Some(stripped) = args[0]
-                        .strip_prefix("String::from(")
-                        .and_then(|r| r.strip_suffix(')'))
-                    {
-                        args[0] = stripped.to_string();
+                    // the default is the bare literal, not an owned copy of it
+                    if let (Some(open), Some(close)) = (args[0].find('"'), args[0].rfind('"')) {
+                        args[0] = args[0][open..=close].to_string();
                     }
                 }
             }
-        }
-        if method == "unwrap_or" && args.len() == 1 {
-            if let Some((
-                _,
-                Expression::Unary { op: UnaryOp::Ref, operand, .. },
-            )) = arguments.first()
-            {
+            if let Some((_, Expression::Unary { op: UnaryOp::Ref, operand, .. })) = arguments.first() {
                 if matches!(&**operand, Expression::Literal { .. }) && !args[0].starts_with('&') {
                     args[0] = format!("&{}", args[0]);
                 }

@@ -245,6 +245,10 @@ statement = "Show verbose error output (includes all notes and suggestions)"
 pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
+id = "wj build --unchecked-arithmetic"
+statement = "Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds and the interpreter); same as `[build] overflow_checks = false` in wj.toml"
+
+[[promise]]
 id = "wj cache"
 statement = "Manage the shared Cargo target cache (outside application repos)"
 
