@@ -35,7 +35,7 @@ pub struct Sim {
 pub fn advance(sim: Sim) -> (String, Sim) {
     if sim.left > 0_u32 {
         let next = Sim { left: sim.left - 1_u32, addr: sim.addr.clone() };
-        return (sim.addr.clone(), next);
+        return (sim.addr, next);
     }
     (sim.addr, Sim { left: 0_u32, addr: String::new() })
 }
