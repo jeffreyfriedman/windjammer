@@ -400,3 +400,9 @@ fn tuple_literals_in_an_annotated_list_are_owned_text() {
 fn tuple_literal_in_a_match_arm_takes_the_sibling_arms_text() {
     typechecks("pub fn parsed(ok: bool) -> Result<(int, string), string> {\n    if ok {\n        return Ok((7, \"seven\"))\n    }\n    Err(\"no\")\n}\n\npub fn code(ok: bool) -> int {\n    let pair = match parsed(ok) {\n        Ok(p) => p,\n        Err(_) => (0, \"\"),\n    }\n    pair.0\n}\n\nfn main() {\n    println(\"${code(true)}\")\n}\n");
 }
+
+/// `assert_eq(first, wanted)` with a borrowed `&String` beside an owned `String` compares by value.
+#[test]
+fn assert_eq_of_a_borrowed_and_an_owned_string_compiles() {
+    typechecks("fn check(names: Vec<string>, wanted: string) {\n    let first = names.get(0).unwrap()\n    assert_eq(first, wanted)\n    let top = names.first().unwrap()\n    assert_ne(top, \"x\".to_string())\n}\n\nfn main() {\n    let mut names: Vec<string> = Vec::new()\n    names.push(\"bob\".to_string())\n    let wanted = \"bob\".to_string()\n    let first = names.get(0).unwrap()\n    assert_eq(first, wanted)\n    check(names, wanted)\n}\n");
+}
