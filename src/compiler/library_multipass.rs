@@ -841,7 +841,7 @@ pub(crate) fn build_library_multipass(
                 let mut meta_registry = SignatureRegistry::empty();
                 let mut meta_copy = Vec::new();
                 let mut meta_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
-                crate::metadata::merge_wj_meta_signatures_from_dir_inner_pub(
+                crate::metadata::merge_wj_meta_signatures_from_file_pub(
                     &meta_path,
                     &mut meta_registry,
                     &mut meta_copy,
