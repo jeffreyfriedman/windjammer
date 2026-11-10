@@ -172,6 +172,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj cache warm` | Build a tiny program once so the shared runtime cache is warm | tested |
 | `wj doctor` | Find every wj on PATH, flag stale or conflicting builds and a missing shared cache, and print the fixes (exit 1 on problems) | tested |
 | `wj doctor --expect-head` | Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate) | tested |
+| `wj doctor --strict` | Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout | tested |
 | `wj doctor --json` | Machine-readable output | tested |
 | `wj install-dev` | Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup | tested |
 | `wj install-dev --dry-run` | Print what would happen without writing anything | tested |

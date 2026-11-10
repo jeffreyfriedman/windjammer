@@ -379,7 +379,11 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             if let Some(ty) = self.infer_match_arm_body_type(scrutinee, arm) {
-                return Some(ty);
+                // A scrutinee lowered to `.copied()` binds owned values: the match yields the pointee.
+                return Some(match ty {
+                    Type::Reference(p) if self.match_scrutinee_option_yields_copy(scrutinee) => *p,
+                    other => other,
+                });
             }
         }
         None

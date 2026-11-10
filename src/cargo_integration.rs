@@ -587,7 +587,7 @@ pub fn create_cargo_toml_with_deps(
     };
 
     let wj_config = crate::cargo_toml::find_wj_config(source_dir);
-    let release_profile = wj_config.profile.release.to_cargo_toml_section();
+    let release_profile = wj_config.release_profile_section(false);
 
     let cargo_toml = format!(
         r#"[package]

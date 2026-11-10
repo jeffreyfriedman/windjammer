@@ -1,0 +1,180 @@
+//! Commit-based staleness: is this `wj` built from an older commit than the compiler checkout it runs in?
+//!
+//! The age-based check (`stale.rs`) waits 30 days; a `wj` a few days behind its checkout already lacks
+//! subcommands and accepted inputs (`wj eval`, `wj run -`), and the failure it gives ("plugin not found", "no
+//! such file") hides the cause. This check compares the binary's build commit with the checkout's HEAD and says so
+//! in one line.
+//!
+//! Cheap and git-free: HEAD, the ref it names (loose or packed) and, for "older", the HEAD commit's committer
+//! date read from its loose object (zlib). No checkout, no git, or a packed HEAD commit: nothing is claimed that
+//! cannot be read. `WJ_CHECKOUT_HEAD=<sha>[@<unix seconds>]` stands in for the checkout's HEAD (tests).
+
+use super::identity::Identity;
+use super::timefmt::iso_datetime;
+use std::path::{Path, PathBuf};
+
+/// The checkout's HEAD commit and, when readable, its committer date.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Head {
+    pub sha: String,
+    pub commit_ts: Option<i64>,
+}
+
+/// HEAD of the checkout at `checkout` (or the `WJ_CHECKOUT_HEAD` override).
+pub fn checkout_head(checkout: &Path) -> Option<Head> {
+    if let Some(v) = super::env::get("WJ_CHECKOUT_HEAD").filter(|v| !v.is_empty()) {
+        let (sha, ts) = match v.split_once('@') {
+            Some((s, t)) => (s.to_string(), t.parse().ok()),
+            None => (v, None),
+        };
+        return Some(Head { sha, commit_ts: ts });
+    }
+    let git = git_dir(checkout)?;
+    let common = common_dir(&git);
+    let head = std::fs::read_to_string(git.join("HEAD")).ok()?;
+    let head = head.trim();
+    let sha = match head.strip_prefix("ref: ") {
+        Some(r) => read_ref(&git, &common, r)?,
+        None => head.to_string(),
+    };
+    let commit_ts = commit_ts(&common, &sha);
+    Some(Head { sha, commit_ts })
+}
+
+fn git_dir(checkout: &Path) -> Option<PathBuf> {
+    let dot = checkout.join(".git");
+    if dot.is_dir() {
+        return Some(dot);
+    }
+    let text = std::fs::read_to_string(&dot).ok()?;
+    let p = PathBuf::from(text.trim().strip_prefix("gitdir:")?.trim());
+    Some(if p.is_absolute() { p } else { checkout.join(p) })
+}
+
+/// A worktree's git dir keeps HEAD; refs and objects live in the common dir (`commondir`).
+fn common_dir(git: &Path) -> PathBuf {
+    match std::fs::read_to_string(git.join("commondir")) {
+        Ok(rel) => {
+            let p = PathBuf::from(rel.trim());
+            if p.is_absolute() { p } else { git.join(p) }
+        }
+        Err(_) => git.to_path_buf(),
+    }
+}
+
+fn read_ref(git: &Path, common: &Path, name: &str) -> Option<String> {
+    for dir in [git, common] {
+        if let Ok(s) = std::fs::read_to_string(dir.join(name)) {
+            return Some(s.trim().to_string());
+        }
+    }
+    let packed = std::fs::read_to_string(common.join("packed-refs")).ok()?;
+    packed.lines().find_map(|l| {
+        let (sha, r) = l.split_once(' ')?;
+        (r == name).then(|| sha.to_string())
+    })
+}
+
+/// Committer date of a loose commit object (`None` when packed or unreadable).
+fn commit_ts(common: &Path, sha: &str) -> Option<i64> {
+    use std::io::Read;
+    if sha.len() < 3 {
+        return None;
+    }
+    let raw = std::fs::read(common.join("objects").join(&sha[..2]).join(&sha[2..])).ok()?;
+    let mut text = String::new();
+    flate2::read::ZlibDecoder::new(&raw[..]).read_to_string(&mut text).ok()?;
+    let line = text.lines().find(|l| l.contains("committer "))?;
+    let mut words = line.rsplit(' ');
+    let _tz = words.next()?;
+    words.next()?.parse().ok()
+}
+
+/// One line when this binary is behind `head`: built from another commit that is older than HEAD (or another
+/// commit whose age cannot be read). `None` when the commits are the same, or this binary is the newer one.
+pub fn behind_text(id: &Identity, head: &Head) -> Option<String> {
+    let commit = id.commit.as_deref()?;
+    if head.sha.starts_with(commit) || commit.starts_with(head.sha.as_str()) {
+        return None;
+    }
+    let older = match (id.commit_ts, head.commit_ts) {
+        (Some(mine), Some(theirs)) => mine < theirs,
+        _ => true,
+    };
+    if !older {
+        return None;
+    }
+    let built = id.build_ts.map(iso_datetime).unwrap_or_else(|| "unknown".into());
+    let short = |s: &str| s[..s.len().min(12)].to_string();
+    let relation = if head.commit_ts.is_some() { "is older than" } else { "is not built from" };
+    Some(format!(
+        "wj: this wj (commit {}, built {built}) {relation} this checkout (commit {}); run `wj install-dev --from <fresh build>` (for example `cargo build --release --bin wj && target/release/wj install-dev`)",
+        short(commit),
+        short(&head.sha)
+    ))
+}
+
+/// The checkout enclosing the current directory (or this executable), and the line for it, if behind.
+pub fn current_behind_text() -> Option<String> {
+    let checkout = std::env::current_dir()
+        .ok()
+        .and_then(|d| super::stale::enclosing_checkout(&d))
+        .or_else(|| std::env::current_exe().ok().and_then(|e| super::stale::enclosing_checkout(&e)))?;
+    behind_text(&super::identity::current(), &checkout_head(&checkout)?)
+}
+
+/// Print the line to stderr when this `wj` runs inside a compiler checkout whose HEAD is newer.
+pub fn warn_if_behind() {
+    if let Some(line) = current_behind_text() {
+        eprintln!("{line}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn id(commit: &str, ts: i64) -> Identity {
+        Identity {
+            version: "0.50.0".into(),
+            commit: Some(commit.into()),
+            commit_ts: Some(ts),
+            dirty: false,
+            profile: Some("release".into()),
+            build_ts: Some(ts),
+        }
+    }
+
+    #[test]
+    fn an_older_commit_is_reported_and_the_same_or_a_newer_one_is_not() {
+        let head = Head { sha: "bbbbbbbbbbbbbbbb".into(), commit_ts: Some(2_000) };
+        let line = behind_text(&id("aaaaaaaaaaaaaaaa", 1_000), &head).expect("older binary");
+        assert!(line.contains("commit aaaaaaaaaaaa") && line.contains("is older than this checkout (commit bbbbbbbbbbbb)"), "{line}");
+        assert!(line.contains("wj install-dev --from"), "{line}");
+        // mutation check: matching commits never warn, even when the dates say otherwise
+        assert_eq!(behind_text(&id("bbbbbbbbbbbbbbbb", 1_000), &head), None);
+        assert_eq!(behind_text(&id("bbbbbbbbbbbb", 1_000), &head), None, "a short commit prefix matches");
+        // a binary built from a newer commit than the checkout (a worktree build run in an older checkout)
+        assert_eq!(behind_text(&id("cccccccccccccccc", 3_000), &head), None);
+        // HEAD's date unreadable (packed): another commit is reported without claiming "older"
+        let packed = Head { sha: "bbbb".into(), commit_ts: None };
+        assert!(behind_text(&id("aaaa", 1_000), &packed).unwrap().contains("is not built from this checkout"));
+    }
+
+    #[test]
+    fn head_is_read_from_a_worktree_checkout_without_git() {
+        let dir = std::env::temp_dir().join(format!("wj-behind-{}", std::process::id()));
+        let common = dir.join("main/.git");
+        let wt = common.join("worktrees/w");
+        std::fs::create_dir_all(wt.clone()).unwrap();
+        std::fs::create_dir_all(common.join("refs/heads")).unwrap();
+        std::fs::create_dir_all(dir.join("w")).unwrap();
+        std::fs::write(dir.join("w/.git"), format!("gitdir: {}\n", wt.display())).unwrap();
+        std::fs::write(wt.join("HEAD"), "ref: refs/heads/topic\n").unwrap();
+        std::fs::write(wt.join("commondir"), "../..\n").unwrap();
+        std::fs::write(common.join("packed-refs"), "# pack-refs\n1234567890abcdef refs/heads/topic\n").unwrap();
+        let head = checkout_head(&dir.join("w"));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(head, Some(Head { sha: "1234567890abcdef".into(), commit_ts: None }));
+    }
+}

@@ -1,0 +1,12 @@
+use std::thread
+
+fn work() -> int {
+    21
+}
+
+fn main() {
+    let a = thread::spawn(move || work())
+    let b = thread::spawn(move || work())
+    let total = a.join().unwrap_or(0) + b.join().unwrap_or(0)
+    println("total ${total}")
+}

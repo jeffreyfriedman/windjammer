@@ -9,10 +9,14 @@ For every program that `wj run --interpret` accepts, its standard output, its ex
 its panic equal those of the same program built and run by the compiled backend, except for the divergences listed in
 `tests/drift_corpus/known_divergences.txt`.
 
-Three things follow.
+These things follow.
 
 - **A refusal is not a divergence.** The interpreter refuses (exits before running) what `wj check` rejects, and it
   also refuses ownership errors that rustc would report (ADR-0030, WJ0007). Refusing early is the promise working.
+- **A strictness warning is not a divergence either.** Where the compiler generates Rust that rustc would not accept
+  for a correct program (integer widths, ADR-0033, WJ0003), `wj check` reports an error and `wj run --interpret` warns on
+  stderr and runs the program: its output and exit status are right, only `wj build` would fail. The warning never
+  touches stdout or the exit status.
 - **The ledger is the only escape hatch and it only shrinks.** A divergence that is not in the ledger fails the drift
   gate; a ledgered one that is fixed fails the gate until its line is deleted. The ledger has a ceiling
   (`tests/drift_corpus/ledger_ceiling.txt`) that `tests/drift_contract_test.rs` enforces in the default test run, so

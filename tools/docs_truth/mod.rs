@@ -9,6 +9,8 @@
 pub mod book;
 pub mod book_features;
 pub mod book_projects;
+pub mod book_regen;
+pub mod book_showcase;
 pub mod claims;
 pub mod config;
 pub mod ebnf;

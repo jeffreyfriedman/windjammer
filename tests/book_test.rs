@@ -47,8 +47,9 @@ fn report(out: &std::process::Output, what: &str) -> String {
     let log = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("book-{what}.log"));
     let _ = std::fs::write(&log, &text);
     eprintln!("{text}");
+    let hint = if text.contains("not what the compiler generates") { "\nThe compiler's output changed. Refresh every `rust,generated` fence with `wj-docs book-regen` (cargo run --release --bin wj-docs -- book-regen --wj <path to wj>) and review the diff." } else { "" };
     if text.contains("book samples:") {
-        format!("{text}\n(full output: {})", log.display())
+        format!("{text}{hint}\n(full output: {})", log.display())
     } else {
         format!("THE RUNNER DID NOT FINISH (status {:?}, signal {:?}); output so far, full copy in {}:\n{text}", out.status.code(), out.status.signal(), log.display())
     }
@@ -307,7 +308,7 @@ fn known_gap_generic_copy_out_of_list_fails_compiled() {
 fn known_gap_idioms_fail_compiled() {
     let _g = compiled_lock();
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_filter_collect.wj", "WJ0029"), ("iter_find_closure.wj", "WJ0003"), ("hashmap_entry_literal_keys.wj", "WJ0003"), ("map_err_literal.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("optional_chain.wj", "WJ0099"), ("map_get_string_key.wj", "WJ0003"), ("async_await_compiled.wj", "WJ0099"), ("pure_attribute_compiled.wj", "WJ0099")] {
+    for (file, code) in [("iter_find_closure.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("map_get_string_key.wj", "WJ0003"), ("tuple_string_match.wj", "WJ0003"), ("join_unwrap_or_literal.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
@@ -448,6 +449,18 @@ fn uncovered_features_are_a_shrink_only_ratchet() {
 }
 
 #[test]
+fn the_side_by_side_prose_claims_hold_for_the_computed_line_counts() {
+    // docs/book/src/showcase/side-by-side.md says the Windjammer programs are shorter than the Go ones and no longer than the
+    // Rust the compiler generates for them. The numbers come from the page itself, so the sentence cannot go stale.
+    let rows = docs_truth::book_showcase::loc_rows(&real(), "showcase/side-by-side.md");
+    assert!(rows.len() >= 4, "the page lost its programs: {rows:?}");
+    for (task, wj, rs, go, _ts) in rows {
+        assert!(wj < go, "{task}: Windjammer ({wj}) is no longer shorter than Go ({go}); fix the prose on the page");
+        assert!(wj <= rs, "{task}: Windjammer ({wj}) is now longer than the generated Rust ({rs}); fix the prose on the page");
+    }
+}
+
+#[test]
 fn the_real_registry_lists_every_spec_family() {
     let ctx = real();
     assert!(!docs_truth::book_features::load(&ctx).is_empty(), "docs/book/features.toml is missing");
@@ -461,4 +474,66 @@ fn eval_prints_an_interpolated_string_literal() {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["eval", "\"${6 * 7} ok\""]).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "42 ok", "{text}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Companion fences: `rust,generated`, `go,run`, `ts,run`
+// ---------------------------------------------------------------------------------------------
+
+const HI: &str = "// expect: hi\nfn main() {\n    println(\"hi\")\n}\n";
+
+#[test]
+fn rust_shown_must_be_what_the_compiler_generates() {
+    let s = Scratch::new();
+    s.page(&format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"hi\");\n}}\n```\n"));
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(ok, "a correct excerpt passes: {out}");
+    s.page(&format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"not what is generated\");\n}}\n```\n"));
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(!ok && out.contains("the Rust shown is not what the compiler generates") && out.contains("[page_L1]"), "{out}");
+}
+
+#[test]
+fn go_and_typescript_versions_must_print_the_same_output() {
+    let s = Scratch::new();
+    let go_ok = "```go,run\npackage main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hi\")\n}\n```\n";
+    let ts_ok = "```ts,run\nconsole.log(\"hi\");\n```\n";
+    s.page(&format!("```wj\n{HI}```\n\n{go_ok}\n{ts_ok}"));
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(ok, "{out}");
+    s.page(&format!("```wj\n{HI}```\n\n{}\n{ts_ok}", go_ok.replace("\"hi\"", "\"bye\"")));
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(!ok && out.contains("the Go version prints different output"), "{out}");
+    s.page(&format!("```wj\n{HI}```\n\n{go_ok}\n{}", ts_ok.replace("\"hi\"", "\"bye\"")));
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(!ok && out.contains("the TypeScript version prints different output"), "{out}");
+}
+
+#[test]
+fn a_companion_fence_needs_a_program_before_it() {
+    let s = Scratch::new();
+    s.page("```go,run\npackage main\n\nfunc main() {}\n```\n");
+    assert!(s.fails("must follow the Windjammer program"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn book_regen_rewrites_a_stale_generated_fence_and_refuses_a_broken_program() {
+    let s = Scratch::new();
+    let stale = format!("```wj\n{HI}```\n\n```rust,generated\nfn main() {{\n    println!(\"stale\");\n}}\n```\n");
+    s.page(&stale);
+    let (ok, _) = run_samples(&s.ctx(), false);
+    assert!(!ok, "a stale excerpt fails before regeneration");
+    let wj = std::path::Path::new(env!("CARGO_BIN_EXE_wj"));
+    let report = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap();
+    assert!(report.contains("-    println!(\"stale\");") && report.contains("+    println!(\"hi\");"), "{report}");
+    let (ok, out) = run_samples(&s.ctx(), false);
+    assert!(ok, "after regeneration the page passes: {out}");
+    assert_eq!(docs_truth::book_regen::regen(&s.ctx(), wj).unwrap(), "every rust,generated fence already matches the compiler\n");
+    // a program that does not build: nothing is rewritten and the error says so
+    let broken = "```wj\nfn main( {\n```\n\n```rust,generated\nfn main() {}\n```\n";
+    s.page(broken);
+    let before = std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap();
+    let err = docs_truth::book_regen::regen(&s.ctx(), wj).unwrap_err();
+    assert!(err.contains("does not build, nothing was rewritten"), "{err}");
+    assert_eq!(std::fs::read_to_string(s.dir.path().join("docs/book/src/page.md")).unwrap(), before);
 }

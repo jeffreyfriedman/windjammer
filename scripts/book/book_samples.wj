@@ -78,6 +78,55 @@ fn planted_extra(name: string) -> string {
     ""
 }
 
+// Lines trimmed, blanks dropped: how generated code is compared with the excerpt a page shows.
+fn norm(text: string) -> string {
+    let mut out: Vec<string> = Vec::new()
+    for l in strings.split(text, "\n") {
+        let t = strings.trim(l)
+        if t != "" {
+            out.push(t)
+        }
+    }
+    out.join("\n")
+}
+
+// Companion fences of a program (`go,run`, `ts,run`, `rust,generated`): "" when they agree, else the failure.
+fn companions(dir: string, scratch: string, wj: string, name: string, at: string, want: Vec<string>) -> Vec<string> {
+    let mut bad: Vec<string> = Vec::new()
+    let work = scratch + "/companions"
+    sh("mkdir -p " + quote(work))
+    let go = dir + "/" + name + ".go"
+    if fs::exists(go) {
+        let r = sh("cd " + quote(work) + " && go run " + quote(go))
+        if r.status != 0 {
+            bad.push("${at} [${name}]: the Go version exited ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
+        } else if lines_of(r.stdout) != want {
+            bad.push("${at} [${name}]: the Go version prints different output\n  windjammer: ${want:?}\n  go:         ${lines_of(r.stdout):?}")
+        }
+    }
+    let ts = dir + "/" + name + ".ts"
+    if fs::exists(ts) {
+        let r = sh("cd " + quote(work) + " && node --experimental-strip-types " + quote(ts))
+        if r.status != 0 {
+            bad.push("${at} [${name}]: the TypeScript version exited ${r.status}\n${tail(r.stdout + r.stderr, 12)}")
+        } else if lines_of(r.stdout) != want {
+            bad.push("${at} [${name}]: the TypeScript version prints different output\n  windjammer: ${want:?}\n  typescript: ${lines_of(r.stdout):?}")
+        }
+    }
+    let rs = dir + "/" + name + ".rs.expect"
+    if fs::exists(rs) {
+        let out = work + "/" + name + "_gen"
+        let r = sh(quote(wj) + " build --no-cargo " + quote(dir + "/" + name + ".wj") + " -o " + quote(out))
+        let generated = fs::read_to_string(out + "/" + name + ".rs").unwrap_or("")
+        if r.status != 0 || generated == "" {
+            bad.push("${at} [${name}]: wj build --no-cargo produced no Rust (exit ${r.status})\n${tail(r.stdout + r.stderr, 12)}")
+        } else if !norm(generated).contains(norm(fs::read_to_string(rs).unwrap_or(""))) {
+            bad.push("${at} [${name}]: the Rust shown is not what the compiler generates (refresh the fence: wj-docs book-regen)\n  shown:\n${fs::read_to_string(rs).unwrap_or("")}\n  generated:\n${tail(generated, 60)}")
+        }
+    }
+    bad
+}
+
 fn main() {
     let args: Vec<string> = env::args().collect()
     if args.len() < 4 {
@@ -153,6 +202,9 @@ fn main() {
         }
         if ok {
             passed += 1
+            for b in companions(dir, scratch, wj, name, at, lines_of(r.stdout)) {
+                failures.push(b)
+            }
             if !fs::exists(dir + "/" + name + ".interp") {
                 programs.push(name)
                 interpreted_out.push(r.stdout)

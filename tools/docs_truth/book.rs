@@ -48,6 +48,29 @@ pub struct Sample {
     /// Runs interpreted only (`wj,interpreter_only` with an `<!-- interpreter-only: why -->` line above): the feature has no
     /// compiled form yet. Counted; `[book] max_interpreter_only` may only shrink.
     pub interp_only: bool,
+    /// Fences right after the program that must agree with it: `go,run` / `ts,run` print the same output (executed by the
+    /// runner), `rust,generated` is a piece of the Rust the compiler generates for the program (compared by the runner).
+    pub companions: Vec<Companion>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Companion {
+    pub kind: &'static str,
+    pub line: usize,
+    pub text: String,
+}
+
+/// `go,run`, `ts,run` or `rust,generated`: the kind of companion fence, if the info string is one.
+pub fn companion_kind(info: &str) -> Option<&'static str> {
+    let mut parts = info.split([',', ' ']).filter(|p| !p.is_empty());
+    let lang = parts.next()?;
+    let rest: Vec<&str> = parts.collect();
+    match lang {
+        "go" if rest.contains(&"run") => Some("go"),
+        "ts" if rest.contains(&"run") => Some("ts"),
+        "rust" if rest.contains(&"generated") => Some("rs"),
+        _ => None,
+    }
 }
 
 pub struct Inventory {
@@ -55,6 +78,8 @@ pub struct Inventory {
     pub ignored: Vec<(String, usize)>,
     /// `interpreter_only` fences lacking their reason comment.
     pub unexplained: Vec<(String, usize)>,
+    /// Companion fences with no program before them in the page.
+    pub orphans: Vec<(String, usize)>,
 }
 
 fn is_test(info: &str) -> bool {
@@ -81,10 +106,17 @@ fn has_marker(text: &str, fence_line: usize, marker: &str) -> bool {
 }
 
 pub fn inventory(ctx: &Ctx) -> Inventory {
-    let mut inv = Inventory { samples: vec![], ignored: vec![], unexplained: vec![] };
+    let mut inv = Inventory { samples: vec![], ignored: vec![], unexplained: vec![], orphans: vec![] };
     for (file, text) in pages(ctx) {
         for f in md::fences(&text) {
             let a = parse_info(&f.info);
+            if let Some(kind) = companion_kind(&f.info) {
+                match inv.samples.last_mut().filter(|s| s.file == file) {
+                    Some(s) => s.companions.push(Companion { kind, line: f.line, text: f.body.clone() }),
+                    None => inv.orphans.push((file.clone(), f.line)),
+                }
+                continue;
+            }
             if !a.wj {
                 continue;
             }
@@ -101,7 +133,7 @@ pub fn inventory(ctx: &Ctx) -> Inventory {
             }
             let code = unhide(&f.body);
             let stem = file.trim_start_matches(&format!("{SRC}/")).trim_end_matches(".md").replace('/', "_");
-            inv.samples.push(Sample { id: format!("{stem}_L{}", f.line), file: file.clone(), line: f.line, expect: expects(&code), test: is_test(&f.info), interp_only, code });
+            inv.samples.push(Sample { id: format!("{stem}_L{}", f.line), file: file.clone(), line: f.line, expect: expects(&code), test: is_test(&f.info), interp_only, companions: vec![], code });
         }
     }
     inv
@@ -120,6 +152,10 @@ pub fn extract(ctx: &Ctx, dir: &std::path::Path) -> std::io::Result<usize> {
         }
         if s.interp_only {
             std::fs::write(dir.join(format!("{name}.interp")), "")?;
+        }
+        for c in &s.companions {
+            let ext = if c.kind == "rs" { "rs.expect" } else { c.kind };
+            std::fs::write(dir.join(format!("{name}.{ext}")), &c.text)?;
         }
         index.push_str(&format!("{name}\t{}:{}\n", s.file, s.line));
     }
@@ -330,6 +366,9 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let inv = inventory(ctx);
     out.extend(sample_shape(&inv));
     out.extend(super::book_features::check(ctx, cfg));
+    for (file, line) in &inv.orphans {
+        out.push(Finding::fail("book", file, *line, "a `go,run`, `ts,run` or `rust,generated` fence must follow the Windjammer program it belongs to"));
+    }
     for (file, line) in &inv.unexplained {
         out.push(Finding::fail("book", file, *line, "`interpreter_only` fences need a reason: put `<!-- interpreter-only: why -->` on the line above"));
     }

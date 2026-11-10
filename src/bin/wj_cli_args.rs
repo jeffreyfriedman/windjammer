@@ -39,6 +39,11 @@ pub enum Commands {
         #[arg(short, long)]
         release: bool,
 
+        /// Let integer arithmetic wrap on overflow in release builds (default: it panics, as in debug builds
+        /// and the interpreter). Same as `[build] overflow_checks = false` in wj.toml.
+        #[arg(long)]
+        unchecked_arithmetic: bool,
+
         /// Target platform (rust, javascript, wasm)
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
@@ -734,6 +739,10 @@ pub enum Commands {
         /// Only check that the wj PATH resolves first was built from HEAD of the enclosing compiler checkout (merge gate)
         #[arg(long)]
         expect_head: bool,
+
+        /// Also fail (exit 1) on warnings, such as a wj built from an older commit than the enclosing checkout
+        #[arg(long)]
+        strict: bool,
     },
 
     /// Atomically install this wj (or --from another build) to ~/.cargo/bin/wj, keeping a timestamped backup

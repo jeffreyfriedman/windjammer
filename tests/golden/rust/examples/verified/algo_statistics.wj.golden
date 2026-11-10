@@ -6,7 +6,7 @@ fn main() {
     let var = data.iter().map(move |x| (*x - mean) * (*x - mean)).sum::<f64>() / n;
     println!("mean={:.1} stddev={:.1}", mean, var.sqrt());
     let mut sorted = data;
-    sorted.sort_by(move |a, b| a.partial_cmp(&b).unwrap_or(Ordering::Equal));
+    sorted.sort_by(move |a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
     let mid = sorted.len() / 2_usize;
     let median = (sorted[mid - 1] + sorted[mid]) / 2.0_f64;
     println!("median={:.1}", median);

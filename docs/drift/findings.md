@@ -30,6 +30,12 @@ unannotated literal in positions where the surrounding type is not yet known, an
 Suggested fix direction: literals take the type of the expected/unified type, defaulting to the language's `int`
 (`i64`) rather than Rust's `i32`, at every site that today leaves the literal unconstrained.
 
+Until then `wj check` reports the shapes whose widths are certain from the Rust the build emits (WJ0003, ADR-0033),
+and an interpreted run warns about them before the program's output: `let_literal_captured_by_closure`,
+`literal_in_option_field_arm`, `shadow_match_binding_literal`, `shadowed_option_literal_arms`,
+`tests/conformance_programs/62_vec_alias_semantics.wj` and three value-position programs of `tests/engine_parity`.
+Their ledger lines stay: the interpreter still runs them, and the backend defect is still there.
+
 ## B. Other compiled-backend findings
 
 | Repro | Finding |

@@ -272,7 +272,8 @@ fn analysis_phase(p: &Parsed, tables: std::sync::Arc<StdlibTables>) -> Vec<Diagn
         ),
     }
     // uses after a move rustc would reject, read from the generated Rust (ADR-0030); only for a file
-    // that is otherwise clean, so a broken file does not report moves on top of its errors
+    // that is otherwise clean, so a broken file does not report moves on top of its errors. (Integer widths are
+    // predicted by the driver from the Rust `wj build` emits: `cli::widths_gate`, ADR-0033.)
     if !out.iter().any(|d| d.is_error()) {
         out.extend(super::moves::predict(&p.program, &p.text, &p.file));
     }

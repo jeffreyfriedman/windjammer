@@ -12,7 +12,7 @@ field at its zero value: `0`, `0.0`, `false`, an empty `string` or list), so a g
 
 ## Attribute syntax
 
-**SPEC-ATTR-001** An attribute `@name` or `@name(args)` precedes an item (function, struct, enum, impl, trait). Several may stack. Unknown attributes are retained for tooling and ignored by the compiler core.
+**SPEC-ATTR-001** An attribute `@name` or `@name(args)` precedes an item (function, struct, enum, impl, trait). Several may stack. Unknown attributes are retained for tooling and ignored by the compiler core. The Rust backend passes them through unchanged, which is how derive helpers and proc-macro attributes from a dependency work; an attribute that no crate in scope defines is therefore rejected by `rustc` in a compiled build (the interpreter ignores it).
 
 <!-- example: tests/spec/attributes/SPEC-ATTR-001.wj -->
 ```windjammer

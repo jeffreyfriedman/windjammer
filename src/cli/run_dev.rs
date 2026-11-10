@@ -101,7 +101,14 @@ fn execute_path(opts: &RunOptions) -> i32 {
             interp.durable_sites = crate::check::durable_sites::discover(&target.entry).unwrap_or_default();
             let eo = runner::EntryOptions { fallback: auto, host, crates, hot: opts.hot, run: interp };
             match runner::run_entry(&target.entry, opts.args.clone(), eo) {
-                RunOutcome::Exited(c) => c,
+                RunOutcome::Exited(c) => {
+                    // the compiled build of exactly this content already failed: say so after the program's
+                    // output (stderr; stdout stays the program's), ADR-0033
+                    if let Some(note) = crate::cli::verdict::lookup(&target.entry).as_ref().and_then(crate::cli::verdict::footer) {
+                        eprintln!("{note}");
+                    }
+                    c
+                }
                 RunOutcome::NeedsCompiled(e) => {
                     eprintln!("{}", fallback_notice(&e));
                     run_compiled(&target, &opts.args, &opts.target, false)

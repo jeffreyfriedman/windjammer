@@ -1,7 +1,0 @@
-fn parse(text: string) -> Result<int, string> {
-    text.parse::<int>().map_err(|_| "bad number")
-}
-
-fn main() {
-    println("${parse("x"):?}")
-}
