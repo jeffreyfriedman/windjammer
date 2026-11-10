@@ -1,3 +1,4 @@
+// oracle: check
 // A struct holding a trait object has no `Clone`: the compiler cannot copy it where it is read again, so
 // the second `take(h)` is a use after move (WJ0007 before an interpreted run, E0382 when built).
 trait Shape {
