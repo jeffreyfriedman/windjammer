@@ -60,6 +60,8 @@ pub fn region(ctx: &Ctx, name: &str, args: &BTreeMap<String, String>) -> Result<
     match name {
         "cli_commands" => Ok(gen_cli::command_table(&ctx.cli)),
         "targets_summary" => Ok(gen_targets::summary(ctx)),
+        "showcase_loc" => super::book_showcase::loc_table(ctx, args.get("page").ok_or("showcase_loc needs page=")?),
+        "file_bytes" => super::book_showcase::file_bytes(ctx, args.get("path").ok_or("file_bytes needs path=")?),
         "book_stats" => Ok(super::book::stats_table(ctx)),
         "adr_index" => Ok(gen_meta::adr_index(ctx)),
         "vscode_package" => Ok(gen_meta::vscode_package(ctx)),

@@ -25,6 +25,8 @@ pub fn computed(ctx: &Ctx) -> BTreeMap<String, u64> {
     m.insert("interpreter.features_supported".into(), gen_interp::count(windjammer::interpreter::features::Status::Supported));
     m.insert("interpreter.features_unsupported".into(), gen_interp::count(windjammer::interpreter::features::Status::Unsupported));
     m.insert("stdlib.files".into(), std_files as u64);
+    m.insert("drift.corpus_cases".into(), ctx.read("tests/drift_corpus/compiled_baseline.tsv").lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#')).count() as u64);
+    m.insert("spec.example_files".into(), tests.iter().filter(|f| f.starts_with("spec/") && f.ends_with(".wj")).count() as u64);
     if super::book::active(ctx) {
         let c = super::book::counts(ctx);
         m.insert("book.pages".into(), c.pages as u64);
