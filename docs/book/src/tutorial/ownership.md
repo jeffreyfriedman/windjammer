@@ -46,6 +46,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBSb2FkIHRyaXA6IEFmcmljYSwgSGV5IEp1ZGUKLy8gZXhwZWN0OiAyIHNvbmdzCnN0cnVjdCBQbGF5bGlzdCB7CiAgICBuYW1lOiBzdHJpbmcsCiAgICBzb25nczogVmVjPHN0cmluZz4sCn0KCmZuIGFkZF9zb25nKGxpc3Q6IFBsYXlsaXN0LCBzb25nOiBzdHJpbmcpIHsKICAgIGxpc3Quc29uZ3MucHVzaChzb25nKQp9CgpmbiBjb3VudChsaXN0OiBQbGF5bGlzdCkgLT4gaW50IHsKICAgIGxpc3Quc29uZ3MubGVuKCkKfQoKZm4gZGVzY3JpYmUobGlzdDogUGxheWxpc3QpIC0-IHN0cmluZyB7CiAgICAiJHtsaXN0Lm5hbWV9OiAke2xpc3Quc29uZ3Muam9pbigiLCAiKX0iCn0KCmZuIG1haW4oKSB7CiAgICBsZXQgbXV0IGxpc3QgPSBQbGF5bGlzdCB7IG5hbWU6ICJSb2FkIHRyaXAiLCBzb25nczogW10gfQogICAgYWRkX3NvbmcobGlzdCwgIkFmcmljYSIpCiAgICBhZGRfc29uZyhsaXN0LCAiSGV5IEp1ZGUiKQogICAgcHJpbnRsbihkZXNjcmliZShsaXN0KSkKICAgIHByaW50bG4oIiR7Y291bnQobGlzdCl9IHNvbmdzIikKfQo)
+
 The compiler reads each function body. `add_song` pushes onto a field of `list`, so `list` is borrowed mutably.
 `count` and `describe` only read, so they borrow it shared. Neither read-only function takes the playlist away from
 `main`, which is why `main` can keep using `list` afterwards.

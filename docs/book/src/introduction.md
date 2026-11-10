@@ -12,6 +12,8 @@ fn main() {
 }
 ```
 
+[Run this in the playground](playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBIZWxsbywgV2luZGphbW1lciEKZm4gbWFpbigpIHsKICAgIGxldCBuYW1lID0gIldpbmRqYW1tZXIiCiAgICBwcmludGxuKCJIZWxsbywgJHtuYW1lfSEiKQp9Cg)
+
 This book takes you from that first program to a finished project, and then stays with you as a reference.
 
 ## How the book is organised

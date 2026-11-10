@@ -6,7 +6,7 @@ name: Book
 on:
   push:
     branches: [main]
-    paths: ['docs/book/**', 'docs/promises.toml', 'docs/spec/grammar.ebnf', 'std/**', 'src/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
+    paths: ['docs/book/**', 'crates/windjammer-playground/**', 'docs/promises.toml', 'docs/spec/grammar.ebnf', 'std/**', 'src/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
   pull_request:
     paths: ['docs/book/**', 'tools/docs_truth/**', 'scripts/book/**', '.github/workflows/book.yml']
   workflow_dispatch:
@@ -48,6 +48,17 @@ jobs:
 
       - name: Build the book
         run: mdbook build docs/book
+
+      # The playground (ADR-0034) is a static page next to the book: the interpreter compiled to WebAssembly, the Worker
+      # and the TypeScript sandbox. The pages' "Run" links point at it; the browser tests stay out of the site.
+      - name: Build the playground interpreter and add it to the site
+        run: |
+          rustup target add wasm32-unknown-unknown
+          (cd crates/windjammer-playground && cargo build --release --target wasm32-unknown-unknown)
+          mkdir -p target/book/playground
+          cp -R docs/book/playground/. target/book/playground/
+          rm -rf target/book/playground/tests
+          cp crates/windjammer-playground/target/wasm32-unknown-unknown/release/windjammer_playground.wasm target/book/playground/
 
       - name: Set up Pages
         if: github.ref == 'refs/heads/main'
