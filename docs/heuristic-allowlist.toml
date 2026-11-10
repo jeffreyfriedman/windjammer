@@ -66,7 +66,7 @@
 "src/codegen/rust/float_type_utilities.rs" = 2
 "src/codegen/rust/for_statement_generation.rs" = 3
 "src/codegen/rust/function_extern_generation.rs" = 2
-"src/codegen/rust/function_formal_parameter_generation.rs" = 5
+"src/codegen/rust/function_formal_parameter_generation.rs" = 4
 "src/codegen/rust/function_generation.rs" = 2
 "src/codegen/rust/function_generation_body.rs" = 2
 "src/codegen/rust/function_generation_prepare.rs" = 12
@@ -168,7 +168,7 @@
 "src/codegen/rust/data_structure_generation.rs" = 2
 "src/codegen/rust/enumerable_lowering.rs" = 4
 "src/codegen/rust/expression_type_inference.rs" = 11
-"src/codegen/rust/function_formal_parameter_generation.rs" = 3
+"src/codegen/rust/function_formal_parameter_generation.rs" = 2
 "src/codegen/rust/function_generation_prepare.rs" = 3
 "src/codegen/rust/item_generation.rs" = 4
 "src/codegen/rust/let_statement_generation.rs" = 6
@@ -179,7 +179,7 @@
 "src/codegen/rust/recursive_struct_layout.rs" = 1
 "src/codegen/rust/return_statement_generation.rs" = 1
 "src/codegen/rust/statement_generation.rs" = 5
-"src/codegen/rust/stdlib_signature_specialization.rs" = 2
+"src/codegen/rust/stdlib_signature_specialization.rs" = 1
 "src/codegen/rust/trait_derivation.rs" = 6
 "src/codegen/rust/type_classification_utilities.rs" = 1
 "src/codegen/rust/types.rs" = 1

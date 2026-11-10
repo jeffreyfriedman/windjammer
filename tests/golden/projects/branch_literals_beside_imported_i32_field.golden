@@ -1,0 +1,65 @@
+// ==== cell.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Cell {
+    pub weight: i32,
+}
+impl Cell {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(4);
+        __bytes.extend_from_slice(&self.weight.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod cell;
+pub mod score;
+
+// Re-export public items
+pub use cell::*;
+pub use score::*;
+// ==== main.rs ====
+mod cell;
+mod score;
+fn main() {
+    let a = score::adjusted(&vec![cell::Cell { weight: 4_i32 }]);
+    let b = score::adjusted(&vec![cell::Cell { weight: 2_i32 }]);
+    println!("{} {}", a, b);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod cell;
+pub mod score;
+
+// Re-export public items
+pub use cell::*;
+pub use score::*;
+// ==== score.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::cell::Cell;
+#[inline]
+pub fn adjusted(cells: &Vec<Cell>) -> i32 {
+    let w = cells[0].weight;
+    let d = {
+        if w > 3_i32 {
+            -1_i32
+        } else {
+            1_i32
+        }
+    };
+    let t = w + d;
+    t
+}
+

@@ -39,7 +39,18 @@ struct Example {
     source: String,
     mode: String,
     expect: String,
+    /// The `// manifest:` lines as a `wj.toml` next to the program (empty when the example has none).
+    manifest: String,
     xfail: Option<String>,
+}
+
+/// The `// manifest:` header lines as a `wj.toml` (same format as tests/spec_conformance_test.rs); empty without any.
+fn manifest_text(src: &str) -> String {
+    let lines: Vec<String> = src.lines().filter_map(|l| l.strip_prefix("// manifest:").map(|v| v.trim().to_string())).collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+    format!("[package]\nname = \"spec\"\nversion = \"0.1.0\"\n{}\n", lines.join("\n"))
 }
 
 fn header(src: &str, key: &str) -> Option<String> {
@@ -74,6 +85,7 @@ fn load(root: &Path) -> Vec<Example> {
                 mode: header(&source, "mode").unwrap_or_else(|| "run".into()),
                 xfail: header(&source, "xfail").map(|x| x.split_whitespace().next().unwrap_or("").to_string()),
                 expect: expect.iter().map(|l| format!("{l}\n")).collect(),
+                manifest: manifest_text(&source),
                 source,
             }
         })
@@ -96,6 +108,10 @@ fn judge(ex: &Example, outcome: Option<(String, i32)>) -> &'static str {
 
 fn run(ex: &Example, col: &str) -> &'static str {
     let tmp = tempfile::TempDir::new().unwrap();
+    if !ex.manifest.is_empty() {
+        // Capability examples declare their grants in `// manifest:` lines; the program runs under that wj.toml.
+        std::fs::write(tmp.path().join("wj.toml"), &ex.manifest).unwrap();
+    }
     let wj = Path::new(WJ);
     let o = match col {
         "interp" => run_interpreter(wj, tmp.path(), &ex.source),
@@ -240,7 +256,7 @@ fn spec_examples_conform_on_every_backend() {
 
 #[test]
 fn selftest_judge_separates_wrong_from_rejected() {
-    let ex = Example { id: "X".into(), source: String::new(), mode: "run".into(), expect: "3\n".into(), xfail: None };
+    let ex = Example { id: "X".into(), source: String::new(), mode: "run".into(), expect: "3\n".into(), manifest: String::new(), xfail: None };
     assert_eq!(judge(&ex, Some(("3\n".into(), 0))), "PASS");
     assert_eq!(judge(&ex, Some(("4\n".into(), 0))), "WRONG");
     assert_eq!(judge(&ex, Some(("3\n".into(), 1))), "WRONG");

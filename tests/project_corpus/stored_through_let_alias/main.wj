@@ -1,0 +1,12 @@
+// A public builder binds its list parameter to a local and stores the local in a struct; the parameter
+// is owned (moved into the payload through the alias). Expected by hand: 2 headers, first "a".
+// expect: 2 a
+mod request
+
+fn main() {
+    let mut headers = Vec::new()
+    headers.push("a")
+    headers.push("b")
+    let req = request::make_request(headers, "/x")
+    println("${req.headers.len()} ${req.headers[0]}")
+}

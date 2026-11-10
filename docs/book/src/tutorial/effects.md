@@ -1,4 +1,5 @@
 # Effects and capabilities
+<!-- feature: effects -->
 
 A function either computes a result or does something to the outside world: reads a file, opens a connection, looks
 at an environment variable, starts a process, asks for the time. Windjammer calls those things **effects**. It infers

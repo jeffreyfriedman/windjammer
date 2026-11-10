@@ -24,6 +24,29 @@ Hello, World!
 `wj run` interprets the program: there is no build step, and a whole multi-module project starts in milliseconds.
 Strings interpolate with `${...}`, and `println` is an ordinary function, not a macro.
 
+## Try code quickly
+
+You do not need a file to try an idea. `wj eval` runs a piece of Windjammer and prints the value of the last expression.
+The common standard modules (`strings`, `math`, `json`, `time`, `fs`, `env`, and the collections) are already imported, and
+statements can be separated by `;` or newlines:
+
+```sh,verify
+$ wj eval 'strings.to_upper("hi")'
+HI
+$ wj eval 'let x = 6; x * 7'
+42
+```
+
+`wj run -` reads a whole program from standard input, which suits generated code and one-off scripts from a pipe:
+
+<!-- promise: feature run-stdin -->
+```sh,verify
+$ echo 'fn main() { println("from stdin") }' | wj run -
+from stdin
+```
+
+`wj eval` runs interpreted, like `wj run`. For a longer session, `wj repl` keeps definitions between inputs.
+
 ## Check
 
 `wj check` reads your program and reports problems without running it:

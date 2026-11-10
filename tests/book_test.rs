@@ -19,6 +19,41 @@ fn real() -> Ctx {
     Ctx { root: PathBuf::from(env!("CARGO_MANIFEST_DIR")), cli: wj_cli_args::Cli::command() }
 }
 
+/// Compiled runs build real Cargo crates. They get a target directory and a `wj` cache of their own (never the shared
+/// one that other tests in the same process build into, which `wj` also prunes), and run one at a time, so no other
+/// build can replace a binary between its build and its run.
+static COMPILED: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn compiled_lock() -> std::sync::MutexGuard<'static, ()> {
+    COMPILED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn isolate(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    let base = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("book-wj");
+    cmd.env("CARGO_TARGET_DIR", base.join("target")).env("WJ_CARGO_TARGET_ROOT", base.join("cache"))
+}
+
+fn compiled_cmd(wj: &str) -> std::process::Command {
+    let mut c = std::process::Command::new(wj);
+    isolate(&mut c);
+    c.args(["run", "--compiled"]);
+    c
+}
+
+/// Everything the runner printed, plus how it ended; a runner that died before its summary says so.
+fn report(out: &std::process::Output, what: &str) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    let log = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("book-{what}.log"));
+    let _ = std::fs::write(&log, &text);
+    eprintln!("{text}");
+    if text.contains("book samples:") {
+        format!("{text}\n(full output: {})", log.display())
+    } else {
+        format!("THE RUNNER DID NOT FINISH (status {:?}, signal {:?}); output so far, full copy in {}:\n{text}", out.status.code(), out.status.signal(), log.display())
+    }
+}
+
 fn show(fs: &[Finding]) -> String {
     fs.iter().map(|f| f.render()).collect::<Vec<_>>().join("\n")
 }
@@ -29,6 +64,11 @@ fn check(ctx: &Ctx) -> Vec<Finding> {
 
 /// Run the sample runner over `ctx`'s book; (success, output).
 fn run_samples(ctx: &Ctx, compiled: bool) -> (bool, String) {
+    run_samples_with(ctx, compiled, &[])
+}
+
+fn run_samples_with(ctx: &Ctx, compiled: bool, env: &[(&str, &str)]) -> (bool, String) {
+    let _g = if compiled { Some(compiled_lock()) } else { None };
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path().join("samples");
     let n = book::extract(ctx, &dir).unwrap();
@@ -38,9 +78,13 @@ fn run_samples(ctx: &Ctx, compiled: bool) -> (bool, String) {
     cmd.args(["run", "--interpret"]).arg(real().root.join("scripts/book/book_samples.wj")).arg("--").arg(&dir).arg(env!("CARGO_BIN_EXE_wj")).arg(&scratch);
     if compiled {
         cmd.arg("--compiled");
+        isolate(&mut cmd);
+    }
+    for (k, v) in env {
+        cmd.env(k, v);
     }
     let out = cmd.current_dir(&real().root).output().expect("run scripts/book/book_samples.wj");
-    (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+    (out.status.success(), report(&out, if compiled { "compiled" } else { "interpreted" }))
 }
 
 /// Like `run_samples` (interpreted) but tolerates a book with no `wj` programs, only projects.
@@ -59,7 +103,7 @@ fn run_samples_projects(ctx: &Ctx) -> (bool, String) {
         .current_dir(&real().root)
         .output()
         .expect("run scripts/book/book_samples.wj");
-    (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+    (out.status.success(), report(&out, "projects"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -249,47 +293,25 @@ fn known_gap_explain_ownership_span_inside_interpolation() {
 
 #[test]
 fn known_gap_generic_copy_out_of_list_fails_compiled() {
+    let _g = compiled_lock();
     let repro = real().root.join("tests/book_repros/generic_largest_needs_clone.wj");
     let wj = env!("CARGO_BIN_EXE_wj");
     let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
     assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).trim() == "9", "the interpreter runs the repro");
-    let compiled = std::process::Command::new(wj).args(["run", "--compiled"]).arg(&repro).output().unwrap();
+    let compiled = compiled_cmd(wj).arg(&repro).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
     assert!(!compiled.status.success() && text.contains("WJ0015"), "the compiled gap is fixed: delete tests/book_repros/generic_largest_needs_clone.wj, this test and its docs/known-gaps.md row\n{text}");
 }
 
 #[test]
-fn known_gap_main_returning_err_exits_zero_when_interpreted() {
-    let repro = real().root.join("tests/book_repros/main_returns_err.wj");
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&repro).output().unwrap();
-    assert!(out.status.success() && out.stderr.is_empty(), "the interpreter now reports an Err from main: delete tests/book_repros/main_returns_err.wj, this test and its docs/known-gaps.md row\n{}", String::from_utf8_lossy(&out.stderr));
-}
-
-#[test]
-fn known_gap_directory_module_borrow_is_lost_when_compiled() {
-    let src = real().root.join("tests/book_repros/dir_module");
-    let tmp = tempfile::tempdir().unwrap();
-    let dst = tmp.path().join("p");
-    std::fs::create_dir_all(dst.join("src/util")).unwrap();
-    for f in ["wj.toml", "src/main.wj", "src/util/mod.wj"] {
-        std::fs::copy(src.join(f), dst.join(f)).unwrap();
-    }
-    let wj = env!("CARGO_BIN_EXE_wj");
-    let interp = std::process::Command::new(wj).args(["run", "--interpret"]).current_dir(&dst).output().unwrap();
-    assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).trim() == "2", "the interpreter runs the repro");
-    let compiled = std::process::Command::new(wj).args(["run", "--compiled"]).current_dir(&dst).output().unwrap();
-    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
-    assert!(!compiled.status.success() && text.contains("WJ0003"), "the directory-module gap is fixed: delete tests/book_repros/dir_module, this test and its docs/known-gaps.md row\n{text}");
-}
-
-#[test]
 fn known_gap_idioms_fail_compiled() {
+    let _g = compiled_lock();
     let wj = env!("CARGO_BIN_EXE_wj");
     for (file, code) in [("iter_find_closure.wj", "WJ0003"), ("module_const.wj", "WJ0001"), ("map_get_string_key.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
-        let compiled = std::process::Command::new(wj).args(["run", "--compiled"]).arg(&repro).output().unwrap();
+        let compiled = compiled_cmd(wj).arg(&repro).output().unwrap();
         let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
         assert!(!compiled.status.success() && text.contains(code), "{file}: the compiled gap is fixed: delete the repro, its entry here and its docs/known-gaps.md text\n{text}");
     }
@@ -297,6 +319,7 @@ fn known_gap_idioms_fail_compiled() {
 
 #[test]
 fn known_gap_module_struct_without_import_fails_compiled() {
+    let _g = compiled_lock();
     let src = real().root.join("tests/book_repros/module_struct");
     let tmp = tempfile::tempdir().unwrap();
     let dst = tmp.path().join("p");
@@ -307,7 +330,7 @@ fn known_gap_module_struct_without_import_fails_compiled() {
     let wj = env!("CARGO_BIN_EXE_wj");
     let interp = std::process::Command::new(wj).args(["run", "--interpret"]).current_dir(&dst).output().unwrap();
     assert!(interp.status.success() && String::from_utf8_lossy(&interp.stdout).contains("b 2"), "the interpreter runs the repro");
-    let compiled = std::process::Command::new(wj).args(["run", "--compiled"]).current_dir(&dst).output().unwrap();
+    let compiled = compiled_cmd(wj).current_dir(&dst).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
     assert!(!compiled.status.success() && text.contains("WJ0003"), "the module-struct gap is fixed: delete tests/book_repros/module_struct, this test and its docs/known-gaps.md row\n{text}");
 }
@@ -347,4 +370,95 @@ fn compiled_samples_do_not_see_each_other_functions() {
     s.page("```wj\n// expect: Err(\"negative\")\nfn load(n: int) -> Result<int, string> {\n    if n < 0 {\n        return Err(\"negative\")\n    }\n    Ok(n)\n}\n\nfn main() {\n    println(\"${load(-1):?}\")\n}\n```\n\n```wj\n// expect: Ok(5)\nfn load(text: string) -> Result<int, string> {\n    text.parse::<int>().map_err(|_| \"bad: ${text}\")\n}\n\nfn main() {\n    println(\"${load(\\\"5\\\"):?}\")\n}\n```\n");
     let (ok, out) = run_samples(&s.ctx(), true);
     assert!(ok, "{out}");
+}
+
+#[test]
+fn the_compiled_gate_fails_when_compiled_output_differs() {
+    // Mutation check for the isolated compiled pass, self-contained: the runner's own test hook makes the compiled
+    // output of one sample differ, and the gate must fail naming that sample. No compiler behaviour is involved.
+    let s = Scratch::new();
+    s.page("```wj\n// expect: hi\nfn main() {\n    println(\"hi\")\n}\n```\n");
+    let (ok, out) = run_samples_with(&s.ctx(), true, &[("BOOK_PLANT_COMPILED_DIFF", "page_L1")]);
+    assert!(!ok && out.contains("[page_L1]") && out.contains("compiled output differs"), "{out}");
+    // and without the hook the same book passes
+    let (ok, out) = run_samples(&s.ctx(), true);
+    assert!(ok, "{out}");
+}
+
+#[test]
+fn mutation_tests_do_not_depend_on_known_gaps() {
+    let text = std::fs::read_to_string(real().root.join("tests/book_test.rs")).unwrap();
+    let start = text.find("fn the_compiled_gate_fails_when_compiled_output_differs").unwrap();
+    let body = &text[start..text[start..].find("\n}\n").map(|e| start + e).unwrap()];
+    let forbidden = ["known-gaps", "known_gap", "book_repros", "OPEN_QUESTIONS", "?."];
+    for f in forbidden {
+        assert!(!body.contains(f), "the compiled-gate mutation test must not depend on a compiler gap (found {f:?}); use the runner's test hook");
+    }
+}
+
+#[test]
+fn known_gap_defer_in_a_loop_body_does_not_run_interpreted() {
+    let repro = real().root.join("tests/book_repros/defer_in_loop.wj");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["run", "--interpret"]).arg(&repro).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success() && text.contains("pass 1") && !text.contains("end of pass"), "the interpreter now runs a loop-body defer: delete tests/book_repros/defer_in_loop.wj, this test and its docs/known-gaps.md row\n{text}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The feature registry (docs/book/features.toml)
+// ---------------------------------------------------------------------------------------------
+
+impl Scratch {
+    fn with_registry(&self, features: &str, spec: &str) {
+        self.write("docs/book/features.toml", features);
+        self.write("docs/spec/widgets.md", spec);
+    }
+}
+
+const ONE_FEATURE: &str = "[[feature]]\nid = \"widgets\"\ntitle = \"Widgets\"\nfamilies = [\"WID\"]\nspec = \"docs/spec/widgets.md\"\n";
+const ONE_RULE: &str = "# Widgets\n\n**SPEC-WID-001** A widget exists.\n";
+
+#[test]
+fn a_spec_family_missing_from_the_registry_fails() {
+    let s = Scratch::new();
+    s.with_registry(ONE_FEATURE, &format!("{ONE_RULE}\n**SPEC-GAD-001** A gadget exists.\n"));
+    s.page(&format!("{GOOD}\n<!-- feature: widgets -->\n"));
+    assert!(s.fails("SPEC-GAD is in no registry entry"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn an_unlisted_page_marker_and_a_stale_family_fail() {
+    let s = Scratch::new();
+    s.with_registry(ONE_FEATURE, ONE_RULE);
+    s.page(&format!("{GOOD}\n<!-- feature: widgets -->\n<!-- feature: gizmos -->\n"));
+    assert!(s.fails("`<!-- feature: gizmos -->`") || s.fails("gizmos"), "{}", show(&s.findings()));
+    s.with_registry(ONE_FEATURE, "# Widgets\n\n**SPEC-OTHER-001** x\n");
+    assert!(s.fails("registry names family WID"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn uncovered_features_are_a_shrink_only_ratchet() {
+    let s = Scratch::new();
+    s.with_registry(ONE_FEATURE, ONE_RULE);
+    assert!(s.fails("features no page covers: 1 exceeds the ratchet 0"), "{}", show(&s.findings()));
+    s.write("docs/docs-truth.toml", "[book]\nmax_uncovered_features = 1\n");
+    assert_eq!(failures(&s.findings()), 0, "{}", show(&s.findings()));
+    s.page(&format!("{GOOD}\n<!-- feature: widgets -->\n"));
+    assert!(s.fails("below the ratchet 1"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn the_real_registry_lists_every_spec_family() {
+    let ctx = real();
+    assert!(!docs_truth::book_features::load(&ctx).is_empty(), "docs/book/features.toml is missing");
+    let listed: std::collections::BTreeSet<String> = docs_truth::book_features::load(&ctx).into_iter().flat_map(|f| f.families).collect();
+    let spec = docs_truth::book_features::spec_families(&ctx);
+    assert!(spec.is_subset(&listed), "unlisted spec families: {:?}", spec.difference(&listed).collect::<Vec<_>>());
+}
+
+#[test]
+fn eval_prints_an_interpolated_string_literal() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj")).args(["eval", "\"${6 * 7} ok\""]).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "42 ok", "{text}");
 }

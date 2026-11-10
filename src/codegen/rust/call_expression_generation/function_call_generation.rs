@@ -736,7 +736,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         result
                     }
                 } else {
-                    result
+                    owned_field_payload(gen, arg, result)
                 }
             })
             .collect();
@@ -1194,4 +1194,19 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     } else {
         call_result
     }
+}
+
+/// A payload (`Some(pair.1)`) is owned: a field typed `&T` with `T` not Copy (an entry of a map iterated by
+/// reference) is cloned, unless the function returns a reference payload (`Option<&T>`).
+fn owned_field_payload(gen: &CodeGenerator<'_>, arg: &Expression<'_>, result: String) -> String {
+    let returns_ref_payload = match &gen.current_function_return_type {
+        Some(Type::Option(inner)) | Some(Type::Result(inner, _)) => matches!(**inner, Type::Reference(_) | Type::MutableReference(_)),
+        _ => false,
+    };
+    let ref_to_non_copy = matches!(arg, Expression::FieldAccess { .. })
+        && gen.infer_expression_type(arg).is_some_and(|t| matches!(&t, Type::Reference(inner) if !gen.is_type_copy(inner)));
+    if ref_to_non_copy && !returns_ref_payload && !result.ends_with(".clone()") {
+        return format!("{result}.clone()");
+    }
+    result
 }

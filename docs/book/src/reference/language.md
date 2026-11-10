@@ -1,4 +1,6 @@
 # The language
+<!-- feature: grammar -->
+<!-- feature: standard-library -->
 
 This page is a map of the language. Each area links to its chapter in the language specification, where every rule has
 an identifier and a runnable example that the compiler's own tests check. The [grammar](grammar.md),

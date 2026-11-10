@@ -217,6 +217,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 std::process::exit(code);
             }
         }
+        Commands::Eval { code } => windjammer::cli::eval::exit_on_failure(windjammer::cli::eval::run(&code)?),
         Commands::Mcp { command } => match command {
             McpCommand::Bind { server, tools, stdio, only, out } => {
                 let text = match (tools, stdio) {
@@ -241,9 +242,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 }
             }
         },
-        Commands::Repl {} => {
-            run_repl()?;
-        }
+        Commands::Repl {} => run_repl()?,
         Commands::Test {
             path,
             filter,

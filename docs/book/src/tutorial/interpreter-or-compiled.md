@@ -1,9 +1,11 @@
 # Interpreter or compiled
+<!-- feature: program-execution -->
 
 <!-- promise: feature interpret-instant -->
 <!-- promise: feature multi-backend -->
+<!-- promise: feature interpreter-matches-compiled -->
 
-Windjammer has two ways to run a program, and they are meant to give the same answers.
+Windjammer has two ways to run a program, and they are meant to give the same answers: for a program the interpreter accepts, its standard output, exit status and panic location match the compiled program's (see [the interpreter's contract](https://github.com/jeffreyfriedman/windjammer/blob/main/docs/testing/INTERPRETER_CONTRACT.md)).
 
 * The **interpreter** runs your source directly. There is no build step, a whole multi-module project starts in
   milliseconds, and it needs no Rust toolchain. It is the default for `wj run`.

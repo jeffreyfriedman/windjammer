@@ -190,6 +190,13 @@ fn register_json(r: &mut Registry) {
     r.func("json::array", |_, _| Ok(jv(serde_json::Value::Array(vec![]))));
     r.func("json::null", |_, _| Ok(jv(serde_json::Value::Null)));
     r.func("json::boolean", |_, a| Ok(jv(serde_json::Value::Bool(matches!(arg(&a, 0, "boolean")?, Value::Bool(true))))));
+    // `Number::from_f64`: NaN and infinities are not JSON numbers, as in the runtime's `number_f64 -> Result`
+    r.func("json::number_f64", |_, a| {
+        Ok(match serde_json::Number::from_f64(arg_f64(&a, 0, "number_f64")?) {
+            Some(n) => Value::ok(jv(serde_json::Value::Number(n))),
+            None => Value::err(s("Invalid number")),
+        })
+    });
     r.func("json::number_i64", |_, a| Ok(jv(serde_json::Value::from(arg_int(&a, 0, "number_i64")? as i64))));
     r.func("json::json_string", |_, a| Ok(jv(serde_json::Value::String(arg_str(&a, 0, "json_string")?.to_string()))));
     r.native("JsonValue", "clone", |_, v, _| Ok(jv(json_of(v)?)));

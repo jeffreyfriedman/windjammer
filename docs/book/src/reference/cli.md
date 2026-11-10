@@ -12,6 +12,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
@@ -105,7 +106,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file or a directory (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
+| `<PATH_AND_ARGS>` | PATH [ARGS]... |  | A .wj file, a directory, or `-` (the program read from stdin) (omitted: the project containing the current directory, wj.toml), then the program's arguments. Everything after PATH belongs to the program, flags included (`wj run tool.wj --release`); wj's own flags go before PATH |
 | `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
 | `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
@@ -148,6 +149,18 @@ Start the Windjammerscript REPL (interactive interpreter)
 ```text
 Usage: wj repl
 ```
+
+## `wj eval`
+
+Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
+
+```text
+Usage: wj eval <CODE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CODE>` | CODE |  | An expression, or statements separated by `;` or newlines whose last one, if an expression, is printed |
 
 ## `wj mcp`
 

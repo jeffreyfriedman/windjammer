@@ -48,10 +48,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Some(ms) = self.lookup_method_signature(rt, method) {
                     let mut reg_sig = ms.to_function_signature();
-                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                         Some(rt),
                         inferred_receiver_ty.as_ref(),
-                        self.current_function_return_type.as_ref(),
                     ) {
                         crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
                             &mut reg_sig,
@@ -70,10 +69,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             if let Some(recv_ty) =
-                crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name(
                     receiver_type_name.as_deref(),
                     inferred_receiver_ty.as_ref(),
-                    self.current_function_return_type.as_ref(),
                 )
             {
                 crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(

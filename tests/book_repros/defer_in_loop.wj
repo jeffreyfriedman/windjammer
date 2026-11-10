@@ -1,0 +1,6 @@
+fn main() {
+    for i in 0..2 {
+        defer println("end of pass ${i}")
+        println("pass ${i}")
+    }
+}

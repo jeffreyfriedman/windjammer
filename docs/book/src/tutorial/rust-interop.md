@@ -1,4 +1,5 @@
 # Rust interop
+<!-- feature: rust-interop -->
 
 Windjammer compiles to Rust, so the whole crates.io ecosystem is within reach. You list a crate in `wj.toml` like any
 dependency and call it by name. A small interface file, the **signature surface**, tells the compiler what the crate's

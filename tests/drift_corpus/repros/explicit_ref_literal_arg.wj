@@ -1,0 +1,17 @@
+// `contains(&9)` and `get(&3)` on integer collections: the explicit borrow of an integer literal is dropped by the
+// compiled backend (rustc: expected `&i64`, found `i64`).
+use std::collections::HashMap
+use std::collections::HashSet
+
+fn main() {
+    let mut s: HashSet<int> = HashSet::new()
+    s.insert(9)
+    println("${s.contains(&9)}")
+    let mut m: HashMap<int, int> = HashMap::new()
+    m.insert(3, 4)
+    let n = match m.get(&3) {
+        Some(v) => *v,
+        None => 0,
+    }
+    println("${n}")
+}

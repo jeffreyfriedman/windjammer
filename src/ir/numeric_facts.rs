@@ -362,6 +362,14 @@ mod tests {
         assert!(a.literal_widths.len() == 2 && a.literal_widths.values().all(|w| *w == BaseType::I64), "{:?}", a.literal_widths);
     }
 
+    /// A built-in function displays its arguments: a value printed with `println` keeps its class published, so a
+    /// literal beside an `int` call result is an `int` (`1 + pick(seed, 6)`).
+    #[test]
+    fn printed_values_stay_published() {
+        let f = facts("fn pick(seed: int, n: int) -> int {\n    seed % n\n}\npub fn f() {\n    let seed = 12345\n    let n = 1 + pick(seed, 6)\n    println(n)\n}\n", "f");
+        assert!(f.literal_widths.len() == 3 && f.literal_widths.values().all(|w| *w == BaseType::I64), "{:?}", f.literal_widths);
+    }
+
     /// A value passed to a call the walk cannot type is opaque: its class (and the class of its elements) stays
     /// with the legacy deciders instead of taking the default.
     #[test]

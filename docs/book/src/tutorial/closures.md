@@ -1,4 +1,5 @@
 # Closures
+<!-- feature: closures -->
 
 A closure is a function you write inline, without a name, that can use the variables around it. They are how you tell
 `map`, `sort_by` and friends what to do.
