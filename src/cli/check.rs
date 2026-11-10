@@ -31,7 +31,7 @@ fn check_quietly(root: &Path) -> Result<Checked> {
     std::panic::set_hook(Box::new(|_| {}));
     let result = check::check_path(root, &CheckOptions::default());
     std::panic::set_hook(previous);
-    result
+    result.map(|c| super::widths_gate::add_to(c, root))
 }
 
 fn run_once(root: &Path, json: bool, fix: bool) -> Result<bool> {
@@ -116,9 +116,6 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
     // uses after a move (WJ0007) are among them: `wj check` predicts them from the generated Rust (ADR-0030)
     let blocking: Vec<&crate::diagnostics::Diagnostic> = checked.report.diagnostics.iter().filter(|d| blocks(d)).collect();
     let errors = blocking.len();
-    if errors == 0 {
-        return Ok(());
-    }
     // paths relative to the current directory: shorter for people and agents (sources looked up either way)
     let cwd = std::env::current_dir().ok().map(|d| d.to_string_lossy().to_string() + "/");
     let short = |f: &str| cwd.as_deref().and_then(|c| f.strip_prefix(c)).unwrap_or(f).to_string();
@@ -126,6 +123,19 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
         let full = cwd.as_deref().map(|c| format!("{c}{f}"));
         checked.sources.get(f).or_else(|| full.as_deref().and_then(|g| checked.sources.get(g))).cloned().or_else(|| std::fs::read_to_string(f).ok())
     };
+    if errors == 0 {
+        // ADR-0033: integer widths the compiled build would mix are a backend defect, not a language error. `wj check`
+        // reports them as errors; an interpreted run warns before the program's output and runs it (scripts that
+        // are only ever interpreted keep working)
+        for mut d in super::widths_gate::predicted_widths(path) {
+            d.severity = crate::diagnostics::Severity::Warning;
+            for sp in d.primary_span.iter_mut() {
+                sp.file = short(&sp.file);
+            }
+            eprintln!("{}", render::render(&d, &source_of));
+        }
+        return Ok(());
+    }
     for d in blocking {
         let mut d = d.clone();
         for sp in d.primary_span.iter_mut().chain(d.secondary_spans.iter_mut()) {
