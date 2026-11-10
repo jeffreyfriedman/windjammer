@@ -151,6 +151,9 @@ pub struct IrFunction {
     /// CLONE-BORROWED-TO-OWNED for elements (`clone_facts::owned_element_reads`): element reads
     /// consumed as owned values, by node, with the root binding. Non-Copy elements are cloned.
     pub element_reads: std::collections::BTreeMap<usize, String>,
+    /// CLONE-USE-AFTER-MOVE for partial moves (`clone_facts::field_copy_sites`): field paths copied
+    /// because their binding is read again after the statement, by node, with the binding.
+    pub field_copy_sites: std::collections::BTreeMap<usize, String>,
 }
 
 impl IrFunction {
@@ -397,6 +400,10 @@ impl IrFunction {
             ),
             clone_sites: std::collections::BTreeMap::new(),
             element_reads: crate::ir::clone_facts::owned_element_reads(&analyzed.decl.body),
+            field_copy_sites: crate::ir::clone_facts::field_copy_sites(
+                &analyzed.decl.body,
+                &crate::ir::liveness::read_after(&params, &analyzed.decl.body, false),
+            ),
         }
     }
 }

@@ -1,0 +1,32 @@
+// CLONE-USE-AFTER-MOVE for a partial move (C6): a field read into a new value, then the whole struct
+// moved. The field is copied because its struct is read again; a field whose struct is not read again
+// moves.
+pub struct Proposal {
+    pub id: string,
+    pub status: string,
+    pub note: string,
+}
+
+pub struct Event {
+    pub proposal_id: string,
+    pub actor: string,
+}
+
+fn approve(proposal: Proposal, actor: string) -> (Proposal, Event) {
+    let event = Event { proposal_id: proposal.id, actor: actor }
+    let mut next = proposal
+    next.status = "approved"
+    (next, event)
+}
+
+fn note_of(proposal: Proposal) -> Event {
+    Event { proposal_id: proposal.note, actor: "system" }
+}
+
+fn main() {
+    let p = Proposal { id: "p1", status: "proposed", note: "n" }
+    let (next, event) = approve(p, "owner")
+    println("${next.id} ${next.status} ${event.proposal_id}")
+    let e = note_of(next)
+    println(e.proposal_id)
+}

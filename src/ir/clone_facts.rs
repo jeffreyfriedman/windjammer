@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, HashMap};
 /// node, with the root name. `returns_value`: the function's tail is its value.
 pub fn returned_param_fields(params: &[&str], body: &[&Statement<'_>], returns_value: bool) -> BTreeMap<usize, String> {
     let mut out = BTreeMap::new();
-    element_stmts(body, returns_value, &|e| param_field_root(params, e), &mut out);
+    element_stmts(body, returns_value, &|e, _| param_field_root(params, e), &mut out);
     out
 }
 
@@ -47,8 +47,37 @@ pub fn borrowed_returned_fields(
 /// callee's formal decides (OWN-CALL-FORMAL). By node, with the root binding.
 pub fn owned_element_reads(body: &[&Statement<'_>]) -> BTreeMap<usize, String> {
     let mut out = BTreeMap::new();
-    element_stmts(body, true, &element_root, &mut out);
+    element_stmts(body, true, &|e, _| element_root(e), &mut out);
     out
+}
+
+/// CLONE-USE-AFTER-MOVE for partial moves: a field path of a binding (not `self`) consumed as an
+/// owned value (a struct-literal field, a returned or assigned value, a literal element) inside a
+/// statement after which liveness says the binding is read again (`read_after`, by statement node).
+/// Moving the field would leave the binding partly moved, so the field is copied there.
+pub fn field_copy_sites(
+    body: &[&Statement<'_>],
+    read_after: &BTreeMap<usize, std::collections::BTreeSet<String>>,
+) -> BTreeMap<usize, String> {
+    let mut out = BTreeMap::new();
+    let pick = |e: &Expression<'_>, stmt: usize| {
+        let root = binding_field_root(e)?;
+        read_after.get(&stmt).is_some_and(|names| names.contains(&root)).then_some(root)
+    };
+    element_stmts(body, true, &pick, &mut out);
+    out
+}
+
+fn binding_field_root(e: &Expression<'_>) -> Option<String> {
+    let Expression::FieldAccess { object, .. } = e else { return None };
+    let mut cur: &Expression<'_> = object;
+    loop {
+        match cur {
+            Expression::FieldAccess { object, .. } => cur = object,
+            Expression::Identifier { name, .. } if name != "self" => return Some(name.clone()),
+            _ => return None,
+        }
+    }
 }
 
 fn element_root(e: &Expression<'_>) -> Option<String> {
@@ -63,35 +92,36 @@ fn element_root(e: &Expression<'_>) -> Option<String> {
     }
 }
 
-type Pick<'p> = &'p dyn Fn(&Expression<'_>) -> Option<String>;
+/// Recognizes a site: the expression and the innermost statement holding it (by node identity).
+type Pick<'p> = &'p dyn Fn(&Expression<'_>, usize) -> Option<String>;
 
-fn element_value(e: &Expression<'_>, pick: Pick, out: &mut BTreeMap<usize, String>) {
-    if let Some(root) = pick(e) {
+fn element_value(e: &Expression<'_>, stmt: usize, pick: Pick, out: &mut BTreeMap<usize, String>) {
+    if let Some(root) = pick(e, stmt) {
         out.insert(node_id(e), root);
         return;
     }
     match e {
         Expression::Block { statements, .. } => element_stmts(statements, true, pick, out),
-        Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| element_value(f, pick, out)),
+        Expression::StructLiteral { fields, .. } => fields.iter().for_each(|(_, f)| element_value(f, stmt, pick, out)),
         Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
-            elements.iter().for_each(|x| element_value(x, pick, out))
+            elements.iter().for_each(|x| element_value(x, stmt, pick, out))
         }
         Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
             // Not the arguments themselves (the formal decides), but values built inside them.
-            arguments.iter().for_each(|(_, a)| nested_values(a, pick, out))
+            arguments.iter().for_each(|(_, a)| nested_values(a, stmt, pick, out))
         }
-        _ => nested_values(e, pick, out),
+        _ => nested_values(e, stmt, pick, out),
     }
 }
 
 /// Owned positions nested in an expression that is not itself one (`Some(Row { a: v[0] })`).
-fn nested_values(e: &Expression<'_>, pick: Pick, out: &mut BTreeMap<usize, String>) {
+fn nested_values(e: &Expression<'_>, stmt: usize, pick: Pick, out: &mut BTreeMap<usize, String>) {
     match e {
         Expression::StructLiteral { .. } | Expression::Tuple { .. } | Expression::Array { .. } | Expression::Block { .. } => {
-            element_value(e, pick, out)
+            element_value(e, stmt, pick, out)
         }
         Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-            arguments.iter().for_each(|(_, a)| nested_values(a, pick, out))
+            arguments.iter().for_each(|(_, a)| nested_values(a, stmt, pick, out))
         }
         _ => {}
     }
@@ -100,14 +130,15 @@ fn nested_values(e: &Expression<'_>, pick: Pick, out: &mut BTreeMap<usize, Strin
 fn element_stmts(body: &[&Statement<'_>], value_tail: bool, pick: Pick, out: &mut BTreeMap<usize, String>) {
     for (i, s) in body.iter().enumerate() {
         let is_tail = value_tail && i + 1 == body.len();
+        let stmt = *s as *const Statement<'_> as *const () as usize;
         match s {
             // A `let` initialiser is not included: the binding may borrow the element
             // (`let node = &nodes[0]` when it is only read), which the local's ownership decides.
-            Statement::Let { value, .. } => nested_values(value, pick, out),
-            Statement::Assignment { value, .. } => element_value(value, pick, out),
-            Statement::Return { value: Some(v), .. } => element_value(v, pick, out),
-            Statement::Expression { expr, .. } if is_tail => element_value(expr, pick, out),
-            Statement::Expression { expr, .. } => nested_values(expr, pick, out),
+            Statement::Let { value, .. } => nested_values(value, stmt, pick, out),
+            Statement::Assignment { value, .. } => element_value(value, stmt, pick, out),
+            Statement::Return { value: Some(v), .. } => element_value(v, stmt, pick, out),
+            Statement::Expression { expr, .. } if is_tail => element_value(expr, stmt, pick, out),
+            Statement::Expression { expr, .. } => nested_values(expr, stmt, pick, out),
             Statement::If { then_block, else_block, .. } => {
                 element_stmts(then_block, is_tail, pick, out);
                 if let Some(b) = else_block {
@@ -119,9 +150,9 @@ fn element_stmts(body: &[&Statement<'_>], value_tail: bool, pick: Pick, out: &mu
             }
             Statement::Match { arms, .. } => arms.iter().for_each(|a| {
                 if is_tail {
-                    element_value(a.body, pick, out)
+                    element_value(a.body, stmt, pick, out)
                 } else {
-                    nested_values(a.body, pick, out)
+                    nested_values(a.body, stmt, pick, out)
                 }
             }),
             _ => {}
@@ -179,6 +210,19 @@ mod tests {
         let reads = owned_element_reads(&d.body);
         assert_eq!(reads.len(), 1, "the struct field `v[3]`; not a let initialiser, an argument or a receiver");
         assert!(reads.values().all(|r| r == "v"));
+    }
+
+    #[test]
+    fn a_field_of_a_binding_read_again_is_a_copy_site() {
+        let src = "struct P { id: string, note: string }\nstruct E { id: string }\nfn f(p: P) -> P {\n let e = E { id: p.id }\n let n = E { id: p.note }\n p\n}\nfn g(p: P) -> E {\n E { id: p.note }\n}\n";
+        let d = decl_of(src, "f");
+        let ps: Vec<&str> = d.parameters.iter().map(|p| p.name.as_str()).collect();
+        let ra = crate::ir::liveness::read_after(&ps, &d.body, false);
+        assert_eq!(field_copy_sites(&d.body, &ra).len(), 2, "`p` is returned after both field reads");
+        let d = decl_of(src, "g");
+        let ps: Vec<&str> = d.parameters.iter().map(|p| p.name.as_str()).collect();
+        let ra = crate::ir::liveness::read_after(&ps, &d.body, false);
+        assert!(field_copy_sites(&d.body, &ra).is_empty(), "`p` is not read after its field moves");
     }
 
     #[test]
