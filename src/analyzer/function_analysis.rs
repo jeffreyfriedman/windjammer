@@ -174,7 +174,7 @@ impl<'ast> Analyzer<'ast> {
         )
     }
 
-    fn resolve_impl_self_receiver_ownership(
+    pub(super) fn resolve_impl_self_receiver_ownership(
         &self,
         func: &FunctionDecl<'ast>,
         modifies_fields: bool,
@@ -257,7 +257,7 @@ impl<'ast> Analyzer<'ast> {
             );
             let calls_owned_on_self = self.function_calls_consuming_method_on_self(func, registry)
                 || self.function_calls_explicit_owned_self_method(func, registry);
-            let self_ownership = self.resolve_impl_self_receiver_ownership(
+            let self_ownership = self.resolve_implicit_self_receiver_ownership(
                 func,
                 modifies_fields,
                 returns_self,

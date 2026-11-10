@@ -34,6 +34,7 @@ mod self_dispatch_for_loops;
 mod self_field_mutation;
 mod self_mutating_calls;
 mod field_cloneability;
+mod implicit_self;
 mod self_return_and_consumption;
 mod signature_registry;
 pub mod simd_loops;

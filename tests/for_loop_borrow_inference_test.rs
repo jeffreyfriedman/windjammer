@@ -104,7 +104,9 @@ fn main() {
             || generated.contains("for i in 0i64..10i64")
             || generated.contains("for i in 0 ..10")
             || generated.contains("0..10")
-            || generated.contains("0_i32..10_i32"),
+            || generated.contains("0_i32..10_i32")
+            // `int` literals are i64 (ADR-0015); `for i in 0_i64..10_i64` is plain valid Rust
+            || generated.contains("0_i64..10_i64"),
         "Range for-loops should not be modified.\nGenerated:\n{}",
         generated
     );
