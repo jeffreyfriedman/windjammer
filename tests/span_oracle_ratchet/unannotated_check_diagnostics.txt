@@ -615,7 +615,7 @@ tests/interpreter_corpus/generic_static_dispatch.wj W0008,W0016
 tests/move_prediction/argument_non_clone.wj WJ0007
 tests/move_prediction/let_alias_non_clone.wj WJ0007
 tests/move_prediction/loop_non_clone.wj WJ0007
-tests/move_prediction/partial_non_clone.wj WJ0007
+tests/move_prediction/loop_if_arm_non_clone.wj WJ0007tests/move_prediction/partial_non_clone.wj WJ0007
 tests/move_prediction/receiver_non_clone.wj WJ0007
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/port.wj W0016
 tests/project_corpus/alias_of_borrowed_text_into_owned_formal/reader.wj W0007
