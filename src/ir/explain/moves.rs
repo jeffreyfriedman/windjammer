@@ -39,11 +39,6 @@ pub struct Move {
     pub in_loop: bool,
 }
 
-/// Class a only (kept for callers of the first slice).
-pub fn receiver_moves(file: &EmittedFile) -> Vec<Move> {
-    moves(file).into_iter().filter(|m| matches!(m.kind, MoveKind::Receiver { .. })).collect()
-}
-
 pub fn moves(file: &EmittedFile) -> Vec<Move> {
     let mut out = Vec::new();
     let mut names: Vec<&String> = file.fns.keys().collect();

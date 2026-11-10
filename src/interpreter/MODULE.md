@@ -46,7 +46,7 @@ Owns evaluation semantics, value model, native stdlib registry, CLI port. Browse
 `crate::type_display`, `crate::intrinsics` (names only; ratcheted), std, libloading. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*`, `Interpreter`.
 
 ## Entry points
-`runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
+`runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `Interpreter::{new, new_capturing, run, run_checked}`.
 
 ## Intrinsics
 Names come only from `crate::intrinsics::Intrinsic`; do not register them in `builtins/`. Panic text mirrors rustc; unmodelled

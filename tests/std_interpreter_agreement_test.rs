@@ -233,7 +233,10 @@ fn calling_an_unimplemented_std_function_stops_with_exit_2() {
                         }
                         let (out, err, code) = run_call(m, &call);
                         // `wj check` may reject a name the runtime exports but std/*.wj never declares (WJ0036): also a stop
-                        let ok = code == 2 && (err.contains("not implemented by the interpreter") || err.contains("[WJ0036]")) && !out.contains("after");
+                        // ... and WJ0002 ("cannot find function in std::module", exit 1) is the same stop for a name std/*.wj does not declare
+                        // (`async::sleep` is a runtime-only async fn; std/async.wj offers `sleep_ms`): the call never reaches the interpreter.
+                        let stopped_by_check = code == 1 && err.contains("[WJ0002]") && err.contains("cannot find function");
+                        let ok = ((code == 2 && (err.contains("not implemented by the interpreter") || err.contains("[WJ0036]"))) || stopped_by_check) && !out.contains("after");
                         if !ok {
                             failures.lock().unwrap().push(format!("{n} ({form}): exit {code}, stdout {out:?}, stderr {:?}", err.lines().next().unwrap_or("")));
                         }
