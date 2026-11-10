@@ -8,6 +8,7 @@ mod arguments;
 mod finalize;
 mod idiom_lowering;
 mod receiver;
+mod ref_text_option;
 mod std_idiom_fixups;
 mod signature_resolution;
 

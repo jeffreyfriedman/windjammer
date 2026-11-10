@@ -15,6 +15,22 @@ impl<'ast> CodeGenerator<'ast> {
     /// Scrutinee text: `text.clone().as_str()` over an owned `String` keeps its `&str` borrow when the arms
     /// are string literals (the clone is only there to satisfy ownership).
     fn generate_match_scrutinee_expr(&mut self, value: &'ast Expression<'ast>, arms: &[MatchArm<'ast>]) -> String {
+        // `match (method, path) { ("GET", "/x") => .. }`: the columns that literal text patterns test are
+        // compared as `&str` (an owned `String` column cannot match a string literal pattern)
+        if let Expression::Tuple { elements, .. } = value {
+            let text_column = |i: usize| arms.iter().any(|a| matches!(&a.pattern, Pattern::Tuple(ps) if ps.get(i).is_some_and(Self::pattern_has_str_literal)));
+            if (0..elements.len()).any(text_column) {
+                let parts: Vec<String> = elements
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        let s = self.generate_expression(e);
+                        if text_column(i) && !s.starts_with('&') { format!("&*{s}") } else { s }
+                    })
+                    .collect();
+                return format!("({})", parts.join(", "));
+            }
+        }
         if let Expression::MethodCall { object, method, arguments, .. } = value {
             if method == "as_str" && arguments.is_empty() && arms.iter().any(|a| Self::pattern_has_str_literal(&a.pattern)) {
                 let base = self.generate_expression(object);
@@ -719,7 +735,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.generate_expression(value)
             }
         } else {
-            self.generate_expression(value)
+            self.generate_match_scrutinee_expr(value, arms)
         };
         self.suppress_borrowed_clone = prev_suppress_scrutinee;
 
