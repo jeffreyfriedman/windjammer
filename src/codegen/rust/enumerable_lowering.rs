@@ -158,10 +158,10 @@ impl<'ast> CodeGenerator<'ast> {
         match (method, object) {
             ("spawn", Expression::Identifier { name, .. }) if name == "thread" => {
                 let (_, Expression::Closure { body, .. }) = arguments.first()? else { return None };
-                Some(Type::Parameterized("JoinHandle".to_string(), vec![self.infer_expression_type(body)?]))
+                Some(Type::Parameterized(crate::type_classification::JOIN_HANDLE.to_string(), vec![self.infer_expression_type(body)?]))
             }
             ("join", _) if arguments.is_empty() => match self.infer_expression_type(object)? {
-                Type::Parameterized(n, args) if n == "JoinHandle" && args.len() == 1 => {
+                Type::Parameterized(n, args) if n == crate::type_classification::JOIN_HANDLE && args.len() == 1 => {
                     Some(Type::Result(Box::new(args[0].clone()), Box::new(Type::String)))
                 }
                 _ => None,
