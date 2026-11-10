@@ -361,3 +361,24 @@ fn const_declared_in_an_inline_module_is_emitted_and_readable() {
 fn map_get_with_a_text_default_over_owned_text_values_compiles() {
     typechecks("use std::collections::BTreeMap\n\nfn main() {\n    let mut groups: BTreeMap<string, string> = BTreeMap::new()\n    let first = \"a\".to_string()\n    let so_far = groups.get(first).unwrap_or(\"\")\n    groups.insert(first, so_far + \"x\")\n    println(\"${groups.len()}\")\n}\n");
 }
+
+/// A library module that never names a runtime type but gets a value of it from another module: the type its
+/// inferred annotation spells (`Vec<Row>`) must be imported there.
+#[test]
+fn library_module_annotating_a_runtime_type_it_never_names_imports_it() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(dir.path().join("wj.toml"), "[package]\nname = \"rowrepro\"\nversion = \"0.1.0\"\n\n[lib]\npath = \"src/mod.wj\"\n").unwrap();
+    std::fs::write(src.join("mod.wj"), "pub mod helper\npub mod session\npub mod user\n").unwrap();
+    std::fs::write(src.join("helper.wj"), "use std::db::Row\n\npub fn col_string(row: Row, col: string) -> (Row, string) {\n    let value = match row.get_string(col) {\n        Ok(v) => v,\n        Err(_) => \"\",\n    }\n    (row, value)\n}\n").unwrap();
+    std::fs::write(src.join("session.wj"), "use std::db\n\npub fn connect(url: string) -> Result<Connection, string> {\n    db.connect(url)\n}\n").unwrap();
+    std::fs::write(src.join("user.wj"), "use crate::session::connect\nuse crate::helper::col_string\n\npub fn first_id(url: string) -> Result<string, string> {\n    let conn = connect(url)?\n    let rows = conn.query(\"SELECT 1 AS id\", [])?\n    if rows.is_empty() {\n        return Err(\"no rows\")\n    }\n    let (_row, id) = col_string(rows[0], \"id\")\n    Ok(id)\n}\n").unwrap();
+    let out = dir.path().join("out");
+    let b = Command::new(WJ).args(["build", "--no-cargo", "--no-lint", "--module-file", "-o"]).arg(&out).arg(src.join("mod.wj")).output().unwrap();
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+    let user = std::fs::read_to_string(out.join("user.rs")).unwrap();
+    if user.contains("<Row>") {
+        assert!(user.contains("use windjammer_runtime::db::Row;"), "an annotation names Row without importing it:\n{user}");
+    }
+}
