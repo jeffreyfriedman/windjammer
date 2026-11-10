@@ -612,6 +612,10 @@ pub fn run_lint_if_enabled(
     }
     let file_name = file.to_string_lossy().to_string();
     let mut linter = RustLeakageLinter::new(&file_name);
+    // the text lets W0005 stay quiet for a clone the compiler would not replace (`clone_use`)
+    if let Ok(source) = std::fs::read_to_string(file) {
+        linter = linter.with_source(&source);
+    }
     linter.lint_program(program);
     let mut has_errors = false;
     for diag in linter.diagnostics() {
