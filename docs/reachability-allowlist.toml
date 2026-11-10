@@ -20,11 +20,10 @@
 "src/cli_execution.rs" = 3
 "src/codegen/backend.rs" = 1
 "src/codegen/javascript/tree_shaker.rs" = 1
-"src/codegen/mod.rs" = 2
+"src/codegen/mod.rs" = 1
 "src/codegen/rust/call_site_borrow.rs" = 2
 "src/codegen/rust/codegen_helpers.rs" = 3
 "src/codegen/rust/defer_lowering.rs" = 1
-"src/codegen/rust/function_generation_prepare.rs" = 1
 "src/codegen/rust/generator.rs" = 7
 "src/codegen/rust/method_call_expression_generation/idiom_lowering.rs" = 1
 "src/codegen/rust/rust_coercion_rules.rs" = 3
@@ -45,9 +44,8 @@
 "src/inference.rs" = 1
 "src/interpreter/builtins/mod.rs" = 1
 "src/interpreter/caps.rs" = 1
-"src/interpreter/eval_expr.rs" = 1
-# guard_stack_bytes: called by crates/windjammer-playground (the wasm host, outside src/)
 "src/interpreter/engine.rs" = 1
+"src/interpreter/eval_expr.rs" = 1
 "src/interpreter/runner.rs" = 3
 "src/intrinsics/mod.rs" = 1
 "src/ir/capability_profiles.rs" = 5

@@ -145,7 +145,7 @@ digraph deps {
   "cargo_toml" -> "embedded_assets" [label="2"];
   "check" -> "analyzer" [label="2"];
   "check" -> "codegen" [label="1"];
-  "check" -> "diagnostics" [label="24"];
+  "check" -> "diagnostics" [label="25"];
   "check" -> "fuzzy_matcher" [label="4"];
   "check" -> "intrinsics" [label="2"];
   "check" -> "ir" [label="18"];
