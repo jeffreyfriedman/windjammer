@@ -3,7 +3,7 @@
 // expect: Hi, I am Robot
 // expect: Hello, I am Ann
 trait Greeter {
-    fn name(self) -> string
+    fn name(&self) -> string
     fn greet(self) -> string {
         "Hi, I am ${self.name()}"
     }
