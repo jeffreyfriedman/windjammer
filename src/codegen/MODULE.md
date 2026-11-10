@@ -22,7 +22,7 @@ Layer `backend`. May import: every module in a lower layer (support < syntax < r
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`codegen::generate`, `generate_rust`, `generate_go`, `generate_javascript`, `generate_wasm` (src/codegen/mod.rs); `CodeGenerator::new(registry, target)` in `rust/generator.rs`; `create_backend` in `backend.rs`.
+`codegen::generate`, `generate_rust`, `generate_go` (src/codegen/mod.rs; JavaScript and WebAssembly go through `generate` with their `Target`); `CodeGenerator::new(registry, target)` in `rust/generator.rs`; `create_backend` in `backend.rs`.
 
 ## Tests
 tests/codegen_*_test.rs (~220 files) via `tests/common/test_utils.rs::compile_single`; backend-specific suites for wgsl/go/js.

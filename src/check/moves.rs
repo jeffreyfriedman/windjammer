@@ -9,16 +9,8 @@
 
 use crate::diagnostics::{Diagnostic, Span};
 use crate::ir::explain::moves::{Move, MoveKind};
-use std::path::Path;
 
-/// WJ0007 diagnostics for the single file at `path` (tests and tools).
-pub fn predicted_moves(path: &Path) -> Vec<Diagnostic> {
-    let Ok(source) = std::fs::read_to_string(path) else { return Vec::new() };
-    let file = path.to_string_lossy().to_string();
-    let tokens = crate::lexer::Lexer::new(&source).tokenize_with_locations();
-    let Ok(program) = crate::parser::Parser::new_with_source(tokens, file.clone(), source.clone()).parse() else { return Vec::new() };
-    predict(&program, &source, &file)
-}
+pub use super::test_api::predicted_moves;
 
 /// WJ0007 diagnostics for one parsed file.
 pub fn predict(program: &crate::parser::Program<'_>, source: &str, file: &str) -> Vec<Diagnostic> {

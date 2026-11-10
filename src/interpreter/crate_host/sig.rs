@@ -122,11 +122,6 @@ pub fn wire_in(t: &Type, o: &Opaque<'_>) -> Result<WireTy, String> {
     })
 }
 
-/// A parameter: its passing mode and the wire type of the value the host decodes.
-pub fn param_of(t: &Type) -> Result<(Pass, WireTy), String> {
-    param_in(t, &Opaque::default())
-}
-
 fn param_in(t: &Type, o: &Opaque<'_>) -> Result<(Pass, WireTy), String> {
     match t {
         Type::Reference(inner) => Ok((Pass::Borrow, wire_in(inner, o)?)),
@@ -142,6 +137,7 @@ fn param_in(t: &Type, o: &Opaque<'_>) -> Result<(Pass, WireTy), String> {
 const SUPPORTED: &str = "the crate host carries integers, floats, bool, char, string, Vec, Option, Result, tuples, opaque types declared as `pub struct T {}` and references to them";
 
 /// The host signature of one surface function, or why it cannot cross (naming the function and the type).
+#[cfg(test)]
 pub fn crate_fn_sig(krate: &str, f: &FunctionDecl<'_>) -> Result<CrateFnSig, String> {
     crate_fn_sig_in(&Opaque { krate, types: &[], self_ty: None }, f)
 }
