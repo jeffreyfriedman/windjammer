@@ -89,13 +89,37 @@ fn diagnostic(m: &Move, source: &str, file: &str) -> Diagnostic {
     d
 }
 
+/// Byte `at` lies in a `//` comment or a string literal of its line (the call the prediction names is code).
+fn in_comment_or_string(source: &str, at: usize) -> bool {
+    let line_start = source[..at].rfind('\n').map_or(0, |n| n + 1);
+    let (mut in_str, mut escaped) = (false, false);
+    let mut prev = ' ';
+    for c in source[line_start..at].chars() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+        } else if c == '"' {
+            in_str = true;
+        } else if c == '/' && prev == '/' {
+            return true;
+        }
+        prev = c;
+    }
+    in_str
+}
+
 /// The first occurrence of `needle` at a word boundary, not in a `fn` definition, for which `ok` holds of the
 /// text after it.
 fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) -> Option<Span> {
     let bytes = source.as_bytes();
     let byte = source.match_indices(needle).map(|(i, _)| i).find(|i| {
         let boundary = *i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
-        boundary && !source[..*i].ends_with("fn ") && ok(&source[i + needle.len()..])
+        boundary && !source[..*i].ends_with("fn ") && !in_comment_or_string(source, *i) && ok(&source[i + needle.len()..])
     })?;
     let line = source[..byte].matches('\n').count() + 1;
     let line_start = source[..byte].rfind('\n').map_or(0, |n| n + 1);
@@ -111,4 +135,26 @@ fn span_of(source: &str, file: &str, needle: &str, ok: impl Fn(&str) -> bool) ->
         col_end: col + text.chars().count(),
         label: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_in_a_comment_or_a_string_is_not_the_call() {
+        let src = "// the second take(h) is a use after move\nlet s = \"take(h)\"\nlet a = take(h) // take(h)\n";
+        let at = |needle: &str, nth: usize| src.match_indices(needle).nth(nth).unwrap().0;
+        assert!(in_comment_or_string(src, at("take(h)", 0)), "comment line");
+        assert!(in_comment_or_string(src, at("take(h)", 1)), "string literal");
+        assert!(!in_comment_or_string(src, at("take(h)", 2)), "code");
+        assert!(in_comment_or_string(src, at("take(h)", 3)), "trailing comment");
+    }
+
+    #[test]
+    fn the_prediction_points_at_the_call_not_at_a_comment_mentioning_it() {
+        let src = "// take(h) twice\nfn main() {\n    let a = take(h)\n}\n";
+        let sp = span_of(src, "t.wj", "take(", |rest| rest.starts_with("h)")).expect("found");
+        assert_eq!((sp.line_start, sp.col_start), (3, 13));
+    }
 }
