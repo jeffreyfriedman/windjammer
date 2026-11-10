@@ -382,3 +382,21 @@ fn library_module_annotating_a_runtime_type_it_never_names_imports_it() {
         assert!(user.contains("use windjammer_runtime::db::Row;"), "an annotation names Row without importing it:\n{user}");
     }
 }
+
+/// A list of tuples in return position: the declared element type makes each text literal an owned `String`.
+#[test]
+fn tuple_literals_in_a_returned_list_are_owned_text() {
+    typechecks("fn table() -> Vec<(string, string, bool)> {\n    [(\"GET\", \"/accounts\", true), (\"POST\", \"/journal\", false)]\n}\n\nfn main() {\n    for row in table() {\n        let (method, path, allowed) = row\n        println(\"${method} ${path} ${allowed}\")\n    }\n}\n");
+}
+
+/// A list of tuples bound to an annotated `let`.
+#[test]
+fn tuple_literals_in_an_annotated_list_are_owned_text() {
+    typechecks("fn main() {\n    let rows: Vec<(string, int)> = [(\"a\", 1), (\"b\", 2)]\n    for r in rows {\n        let (name, n) = r\n        println(\"${name} ${n}\")\n    }\n}\n");
+}
+
+/// The `Err` arm's tuple literal takes its text type from the sibling arm (`Ok(p) => p`, `p: (int, string)`).
+#[test]
+fn tuple_literal_in_a_match_arm_takes_the_sibling_arms_text() {
+    typechecks("pub fn parsed(ok: bool) -> Result<(int, string), string> {\n    if ok {\n        return Ok((7, \"seven\"))\n    }\n    Err(\"no\")\n}\n\npub fn code(ok: bool) -> int {\n    let pair = match parsed(ok) {\n        Ok(p) => p,\n        Err(_) => (0, \"\"),\n    }\n    pair.0\n}\n\nfn main() {\n    println(\"${code(true)}\")\n}\n");
+}

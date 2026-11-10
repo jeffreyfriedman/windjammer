@@ -76,6 +76,7 @@ pub mod loop_statement_generation;
 pub mod intrinsic_lowering;
 pub mod macro_and_string_generation;
 pub mod macro_conversion;
+mod match_arm_tuple_slots;
 mod match_binding_type_inference;
 pub mod match_statement_generation;
 mod move_at_last_use;
