@@ -61,13 +61,9 @@ fn foo() {
 }
 "#;
 
-    let generated =
-        test_utils::compile_single_result(code).expect("Should compile with inferred mut");
-    assert!(
-        generated.contains("let mut x"),
-        "Should infer `let mut x` in generated Rust. Got:\n{}",
-        generated
-    );
+    // ADR-0002: local mutability is explicit, so reassigning a plain `let` is WJ0051
+    let d = windjammer::check::local_mutability_sources(&[("test.wj".to_string(), code.to_string())]);
+    assert!(d.len() == 1 && d[0].is_error() && d[0].message.starts_with("`x`"), "{d:?}");
 }
 
 #[test]

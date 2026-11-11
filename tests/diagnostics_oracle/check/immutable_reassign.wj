@@ -2,6 +2,6 @@
 fn main() {
     let x = 10
     x = 20
-//~@5+1 WARN WJ0051 `x` is assigned after
+//~@5+1 ERROR WJ0051 `x` is assigned after
     println("${x}")
 }

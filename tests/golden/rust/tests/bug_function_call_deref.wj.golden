@@ -15,7 +15,7 @@ pub fn execute(self) {
 }
 
 fn main() {
-    let mut action = Action::Update("test".to_string(), 42_i32);
+    let action = Action::Update("test".to_string(), 42_i32);
     action.execute();
 }
 

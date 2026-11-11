@@ -10,12 +10,8 @@
     feature = "analyzer_tests",
 ))]
 
-/// **Current behavior (dogfooding):** Windjammer may infer `let mut` / defer checks so `wj build`
-/// succeeds; rustc may still be invoked downstream. These tests assert what the `wj` CLI does
-/// today, not a future native immutability pass.
-///
-/// Rationale: tests document actual codegen so CI is green; tightening immutability belongs in
-/// the compiler with new diagnostics.
+/// ADR-0002: a local changed without `let mut` stops `wj build` with WJ0051 (assignment, compound assignment, field
+/// assignment, a mutating method, also inside an impl method); with `let mut` the build succeeds.
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
@@ -26,8 +22,8 @@ mod test_utils;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_let_direct_reassignment_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
+fn test_let_direct_reassignment_is_wj0051() {
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let x = 5
@@ -35,10 +31,8 @@ fn main() {
 }
 "#,
     );
-    assert_eq!(
-        exit_code, 0,
-        "wj build is expected to succeed (mut inferred or deferred)"
-    );
+    assert_eq!(exit_code, 1, "a changed `let` is WJ0051, stderr:\n{stderr}");
+    assert!(stderr.contains("WJ0051"), "{stderr}");
 }
 
 #[test]
@@ -65,8 +59,8 @@ fn main() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_let_compound_assignment_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
+fn test_let_compound_assignment_is_wj0051() {
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let count = 0
@@ -74,7 +68,8 @@ fn main() {
 }
 "#,
     );
-    assert_eq!(exit_code, 0, "wj build expected to succeed");
+    assert_eq!(exit_code, 1, "a changed `let` is WJ0051, stderr:\n{stderr}");
+    assert!(stderr.contains("WJ0051"), "{stderr}");
 }
 
 #[test]
@@ -101,8 +96,8 @@ fn main() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_let_field_mutation_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
+fn test_let_field_mutation_is_wj0051() {
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 struct Point { x: int, y: int }
 
@@ -112,7 +107,8 @@ fn main() {
 }
 "#,
     );
-    assert_eq!(exit_code, 0, "wj build expected to succeed");
+    assert_eq!(exit_code, 1, "a changed `let` is WJ0051, stderr:\n{stderr}");
+    assert!(stderr.contains("WJ0051"), "{stderr}");
 }
 
 #[test]
@@ -141,8 +137,8 @@ fn main() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_let_mutating_method_call_wj_succeeds_or_reports() {
-    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
+fn test_let_mutating_method_call_is_wj0051() {
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 fn main() {
     let items: Vec<int> = Vec::new()
@@ -150,7 +146,8 @@ fn main() {
 }
 "#,
     );
-    assert_eq!(exit_code, 0, "wj build expected to succeed");
+    assert_eq!(exit_code, 1, "a changed `let` is WJ0051, stderr:\n{stderr}");
+    assert!(stderr.contains("WJ0051"), "{stderr}");
 }
 
 #[test]
@@ -177,8 +174,8 @@ fn main() {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_immutability_in_impl_methods_wj_succeeds() {
-    let (exit_code, _stdout, _stderr) = test_utils::compile_via_cli_exit(
+fn test_immutability_in_impl_methods_is_wj0051() {
+    let (exit_code, _stdout, stderr) = test_utils::compile_via_cli_exit(
         r#"
 struct Counter { value: int }
 
@@ -190,7 +187,8 @@ impl Counter {
 }
 "#,
     );
-    assert_eq!(exit_code, 0, "wj build expected to succeed");
+    assert_eq!(exit_code, 1, "a changed `let` is WJ0051, stderr:\n{stderr}");
+    assert!(stderr.contains("WJ0051"), "{stderr}");
 }
 
 // ==========================================

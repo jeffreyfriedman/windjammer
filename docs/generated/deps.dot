@@ -166,7 +166,7 @@ digraph deps {
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="31"];
   "cli" -> "cargo_toml" [label="5"];
-  "cli" -> "check" [label="27"];
+  "cli" -> "check" [label="26"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="3"];
   "cli" -> "compiler_config" [label="3"];
