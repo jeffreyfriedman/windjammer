@@ -1,0 +1,287 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 hello world\ninsert 1 bye\nswap 0 1\nprint\nundo\nprint\ndelete 5\n",
+  "stdout": "0: bye\n1: hello world\n0: hello world\n1: bye\nerror: bad index\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 a\ninsert 1 b\nreplace 0 z\nundo\nundo\nredo\nprint\ninsert 0 q\nredo\nprint\n",
+  "stdout": "0: a\n1: b\nerror: nothing to redo\n0: q\n1: a\n2: b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "print\nundo\nredo\n",
+  "stdout": "(empty)\nerror: nothing to undo\nerror: nothing to redo\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 a\ninsert 0 b\ninsert 0 c\ninsert 0 d\ninsert 0 e\ninsert 0 f\nundo\nundo\nundo\nundo\nundo\nundo\nprint\nredo\nredo\nredo\nredo\nredo\nredo\nprint\n",
+  "stdout": "error: nothing to undo\n0: a\nerror: nothing to redo\n0: f\n1: e\n2: d\n3: c\n4: b\n5: a\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert x a\ninsert 1 a\ninsert 0\ninsert 0 \ninsert 0 a b  c\nprint\nfoo\ndelete\ndelete 0 1\nswap 0\nswap 0 0 0\nundo 1\nprint now\ninsert 1234567 a\ninsert -1 a\n",
+  "stdout": "error: bad arguments\nerror: bad index\nerror: bad arguments\nerror: bad arguments\n0: a b  c\nerror: unknown command\nerror: bad arguments\nerror: bad arguments\nerror: bad arguments\nerror: bad arguments\nerror: bad arguments\nerror: bad arguments\nerror: bad arguments\nerror: bad arguments\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 a\ninsert 1 b\nswap 0 0\nundo\nprint\nswap 0 2\nswap 2 0\nreplace 2 x\ndelete 2\nundo\nundo\nundo\nundo\nprint\n",
+  "stdout": "0: a\n1: b\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 one\ninsert 0 two\ndelete 1\nundo\nredo\nredo\nprint\nreplace 0 TWO\nundo\nprint\nredo\nprint\n",
+  "stdout": "error: nothing to redo\n0: two\n0: two\n0: TWO\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 a\nundo\nredo\ninsert 0 b\nredo\nundo\nundo\nundo\nprint\n",
+  "stdout": "error: nothing to redo\nerror: nothing to undo\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\ninsert 0 x\n\nUNDO\nundo\nundo\n",
+  "stdout": "error: unknown command\nerror: nothing to undo\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 0 a\ninsert 1 b\ninsert 2 c\ndelete 0\ndelete 0\ndelete 0\nprint\nundo\nundo\nprint\nundo\nundo\nprint\nredo\nredo\nredo\nredo\nprint\n",
+  "stdout": "(empty)\n0: b\n1: c\n0: a\n1: b\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 5 alpha\ninsert 3 g\ndelete 0\ndelete 4\ndelete 0\nundo\nreplace 1\nreplace 1 g\nredo\nprint\ninsert 0 g\nredo\ndelete 1\ninsert 3 g\ndelete 5\nreplace 0 e f g\nprint\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad arguments\nerror: bad index\nerror: nothing to redo\n(empty)\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: bad index\n0: e f g\n0: e f g\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete 3\ninsert 5 delta  d\nredo\nredo\nredo\ndelete 5\ninsert 0 g\nprint\ninsert 2 alpha\ninsert 3 beta x\nundo\nprint\nredo\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: nothing to redo\nerror: nothing to redo\nerror: nothing to redo\nerror: bad index\n0: g\nerror: bad index\nerror: bad index\n(empty)\n0: g\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 1 alpha\nundo\ninsert 5 delta  d\nprint\ninsert 3 g\ninsert 0 g\nundo\nreplace 4 beta x\nundo\ninsert 0 beta x\nprint\nreplace 5 beta x\nundo\nreplace 3 alpha\nreplace 3 beta x\ninsert 2 e f g\nreplace 3 delta  d\nprint\nreplace 1 beta x\nswap 4 2\nundo\ndelete 4\ninsert 4 e f g\ninsert 0 e f g\nprint\nreplace 0 delta  d\ninsert z q\nundo\ndelete 4\nprint\n",
+  "stdout": "error: bad index\nerror: nothing to undo\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: nothing to undo\n0: beta x\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\n0: e f g\nerror: bad arguments\nerror: bad index\n0: e f g\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete 0\ninsert 1 e f g\nredo\ninsert 4 e f g\nprint\nreplace 4 g\ninsert 4 beta x\ndelete 0\nswap 1 3\nredo\nredo\nreplace 2 e f g\nprint\ninsert 5 g\nprint\ninsert 5 beta x\ninsert 4 beta x\nprint\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: nothing to redo\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: nothing to redo\nerror: bad index\n(empty)\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\n(empty)\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "print\ninsert 2 alpha\nreplace 1 e f g\nredo\nundo\ninsert 5 g\ndelete 1\nredo\nprint\nprint\ninsert 0 beta x\ninsert 1 beta x\nprint\n",
+  "stdout": "(empty)\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: nothing to redo\n(empty)\n(empty)\n0: beta x\n1: beta x\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "swap 2 4\ninsert 2 e f g\nreplace 3 alpha\nundo\ninsert z q\nredo\nredo\ninsert 1 \ninsert 4 g\nundo\nundo\nundo\ninsert 1 \nundo\ndelete 3\ninsert 0 delta  d\nredo\nreplace 1 e f g\nundo\ninsert 1 beta x\ninsert 0 delta  d\nundo\ninsert 1 \nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad arguments\nerror: nothing to redo\nerror: nothing to redo\nerror: bad arguments\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\nerror: nothing to undo\nerror: bad arguments\nerror: nothing to undo\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: bad arguments\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "undo\nswap 1 4\ninsert z q\nswap 0 1\nreplace 3 delta  d\ninsert 5 e f g\ndelete 4\ninsert 4 beta x\nswap 0 3\nreplace 1\nundo\nprint\n",
+  "stdout": "error: nothing to undo\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: nothing to undo\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "print\ndelete 2\ninsert 5 alpha\nredo\nundo\ninsert 5 g\ninsert 2 e f g\nundo\ninsert 4 e f g\nswap 2 2\ninsert 4 e f g\nreplace 1 e f g\ninsert 1 \ninsert 2 alpha\ninsert 3 g\ninsert 0 beta x\nprint\nredo\nreplace 5 delta  d\ndelete 2\nundo\ninsert 0 alpha\nprint\ndelete 0\ninsert 5 alpha\nprint\n",
+  "stdout": "(empty)\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: bad index\n0: beta x\nerror: nothing to redo\nerror: bad index\nerror: bad index\n0: alpha\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "print\nprint\nundo\nreplace 1 beta x\ndelete 5\nundo\ninsert 1 \nprint\n",
+  "stdout": "(empty)\n(empty)\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad arguments\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "redo\ninsert 1 beta x\ninsert 0 beta x\ninsert 0 delta  d\nprint\nprint\nreplace 1 alpha\ninsert z q\nprint\nundo\nprint\nprint\n",
+  "stdout": "error: nothing to redo\nerror: bad index\n0: delta  d\n1: beta x\n0: delta  d\n1: beta x\nerror: bad arguments\n0: delta  d\n1: alpha\n0: delta  d\n1: beta x\n0: delta  d\n1: beta x\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete 3\nprint\nswap 1 2\ndelete 2\ninsert 4 delta  d\nprint\nswap 2 3\nredo\ninsert z q\ndelete 3\nprint\nreplace 0 delta  d\nprint\ninsert 0 alpha\ndelete 3\nundo\nprint\nprint\n",
+  "stdout": "error: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: bad index\n(empty)\nerror: bad index\nerror: nothing to redo\nerror: bad arguments\nerror: bad index\n(empty)\nerror: bad index\n(empty)\nerror: bad index\n(empty)\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "print\nprint\nundo\ninsert 1 alpha\nprint\nundo\nreplace 3 e f g\ndelete 4\nreplace 0 e f g\nreplace 1 beta x\nredo\nredo\ninsert 5 beta x\nprint\nswap 2 3\ninsert 1 delta  d\nundo\n\nreplace 3 beta x\nredo\nundo 2\nredo\ninsert 5 delta  d\ninsert 3 beta x\nprint\nundo\ninsert 3 delta  d\nprint\nredo\ninsert 2 e f g\nprint\n",
+  "stdout": "(empty)\n(empty)\nerror: nothing to undo\nerror: bad index\n(empty)\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: nothing to redo\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: nothing to redo\nerror: bad arguments\nerror: nothing to redo\nerror: bad index\nerror: bad index\n(empty)\nerror: nothing to undo\nerror: bad index\n(empty)\nerror: nothing to redo\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "print\ninsert 2 beta x\nreplace 1 alpha\ninsert 4 g\ninsert 0 e f g\nswap 3 3\nundo\nreplace 4 delta  d\ninsert 5 alpha\nundo\nundo\ninsert 4 e f g\ndelete 1\nreplace 3 e f g\nundo\ninsert 4 alpha\nundo\nswap 3 3\nredo\nprint\n",
+  "stdout": "(empty)\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: nothing to undo\nerror: bad index\n0: e f g\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "undo\nprint\nprint\ndelete 1\nundo\nredo\nredo\nredo\ninsert 4 delta  d\nprint\ninsert 5 g\ninsert 5 g\nundo\ninsert 5 alpha\nredo\nredo\ndelete 0\ndelete 3\nprint\n",
+  "stdout": "error: nothing to undo\n(empty)\n(empty)\nerror: bad index\nerror: nothing to undo\nerror: nothing to redo\nerror: nothing to redo\nerror: nothing to redo\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: nothing to redo\nerror: nothing to redo\nerror: bad index\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "bogus\nredo\nreplace 3 e f g\nredo\n\ninsert 3 alpha\ninsert 1 g\nprint\nreplace 5 g\nundo\ndelete 0\ninsert 3 alpha\nundo\nundo\nswap 5 3\nprint\n",
+  "stdout": "error: unknown command\nerror: nothing to redo\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\n(empty)\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "replace 1 alpha\nundo\ninsert z q\n\ninsert 5 e f g\ninsert 5 g\nswap 4 1\nreplace 4 g\nprint\n",
+  "stdout": "error: bad index\nerror: nothing to undo\nerror: bad arguments\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete 2\ndelete 2\ninsert 1 beta x\ndelete 0\nundo 2\nreplace 4 delta  d\nundo\nundo\ninsert 1 beta x\ninsert 1 \ndelete 1\nredo\ndelete 4\nredo\nredo\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: nothing to redo\nerror: nothing to redo\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 delta  d\nprint\ninsert 3 e f g\nundo\ndelete 1\nreplace 3 delta  d\nreplace 1 e f g\ndelete 1\ninsert 1 alpha\nredo\ndelete 1\nredo\nswap 0 4\ninsert 4 alpha\ndelete 3\nreplace 5 e f g\ninsert 2 e f g\ninsert 1 \nredo\nprint\nredo\ninsert 0 g\nundo\ninsert 0 beta x\nundo\nredo\ndelete 2\nprint\n",
+  "stdout": "0: delta  d\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: nothing to redo\n0: delta  d\nerror: nothing to redo\nerror: bad index\n0: beta x\n1: delta  d\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete\ninsert 0 g\nswap 2 3\ninsert 1 beta x\nreplace 1\ndelete 0\nundo\nprint\ninsert 1 \nswap 3 4\nprint\n",
+  "stdout": "error: bad arguments\nerror: bad index\nerror: bad arguments\n0: g\n1: beta x\nerror: bad arguments\nerror: bad index\n0: g\n1: beta x\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "undo\nredo\n\ndelete 3\ninsert 5 e f g\nundo\nundo\ndelete 4\nredo\nswap 3 5\nprint\n",
+  "stdout": "error: nothing to undo\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\nerror: bad index\nerror: nothing to redo\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "redo\nundo\nundo\ninsert 2 beta x\nprint\ninsert 3 e f g\nreplace 3 e f g\nprint\n",
+  "stdout": "error: nothing to redo\nerror: nothing to undo\nerror: nothing to undo\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 1 e f g\ninsert 0 alpha\nprint\nswap 5 4\nredo\nundo 2\nreplace 3 beta x\nredo\nredo\ninsert 1 \ninsert 4 e f g\nredo\nprint\nundo\ninsert 1 g\nredo\nundo\ndelete\nswap 2 2\nredo\nundo\nreplace 2 alpha\nundo\ninsert 1 \nprint\ndelete 1\nprint\n",
+  "stdout": "error: bad index\n0: alpha\nerror: bad index\nerror: nothing to redo\nerror: bad arguments\nerror: bad index\nerror: nothing to redo\nerror: nothing to redo\nerror: bad arguments\nerror: bad index\nerror: nothing to redo\n0: alpha\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad arguments\n(empty)\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "undo\nswap 4 2\nprint\nreplace 5 g\nundo\nprint\ninsert 3 e f g\nprint\ninsert 4 delta  d\nredo\nprint\nprint\nredo\ninsert 1 beta x\nundo\ninsert 5 alpha\nundo\nredo\ninsert 2 e f g\nprint\nprint\n",
+  "stdout": "error: nothing to undo\nerror: bad index\n(empty)\nerror: bad index\nerror: nothing to undo\n(empty)\nerror: bad index\n(empty)\nerror: bad index\nerror: nothing to redo\n(empty)\n(empty)\nerror: nothing to redo\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: nothing to undo\nerror: nothing to redo\nerror: bad index\n(empty)\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 0 e f g\nreplace 1 alpha\nreplace 2 g\nprint\ndelete 2\ndelete 5\nundo 2\nreplace 1 g\ndelete 4\nredo\nundo\nreplace 2 e f g\ninsert 1 beta x\nundo\nundo\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\n0: e f g\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: nothing to undo\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete 3\nswap 3 1\nreplace 1\nredo\ninsert 3 beta x\nreplace 4 beta x\ndelete 0\nprint\ninsert 4 delta  d\nprint\ninsert 5 beta x\ninsert 0 beta x\nswap 3 0\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: bad arguments\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: bad index\n(empty)\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\n0: beta x\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "undo\nswap 3 3\ndelete 5\nprint\ninsert 1 beta x\nprint\ninsert 3 e f g\ndelete 4\nundo\ninsert 3 beta x\nswap 0 3\ninsert 3 e f g\nprint\n",
+  "stdout": "error: nothing to undo\nerror: bad index\nerror: bad index\n(empty)\nerror: bad index\n(empty)\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "delete 3\nundo\ndelete 3\nswap 5 2\nswap 4 2\nswap 2 3\nswap 1 3\nreplace 1\nreplace 2 delta  d\nreplace 1 g\nswap 4 1\ninsert 5 alpha\nprint\nundo\nredo\nprint\ninsert 5 alpha\nreplace 0 beta x\nprint\n",
+  "stdout": "error: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\n(empty)\nerror: nothing to undo\nerror: nothing to redo\n(empty)\nerror: bad index\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\nprint\nbogus\nprint\nundo\nprint\ndelete 2\ninsert z q\nreplace 2 g\nredo\ninsert 5 beta x\ninsert 2 e f g\ndelete\nundo\nundo\nredo\nreplace 1\nreplace 5 g\nprint\n",
+  "stdout": "(empty)\nerror: unknown command\n(empty)\nerror: nothing to undo\n(empty)\nerror: bad index\nerror: bad arguments\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: bad arguments\nerror: nothing to undo\nerror: nothing to undo\nerror: nothing to redo\nerror: bad arguments\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "insert 5 g\ninsert 2 delta  d\ninsert 4 beta x\nundo\ninsert 5 delta  d\nundo\ninsert 4 beta x\nredo\ninsert 3 delta  d\nreplace 3 beta x\nundo\nswap 0 3\ninsert 2 e f g\ninsert 2 delta  d\nswap 2 5\ninsert 3 alpha\nswap 0 5\nundo\ninsert 1 alpha\nswap 3 1\nundo\nredo\ndelete 1\ninsert 1 e f g\ndelete 2\nredo\ndelete 2\ninsert 4 delta  d\nprint\n",
+  "stdout": "error: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: nothing to undo\nerror: nothing to redo\nerror: bad index\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: bad index\nerror: bad index\n(empty)\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "redo\ndelete 4\nundo\ninsert 1 beta x\ninsert 2 g\nredo\ninsert z q\ndelete 4\ninsert z q\nundo\nprint\ninsert 4 delta  d\nredo\nprint\n",
+  "stdout": "error: nothing to redo\nerror: bad index\nerror: nothing to undo\nerror: bad index\nerror: bad index\nerror: nothing to redo\nerror: bad arguments\nerror: bad index\nerror: bad arguments\nerror: nothing to undo\n(empty)\nerror: bad index\nerror: nothing to redo\n(empty)\n"
+ }
+]

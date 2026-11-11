@@ -1,0 +1,15 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 6 100\nitem pear 2 250\nrule percent apple 10\nrule bogo pear 1 1\nrule threshold 500 10\n",
+  "stdout": "item apple 600 540\nitem pear 500 250\nrule 1 percent 60\nrule 2 bogo 250\nrule 3 threshold 79\ntotal 711\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item a 3 333\nrule fixed * 50\nrule percent * 33\nbogus\nrule percent a 101\nitem b x 4\n",
+  "stdout": "error line 4: bogus\nerror line 5: rule percent a 101\nerror line 6: item b x 4\nitem a 999 636\nrule 1 fixed 50\nrule 2 percent 313\ntotal 636\n"
+ }
+]

@@ -1,0 +1,281 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg app 1\npkg lib 3\npkg core 2\ndep app lib >= 2\ndep app core = 2\ndep lib core < 5\ninstall app\n",
+  "stdout": "install core 2\ninstall lib 3\ninstall app 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 1\npkg b 2\npkg c 3\ndep a b >= 3\ndep b c = 3\ndep c a > 0\ndep c d = 1\ninstall a\n",
+  "stdout": "error: a needs b >= 3 but found 2\nerror: cycle a -> b -> c -> a\nerror: missing dependency d of c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg a 1\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 1\ndep a a = 1\ninstall a\n",
+  "stdout": "error: cycle a -> a\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg x 1\npkg y 1\npkg z 1\ndep x y >= 1\ndep y z >= 1\ndep z x >= 1\ninstall x\ninstall y\n",
+  "stdout": "error: cycle x -> y -> z -> x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg top 1\npkg b 1\npkg c 1\npkg d 1\ndep top c >= 1\ndep top b >= 1\ndep b d >= 1\ndep c d >= 1\ninstall top\ninstall d\ninstall c\n",
+  "stdout": "install d 1\ninstall b 1\ninstall c 1\ninstall top 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 1\npkg a 2\ndep b a = 1\npkg z\nfoo bar\ndep a z\ndep a z ~ 1\ndep a z >= x\ninstall q\ninstall a\n\n",
+  "stdout": "error: duplicate package a\nerror: bad line 4\nerror: bad line 5\nerror: bad line 6\nerror: bad line 7\nerror: bad line 8\nerror: dep for unknown package b\nerror: unknown package q\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 5\npkg b 5\ndep a b > 5\ndep a b >= 6\ndep a b <= 4\ndep a b = 5\ndep a b < 5\ninstall a\n",
+  "stdout": "error: a needs b > 5 but found 5\nerror: a needs b >= 6 but found 5\nerror: a needs b <= 4 but found 5\nerror: a needs b < 5 but found 5\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 1\npkg m 7\npkg k 8\ndep a m >= 7\ndep a k <= 7\ndep k m >= 007\ndep m a = 1\ninstall a\ninstall k\n",
+  "stdout": "error: a needs k <= 7 but found 8\nerror: cycle a -> k -> m -> a\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg a 1\ndep a w = 1\ndep a v = 1\npkg c 1\ndep c a = 1\ninstall c\ninstall a\n",
+  "stdout": "error: missing dependency v of a\nerror: missing dependency w of a\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "install x\ndep x y = 1\ninstall x\n",
+  "stdout": "error: dep for unknown package x\nerror: unknown package x\nerror: unknown package x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg db 1\npkg net 2\ndep db db >= 0\ninstall app\npkg core 4\ninstall log\ndep net core >= 4\npkg lib 5\npkg ui 2\ninstall net\npkg log 5\npkg app 3\n",
+  "stdout": "install app 3\ninstall log 5\ninstall core 4\ninstall net 2\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "dep log core <= 6\npkg log 3\npkg app 2\ninstall lib\npkg lib 1\ndep app app >= 0\njunk\ndep lib lib <= 1\ninstall net\npkg net 5\ninstall app\npkg core 4\ndep lib core <= 5\npkg db 3\ndep db db <= 5\n",
+  "stdout": "error: bad line 7\nerror: cycle lib -> lib\nerror: cycle app -> app\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg log 5\npkg db 1\npkg net 1\npkg lib 3\npkg core 2\ndep net net <= 1\ndep db net <= 1\ndep lib lib >= 2\ndep core core <= 2\ndep net lib <= 5\ndep db lib <= 5\ndep log db <= 2\ndep lib lib >= 1\ndep db core >= 1\ndep db net <= 1\ninstall core\n",
+  "stdout": "error: cycle core -> core\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg lib 5\ndep db net >= 2\npkg app 1\ninstall net\npkg db 4\ndep lib app >= 0\ndep app app >= 0\ndep app net >= 3\ndep app app >= 1\npkg net 4\ndep db db >= 3\ndep app net >= 2\ndep db lib >= 4\ndep app net >= 3\ninstall app\ndep lib lib >= 3\ndep lib net >= 2\n",
+  "stdout": "error: cycle app -> app\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg db 6\ndep ui db <= 7\npkg ui 1\npkg core 3\ndep core db <= 7\ndep db db >= 4\ndep core ui >= 0\ninstall ui\ndep core db <= 6\ndep ui db >= 5\ndep ui db >= 4\ndep core db >= 4\ndep ui ui >= 0\ndep ui db <= 7\n",
+  "stdout": "error: cycle db -> db\nerror: cycle ui -> ui\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "dep app lib >= 2\ninstall core\npkg net 3\ndep net core >= 1\ndep lib log >= 1\npkg db 4\npkg lib 4\ninstall core\ndep core core <= 2\npkg log 2\ndep app log >= 1\ninstall app\ndep net net >= 1\ndep lib log >= 0\ndep db log <= 2\ndep app lib <= 6\ndep net app >= 0\ndep app core <= 2\npkg core 1\npkg app 2\ndep db db >= 2\n",
+  "stdout": "error: cycle core -> core\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg ui 4\ninstall core\ndep app lib <= 6\ndep log lib <= 7\npkg log 6\npkg db 1\npkg net 5\npkg core 5\npkg app 4\ndep ui lib <= 5\ndep log net <= 7\ndep ui net >= 5\ndep lib net >= 4\npkg lib 5\ndep core lib >= 5\n",
+  "stdout": "install net 5\ninstall lib 5\ninstall core 5\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "install lib\ndep core net >= 0\ndep core core <= 4\npkg lib 6\npkg db 4\npkg core 2\ndep core core >= 1\ninstall db\ndep db app <= 2\ninstall net\npkg ui 3\npkg net 1\npkg app 1\ndep net app <= 3\npkg log 6\ndep core log >= 6\ndep db db <= 6\n",
+  "stdout": "error: cycle db -> db\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "dep net ui <= 5\npkg app 4\ndep ui ui >= 3\npkg core 3\ndep db log <= 4\ndep core ui >= 2\npkg db 3\npkg lib 2\npkg net 1\ndep net app >= 4\npkg ui 4\ndep app app >= 3\npkg log 2\ninstall app\ndep net core <= 4\n",
+  "stdout": "error: cycle app -> app\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg core 2\npkg app 1\npkg log 4\npkg db 2\npkg ui 4\npkg net 3\ndep app ui >= 2\ndep core ui <= 4\ninstall app\ninstall app\n",
+  "stdout": "install ui 4\ninstall app 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg log 6\npkg app 4\ndep lib log >= 5\ndep app log >= 6\ndep lib app >= 3\npkg ui 3\ndep ui log >= 5\ninstall app\ndep lib app >= 3\npkg lib 5\ndep log log >= 5\ndep ui ui >= 3\ninstall log\ndep ui lib >= 3\ndep ui app >= 2\ninstall lib\ndep ui app >= 2\n",
+  "stdout": "error: cycle log -> log\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg db 4\ninstall net\ndep core log >= 2\npkg log 4\npkg net 6\npkg core 2\npkg ui 5\ndep db net <= 6\ninstall db\ninstall log\n",
+  "stdout": "install net 6\ninstall db 4\ninstall log 4\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg net 2\npkg lib 1\npkg app 3\npkg log 5\npkg core 6\npkg db 4\ndep net lib <= 1\ndep lib app >= 3\ndep net app >= 1\ndep lib log <= 7\ndep lib db <= 4\ndep net lib >= 1\ndep core net <= 3\ndep log log >= 5\ndep log db >= 3\ndep app db >= 4\ndep lib lib <= 1\ninstall core\ninstall core\n",
+  "stdout": "error: cycle lib -> lib\nerror: cycle log -> log\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg core 4\ndep db ui <= 4\ndep lib core >= 2\ndep ui lib <= 4\ndep lib log <= 4\ndep db ui >= 0\npkg ui 2\npkg db 3\ndep db lib >= 1\ndep ui lib <= 4\npkg lib 3\ninstall db\npkg log 3\ninstall core\ndep net lib >= 3\npkg net 3\ninstall core\n",
+  "stdout": "install core 4\ninstall log 3\ninstall lib 3\ninstall ui 2\ninstall db 3\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg core 5\npkg log 4\npkg lib 3\npkg db 1\npkg ui 5\ndep log db >= 1\ndep core ui >= 3\ndep lib db >= 0\ndep lib ui >= 3\ndep lib db >= 0\ndep lib ui <= 7\ndep log ui <= 7\n\ndep ui ui >= 5\ndep lib ui >= 3\ninstall ui\n",
+  "stdout": "error: cycle ui -> ui\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg log 3\npkg net 1\npkg core 3\npkg lib 1\npkg app 4\npkg db 4\ndep core ui >= 3\ndep ui ui <= 3\ndep log core >= 1\ndep lib ui <= 3\ndep core app >= 2\ndep core ui >= 1\ninstall log\ninstall app\n",
+  "stdout": "error: dep for unknown package ui\nerror: missing dependency ui of core\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dep core ui <= 5\npkg ui 4\ndep lib log <= 8\ndep ui db <= 4\ninstall lib\npkg log 6\npkg db 3\npkg lib 1\ninstall core\npkg core 1\n",
+  "stdout": "install log 6\ninstall lib 1\ninstall db 3\ninstall ui 4\ninstall core 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "dep net app >= 3\ndep net log <= 8\npkg log 6\npkg core 6\npkg app 4\ninstall log\ndep app db >= 4\npkg db 6\ndep net net >= 3\ndep app app >= 4\ninstall net\ndep db core >= 5\ndep core core <= 7\ndep app app > 5\n",
+  "stdout": "error: dep for unknown package net\nerror: dep for unknown package net\nerror: dep for unknown package net\nerror: unknown package net\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg net 5\ninstall net\ndep net net <= 5\ndep core log <= 6\npkg core 1\ndep log log >= 4\ndep core net >= 5\npkg ui 6\ndep core log <= 8\ndep log log >= 5\ndep core log >= 4\ndep ui net <= 7\ninstall log\ndep core net >= 3\ndep ui net >= 5\npkg log 6\ninstall log\ndep ui log >= 5\n",
+  "stdout": "error: cycle net -> net\nerror: cycle log -> log\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg net 1\ninstall core\npkg lib 3\npkg core 2\npkg log 5\ninstall app\ndep lib lib <= 5\npkg db 4\npkg app 6\ninstall net\ndep net log > 2\ndep app net <= 3\n",
+  "stdout": "install core 2\ninstall log 5\ninstall net 1\ninstall app 6\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "dep net ui <= 5\ndep app ui >= 4\ndep app db >= 0\npkg lib 3\ndep net net >= 0\npkg ui 5\npkg net 1\npkg db 1\ninstall net\ndep ui lib <= 3\ndep net ui <= 5\ndep ui db >= 0\ndep app lib >= 2\ninstall db\npkg app 4\n",
+  "stdout": "error: cycle net -> net\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg core 1\npkg net 3\ndep net app >= 4\npkg log 4\ndep lib log <= 5\npkg ui 5\ndep lib core >= 0\ndep net net >= 3\ndep app app >= 6\npkg app 6\ndep app log >= 4\ndep lib lib <= 6\ndep app ui >= 4\ndep lib ui <= 5\ndep app core >= 1\ndep lib app <= 8\ndep net core <= 1\npkg lib 6\ninstall core\n",
+  "stdout": "install core 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg app 6\npkg ui 4\npkg lib 4\npkg log 5\ndep app ui <= 4\ndep ui ui > 5\ndep ui log <= 6\ndep ui lib > 4\ndep ui lib <= 4\ndep app ui <= 6\ndep app log <= 5\ndep ui ui <= 4\ndep log log >= 5\ninstall ui\n",
+  "stdout": "error: ui needs lib > 4 but found 4\nerror: cycle log -> log\nerror: ui needs ui > 5 but found 4\nerror: cycle ui -> ui\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "install ui\ninstall log\npkg ui 5\npkg log 6\ninstall app\ndep ui log >= 6\ndep ui ui >= 5\ndep app log <= 8\n",
+  "stdout": "error: dep for unknown package app\nerror: cycle ui -> ui\nerror: unknown package app\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pkg ui 4\ninstall core\ndep log ui >= 2\npkg core 2\ninstall core\npkg db 3\ndep log core >= 2\npkg net 4\npkg log 3\n",
+  "stdout": "install core 2\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg app 5\npkg log 2\ndep core ui >= 4\ndep db net >= 1\ninstall lib\ndep core lib >= 3\ndep app net >= 1\npkg ui 5\ndep ui net >= 2\ndep core log >= 0\ndep app ui >= 5\npkg db 2\ndep app ui <= 5\n",
+  "stdout": "error: dep for unknown package core\nerror: dep for unknown package core\nerror: dep for unknown package core\nerror: unknown package lib\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg core 1\ninstall db\npkg net 6\ndep log ui <= 3\ninstall db\npkg db 4\npkg ui 1\ndep core log <= 4\npkg app 6\n",
+  "stdout": "error: dep for unknown package log\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dep app log <= 8\npkg log 6\ndep log lib <= 4\npkg app 4\npkg core 1\ninstall core\ndep ui lib >= 3\ninstall core\npkg ui 1\ndep app lib <= 5\npkg lib 4\ndep log lib <= 4\n",
+  "stdout": "install core 1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "pkg lib 2\ndep core lib >= 2\ndep core lib >= 1\ndep lib log >= 1\ndep core lib <= 4\npkg log 2\ninstall log\ninstall lib\npkg core 2\ndep core log >= 1\ninstall lib\ndep core core >= 2\ndep core log >= 1\ndep log log >= 1\n",
+  "stdout": "error: cycle log -> log\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "install app\npkg log 6\npkg db 5\npkg lib 2\ndep app db >= 5\npkg net 3\ninstall log\npkg app 5\ndep core ui >= 2\npkg core 2\npkg ui 4\n",
+  "stdout": "install db 5\ninstall app 5\ninstall log 6\n"
+ }
+]
