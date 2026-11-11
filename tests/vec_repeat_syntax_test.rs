@@ -29,6 +29,12 @@
 ///
 /// This causes type mismatches when the repeated value and count have different types.
 use std::fs;
+
+/// The element and count widths are the solver's (`vec![0_i32; 5_usize]` is the same repeat expression as
+/// `vec![0; 5]`, and valid Rust); these tests check the repeat syntax, so integer suffixes are ignored.
+fn without_int_suffixes(rust: &str) -> String {
+    regex::Regex::new(r"(\d)_(?:i|u)(?:8|16|32|64|128|size)\b").unwrap().replace_all(rust, "$1").into_owned()
+}
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -60,6 +66,7 @@ pub fn test_repeat() {
             String::from_utf8_lossy(&wj_output.stderr)
         )
     });
+    let generated = without_int_suffixes(&generated);
 
     // Should preserve semicolon, not convert to comma
     assert!(
@@ -108,6 +115,7 @@ pub fn test_option_repeat() {
             String::from_utf8_lossy(&wj_output.stderr)
         )
     });
+    let generated = without_int_suffixes(&generated);
 
     // Should preserve semicolon
     assert!(
@@ -145,6 +153,7 @@ pub fn test_2d_vec() {
             String::from_utf8_lossy(&wj_output.stderr)
         )
     });
+    let generated = without_int_suffixes(&generated);
 
     // Should preserve both semicolons
     assert!(
@@ -195,6 +204,7 @@ pub fn test_struct_repeat() {
             String::from_utf8_lossy(&wj_output.stderr)
         )
     });
+    let generated = without_int_suffixes(&generated);
 
     // Should preserve semicolon with identifier
     assert!(
