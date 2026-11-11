@@ -14,6 +14,7 @@ mod test_api;
 pub use test_api::compiler_identity_of;
 pub mod moves;
 pub mod locate;
+pub mod local_mut;
 mod project;
 mod rust_calls;
 mod rust_surface_health;
@@ -133,6 +134,27 @@ pub fn rust_crate_calls(path: &Path) -> Result<Checked> {
         sources.push((s.path.display().to_string(), s.text.clone()));
     }
     Ok(Checked { report: Report::new("check", finish(out)), sources: sources.into_iter().collect() })
+}
+
+/// ADR-0002: the `WJ0051` diagnostics (local bindings changed without `mut`) of the program at `path`, exactly as
+/// `wj check` reports them; `wj build` and `wj run` print these. No cache, no other check.
+pub fn local_mutability(path: &Path) -> Result<Checked> {
+    let (sources, _) = inputs(path)?;
+    let found = local_mutability_sources(&sources);
+    Ok(Checked { report: Report::new("check", found), sources: sources.into_iter().collect() })
+}
+
+/// `local_mutability` over in-memory sources (one program); files that do not parse are left out.
+pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic> {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut sink = Vec::new();
+    let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
+    let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
+    let tables = std::sync::Arc::new(crate::ir::stdlib_tables::StdlibTables::compute());
+    let found = local_mut::run(&refs, tables);
+    std::panic::set_hook(previous);
+    finish(found)
 }
 
 /// Check in-memory sources (used by tests and the LSP).

@@ -21,7 +21,7 @@ fn main() {
 EOF
 $ wj check --json mutate.wj
 "schema_version": 2
-"code": "WJ0004"
+"code": "WJ0051"
 "applicability": "machine_applicable"
 "replacement": "mut "
 ```

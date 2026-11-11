@@ -24,6 +24,8 @@ struct Entry {
     ret: Option<Type>,
     /// Declared without `self`: an associated function (`Vec::new()`).
     is_static: bool,
+    /// Declared `&mut self`: the method changes its receiver (`push`, `insert`, `next`).
+    changes_receiver: bool,
 }
 
 /// An instantiated signature. A type the receiver or the turbofish does not fix stays `Type::Generic`.
@@ -72,6 +74,10 @@ fn collect_entries(source: &str, path: &str, table: &mut BTreeMap<(String, Strin
                     params: m.parameters.iter().filter(|p| p.name != "self").map(|p| p.type_.clone()).collect(),
                     ret: m.return_type.clone(),
                     is_static: !m.parameters.iter().any(|p| p.name == "self"),
+                    changes_receiver: m
+                        .parameters
+                        .iter()
+                        .any(|p| p.name == "self" && p.ownership == crate::parser::ast::ownership::OwnershipHint::Mut),
                 };
                 table.insert((decl.name.clone(), m.name.clone()), entry);
             }
@@ -99,6 +105,18 @@ impl CoreSurface {
     pub fn declared_static(&self, type_name: &str, function: &str) -> Option<(Vec<String>, Vec<String>, Vec<Type>, Option<Type>)> {
         let e = self.table.get(&(type_name.to_string(), function.to_string())).filter(|e| e.is_static)?;
         Some((e.type_generics.clone(), e.method_generics.clone(), e.params.clone(), e.ret.clone()))
+    }
+
+    /// Whether `receiver.method(..)` changes its receiver: `Some(true)` for a method declared `&mut self`,
+    /// `Some(false)` for any other declared method, `None` when the surface does not declare it for this receiver.
+    /// ADR-0002: a local binding changed this way must be declared `let mut`.
+    pub fn changes_receiver(&self, receiver: &Type, method: &str) -> Option<bool> {
+        let (name, _) = head(receiver)?;
+        let e = self
+            .table
+            .get(&(name.to_string(), method.to_string()))
+            .or_else(|| is_element_container(name).then(|| self.enumerable.get(method)).flatten())?;
+        (!e.is_static).then_some(e.changes_receiver)
     }
 
     /// Whether `type_name::name` is declared without `self` (an associated function).

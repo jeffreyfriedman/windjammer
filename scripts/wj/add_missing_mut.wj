@@ -1,0 +1,228 @@
+// Insert the `mut` that ADR-0002 requires on every local binding a program changes (WJ0051), and nothing else.
+//   wj run scripts/wj/add_missing_mut.wj -- WJ ROOT... [--exclude PATH]... [--check]
+// Outside this repository, grant the tree: `wj run --allow fs.read=DIR/** --allow fs.write=DIR/**/*.wj ...`.
+// Every `.wj` file under each ROOT belongs to one program: the project whose `wj.toml` is its nearest ancestor (inside
+// ROOT), or the file alone. Each program is checked once (`WJ check --json`); only the WJ0051 fixes are applied, so a
+// corpus that keeps deprecated syntax on purpose is left as it is (`wj fix` would migrate that too). `--check` writes
+// nothing and exits 1 when a `mut` is missing. Prints one line per program changed and a total.
+use std::env
+use std::fs
+use std::strings
+use wj_json_doc::Json
+use wj_json_doc::parse
+use wj_json_doc::get
+use wj_json_doc::items
+use wj_json_doc::as_str
+use wj_json_doc::as_i64
+use wj_json_doc::object
+use wj_proc::sh
+use wj_proc::quote
+
+struct Insert {
+    file: string,
+    at: int,
+    text: string,
+}
+
+fn str_of(d: Json, key: string) -> string {
+    as_str(get(d, key) ?? object()) ?? ""
+}
+
+fn int_of(d: Json, key: string) -> int {
+    as_i64(get(d, key) ?? object()) ?? -1
+}
+
+fn parent(path: string) -> string {
+    let parts = strings.split(path, "/")
+    if parts.len() <= 1 {
+        return "."
+    }
+    let mut out = parts[0]
+    let mut i = 1
+    while i + 1 < parts.len() {
+        out = out + "/" + parts[i]
+        i += 1
+    }
+    out
+}
+
+fn skipped_dir(path: string) -> bool {
+    for part in strings.split(path, "/") {
+        if part == "target" || part == "build" || part == ".wj-cache" || part == "node_modules" || part == ".git" {
+            return true
+        }
+    }
+    false
+}
+
+// The program a file belongs to: the nearest directory (not above `root`) with a `wj.toml`, or the file itself.
+fn unit_of(file: string, root: string) -> string {
+    let mut dir = parent(file)
+    while strings.starts_with(dir, root) {
+        if fs.exists(dir + "/wj.toml") {
+            return dir
+        }
+        if dir == root {
+            break
+        }
+        dir = parent(dir)
+    }
+    file
+}
+
+// The `.wj` files under `root`, sorted (outside the repository too: listing goes through `find`).
+fn wj_files(root: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let Ok(o) = sh("find " + quote(root) + " -name '*.wj' -type f | sort") else {
+        return out
+    }
+    for line in strings.split(o.stdout, "\n") {
+        if line != "" {
+            out.push(line)
+        }
+    }
+    out
+}
+
+fn excluded(path: string, excludes: Vec<string>) -> bool {
+    for x in excludes {
+        if path == x || strings.starts_with(path, x + "/") {
+            return true
+        }
+    }
+    false
+}
+
+// The WJ0051 insertions `wj check --json` proposes for one program.
+fn inserts_for(wj: string, unit: string) -> Vec<Insert> {
+    let mut out: Vec<Insert> = Vec::new()
+    let run = sh(quote(wj) + " check --json " + quote(unit))
+    let Ok(o) = run else {
+        return out
+    }
+    let Ok(report) = parse(o.stdout) else {
+        // not a report (a toolchain pin, an unreadable path): say so, never skip silently
+        let first = strings.split(o.stderr, "\n")
+        eprintln("add_missing_mut: could not check ${unit}: ${if first.len() > 0 { first[0] } else { "" }}")
+        return out
+    }
+    for d in items(get(report, "diagnostics") ?? object()) {
+        if str_of(d, "code") != "WJ0051" {
+            continue
+        }
+        for f in items(get(d, "fixes") ?? object()) {
+            for e in items(get(f, "edits") ?? object()) {
+                out.push(Insert { file: str_of(e, "file"), at: int_of(e, "byte_start"), text: str_of(e, "replacement") })
+            }
+        }
+    }
+    out
+}
+
+// `text` with every insertion of `file` applied (from the end, so earlier offsets stay valid).
+fn apply(text: string, file: string, inserts: Vec<Insert>) -> string {
+    let mut offsets: Vec<int> = Vec::new()
+    let mut texts: Vec<string> = Vec::new()
+    for ins in inserts {
+        if ins.file == file && ins.at >= 0 {
+            offsets.push(ins.at)
+            texts.push(ins.text)
+        }
+    }
+    let mut out = text
+    let mut done: Vec<int> = Vec::new()
+    while done.len() < offsets.len() {
+        // the largest offset not applied yet
+        let mut best = -1
+        let mut best_i = 0
+        let mut i = 0
+        while i < offsets.len() {
+            if !done.contains(&i) && offsets[i] > best {
+                best = offsets[i]
+                best_i = i
+            }
+            i += 1
+        }
+        done.push(best_i)
+        let at = best as usize
+        out = strings.substring(out, 0, at) + texts[best_i] + strings.substring(out, at, strings.len(out))
+    }
+    out
+}
+
+fn main() {
+    let args = env.args()
+    let mut wj = ""
+    let mut roots: Vec<string> = Vec::new()
+    let mut excludes: Vec<string> = Vec::new()
+    let mut check = false
+    let mut i = 1
+    while i < args.len() {
+        let a = args[i]
+        if a == "--exclude" && i + 1 < args.len() {
+            excludes.push(args[i + 1])
+            i += 2
+            continue
+        }
+        if a == "--check" {
+            check = true
+        } else if wj == "" {
+            wj = a
+        } else {
+            roots.push(a)
+        }
+        i += 1
+    }
+    if wj == "" || roots.len() == 0 {
+        println("usage: wj run scripts/wj/add_missing_mut.wj -- WJ ROOT... [--exclude PATH]... [--check]")
+        std::process::exit(2)
+    }
+    let mut units: Vec<string> = Vec::new()
+    for root in roots {
+        let files = if fs.is_dir(root) { wj_files(root) } else { [root] }
+        for f in files {
+            if skipped_dir(f) || excluded(f, excludes) {
+                continue
+            }
+            let u = unit_of(f, root)
+            if !units.contains(&u) {
+                units.push(u)
+            }
+        }
+    }
+    let mut total = 0
+    let mut programs = 0
+    for u in units {
+        let inserts = inserts_for(wj, u)
+        if inserts.len() == 0 {
+            continue
+        }
+        let mut files: Vec<string> = Vec::new()
+        for ins in inserts {
+            if !files.contains(&ins.file) && !excluded(ins.file, excludes) {
+                files.push(ins.file)
+            }
+        }
+        let mut n = 0
+        for f in files {
+            let Ok(text) = fs.read_to_string(f) else {
+                continue
+            }
+            let new_text = apply(text, f, inserts)
+            if new_text != text {
+                n += strings.len(new_text) as int - strings.len(text) as int
+                if !check {
+                    let _ = fs.write(f, new_text)
+                }
+            }
+        }
+        // each insertion is `mut `: four bytes
+        println("${u}: ${n / 4} mut")
+        total += n / 4
+        programs += 1
+    }
+    println("add_missing_mut: ${total} mut in ${programs} program(s)${if check { " missing" } else { " added" }}")
+    if check && total > 0 {
+        std::process::exit(1)
+    }
+}

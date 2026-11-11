@@ -1,0 +1,13 @@
+warning[WJ0051]: `items` is changed but is not declared `mut`
+  --> immutable_push.wj:6:5
+  |
+6 |     items.push(4)
+  |     ^^^^^ `push` changes `items` here
+  :::  immutable_push.wj:5:9
+  |
+5 |     let items = [1, 2, 3]
+  |         ----- declared without `mut`
+  = help: declare it with `mut items`
+  = note: local bindings are immutable unless declared `mut` (ADR-0002); this is accepted for now and becomes an error in a coming release: `wj fix` adds the `mut`
+  = fix (auto-fixable): declare `items` as `mut`
+  = explain: wj explain WJ0051

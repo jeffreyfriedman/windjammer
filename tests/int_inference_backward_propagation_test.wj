@@ -24,7 +24,7 @@ fn test_loop_index_backward_propagation() {
 }
 
 fn test_function_parameter_backward_propagation() {
-    let items: Vec<f32> = Vec::new()
+    let mut items: Vec<f32> = Vec::new()
     
     // Bug: idx inferred as I32, but remove() needs Usize
     // Expected: idx should be Usize

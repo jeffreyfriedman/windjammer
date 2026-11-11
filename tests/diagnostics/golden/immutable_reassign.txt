@@ -1,8 +1,13 @@
-warning[WJ0004]: `x` is assigned after its declaration but declared without `mut`
+warning[WJ0051]: `x` is assigned after its declaration but is not declared `mut`
   --> immutable_reassign.wj:4:5
   |
 4 |     x = 20
   |     ^ assigned here
-  = help: declare it with `let mut x` (ADR-0002: explicit `mut`)
-  = fix (auto-fixable): declare `x` as mutable
-  = explain: wj explain WJ0004
+  :::  immutable_reassign.wj:3:9
+  |
+3 |     let x = 10
+  |         - declared without `mut`
+  = help: declare it with `mut x`
+  = note: local bindings are immutable unless declared `mut` (ADR-0002); this is accepted for now and becomes an error in a coming release: `wj fix` adds the `mut`
+  = fix (auto-fixable): declare `x` as `mut`
+  = explain: wj explain WJ0051

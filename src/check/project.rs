@@ -12,7 +12,7 @@ use std::path::Path;
 
 /// GPU shader files (`@vertex` / `@fragment` / `@compute`) use WGSL built-ins and are compiled by
 /// the shader pipeline, not the Rust one; the build skips them and so do the semantic checks.
-fn is_shader(p: &Parsed) -> bool {
+pub(super) fn is_shader(p: &Parsed) -> bool {
     p.program.items.iter().any(|i| match i {
         crate::parser::Item::Function { decl, .. } => decl
             .decorators
@@ -66,6 +66,8 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>, mut memo: Opt
     }
     // Session-shared stdlib tables, computed on the first analysis that is not reused from the memo.
     let tables = std::cell::OnceCell::new();
+    // ADR-0002: local bindings changed without `mut` (WJ0051), over the whole program at once
+    out.extend(super::local_mut::run(parsed, tables.get_or_init(|| std::sync::Arc::new(StdlibTables::compute())).clone()));
     for p in parsed {
         // A file that already has errors would only add cascading analyzer noise.
         let has_errors = out

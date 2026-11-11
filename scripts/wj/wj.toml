@@ -18,7 +18,8 @@ wj_fs_walk = { path = "../../windjammer-ecosystem/packages/wj-fs-walk" }
 [capabilities]
 fs.read = ["./**", "../../**", "/tmp/**"]
 # generated sources and manifests are named by suffix (`*.wj`, `wj.toml`): the pattern says so out loud, a bare `**` never reaches them
-fs.write = ["./**", "../../**", "/tmp/**", "../../tests/check_negative/mutants/*.wj", "/tmp/**/*.wj", "/tmp/**/wj.toml"]
+# `add_missing_mut.wj` edits the repository's sources in place (`../../**/*.wj`)
+fs.write = ["./**", "../../**", "/tmp/**", "../../tests/check_negative/mutants/*.wj", "../../**/*.wj", "/tmp/**/*.wj", "/tmp/**/wj.toml"]
 process = ["bash", "cargo", "sh"]
 env.read = ["*"]
 

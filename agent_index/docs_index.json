@@ -1324,6 +1324,15 @@
   {
     "kind": "error",
     "module": "",
+    "name": "WJ0051",
+    "signature": "Local binding changed but not declared mut",
+    "source": "",
+    "summary": "A local binding (`let`, a `for` loop variable) is immutable unless declared `mut` (ADR-0002). The program assigns to it, assigns to a field or element of it, ca",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
     "name": "WJ0160",
     "signature": "Arena value escapes its arena",
     "source": "",

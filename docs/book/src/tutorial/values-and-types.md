@@ -41,9 +41,10 @@ fn main() {
 
 [Run this in the playground](../playground/index.html#lang=wj&code=Ly8gZXhwZWN0OiBBZGEsIDM2LCAxLjUsIHRydWUKZm4gbWFpbigpIHsKICAgIGxldCBuYW1lOiBzdHJpbmcgPSAiQWRhIgogICAgbGV0IGFnZTogaW50ID0gMzYKICAgIGxldCByYXRpbzogZmxvYXQgPSAxLjUKICAgIGxldCByZWFkeTogYm9vbCA9IHRydWUKICAgIHByaW50bG4oIiR7bmFtZX0sICR7YWdlfSwgJHtyYXRpb30sICR7cmVhZHl9IikKfQo)
 
-Assigning to a binding that is not `mut` is reported as `WJ0004`, with an automatic fix: `wj explain WJ0004` shows it.
-Write `let mut` for anything you change; the diagnostic is a warning today and becomes an error as the explicit-`mut`
-migration lands (see the [known gaps](https://github.com/jeffreyfriedman/windjammer/blob/main/docs/known-gaps.md)).
+Write `let mut` for any local you change: assigning to it, assigning to one of its fields, or calling a method that
+changes it (`push`, `insert`, or a method of your own that changes `self`). A local changed without `mut` is reported as
+`WJ0051` by `wj check`, `wj build` and `wj run` alike, with an automatic fix (`wj fix` adds every missing `mut`;
+`wj explain WJ0051` explains it). It is a warning while existing code migrates and becomes an error in a coming release.
 
 ## The everyday types
 

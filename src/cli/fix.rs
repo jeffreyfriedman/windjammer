@@ -83,6 +83,86 @@ fn collect(path: &Path, out: &mut Vec<PathBuf>, docs: bool) -> Result<()> {
     Ok(())
 }
 
+/// Insert `mut` where a local binding is changed without it (WJ0051), in the program at `path` and, with `docs`, in
+/// every ```wj code fence of the `.md` files under it (each fence is its own program). Returns (files, edits).
+fn add_missing_mut(path: &Path, check: bool, docs: bool) -> Result<(usize, usize)> {
+    let has_wj = path.is_dir() || path.extension().is_some_and(|e| e == "wj");
+    let checked = if has_wj {
+        crate::check::local_mutability(path)?
+    } else {
+        crate::check::Checked { report: crate::diagnostics::Report::new("check", Vec::new()), sources: Default::default() }
+    };
+    let outcome = crate::check::apply_fixes(&checked.report.diagnostics, &checked.sources, !check)?;
+    for f in &outcome.files_skipped {
+        eprintln!("warning: {f}: adding `mut` would not parse; left unchanged");
+    }
+    for d in &checked.report.diagnostics {
+        let Some(decl) = d.secondary_spans.first().filter(|s| !outcome.files_skipped.contains(&s.file)) else { continue };
+        let name = checked.sources.get(&decl.file).and_then(|t| t.get(decl.byte_start..decl.byte_end)).unwrap_or("?");
+        let verb = if check { "is missing" } else { "added" };
+        println!("{}:{}: `{name}` is changed: `mut` {verb} ({})", decl.file, decl.line_start, d.code);
+    }
+    let (mut files, mut edits) = (outcome.files_changed, outcome.edits_applied);
+    if docs {
+        let mut md = Vec::new();
+        collect(path, &mut md, true)?;
+        for file in md.iter().filter(|p| p.extension().is_some_and(|e| e == "md")) {
+            let text = fs::read_to_string(file)?;
+            let (new, n) = mut_in_fences(&text);
+            if n > 0 {
+                files += 1;
+                edits += n;
+                println!("fixed {} ({n} `mut` added in code fences)", file.display());
+                if !check {
+                    fs::write(file, new)?;
+                }
+            }
+        }
+    }
+    Ok((files, edits))
+}
+
+/// Whether a fence info string (```wj, ```wj,test, ```windjammer) holds Windjammer code.
+fn is_wj_fence(line: &str) -> bool {
+    let info = line.trim().strip_prefix("```").unwrap_or("");
+    !line.trim().is_empty() && line.trim().starts_with("```") && matches!(info.split(',').next(), Some("wj" | "windjammer"))
+}
+
+/// `md` with `mut` inserted in the code fences that change a binding declared without it, and the edit count.
+fn mut_in_fences(md: &str) -> (String, usize) {
+    let mut out = String::with_capacity(md.len() + 16);
+    let mut count = 0;
+    let mut lines = md.split_inclusive('\n');
+    while let Some(line) = lines.next() {
+        out.push_str(line);
+        if !is_wj_fence(line) {
+            continue;
+        }
+        let mut body = String::new();
+        let mut closing = None;
+        for l in lines.by_ref() {
+            if l.trim() == "```" {
+                closing = Some(l);
+                break;
+            }
+            body.push_str(l);
+        }
+        let diags = crate::check::local_mutability_sources(&[("fence.wj".to_string(), body.clone())]);
+        let edits: Vec<crate::diagnostics::Edit> = crate::diagnostics::apply::collect_edits(&diags).into_values().flatten().collect();
+        match crate::diagnostics::apply::apply_edits(&body, &edits).filter(|new| parses("fence.wj", new)) {
+            Some(new) if !edits.is_empty() => {
+                count += edits.len();
+                out.push_str(&new);
+            }
+            _ => out.push_str(&body),
+        }
+        if let Some(c) = closing {
+            out.push_str(c);
+        }
+    }
+    (out, count)
+}
+
 /// Fix a path (file or directory). With `check`, nothing is written and the call fails if
 /// any file would change.
 pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
@@ -126,6 +206,10 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
         }
         println!("fixed {} ({} rewrite(s))", name, out.changed_count());
     }
+    // ADR-0002: every local binding the program changes is declared `mut` (WJ0051), after the rewrites above
+    let (mut_files, mut_edits) = add_missing_mut(path, check, docs)?;
+    summary.files_changed += mut_files;
+    summary.rewrites += mut_edits;
     println!(
         "wj fix: {} file(s) scanned, {} changed, {} rewrite(s), {} occurrence(s) need manual migration",
         summary.files_scanned, summary.files_changed, summary.rewrites, summary.skipped

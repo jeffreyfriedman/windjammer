@@ -1,4 +1,4 @@
-// expect: WJ0004
+// expect: WJ0051
 fn main() {
     let x = 10
     x = 20
