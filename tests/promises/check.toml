@@ -167,3 +167,34 @@ polarity = "positive"
 files = { "m.wj" = "struct P { x: int }\n\nimpl P {\n    fn to_string(self) -> string {\n        \"(${self.x})\"\n    }\n}\n\nfn main() {\n    let p = P { x: 1 }\n    println(\"${p}\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 exit = 0
+
+[[case]]
+name = "check --error-format agent prints one line per diagnostic with its fix"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let v = vec![1, 2]\n    println(\"${v.len()} ${missing}\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+exit = 1
+output_has = ["m.wj:3:27: error WJ0001: cannot find value `missing`", "m.wj:2:13: warning W0007", "| fix(auto: wj check --fix)"]
+
+[[case]]
+name = "check --error-format agent on a valid program prints no diagnostics"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
+name = "check --error-format rejects an unknown format"
+polarity = "negative"
+files = { "m.wj" = "fn main() {}\n" }
+args = ["check", "--error-format", "terse", "{w}/m.wj"]
+exit = 2
+output_has = ["possible values"]
+
+[[case]]
+name = "check warns that $${ prints the braces literally (W0017)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let d = 4\n    println(\"$${d}.50\")\n}\n" }
+args = ["check", "--error-format", "agent", "{w}/m.wj"]
+exit = 0
+output_has = ["warning W0017", "| fix: replace `$${` with `\\$${`"]

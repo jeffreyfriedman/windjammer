@@ -53,7 +53,7 @@ fn say(msg: &str) {
     eprintln!("wj verify: {msg}");
 }
 
-pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint: bool) -> i32 {
+pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint: bool, out: crate::cli::run::Output) -> i32 {
     let cwd = std::env::current_dir().unwrap_or_default();
     let target = match crate::module_system::project::resolve_run_target(path, &cwd, bin) {
         Ok(t) => t,
@@ -76,6 +76,9 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     interp.args(["run", "--interpret"]);
     if no_lint {
         interp.arg("--no-lint");
+    }
+    if out.format == crate::diagnostics::render::Format::Agent {
+        interp.args(["--error-format", "agent"]);
     }
     interp.arg(&entry).args(args).stdout(Stdio::piped()).stderr(Stdio::inherit());
     let interp_out = match run_with_stdin(interp, stdin.as_deref()) {
@@ -101,7 +104,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
             return if interp_code != 0 { interp_code } else { 1 };
         }
     };
-    let (workdir, failed) = match crate::cli::run::build_native(&input, "rust", false) {
+    let (workdir, failed) = match crate::cli::run::build_native(&input, "rust", false, out) {
         Ok(r) => r,
         Err(e) => {
             say(&format!("the compiled build could not run: {e:#}"));
