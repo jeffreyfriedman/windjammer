@@ -204,7 +204,7 @@ pub fn execute(
         } else {
             crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cargo);
         }
-        crate::cargo_cache::configure_cargo_command(&mut cargo, crate::cargo_cache::TargetKind::Shared);
+        let _tree = crate::cargo_cache::configure_cargo_command(&mut cargo, crate::cargo_cache::TargetKind::Shared);
         let cargo_status = cargo
             .current_dir(output_dir)
             .stdout(std::process::Stdio::piped())

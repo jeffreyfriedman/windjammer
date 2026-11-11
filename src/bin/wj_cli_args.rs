@@ -824,6 +824,10 @@ pub enum CacheCommand {
         /// Also clear debug incremental trees when reclaiming
         #[arg(long)]
         aggressive: bool,
+
+        /// Also delete what a running build holds or wrote within the last hour (normally left alone)
+        #[arg(long)]
+        force: bool,
     },
     /// Pre-build the runtime for programs that use no network/async code (first compiled build becomes warm)
     Warm,

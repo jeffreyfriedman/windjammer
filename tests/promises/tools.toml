@@ -191,6 +191,28 @@ polarity = "positive"
 args = ["cache", "prune", "--aggressive"]
 
 [[case]]
+name = "cache prune leaves a target tree written within the hour"
+polarity = "positive"
+files = { "cache/cargo-target/verify/debug/deps/libx.rlib" = "x" }
+env = { WJ_CARGO_TARGET_ROOT = "{w}/cache" }
+args = ["cache", "prune", "--aggressive"]
+creates = ["cache/cargo-target/verify/debug/deps/libx.rlib"]
+
+[[case]]
+name = "cache prune --force deletes even a tree written within the hour"
+polarity = "positive"
+files = { "cache/cargo-target/verify/debug/deps/libx.rlib" = "x" }
+env = { WJ_CARGO_TARGET_ROOT = "{w}/cache" }
+args = ["cache", "prune", "--aggressive", "--force"]
+absent = ["cache/cargo-target/verify"]
+
+[[case]]
+name = "cache prune --force rejects arguments"
+polarity = "negative"
+args = ["cache", "prune", "--force", "extra"]
+exit = 2
+
+[[case]]
 name = "cache rejects an unknown action"
 polarity = "negative"
 args = ["cache", "explode"]

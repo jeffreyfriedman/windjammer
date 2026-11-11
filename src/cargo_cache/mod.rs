@@ -4,6 +4,7 @@
 //! projects when they share one target directory. See
 //! `docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md`.
 
+pub mod active;
 pub mod build_profile;
 
 use std::fs;
@@ -150,13 +151,16 @@ pub fn apply_lean_build_env(cmd: &mut Command) {
 }
 
 /// Apply shared/verify target dir to a cargo `Command` (overrides sandbox env).
-pub fn configure_cargo_command(cmd: &mut Command, kind: TargetKind) {
+/// Point `cmd` at the cache's target tree of `kind`. The returned lock holds the tree for the build: keep it
+/// alive until the cargo run ends, so an automatic prune does not delete under it.
+pub fn configure_cargo_command(cmd: &mut Command, kind: TargetKind) -> Option<active::TreeLock> {
     let dir = target_dir(kind);
     let _ = fs::create_dir_all(&dir);
     cmd.env("CARGO_TARGET_DIR", &dir);
     if kind == TargetKind::Verify {
         apply_lean_build_env(cmd);
     }
+    active::hold_path(&dir)
 }
 
 /// Convenience: shared target path (creates dir when possible).
@@ -276,6 +280,8 @@ pub struct PruneOptions {
     pub aggressive: bool,
     /// When true, prune if free space is below threshold even without --aggressive.
     pub auto_low_disk: bool,
+    /// Delete even what a running build holds or wrote within the hour (`wj cache prune --force`).
+    pub force: bool,
 }
 
 impl Default for PruneOptions {
@@ -286,6 +292,7 @@ impl Default for PruneOptions {
             ),
             aggressive: false,
             auto_low_disk: true,
+            force: false,
         }
     }
 }
@@ -310,18 +317,26 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
 
     let do_aggressive = opts.aggressive || (opts.auto_low_disk && low_disk);
 
+    // never under a running build: a tree a build holds is left alone, and so is anything written within the
+    // hour (a build that holds no lock), unless forced (`wj cache prune --force`)
+    let in_use = |tree: &Path| !opts.force && active::held(tree);
+    let deletable = |tree: &Path, path: &Path| opts.force || active::may_delete(tree, path);
     for root in [&shared, &verify] {
         if !root.exists() {
             continue;
         }
+        if in_use(root) {
+            report.messages.push(format!("{} is in use by a running build: not pruned", root.display()));
+            continue;
+        }
         report.freed_bytes += prune_old_incremental(root, opts.max_incremental_age, &mut report);
         if do_aggressive {
-            report.freed_bytes += prune_stale_fingerprint_dirs(root, &mut report);
+            report.freed_bytes += prune_stale_fingerprint_dirs(root, &deletable, &mut report);
         }
     }
 
     // The verify tree is ephemeral scratch: always drop it when large or when reclaiming.
-    if verify.exists() && (do_aggressive || dir_size(&verify) > VERIFY_MAX_BYTES) {
+    if verify.exists() && deletable(&verify, &verify) && (do_aggressive || dir_size(&verify) > VERIFY_MAX_BYTES) {
         let size = dir_size(&verify);
         if fs::remove_dir_all(&verify).is_ok() {
             report.freed_bytes += size;
@@ -332,7 +347,7 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
     report.freed_bytes += prune_stale_temp_scratch(
         &std::env::temp_dir(),
         if do_aggressive {
-            Duration::from_secs(30 * 60)
+            active::RECENT
         } else {
             TEMP_SCRATCH_MAX_AGE
         },
@@ -406,6 +421,11 @@ fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u6
     if size <= budget {
         return 0;
     }
+    // a running build may need any artifact of its tree, however old: leave a held tree alone
+    if active::held(tree) {
+        report.messages.push(format!("{} is in use by a running build: size budget not enforced", tree.display()));
+        return 0;
+    }
     let mut excess = size - budget;
     // Incremental state is cheap to regenerate and goes first; compiled dependency artifacts (the
     // pre-built runtime and its crates, minutes of CPU) go last, oldest first.
@@ -423,9 +443,13 @@ fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u6
     rest.sort_by_key(|(mtime, _, _)| *mtime);
     files.extend(rest);
     let mut freed = 0u64;
-    for (_, len, path) in files {
+    for (mtime, len, path) in files {
         if excess == 0 {
             break;
+        }
+        // written within the hour: possibly by a build that holds no lock
+        if active::is_recent(Some(mtime)) {
+            continue;
         }
         if fs::remove_file(&path).is_ok() {
             freed += len;
@@ -440,6 +464,12 @@ fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u6
         ));
     }
     freed
+}
+
+/// [`enforce_size_budget`] for the cache tests.
+#[doc(hidden)]
+pub fn enforce_size_budget_for_test(tree: &Path, budget: u64, report: &mut PruneReport) -> u64 {
+    enforce_size_budget(tree, budget, report)
 }
 
 fn collect_files(dir: &Path, out: &mut Vec<(SystemTime, u64, PathBuf)>) {
@@ -532,14 +562,14 @@ fn prune_old_incremental(root: &Path, max_age: Duration, report: &mut PruneRepor
     freed
 }
 
-fn prune_stale_fingerprint_dirs(root: &Path, report: &mut PruneReport) -> u64 {
+fn prune_stale_fingerprint_dirs(root: &Path, deletable: &dyn Fn(&Path, &Path) -> bool, report: &mut PruneReport) -> u64 {
     let mut freed = 0u64;
     // `.fingerprint` itself is needed; remove only empty nested leftovers is risky.
     // Instead remove `incremental` entirely under debug when aggressive+low disk —
     // next build regenerates quickly relative to full clean.
     for profile in ["debug"] {
         let incr = root.join(profile).join("incremental");
-        if incr.is_dir() {
+        if incr.is_dir() && deletable(root, &incr) {
             let size = dir_size(&incr);
             if fs::remove_dir_all(&incr).is_ok() {
                 freed += size;
@@ -715,7 +745,7 @@ mod tests {
         std::env::remove_var(ENV_USE_LOCAL);
 
         let mut cmd = Command::new("cargo");
-        configure_cargo_command(&mut cmd, TargetKind::Verify);
+        let _tree = configure_cargo_command(&mut cmd, TargetKind::Verify);
         // Can't easily read Command env; ensure dir was created.
         assert!(tmp.path().join("cargo-target").join("verify").exists());
 

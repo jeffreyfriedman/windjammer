@@ -81,6 +81,7 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
     if let Some(code) = failed {
         return Ok(code);
     }
+    let _tree = crate::cargo_cache::active::hold(crate::cargo_cache::TargetKind::Shared);
     let status = compiled_command(&workdir, release, args).status()?;
     Ok(status.code().unwrap_or(1))
 }
@@ -95,7 +96,8 @@ pub fn compiled_command(workdir: &Path, release: bool, args: &[String]) -> Comma
     if !release {
         crate::cargo_cache::build_profile::apply_fast_dev_env(&mut cmd);
     }
-    crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared);
+    // the caller holds the tree while the command runs (`cargo_cache::active::hold`)
+    drop(crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared));
     // Forward arguments to the program
     if !args.is_empty() {
         cmd.arg("--").args(args);
@@ -201,7 +203,7 @@ fn compile_or_report(output_dir: &Path, release: bool, source: &Path) -> Result<
     if release {
         build.arg("--release");
     }
-    crate::cargo_cache::configure_cargo_command(&mut build, crate::cargo_cache::TargetKind::Shared);
+    let _tree = crate::cargo_cache::configure_cargo_command(&mut build, crate::cargo_cache::TargetKind::Shared);
     let out = build.output()?;
     if out.status.success() {
         crate::cli::verdict::record(source, crate::cli::verdict::Outcome::Accepted, release);

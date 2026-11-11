@@ -1,0 +1,11 @@
+pub struct Sched {
+    pub pending: u32,
+    pub done: u32,
+}
+
+impl Sched {
+    pub fn step(self) -> Sched {
+        let batch = if self.pending > 4 { 4 } else { self.pending }
+        Sched { pending: self.pending - batch, done: self.done + batch }
+    }
+}
