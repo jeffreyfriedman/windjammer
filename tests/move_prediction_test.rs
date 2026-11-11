@@ -4,6 +4,9 @@
 //! rejects with E0382; the list of files with a prediction is pinned here and each entry was checked
 //! against the compiled build. A new prediction fails until it is confirmed and added (or fixed).
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::path::{Path, PathBuf};
 
 fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -144,7 +147,8 @@ fn predictions_on_agent_drafts() {
     let mut trials = Vec::new();
     wj_json(&root.join("bench/agent-dx/results/pilot4/trials"), &mut trials);
     trials.sort();
-    let dir = std::env::temp_dir().join(format!("wj-move-drafts-{}", std::process::id()));
+    let _scr = Scratch::new("move-drafts");
+    let dir = _scr.path().to_path_buf();
     std::fs::create_dir_all(&dir).unwrap();
     let mut hits = Vec::new();
     let mut n = 0;

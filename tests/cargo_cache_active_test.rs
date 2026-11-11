@@ -3,6 +3,9 @@
 //! run (`cargo_cache::active::hold`), and a prune skips a held tree, and anything modified within the last hour.
 //! `wj cache prune --force` (`PruneOptions::force`) still clears everything.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -29,7 +32,8 @@ fn aggressive(force: bool) -> PruneOptions {
 
 #[test]
 fn a_prune_skips_trees_that_builds_hold_and_recent_files() {
-    let root = std::env::temp_dir().join(format!("wj-cache-active-{}", std::process::id()));
+    let _scr = Scratch::new("cache-active");
+    let root = _scr.path().to_path_buf();
     let _ = fs::remove_dir_all(&root);
     std::env::set_var("WJ_CARGO_TARGET_ROOT", &root);
     let verify = cargo_cache::target_dir(TargetKind::Verify);
@@ -68,7 +72,8 @@ fn a_prune_skips_trees_that_builds_hold_and_recent_files() {
 
 #[test]
 fn the_size_budget_never_removes_files_of_a_held_tree_or_recent_files() {
-    let root = std::env::temp_dir().join(format!("wj-cache-budget-{}", std::process::id()));
+    let _scr = Scratch::new("cache-budget");
+    let root = _scr.path().to_path_buf();
     let _ = fs::remove_dir_all(&root);
     let tree = root.join("cargo-target");
     file(&tree.join("release/deps/old.rlib"), 4096, Duration::from_secs(3 * 3600));
