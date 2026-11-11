@@ -378,3 +378,18 @@ files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
 args = ["run", "--verify", "--compiled", "{w}/m.wj"]
 exit = 2
 output_has = ["cannot be used with"]
+
+[[case]]
+name = "run --interpret --speculate prints only the program's output"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"s ${2 * 3}\")\n}\n" }
+args = ["run", "--interpret", "--speculate", "{w}/m.wj"]
+stdout_has = ["s 6"]
+
+[[case]]
+name = "run --speculate cannot be combined with --compiled"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--speculate", "--compiled", "{w}/m.wj"]
+exit = 2
+output_has = ["cannot be used with"]

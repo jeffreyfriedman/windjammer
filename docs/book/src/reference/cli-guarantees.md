@@ -88,6 +88,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj run` | Compile and run a Windjammer file | tested |
 | `wj run --defer-drop` | Defer drop optimization mode (auto, always, never) | tested |
 | `wj run --defer-drop-threshold` | Defer drop threshold in bytes (default: 102400 = 100KB) | tested |
+| `wj run --speculate` | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) | tested |
 | `wj run --verify` | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr | tested |
 | `wj run --interpret` | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release | tested |
 | `wj run --target` | Target platform (rust, javascript, wasm) | tested |

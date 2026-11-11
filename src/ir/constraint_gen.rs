@@ -803,10 +803,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
             }
 
-            Statement::Assignment { target, value, .. } => {
+            Statement::Assignment { target, value, compound_op, .. } => {
                 let target_var = self.walk_expression(target);
                 let val_var = self.walk_expression(value);
-                self.cs.add_because(Constraint::TypeEquals(target_var, val_var), tagged("TY-UNIFY"));
+                // `a *= b` is arithmetic: an integer `b` may meet a float `a` (the backend converts it).
+                let c = if compound_op.is_some() { Constraint::NumericPeers(target_var, val_var, None) } else { Constraint::TypeEquals(target_var, val_var) };
+                self.cs.add_because(c, tagged("TY-UNIFY"));
                 self.detect_mutation_target(target);
                 self.emit_stored_by_assignment(target, value);
             }
@@ -996,9 +998,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.cs.add_because(Constraint::TypeIs(r, BaseType::Bool), tagged("TY-BOOL"));
                     self.cs.add_because(Constraint::TypeIs(result, BaseType::Bool), tagged("TY-BOOL"));
                 } else if is_arithmetic_op(op) {
-                    // Arithmetic: operands same numeric type, result same type
-                    self.cs.add_because(Constraint::TypeEquals(l, r), tagged("TY-UNIFY"));
-                    self.cs.add_because(Constraint::TypeEquals(result, l), tagged("TY-UNIFY"));
+                    // Arithmetic: operands one numeric class (unless an integer meets a float: mixed arithmetic, which the
+                    // backend converts), result their class (or the float side's).
+                    self.cs.add_because(Constraint::NumericPeers(l, r, Some(result)), tagged("TY-UNIFY"));
                     self.cs.add_because(Constraint::IsNumeric(l), tagged("NUM-MIXED"));
                     self.cs.add_because(Constraint::IsNumeric(r), tagged("NUM-MIXED"));
                 } else if is_bitwise_op(op) {
