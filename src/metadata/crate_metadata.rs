@@ -184,6 +184,10 @@ pub struct CrateMetadata {
     /// `const string` names that lower to `&'static str` (cross-crate owned formals).
     #[serde(default)]
     pub string_consts: Vec<String>,
+    /// Tuple-variant payload types: `Enum::Variant` -> serialized payload types in order (NUM-FIELD-DECLARED: a literal
+    /// passed to another crate's `Value::Int64(..)` has the declared payload width).
+    #[serde(default)]
+    pub variant_payloads: std::collections::BTreeMap<String, Vec<String>>,
     /// Version for compatibility
     pub version: String,
 }
@@ -201,8 +205,14 @@ impl CrateMetadata {
             functions: HashMap::new(),
             copy_structs: Vec::new(),
             string_consts: Vec::new(),
+            variant_payloads: Default::default(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
+    }
+
+    /// Whether there is anything to publish in `metadata.json`.
+    pub fn has_entries(&self) -> bool {
+        !self.structs.is_empty() || !self.functions.is_empty() || !self.variant_payloads.is_empty()
     }
 
     /// Merge in struct/function data from a ModuleMetadata
@@ -237,7 +247,46 @@ pub fn extract_struct_field_types(
             result.insert(struct_name.clone(), typed_fields);
         }
     }
+    // A tuple variant's payloads are its positional fields (`Value::Int64` -> `0: i64`), as for the crate's own enums
+    // (`type_inference::struct_field_registry::local_struct_field_table`).
+    for (variant, types) in &crate_meta.variant_payloads {
+        let payload: HashMap<String, Type> = types
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((i.to_string(), ModuleMetadata::deserialize_type(t)?)))
+            .collect();
+        if payload.len() == types.len() && !payload.is_empty() {
+            result.entry(variant.clone()).or_insert(payload);
+        }
+    }
     result
+}
+
+/// Tuple-variant payload types of every enum a program declares (nested modules included), for `metadata.json`.
+pub fn collect_variant_payloads(program: &crate::parser::Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    fn walk(item: &crate::parser::Item, out: &mut std::collections::BTreeMap<String, Vec<String>>) {
+        match item {
+            crate::parser::Item::Enum { decl, .. } => {
+                for v in &decl.variants {
+                    if let crate::parser::EnumVariantData::Tuple(tys) = &v.data {
+                        let types = tys.iter().map(ModuleMetadata::serialize_type).collect();
+                        out.insert(format!("{}::{}", decl.name, v.name), types);
+                    }
+                }
+            }
+            crate::parser::Item::Mod { items, .. } => {
+                for sub in items {
+                    walk(sub, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    for item in &program.items {
+        walk(item, &mut out);
+    }
+    out
 }
 
 /// Load struct field types from a metadata.json file on disk.
