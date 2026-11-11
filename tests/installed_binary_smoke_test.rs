@@ -77,6 +77,26 @@ fn normalize(s: &str, subs: &[(String, &str)]) -> String {
         .join("\n")
 }
 
+/// A generated crate's version names its directory (`0.1.0+wj<16 hex digits>`, `cargo_cache::crate_version`): like an
+/// absolute path, it legitimately differs between two work directories.
+fn mask_crate_identity(t: &str) -> String {
+    let mut out = String::with_capacity(t.len());
+    let mut rest = t;
+    while let Some(i) = rest.find("+wj") {
+        let tail = &rest[i + 3..];
+        let hex = tail.bytes().take(16).filter(u8::is_ascii_hexdigit).count();
+        out.push_str(&rest[..i + 3]);
+        if hex == 16 {
+            out.push_str("<dir>");
+            rest = &tail[16..];
+        } else {
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn tree(dir: &Path) -> Vec<(String, u64)> {
     tree_normalized(dir, &[])
 }
@@ -99,10 +119,7 @@ fn tree_normalized(dir: &Path, subs: &[(String, &str)]) -> Vec<(String, u64)> {
             } else {
                 let bytes = fs::read(&p).unwrap_or_default();
                 let bytes = match String::from_utf8(bytes) {
-                    Ok(t) => subs
-                        .iter()
-                        .fold(t, |t, (f, to)| t.replace(f.as_str(), to))
-                        .into_bytes(),
+                    Ok(t) => mask_crate_identity(&subs.iter().fold(t, |t, (f, to)| t.replace(f.as_str(), to))).into_bytes(),
                     Err(e) => e.into_bytes(),
                 };
                 let h = bytes.iter().fold(1469598103934665603u64, |h, x| {
