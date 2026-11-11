@@ -134,12 +134,12 @@ digraph deps {
   "build_utils" -> "project_paths" [label="1"];
   "build_utils" -> "rust_integration_tests" [label="2"];
   "build_utils" -> "test_module_gate" [label="1"];
-  "cargo_integration" -> "cargo_cache" [label="3"];
+  "cargo_integration" -> "cargo_cache" [label="4"];
   "cargo_integration" -> "cargo_toml" [label="8"];
   "cargo_integration" -> "compiler_config" [label="2"];
   "cargo_integration" -> "error_mapper" [label="1"];
   "cargo_integration" -> "source_map" [label="1"];
-  "cargo_toml" -> "cargo_cache" [label="1"];
+  "cargo_toml" -> "cargo_cache" [label="3"];
   "cargo_toml" -> "compiler" [label="1"];
   "cargo_toml" -> "compiler_config" [label="5"];
   "cargo_toml" -> "config" [label="7"];
@@ -416,7 +416,7 @@ digraph deps {
   "stdlib_scanner" -> "embedded_assets" [label="2"];
   "stdlib_scanner" -> "parser" [label="4"];
   "test_runner" -> "build_utils" [label="2"];
-  "test_runner" -> "cargo_cache" [label="3"];
+  "test_runner" -> "cargo_cache" [label="4"];
   "test_runner" -> "cargo_toml" [label="2"];
   "test_runner" -> "check" [label="3"];
   "test_runner" -> "compiler_config" [label="1"];

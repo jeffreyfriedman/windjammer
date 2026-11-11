@@ -24,11 +24,16 @@ Notes:
 - Entries 2 to 5 and 7 are the same kind of defect as the pilot 4 and 5 entries (interpreter green, compiled red, rustc's first error mapped to `WJ0003` with an approximate location), and none is in family A, B or C
   of ADR-0033, so `wj check` does not predict them. 2 is a new class (a block-bodied closure whose value is an `if`/`else`); 3 and 4 touch String against `str` and a reference to an owned map, closest to
   families B and C but with other generated shapes. The drift corpus (`tests/drift_corpus/repros/`) does not contain them yet; the repro files are written to be copied there.
+- Entry 1 is **fixed** (branch `wt/run-identity`): every generated crate's version carries build metadata naming its own directory
+  (`0.1.0+wj<hash of the canonical path>`, `cargo_cache::crate_version`), so cargo no longer treats two same-named crates in the shared target
+  directory as one unit. It applied to `wj run --compiled`/`--verify`, `wj build` (the published binary) and the `wj test` crate (`windjammer-tests`,
+  one name for every project). Gate: `tests/run_identity_test.rs` (x, y, x, y through `wj run --compiled` and `wj build`).
 - Entry 1 changes how to read earlier pilots: pilots 4 and 5 ran two trials at a time with the same workspace name, so some of their tool-wait, turn and "divergence" figures may include this effect.
   The graded final results are not affected (the hidden oracle builds each program in its own directory).
 - The one "wrong output" the agents saw in the first run (`compiled: invalid input` for a task that never prints it) was entry 1, not a miscompile.
 - `wj run --verify` blocks reading standard input until it is closed when it is started without redirected input; all trials pipe or redirect, so it did not occur. Not a defect for programs that read stdin
-  (they need the input anyway), but a program that ignores stdin waits too; worth a bounded read or a note in the sheet.
+  (they need the input anyway), but a program that ignores stdin waits too; worth a bounded read or a note in the sheet. **Fixed**: `--verify` now reads stdin to its end once data arrives, and takes it as empty (with a note) when
+  neither data nor the end of input arrives within 2 s (`tests/run_verify_test.rs`).
 
 ## V2 and U failure classes by trial (counts of trials in the sequential run in which a compiler diagnostic was shown)
 

@@ -64,13 +64,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
     };
     let entry = target.entry.clone();
     // stdin once, for both runs; a terminal is left to the interpreted run and the compiled run is not repeated
-    let stdin: Option<Vec<u8>> = if std::io::stdin().is_terminal() {
-        None
-    } else {
-        let mut buf = Vec::new();
-        let _ = std::io::stdin().read_to_end(&mut buf);
-        Some(buf)
-    };
+    let stdin: Option<Vec<u8>> = if std::io::stdin().is_terminal() { None } else { Some(capture_stdin(STDIN_FIRST_BYTE_WAIT)) };
     let Ok(exe) = std::env::current_exe() else { return 1 };
     let mut interp = Command::new(&exe);
     interp.args(["run", "--interpret"]);
@@ -157,6 +151,48 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
         interp_code
     } else {
         1
+    }
+}
+
+/// How long `--verify` waits for the first byte of a non-terminal stdin before treating it as empty.
+pub const STDIN_FIRST_BYTE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Stdin for both runs. The rule: read to end of input once data arrives; if neither data nor the end of input
+/// arrives within `wait` (an open pipe nobody writes to, as when an agent harness starts `wj` without redirecting
+/// input), both runs get empty stdin and a note says so. Redirect input (`< file`, `< /dev/null`) to be explicit.
+pub fn capture_stdin(wait: std::time::Duration) -> Vec<u8> {
+    capture_from(std::io::stdin(), wait)
+}
+
+/// `capture_stdin` over any reader (tests drive it with a pipe).
+pub fn capture_from<R: Read + Send + 'static>(mut input: R, wait: std::time::Duration) -> Vec<u8> {
+    enum Msg {
+        /// The first bytes arrived; the rest follows as `Done`.
+        Started,
+        Done(Vec<u8>),
+    }
+    let (tx, rx) = std::sync::mpsc::channel::<Msg>();
+    std::thread::spawn(move || {
+        let mut first = [0u8; 8192];
+        let mut buf = Vec::new();
+        if let Ok(n @ 1..) = input.read(&mut first) {
+            let _ = tx.send(Msg::Started);
+            buf.extend_from_slice(&first[..n]);
+            let _ = input.read_to_end(&mut buf);
+        }
+        let _ = tx.send(Msg::Done(buf));
+    });
+    match rx.recv_timeout(wait) {
+        Ok(Msg::Done(buf)) => buf,
+        // data is arriving: read to the end of input, however long it takes
+        Ok(Msg::Started) => match rx.recv() {
+            Ok(Msg::Done(buf)) => buf,
+            _ => Vec::new(),
+        },
+        Err(_) => {
+            say(&format!("no input arrived on stdin within {} s; both runs get empty stdin (redirect it: `< file` or `< /dev/null`)", wait.as_secs()));
+            Vec::new()
+        }
     }
 }
 

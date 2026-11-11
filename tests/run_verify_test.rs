@@ -95,3 +95,48 @@ fn rerun_is_allowed_only_for_console_and_stdin() {
     let env = program(d.path(), "env.wj", "use std::env\n\nfn main() {\n    println(\"${env::var(\"HOME\").unwrap_or(\"\")}\")\n}\n");
     assert!(windjammer::cli::verify::rerun_blockers(&env).is_err());
 }
+
+/// Pilot 6 caveat: `--verify` started with an open pipe nobody writes to (an agent harness that does not redirect
+/// input) waited until the pipe closed. Rule: no data and no end of input within the wait means empty stdin.
+#[test]
+fn an_open_silent_stdin_does_not_block_and_slow_input_is_read_whole() {
+    use std::time::{Duration, Instant};
+    let (reader, writer) = std::io::pipe().unwrap();
+    let start = Instant::now();
+    let got = windjammer::cli::verify::capture_from(reader, Duration::from_millis(300));
+    assert!(got.is_empty());
+    assert!(start.elapsed() < Duration::from_secs(2), "waited {:?}", start.elapsed());
+    drop(writer);
+
+    // the first byte inside the wait, the rest well after it: everything is read
+    let (reader, mut writer) = std::io::pipe().unwrap();
+    let w = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        writer.write_all(b"a").unwrap();
+        std::thread::sleep(Duration::from_millis(600));
+        writer.write_all(b"bc\n").unwrap();
+    });
+    let got = windjammer::cli::verify::capture_from(reader, Duration::from_millis(300));
+    w.join().unwrap();
+    assert_eq!(got, b"abc\n");
+}
+
+#[test]
+fn verify_with_an_open_unwritten_stdin_finishes() {
+    let d = tempfile::tempdir().unwrap();
+    let f = program(d.path(), "quiet.wj", "fn main() {\n    println(\"no input needed\")\n}\n");
+    let mut child = Command::new(WJ)
+        .args(["run", "--verify"])
+        .arg(&f)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let _keep_open = child.stdin.take();
+    let o = child.wait_with_output().unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(String::from_utf8_lossy(&o.stdout), "no input needed\n", "{err}");
+    assert!(err.contains("no input arrived on stdin within 2 s"), "{err}");
+    assert_eq!(o.status.code(), Some(0), "{err}");
+}
