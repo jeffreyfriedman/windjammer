@@ -958,16 +958,6 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.in_index_context {
                     return crate::codegen::rust::literals::generate_literal(lit);
                 }
-                // NUM-DEFAULT-INT (ADR-0015): the semantic layer proved that nothing (no declared
-                // type, call, index, field or return) constrains this literal's class, so it is `int`.
-                // This fact wins over the legacy collector, whose answer for such classes is its own
-                // i32 default.
-                if self.current_ir_function.as_ref().is_some_and(|f| {
-                    crate::ir::numeric_defaults::literal_key(expr)
-                        .is_some_and(|k| f.default_int_literals.contains(&k))
-                }) {
-                    return format!("{}_i64", i);
-                }
                 // NUM-LITERAL-WIDTH: the solver fixed this literal's width from its uses.
                 if let Some(suffix) =
                     self.solver_literal_width(expr).and_then(crate::codegen::rust::solver_widths::rust_int_name)
