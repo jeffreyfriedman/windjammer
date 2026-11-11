@@ -1136,7 +1136,7 @@ pub(crate) fn generate_test_harness(
     let cargo_toml = format!(
         r#"[package]
 name = "windjammer-tests"
-version = "0.1.0"
+version = "{}"
 edition = "2021"
 
 [dependencies]
@@ -1147,7 +1147,7 @@ smallvec = "1.13"{}
 name = "windjammer_tests"
 path = "lib.rs"
 "#,
-        runtime_dep_line, library_dep_str
+        crate::cargo_cache::crate_version(output_dir), runtime_dep_line, library_dep_str
     );
 
     let mut cargo_toml = cargo_toml;
