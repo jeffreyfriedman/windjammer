@@ -148,7 +148,9 @@ fn every_core_surface_entry_typechecks_in_rustc() {
 /// on one (E0596). One file per direction; the rejected calls are told apart by the line rustc reports.
 fn receiver_modes_agree_with_rustc(prelude_and_entries: &str, reading: &str, changing: &[(String, String)]) {
     assert!(changing.len() >= 30, "too few `&mut self` entries: {}", changing.len());
-    let prelude: String = prelude_and_entries.lines().take(3).map(|l| format!("{l}\n")).collect();
+    // the prelude is every line before the first entry function
+    let prelude: String = prelude_and_entries.lines().take_while(|l| !l.starts_with("fn e")).map(|l| format!("{l}\n")).collect();
+    let prelude_lines = prelude.lines().count();
     let dir = tempfile::TempDir::new().unwrap();
     let run = |name: &str, body: &str| {
         let file = dir.path().join(name);
@@ -169,13 +171,13 @@ fn receiver_modes_agree_with_rustc(prelude_and_entries: &str, reading: &str, cha
     let body: String = changing.iter().map(|(_, l)| l.as_str()).collect();
     let out = run("changing.rs", &body);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    // each entry is one line after the 3-line prelude; rustc names the line of the rejected call
+    // each entry is one line after the prelude; rustc names the line of the rejected call
     let rejected: std::collections::BTreeSet<usize> = stderr
         .lines()
         .filter_map(|l| l.trim().strip_prefix("--> "))
         .filter_map(|loc| loc.split(':').nth(1)?.parse::<usize>().ok())
         .collect();
     let accepted: Vec<&str> =
-        changing.iter().enumerate().filter(|(i, _)| !rejected.contains(&(i + 4))).map(|(_, (n, _))| n.as_str()).collect();
+        changing.iter().enumerate().filter(|(i, _)| !rejected.contains(&(i + prelude_lines + 1))).map(|(_, (n, _))| n.as_str()).collect();
     assert!(accepted.is_empty(), "declared `&mut self` in std/rust_core.wji but rustc accepts an immutable receiver: {accepted:?}\n{stderr}");
 }

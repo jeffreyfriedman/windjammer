@@ -40,7 +40,7 @@ pub fn execute(self, state: State) {
 }
 
 fn main() {
-    let mut action = Action::Change(String::from("test"), 10_i32);
+    let action = Action::Change(String::from("test"), 10_i32);
     let mut state = State::new();
     action.execute(state);
 }

@@ -252,13 +252,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Mutability: explicit via `let mut`, or auto-inferred when the
-        // variable is later used with a &mut self method call.
-        let auto_needs_mut =
-            !mutable && !needs_mut_ref && var_name.is_some_and(|v| self.variable_needs_mut(v));
+        // Mutability is explicit (ADR-0002): `let mut` in the source, never inferred for a local. A local changed
+        // without it is WJ0051, reported before code generation.
         if needs_mut_ref {
             // Don't add mut keyword, but we'll add &mut to the value
-        } else if mutable || auto_needs_mut {
+        } else if mutable {
             output.push_str("mut ");
         }
 
@@ -686,7 +684,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if let Expression::Identifier { name, .. } = value {
-                    if !Self::is_mut_local_self_rebind(pattern, value, mutable, auto_needs_mut) {
+                    if !Self::is_mut_local_self_rebind(pattern, value, mutable) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
                             if analysis
                                 .needs_clone(name, self.current_statement_idx)
@@ -1032,7 +1030,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.apply_owned_param_field_extract_clone(value, &mut value_str);
 
                 if let Expression::Identifier { name, .. } = value {
-                    if !Self::is_mut_local_self_rebind(pattern, value, mutable, auto_needs_mut) {
+                    if !Self::is_mut_local_self_rebind(pattern, value, mutable) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
                             if analysis
                                 .needs_clone(name, self.current_statement_idx)
@@ -1218,7 +1216,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.apply_owned_param_field_extract_clone(value, &mut value_str);
 
                 if let Expression::Identifier { name, .. } = value {
-                    if !Self::is_mut_local_self_rebind(pattern, value, mutable, auto_needs_mut) {
+                    if !Self::is_mut_local_self_rebind(pattern, value, mutable) {
                         if let Some(ref analysis) = self.auto_clone_analysis {
                             if analysis
                                 .needs_clone(name, self.current_statement_idx)
@@ -1503,7 +1501,6 @@ impl<'ast> CodeGenerator<'ast> {
         pattern: &Pattern,
         value: &Expression,
         mutable: bool,
-        auto_needs_mut: bool,
     ) -> bool {
         let bound = match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => Some(name.as_str()),
@@ -1514,7 +1511,7 @@ impl<'ast> CodeGenerator<'ast> {
             _ => None,
         };
         matches!((bound, init), (Some(b), Some(i)) if b == i)
-            && (mutable || auto_needs_mut || matches!(pattern, Pattern::MutBinding(_)))
+            && (mutable || matches!(pattern, Pattern::MutBinding(_)))
     }
 }
 

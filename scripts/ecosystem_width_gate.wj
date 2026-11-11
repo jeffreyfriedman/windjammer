@@ -5,6 +5,7 @@
 // when any target does not pass.
 use std::process
 use std::env
+use std::fs
 use std::strings
 
 fn targets() -> Vec<string> {
@@ -30,6 +31,16 @@ fn main() {
     let wj = args[1]
     let root = args[2]
     let logdir = args[3]
+    // the sweep writes one log per target into `logdir`; without it every target reads as a failure with no result line
+    if !fs::is_dir(logdir) {
+        match fs::create_dir_all(logdir) {
+            Ok(_) => {},
+            Err(e) => {
+                println("gate: cannot create the log directory ${logdir}: ${e}")
+                process.exit(2)
+            },
+        }
+    }
     // The ecosystem pins a released wj; this gate deliberately tests the candidate binary.
     let mut cmd = "cd '" + root + "' && WJ_ALLOW_TOOLCHAIN_MISMATCH=1 '" + wj + "' run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read --caps off scripts/health_sweep.wj '" + wj + "' '" + logdir + "' compiled"
     for t in targets() {

@@ -17,7 +17,7 @@ struct Point {
 #[inline]
 fn test_copy_int() {
     let a = 42_i64;
-    let mut b = a;
+    let b = a;
     println!("[copy_int] a={}, b={}", a, b);
     let mut b = a;
     b = 99_i64;
@@ -27,7 +27,7 @@ fn test_copy_int() {
 #[inline]
 fn test_copy_float() {
     let a = 3.14_f64;
-    let mut b = a;
+    let b = a;
     println!("[copy_float] a={}, b={}", a, b);
     let mut b = a;
     b = 2.72_f64;
@@ -37,7 +37,7 @@ fn test_copy_float() {
 #[inline]
 fn test_copy_bool() {
     let a = true;
-    let mut b = a;
+    let b = a;
     println!("[copy_bool] a={}, b={}", a, b);
     let mut b = a;
     b = false;

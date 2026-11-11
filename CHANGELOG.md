@@ -90,6 +90,7 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
   (2026-10-11 cleanup; history is in git).
 
 ### Changed
+- **Explicit `let mut` is required** (ADR-0002, Q-007 resolved): a local changed without `mut` is now the error `WJ0051` in `wj check`, `wj build` and `wj run`, and the Rust backend no longer adds `mut` to locals on its own (parameters, `self` and match-arm bindings stay inferred). `wj fix <dir>` adds every missing `mut` (docs/language-guide/explicit-mut-migration.md).
 - `wj build --json` / `wj check --json` exit non-zero on errors and use diagnostics schema v2 (v1 was the legacy shape).
 
 ## [0.50.0] - 2026-07-07
