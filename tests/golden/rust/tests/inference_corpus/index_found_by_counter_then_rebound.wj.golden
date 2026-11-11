@@ -1,0 +1,35 @@
+fn tally(names: Vec<String>) -> Vec<i64> {
+    let mut areas: Vec<String> = Vec::new();
+    let mut total: Vec<i64> = Vec::new();
+    let mut found: Vec<i64> = Vec::new();
+    for n in names {
+        let mut idx = -1_i64;
+        let mut k = 0_i64;
+        while k < ((areas.len() as i64)) {
+            if areas[k as usize] == n {
+                idx = k;
+            }
+            k += 1;
+        }
+        if idx < 0_i64 {
+            let _ = areas.push(n);
+            let _ = total.push(0_i64);
+            idx = (areas.len() - 1_usize) as i64;
+        }
+        total[idx as usize] += 1;
+        found.push(idx);
+    }
+    let mut ci = 0_usize;
+    while ci < found.len() {
+        let idx = found[ci] as usize;
+        total[idx] += 1;
+        ci += 1;
+    }
+    total
+}
+
+fn main() {
+    let t: Vec<i64> = tally(vec!["a".to_string(), "b".to_string(), "a".to_string()]);
+    println!("{} {}", t[0], t[1]);
+}
+

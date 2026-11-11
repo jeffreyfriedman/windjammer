@@ -37,6 +37,32 @@ pub(crate) fn int_width_as_type(base: &BaseType) -> Option<Type> {
     })
 }
 
+/// An index the solver converted (`(k as usize)`, NUM-USIZE-TO-INT at the index) is printed without the parentheses
+/// (the brackets delimit it: `v[k as usize]`), and a conversion the program wrote to another integer type is
+/// retargeted rather than stacked (`clamped as i64` indexes as `clamped as usize`).
+pub(crate) fn bare_index_conversion(idx: String) -> String {
+    let Some(inner) = idx.strip_prefix('(').and_then(|s| s.strip_suffix(" as usize)")) else { return idx };
+    // The outer parentheses must enclose the whole conversion: `(a) + (b as usize)` is not one.
+    let mut depth = 0i32;
+    for c in inner.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
+        }
+        if depth < 0 {
+            return idx;
+        }
+    }
+    let mut core = inner;
+    for mid in [" as i64", " as i32", " as int"] {
+        if let Some(base) = core.strip_suffix(mid) {
+            core = base;
+        }
+    }
+    format!("{core} as usize")
+}
+
 impl<'ast> CodeGenerator<'ast> {
     /// NUM-USIZE-TO-INT: print the conversions the solver placed on this expression — an index source
     /// of another width (`(v.len() as i64)`) or a `usize` value stored into a wider slot.
