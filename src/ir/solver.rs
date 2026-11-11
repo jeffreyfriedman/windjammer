@@ -202,6 +202,8 @@ pub struct Solver {
     pending: Vec<Constraint>,
     /// `FlowsInto` edges, decided after every other constraint of pass 1.
     deferred_flows: Vec<(ConstraintVar, ConstraintVar)>,
+    /// `NumericPeers` edges, decided with the flows.
+    deferred_peers: Vec<(ConstraintVar, ConstraintVar, Option<ConstraintVar>)>,
 }
 
 impl Solver {
@@ -223,6 +225,7 @@ impl Solver {
             parts: Default::default(),
             pending: Vec::new(),
             deferred_flows: Vec::new(),
+            deferred_peers: Vec::new(),
         }
     }
 
@@ -345,6 +348,7 @@ impl Solver {
             }
 
             Constraint::FlowsInto(value, slot) => self.deferred_flows.push((*value, *slot)),
+            Constraint::NumericPeers(a, b, result) => self.deferred_peers.push((*a, *b, *result)),
 
             Constraint::HasPart(container, part, var) => {
                 let root = self.uf.find(container.0);
@@ -466,10 +470,49 @@ impl Solver {
         }
     }
 
+    /// The number kind of a variable's class: its exact type (integer or float), or `Float` when a member is a float
+    /// literal (a float class). An integer literal alone does not fix the kind: it takes a float peer's type.
+    fn numeric_kind(&mut self, v: ConstraintVar) -> Option<NumericClass> {
+        let root = self.uf.find(v.0);
+        if let Some(t) = &self.types[root as usize] {
+            return if is_integer_type(t) {
+                Some(NumericClass::Integer)
+            } else if is_float_type(t) {
+                Some(NumericClass::Float)
+            } else {
+                None
+            };
+        }
+        let members: Vec<(ConstraintVar, NumericClass)> = self.numeric_classes.clone();
+        members
+            .into_iter()
+            .any(|(m, c)| c == NumericClass::Float && self.uf.find(m.0) == root)
+            .then_some(NumericClass::Float)
+    }
+
     /// `FlowsInto` edges: unify, except an index class (no exact width, an index preference) entering a slot whose
     /// class has an exact integer width other than `usize`: that value keeps its index class (NUM-USIZE-TO-INT
     /// converts it at the argument).
     fn resolve_deferred_flows(&mut self) {
+        for i in 0..self.deferred_peers.len() {
+            let (a, b, result) = self.deferred_peers[i];
+            let (ka, kb) = (self.numeric_kind(a), self.numeric_kind(b));
+            let derived = match (ka, kb) {
+                // Mixed arithmetic: the integer side is converted; the result is the float side.
+                (Some(NumericClass::Integer), Some(NumericClass::Float)) => result.map(|r| Constraint::TypeEquals(r, b)),
+                (Some(NumericClass::Float), Some(NumericClass::Integer)) => result.map(|r| Constraint::TypeEquals(r, a)),
+                _ => {
+                    self.process_constraint(&Constraint::TypeEquals(a, b));
+                    result.map(|r| Constraint::TypeEquals(r, a))
+                }
+            };
+            if let Some(c) = derived {
+                self.process_constraint(&c);
+            }
+            while let Some(derived) = self.pending.pop() {
+                self.process_constraint(&derived);
+            }
+        }
         for i in 0..self.deferred_flows.len() {
             let (value, slot) = self.deferred_flows[i];
             let (rv, rs) = (self.uf.find(value.0), self.uf.find(slot.0));

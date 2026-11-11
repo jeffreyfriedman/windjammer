@@ -89,8 +89,11 @@ fn engine_i32_range_literal_must_not_emit_i64_suffix() {
     let rs = map.get("pedestal.rs").expect("pedestal.rs");
     eprintln!("engine pedestal.rs (cross-module VIEWER_GRID):\n{rs}");
 
+    // The imported-const function only: `let cy = 10` and `(-1)..3` elsewhere in the file are unconstrained, so they
+    // are Windjammer `int` (i64) by the language (ADR-0015), and that Rust is valid.
+    let pedestal_fn = rs.split("pub fn build_ring_band").next().unwrap_or(rs);
     assert!(
-        !rs.contains("16_i64") && !rs.contains("15_i64"),
+        !pedestal_fn.contains("16_i64") && !pedestal_fn.contains("15_i64"),
         "imported i32 const range/peer arithmetic must not emit _i64. Product: \
          component_viewer_controls for x in cx - 16_i64..cx + 16_i64. Got:\n{rs}"
     );
