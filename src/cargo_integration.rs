@@ -591,14 +591,14 @@ pub fn create_cargo_toml_with_deps(
     let cargo_toml = format!(
         r#"[package]
 name = "{}"
-version = "0.1.0"
+version = "{}"
 edition = "2021"
 
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
 {}{}{}"#,
-        project_name, deps_section, lib_or_bin_section, release_profile
+        project_name, crate::cargo_cache::crate_version(output_dir), deps_section, lib_or_bin_section, release_profile
     );
 
     eprintln!(
