@@ -1,0 +1,261 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 6 100\nitem pear 2 250\nrule percent apple 10\nrule bogo pear 1 1\nrule threshold 500 10\n",
+  "stdout": "item apple 600 540\nitem pear 500 250\nrule 1 percent 60\nrule 2 bogo 250\nrule 3 threshold 79\ntotal 711\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item a 3 333\nrule fixed * 50\nrule percent * 33\nbogus\nrule percent a 101\nitem b x 4\n",
+  "stdout": "error line 4: bogus\nerror line 5: rule percent a 101\nerror line 6: item b x 4\nitem a 999 636\nrule 1 fixed 50\nrule 2 percent 313\ntotal 636\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "total 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rule percent * 10\nrule threshold 0 50\n",
+  "stdout": "rule 1 percent 0\nrule 2 threshold 0\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a 1 0\nrule bogo a 1 1\nrule percent a 100\nrule fixed a 5\n",
+  "stdout": "item a 0 0\nrule 1 bogo 0\nrule 2 percent 0\nrule 3 fixed 0\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a 7 100\nitem a 7 100\nrule bogo a 2 1\nrule bogo * 3 1\n",
+  "stdout": "item a 700 400\nitem a 700 400\nrule 1 bogo 400\nrule 2 bogo 200\ntotal 800\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a 2 100\nrule threshold 200 100\nrule fixed a 50\nrule threshold 0 50\n",
+  "stdout": "item a 200 150\nrule 1 threshold 200\nrule 2 fixed 50\nrule 3 threshold 0\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n\nitem a 1 1 1\nitem a\nitem a 0 5\nitem a 1 -5\nrule\nrule fixed a\nrule bogo a 0 1\nrule bogo a 1 0\nrule threshold 5\nrule percent a 100 \nrule discount a 5\nrule fixed * 1234567890\nitem  a 1 5\n",
+  "stdout": "error line 3: item a 1 1 1\nerror line 4: item a\nerror line 5: item a 0 5\nerror line 6: item a 1 -5\nerror line 7: rule\nerror line 8: rule fixed a\nerror line 9: rule bogo a 0 1\nerror line 10: rule bogo a 1 0\nerror line 11: rule threshold 5\nerror line 12: rule percent a 100 \nerror line 13: rule discount a 5\nerror line 14: rule fixed * 1234567890\nerror line 15: item  a 1 5\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item x 10 999\nrule percent x 7\nrule percent x 7\nrule percent * 7\nrule fixed x 1\nrule threshold 9000 3\nrule threshold 8000 3\n",
+  "stdout": "item x 9990 8036\nrule 1 percent 699\nrule 2 percent 650\nrule 3 percent 604\nrule 4 fixed 1\nrule 5 threshold 0\nrule 6 threshold 241\ntotal 7795\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a 5 10\nitem b 5 10\nrule threshold 100 20\nrule percent a 50\nrule fixed b 100\n",
+  "stdout": "item a 50 25\nitem b 50 0\nrule 1 threshold 20\nrule 2 percent 25\nrule 3 fixed 50\ntotal 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a 1 10\nrule percent b 10\nrule fixed c 5\nrule bogo d 1 1\nrule threshold 11 10\n",
+  "stdout": "item a 10 10\nrule 1 percent 0\nrule 2 fixed 0\nrule 3 bogo 0\nrule 4 threshold 0\ntotal 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item fig 8 1999\nitem apple 7 0\nitem fig 6 100\nitem fig 5 50\nitem apple 2 50\nitem a1 12 1999\nrule percent * 63\nrule percent * 76\nrule bogo fig 1 2\n",
+  "stdout": "item fig 15992 0\nitem apple 0 0\nitem fig 600 0\nitem fig 250 0\nitem apple 100 9\nitem a1 23988 2131\nrule 1 percent 25784\nrule 2 percent 11508\nrule 3 bogo 1498\ntotal 2140\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item fig 0 5\nrule bogo a1 1 2\nrule fixed apple 75\nitem fig 2 0\nitem pear 7 100\n",
+  "stdout": "error line 1: item fig 0 5\nitem fig 0 0\nitem pear 700 700\nrule 1 bogo 0\nrule 2 fixed 0\ntotal 700\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item apple 11 250\nrule percent apple 15\nrule bogo fig 3 2\nitem fig 0 5\nrule bogo a1 3 3\n",
+  "stdout": "error line 4: item fig 0 5\nitem apple 2750 2338\nrule 1 percent 412\nrule 2 bogo 0\nrule 3 bogo 0\ntotal 2338\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item a1 6 1999\nitem pear 11 100\njunk\nitem a1 8 0\nitem a1 2 99\nrule threshold 3000 62\nrule fixed a1 0\nrule threshold 1000 74\nrule fixed fig 75\nrule bogo pear 2 1\nrule bogo a1 4 1\n",
+  "stdout": "error line 3: junk\nitem a1 11994 9995\nitem pear 1100 800\nitem a1 0 0\nitem a1 198 198\nrule 1 threshold 8241\nrule 2 fixed 0\nrule 3 threshold 3737\nrule 4 fixed 0\nrule 5 bogo 300\nrule 6 bogo 1999\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 8 250\nitem fig 5 99\nitem pear 4 100\nitem pear 6 250\nitem pear 12 100\nrule percent pear 81\nrule percent a1 29\nrule fixed * 10\nrule fixed pear 75\nrule percent fig 94\n",
+  "stdout": "item apple 2000 1990\nitem fig 495 30\nitem pear 400 0\nitem pear 1500 200\nitem pear 1200 143\nrule 1 percent 2511\nrule 2 percent 0\nrule 3 fixed 50\nrule 4 fixed 216\nrule 5 percent 455\ntotal 2363\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item a1 11 1\nitem pear 1 0\nitem apple 8 1\nitem pear 7 1999\nrule bogo fig 3 2\nrule fixed pear 10\nrule bogo pear 3 3\nrule fixed a1 75\nitem a b c\n",
+  "stdout": "error line 9: item a b c\nitem a1 11 0\nitem pear 0 0\nitem apple 8 8\nitem pear 13993 7986\nrule 1 bogo 0\nrule 2 fixed 10\nrule 3 bogo 5997\nrule 4 fixed 11\ntotal 7994\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "junk\nrule fixed a1 10\nitem pear 9 50\nitem apple 1 100\nitem a1 4 250\nrule bogo * 3 1\nrule fixed fig 300\nrule bogo fig 3 3\nitem pear 12 0\nitem pear 2 99\n",
+  "stdout": "error line 1: junk\nitem pear 450 350\nitem apple 100 100\nitem a1 1000 740\nitem pear 0 0\nitem pear 198 198\nrule 1 fixed 10\nrule 2 bogo 350\nrule 3 fixed 0\nrule 4 bogo 0\ntotal 1388\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item a b c\nitem apple 9 250\nitem a1 3 1\nitem pear 7 1\nitem a1 3 1999\nrule threshold 1000 96\nrule bogo pear 3 3\nrule fixed pear 10\n",
+  "stdout": "error line 1: item a b c\nitem apple 2250 2250\nitem a1 3 3\nitem pear 7 0\nitem a1 5997 5997\nrule 1 threshold 7926\nrule 2 bogo 3\nrule 3 fixed 4\ntotal 324\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item a1 8 1999\nitem a1 2 250\nitem pear 2 99\njunk\nitem apple 4 99\nitem a1 5 99\nrule fixed a1 300\nrule bogo fig 4 2\nrule fixed fig 10\n",
+  "stdout": "error line 4: junk\nitem a1 15992 15692\nitem a1 500 200\nitem pear 198 198\nitem apple 396 396\nitem a1 495 195\nrule 1 fixed 900\nrule 2 bogo 0\nrule 3 fixed 0\ntotal 16681\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item pear 1 100\nitem a1 1 250\nitem a1 2 99\nitem pear 9 250\nrule bogo pear 3 3\nrule bogo fig 3 2\nrule fixed apple 10\n",
+  "stdout": "item pear 100 100\nitem a1 250 250\nitem a1 198 198\nitem pear 2250 1500\nrule 1 bogo 750\nrule 2 bogo 0\nrule 3 fixed 0\ntotal 2048\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 3 99\nrule threshold 0 85\nrule fixed * 300\nrule threshold 3000 31\nrule fixed * 0\n",
+  "stdout": "item apple 297 0\nrule 1 threshold 252\nrule 2 fixed 297\nrule 3 threshold 0\nrule 4 fixed 0\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a1 12 99\nitem pear 3 250\nrule fixed * 75\n",
+  "stdout": "item a1 1188 1113\nitem pear 750 675\nrule 1 fixed 150\ntotal 1788\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item fig 3 250\nitem a1 12 50\nitem apple 8 1999\nitem a1 8 100\nrule threshold 1000 8\nrule bogo * 4 1\nrule bogo pear 1 3\njunk\nrule threshold 0 40\nrule percent * 81\nrule threshold 3000 90\nrule percent * 36\n",
+  "stdout": "error line 8: junk\nitem fig 750 92\nitem a1 600 61\nitem apple 15992 1702\nitem a1 800 86\nrule 1 threshold 1451\nrule 2 bogo 2199\nrule 3 bogo 0\nrule 4 threshold 5796\nrule 5 percent 12913\nrule 6 threshold 0\nrule 7 percent 1089\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item pear 6 100\nitem apple 10 50\nitem apple 2 50\nrule fixed fig 300\nitem a1 7 1999\nitem a b c\n",
+  "stdout": "error line 6: item a b c\nitem pear 600 600\nitem apple 500 500\nitem apple 100 100\nitem a1 13993 13993\nrule 1 fixed 0\ntotal 15193\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item pear 3 99\nitem pear 12 99\nitem apple 5 1999\nrule fixed apple 300\nrule percent apple 69\nrule threshold 3000 43\n",
+  "stdout": "item pear 297 297\nitem pear 1188 1188\nitem apple 9995 3006\nrule 1 fixed 300\nrule 2 percent 6689\nrule 3 threshold 1931\ntotal 2560\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rule fixed apple 0\nitem fig 10 250\n\nrule percent fig 4\nrule fixed a1 0\nrule fixed * 75\n",
+  "stdout": "item fig 2500 2325\nrule 1 fixed 0\nrule 2 percent 100\nrule 3 fixed 0\nrule 4 fixed 75\ntotal 2325\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rule percent apple 75\nrule percent * 30\nrule percent apple 57\nitem apple 9 99\nitem pear 4 99\n",
+  "stdout": "item apple 891 68\nitem pear 396 278\nrule 1 percent 668\nrule 2 percent 184\nrule 3 percent 89\ntotal 346\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a1 3 100\nrule fixed pear 0\nrule threshold 3000 92\n",
+  "stdout": "item a1 300 300\nrule 1 fixed 0\nrule 2 threshold 0\ntotal 300\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item fig 10 100\nitem pear 9 100\nitem a1 3 1\nitem fig 5 100\nitem fig 10 0\nrule bogo apple 1 3\nrule threshold 100 52\nrule bogo fig 4 3\n",
+  "stdout": "item fig 1000 700\nitem pear 900 900\nitem a1 3 3\nitem fig 500 500\nitem fig 0 0\nrule 1 bogo 0\nrule 2 threshold 1249\nrule 3 bogo 300\ntotal 854\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rule percent fig 56\nitem fig 12 1\nrule bogo * 3 2\nitem a1 8 1\nrule percent apple 45\nitem pear 3 99\nrule threshold 3000 44\nitem pear 4 250\nrule bogo * 3 1\n",
+  "stdout": "item fig 12 0\nitem a1 8 4\nitem pear 297 297\nitem pear 1000 750\nrule 1 percent 6\nrule 2 bogo 6\nrule 3 percent 0\nrule 4 threshold 0\nrule 5 bogo 254\ntotal 1051\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item pear 2 0\nitem pear 6 99\nitem apple 3 250\nitem fig 1 99\nitem fig 9 100\nrule threshold 0 63\nrule threshold 0 28\nrule fixed a1 0\nrule bogo * 3 2\n",
+  "stdout": "item pear 0 0\nitem pear 594 396\nitem apple 750 750\nitem fig 99 99\nitem fig 900 700\nrule 1 threshold 1476\nrule 2 threshold 242\nrule 3 fixed 0\nrule 4 bogo 398\ntotal 227\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 3 50\nitem pear 8 250\nitem a1 2 100\nitem apple 1 50\nrule fixed pear 10\n",
+  "stdout": "item apple 150 150\nitem pear 2000 1990\nitem a1 200 200\nitem apple 50 50\nrule 1 fixed 10\ntotal 2390\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item apple 10 0\nrule percent pear 45\nrule fixed * 300\nitem fig 0 5\nrule percent * 86\nrule fixed fig 75\n",
+  "stdout": "error line 4: item fig 0 5\nitem apple 0 0\nrule 1 percent 0\nrule 2 fixed 0\nrule 3 percent 0\nrule 4 fixed 0\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item a1 9 50\nitem pear 12 100\nitem a1 12 0\nitem pear 5 99\nitem pear 9 50\nrule threshold 3000 83\nrule fixed fig 0\nrule threshold 100 36\nrule percent * 46\nrule threshold 1000 68\nrule threshold 3000 15\n",
+  "stdout": "item a1 450 243\nitem pear 1200 648\nitem a1 0 0\nitem pear 495 268\nitem pear 450 243\nrule 1 threshold 0\nrule 2 fixed 0\nrule 3 threshold 934\nrule 4 percent 1193\nrule 5 threshold 0\nrule 6 threshold 0\ntotal 468\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 4 1\nrule threshold 3000 18\n\nrule percent * 79\nrule bogo * 1 1\nrule bogo apple 2 3\nrule fixed * 0\n",
+  "stdout": "item apple 4 0\nrule 1 threshold 0\nrule 2 percent 3\nrule 3 bogo 1\nrule 4 bogo 0\nrule 5 fixed 0\ntotal 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item pear 2 99\nitem fig 6 99\nitem a1 10 250\nrule threshold 3000 1\nrule percent pear 25\nrule bogo fig 2 2\nrule fixed * 10\n",
+  "stdout": "item pear 198 139\nitem fig 594 386\nitem a1 2500 2490\nrule 1 threshold 32\nrule 2 percent 49\nrule 3 bogo 198\nrule 4 fixed 30\ntotal 2983\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item apple 7 1\nrule bogo * 4 3\nrule percent * 73\nrule fixed a1 10\nrule bogo pear 2 3\nrule threshold 100 51\nrule threshold 100 84\n",
+  "stdout": "item apple 7 2\nrule 1 bogo 3\nrule 2 percent 2\nrule 3 fixed 0\nrule 4 bogo 0\nrule 5 threshold 0\nrule 6 threshold 0\ntotal 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rule fixed pear 300\nrule threshold 1000 24\nrule threshold 3000 29\nitem fig 1 1\nrule threshold 1000 8\nitem fig 5 99\nrule fixed apple 10\nrule fixed * 10\nrule percent * 25\n",
+  "stdout": "item fig 1 0\nitem fig 495 364\nrule 1 fixed 0\nrule 2 threshold 0\nrule 3 threshold 0\nrule 4 threshold 0\nrule 5 fixed 0\nrule 6 fixed 11\nrule 7 percent 121\ntotal 364\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "item pear 8 1\nitem a1 11 50\nrule fixed fig 300\nrule percent a 200\nrule threshold 0 27\nrule percent pear 31\nrule bogo * 1 1\nrule threshold 100 78\nrule percent pear 55\n",
+  "stdout": "error line 4: rule percent a 200\nitem pear 8 1\nitem a1 550 300\nrule 1 fixed 0\nrule 2 threshold 150\nrule 3 percent 2\nrule 4 bogo 254\nrule 5 threshold 118\nrule 6 percent 1\ntotal 33\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "item fig 4 99\nitem pear 7 1\nitem apple 1 50\nrule percent * 80\nrule fixed fig 300\nrule threshold 1000 90\n",
+  "stdout": "item fig 396 0\nitem pear 7 2\nitem apple 50 10\nrule 1 percent 361\nrule 2 fixed 80\nrule 3 threshold 0\ntotal 12\n"
+ }
+]

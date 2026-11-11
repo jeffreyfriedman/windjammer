@@ -1,0 +1,16 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open ann 100\nopen bob 20\nopen cy 0\niou ann bob 30\niou bob cy 50\niou cy ann 10\nsettle\nall\nhistory bob\ntransfer cy ann 50\n",
+  "stdout": "ann pays cy 20\nbob pays cy 20\nann: 80\nbob: 0\ncy: 40\nopen 20\nout 20 to cy\nerror: overdraft cy\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "open a 10\nopen b 5\ntransfer a b 7\ntransfer a b 7\ntransfer b a 12\nbalance a\nbalance b\nbalance zed\nopen a 1\ntransfer a a 1\n",
+  "stdout": "error: overdraft a\na: 15\nb: 0\nerror: unknown account zed\nerror: account exists a\nerror: self transfer\n"
+ }
+]
