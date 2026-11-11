@@ -171,7 +171,7 @@ pub fn run(cli: Cli) -> Result<()> {
             compiled,
             release,
             watch,
-            verify,
+            verify, speculate,
             hot,
             sched_seed,
             hash_seed,
@@ -212,7 +212,7 @@ pub fn run(cli: Cli) -> Result<()> {
             let engine_resolved = engine_is_resolved(&engine)?;
             let jit_on = jit_setting(&jit, no_jit)?;
             let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, record, replay, journal, crash_after, binds: bind, limits, result_json, durable_sites: Vec::new(), simulate: simulate.then_some(windjammer::interpreter::effect_port::sim::SimConfig { seed, faults }), no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
-            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
+            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint, speculate });
             if code != 0 {
                 std::process::exit(code);
             }

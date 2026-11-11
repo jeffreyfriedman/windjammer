@@ -57,12 +57,12 @@ must say that it is not.
 
 ## Options
 
-### (a) Speculative background compile of the last-saved state (planned)
+### (a) Speculative background compile of the last-saved state (landed as an opt-in: `--speculate`)
 
 While the interpreter runs, a detached `wj build` of the same content runs at low priority and records its verdict
 (built, or the rustc errors) under a key of the content and the compiler build. The next interpreted run prints the
-verdict after the program's output (`wj: note: the compiled build of this exact program failed ...`), and `wj status`
-lists it.
+verdict after the program's output (`wj: note: the compiled build of this exact program failed ...`); a status
+command that lists verdicts does not exist yet.
 
 - **Agent value:** high for agents that run more than once. Pilot 5 interpreted-first trials made 1.8 verify calls on
   average (1.5 to green), with 4 to 10 s of agent thinking between calls, longer than a warm compiled build of a small
@@ -275,6 +275,22 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   type error (the check-negative mutants, error-system fixtures) are reported too; their builds fail the same way.
 - On this head `literal_in_option_field_arm` builds (`Some(v - 1_i64)`): the backend fixed it, and the prediction
   went away by construction. Its drift-ledger line is now stale (for the ledger's owner).
+
+## Fourth slice (landed): `wj run --interpret --speculate` (opt-in)
+
+- `src/cli/speculate.rs`: with `--speculate`, an interpreted run starts `wj build` of what `wj run --compiled` would
+  build, detached, at `nice -n 19`, with `CARGO_NET_OFFLINE=true`, into a scratch directory it removes afterwards;
+  `wj build` records the verdict (`cli::verdict`), and the next interpreted run of the same content prints the
+  failure footer. The run itself never waits and prints nothing about it.
+- Bounds, each checked before starting: no build when the verdict for this content and compiler is recorded; one
+  speculative build per user (a pid file in the cache root, a live pid is never doubled); none when the 1-minute load
+  average is at or above the core count; none for a project with Rust crate dependencies (their build scripts would
+  run). Compiling runs none of the program's code and needs no grant.
+- Gates: `tests/speculate_test.rs` (each bound, stdout and exit status unchanged, the run does not wait, the flag
+  conflicts with `--compiled`) and the promise registry entry `wj run --speculate` with a positive and a negative case.
+- Not measured yet: the CPU it adds on the shared machine during a pilot (the kill criterion above). On this machine
+  the load average is usually above the core count, so the bound keeps it off most of the time; that is the intended
+  behaviour for an opt-in on a busy host.
 
 ## Consequences
 

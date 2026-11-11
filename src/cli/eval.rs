@@ -83,6 +83,7 @@ pub fn run(code: &str) -> std::io::Result<i32> {
         hot: false,
         interp,
         lint: None,
+        speculate: false,
         no_lint: true,
     });
     remove(&file);
