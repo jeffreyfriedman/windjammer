@@ -27,8 +27,6 @@ pub fn is_float_type(t: &Type) -> bool {
 /// Defaults to f32 unless explicitly f64.
 pub fn float_target(t: &Type) -> &str {
     match t {
-        // Windjammer `float` is f64.
-        Type::Float => "f64",
         Type::Custom(n) if n == "f64" => "f64",
         _ => "f32",
     }
