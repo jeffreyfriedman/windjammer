@@ -1,0 +1,21 @@
+pub enum Val {
+    Num(i64),
+    Name(string),
+}
+
+pub fn val_cmp(a: Val, b: Val) -> i32 {
+    match a {
+        Val::Num(x) => {
+            match b {
+                Val::Num(y) => if x == y { 0 } else { 1 },
+                _ => 2,
+            }
+        }
+        Val::Name(x) => {
+            match b {
+                Val::Name(y) => if x == y { 0 } else { 1 },
+                _ => 2,
+            }
+        }
+    }
+}

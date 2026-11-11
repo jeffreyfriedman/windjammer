@@ -1,0 +1,7 @@
+fn make() -> Vec<Vec<u8>> {
+    vec![vec![97], vec![98]]
+}
+
+pub fn check() {
+    assert_eq(make()[0], vec![97])
+}

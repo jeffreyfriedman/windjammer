@@ -1,0 +1,8 @@
+// Two enum parameters matched one inside the other; the first is consumed (its String payload is bound by value) while the second is only read.
+// Comparing the two bindings with == must work. Expected by hand: equal names -> 0, different -> 1, mixed -> 2.
+// expect: 0 1 2
+mod val
+
+fn main() {
+    println("${val::val_cmp(val::Val::Name("a"), val::Val::Name("a"))} ${val::val_cmp(val::Val::Name("a"), val::Val::Name("b"))} ${val::val_cmp(val::Val::Name("a"), val::Val::Num(1))}")
+}

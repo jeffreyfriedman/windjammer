@@ -297,13 +297,13 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
             }
-            // Look up the callee signature with multiple fallback strategies:
+            // Look up the callee signature (a bare call to an imported name: that free function), then:
             // 1. Exact name (e.g., "place_marker" or "StationBuilder::place_marker")
             // 2. Suffix match (e.g., find "Type::method" from "method")
             // 3. Simple name from qualified (e.g., "place_marker" from "station_builder::place_marker")
             //    This handles cross-crate calls where metadata stores the simple name
             //    but the call site uses the module-qualified name.
-            let sig = match registry.lookup_method(func_name) {
+            let sig = match is_bare_fn_call.then(|| self.imported_free_function(registry, func_name)).flatten().or_else(|| registry.lookup_method(func_name)) {
                 Some(s) => s,
                 None => {
                     if let Some(s) = registry.get_signature(func_name) {

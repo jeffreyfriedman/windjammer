@@ -349,7 +349,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
     /// Function import alias → fully qualified path (`use dep::fn as alias`).
     pub(crate) import_fn_alias_map: std::collections::HashMap<String, String>,
-    pub(crate) imported_fn_names: std::collections::HashSet<String>, // `use crate::ops::double` leaves: a bare call names the import
+    pub(crate) imported_fn_names: std::collections::HashMap<String, String>, // `use crate::ops::double`: bare name -> the path it names
     /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
     /// Used to emit `module::fn` instead of `module.fn` for free functions.
     pub(crate) runtime_std_module_imports: std::collections::HashSet<String>,
