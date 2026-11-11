@@ -26,7 +26,7 @@ class GuardTest(unittest.TestCase):
             g.record(m, c["models"][m]["expected_usd_per_trial"] * (10 if m == "opus" else 1))
         self.assertEqual(ran["haiku"], 60)
         self.assertEqual(ran["sonnet"], 60)
-        self.assertLess(ran["opus"], 60)
+        self.assertLess(ran["opus"], g.planned["opus"])
         self.assertIn("opus", g.aborted)
         self.assertLessEqual(g.spent, c["hard_cap_usd"])
 
@@ -37,7 +37,7 @@ class GuardTest(unittest.TestCase):
         for m, *_ in rows:
             self.assertIsNone(g.allow(m))
             g.record(m, c["models"][m]["expected_usd_per_trial"])
-        self.assertEqual(sum(g.done.values()), 180)
+        self.assertEqual(sum(g.done.values()), len(rows))
 
 
 class DecompositionTest(unittest.TestCase):
@@ -80,7 +80,7 @@ class DryRunTest(unittest.TestCase):
         out = []
         problems = [p for p in P7.dry_run(c, None, say=out.append) if "AGENTDX_RUSTC" not in p]
         self.assertEqual(problems, [], problems)
-        self.assertTrue(any("144 trials" in l for l in out), out)
+        self.assertTrue(any("= 120 trials" in l for l in out), out)
 
     def test_dry_run_reports_a_missing_task(self):
         problems = P7.dry_run(cfg(tasks=["t999_nope"]), None, say=lambda *_: None)

@@ -32,8 +32,8 @@ def use_tasks(cfg):
 def matrix(cfg):
     """[(model, task, arm, trial)] in run order: cheapest model first, round-robin by trial inside a model."""
     out = []
-    for model in cfg["models"]:
-        out += [(model, t, a, k) for t, a, k in PL.plan(cfg["tasks"], cfg["arms"], cfg["trials_per_cell"])]
+    for model, mc in cfg["models"].items():
+        out += [(model, t, a, k) for t, a, k in PL.plan(cfg["tasks"], cfg["arms"], mc.get("trials_per_cell", cfg["trials_per_cell"]))]
     return out
 
 
@@ -149,7 +149,8 @@ def _dry_run(cfg, prior_trials_dir, say):
     rows = matrix(cfg)
     n = len(rows)
     _check(n <= B.PILOT_MAX_TRIALS, f"{n} trials exceed the harness ceiling {B.PILOT_MAX_TRIALS}", problems)
-    say(f"matrix: {len(cfg['models'])} models x {len(cfg['arms'])} arms x {len(cfg['tasks'])} tasks x {cfg['trials_per_cell']} trials = {n} trials")
+    say(f"matrix: {len(cfg['models'])} models x {len(cfg['arms'])} arms x {len(cfg['tasks'])} tasks, "
+        + ", ".join(f"{m} {v.get('trials_per_cell', cfg['trials_per_cell'])} trial(s) per cell" for m, v in cfg["models"].items()) + f" = {n} trials")
     exp = {m: sum(1 for r in rows if r[0] == m) * v["expected_usd_per_trial"] for m, v in cfg["models"].items()}
     worst = {m: sum(1 for r in rows if r[0] == m) * v["per_trial_usd_cap"] for m, v in cfg["models"].items()}
     for m in cfg["models"]:

@@ -1,0 +1,15 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define make-counter\n  (lambda ()\n    (let ((n 0))\n      (lambda () (set! n (+ n 1)) n))))\n(define c (make-counter))\n(c)\n(print (c))\n(print (c))\n(print (/ 1 0))\n",
+  "stdout": "2\n3\nerror line 9: division by zero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "; sum of squares\n(define sq (lambda (x) (* x x)))\n(define total 0)\n(define i 1)\n(while (<= i 5)\n  (set! total (+ total (sq i)))\n  (set! i (+ i 1)))\n(print total)\n(print sq)\n(print (< total 50))\n",
+  "stdout": "55\n<closure>\n#f\n"
+ }
+]
