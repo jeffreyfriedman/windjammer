@@ -304,7 +304,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     sub(self, Part::Ret, r, g);
                 }
             }
-            Type::Parameterized(n, args) if args.len() == 1 && crate::typing::core_surface::is_element_container(n) => {
+            Type::Parameterized(n, args) if args.len() == 1 && crate::typing::core_surface::has_element_part(n) => {
                 sub(self, Part::Elem, &args[0], g)
             }
             Type::Parameterized(n, args) if args.len() == 2 && crate::typing::core_surface::is_map_container(n) => {
@@ -344,6 +344,14 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 Some(ret.unwrap_or_else(|| crate::typing::core_surface::self_type(type_name, &generics)))
             }
             Expression::MethodCall { object, method, .. } => {
+                // `thread::spawn(..)`: a std module function the surface declares (the receiver names a module).
+                if let Expression::Identifier { name, .. } = &**object {
+                    if self.bound_var(name).is_none() {
+                        if let Some((type_name, (generics, _, _, ret))) = self.surface_static(&format!("{name}::{method}")) {
+                            return Some(ret.unwrap_or_else(|| crate::typing::core_surface::self_type(type_name, &generics)));
+                        }
+                    }
+                }
                 let receiver = self.surface_shape(object)?;
                 let type_name = crate::typing::core_surface::surface_type_name(&receiver)?;
                 let (_, _, _, ret) = self.core_surface?.declared(type_name, method)?;

@@ -67,7 +67,10 @@ fn receiver(type_name: &str, generics: &[String], by_ref: bool) -> String {
 
 #[test]
 fn every_core_surface_entry_typechecks_in_rustc() {
-    let mut src = String::from("#![allow(unused, clippy::all)]\nuse std::collections::*;\nfn arg<A>() -> A { unimplemented!() }\n");
+    // `ThreadPanic` is the surface's name for a joined thread's panic payload.
+    let mut src = String::from(
+        "#![allow(unused, clippy::all)]\nuse std::collections::*;\nuse std::thread::{self, JoinHandle};\ntype ThreadPanic = Box<dyn std::any::Any + Send + 'static>;\nfn arg<A>() -> A { unimplemented!() }\n",
+    );
     let surface = CoreSurface::parse();
     let entries = surface.entries();
     assert!(!entries.is_empty());
@@ -77,7 +80,8 @@ fn every_core_surface_entry_typechecks_in_rustc() {
             let (generics, _, params, ret) = surface.declared_static(ty, method).unwrap();
             let args: Vec<String> = params.iter().map(|p| format!("arg::<{}>()", rust(p, false))).collect();
             let ret_ty = ret.map(|r| rust(&r, false)).unwrap_or_else(|| "()".into());
-            let path = receiver(ty, &generics, false).replacen('<', "::<", 1);
+            // The `Thread` trait declares the `std::thread` module's functions.
+            let path = if ty == "Thread" { "thread".to_string() } else { receiver(ty, &generics, false).replacen('<', "::<", 1) };
             src.push_str(&format!("fn e{i}() {{ let _x: {ret_ty} = {path}::{method}({}); }}\n", args.join(", ")));
             continue;
         }

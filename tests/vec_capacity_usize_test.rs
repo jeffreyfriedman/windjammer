@@ -87,3 +87,20 @@ fn test(alpha: f64) {
         panic!("mixed f32/f64 in one Vec: {rust_code}");
     }
 }
+
+/// A float literal pushed before an `f64` value: the vector's element is the literal's solved width (`float`, f64),
+/// not the legacy `f32` literal default (the annotation `Vec<f32>` made rustc reject the `f64` push).
+#[test]
+fn test_vec_push_float_literal_before_f64_value() {
+    let test_wj = r#"
+fn test(alpha: f64) {
+    let mut v = Vec::new()
+    v.push(0.5)
+    v.push(alpha)
+}
+"#;
+
+    let (rust_code, _err) = test_utils::compile_via_cli_with_stderr(test_wj);
+    assert!(!rust_code.contains("Vec<f32>") && !rust_code.contains("_f32"), "pushes are f64:\n{rust_code}");
+    assert!(rust_code.contains("0.5_f64"), "the literal is f64:\n{rust_code}");
+}

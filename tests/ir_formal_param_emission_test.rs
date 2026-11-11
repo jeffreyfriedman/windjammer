@@ -65,6 +65,7 @@ fn wrap(name: string) -> Holder {
         solver_local_widths: Default::default(),
         index_source_widths: Default::default(),
         usize_conversions: Default::default(),
+        use_widths: Default::default(),
         last_uses: Default::default(),
         element_reads: Default::default(),
         field_copy_sites: Default::default(),

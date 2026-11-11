@@ -99,6 +99,18 @@ impl<'ast> CodeGenerator<'ast> {
         Some(format!("{s}_{suffix}"))
     }
 
+    /// Width the solver fixed for this read of a local (NUM-USE-WIDTH: the binding the read names, by position).
+    pub(in crate::codegen::rust) fn solver_use_width(&self, ident: &Expression<'ast>) -> Option<BaseType> {
+        let f = self.current_ir_function.as_ref()?;
+        f.use_widths.get(&crate::ir::numeric_defaults::literal_key(ident)?).cloned()
+    }
+
+    /// Width of a `let` binding: the name's NUM-LOCAL-WIDTH, else the initializer's own fact (NUM-USE-WIDTH: a name
+    /// bound again with another width has no name fact, so `let mut i = 0` is `0_usize` here and `0_u32` later).
+    pub(in crate::codegen::rust) fn solver_binding_width(&self, name: Option<&str>, init: &Expression<'ast>) -> Option<BaseType> {
+        name.and_then(|n| self.solver_local_width(n).cloned()).or_else(|| self.solver_operand_width(init))
+    }
+
     /// Width the solver fixed for a singly bound local (NUM-LOCAL-WIDTH).
     pub(in crate::codegen::rust) fn solver_local_width(&self, name: &str) -> Option<&BaseType> {
         self.current_ir_function.as_ref()?.solver_local_widths.get(name)
@@ -122,7 +134,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn solver_operand_width(&self, expr: &Expression<'ast>) -> Option<BaseType> {
         match expr {
             Expression::Literal { value: Literal::Int(_), .. } => self.solver_literal_width(expr).cloned(),
-            Expression::Identifier { name, .. } => self.solver_local_width(name).cloned(),
+            Expression::Identifier { name, .. } => self.solver_use_width(expr).or_else(|| self.solver_local_width(name).cloned()),
             Expression::MethodCall { .. } => {
                 let f = self.current_ir_function.as_ref()?;
                 f.index_source_widths.get(&crate::ir::numeric_defaults::literal_key(expr)?).cloned()

@@ -626,12 +626,14 @@ pub fn make_f64_map_from_int(n: int) -> HashMap<i64, f64> {
     );
     assert!(
         rs.contains("with_capacity(n)")
-            || rs.contains("with_capacity(n as usize)"),
+            || rs.contains("with_capacity(n as usize)")
+            || rs.contains("with_capacity((n as usize))"),
         "usize capacity should pass through (or cast int→usize only). Got:\n{rs}"
     );
     // int overload must reach Rust as usize
     assert!(
         rs.contains("with_capacity(n as usize)")
+            || rs.contains("with_capacity((n as usize))")
             || rs.matches("with_capacity(n)").count() >= 2,
         "int capacity must coerce to usize for Rust HashMap. Got:\n{rs}"
     );

@@ -1,0 +1,35 @@
+// A name bound twice with different widths: the first `i` counts up to a `len()` (usize), the second up to a
+// `u32` degree and is passed to a `u32` parameter. Each read has its own binding's width (NUM-USE-WIDTH).
+fn out_degree(v: int) -> u32 {
+    (v % 4) as u32
+}
+
+fn neighbor_at(v: int, index: u32) -> int {
+    v + index as int
+}
+
+fn has_neighbor(ids: Vec<int>, vertex: int, expected: int) -> bool {
+    if ids.len() > 0 {
+        let mut i = 0
+        while i < ids.len() {
+            if ids[i] == vertex {
+                return true
+            }
+            i = i + 1
+        }
+        return false
+    }
+    let degree = out_degree(vertex)
+    let mut i = 0
+    while i < degree {
+        if neighbor_at(vertex, i) == expected {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
+
+fn main() {
+    println("${has_neighbor([1, 2], 2, 0)} ${has_neighbor([], 3, 5)}")
+}
