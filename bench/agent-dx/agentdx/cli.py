@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from . import pilot6_report as P6, baseline, budget as BU, driver, gen, pilot as PL, pilot_report as PR, arms as AR, replay as R, report as RP, tasks as T, toolchains, workspace as W
+from . import pilot6_report as P6, pilot7 as P7, pilot7_report as P7R, baseline, budget as BU, driver, gen, pilot as PL, pilot_report as PR, arms as AR, replay as R, report as RP, tasks as T, toolchains, workspace as W
 from .paths import LANGS
 
 
@@ -85,6 +85,16 @@ def main(argv=None):
     pl.add_argument("--stream", action="store_true", help="stream-json output: per-turn token log (needed for pack/tool attribution)")
     pl.add_argument("--yes", action="store_true", help="proceed after the estimate is printed")
     pl.add_argument("--estimate-only", action="store_true")
+    p7 = sub.add_parser("pilot7", help="pilot 7: models x arms x tasks (agentdx/pilot7_config.json); --dry-run spends nothing")
+    p7.add_argument("--config", default=P7.CONFIG)
+    p7.add_argument("--out", default="results/pilot7")
+    p7.add_argument("--dry-run", action="store_true")
+    p7.add_argument("--prior", default="results/pilot6/trials", help="recorded trials for the decomposition demo of --dry-run")
+    p7.add_argument("--yes", action="store_true", help="launch (owner decision; never in CI)")
+    p7r = sub.add_parser("pilot7-report")
+    p7r.add_argument("--config", default=P7.CONFIG)
+    p7r.add_argument("--out", default="results/pilot7")
+    p7r.add_argument("--md")
     prg = sub.add_parser("pilot-regrade", help="re-grade non-passing pilot trials from their recorded final source")
     prg.add_argument("--trials-dir", required=True)
     pr = sub.add_parser("pilot-report")
@@ -109,6 +119,28 @@ def main(argv=None):
     rp.add_argument("--md", default=None)
     rp.add_argument("--json", default=None)
     a = ap.parse_args(argv)
+    if a.cmd == "pilot7":
+        cfg = P7.load_config(a.config)
+        problems = P7.dry_run(cfg, a.prior)
+        for p in problems:
+            print(f"PROBLEM: {p}")
+        print("dry run: ready" if not problems else f"dry run: {len(problems)} problem(s)")
+        if a.dry_run or problems:
+            return 1 if problems else 0
+        if not a.yes:
+            print("not started: pass --yes to launch (owner decision)", file=sys.stderr)
+            return 3
+        caps = {m: v["per_trial_usd_cap"] for m, v in cfg["models"].items()}
+        r = P7.run_matrix(cfg, a.out, lambda m: PL.ClaudeAgent(m, cfg["max_turns"], caps[m], stream=True))
+        print(json.dumps(r))
+        return 0
+    if a.cmd == "pilot7-report":
+        md = P7R.build(a.out, P7.load_config(a.config))
+        if a.md:
+            open(a.md, "w").write(md)
+        else:
+            print(md)
+        return 0
     if a.cmd == "toolchains":
         print(json.dumps(toolchains.detect(), indent=1))
     elif a.cmd == "gen":
