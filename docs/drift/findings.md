@@ -34,7 +34,9 @@ Until then `wj check` reports the shapes whose widths are certain from the Rust 
 and an interpreted run warns about them before the program's output: `let_literal_captured_by_closure`,
 `literal_in_option_field_arm`, `shadow_match_binding_literal`, `shadowed_option_literal_arms`,
 `tests/conformance_programs/62_vec_alias_semantics.wj` and three value-position programs of `tests/engine_parity`.
-Their ledger lines stay: the interpreter still runs them, and the backend defect is still there.
+Their ledger lines stay: the interpreter still runs them, and the backend defect is still there. Families B (a reference
+expected for a lookup) and C (`String` against `&str`) are predicted the same way since ADR-0033's third slice
+(`explicit_ref_literal_arg`, `closure_string_param_literal`, `examples/verified/hashset_basics.wj`, ...).
 
 ## B. Other compiled-backend findings
 

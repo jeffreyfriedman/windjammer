@@ -57,12 +57,12 @@ must say that it is not.
 
 ## Options
 
-### (a) Speculative background compile of the last-saved state (planned)
+### (a) Speculative background compile of the last-saved state (landed as an opt-in: `--speculate`)
 
 While the interpreter runs, a detached `wj build` of the same content runs at low priority and records its verdict
 (built, or the rustc errors) under a key of the content and the compiler build. The next interpreted run prints the
-verdict after the program's output (`wj: note: the compiled build of this exact program failed ...`), and `wj status`
-lists it.
+verdict after the program's output (`wj: note: the compiled build of this exact program failed ...`); a status
+command that lists verdicts does not exist yet.
 
 - **Agent value:** high for agents that run more than once. Pilot 5 interpreted-first trials made 1.8 verify calls on
   average (1.5 to green), with 4 to 10 s of agent thinking between calls, longer than a warm compiled build of a small
@@ -254,6 +254,68 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   registry entry `wj run --verify` with a positive and a negative acceptance case.
 - Not yet: the build is not speculative (option a), so a cold `--verify` costs one compiled build; the interpreted run's
   stdout is printed when it ends rather than streamed.
+
+## Third slice (landed): families B and C
+
+- The same walker and gate (`src/check/widths/`, `src/cli/widths_gate.rs`) now also type `String`, `&str`,
+  `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet` and closures bound to locals, and report:
+  - B: a lookup (`get`, `get_mut`, `contains_key`, `remove` on a map; `get`, `contains`, `remove` on a set; `contains`
+    on a `Vec`) given an owned integer or `String`, and an owned value where a reference parameter, field or
+    binding is required (or the reverse);
+  - C: a `String` where `&str` is required or a `&str`/`&String` where `String` is (parameters of the file's
+    functions, methods and annotated closures, fields, annotated `let`s, assignments, `match`/`if` arms), and
+    `String + String` / `String += String`.
+- One level of deref coercion is honoured behind a reference (`&String` for `&str`, `&&T` for `&T`), so only shapes
+  rustc never accepts are reported. `tests/prediction_families_test.rs` checks eleven positive and eleven negative
+  shapes against rustc itself.
+- Corpus scan: every file with a prediction is again confirmed by rustc (E0308) on the build's output, and pinned.
+  New on the verified programs: `hashset_basics`, `prog_lru_cache`, `98_bignum_factorial`,
+  `174_closure_mut_capture`, three engine-parity programs (`map_get_match`, `match_arms`, `match_value`) and the
+  repros `explicit_ref_literal_arg` and `closure_string_param_literal`. Programs `wj check` already rejects for a
+  type error (the check-negative mutants, error-system fixtures) are reported too; their builds fail the same way.
+- On this head `literal_in_option_field_arm` builds (`Some(v - 1_i64)`): the backend fixed it, and the prediction
+  went away by construction. Its drift-ledger line is now stale (for the ledger's owner).
+
+## Fourth slice (landed): `wj run --interpret --speculate` (opt-in)
+
+- `src/cli/speculate.rs`: with `--speculate`, an interpreted run starts `wj build` of what `wj run --compiled` would
+  build, detached, at `nice -n 19`, with `CARGO_NET_OFFLINE=true`, into a scratch directory it removes afterwards;
+  `wj build` records the verdict (`cli::verdict`), and the next interpreted run of the same content prints the
+  failure footer. The run itself never waits and prints nothing about it.
+- Bounds, each checked before starting: no build when the verdict for this content and compiler is recorded; one
+  speculative build per user (a pid file in the cache root, a live pid is never doubled); none when the 1-minute load
+  average is at or above the core count; none for a project with Rust crate dependencies (their build scripts would
+  run). Compiling runs none of the program's code and needs no grant.
+- Gates: `tests/speculate_test.rs` (each bound, stdout and exit status unchanged, the run does not wait, the flag
+  conflicts with `--compiled`) and the promise registry entry `wj run --speculate` with a positive and a negative case.
+- Not measured yet: the CPU it adds on the shared machine during a pilot (the kill criterion above). On this machine
+  the load average is usually above the core count, so the bound keeps it off most of the time; that is the intended
+  behaviour for an opt-in on a busy host.
+
+## Measurement (offline, no LLM calls): what `--verify` would have told the pilot-5 agents
+
+Method: the final program of every pilot-5 trial in arms V (interpreted-first) and W (interpreted plus final build),
+taken from the trial records (`final_source`), run with `wj run --verify` on sample 0 of its task, on the head of this
+slice with a warm shared build cache. The six `t110_crc_lines` trials are left out: their workspace declared the
+`crc32fast` crate in a `wj.toml` that the records do not keep. A live pilot arm with `--verify` in the prompt costs
+LLM calls and is an owner decision; this replay is free.
+
+| Outcome on this head (54 trials) | Trials |
+|---|---|
+| compiled build OK, compiled run matches the interpreted run | 45 |
+| compiled build OK, not run a second time (effects beyond the console) | 5 |
+| the interpreter ran it, the compiled build failed (`t104_activity_log` V, all three) | 3 |
+| the program fails in the interpreter too (`t102_file_tally` V.0, a non-interpreted std call) | 1 |
+
+- The pilot recorded ten silent divergences. On this head the backend fixes since pilot 5 made `t101` and `t107` build
+  and match; the three that remain (`t104`, `map_get_in_sort_by_closure`, a closure returning `()` where `Ordering` is
+  expected) are exactly the trials `--verify` flags. No passing trial was flagged: `--verify` gave no false alarm.
+- `wj check` predicted none of the three (their first rustc error is outside families A to C), which is why `--verify`
+  is the complement of the predictions rather than a replacement.
+- Cost: median 2 s, maximum 10 s of wall time per `--verify` with a warm cache, against 3.9 s of mean tool-wait for arm
+  W's separate final build in the pilot.
+- Projection, not a measurement: an interpreted-first arm that ends with `--verify` would have seen every remaining
+  divergence at the cost of one call; the pilot acceptance metric above is what confirms it.
 
 ## Consequences
 
