@@ -87,22 +87,29 @@ fn rs_inner_cfg_predicate(rs_path: &Path) -> Option<String> {
     }
 }
 
-fn module_needs_desktop_feature_gate(module: &str) -> bool {
-    module.starts_with("desktop_") || (module.starts_with("app_") && module != "app_reactive")
-}
-
-/// Emit `#[cfg(...)]` + `pub mod name;` honoring test gates, `#![cfg]` in `name.rs`, and desktop heuristics.
-fn push_pub_mod_declaration(out: &mut String, output_dir: &Path, module: &str) {
+/// Emit `#[cfg(...)]` + `pub mod name;` honoring test gates, `#![cfg]` in `name.rs`, and the project's
+/// `[module_features]` declarations.
+fn push_pub_mod_declaration(out: &mut String, output_dir: &Path, module: &str, features: &crate::config::ModuleFeatures) {
     if is_test_module(module) {
         out.push_str("#[cfg(test)]\n");
     }
     let rs_path = output_dir.join(format!("{module}.rs"));
     if let Some(predicate) = rs_inner_cfg_predicate(&rs_path) {
         out.push_str(&format!("#[cfg({predicate})]\n"));
-    } else if module_needs_desktop_feature_gate(module) {
-        out.push_str("#[cfg(feature = \"desktop\")]\n");
+    } else {
+        out.push_str(&features.cfg_line(module));
     }
     out.push_str(&format!("pub mod {module};\n"));
+}
+
+/// The `[module_features]` that apply to a generated directory: those of the project its sources come from, else
+/// of the project that contains the output.
+fn module_features_for(output_dir: &Path, layout: Option<(&Path, &Path)>) -> crate::config::ModuleFeatures {
+    let from_source = layout.map(|(_, src)| crate::config::ModuleFeatures::near(src)).unwrap_or_default();
+    if from_source != crate::config::ModuleFeatures::default() {
+        return from_source;
+    }
+    crate::config::ModuleFeatures::near(output_dir)
 }
 
 /// When `mod.wj` exists, stub-merge must not re-add stale `.rs` files for modules no longer
@@ -331,6 +338,7 @@ pub(crate) fn generate_mod_file_with_layout(
 fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>) -> Result<()> {
     use colored::*;
     use std::fs;
+    let features = module_features_for(output_dir, layout);
 
     // Step 1: Recursively generate mod.rs for subdirectories that have .rs files
     let subdirs: Vec<_> = fs::read_dir(output_dir)?
@@ -465,7 +473,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     extra_modules.sort();
                     for m in &extra_modules {
                         updated.push('\n');
-                        push_pub_mod_declaration(&mut updated, output_dir, m);
+                        push_pub_mod_declaration(&mut updated, output_dir, m, &features);
                         if !is_test_module(m) {
                             updated.push_str(&format!("pub use {m}::*;\n"));
                         }
@@ -732,7 +740,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     content.push_str("// This file declares all generated Windjammer modules\n\n");
 
     for module in &modules {
-        push_pub_mod_declaration(&mut content, output_dir, module);
+        push_pub_mod_declaration(&mut content, output_dir, module, &features);
     }
 
     content.push_str("\n// Re-export public items\n");
@@ -750,24 +758,19 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                 continue;
             }
 
-            let needs_desktop_gate = module.starts_with("desktop_")
-                || (module.starts_with("app_") && module != "app_reactive");
+            let gate = features.cfg_line(module);
 
             if modules_with_conflicts.contains(module) {
                 if let Some(exports) = type_exports.get(module) {
                     for symbol in exports {
                         if !conflicting_symbols.contains(symbol) {
-                            if needs_desktop_gate {
-                                content.push_str("#[cfg(feature = \"desktop\")]\n");
-                            }
+                            content.push_str(&gate);
                             content.push_str(&format!("pub use {}::{};\n", module, symbol));
                         }
                     }
                 }
             } else {
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
+                content.push_str(&gate);
                 content.push_str(&format!("pub use {}::*;\n", module));
             }
         }
@@ -938,7 +941,7 @@ mod cfg_gated_module_tests {
         )
         .unwrap();
         let mut out = String::new();
-        push_pub_mod_declaration(&mut out, temp.path(), "desktop_app");
+        push_pub_mod_declaration(&mut out, temp.path(), "desktop_app", &crate::config::ModuleFeatures::default());
         assert!(
             out.contains("#[cfg(feature = \"desktop\")]\n")
                 && out.contains("pub mod desktop_app;\n"),
