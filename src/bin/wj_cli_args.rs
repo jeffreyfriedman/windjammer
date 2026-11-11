@@ -164,6 +164,11 @@ pub enum Commands {
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 
+        /// Interpreted runs: also start a compiled build of the same content in the background (lowest priority,
+        /// offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033)
+        #[arg(long, conflicts_with_all = ["compiled", "release", "verify"])]
+        speculate: bool,
+
         /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
         hot: bool,

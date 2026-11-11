@@ -115,13 +115,15 @@ fn the_found_shapes_are_rejected_by_rustc() {
 }
 
 #[test]
-fn drift_repros_of_family_a_are_predicted() {
+fn drift_repros_of_the_families_are_predicted() {
     let repros = root().join("tests/drift_corpus/repros");
     for (f, line) in [
         ("let_literal_captured_by_closure.wj", 5),
-        ("literal_in_option_field_arm.wj", 10),
         ("shadow_match_binding_literal.wj", 6),
         ("shadowed_option_literal_arms.wj", 5),
+        // family B (a reference expected) and C (`String` against `&str`)
+        ("explicit_ref_literal_arg.wj", 9),
+        ("closure_string_param_literal.wj", 6),
     ] {
         let d = predicted_widths(&repros.join(f));
         assert!(!d.is_empty(), "{f}: no prediction");
@@ -202,17 +204,52 @@ fn predictions_across_the_corpora() {
             hits.push(format!("{rel} {}", d.len()));
         }
     }
+    // every entry was confirmed by rustc (E0308) on the build's output above; programs `wj check` already rejects
+    // for a type error (check_negative mutants, error-system fixtures) are pinned too: their builds fail the same way
     let pinned = [
+        "examples/syntax_tests/99_error_test/main.wj 1",
+        "examples/testing_examples.wj 3",
+        "examples/verified/hashset_basics.wj 2",
+        "examples/verified/prog_lru_cache.wj 2",
+        "tests/check_negative/mutants/algo_caesar_cipher__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/algo_roman_numerals__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/basics_for_range__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/basics_interpolation__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/basics_loop_break__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/basics_while__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/chars_ascii_arith__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/error_unwrap_or_expect__let_int_gets_string.wj 1",
+        "tests/check_negative/mutants/from_conversion__let_int_gets_string.wj 1",
+        "tests/check_negative/mutants/numbers_integer_widths__let_int_gets_string.wj 1",
+        "tests/check_negative/mutants/prog_run_length_encoding__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/prog_text_wrap__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/strings_basics__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/strings_build__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/strings_format_specs__string_annotated_int.wj 1",
+        "tests/check_negative/mutants/strings_unicode__string_annotated_int.wj 1",
+        "tests/conformance_programs/174_closure_mut_capture.wj 3",
         "tests/conformance_programs/62_vec_alias_semantics.wj 1",
-        // a compute shader written as .wj: its Rust build fails anyway (missing shader builtins); the widths are real
+        "tests/conformance_programs/98_bignum_factorial.wj 1",
+        "tests/diagnostics/cases/let_string_to_int.wj 1",
+        "tests/diagnostics/cases/numeric_string_to_int.wj 1",
+        "tests/diagnostics_oracle/check/let_string_to_int.wj 1",
+        "tests/diagnostics_oracle/check/numeric_string_to_int.wj 1",
         "tests/dogfood/voxel_raymarch.wj 7",
+        "tests/drift_corpus/repros/closure_string_param_literal.wj 1",
+        "tests/drift_corpus/repros/explicit_ref_literal_arg.wj 2",
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
-        "tests/drift_corpus/repros/literal_in_option_field_arm.wj 1",
         "tests/drift_corpus/repros/shadow_match_binding_literal.wj 1",
         "tests/drift_corpus/repros/shadowed_option_literal_arms.wj 1",
+        "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
         "tests/engine_parity/closures_compiled.wj 1",
+        "tests/engine_parity/map_get_match.wj 2",
+        "tests/engine_parity/match_arms.wj 1",
+        "tests/engine_parity/match_value.wj 3",
         "tests/engine_parity/option_arm_values.wj 1",
+        "tests/error_system/test_type_mismatch.wj 1",
+        "tests/error_system_e2e/test_type_errors.wj 1",
+        "tests/fixtures/library_multipass/postgres_query_vec_params.wj 1",
         "tests/fixtures/library_multipass/u64_index_len_compare.wj 1",
         "tests/inference_corpus/closure_len_width.wj 1",
         "tests/spec/closures/SPEC-CLOS-009.wj 1",

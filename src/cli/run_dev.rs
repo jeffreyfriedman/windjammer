@@ -35,6 +35,8 @@ pub struct RunOptions {
     pub lint: Option<fn(&Path, bool)>,
     /// Interpreted runs: lints (W####) are reported but do not stop the run; compile errors still do.
     pub no_lint: bool,
+    /// Interpreted runs: start a bounded background compiled build of the same content (ADR-0033, `cli::speculate`).
+    pub speculate: bool,
 }
 
 /// Run once; returns the process exit status. A path of `-` reads the program from stdin (`wj run -`).
@@ -97,6 +99,11 @@ fn execute_path(opts: &RunOptions) -> i32 {
                     return 2;
                 }
             };
+            if opts.speculate {
+                if let Ok(input) = build_input(&target) {
+                    let _ = super::speculate::start(&input);
+                }
+            }
             let mut interp = opts.interp.clone();
             interp.durable_sites = crate::check::durable_sites::discover(&target.entry).unwrap_or_default();
             let eo = runner::EntryOptions { fallback: auto, host, crates, hot: opts.hot, run: interp };
