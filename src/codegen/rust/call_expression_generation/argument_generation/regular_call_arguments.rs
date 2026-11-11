@@ -15,6 +15,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
     _signature_from_simple_fallback: bool,
     is_extern_call: bool,
 ) -> Vec<String> {
+    let func_name: &str = &gen.imported_free_function_key(func_name, signature.as_ref()).unwrap_or_else(|| func_name.to_string()); // C3: the imported fn, not a homonym method
     let associated_receiver: Option<String> =
         if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
             func_name,
@@ -819,8 +820,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         && coerced.ends_with(".clone()");
                     if !already_rust_ref
                         && !coerced.contains("string_to_ffi(")
-                        && (gen.preregistered_free_call_arg_expects_borrow(func_name, i)
-                            || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
+                        && (gen.free_call_arg_expects_shared_borrow(func_name, signature.as_ref(), i)
                             || stale_shared_clone)
                     {
                         coerced = crate::ir::target_encodings::rust_shared_borrow(&coerced);

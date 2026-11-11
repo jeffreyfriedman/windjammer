@@ -4415,7 +4415,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_passes_param_as_call_argument(left, param_name, func)
                     || self.expression_passes_param_as_call_argument(right, param_name, func)
             }
-            Expression::Unary { operand, .. } => {
+            Expression::Unary { operand, .. } | Expression::Cast { expr: operand, .. } => {
                 self.expression_passes_param_as_call_argument(operand, param_name, func)
             }
             // Field reads / indexing are not call-argument uses of the root binding.
@@ -11419,7 +11419,7 @@ impl<'ast> CodeGenerator<'ast> {
                         } else {
                             reg.find_unique_signature_ending_with(simple)
                         }
-                    })
+                    }).filter(|s| !s.has_self_receiver || callee_name.contains("::") || self.bare_call_is_sibling_method(simple)) // not a same-named method's formals
                 else {
                     continue;
                 };

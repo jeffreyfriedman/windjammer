@@ -553,8 +553,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// beside a free `list_webhooks(deps, ..)`), and nothing at all when a parameter or local shadows the name.
     fn resolve_free_callee_signature(&self, name: &str, arg_count: usize) -> Option<&FunctionSignature> {
         let local = !name.contains("::") && (self.param_vars.contains_key(name) || self.scopes.iter().any(|s| s.contains_key(name)));
-        let scoped = self.registry.filter(|_| !local)?.scoped_key(&self.analyzed.module_path, name);
-        self.resolve_callee_signature(scoped.as_deref().unwrap_or(name), arg_count).filter(|s| !s.has_self_receiver)
+        let registry = self.registry.filter(|_| !local)?;
+        let scoped = registry.scoped_key(&self.analyzed.module_path, name);
+        // The bare key may hold a method: the call then names the free function the file imports by `use`.
+        self.resolve_callee_signature(scoped.as_deref().unwrap_or(name), arg_count)
+            .filter(|s| !s.has_self_receiver)
+            .or_else(|| self.analyzed.imported_paths.get(name).and_then(|p| registry.imported_free_function(p)).map(|(_, s)| s))
     }
 
     fn resolve_callee_signature(

@@ -1,0 +1,9 @@
+// `double(v)` inside a method refers to the imported free function, not to the method of the same name with another signature. Expected by hand: 0 + 2*21 = 42.
+// expect: 42
+mod ops
+mod acc
+
+fn main() {
+    let a = acc::Acc { total: 0 }
+    println("${a.run(21)}")
+}

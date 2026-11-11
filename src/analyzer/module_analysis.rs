@@ -127,6 +127,7 @@ impl<'ast> Analyzer<'ast> {
         // Users shouldn't need to know about Rust's &str vs String distinction.
         self.check_forbidden_rust_patterns(program)?;
 
+        self.imported_paths = std::sync::Arc::new(crate::parser::use_imports::imported_paths(&program.items));
         // PHASE 0: Collect all enum, struct, and trait definitions
         // This must happen before any function analysis
         for item in &program.items {
