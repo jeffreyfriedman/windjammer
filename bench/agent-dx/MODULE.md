@@ -18,6 +18,7 @@ Python and TypeScript, using identical tasks and one language-neutral oracle. No
 | `agents/` | Agent adapters (`claude_code.sh`, `replay_example.sh`). |
 | `transcripts/` | Recorded agent runs for deterministic replay (`schema: 1`). |
 | `results/` | Generated baseline JSON and the markdown report. |
+| `friction/` | Friction corpus (ADR-0037): `events/<id>/` (event.json with class and command, observed.txt, main.wj when recoverable, stdin.txt, status.txt), `extract.wj` (builds it from `results/pilot3..6`), `replay.wj` (replays every event on a `wj` and writes `status.json` and the `cost.*` keys of `docs/generated/measured.json`), `cost_proxies.wj` (loop times, tokens to write), `ratchet.json` (gated by tests/agent_cost_ratchet_test.rs), `open-bugs.md` (every still-open compiler bug with its owner stream). Windjammer scripts, no LLM. |
 | `tests/` | Harness self-tests (unittest): oracle cross-checks, mutation checks, driver, metrics, replay. |
 
 ## Harness modules (`agentdx/`)

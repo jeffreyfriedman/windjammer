@@ -1,0 +1,16 @@
+{
+  "id": "p6-t101-noise",
+  "pilot": "pilot6",
+  "task": "t101_json_orders",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 0,
+  "call": -1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 0,
+  "command": "wj run --compiled main.wj",
+  "source": "final",
+  "class": "noise",
+  "reason": "every compiled build printed rustc warnings about the generated Rust and build progress (pilot6-findings entry 6)"
+}

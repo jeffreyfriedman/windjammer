@@ -1,0 +1,9 @@
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:34:30
+  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead
+  = help: write `x ?? default` instead of `x.unwrap()`; or propagate with `x?`, or handle it with `match` / `if let`
+  (error in `wj build`)
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:35:30
+  = note: `.unwrap()` stops the program when the value is absent; `??` supplies a fallback instead
+error: explicit .unwr

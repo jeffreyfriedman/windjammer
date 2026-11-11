@@ -1,0 +1,16 @@
+{
+  "id": "p4-t013-N-0-c00",
+  "pilot": "pilot4",
+  "task": "t013_bst",
+  "arm": "N",
+  "arm_name": "interpreted+final-build+v2",
+  "trial": 0,
+  "call": 0,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 1,
+  "command": "wj run --interpret main.wj",
+  "source": "reconstructed",
+  "class": "user-error-good-message",
+  "reason": "Windjammer lint with help/fix"
+}

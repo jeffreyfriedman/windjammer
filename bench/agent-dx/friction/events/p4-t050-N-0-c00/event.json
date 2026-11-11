@@ -1,0 +1,16 @@
+{
+  "id": "p4-t050-N-0-c00",
+  "pilot": "pilot4",
+  "task": "t050_cat_number",
+  "arm": "N",
+  "arm_name": "interpreted+final-build+v2",
+  "trial": 0,
+  "call": 0,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 1,
+  "command": "wj run --interpret main.wj",
+  "source": "reconstructed",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

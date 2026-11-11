@@ -1,0 +1,4 @@
+error[WJ0003]: mismatched types: expected `string`, found `&string`
+  --> main.wj:36:24
+   |
+36 |     let mut users: Vec<string> = []

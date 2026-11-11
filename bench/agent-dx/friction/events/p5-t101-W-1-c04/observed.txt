@@ -1,0 +1,13 @@
+error[E0614]: type `f64` cannot be dereferenced
+  --> main.rs:44:46
+   |
+44 |                 m.insert(o.customer.clone(), *t);
+For more information about this error, try `rustc --explain E0614`.
+warning: `windjammer` (bin "windjammer") generated 3 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 3 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 1 previous error; 3 warnings emitted
+Error: Cargo build failed
+Building Windjammer project from "main.wj" (target: rust)
+Output: "./build"
+Error: Cargo

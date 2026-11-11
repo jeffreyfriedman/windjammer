@@ -1,0 +1,16 @@
+error[WJ0003]: mismatched types: expected `&HashMap<string, i64>`, found `HashMap<_, _>`
+  --> main.wj:36:1
+   |
+36 |         m.insert(parts[1], a + 1)
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:48:1
+   |
+48 |         } else {
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:50:1
+   |
+50 |         }
+error[WJ0003]: mismatched types: expected `&HashMap<string, i64>`, found `HashMap<_, _>`
+  --> main.wj:55:1
+   |
+55 |         let mut bc = 0

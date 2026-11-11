@@ -1,0 +1,258 @@
+// Builds the friction corpus (bench/agent-dx/friction/events/) from the recorded agent pilots (results/pilot3..6).
+// One directory per event: event.json (where it came from, the command, the class), observed.txt (the output the
+// agent saw, as recorded), main.wj (the program at that moment, when it can be recovered) and stdin.txt for runs.
+//
+//   wj run --interpret --allow 'fs.read=**' --allow 'fs.write=**' bench/agent-dx/friction/extract.wj -- [REPO]
+//
+// Events:
+//   * every failing `wj` call (check/run/build/test) in a Windjammer trial, with the excerpt the harness kept;
+//   * `noise`: one compiled program per pilot-6 task (the warnings every compiled build printed, findings entry 6);
+//   * `skipped-loop`: an interpreted-first trial whose first program run was not interpreted.
+// The source of a failing call is known when the pilot stored it (pilot 6 `failing-sources/`) or when that call was
+// the trial's first `wj` call (the trial's `first_source` is then exactly the program it ran). Otherwise only the
+// error text is kept (source = "none"). Deterministic: re-running rewrites the same files; replay.wj adds `status`.
+use std::env
+use std::fs
+use std::json
+use std::strings
+
+struct Ev {
+    id: string,
+    pilot: string,
+    task: string,
+    arm: string,
+    arm_name: string,
+    trial: int,
+    call: int,
+    verb: string,
+    mode: string,
+    exit: int,
+    command: string,
+    source: string,
+    class: string,
+    reason: string,
+}
+
+fn s_of(v: json::Value, k: string) -> string {
+    match json::get(v, k) {
+        Some(x) => json::as_str(x) ?? "",
+        None => "",
+    }
+}
+
+fn i_of(v: json::Value, k: string) -> int {
+    match json::get(v, k) {
+        Some(x) => (json::as_i64(x) ?? 0) as int,
+        None => 0,
+    }
+}
+
+fn has(t: string, p: string) -> bool {
+    strings::contains(t, p)
+}
+
+/// The command the agent ran, rebuilt from the shim's verb and mode.
+fn command_of(verb: string, mode: string) -> string {
+    if verb == "run" && mode == "compiled" {
+        return "wj run --compiled main.wj"
+    }
+    if verb == "run" && mode == "interpret" {
+        return "wj run --interpret main.wj"
+    }
+    if verb == "run" && mode == "default" {
+        return "wj run --verify main.wj"
+    }
+    if verb == "build" {
+        return "wj build main.wj"
+    }
+    if verb == "check" {
+        return "wj check main.wj"
+    }
+    "wj " + verb + " main.wj"
+}
+
+/// Message shapes that pilot findings (docs/drift/pilot4..6-findings.md) traced to programs the interpreter accepts and
+/// the generated Rust does not: ownership/width/String inference, closure values, adapters.
+fn drift_shape(t: string) -> bool {
+    let shapes = ["cannot be dereferenced", "is not a reference", "expected an owned", "expected `Ordering`, found `void`",
+        "expected `string`, found `str`", "expected `string`, found `&string`", "found `HashMap<_, _>`", "found `Map<Iter",
+        "expected `&_`, found `string`", "expected `int`, found `uint`", "expected `uint`, found `int`",
+        "cannot collect `&str` items", "cannot be built from an iterator", "used after it was moved", "partially moved",
+        "cannot be applied to type `&mut", "expected `void`, found `string`", "cannot be indexed by", "match` arms have incompatible",
+        "non-primitive cast", "expected a type, found a trait", "expected an `Fn(char)` closure"]
+    for s in shapes {
+        if has(t, s) {
+            return true
+        }
+    }
+    false
+}
+
+/// Class of a failing call from the text the agent saw (replay.wj re-decides events with a source).
+fn classify(t: string, pilot: string) -> Vec<string> {
+    if has(t, "wj verify: stdout differs") && pilot == "pilot6-parallel" {
+        return ["compiler-bug", "tooling: same-named workspaces shared one compiled binary (pilot6-findings entry 1)"]
+    }
+    if has(t, "unsupported in the interpreter") {
+        return ["compiler-bug", "interpreter gap: a valid program the interpreter refuses"]
+    }
+    if has(t, "panicked at main.rs") {
+        return ["unhelpful-message", "run-time panic located in the generated main.rs, not in main.wj"]
+    }
+    if has(t, "error[E") {
+        if drift_shape(t) {
+            return ["compiler-bug", "raw rustc error on the generated Rust; message shape of a known drift class"]
+        }
+        return ["unhelpful-message", "raw rustc error on the generated Rust (main.rs location, no WJ code)"]
+    }
+    if has(t, "error[WJ") {
+        if drift_shape(t) {
+            return ["compiler-bug", "rustc rejection translated to WJ0003-style; message shape of a known drift class"]
+        }
+        return ["user-error-good-message", "Windjammer diagnostic with code and location"]
+    }
+    if has(t, "[W0") {
+        return ["user-error-good-message", "Windjammer lint with help/fix"]
+    }
+    if has(t, "could not find `wj.toml`") {
+        return ["user-error-good-message", "tool usage error with a clear message"]
+    }
+    if has(t, "Building Windjammer project") || has(t, "Incremental") || has(t, "warning: unused") {
+        return ["noise", "build progress and rustc warnings in front of the program's own exit status"]
+    }
+    ["program-output", "the program's own non-zero exit (the task asks for it); not friction"]
+}
+
+fn write_event(dir: string, e: Ev, observed: string, src: string, stdin: string) {
+    let d = dir + "/" + e.id
+    fs::create_dir_all(d).unwrap_or(())
+    fs::write(d + "/event.json", (json::to_string_pretty(e) ?? "{}") + "\n").unwrap_or(())
+    fs::write(d + "/observed.txt", observed + "\n").unwrap_or(())
+    if src.len() > 0 {
+        fs::write(d + "/main.wj", src).unwrap_or(())
+    }
+    if stdin.len() > 0 {
+        fs::write(d + "/stdin.txt", stdin).unwrap_or(())
+    }
+}
+
+/// First visible example's stdin for a task (tasks/ or tasks_set2/).
+fn sample_stdin(bench: string, task: string) -> string {
+    for root in ["tasks", "tasks_set2"] {
+        let p = bench + "/" + root + "/" + task + "/samples.json"
+        if fs::exists(p) {
+            let v = json::parse(fs::read_to_string(p) ?? "[]") ?? json::array()
+            let first = if json::is_array(v) { json::get_index(v, 0) } else { None }
+            match first {
+                Some(c) => return s_of(c, "stdin"),
+                None => return "",
+            }
+        }
+    }
+    ""
+}
+
+fn short_pilot(p: string) -> string {
+    if p == "pilot6-parallel" { "p6par" } else { "p" + strings::replace(p, "pilot", "") }
+}
+
+fn pad(n: int) -> string {
+    if n < 10 { "0" + n.to_string() } else { n.to_string() }
+}
+
+fn main() {
+    let args = env::args()
+    let repo = if args.len() > 1 { args[1] } else { "." }
+    let bench = repo + "/bench/agent-dx"
+    let out = bench + "/friction/events"
+    fs::remove_dir_all(out).unwrap_or(())
+    fs::create_dir_all(out).unwrap_or(())
+    let mut n = 0
+    let mut with_src = 0
+    let mut noise_tasks: Vec<string> = Vec::new()
+    for pilot in ["pilot3", "pilot4", "pilot5", "pilot6", "pilot6-parallel"] {
+        let tdir = bench + "/results/" + pilot + "/trials"
+        let mut names: Vec<string> = Vec::new()
+        for ent in fs::read_dir(tdir) ?? Vec::new() {
+            if ent.name().ends_with(".json") {
+                names.push(ent.name())
+            }
+        }
+        names.sort()
+        for name in names {
+            let t = json::parse(fs::read_to_string(tdir + "/" + name) ?? "{}") ?? json::object()
+            if s_of(t, "lang") != "wj" {
+                continue
+            }
+            let task = s_of(t, "task")
+            let arm = s_of(t, "arm")
+            let arm_name = s_of(t, "arm_name")
+            let trial = i_of(t, "trial")
+            let first_source = s_of(t, "first_source")
+            let stdin = sample_stdin(bench, task)
+            let invs = json::get(t, "invocations") ?? json::array()
+            let diags = json::get(t, "diag_samples") ?? json::array()
+            let base = short_pilot(pilot) + "-" + strings::substring(task, 0, 4) + "-" + arm + "-" + trial.to_string()
+            let mut k = 0
+            let mut first_run_mode = ""
+            for i in 0..json::len(invs) {
+                let inv = json::get_index(invs, i) ?? json::object()
+                let verb = s_of(inv, "verb")
+                let mode = s_of(inv, "mode")
+                let exit = i_of(inv, "exit")
+                if first_run_mode == "" && (verb == "run" || verb == "build") {
+                    first_run_mode = mode
+                }
+                let is_verify = verb == "check" || verb == "run" || verb == "test" || verb == "build"
+                if exit == 0 || !is_verify {
+                    continue
+                }
+                let observed = match json::get_index(diags, k) {
+                    Some(x) => json::as_str(x) ?? "",
+                    None => "",
+                }
+                k = k + 1
+                if observed == "" {
+                    continue
+                }
+                let cls = classify(observed, pilot)
+                let stored = bench + "/results/" + pilot + "/failing-sources/" + task + "." + arm + "." + trial.to_string() + ".call" + i.to_string() + ".wj"
+                let mut src = ""
+                let mut how = "none"
+                if fs::exists(stored) {
+                    src = fs::read_to_string(stored) ?? ""
+                    how = "stored"
+                } else if i == 0 && first_source.len() > 0 {
+                    src = first_source
+                    how = "reconstructed"
+                }
+                if src.len() > 0 {
+                    with_src = with_src + 1
+                }
+                let e = Ev { id: base + "-c" + pad(i), pilot: pilot, task: task, arm: arm, arm_name: arm_name, trial: trial, call: i,
+                    verb: verb, mode: mode, exit: exit, command: command_of(verb, mode), source: how, class: cls[0], reason: cls[1] }
+                write_event(out, e, observed, src, if verb == "run" { stdin } else { "" })
+                n = n + 1
+            }
+            // the cheap loop: an interpreted-first arm whose first program run was not interpreted
+            if strings::contains(arm_name, "interpreted") && first_run_mode != "" && first_run_mode != "interpret" {
+                let e = Ev { id: base + "-loop", pilot: pilot, task: task, arm: arm, arm_name: arm_name, trial: trial, call: -1,
+                    verb: "run", mode: first_run_mode, exit: 0, command: command_of("run", first_run_mode), source: "none",
+                    class: "skipped-loop", reason: "interpreted-first arm; the first program run was `" + command_of("run", first_run_mode) + "`, not `wj run --interpret`" }
+                write_event(out, e, "(behaviour, no output: the agent's first program run used mode " + first_run_mode + ")", "", "")
+                n = n + 1
+            }
+            // build noise: one compiled-first program per pilot-6 task, as the agent finished it
+            if pilot == "pilot6" && arm == "U" && !noise_tasks.contains(task) {
+                noise_tasks.push(task)
+                let e = Ev { id: "p6-" + strings::substring(task, 0, 4) + "-noise", pilot: pilot, task: task, arm: arm, arm_name: arm_name,
+                    trial: trial, call: -1, verb: "run", mode: "compiled", exit: 0, command: "wj run --compiled main.wj", source: "final",
+                    class: "noise", reason: "every compiled build printed rustc warnings about the generated Rust and build progress (pilot6-findings entry 6)" }
+                write_event(out, e, "(not kept per call; pilot6-findings entry 6: 30 of 30 compiled-first trials saw unused-import and unused-parens warnings)", s_of(t, "final_source"), stdin)
+                n = n + 1
+                with_src = with_src + 1
+            }
+        }
+    }
+    println("friction corpus: ${n} events, ${with_src} with a program")
+}

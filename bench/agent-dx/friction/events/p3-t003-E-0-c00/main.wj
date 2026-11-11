@@ -1,0 +1,44 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let limit: int = 200000
+    let mut sieve: Vec<bool> = []
+    for i in 0..(limit + 1) {
+        sieve.push(true)
+    }
+    let mut counts: Vec<int> = []
+    let mut lasts: Vec<int> = []
+    let mut c: int = 0
+    let mut last: int = 0
+    for i in 0..(limit + 1) {
+        if i >= 2 && sieve[i as usize] {
+            c = c + 1
+            last = i
+            let mut j = i * i
+            while j <= limit {
+                sieve[j as usize] = false
+                j = j + i
+            }
+        }
+        counts.push(c)
+        lasts.push(last)
+    }
+    let mut first = true
+    for line in text.lines() {
+        let t = line.trim()
+        if t.len() == 0 {
+            continue
+        }
+        if first {
+            first = false
+            continue
+        }
+        let n: int = t.parse::<int>().unwrap_or(0)
+        if n < 2 {
+            println("0 none")
+        } else {
+            println("${counts[n as usize]} ${lasts[n as usize]}")
+        }
+    }
+}

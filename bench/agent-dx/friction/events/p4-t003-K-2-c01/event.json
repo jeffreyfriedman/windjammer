@@ -1,0 +1,16 @@
+{
+  "id": "p4-t003-K-2-c01",
+  "pilot": "pilot4",
+  "task": "t003_prime_counts",
+  "arm": "K",
+  "arm_name": "compiled-first+sheet",
+  "trial": 2,
+  "call": 1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

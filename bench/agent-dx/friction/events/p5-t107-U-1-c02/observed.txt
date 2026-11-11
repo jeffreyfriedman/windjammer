@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:32:1
+   |
+32 |                 } else if cur_len + 1 + l <= w {
+error[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`
+  --> main.wj:40:1
+   |
+40 |             }

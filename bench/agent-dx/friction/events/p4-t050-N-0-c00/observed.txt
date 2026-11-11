@@ -1,0 +1,8 @@
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = help: replace `println("{:>6}\t{}", c, line)` with `println("${c:>6}\t${line}")` (or run `wj fix`)
+  = suggestion: println("${c:>6}\t${line}")
+
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = help: replace `println("cat: {}: No such file", n)` with `println("cat: ${n}: No such file")` (or run `wj fix`)
+  = suggestion: println("cat: ${n}: No such file")
+

@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:44:1
+   |
+44 |         } else {
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:46:1
+   |
+46 |         }

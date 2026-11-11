@@ -1,0 +1,16 @@
+{
+  "id": "p3-t009-B-1-c02",
+  "pilot": "pilot3",
+  "task": "t009_rpn_eval",
+  "arm": "B",
+  "arm_name": "compiled-first",
+  "trial": 1,
+  "call": 2,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "p3-t006-E-2-c00",
+  "pilot": "pilot3",
+  "task": "t006_base_convert",
+  "arm": "E",
+  "arm_name": "tiny-pack+mcp",
+  "trial": 2,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

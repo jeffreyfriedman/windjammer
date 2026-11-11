@@ -1,0 +1,7 @@
+error[E0599]: no method named `iter` found for struct `Chars<'a>` in the current scope
+   --> main.rs:16:42
+    |
+ 16 |             for (i, x) in digits.chars().iter().enumerate() {
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `ws` (bin "ws") due to 1 previous error; 1 warning emitted
+error: could not compile `ws` (bin "ws") due to 1 previous error; 1 warning emitted

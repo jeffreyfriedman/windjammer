@@ -1,0 +1,11 @@
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:22:56
+   |
+22 |                     let _ = counts.insert(cur.clone(), *n + 1_i64);
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:29:40
+   |
+29 |             let _ = counts.insert(cur, *n + 1_i64);
+For more information about this error, try `rustc --explain E0614`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 1 warning emitted

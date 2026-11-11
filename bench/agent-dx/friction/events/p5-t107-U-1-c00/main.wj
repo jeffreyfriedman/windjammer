@@ -1,0 +1,51 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut first = true
+    let mut w = 0
+    let mut ok = false
+    let mut cur = ""
+    let mut cur_len: int = 0
+    let mut lines: Vec<string> = []
+    for line in text.lines() {
+        if first {
+            first = false
+            match line.trim().parse::<int>() {
+                Ok(n) => {
+                    if n > 0 {
+                        w = n
+                        ok = true
+                    }
+                }
+                Err(_) => {}
+            }
+            if !ok {
+                println("error: bad width")
+                std::process::exit(1)
+            }
+        } else {
+            for word in line.split_whitespace() {
+                let l: int = word.len() as int
+                if cur_len == 0 {
+                    cur = word
+                    cur_len = l
+                } else if cur_len + 1 + l <= w {
+                    cur = "${cur} ${word}"
+                    cur_len = cur_len + 1 + l
+                } else {
+                    println("${cur}")
+                    cur = word
+                    cur_len = l
+                }
+            }
+        }
+    }
+    if first {
+        println("error: bad width")
+        std::process::exit(1)
+    }
+    if cur_len > 0 {
+        println("${cur}")
+    }
+}

@@ -1,0 +1,16 @@
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:22:56
+   |
+22 |                     let _ = counts.insert(cur.clone(), *n + 1_i64);
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:29:40
+   |
+29 |             let _ = counts.insert(cur, *n + 1_i64);
+error[E0308]: mismatched types
+  --> main.rs:37:23
+   |
+37 |           if a.1 != b.1 {
+error[E0308]: mismatched types
+  --> main.rs:39:16
+   |
+39 |           } else {

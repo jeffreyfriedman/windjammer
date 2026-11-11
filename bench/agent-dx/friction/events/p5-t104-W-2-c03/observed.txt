@@ -1,0 +1,15 @@
+error[E0277]: the type `[i64]` cannot be indexed by `i64`
+   --> main.rs:58:70
+    |
+ 58 |         while j > 0_i64 && (tvals[order[(j as usize) - 1]]) < (tvals[order[j as usize]]) {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:78:20
+   |
+78 |                 if *c > bc || *c == bc && ps[1] < best {
+error[E0614]: type `i64` cannot be dereferenced
+  --> main.rs:78:31
+   |
+78 |                 if *c > bc || *c == bc && ps[1] < best {
+Some errors have detailed explanations: E0277, E0614.
+For more information about an error, try `rustc --explain E0277`.
+warning: `windjammer` (bin "

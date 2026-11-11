@@ -1,0 +1,4 @@
+error[WJ0029]: cannot collect `&str` items into `Vec<std::string::string>`
+  --> main.wj:96:24
+   |
+96 |         let parts: Vec<string> = line.trim().split(" ").collect()

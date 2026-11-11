@@ -1,0 +1,83 @@
+use std::fs
+
+fn prec(op: string) -> int {
+    if op == "^" { return 3 }
+    if op == "*" || op == "/" { return 2 }
+    if op == "+" || op == "-" { return 1 }
+    0
+}
+
+fn convert(line: string) -> string {
+    let cs: Vec<char> = line.chars().collect()
+    let n: int = cs.len() as int
+    let mut out: Vec<string> = []
+    let mut stack: Vec<string> = []
+    let mut expect = true
+    let mut i: int = 0
+    while i < n {
+        let c = cs[i as usize]
+        if c == ' ' || c == '\t' || c == '\r' {
+            i += 1
+        } else if c >= '0' && c <= '9' {
+            if !expect { return "error" }
+            let mut num = ""
+            while i < n && cs[i as usize] >= '0' && cs[i as usize] <= '9' {
+                num = num + cs[i as usize].to_string()
+                i += 1
+            }
+            out.push(num)
+            expect = false
+        } else if c == '(' {
+            if !expect { return "error" }
+            stack.push("(")
+            i += 1
+        } else if c == ')' {
+            if expect { return "error" }
+            let mut found = false
+            while stack.len() > 0 {
+                let t = stack.pop().unwrap()
+                if t == "(" {
+                    found = true
+                    break
+                }
+                out.push(t)
+            }
+            if !found { return "error" }
+            i += 1
+        } else if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' {
+            if expect { return "error" }
+            let op = c.to_string()
+            let p = prec(op)
+            while stack.len() > 0 {
+                let top = stack[stack.len() - 1]
+                if top == "(" { break }
+                let tp = prec(top)
+                if tp > p || (tp == p && op != "^") {
+                    out.push(stack.pop().unwrap())
+                } else {
+                    break
+                }
+            }
+            stack.push(op)
+            expect = true
+            i += 1
+        } else {
+            return "error"
+        }
+    }
+    if expect { return "error" }
+    while stack.len() > 0 {
+        let t = stack.pop().unwrap()
+        if t == "(" { return "error" }
+        out.push(t)
+    }
+    out.join(" ")
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim() == "" { continue }
+        println(convert(line))
+    }
+}

@@ -1,0 +1,4 @@
+error[WJ0003]: mismatched types: expected an owned `int`, found an owned `int`
+  --> main.wj:8:37
+  |
+8 |     let mut counts: HashMap<string, int> = HashMap::new()
