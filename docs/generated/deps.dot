@@ -163,9 +163,9 @@ digraph deps {
   "check" -> "typing" [label="4"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="30"];
+  "cli" -> "cargo_cache" [label="31"];
   "cli" -> "cargo_toml" [label="5"];
-  "cli" -> "check" [label="26"];
+  "cli" -> "check" [label="27"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="3"];
   "cli" -> "compiler_config" [label="3"];
@@ -183,7 +183,7 @@ digraph deps {
   "cli" -> "linter" [label="5"];
   "cli" -> "metadata" [label="1"];
   "cli" -> "module_system" [label="12"];
-  "cli" -> "package" [label="16"];
+  "cli" -> "package" [label="17"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="6"];
