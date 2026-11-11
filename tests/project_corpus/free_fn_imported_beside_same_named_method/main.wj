@@ -4,6 +4,6 @@ mod ops
 mod acc
 
 fn main() {
-    let a = acc::Acc { total: 0 }
+    let mut a = acc::Acc { total: 0 }
     println("${a.run(21)}")
 }

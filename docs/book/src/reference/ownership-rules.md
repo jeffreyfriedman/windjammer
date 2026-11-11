@@ -20,9 +20,11 @@ independent copy. The compiler picks the cheapest implementation that preserves 
 
 ## Locals and parameters
 
-`let` bindings are immutable and `let mut` allows reassignment and mutation of the binding. Parameters are immutable in
-the callee unless its body mutates them, which makes them a mutable borrow. Assigning to a local not declared `mut` is
-diagnostic `WJ0004`, a warning with an automatic fix today, and an error once the explicit-`mut` migration lands.
+`let` bindings are immutable and `let mut` allows reassignment and mutation of the binding (ADR-0002: local mutability
+is explicit). Parameters and `self` are different: how they are passed (`&`, `&mut` or owned) is inferred, so a
+parameter whose body changes it becomes a mutable borrow. Changing a local not declared `mut` (assigning to it or to
+its fields, or calling a method that changes it) is diagnostic `WJ0051`, a warning with an automatic fix (`wj fix`)
+while existing code migrates, and an error in a coming release.
 
 ```wj
 // expect: 1 50 2

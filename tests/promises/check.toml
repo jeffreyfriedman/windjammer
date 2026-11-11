@@ -139,13 +139,11 @@ exit = 1
 stdout_has = ["\"code\": \"WJ0010\""]
 
 [[case]]
-name = "check rejects assigning to an immutable binding (WJ0004)"
-polarity = "negative"
-xfail = "BUG: `wj check` accepts `let x = 1; x = 2` (WJ0004 is documented as Proven)"
-files = { "m.wj" = "fn main() {\n    let x = 1\n    x = 2\n    println(\"${x}\")\n}\n" }
+name = "check reports a local changed without mut (WJ0051), with its fix"
+polarity = "positive"
+files = { "m.wj" = "struct Counter {\n    n: int,\n}\nimpl Counter {\n    fn bump(self) {\n        self.n = self.n + 1\n    }\n}\nfn main() {\n    let c = Counter { n: 0 }\n    c.bump()\n    println(\"${c.n}\")\n}\n" }
 args = ["check", "--json", "{w}/m.wj"]
-exit = 1
-stdout_has = ["WJ0004"]
+stdout_has = ["\"code\": \"WJ0051\"", "\"replacement\": \"mut \""]
 
 [[case]]
 name = "check --fix applies machine-applicable rewrites"

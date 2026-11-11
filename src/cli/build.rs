@@ -40,6 +40,21 @@ fn stop_on_rust_crate_errors(path: &Path) -> Result<()> {
     anyhow::bail!("{} error(s) in calls into Rust crates: the build stops before generating code", errors.len())
 }
 
+/// ADR-0002: local bindings changed without `mut` (WJ0051), reported exactly as `wj check` reports them. A warning
+/// during the migration; an error stops the build before code generation.
+fn report_local_mutability(path: &Path) -> Result<()> {
+    let checked = crate::check::local_mutability(path)?;
+    let source_of = |f: &str| checked.sources.get(f).cloned();
+    for d in &checked.report.diagnostics {
+        eprintln!("{}", crate::diagnostics::render::render(d, &source_of));
+    }
+    let errors = checked.report.diagnostics.iter().filter(|d| d.is_error()).count();
+    if errors > 0 {
+        anyhow::bail!("{errors} local binding(s) changed without `mut`: the build stops before generating code (`wj fix` adds the `mut`)");
+    }
+    Ok(())
+}
+
 /// Build options for JavaScript target
 pub struct BuildOptions {
     pub tree_shake: bool,
@@ -90,6 +105,7 @@ pub fn execute(
     }
     // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
     stop_on_rust_crate_errors(path)?;
+    report_local_mutability(path)?;
     // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
     let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
     // ADR-0021 E4b: the calls of `durable fn`s that are journaled steps

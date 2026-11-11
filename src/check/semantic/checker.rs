@@ -153,11 +153,7 @@ impl Cx<'_, '_> {
             }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types, scalars, immutable, .. } = col;
-        let immutable: HashSet<String> = immutable
-            .into_iter()
-            .filter(|n| counts.get(n).copied().unwrap_or(0) == 1)
-            .collect();
+        let Collect { names, counts, let_types, scalars, .. } = col;
         let scalars: HashMap<String, (Kind, bool)> = scalars
             .into_iter()
             .filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1)
@@ -171,7 +167,6 @@ impl Cx<'_, '_> {
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
         ck.ret_ty = ret.cloned();
         ck.scalars = scalars;
-        ck.immutable = immutable;
         walk_block(&mut ck, body);
         if let (Some(Statement::Expression { expr, .. }), Some(ty)) = (body.last().map(|s| &**s), ret) {
             ck.wrapper_mismatch(ty, expr, " in return value");
@@ -195,8 +190,6 @@ struct Collect<'i> {
     names: HashSet<String>,
     counts: HashMap<String, usize>,
     let_types: HashMap<String, String>,
-    /// `let x = ..` bindings declared without `mut`.
-    immutable: HashSet<String>,
     /// `let x: int = ..` / `let s = "lit"`: scalar kind and whether it was declared.
     scalars: HashMap<String, (Kind, bool)>,
 }
@@ -208,7 +201,6 @@ impl<'i> Collect<'i> {
             names: HashSet::new(),
             counts: HashMap::new(),
             let_types: HashMap::new(),
-            immutable: HashSet::new(),
             scalars: HashMap::new(),
         }
     }
@@ -260,9 +252,6 @@ impl Visitor for Collect<'_> {
                     }
                 }
             }
-        }
-        if let Statement::Let { pattern: Pattern::Identifier(n), mutable: false, .. } = s {
-            self.immutable.insert(n.clone());
         }
         if let Statement::Let {
             pattern: Pattern::Identifier(n) | Pattern::MutBinding(n),
@@ -326,7 +315,6 @@ struct Checker<'c, 'a, 'o> {
     self_ty: Option<String>,
     ret_ty: Option<Type>,
     scalars: HashMap<String, (Kind, bool)>,
-    immutable: HashSet<String>,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -345,7 +333,6 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             self_ty,
             ret_ty: None,
             scalars: HashMap::new(),
-            immutable: HashSet::new(),
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -785,38 +772,6 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         self.cx.out.push(d);
     }
 
-    /// ADR-0002: assigning to a binding declared without `mut`. The compiler still infers `mut`,
-    /// so this is a warning until `rules::MUTABILITY_REQUIRED` flips (the inference itself is not
-    /// duplicated here).
-    fn immutable_assignment(&mut self, target: &Expression<'_>) {
-        let Expression::Identifier { name, location } = target else { return };
-        if !self.immutable.contains(name) {
-            return;
-        }
-        let ix = &self.cx.loc.ix;
-        let text = ix.text();
-        let needle = format!("let {name}");
-        let eff = self.effective(location);
-        let span = self.cx.loc.word(&eff, name);
-        let before = span.as_ref().map_or(text.len(), |s| s.byte_start);
-        let Some(at) = text[..before.min(text.len())].rfind(&needle) else { return };
-        if text[at + needle.len()..].chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_') {
-            return;
-        }
-        let severity = if rules::MUTABILITY_REQUIRED { crate::diagnostics::Severity::Error } else { crate::diagnostics::Severity::Warning };
-        let mut d = Diagnostic::new("WJ0004", severity, format!("`{name}` is assigned after its declaration but declared without `mut`"));
-        if let Some(sp) = span {
-            d = d.at(sp.with_label("assigned here"));
-        }
-        let at_mut = at + 4;
-        d = d.with_help(format!("declare it with `let mut {name}` (ADR-0002: explicit `mut`)")).with_fix(Fix {
-            description: format!("declare `{name}` as mutable"),
-            applicability: Applicability::MachineApplicable,
-            edits: vec![Edit { span: ix.span(at_mut, at_mut), replacement: "mut ".to_string() }],
-        });
-        self.cx.out.push(d);
-    }
-
     fn operand_span(&self, e: &Expression<'_>) -> Option<Span> {
         match e {
             Expression::Literal { value, location } => self.cx.loc.literal(&self.effective(location), value),
@@ -954,7 +909,6 @@ impl Visitor for Checker<'_, '_, '_> {
                 if compound_op.is_none() {
                     self.assignment(target, value);
                 }
-                self.immutable_assignment(target);
             }
             Statement::Let { type_: Some(ty), value, location, .. } => {
                 self.let_from_call(ty, value);

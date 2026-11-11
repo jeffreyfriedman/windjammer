@@ -112,14 +112,11 @@ fn call_with_a_function_typed_parameter_typechecks() {
     generated_rust_typechecks("fn_typed_param_call.wj");
 }
 
-/// A method that mutates by calling a mutating method inside an expression makes its receiver binding `mut`.
+/// A binding changed only through a method that changes its receiver transitively (`1 + self.step()`), or taken
+/// from a tuple pattern and changed through a method, is declared `mut` (ADR-0002); with it, the generated Rust
+/// type-checks. Without it, `wj check` reports WJ0051 (tests/local_mutability_test.rs covers both programs).
 #[test]
-fn receiver_of_a_transitively_mutating_method_is_mut() {
+fn explicitly_mut_receivers_of_changing_methods_typecheck() {
     generated_rust_typechecks("mut_receiver_transitive_in_expr.wj");
-}
-
-/// A binding taken from a tuple pattern and mutated through a method is declared `mut`.
-#[test]
-fn tuple_pattern_binding_mutated_by_a_method_is_mut() {
     generated_rust_typechecks("mut_receiver_tuple_binding.wj");
 }

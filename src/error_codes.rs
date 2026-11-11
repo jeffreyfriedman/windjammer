@@ -314,6 +314,30 @@ match value {
             maturity: GuaranteeMaturity::Proven,
         });
 
+        // WJ0051: local binding changed without `mut` (ADR-0002)
+        self.register(WjErrorCode {
+            code: "WJ0051".to_string(),
+            title: "Local binding changed but not declared mut".to_string(),
+            explanation: "A local binding (`let`, a `for` loop variable) is immutable unless declared `mut` (ADR-0002). The program assigns to it, assigns to a field or element of it, calls a method that changes it, or passes it to a function that changes it. `wj fix` adds the `mut`.".to_string(),
+            causes: vec![
+                "`let x = ..` followed by `x = ..`, `x += ..` or `x.field = ..`".to_string(),
+                "Calling a method that changes the value (`push`, `insert`, a method that changes `self`)".to_string(),
+            ],
+            solutions: vec![
+                "Declare the binding `let mut x` (`let (mut a, b)`, `for mut x in`)".to_string(),
+                "Run `wj fix <path>` to insert every missing `mut`".to_string(),
+            ],
+            example: Some(r#"// Wrong:
+let items = Vec::new()
+items.push(1)
+
+// Correct:
+let mut items = Vec::new()
+items.push(1)"#.to_string()),
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+
         // WJ0160: arena value escapes its arena (ADR-0025, `std::arena`, unstable)
         self.register(WjErrorCode {
             code: "WJ0160".to_string(),

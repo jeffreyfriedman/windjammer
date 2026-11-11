@@ -111,3 +111,27 @@ files = { "d.md" = "# t\n\n```windjammer\nfn main() {\n    println!(\"hi\")\n}\n
 args = ["fix", "--docs", "--check", "{w}/d.md"]
 exit = 1
 file_has = { "d.md" = "println!(" }
+
+[[case]]
+name = "fix declares mut on a local the program changes (WJ0051)"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = Vec::new()\n    v.push(1)\n    println(\"${v.len()}\")\n}\n" }
+args = ["fix", "{w}/m.wj"]
+file_has = { "m.wj" = "let mut v = Vec::new()" }
+output_has = ["`v` is changed: `mut` added (WJ0051)"]
+
+[[case]]
+name = "fix --check fails on a local changed without mut (WJ0051) and does not write"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let v = Vec::new()\n    v.push(1)\n    println(\"${v.len()}\")\n}\n" }
+args = ["fix", "--check", "{w}/m.wj"]
+exit = 1
+file_has = { "m.wj" = "let v = Vec::new()" }
+output_has = ["`v` is changed: `mut` is missing (WJ0051)"]
+
+[[case]]
+name = "fix --docs declares mut in code fences"
+polarity = "positive"
+files = { "d.md" = "# t\n\n```wj\nfn main() {\n    let n = 0\n    n += 1\n    println(\"${n}\")\n}\n```\n" }
+args = ["fix", "--docs", "{w}/d.md"]
+file_has = { "d.md" = "    let mut n = 0" }
