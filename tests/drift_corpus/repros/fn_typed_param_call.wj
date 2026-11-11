@@ -1,5 +1,5 @@
-// A call to a function with a function-typed parameter is not adapted like other calls: integer literals are typed i32
-// (rustc E0308, expected i64) and a queue held in an immutable local is not borrowed where the callee mutates it.
+// A call to a function with a function-typed parameter is adapted like any other call: its own parameter type decides
+// (integer literals are i64, `accept(lo)` passes the value). The queue the callee mutates is declared `let mut` (ADR-0002).
 struct Queue {
     items: Vec<string>,
 }
@@ -30,6 +30,6 @@ fn drain_while(q: Queue, limit: int, keep: fn(string) -> bool) -> int {
 
 fn main() {
     println("${within(1, 9, |n| n > 0)}")
-    let q = Queue { items: ["a", "b", "stop"] }
+    let mut q = Queue { items: ["a", "b", "stop"] }
     println("${drain_while(q, 10, |s| s != "stop")}")
 }
