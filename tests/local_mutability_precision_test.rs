@@ -45,10 +45,17 @@ fn reported(name: &str, src: &str) -> BTreeSet<String> {
 /// rustc's `unused_mut` warnings on the Rust `wj build --no-cargo` emits for `path`: the names of bindings declared
 /// `mut` that are never changed. `None` when the program does not build or rustc rejects it on its own.
 fn rust_unused_mut(path: &Path) -> Option<BTreeSet<String>> {
+    // built from a copy in a scratch directory: the build reads `.wj.meta` sidecars of every ancestor directory
     let out = tempfile::tempdir().unwrap();
-    windjammer::build_project(path, out.path(), windjammer::CompilationTarget::Rust, false).ok()?;
+    let src = out.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let copy = src.join(path.file_name()?);
+    std::fs::copy(path, &copy).ok()?;
+    windjammer::build_project(&copy, &out.path().join("out"), windjammer::CompilationTarget::Rust, false).ok()?;
+    let out_dir = out.path().join("out");
+    let out = &out_dir;
     let stem = path.file_stem()?.to_string_lossy().to_string();
-    let rs = out.path().join(format!("{stem}.rs"));
+    let rs = out.join(format!("{stem}.rs"));
     unused_mut_of_file(&rs)
 }
 
@@ -57,7 +64,7 @@ fn unused_mut_of_file(rs: &Path) -> Option<BTreeSet<String>> {
     let tmp = tempfile::tempdir().unwrap();
     let crate_type = if rust.contains("fn main(") { "bin" } else { "lib" };
     let o = std::process::Command::new("rustc")
-        .args(["--edition", "2021", "--crate-type", crate_type, "--emit=metadata", "-A", "warnings", "-W", "unused_mut", "--crate-name", "prec", "-o"])
+        .args(["--edition", "2021", "--crate-type", crate_type, "--emit=metadata", "-W", "unused_mut", "--crate-name", "prec", "-o"])
         .arg(tmp.path().join("out.rmeta"))
         .arg(rs)
         .output()
