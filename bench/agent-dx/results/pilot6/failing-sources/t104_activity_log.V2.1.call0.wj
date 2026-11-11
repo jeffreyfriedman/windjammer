@@ -1,0 +1,70 @@
+use std::fs
+use std::collections::HashMap
+
+fn all_digits(s: string) -> bool {
+    if s.len() == 0 {
+        return false
+    }
+    for c in s.chars() {
+        if c < '0' || c > '9' {
+            return false
+        }
+    }
+    true
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut counts: HashMap<string, int> = HashMap::new()
+    let mut totals: HashMap<string, int> = HashMap::new()
+    let mut ucount: HashMap<string, int> = HashMap::new()
+    let mut malformed = 0
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|p| p.to_string()).collect()
+        if parts.len() != 3 || !all_digits(parts[2]) {
+            malformed += 1
+            continue
+        }
+        match parts[2].parse::<int>() {
+            Ok(n) => {
+                let u = parts[0]
+                let key = "${u} ${parts[1]}"
+                counts.insert(key, counts.get(key).unwrap_or(0) + 1)
+                totals.insert(u, totals.get(u).unwrap_or(0) + n)
+                ucount.insert(u, ucount.get(u).unwrap_or(0) + 1)
+            }
+            Err(_) => {
+                malformed += 1
+            }
+        }
+    }
+    let mut users: Vec<string> = []
+    for k in totals.keys() {
+        users.push(k)
+    }
+    users.sort_by(|a, b| {
+        let ta = totals.get(a).unwrap_or(0)
+        let tb = totals.get(b).unwrap_or(0)
+        if ta != tb {
+            tb.cmp(ta)
+        } else {
+            a.cmp(b)
+        }
+    })
+    for u in users {
+        let mut best = ""
+        let mut bc = 0
+        for k in counts.keys() {
+            let parts: Vec<string> = k.split(" ").map(|p| p.to_string()).collect()
+            if parts[0] == u {
+                let c = counts.get(k).unwrap_or(0)
+                if c > bc || (c == bc && parts[1] < best) {
+                    bc = c
+                    best = parts[1]
+                }
+            }
+        }
+        println("${u} ${ucount.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}")
+    }
+    println("malformed: ${malformed}")
+}

@@ -1,0 +1,9 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut totals: Vec<float> = [0.0, 0.0]
+    let i: int = 1
+    totals[i] += 2.5
+    println("${text.len()} ${totals[1]:.2}")
+}

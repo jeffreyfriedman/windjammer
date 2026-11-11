@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::io::Read;\n\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n    let (first, rest) = match s.find('\\n') {\n        Some(i) => (&s[..i], &s[i + 1..]),\n        None => (&s[..], \"\"),\n    };\n    let t = first.trim();\n    let ok = !t.is_empty() && t.chars().all(|c| c.is_ascii_digit()) && t.chars().any(|c| c != '0');\n    if !ok {\n        println!(\"error: bad width\");\n        std::process::exit(1);\n    }\n    let w: usize = t.parse().unwrap_or(usize::MAX);\n    let mut out = String::new();\n    let mut line = String::new();\n    let mut len = 0usize;\n    for word in rest.split_whitespace() {\n        let wl = word.chars().count();\n        if len == 0 {\n            line.push_str(word);\n            len = wl;\n        } else if len.saturating_add(1).saturating_add(wl) <= w {\n            line.push(' ');\n            line.push_str(word);\n            len += 1 + wl;\n        } else {\n            out.push_str(&line);\n            out.push('\\n');\n            line = word.to_string();\n            len = wl;\n        }\n    }\n    if len > 0 {\n        out.push_str(&line);\n        out.push('\\n');\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_source": "use std::io::Read;\n\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n    let (first, rest) = match s.find('\\n') {\n        Some(i) => (&s[..i], &s[i + 1..]),\n        None => (&s[..], \"\"),\n    };\n    let t = first.trim();\n    let ok = !t.is_empty() && t.chars().all(|c| c.is_ascii_digit()) && t.chars().any(|c| c != '0');\n    if !ok {\n        println!(\"error: bad width\");\n        std::process::exit(1);\n    }\n    let w: usize = t.parse().unwrap_or(usize::MAX);\n    let mut out = String::new();\n    let mut line = String::new();\n    let mut len = 0usize;\n    for word in rest.split_whitespace() {\n        let wl = word.chars().count();\n        if len == 0 {\n            line.push_str(word);\n            len = wl;\n        } else if len.saturating_add(1).saturating_add(wl) <= w {\n            line.push(' ');\n            line.push_str(word);\n            len += 1 + wl;\n        } else {\n            out.push_str(&line);\n            out.push('\\n');\n            line = word.to_string();\n            len = wl;\n        }\n    }\n    if len > 0 {\n        out.push_str(&line);\n        out.push('\\n');\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_turn_input": 10468,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 0.389,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 59.7,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 12.81,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:33:34",
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 8.512,
+ "tool_result_tokens_est": 76,
+ "tool_wait_seconds": 0.39,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 9846,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10468,
+   "output": 8,
+   "result_chars": 267,
+   "turn": 1
+  },
+  {
+   "cache_read": 10466,
+   "cache_write": 1061,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 11529,
+   "output": 237,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 8.512,
+  "cost_usd": 0.0196632,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.rs`. It compiles, and both examples from the task print the expected output.\n\nI didn't test the error path or empty text, and the checks below are by reading the code, not by running it:\n- **Bad width:** an empty first line or one that isn't all digits (`abc`, `-3`, `1.5`) prints `error: bad width` and exits with status 1. A width of `0` is also rejected, and surround",
+  "subtype": "success",
+  "tokens_in": 21997,
+  "tokens_out": 1090,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 21.71,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

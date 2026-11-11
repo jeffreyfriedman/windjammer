@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::io::{self, BufRead};\n\nfn main() {\n    let stdin = io::stdin();\n    let mut lines = stdin.lock().lines();\n    let cap: usize = lines.next().unwrap().unwrap().trim().parse().unwrap();\n    // front = least recently used, back = most recent\n    let mut v: Vec<(i64, i64)> = Vec::new();\n    let mut out = String::new();\n    for line in lines {\n        let line = line.unwrap();\n        let p: Vec<&str> = line.split_whitespace().collect();\n        if p.is_empty() {\n            continue;\n        }\n        match p[0] {\n            \"put\" => {\n                let k: i64 = p[1].parse().unwrap();\n                let val: i64 = p[2].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    v.remove(i);\n                }\n                v.push((k, val));\n                if v.len() > cap {\n                    let e = v.remove(0);\n                    out.push_str(&format!(\"evict {}\\n\", e.0));\n                }\n            }\n            \"get\" => {\n                let k: i64 = p[1].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    let e = v.remove(i);\n                    out.push_str(&format!(\"{}\\n\", e.1));\n                    v.push(e);\n                } else {\n                    out.push_str(\"-1\\n\");\n                }\n            }\n            \"keys\" => {\n                if v.is_empty() {\n                    out.push_str(\"<empty>\\n\");\n                } else {\n                    let s: Vec<String> = v.iter().rev().map(|e| e.0.to_string()).collect();\n                    out.push_str(&s.join(\" \"));\n                    out.push('\\n');\n                }\n            }\n            _ => {}\n        }\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_source": "use std::io::{self, BufRead};\n\nfn main() {\n    let stdin = io::stdin();\n    let mut lines = stdin.lock().lines();\n    let cap: usize = lines.next().unwrap().unwrap().trim().parse().unwrap();\n    // front = least recently used, back = most recent\n    let mut v: Vec<(i64, i64)> = Vec::new();\n    let mut out = String::new();\n    for line in lines {\n        let line = line.unwrap();\n        let p: Vec<&str> = line.split_whitespace().collect();\n        if p.is_empty() {\n            continue;\n        }\n        match p[0] {\n            \"put\" => {\n                let k: i64 = p[1].parse().unwrap();\n                let val: i64 = p[2].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    v.remove(i);\n                }\n                v.push((k, val));\n                if v.len() > cap {\n                    let e = v.remove(0);\n                    out.push_str(&format!(\"evict {}\\n\", e.0));\n                }\n            }\n            \"get\" => {\n                let k: i64 = p[1].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    let e = v.remove(i);\n                    out.push_str(&format!(\"{}\\n\", e.1));\n                    v.push(e);\n                } else {\n                    out.push_str(\"-1\\n\");\n                }\n            }\n            \"keys\" => {\n                if v.is_empty() {\n                    out.push_str(\"<empty>\\n\");\n                } else {\n                    let s: Vec<String> = v.iter().rev().map(|e| e.0.to_string()).collect();\n                    out.push_str(&s.join(\" \"));\n                    out.push('\\n');\n                }\n            }\n            _ => {}\n        }\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_turn_input": 10535,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 2.262,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 21.0,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 6.09,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:26:54",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 12.152,
+ "tool_result_tokens_est": 65,
+ "tool_wait_seconds": 2.26,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 9913,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10535,
+   "output": 16,
+   "result_chars": 226,
+   "turn": 1
+  },
+  {
+   "cache_read": 10533,
+   "cache_write": 1054,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 11589,
+   "output": 109,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 12.152,
+  "cost_usd": 0.0184886,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache solution in `main.rs`. I compiled it and ran Example 1, and the output matched the expected text. I did not run Example 2 or any other inputs.\n\nIt keeps the entries in a `Vec` ordered from least to most recently used. With a capacity of at most 50, the linear scans are fast enough.",
+  "subtype": "success",
+  "tokens_in": 22124,
+  "tokens_out": 974,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 20.5,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

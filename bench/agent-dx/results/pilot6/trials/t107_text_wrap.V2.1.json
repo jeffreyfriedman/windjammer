@@ -1,0 +1,125 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V2",
+ "arm_name": "interpreted-first+verify",
+ "capability_denials": 0,
+ "compile_errors": 1,
+ "diag_samples": [
+  "error: bad width"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 1,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut line = \"\"\n    let mut have = false\n    for l in text.lines() {\n        if first {\n            first = false\n            match l.trim().parse::<int>() {\n                Ok(n) => { width = n }\n                Err(_) => { width = 0 }\n            }\n            if width <= 0 {\n                println(\"error: bad width\")\n                std::process::exit(1)\n            }\n        } else {\n            for w in l.split_whitespace() {\n                if !have {\n                    line = w\n                    have = true\n                } else if (line.len() as int) + 1 + (w.len() as int) <= width {\n                    line = \"${line} ${w}\"\n                } else {\n                    println(line)\n                    line = w\n                }\n            }\n        }\n    }\n    if first {\n        println(\"error: bad width\")\n        std::process::exit(1)\n    }\n    if have {\n        println(line)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut line = \"\"\n    let mut have = false\n    for l in text.lines() {\n        if first {\n            first = false\n            match l.trim().parse::<int>() {\n                Ok(n) => { width = n }\n                Err(_) => { width = 0 }\n            }\n            if width <= 0 {\n                println(\"error: bad width\")\n                std::process::exit(1)\n            }\n        } else {\n            for w in l.split_whitespace() {\n                if !have {\n                    line = w\n                    have = true\n                } else if (line.len() as int) + 1 + (w.len() as int) <= width {\n                    line = \"${line} ${w}\"\n                } else {\n                    println(line)\n                    line = w\n                }\n            }\n        }\n    }\n    if first {\n        println(\"error: bad width\")\n        std::process::exit(1)\n    }\n    if have {\n        println(line)\n    }\n}\n",
+ "first_turn_input": 11459,
+ "fix_calls": 1,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 8.121,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "default",
+   "secs": 4.045,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 30.4,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 4.92,
+ "pack_bytes": 1844,
+ "pack_file": "sheet_v2.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T12:11:56",
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 7.085,
+ "tool_result_tokens_est": 291,
+ "tool_wait_seconds": 12.17,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 10836,
+   "cache_write": 621,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11459,
+   "output": 5,
+   "result_chars": 1018,
+   "turn": 1
+  },
+  {
+   "cache_read": 11457,
+   "cache_write": 1278,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 12737,
+   "output": 164,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 7.085,
+  "cost_usd": 0.0184733,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written and passes `wj run --verify` on two inputs. The first is Example 1, and the output matches the expected lines. The second is a non-numeric width (`x`), which prints `error: bad width` and exits with status 1.\n\nI didn't run Example 2 or any other cases, such as a width of `0` or empty text. The code treats a width of 0 or less, an unparseable first line and empty input as `erro",
+  "subtype": "success",
+  "tokens_in": 24196,
+  "tokens_out": 864,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": null,
+ "verify_used": true,
+ "wall_seconds": 24.18,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

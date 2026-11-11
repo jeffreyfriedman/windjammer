@@ -1,0 +1,247 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "U",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "compile_errors": 1,
+ "diag_samples": [
+  "error: bad width"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 1,
+ "final_build_calls": 1,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut ok = true\n    let mut cur = \"\"\n    let mut curlen = 0\n    let mut lines: Vec<string> = []\n    for line in text.lines() {\n        if first {\n            first = false\n            let t = line.trim()\n            match t.parse::<int>() {\n                Ok(n) => {\n                    if n > 0 && t.len() > 0 && !t.starts_with(\"+\") {\n                        width = n\n                    } else {\n                        ok = false\n                    }\n                }\n                Err(_) => { ok = false }\n            }\n            if !ok {\n                break\n            }\n        } else {\n            for w in line.split_whitespace() {\n                let wl: int = w.chars().count() as int\n                if curlen == 0 {\n                    cur = w\n                    curlen = wl\n                } else if curlen + 1 + wl <= width {\n                    cur = \"${cur} ${w}\"\n                    curlen = curlen + 1 + wl\n                } else {\n                    lines.push(cur)\n                    cur = w\n                    curlen = wl\n                }\n            }\n        }\n    }\n    if !ok || first {\n        println(\"error: bad width\")\n        std::process::exit(1)\n    }\n    if curlen > 0 {\n        lines.push(cur)\n    }\n    for l in lines {\n        println(l)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut first = true\n    let mut width = 0\n    let mut ok = true\n    let mut cur = \"\"\n    let mut curlen = 0\n    let mut lines: Vec<string> = []\n    for line in text.lines() {\n        if first {\n            first = false\n            let t = line.trim()\n            match t.parse::<int>() {\n                Ok(n) => {\n                    if n > 0 && t.len() > 0 && !t.starts_with(\"+\") {\n                        width = n\n                    } else {\n                        ok = false\n                    }\n                }\n                Err(_) => { ok = false }\n            }\n            if !ok {\n                break\n            }\n        } else {\n            for w in line.split_whitespace() {\n                let wl: int = w.chars().count() as int\n                if curlen == 0 {\n                    cur = w\n                    curlen = wl\n                } else if curlen + 1 + wl <= width {\n                    cur = \"${cur} ${w}\"\n                    curlen = curlen + 1 + wl\n                } else {\n                    lines.push(cur)\n                    cur = w\n                    curlen = wl\n                }\n            }\n        }\n    }\n    if !ok || first {\n        println(\"error: bad width\")\n        std::process::exit(1)\n    }\n    if curlen > 0 {\n        lines.push(cur)\n    }\n    for l in lines {\n        println(l)\n    }\n}\n",
+ "first_turn_input": 11261,
+ "fix_calls": 2,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 10.875,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 7.276,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 5.62,
+   "verb": "build"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 2.735,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 5.43,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 0.044,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 20.319,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 14.116,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "default",
+   "secs": 19.506,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 16.865,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 69.9,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 8,
+ "other_seconds": 8.77,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:36:24",
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 33.966,
+ "tool_result_tokens_est": 2075,
+ "tool_wait_seconds": 102.79,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 10639,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11261,
+   "output": 17,
+   "result_chars": 1833,
+   "turn": 1
+  },
+  {
+   "cache_read": 11259,
+   "cache_write": 1796,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13057,
+   "output": 3,
+   "result_chars": 132,
+   "turn": 2
+  },
+  {
+   "cache_read": 13055,
+   "cache_write": 254,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13311,
+   "output": 16,
+   "result_chars": 727,
+   "turn": 3
+  },
+  {
+   "cache_read": 13309,
+   "cache_write": 411,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13722,
+   "output": 4,
+   "result_chars": 192,
+   "turn": 4
+  },
+  {
+   "cache_read": 13720,
+   "cache_write": 283,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14005,
+   "output": 4,
+   "result_chars": 4256,
+   "turn": 5
+  },
+  {
+   "cache_read": 14003,
+   "cache_write": 1810,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 15815,
+   "output": 3,
+   "result_chars": 43,
+   "turn": 6
+  },
+  {
+   "cache_read": 15813,
+   "cache_write": 281,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 16096,
+   "output": 16,
+   "result_chars": 80,
+   "turn": 7
+  },
+  {
+   "cache_read": 16094,
+   "cache_write": 271,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 16367,
+   "output": 292,
+   "result_chars": 0,
+   "turn": 8
+  }
+ ],
+ "usage": {
+  "api_seconds": 33.966,
+  "cost_usd": 0.0543052,
+  "denied_commands": [
+   "ls build build/target/release 2>&1 | head -20; printf '5\\nabcdefgh ij k\\n' | ./build/target/release/main; printf '10\\nthe quick brown fox jumps over the lazy dog\\n' | ./build/target/release/main; prin"
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "`main.wj` is written and gives the right output for both examples, the bad-width case and empty text. I ran it with `wj run --release`, because `wj run --compiled` kept printing output from a different program (`total $0.00`).\n\n- **Example 1** (width 10) prints the five expected lines.\n- **Example 2** (width 5) prints `abcdefgh` and `ij k`.\n- **Bad width:** input `x` prints `error: bad width` and ",
+  "subtype": "success",
+  "tokens_in": 113634,
+  "tokens_out": 2058,
+  "turns": 9
+ },
+ "verify_calls": 10,
+ "verify_calls_to_green": 10,
+ "verify_used": false,
+ "wall_seconds": 145.53,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

@@ -47,7 +47,8 @@ Python and TypeScript, using identical tasks and one language-neutral oracle. No
 | `stats.py` | Task-clustered bootstrap CIs and task-paired differences. |
 | `friction.py` | Friction list: rules + unclassified grouping, fix location, priority by estimated tokens. |
 | `pilot_report.py` | Pilot report (arm means, paired diffs, per-task, categories, divergence, friction). |
-| `cli.py` | `python3 -m agentdx <toolchains|gen|baseline|run|pilot|pilot-report|replay|report|check-workspace>`. |
+| `pilot6_report.py` | Pilot 6 report (R vs U vs V2): noisy-trial marking (load > 16), ADR-0033 acceptance table, cost per correct program, Rust compile-error tally, offline prediction precision/recall, parallel-run appendix. |
+| `cli.py` | `python3 -m agentdx <toolchains|gen|baseline|run|pilot|pilot-report|pilot6-report|replay|report|check-workspace>`. |
 
 ## Invariants
 

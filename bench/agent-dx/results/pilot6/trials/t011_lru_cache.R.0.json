@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "final_source": "use std::io::*;\n\nfn main() {\n    let mut s = String::new();\n    stdin().read_to_string(&mut s).unwrap();\n    let mut lines = s.lines();\n    let c: usize = lines.next().unwrap().trim().parse().unwrap();\n    // front = least recently used, back = most recent\n    let mut v: Vec<(i64, i64)> = Vec::new();\n    let mut out = String::new();\n    for l in lines {\n        let p: Vec<&str> = l.split_whitespace().collect();\n        if p.is_empty() {\n            continue;\n        }\n        match p[0] {\n            \"put\" => {\n                let k: i64 = p[1].parse().unwrap();\n                let val: i64 = p[2].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    v.remove(i);\n                }\n                v.push((k, val));\n                if v.len() > c {\n                    let e = v.remove(0);\n                    out.push_str(&format!(\"evict {}\\n\", e.0));\n                }\n            }\n            \"get\" => {\n                let k: i64 = p[1].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    let e = v.remove(i);\n                    out.push_str(&format!(\"{}\\n\", e.1));\n                    v.push(e);\n                } else {\n                    out.push_str(\"-1\\n\");\n                }\n            }\n            \"keys\" => {\n                if v.is_empty() {\n                    out.push_str(\"<empty>\\n\");\n                } else {\n                    let ks: Vec<String> = v.iter().rev().map(|e| e.0.to_string()).collect();\n                    out.push_str(&ks.join(\" \"));\n                    out.push('\\n');\n                }\n            }\n            _ => {}\n        }\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_source": "use std::io::*;\n\nfn main() {\n    let mut s = String::new();\n    stdin().read_to_string(&mut s).unwrap();\n    let mut lines = s.lines();\n    let c: usize = lines.next().unwrap().trim().parse().unwrap();\n    // front = least recently used, back = most recent\n    let mut v: Vec<(i64, i64)> = Vec::new();\n    let mut out = String::new();\n    for l in lines {\n        let p: Vec<&str> = l.split_whitespace().collect();\n        if p.is_empty() {\n            continue;\n        }\n        match p[0] {\n            \"put\" => {\n                let k: i64 = p[1].parse().unwrap();\n                let val: i64 = p[2].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    v.remove(i);\n                }\n                v.push((k, val));\n                if v.len() > c {\n                    let e = v.remove(0);\n                    out.push_str(&format!(\"evict {}\\n\", e.0));\n                }\n            }\n            \"get\" => {\n                let k: i64 = p[1].parse().unwrap();\n                if let Some(i) = v.iter().position(|e| e.0 == k) {\n                    let e = v.remove(i);\n                    out.push_str(&format!(\"{}\\n\", e.1));\n                    v.push(e);\n                } else {\n                    out.push_str(\"-1\\n\");\n                }\n            }\n            \"keys\" => {\n                if v.is_empty() {\n                    out.push_str(\"<empty>\\n\");\n                } else {\n                    let ks: Vec<String> = v.iter().rev().map(|e| e.0.to_string()).collect();\n                    out.push_str(&ks.join(\" \"));\n                    out.push('\\n');\n                }\n            }\n            _ => {}\n        }\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_turn_input": 10535,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 2.921,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 38.8,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 5.75,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:18:54",
+ "schema": 2,
+ "task": "t011_lru_cache",
+ "thinking_seconds": 8.462,
+ "tool_result_tokens_est": 65,
+ "tool_wait_seconds": 2.92,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6044,
+   "cache_write": 4489,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10535,
+   "output": 16,
+   "result_chars": 226,
+   "turn": 1
+  },
+  {
+   "cache_read": 10533,
+   "cache_write": 1059,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 11594,
+   "output": 156,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 8.462,
+  "cost_usd": 0.0340877,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the LRU cache solution in `main.rs`. It compiles, and Example 1 produced the expected output (`1`, `evict 2`, `-1`, `3 1`). I did not run Example 2 or any other inputs.\n\nThe cache is a `Vec` ordered from least to most recently used. `put` and `get` find a key by linear search, which is fine for a capacity of at most 50. On overflow, `put` evicts the first entry and prints `evict <key>`.",
+  "subtype": "success",
+  "tokens_in": 22129,
+  "tokens_out": 1023,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 17.13,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

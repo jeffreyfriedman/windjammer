@@ -1,0 +1,137 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V2",
+ "arm_name": "interpreted-first+verify",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [
+  "Building Windjammer project from \"~/src/wj-wt/pilot6/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.1/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/pilot6-root/run/46e593856ec6af44\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 1,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::fs\nuse std::json\nuse std::collections::HashMap\n\nstruct Item {\n    sku: string,\n    qty: int,\n    price: float,\n}\n\nstruct Order {\n    id: int,\n    customer: string,\n    items: Vec<Item>,\n    note: Option<string>,\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let parsed = json.parse_string::<Vec<Order>>(text)\n    match parsed {\n        Ok(orders) => {\n            let mut totals: HashMap<string, float> = HashMap::new()\n            let mut names: Vec<string> = []\n            for o in orders {\n                let mut sum = 0.0\n                for it in o.items {\n                    sum += (it.qty as float) * it.price\n                }\n                if totals.contains_key(o.customer) {\n                    let cur = totals.get(o.customer).unwrap_or(0.0)\n                    totals.insert(o.customer, cur + sum)\n                } else {\n                    names.push(o.customer)\n                    totals.insert(o.customer, sum)\n                }\n            }\n            names.sort()\n            for n in names {\n                let t = totals.get(n).unwrap_or(0.0)\n                println(\"${n} ${t:.2}\")\n            }\n        }\n        Err(_) => {\n            println(\"invalid input\")\n            std::process::exit(1)\n        }\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::json\nuse std::collections::HashMap\n\nstruct Item {\n    sku: string,\n    qty: int,\n    price: float,\n}\n\nstruct Order {\n    id: int,\n    customer: string,\n    items: Vec<Item>,\n    note: Option<string>,\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let parsed = json.parse_string::<Vec<Order>>(text)\n    match parsed {\n        Ok(orders) => {\n            let mut totals: HashMap<string, float> = HashMap::new()\n            let mut names: Vec<string> = []\n            for o in orders {\n                let mut sum = 0.0\n                for it in o.items {\n                    sum += (it.qty as float) * it.price\n                }\n                if totals.contains_key(o.customer) {\n                    let cur = totals.get(o.customer).unwrap_or(0.0)\n                    totals.insert(o.customer, cur + sum)\n                } else {\n                    names.push(o.customer)\n                    totals.insert(o.customer, sum)\n                }\n            }\n            names.sort()\n            for n in names {\n                let t = totals.get(n).unwrap_or(0.0)\n                println(\"${n} ${t:.2}\")\n            }\n        }\n        Err(_) => {\n            println(\"invalid input\")\n            std::process::exit(1)\n        }\n    }\n}\n",
+ "first_turn_input": 11708,
+ "fix_calls": 1,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 12.811,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "default",
+   "secs": 3.248,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 58.0,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 6.28,
+ "pack_bytes": 1844,
+ "pack_file": "sheet_v2.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T12:13:20",
+ "schema": 2,
+ "task": "t101_json_orders",
+ "thinking_seconds": 12.659,
+ "tool_result_tokens_est": 284,
+ "tool_wait_seconds": 16.06,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 11086,
+   "cache_write": 620,
+   "calls": [
+    "Write"
+   ],
+   "fresh": 2,
+   "input_total": 11708,
+   "output": 6,
+   "result_chars": 213,
+   "turn": 1
+  },
+  {
+   "cache_read": 11706,
+   "cache_write": 815,
+   "calls": [
+    "Bash",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12523,
+   "output": 16,
+   "result_chars": 782,
+   "turn": 2
+  },
+  {
+   "cache_read": 12521,
+   "cache_write": 712,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13235,
+   "output": 6,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 12.659,
+  "cost_usd": 0.024591300000000003,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written, and `wj run --verify main.wj` passes on both inputs I tried. The compiled build matched the interpreter each time.\n\n- **Valid input:** I ran a trimmed version of example 1, with ann's second order and bob's `note` field left out. It printed `ann 17.00` and `bob 3.50`, which is right for those two orders (2\u00d73.5 + 10 = 17).\n- **Empty input:** it printed `invalid input` and exit",
+  "subtype": "success",
+  "tokens_in": 37466,
+  "tokens_out": 1246,
+  "turns": 4
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": null,
+ "verify_used": true,
+ "wall_seconds": 35.0,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

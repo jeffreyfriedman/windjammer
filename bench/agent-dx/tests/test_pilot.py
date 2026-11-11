@@ -82,6 +82,42 @@ class TrialRecord(unittest.TestCase):
             an = pilot.analyse_invocations(log)
             self.assertEqual(an["verify_calls_to_green"], 4)
 
+    def test_pilot6_fields_predictions_compile_errors_and_verify_arm(self):
+        log = [{"argv": a, "exit": e, "secs": 1, "out": o, "source": "SRC%d" % i} for i, (a, e, o) in enumerate([
+            (["run", "--interpret", "m"], 0, "warning: the compiled build would reject this: `x + y`"),
+            (["rustc", "main.rs"], 1, "error[E0308]: mismatched types\nerror[E0382]: borrow of moved value\nerror: aborting due to 2 previous errors"),
+            (["rustc", "main.rs"], 1, "error: expected one of `;`\nerror: could not compile"),
+            (["rustc", "main.rs"], 0, "")])]
+        for e in log:
+            e["verb"], e["mode"] = shim.classify(e["argv"], "rustc")
+        an = pilot.analyse_invocations(log, "rust")
+        self.assertEqual([p["call"] for p in an["predictions"]], [0])
+        self.assertEqual(an["predictions"][0]["source"], "SRC0")  # the marker is found in any tool output
+        self.assertEqual(an["compile_errors"], 3)   # 2 in the first failing call, 1 in the second (aborting/could not compile excluded)
+        self.assertEqual(an["failing_verify_calls"], 2)
+        self.assertEqual(an["fix_calls"], 3)                     # first failure, second failure, first success
+        self.assertEqual(self.run_one("V2", [["run", "--verify", "main.wj"]])["mode_violations"], 0)
+        self.assertEqual(self.run_one("V2", [["build", "main.wj"]])["mode_violations"], 1)
+        self.assertIn("--verify", arms.prompt(TASK, "V2"))
+        self.assertLessEqual(len(open(arms.pack_path("V2")).read().encode()), 2048)
+
+    def test_pilot6_report_marks_noisy_trials_and_renders_adr_table(self):
+        from agentdx import pilot6_report as P6
+        mk = lambda arm, task, load, cost, ok=True: {
+            "arm": arm, "task": task, "trial": 0, "lang": "wj" if arm != "R" else "rust", "pass_final": ok, "verify_calls": 1, "verify_calls_to_green": 1,
+            "usage": {"cost_usd": cost, "turns": 3, "tokens_in": 10, "tokens_out": 5, "permission_denials": 0}, "wall_seconds": 10.0, "thinking_seconds": 5.0,
+            "tool_wait_seconds": 2.0, "load_avg": load, "capability_denials": 0, "divergence": {"silent": False, "diverged": False, "interp_pass": ok, "compiled_pass": ok},
+            "diagnostic_categories": {}, "mode_violations": 0, "invocations": [], "first_source": "", "final_source": "", "predictions": [], "prediction_shown": False,
+            "verify_used": arm == "V2", "compile_errors": 0, "failing_verify_calls": 0, "fix_calls": 0, "final_grade": {"status": "pass"}, "diag_samples": []}
+        trials = [mk(a, t, load, c) for a, c in (("R", 0.03), ("U", 0.04), ("V2", 0.02)) for t, load in (("t1", 10.0), ("t2", 20.0))]
+        self.assertFalse(P6.noisy(trials[0]))
+        self.assertTrue(P6.noisy(trials[1]))
+        md, js = P6.build(trials, [], n_boot=50)
+        self.assertEqual(js["noisy"]["V2"]["noisy"], 1)
+        self.assertEqual(js["adr0033"]["cost per trial, USD"]["pass"], True)
+        self.assertEqual(js["adr0033"]["tool-wait, seconds"]["pass"], False)
+        self.assertIn("ADR-0033 acceptance table", md)
+
     def test_divergence_flags(self):
         tr = self.run_one("A", [["run", "--interpret", "main.wj"]], compiled="fail", interp="pass")
         self.assertEqual(tr["divergence"], {"interp_pass": True, "compiled_pass": False, "diverged": True, "silent": True})
