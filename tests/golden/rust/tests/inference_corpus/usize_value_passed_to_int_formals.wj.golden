@@ -1,0 +1,26 @@
+#[inline]
+fn byte_len(text: &str) -> usize {
+    text.len()
+}
+
+#[inline]
+fn sub(text: String, from: i64, to: i64) -> String {
+    if from >= to {
+        return String::new();
+    }
+    text
+}
+
+fn main() {
+    println!("{}", trim_hashes("ab".to_string()));
+}
+
+#[inline]
+fn trim_hashes(body: String) -> String {
+    let mut end = byte_len(&body);
+    while end > 0_usize && sub(body.clone(), (end - 1_usize) as i64, end as i64) == "#" {
+        end -= 1;
+    }
+    sub(body, 0_i64, end as i64)
+}
+

@@ -437,7 +437,7 @@ pub fn build_project_with_config(
         }
     }
 
-    if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {
+    if library && crate_metadata.has_entries() {
         super::write_crate_metadata_json(output, &crate_metadata)?;
     }
 
@@ -504,6 +504,7 @@ mod tests {
             functions,
             copy_structs: Vec::new(),
             string_consts: Vec::new(),
+            variant_payloads: Default::default(),
             version: "0.1.0".to_string(),
         };
         std::fs::write(

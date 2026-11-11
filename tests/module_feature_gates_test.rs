@@ -10,7 +10,8 @@
     feature = "analyzer_tests",
 ))]
 
-// Test that desktop-only modules get proper #[cfg(feature = "desktop")] gates
+// Modules a project declares in `wj.toml` (`[module_features]`) get `#[cfg(feature = "..")]` gates; a module's name
+// never decides it (a `desktop_*` module that is not listed is not gated).
 
 use std::fs;
 use tempfile::TempDir;
@@ -32,6 +33,12 @@ fn test_desktop_module_feature_gates() {
     .unwrap();
     fs::write(src_dir.join("app_docking.wj"), "pub struct AppDocking {}").unwrap();
     fs::write(src_dir.join("app_reactive.wj"), "pub struct AppReactive {}").unwrap();
+    fs::write(src_dir.join("desktop_notes.wj"), "pub struct DesktopNotes {}").unwrap();
+    fs::write(
+        temp_dir.path().join("wj.toml"),
+        "[package]\nname = \"gates\"\n\n[module_features]\ndesktop = [\"desktop_renderer\", \"app_docking\"]\n",
+    )
+    .unwrap();
 
     // Compile with --module-file flag
     let output_dir = temp_dir.path().join("out");
@@ -73,11 +80,16 @@ fn test_desktop_module_feature_gates() {
         "button should NOT have feature gate"
     );
 
-    // app_reactive is an exception - it should NOT have a feature gate
+    // Modules the project does not list are not gated, whatever their names.
     assert!(
         mod_rs.contains("pub mod app_reactive;")
             && !mod_rs.contains("#[cfg(feature = \"desktop\")]\npub mod app_reactive;"),
-        "app_reactive should NOT have feature gate (exception)"
+        "app_reactive is not listed: no feature gate"
+    );
+    assert!(
+        mod_rs.contains("pub mod desktop_notes;")
+            && !mod_rs.contains("#[cfg(feature = \"desktop\")]\npub mod desktop_notes;"),
+        "desktop_notes is not listed: no feature gate (names do not decide)"
     );
 
     // Verify re-exports also have feature gates

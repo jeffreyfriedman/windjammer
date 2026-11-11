@@ -284,7 +284,8 @@ Widths are decided by the numeric solver in principle (WP 8). Today four compone
 
 ### NUM-FIELD-DECLARED
 **Rule.** A read of a struct field has the field's declared type, in any module, including fields of structs
-declared in another file of the project.
+declared in another file of the project. A tuple variant's payloads are its fields: `Value::Int64(99)` passes an
+`i64`, also when `Value` is declared in a dependency crate (its `metadata.json` lists the variant payload types).
 **Status.** Conforms.
 
 ### NUM-LITERAL-SUFFIX
@@ -326,6 +327,12 @@ source or use is `usize` (a solved width, published as a fact); with an exact wi
 **Example.** `let mut i = 0; while i < v.len() { i = i + 1 }` emits `let mut i = 0_usize`.
 **Status.** Solver models it; the Rust backend reads it where a fact exists (convergence C4).
 
+### NUM-USE-WIDTH
+**Rule.** Each read of a local has the width of the binding it names. A name bound twice with different widths (a
+counter over a `len()`, later a counter passed to a `u32` parameter) is two classes; a fact keyed by the name cannot
+describe both, so the solver publishes the width of every read by its source position (`IrFunction::use_widths`).
+**Status.** Conforms for reads of `let` and pattern bindings; parameters keep their declared types.
+
 ### NUM-USIZE-TO-INT
 **Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index
 source whose class resolved to `W` is emitted `(v.len() as W)`; a `usize` class pushed into a `Vec<W>` is converted at
@@ -333,10 +340,13 @@ the argument. The solver places these conversions (`IrFunction::usize_conversion
 
 ### NUM-STD-SIG
 **Rule (ADR-0029, option C stage C1).** A method of a Rust core type (`Vec`, `VecDeque`, `HashMap`, `BTreeMap`,
-`HashSet`, `BTreeSet`, `Option`, `Result`, `String`, every integer and float type) has the signature declared in `std/rust_core.wji`,
+`HashSet`, `BTreeSet`, `Option`, `Result`, `String`, `JoinHandle`, every integer and float type) and the `std::thread`
+function `spawn` have the signature declared in `std/rust_core.wji`,
 instantiated for the receiver's static type (and a turbofish): `counts.get(k).unwrap_or(0)` on a `HashMap<string, int>`
 is an `int`, `line.parse::<int>().unwrap_or(0)` is an `int`, `x.min(1.0)` on an `f32` takes an `f32`, `2.pow(10)` takes a `u32` exponent and `10.min(3)` is one class (a numeric method's `T` is the receiver's own type, also for a literal receiver). A `usize`
-parameter is an index use and a `usize` result an index source (NUM-USIZE).
+parameter is an index use and a `usize` result an index source (NUM-USIZE). An associated function of a core type
+(`HashMap::new()`) and a std module function (`thread::spawn(..)`) have the surface's signature even where a `use`
+brings a same-named std declaration into scope.
 **Status.** Conforms for receivers whose static type is declared (parameters, annotated or typed initializers, fields).
 
 ### NUM-ELEMENT

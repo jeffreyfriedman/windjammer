@@ -435,6 +435,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             let arg_expr = &arguments[arguments.len() - 1].1;
+            // A pushed float literal has the width the solver fixed from its class (NUM-DEFAULT-FLOAT: `float` unless
+            // a use says `f32`), not the legacy literal default.
+            if let Expression::Literal { value: crate::parser::Literal::Float(_), .. } = arg_expr {
+                let solved = self.current_ir_function.as_ref().and_then(|f| f.literal_widths.get(&crate::ir::numeric_defaults::literal_key(arg_expr)?));
+                match solved {
+                    Some(crate::ir::safety_type::BaseType::F32) => return Some(Type::Custom("f32".into())),
+                    Some(crate::ir::safety_type::BaseType::F64) => return Some(Type::Custom("f64".into())),
+                    _ => {}
+                }
+            }
             return self.infer_expression_type(arg_expr);
         }
         None

@@ -124,6 +124,11 @@ pub struct IrFunction {
     /// (any integer width, `usize` included), never the numeric default.
     pub solver_local_widths: std::collections::BTreeMap<String, crate::ir::safety_type::BaseType>,
 
+    /// Semantic fact NUM-USE-WIDTH: the solved width of each read of a local (by the identifier's source position),
+    /// for the binding that read names. A name bound twice with different widths (`let mut i = 0` over a `len()`,
+    /// later `let mut i = 0` against a `u32`) has no NUM-LOCAL-WIDTH, but each read still has its binding's width.
+    pub use_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
+
     /// Semantic fact NUM-USIZE (ADR-0028): the width of each `len()`-like index source (by the call's
     /// source position). `usize` needs nothing; another width is converted at the call (NUM-USIZE-TO-INT).
     pub index_source_widths: std::collections::BTreeMap<(usize, usize), crate::ir::safety_type::BaseType>,
@@ -383,6 +388,7 @@ impl IrFunction {
             literal_widths: std::collections::BTreeMap::new(),
             solver_i64_locals: std::collections::BTreeSet::new(),
             solver_local_widths: std::collections::BTreeMap::new(),
+            use_widths: std::collections::BTreeMap::new(),
             index_source_widths: std::collections::BTreeMap::new(),
             usize_conversions: std::collections::BTreeMap::new(),
             last_uses: crate::ir::liveness::last_uses(&params, &analyzed.decl.body),
