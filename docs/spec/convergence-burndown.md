@@ -34,7 +34,7 @@ method-call result widths, struct field widths, closure parameters.
 | W6 | `codegen/rust/let_statement_generation.rs` untyped-let width paints (peer scan, counter promotion, `while`-bound scans; ~600 of 1696) | ~600 | solver local pin (`stamp_solver_int_binding` already authoritative when the solver pins) | replaced-but-still-present | D-WIDTH-OWNERS |
 | W7 | `codegen/rust/type_casting.rs` (`coerce_arg_str_for_i64_formal`, `coerce_arg_str_for_u32_formal`, `coerce_struct_field_numeric`) | ~330 | call-site formal types from the solver | untouched | narrowing-cast gate |
 | W8 | `type_inference/int_inference/mod.rs` + `float_inference/mod.rs` (legacy (line,col) collectors) | 1112 + 750 | solver facts keyed by node identity | untouched; still the fallback behind W2 | D-WIDTH-OWNERS |
-| W9 | `ir/numeric_defaults.rs` class analysis (duplicates the solver's IsInteger defaulting) | 561 | solver `defaulted` set (added in this step; `SolverResult::defaulted`) | untouched; fold into solver once literal facts cover every context | none until merged |
+| W9 | `ir/numeric_defaults.rs` class analysis (duplicates the solver's IsInteger defaulting) | 561 | solver `defaulted` set (added in this step; `SolverResult::defaulted`) | **deleted** (wt/c2b): 563 lines; the solver publishes defaulted classes since stage C2, and the pre-pass overrode it (`if p > 4 { 4 } else { p }` beside a `u32` field printed `4_i64`) | D-WIDTH-OWNERS |
 | W10 | `type_inference/int_implicit_casts.rs`, `codegen/rust/type_balancing*.rs`, `int_formal_scan_extra.rs`, `std_idiom_fixups.rs`, `closure_unary_constraints.rs`, `program_facts.rs` (ownership-gaps helpers) | ~3000 | solver closure/unary/formal constraints | untouched | D-WIDTH-OWNERS |
 | W11 | `codegen/rust/function_formal_parameter_generation.rs` int-formal scans (part of 4913) | ~800 | callee formal types from DefId registry (C3) | untouched | D-WIDTH-OWNERS |
 | W12 | `codegen/rust/ir_call_site.rs` arg coercions to int formals (part of 10444) | ~1500 | same as W11 | untouched | D-WIDTH-OWNERS |
@@ -124,7 +124,7 @@ mutation check adds one guess of each kind to a real file and requires all three
 fails when the line below does not match the allow-list.
 
 Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps including public formals; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
-`H-NAME-MATCHES` 528, `H-MATCH-ARM-NAMES` 1128, `H-FALLBACK-LEGACY` 128 (total 1784)
+`H-NAME-MATCHES` 527, `H-MATCH-ARM-NAMES` 1127, `H-FALLBACK-LEGACY` 128 (total 1782)
 
 Breakdown at seeding (2026-11-04):
 

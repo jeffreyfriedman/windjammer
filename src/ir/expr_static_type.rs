@@ -23,6 +23,11 @@ pub fn declared_type_of<'ast>(
     struct_field_types: &HashMap<String, HashMap<String, Type>>,
 ) -> Option<Type> {
     match expr {
+        // `self` in a method has the type of the impl it is declared in, however the parameter spells it (`self`,
+        // `Self`, inferred).
+        Expression::Identifier { name, .. } if name == "self" && func.parent_type.is_some() => {
+            func.parent_type.as_ref().map(|t| Type::Custom(t.clone()))
+        }
         Expression::Identifier { name, .. } => func
             .parameters
             .iter()
