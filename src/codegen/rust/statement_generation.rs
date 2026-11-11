@@ -1177,7 +1177,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let Some(fields) = self.lookup_struct_field_types(name) else {
                     return false;
                 };
-                !fields.is_empty() && fields.values().all(|ft| self.type_supports_mem_take(ft))
+                !fields.is_empty() && fields.values().all(|ft| self.has_default(ft)) // the derive's own `Default` test
             }
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 self.type_supports_mem_take(inner)

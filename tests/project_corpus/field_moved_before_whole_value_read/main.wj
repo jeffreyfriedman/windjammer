@@ -1,0 +1,11 @@
+// A field of a binding moves before the binding (or the struct holding the field) is used whole: inside one
+// struct literal (`id: node.id` before `distance(node, q)`), and across statements (`request.obj.kind`
+// before `request.obj`). The moved field is copied. Expected by hand: id a, dist 3 - 1 = 2; doc:7#viewer.
+// expect: a 2 doc:7#viewer
+mod rec
+
+fn main() {
+    let h = rec::score(rec::Node { id: "a", x: 3.0 }, 1.0)
+    let r = rec::Request { obj: rec::Obj { kind: "doc", key: "7" }, rel: "viewer" }
+    println("${h.id} ${h.dist} ${rec::expand(r)}")
+}

@@ -1,0 +1,25 @@
+pub struct Entry {
+    pub id: u32,
+    pub owner: string,
+}
+
+pub struct Table {
+    pub entries: Vec<Entry>,
+}
+
+impl Table {
+    pub fn set_owner(self, id: u32, owner: string) -> Table {
+        let mut entries = Vec::new()
+        let mut i = 0
+        while i < self.entries.len() {
+            let entry = self.entries[i]
+            if entry.id == id {
+                entries.push(Entry { id: entry.id, owner: owner })
+            } else {
+                entries.push(entry)
+            }
+            i = i + 1
+        }
+        Table { entries: entries }
+    }
+}
