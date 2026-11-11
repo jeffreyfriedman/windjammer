@@ -106,6 +106,12 @@ pub enum Constraint {
     /// `TypeEquals`, except that an index class (no exact width, meets an index source or use) entering a slot of an
     /// exact integer width stays an index class and is converted at the argument (NUM-USIZE-TO-INT).
     FlowsInto(ConstraintVar, ConstraintVar),
+    /// `NumericPeers(a, b)`: `a` and `b` meet in arithmetic or a compound assignment. One class, unless one side is an
+    /// integer (an exact integer type) and the other a float (an exact float type or a float literal): that is
+    /// mixed arithmetic, which the backend converts, and the classes stay apart.
+    /// The third variable, when present, is the arithmetic's result: the shared class, or for mixed arithmetic the
+    /// float side's class (`i * 0.5` is a float).
+    NumericPeers(ConstraintVar, ConstraintVar, Option<ConstraintVar>),
 
     // --- Ownership constraints ---
     /// A variable must have a specific ownership mode.

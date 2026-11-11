@@ -5,7 +5,7 @@ pub trait Doubler {
 impl Doubler for i64 {
 #[inline]
 fn double(self) -> i64 {
-        self * 2
+        self * 2_i64
 }
 }
 
