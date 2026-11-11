@@ -107,7 +107,11 @@ fn false_positives(files: &[PathBuf]) -> (BTreeMap<String, BTreeSet<String>>, us
         let Some(unused) = rust_unused_mut(f) else { continue };
         judged += 1;
         flagged += names.len();
-        let bad: BTreeSet<String> = names.intersection(&unused).cloned().collect();
+        // rustc names a binding, not a place: a name bound more than once is left out (one of its bindings may
+        // need `mut` while another does not)
+        let d = demut(&src);
+        let bound_once = |n: &String| ["let ", "for "].iter().map(|k| d.matches(&format!("{k}{n} ")).count() + d.matches(&format!("{k}{n}:")).count()).sum::<usize>() <= 1;
+        let bad: BTreeSet<String> = names.intersection(&unused).filter(|n| bound_once(n)).cloned().collect();
         if !bad.is_empty() {
             fps.insert(f.strip_prefix(root()).unwrap_or(f).display().to_string(), bad);
         }
