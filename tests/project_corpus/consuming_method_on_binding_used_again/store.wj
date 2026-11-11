@@ -1,0 +1,25 @@
+pub struct Store {
+    pub rows: Vec<i64>,
+    pub hits: u64,
+}
+
+impl Store {
+    pub fn has(self, key: i64) -> bool {
+        let mut s = self
+        s.hits = s.hits + 1
+        let mut i = 0
+        while i < s.rows.len() {
+            if s.rows[i] == key {
+                return true
+            }
+            i = i + 1
+        }
+        false
+    }
+}
+
+pub fn probe(store: Store, key: i64) -> (Store, bool) {
+    let mut active = store
+    let ok = active.has(key)
+    (active, ok)
+}

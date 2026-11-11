@@ -1,0 +1,8 @@
+// assert_eq on an element of a call result compares both sides by value. Expected by hand: prints ok.
+// expect: ok
+mod lists
+
+fn main() {
+    lists::check()
+    println("ok")
+}

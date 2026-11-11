@@ -113,6 +113,13 @@ impl<'ast> Analyzer<'ast> {
         analyzer
     }
 
+    /// The free function a bare call `name(..)` names when the analyzed file imports `name` with `use`
+    /// (C3 identity by declaration: a same-named trait method is not that function).
+    pub(crate) fn imported_free_function<'r>(&self, registry: &'r SignatureRegistry, name: &str) -> Option<&'r super::FunctionSignature> {
+        let path = self.imported_paths.get(name)?;
+        registry.imported_free_function(path).map(|(_, sig)| sig)
+    }
+
     /// Declared types of the `const` / `static` items of the other files of a library (by name, only names
     /// every file declares with one type). The analyzed file's own items are recorded over these.
     pub fn seed_module_const_types(&mut self, consts: Arc<HashMap<String, Type>>) {

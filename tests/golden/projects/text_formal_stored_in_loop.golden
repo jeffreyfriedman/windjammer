@@ -1,0 +1,58 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod table;
+
+// Re-export public items
+pub use table::*;
+// ==== main.rs ====
+mod table;
+fn main() {
+    let t = table::Table { entries: vec![table::Entry { id: 1_u32, owner: String::from("a") }, table::Entry { id: 2_u32, owner: String::from("x") }] };
+    let u = t.set_owner(2_u32, "b".to_string());
+    println!("{} {}", u.entries[0].owner, u.entries[1].owner);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod table;
+
+// Re-export public items
+pub use table::*;
+// ==== table.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Entry {
+    pub id: u32,
+    pub owner: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Table {
+    pub entries: Vec<Entry>,
+}
+
+impl Table {
+#[inline]
+pub fn set_owner(&self, id: u32, owner: String) -> Table {
+        let mut entries: Vec<Entry> = Vec::new();
+        let mut i = 0_usize;
+        while i < self.entries.len() {
+            let entry = self.entries[i].clone();
+            if entry.id == id {
+                let _ = entries.push(Entry { id: entry.id, owner: owner.clone() });
+            } else {
+                let _ = entries.push(entry);
+            }
+            i += 1;
+        }
+        Table { entries }
+}
+}
+

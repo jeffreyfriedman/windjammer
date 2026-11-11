@@ -21,7 +21,7 @@ Layer `syntax`. May import: every module in a lower layer (support) and peers `l
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`Parser::new(tokens)` then `parse()` (src/parser_impl.rs); AST in `parser/ast/`; `ast/json_attrs.rs` reads `@json(..)` options (ADR-0027) for both the Rust backend and the interpreter.
+`Parser::new(tokens)` then `parse()` (src/parser_impl.rs); AST in `parser/ast/`; `use_imports.rs` maps the names a file imports with `use` to their paths (C3 identity for bare calls); `ast/json_attrs.rs` reads `@json(..)` options (ADR-0027) for both the Rust backend and the interpreter.
 
 ## Tests
 tests/parser_*_test.rs and tests/ast_builders_tests.rs.

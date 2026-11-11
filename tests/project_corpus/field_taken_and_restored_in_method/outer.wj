@@ -1,0 +1,25 @@
+pub struct Tag {
+    pub value: u64,
+}
+
+pub struct Inner {
+    pub name: string,
+    pub tags: Vec<string>,
+    pub at: Tag,
+}
+
+pub struct Outer {
+    pub inner: Inner,
+    pub n: u64,
+}
+
+impl Outer {
+    pub fn bump(self) -> usize {
+        let mut inner = self.inner
+        inner.tags.push("x")
+        let k = inner.tags.len()
+        self.inner = inner
+        self.n = self.n + 1
+        k
+    }
+}

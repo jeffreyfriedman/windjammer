@@ -115,7 +115,7 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="133"];
+  "analyzer" -> "parser" [label="134"];
   "analyzer" -> "stdlib_scanner" [label="2"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
@@ -216,7 +216,7 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="625"];
+  "codegen" -> "analyzer" [label="628"];
   "codegen" -> "auto_clone" [label="6"];
   "codegen" -> "compiler" [label="6",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
@@ -229,7 +229,7 @@ digraph deps {
   "codegen" -> "ir" [label="395"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="696"];
+  "codegen" -> "parser" [label="700"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
@@ -352,7 +352,7 @@ digraph deps {
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
   "ir" -> "intrinsics" [label="1"];
   "ir" -> "lexer" [label="23"];
-  "ir" -> "parser" [label="90"];
+  "ir" -> "parser" [label="94"];
   "ir" -> "resolve" [label="9"];
   "ir" -> "source_map" [label="6"];
   "ir" -> "type_classification" [label="31"];
@@ -393,7 +393,7 @@ digraph deps {
   "package" -> "module_system" [label="1"];
   "package" -> "parser" [label="2"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
-  "parser" -> "lexer" [label="30"];
+  "parser" -> "lexer" [label="31"];
   "parser" -> "parser_impl" [label="27"];
   "parser" -> "source_map" [label="5"];
   "parser_impl" -> "error" [label="2"];

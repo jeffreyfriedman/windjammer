@@ -44,7 +44,12 @@ fn infer_receiver_type<'ast>(
         Expression::Identifier { name, .. } if name == "self" => {
             func.parent_type.as_ref().map(|p| Type::Custom(strip_generics(p)))
         }
-        Expression::Identifier { name, .. } => func.parameters.iter().find(|p| &p.name == name).map(|p| p.type_.clone()),
+        Expression::Identifier { name, .. } => func
+            .parameters
+            .iter()
+            .find(|p| &p.name == name)
+            .map(|p| p.type_.clone())
+            .or_else(|| local_binding_type(name, func)),
         Expression::FieldAccess { object: inner, field, .. } => {
             let inner_base = infer_receiver_type(inner, func, struct_field_types).as_ref().and_then(type_to_struct_base)?;
             crate::type_inference::struct_field_registry::lookup_struct_field_map(
@@ -68,5 +73,53 @@ fn element_type(ty: &Type) -> Option<Type> {
         Type::Parameterized(name, args) if strip_generics(name) == "Vec" && args.len() == 1 => Some(args[0].clone()),
         Type::Reference(inner) | Type::MutableReference(inner) => element_type(inner),
         _ => None,
+    }
+}
+
+/// Declared type of a local bound once in `func` by `let`: the annotation, else the type of its initializer
+/// when that is itself known by declaration (`let mut host = self`, `let p = param`, `let c = Csr { .. }`).
+/// `None` when the name is bound more than once (shadowing) or the initializer's type is not declared.
+fn local_binding_type<'ast>(
+    name: &str,
+    func: &FunctionDecl<'ast>,
+) -> Option<Type> {
+    let mut lets = Vec::new();
+    collect_lets(&func.body, name, &mut lets);
+    let [(annotation, value)] = lets.as_slice() else {
+        return None;
+    };
+    if let Some(ty) = annotation {
+        return Some(ty.clone());
+    }
+    match value {
+        // `self` or a parameter only: following another local could cycle (`let a = b` ... `let b = a`).
+        Expression::Identifier { name: source, .. } if source == "self" => func.parent_type.as_ref().map(|p| Type::Custom(strip_generics(p))),
+        Expression::Identifier { name: source, .. } => func.parameters.iter().find(|p| &p.name == source).map(|p| p.type_.clone()),
+        Expression::StructLiteral { name: struct_name, .. } => Some(Type::Custom(strip_generics(struct_name))),
+        _ => None,
+    }
+}
+
+/// Every `let <name> = value` (plain identifier pattern) in `stmts`, nested blocks included.
+fn collect_lets<'a, 'ast>(
+    stmts: &'a [&'ast crate::parser::ast::core::Statement<'ast>],
+    name: &str,
+    out: &mut Vec<(&'a Option<Type>, &'ast Expression<'ast>)>,
+) {
+    use crate::parser::ast::core::{Pattern, Statement};
+    for stmt in stmts {
+        match stmt {
+            Statement::Let { pattern: Pattern::Identifier(n), type_, value, .. } if n == name => out.push((type_, value)),
+            Statement::If { then_block, else_block, .. } => {
+                collect_lets(then_block, name, out);
+                if let Some(b) = else_block {
+                    collect_lets(b, name, out);
+                }
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                collect_lets(body, name, out)
+            }
+            _ => {}
+        }
     }
 }

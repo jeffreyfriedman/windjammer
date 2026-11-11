@@ -207,7 +207,9 @@ impl<'ast> CodeGenerator<'ast> {
                     // program declares (the standard collections' method names are ambiguous)
                     let declared = self.infer_type_name(object).or_else(|| self.infer_local_var_type_from_body(var_name)).is_some_and(|t| {
                         let base = t.split('<').next().unwrap_or(&t);
-                        self.user_declared_struct_names.contains(base.rsplit("::").next().unwrap_or(base))
+                        let leaf = base.rsplit("::").next().unwrap_or(base);
+                        // declared in this file, or a struct of another module of the program (`acc::Acc`)
+                        self.user_declared_struct_names.contains(leaf) || self.lookup_struct_field_types(base).is_some()
                     });
                     if declared && self.expression_mutates_variable_field(expr, var_name) {
                         return true;
@@ -217,7 +219,11 @@ impl<'ast> CodeGenerator<'ast> {
                     || arguments.iter().any(|(_, a)| self.nested_mutating_call_on_var(a, var_name))
             }
             Expression::MacroInvocation { args, .. } => args.iter().any(|a| self.nested_mutating_call_on_var(a, var_name)),
-            Expression::Call { arguments, .. } => arguments.iter().any(|(_, a)| self.nested_mutating_call_on_var(a, var_name)),
+            // `println("${drain(q, 10)}")` with `drain(q: &mut Queue, ..)`: the callee's formal decides.
+            Expression::Call { function, arguments, .. } => {
+                self.call_passes_var_as_mut_borrowed(function, arguments, var_name)
+                    || arguments.iter().any(|(_, a)| self.nested_mutating_call_on_var(a, var_name))
+            }
             Expression::Binary { left, right, .. } => {
                 self.nested_mutating_call_on_var(left, var_name) || self.nested_mutating_call_on_var(right, var_name)
             }
@@ -361,10 +367,16 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
         var_name: &str,
     ) -> bool {
-        let Some(receiver_type) = self.infer_type_name(object) else {
+        let Some(receiver_type) = self.infer_type_name(object).or_else(|| self.infer_type_from_initializer(object)) else {
             return false;
         };
-        let qualified_name = format!("{}::{}", receiver_type, method);
+        // `graph::Host { .. }.run(..)` from another module: the type's methods are keyed by its own name.
+        let base = receiver_type.split('<').next().unwrap_or(&receiver_type);
+        let leaf = base.rsplit("::").next().unwrap_or(base);
+        let qualified_name = [format!("{receiver_type}::{method}"), format!("{leaf}::{method}")]
+            .into_iter()
+            .find(|q| self.get_signature_with_global(q).is_some())
+            .unwrap_or_else(|| format!("{receiver_type}::{method}"));
         if self.has_explicit_ownership_collision_with_global(&qualified_name) {
             return false;
         }

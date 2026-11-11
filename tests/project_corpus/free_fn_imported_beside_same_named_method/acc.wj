@@ -1,0 +1,16 @@
+use crate::ops::double
+
+pub struct Acc {
+    pub total: i64,
+}
+
+impl Acc {
+    pub fn double(self, slot: usize) -> usize {
+        slot + 1
+    }
+
+    pub fn run(self, v: i64) -> i64 {
+        self.total = self.total + double(v)
+        self.total
+    }
+}

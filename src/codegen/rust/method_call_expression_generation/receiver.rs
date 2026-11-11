@@ -210,10 +210,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // DOUBLE-CLONE SAFETY NET: If the object was auto-cloned by the FieldAccess
-        // handler and this IS a language-level `.clone()` call, strip the redundant auto-clone.
-        // e.g., "stack.item.clone()" from auto-clone + ".clone()" from source
-        //     → should be "stack.item.clone()", not "stack.item.clone().clone()"
+        if !is_type_preserving { self.copy_reused_owned_receiver(object, method, &mut obj_str); }
+        // DOUBLE-CLONE SAFETY NET: a FieldAccess auto-clone before a language-level `.clone()` is redundant:
+        // "stack.item.clone()" from auto-clone + ".clone()" from source -> "stack.item.clone()", not twice.
         crate::codegen::rust::string_utilities::strip_redundant_auto_clone_before_explicit_clone(
             &mut obj_str,
             method,

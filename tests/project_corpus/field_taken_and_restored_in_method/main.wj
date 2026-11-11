@@ -1,0 +1,9 @@
+// A field is moved into a local, changed, and stored back; the field's struct holds a nested struct and a Vec. Expected by hand: pushes "x" once -> len 1, n 1.
+// expect: 1 1
+mod outer
+
+fn main() {
+    let mut o = outer::Outer { inner: outer::Inner { name: "a", tags: [], at: outer::Tag { value: 0 } }, n: 0 }
+    let k = o.bump()
+    println("${k} ${o.n}")
+}

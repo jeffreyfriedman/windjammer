@@ -598,6 +598,13 @@ pub(crate) fn callee_user_arg_bare_formal_is_copy_pass_by_value(
     user_arg_index: usize,
 ) -> bool {
     let pidx = sig.arg_param_index(user_arg_index);
+    // A formal the declaration spells `&T` (`Vec::contains(&self, x: &T)`) takes a borrow even when `T` is
+    // Copy; only the body-converged `param_types` wrap (no declared formals) is peeled below.
+    if !sig.formal_param_types.is_empty()
+        && matches!(sig.formal_param_types.get(pidx), Some(Type::Reference(_) | Type::MutableReference(_)))
+    {
+        return false;
+    }
     let bare = if let Some(t) = sig.formal_param_type(pidx) {
         match t {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),

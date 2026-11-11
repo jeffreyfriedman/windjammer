@@ -1,0 +1,9 @@
+// A builder method writes through a nested field (`self.buffer.items.push`, `self.buffer.pending = ..`) and
+// returns `self`: the owned receiver is `mut self`. Expected by hand: 3 items appended, pending 3.
+// expect: 3 3
+mod port
+
+fn main() {
+    let p = port::Port::new(1).append(5).append_all([6, 7])
+    println("${p.buffer.items.len()} ${p.buffer.pending}")
+}

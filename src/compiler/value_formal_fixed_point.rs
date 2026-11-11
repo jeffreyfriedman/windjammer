@@ -83,7 +83,10 @@ impl FormalScope {
                 if self.trait_impl_methods.contains(&ir_fn.name) {
                     continue;
                 }
-                vec![ir_fn.name.clone()]
+                // `Host::run` and the module-qualified `graph::Host::run` other files read
+                let mut keys = vec![ir_fn.name.clone()];
+                keys.extend(file_stem.map(|stem| format!("{stem}::{}", ir_fn.name)));
+                keys
             } else {
                 let mut keys: Vec<String> = file_stem.map(|stem| format!("{stem}::{}", af.decl.name)).into_iter().collect();
                 if self.bare_name_counts.get(&af.decl.name) == Some(&1) {

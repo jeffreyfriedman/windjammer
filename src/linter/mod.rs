@@ -365,6 +365,7 @@ mod owned_but_not_returned_tests {
             module_path: Vec::new(),
             module_const_types: Default::default(),
             type_aliases: Default::default(),
+            imported_paths: Default::default(),
         };
 
         let mut linter = Linter::new();

@@ -49,6 +49,7 @@ pub mod trait_parser;
 
 // Item parsing module - extracted from parser_impl.rs
 pub mod item_parser;
+pub mod use_imports;
 
 // Re-export AST types for convenience
 pub use ast::*;

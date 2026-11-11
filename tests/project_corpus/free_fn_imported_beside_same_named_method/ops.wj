@@ -1,0 +1,3 @@
+pub fn double(v: i64) -> i64 {
+    v * 2
+}

@@ -2000,7 +2000,7 @@ pub(crate) fn local_user_fn_beats_runtime_std_homonym(
     let Some(local_sig) = local.get_signature(callee_name) else {
         return resolved;
     };
-    if local_sig.formal_param_types.is_empty() && local_sig.param_types.is_empty() {
+    if (local_sig.has_self_receiver && !resolved.has_self_receiver) || (local_sig.formal_param_types.is_empty() && local_sig.param_types.is_empty()) { // a bare-key method is no homonym of a free fn
         return resolved;
     }
     if signature_is_wj_std_stub_or_runtime_qualified(local_sig) {

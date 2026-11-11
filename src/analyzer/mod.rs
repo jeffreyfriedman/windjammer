@@ -109,6 +109,8 @@ pub struct AnalyzedFunction<'ast> {
     pub module_const_types: Arc<HashMap<String, Type>>,
     /// The file's `type` aliases: name -> (generic parameters, target) (`type Pair<T> = (T, T)`).
     pub type_aliases: TypeAliases,
+    /// The file's `use` imports: bare name -> the path it names (`parser::use_imports`, C3 identity).
+    pub imported_paths: Arc<HashMap<String, String>>,
 }
 
 /// `type` aliases by name: (the alias's generic parameters, its target type).
@@ -368,6 +370,8 @@ pub struct Analyzer<'ast> {
     module_const_types: Arc<HashMap<String, Type>>,
     /// The program's `type` aliases.
     type_aliases: TypeAliases,
+    /// The analyzed file's `use` imports (bare name -> path).
+    imported_paths: Arc<HashMap<String, String>>,
     /// Unqualified struct name → module paths where it is defined (for qualified field lookup).
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ files.
     struct_defining_module_paths: Arc<HashMap<String, Vec<Vec<String>>>>,
@@ -405,6 +409,7 @@ impl<'ast> Analyzer<'ast> {
             global_struct_field_types: Arc::new(HashMap::new()),
             module_const_types: Arc::new(HashMap::new()),
             type_aliases: Arc::new(HashMap::new()),
+            imported_paths: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
             ownership_preconverged: false,

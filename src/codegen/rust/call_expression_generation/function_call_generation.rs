@@ -535,7 +535,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Static methods → Self::method(args)
     if gen.in_impl_block
         && !func_name.contains("::")
-        && gen.current_impl_methods.contains(func_name) && gen.resolved_callee_path(function).is_none() && !gen.imported_fn_names.contains(func_name)
+        && gen.current_impl_methods.contains(func_name) && gen.resolved_callee_path(function).is_none() && !gen.imported_fn_names.contains_key(func_name)
     {
         if gen.current_impl_instance_methods.contains(func_name) {
             func_str = format!("self.{}", func_str);
@@ -1057,8 +1057,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             continue;
         }
         if !arg.contains("string_to_ffi(")
-            && (gen.preregistered_free_call_arg_expects_borrow(func_name, i)
-                || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
+            && (gen.free_call_arg_expects_shared_borrow(func_name, signature.as_ref(), i)
                 || stale_shared_clone)
         {
             *arg = crate::ir::target_encodings::rust_shared_borrow(arg);

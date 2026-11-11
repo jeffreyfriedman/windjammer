@@ -1417,7 +1417,7 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                false
+                self.expr_forwards_param_as_owned_pass_through(param_name, object, registry, func) // `f(slug).len()`
             }
             Expression::Call {
                 function,
@@ -1436,7 +1436,7 @@ impl<'ast> Analyzer<'ast> {
                     if matches!(name.as_str(), "println" | "print" | "eprintln" | "eprint") {
                         return false;
                     }
-                    if let Some(sig) = registry.get_signature(name) {
+                    if let Some(sig) = self.imported_free_function(registry, name).or_else(|| registry.get_signature(name)) {
                         let pidx = arguments
                             .iter()
                             .position(|(_, a)| self.expr_is_param_or_ref_to_param(param_name, a))
