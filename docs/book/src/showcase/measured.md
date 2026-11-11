@@ -9,13 +9,21 @@ the agent builds first, and Windjammer where the agent is encouraged to run the 
 
 ## The pilot, in one table
 
-The numbers are per trial, as a mean with a 95% interval that resamples tasks and then trials. The number of trials is:
+The numbers are per trial, as a mean with a 95% interval that resamples tasks and then trials. The pilot ran this many trials in all, split evenly across the three setups:
 
 <!-- wj:gen name=pilot6_value path=n_trials digits=0 -->
-0
+90
 <!-- wj:end -->
 
 <!-- wj:gen name=pilot6_table -->
+| Per trial | Plain Rust | Windjammer, compiled first | Windjammer, interpreter first |
+|---|---|---|---|
+| pass@1 against the hidden tests | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] |
+| cost per trial, USD | 0.033 [0.026, 0.042] | 0.039 [0.033, 0.046] | 0.040 [0.031, 0.053] |
+| agent turns | 3.0 [3.0, 3.0] | 3.8 [3.0, 4.8] | 4.8 [3.3, 7.2] |
+| tokens in (including cache) | 22775 [22311, 23449] | 32249 [25208, 43667] | 41135 [29006, 62534] |
+| tokens out | 1710 [1291, 2324] | 1798 [1453, 2212] | 1869 [1442, 2531] |
+| wall seconds (a loaded machine, see the limits) | 22.1 [19.4, 25.3] | 34.1 [28.4, 41.2] | 39.4 [29.0, 52.8] |
 <!-- wj:end -->
 
 ## What it shows
@@ -28,6 +36,11 @@ languages by correctness.
 include zero:
 
 <!-- wj:gen name=pilot6_paired -->
+| Cost per trial, USD | Difference [95% interval] | Interval contains zero |
+|---|---|---|
+| Rust minus compiled-first | -0.005 [-0.016, 0.005] | yes: no difference shown |
+| Rust minus interpreter-first | -0.007 [-0.023, 0.006] | yes: no difference shown |
+| compiled-first minus interpreter-first | -0.001 [-0.011, 0.005] | yes: no difference shown |
 <!-- wj:end -->
 
 Read the last column as the verdict: where the interval contains zero, the data do not show a difference. Windjammer needed
@@ -35,6 +48,18 @@ more turns and more input tokens, since the agent reads a short guide and checks
 setup with the lowest cost per trial:
 
 <!-- wj:gen name=pilot6_by_task -->
+| Task | Plain Rust | Compiled first | Interpreter first | Least cost |
+|---|---|---|---|---|
+| t011_lru_cache | 0.024 | 0.030 | 0.029 | Rust |
+| t013_bst | 0.038 | 0.049 | 0.045 | Rust |
+| t101_json_orders | 0.069 | 0.034 | 0.032 | Windjammer, interpreter first |
+| t103_trait_pricing | 0.023 | 0.043 | 0.044 | Rust |
+| t104_activity_log | 0.028 | 0.062 | 0.084 | Rust |
+| t105_date_diff | 0.030 | 0.037 | 0.043 | Rust |
+| t106_priority_queue | 0.028 | 0.032 | 0.030 | Rust |
+| t107_text_wrap | 0.024 | 0.027 | 0.025 | Rust |
+| t108_to_rpn | 0.041 | 0.037 | 0.036 | Windjammer, interpreter first |
+| t109_spiral | 0.029 | 0.037 | 0.034 | Rust |
 <!-- wj:end -->
 
 The pilot's notes explain the task where Windjammer cost the least by what that task asks: with only the standard library,
@@ -50,7 +75,7 @@ are close, and on the task with the largest gap the other way, Windjammer cost m
 out of this many Rust trials:
 
 <!-- wj:gen name=pilot6_value path=rust_errors.n digits=0 -->
-0
+30
 <!-- wj:end -->
 
 So on these tasks Rust's borrow checker cost the model nothing, and Windjammer's advantage is not fewer compiler errors. What
@@ -77,7 +102,7 @@ Rust](ownership.md), where the program is shorter and the generated Rust carries
 The Rust trials that ran above the load threshold:
 
 <!-- wj:gen name=pilot6_value path=noisy.R.noisy digits=0 -->
-0
+30
 <!-- wj:end -->
 
 ## What the rest of this section does show
