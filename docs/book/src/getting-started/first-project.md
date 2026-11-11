@@ -21,7 +21,7 @@ $ cd greeter && wj run
 Hello, World!
 ```
 
-`wj run` interprets the program: there is no build step, and a whole multi-module project starts in milliseconds.
+`wj run` interprets the program: there is no build step, and a whole multi-module project runs the same way.
 Strings interpolate with `${...}`, and `println` is an ordinary function, not a macro.
 
 ## Try code quickly

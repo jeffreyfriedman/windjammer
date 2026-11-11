@@ -8,6 +8,7 @@
 
 pub mod book;
 pub mod book_features;
+pub mod book_pilot;
 pub mod book_playground;
 pub mod book_projects;
 pub mod book_regen;
