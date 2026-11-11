@@ -255,6 +255,27 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
 - Not yet: the build is not speculative (option a), so a cold `--verify` costs one compiled build; the interpreted run's
   stdout is printed when it ends rather than streamed.
 
+## Third slice (landed): families B and C
+
+- The same walker and gate (`src/check/widths/`, `src/cli/widths_gate.rs`) now also type `String`, `&str`,
+  `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet` and closures bound to locals, and report:
+  - B: a lookup (`get`, `get_mut`, `contains_key`, `remove` on a map; `get`, `contains`, `remove` on a set; `contains`
+    on a `Vec`) given an owned integer or `String`, and an owned value where a reference parameter, field or
+    binding is required (or the reverse);
+  - C: a `String` where `&str` is required or a `&str`/`&String` where `String` is (parameters of the file's
+    functions, methods and annotated closures, fields, annotated `let`s, assignments, `match`/`if` arms), and
+    `String + String` / `String += String`.
+- One level of deref coercion is honoured behind a reference (`&String` for `&str`, `&&T` for `&T`), so only shapes
+  rustc never accepts are reported. `tests/prediction_families_test.rs` checks eleven positive and eleven negative
+  shapes against rustc itself.
+- Corpus scan: every file with a prediction is again confirmed by rustc (E0308) on the build's output, and pinned.
+  New on the verified programs: `hashset_basics`, `prog_lru_cache`, `98_bignum_factorial`,
+  `174_closure_mut_capture`, three engine-parity programs (`map_get_match`, `match_arms`, `match_value`) and the
+  repros `explicit_ref_literal_arg` and `closure_string_param_literal`. Programs `wj check` already rejects for a
+  type error (the check-negative mutants, error-system fixtures) are reported too; their builds fail the same way.
+- On this head `literal_in_option_field_arm` builds (`Some(v - 1_i64)`): the backend fixed it, and the prediction
+  went away by construction. Its drift-ledger line is now stale (for the ledger's owner).
+
 ## Consequences
 
 - `wj check` on a family-A program now fails with WJ0003 at the line, with the workaround; an interpreted run prints
