@@ -1507,13 +1507,12 @@ pub(crate) fn build_library_multipass(
         crate_metadata.copy_structs.sort();
         crate_metadata.string_consts.clear();
         for program in &parsed_programs {
-            crate_metadata
-                .string_consts
-                .extend(crate::metadata::collect_string_const_names(program));
+            crate_metadata.string_consts.extend(crate::metadata::collect_string_const_names(program));
+            crate_metadata.variant_payloads.extend(crate::metadata::collect_variant_payloads(program));
         }
         crate_metadata.string_consts.sort();
         crate_metadata.string_consts.dedup();
-        if !crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty() {
+        if crate_metadata.has_entries() {
             super::write_crate_metadata_json(output, &crate_metadata)?;
         }
     }
