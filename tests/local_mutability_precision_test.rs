@@ -26,25 +26,51 @@ fn wj_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// `src` as written before the migration: no `let mut` / `for mut`.
+/// `src` as written before the migration: no `let mut`, no `mut` in a `for` pattern.
 fn demut(src: &str) -> String {
-    src.replace("let mut ", "let ").replace("for mut ", "for ")
+    src.lines()
+        .map(|l| {
+            let l = l.replace("let mut ", "let ");
+            if l.trim_start().starts_with("for ") {
+                l.replace("for mut ", "for ").replace("(mut ", "(").replace(", mut ", ", ")
+            } else {
+                l
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Names of the bindings WJ0051 reports in `src` (alone, as one program).
 fn reported(name: &str, src: &str) -> BTreeSet<String> {
+    reported_split(name, src).into_iter().flat_map(|(a, b)| a.into_iter().chain(b)).collect()
+}
+
+/// (names declared by `let`, names declared by a `for` pattern) that WJ0051 reports in `src`.
+fn reported_split(name: &str, src: &str) -> Vec<(Option<String>, Option<String>)> {
     windjammer::check::local_mutability_sources(&[(name.to_string(), src.to_string())])
         .iter()
         .filter_map(|d| {
             let s = d.secondary_spans.first()?;
-            src.get(s.byte_start..s.byte_end).map(str::to_string)
+            let n = src.get(s.byte_start..s.byte_end)?.to_string();
+            let line = src.lines().nth(s.line_start - 1).unwrap_or("");
+            Some(if line.trim_start().starts_with("for ") { (None, Some(n)) } else { (Some(n), None) })
         })
         .collect()
 }
 
+/// The generated Rust of the original program writes through the loop variable `n`: a `for` that binds `n` iterates
+/// mutably (`&mut`, `iter_mut`, `values_mut`) or binds it `mut` (a by-value variable it reassigns).
+fn loop_writes(rust: &str, n: &str) -> bool {
+    let word = |l: &str| l.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|w| w == n);
+    rust.lines()
+        .filter(|l| l.trim_start().starts_with("for ") && l.contains(" in ") && word(l.split(" in ").next().unwrap_or("")))
+        .any(|l| l.contains("&mut ") || l.contains("_mut()") || l.contains(&format!("mut {n}")))
+}
+
 /// rustc's `unused_mut` warnings on the Rust `wj build --no-cargo` emits for `path`: the names of bindings declared
 /// `mut` that are never changed. `None` when the program does not build or rustc rejects it on its own.
-fn rust_unused_mut(path: &Path) -> Option<BTreeSet<String>> {
+fn rust_unused_mut(path: &Path) -> Option<(BTreeSet<String>, String)> {
     // built from a copy in a scratch directory: the build reads `.wj.meta` sidecars of every ancestor directory
     let out = tempfile::tempdir().unwrap();
     let src = out.path().join("src");
@@ -56,7 +82,8 @@ fn rust_unused_mut(path: &Path) -> Option<BTreeSet<String>> {
     let out = &out_dir;
     let stem = path.file_stem()?.to_string_lossy().to_string();
     let rs = out.join(format!("{stem}.rs"));
-    unused_mut_of_file(&rs)
+    let rust = std::fs::read_to_string(&rs).ok()?;
+    unused_mut_of_file(&rs).map(|u| (u, rust))
 }
 
 fn unused_mut_of_file(rs: &Path) -> Option<BTreeSet<String>> {
@@ -104,7 +131,15 @@ fn false_positives(files: &[PathBuf]) -> (BTreeMap<String, BTreeSet<String>>, us
         if names.is_empty() {
             continue;
         }
-        let Some(unused) = rust_unused_mut(f) else { continue };
+        let Some((unused, rust)) = rust_unused_mut(f) else { continue };
+        // loop variables: the generated Rust must write through them
+        for (_, n) in reported_split(&f.display().to_string(), &demut(&src)) {
+            if let Some(n) = n {
+                if !loop_writes(&rust, &n) {
+                    fps.entry(f.strip_prefix(root()).unwrap_or(f).display().to_string()).or_insert_with(BTreeSet::new).insert(format!("for {n}"));
+                }
+            }
+        }
         judged += 1;
         flagged += names.len();
         // rustc names a binding, not a place: a name bound more than once is left out (one of its bindings may
@@ -113,7 +148,7 @@ fn false_positives(files: &[PathBuf]) -> (BTreeMap<String, BTreeSet<String>>, us
         let bound_once = |n: &String| ["let ", "for "].iter().map(|k| d.matches(&format!("{k}{n} ")).count() + d.matches(&format!("{k}{n}:")).count()).sum::<usize>() <= 1;
         let bad: BTreeSet<String> = names.intersection(&unused).filter(|n| bound_once(n)).cloned().collect();
         if !bad.is_empty() {
-            fps.insert(f.strip_prefix(root()).unwrap_or(f).display().to_string(), bad);
+            fps.entry(f.strip_prefix(root()).unwrap_or(f).display().to_string()).or_insert_with(BTreeSet::new).extend(bad);
         }
     }
     (fps, judged, flagged)
@@ -124,7 +159,7 @@ fn the_oracle_flags_a_mut_that_is_never_needed() {
     let dir = tempfile::tempdir().unwrap();
     let f = dir.path().join("m.wj");
     std::fs::write(&f, "fn main() {\n    let mut never = 1\n    let mut once = 1\n    once += 1\n    println(\"${never} ${once}\")\n}\n").unwrap();
-    let unused = rust_unused_mut(&f).expect("builds and type-checks");
+    let (unused, _) = rust_unused_mut(&f).expect("builds and type-checks");
     assert!(unused.contains("never") && !unused.contains("once"), "{unused:?}");
     // and the demutted program is reported exactly for the binding that changes
     let src = std::fs::read_to_string(&f).unwrap();

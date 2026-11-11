@@ -19,6 +19,17 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
         location: &crate::parser::ast::SourceLocation,
     ) -> String {
+        // ADR-0002: `mut` on a loop variable (`for mut x in xs`, `for (k, mut v) in m`, `for mut i in 0..n`) is the
+        // source's visible sign that the loop writes to it; how the loop binds it stays inferred from the body
+        // (iter / iter_mut / into_iter, `mut` on a by-value binding), so the pattern is generated as if unmarked.
+        let unmarked;
+        let pattern = if loop_pattern_declares_mut(pattern) {
+            unmarked = without_mut(pattern);
+            &unmarked
+        } else {
+            pattern
+        };
+
         if let Some(simd_block) =
             super::simd_transform::try_emit_simd_for_loop(self, pattern, iterable, body)
         {
@@ -748,5 +759,23 @@ impl<'ast> CodeGenerator<'ast> {
             })
         };
         is_usize_ty(start) || is_usize_ty(end)
+    }
+}
+
+/// Whether a loop pattern declares any of its names `mut`.
+fn loop_pattern_declares_mut(p: &Pattern<'_>) -> bool {
+    match p {
+        Pattern::MutBinding(_) => true,
+        Pattern::Tuple(ps) => ps.iter().any(loop_pattern_declares_mut),
+        _ => false,
+    }
+}
+
+/// The loop pattern with its `mut` markers removed (`(k, mut v)` -> `(k, v)`).
+fn without_mut<'ast>(p: &Pattern<'ast>) -> Pattern<'ast> {
+    match p {
+        Pattern::MutBinding(n) => Pattern::Identifier(n.clone()),
+        Pattern::Tuple(ps) => Pattern::Tuple(ps.iter().map(without_mut).collect()),
+        other => other.clone(),
     }
 }
