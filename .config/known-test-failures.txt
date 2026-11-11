@@ -1,63 +1,27 @@
 # Known failing tests for the CI ratchet (scripts/wj/check_test_ratchet.wj).
-#
-# Real, open compiler bugs (each one is a minimal repro of an ownership / integer-width
-# inference gap). Remove a line as soon as its test passes; never add a line for a test that
-# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail (11 after the codegen-correctness stream).
-#
-# Classes: multi-file ownership demotion (call-site vs defining module), String move-vs-clone
-# at last use, enum payload literal width without return-type context, while-counter width.
-cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
-# Inference differential corpus (docs/spec/inference-divergences.md); each is a minimal repro of an open divergence.
-# Dogfooding findings (docs/known-issues/dogfood-findings.md)
-# Compiler findings from compiling a large multi-module program (docs/known-issues/dogfood-findings.md).
-# Ecosystem porting findings handed to the convergence / numeric-solver stream (docs/known-issues/*.md).
-# Found by the full-suite integration run after the 2026-10 merges (green2); trackers in docs/known-issues/.
-# docs/known-issues/rust-float-literal-width-from-context.md
-# docs/known-issues/ownership-and-width-ratchet-residue.md
-# Round-2 findings (docs/known-issues/dogfood-findings.md)
+# Rewritten 2026-11-10 from a measured triage (docs/triage/failing-tests-2026-11-10.md).
+# Rule: only tests that fail at the pre-integration base commit too (pre-existing, ledgered) are listed.
+# Regressions are bugs to fix and are NOT listed here. Remove a line as soon as its test passes.
+# Measured at ca7993c0a: 6844 other tests pass; full list of 123 earlier failures classified in the triage doc.
 
+# [owner: ownership] multi-file / cross-crate ownership demotion and value-formal call-site borrow/own mismatches
 auto_borrow_vec_new_arg_test::test_auto_borrow_vec_new_at_call_site
-backend_conformance_test::corpus_conforms_on_every_backend
-bug_module_file_readonly_vec_formal_must_not_clone_field_test::module_file_readonly_vec_formal_must_not_clone_field
-bug_untyped_zero_plus_vec_len_must_not_emit_i64_test::untyped_zero_plus_vec_len_must_not_emit_i64
-codegen_correctness_test::option_param_consumed
-codegen_proactive_hardening_gates_test::len_to_int_formal_substring_must_cargo_check
-codegen_proactive_hardening_gates_test::typed_closure_string_predicate_must_cargo_check
-cross_crate_dogfooding_ownership_test::dogfood_substrate_full_store_patch_part_enum_value_layout
-# Third batch of compiler findings (numeric solver C4 / ownership convergence)
-# Drift findings (docs/drift/pilot4-findings.md): interpreted green, generated Rust rejected
-
-# green4 triage (2026-11): failing before the C4 usize work (checked at 22d3fe8b2), still open.
-# Width, owner: numeric solver / convergence C4 (D-WIDTH-OWNERS; docs/spec/inference-divergences.md).
-codegen_mcp_frame_content_length_rustc_test::mcp_frame_int_to_dec_len_must_rustc
-codegen_string_len_int_formal_test::string_len_passed_to_int_formal_must_agree
-float_inference_field_initializer_test::test_struct_tuple_field_with_type_alias
-inference_differential_test::corpus_closure_len_arithmetic_width
-round2_findings_test::json_parse_target_type_inferred_from_later_use
-round2_findings_test::push_literal_takes_local_vec_width_not_return_type
-round2_findings_test::untyped_counter_compared_with_len_meets_int_formal
-round2_findings_test::untyped_float_tuple_array_follows_f32_use_after_destructuring
-svo_bfs_layout_test::test_bfs_svo_windjammer_compiles_and_layout_holds
-type_inference_vec3_f32_test::test_vec3_cross_module_inference
-windjammer_fixtures_integration::regression_vec_tuple_string_push
-# Ownership, owner: convergence C3 (module-qualified signature registry) / C5 (call-site borrow) / C6 (liveness clones).
-# Classified 2026-11-05 (wt/ownership-recv); none is stale, none a regression of this stream. Known-unfixed, by owner:
-#   C6 call-site borrow/clone (a borrowed formal is passed a clone, or an owned formal a borrow): dogfood_wal_ffi_*,
-#     dogfood_substrate_*, module_file_owned_startup_*, cross_module_trait_field_access_*, hashmap_str_key_no_to_string,
-#     tuple_writeback_must_not_clone, hashset_contains_no_double_borrow_*, match_borrow_break_* (2),
-#     static_self_method_borrows_vec_param_not_clone, dogfood_authz_owned_store_*, path_bytes_* (3), serve_closure_*.
-#   C5 parameter formals (O2 text demotion / O4 codegen re-decision): shadow_validation_clean_for_borrowed_string_param,
-#     corpus_explicit_ref_pin_is_not_double_borrowed, corpus_closure_mutating_capture_is_mutable, test_if_let_method_return_option,
-#     sender_send_string_channel_still_converts_literals.
-#   Not ownership: graph_bfs_hashmap_compiles (i64 vs i32 width: C4); wj_test_crate_* (2: the test crate cannot resolve
-#     `crate::domain`, a test-runner module-layout bug).
+bug_auth_api_cross_crate_cookie_map_get_must_not_to_string_test::cookie_build_path_dep_map_get_must_not_own_key
+bug_cross_crate_demoted_str_owned_arg_must_auto_borrow_test::cross_crate_demoted_str_owned_arg_must_auto_borrow
+bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test::cross_crate_owned_encode_named_fn_must_not_borrow_arg
+bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test::cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref
+bug_cross_crate_set_if_mut_borrow_test::test_cross_crate_set_if_mut_borrow_when_callee_missing_from_metadata
+bug_demoted_str_caller_into_owned_formal_test::multipass_demoted_str_into_cross_crate_owned_formal_must_cargo_check
+bug_import_alias_must_not_steal_foreign_fn_ownership_test::import_alias_must_not_steal_foreign_fn_ownership
 bug_module_file_feed_unified_owned_startup_must_not_borrow_test::module_file_owned_startup_must_not_receive_ref_args
-codegen_wj_test_crate_str_formal_format_temp_test::wj_test_crate_format_temps_must_match_demoted_str_formals
-codegen_wj_test_crate_str_formal_format_temp_test::wj_test_crate_hashmap_formal_must_accept_borrowed_query
+bug_module_file_readonly_vec_formal_must_not_clone_field_test::module_file_readonly_vec_formal_must_not_clone_field
+bug_multipass_cross_crate_render_owned_template_helper_test::multipass_cross_crate_render_owned_template_helper_must_cargo_check
+bug_qs_get_literal_into_demoted_key_must_not_string_from_test::qs_get_literal_into_demoted_key_must_not_string_from
+bug_regex_is_match_owned_formals_must_receive_owned_test::regex_is_match_owned_formals_must_receive_owned
+bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test::cross_crate_validate_field_must_auto_borrow_not_value
+cross_crate_dogfooding_ownership_test::dogfood_substrate_full_store_patch_part_enum_value_layout
+cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
 cross_module_ownership_test::cross_module_trait_field_access_inferred_borrowed
-ecosystem_findings2_test::sender_send_string_channel_still_converts_literals
-inference_differential_test::corpus_closure_mutating_capture_is_mutable
-inference_differential_test::corpus_explicit_ref_pin_is_not_double_borrowed
 ir_shadow_validation_test::shadow_validation_clean_for_borrowed_string_param
 library_multipass_map_key_codegen_test::test_library_multipass_graph_bfs_hashmap_compiles
 library_multipass_map_key_codegen_test::test_library_multipass_hashmap_str_key_no_to_string
@@ -72,7 +36,30 @@ path_and_bytes_borrow_tests::path_bytes_segment_append_delete_borrows_key_param
 path_and_bytes_borrow_tests::path_bytes_segment_append_put_borrows_key_value_params
 ref_mut_logic_layered_test::test_if_let_method_return_option
 server_serve_handler_ownership_test::serve_closure_passes_request_to_handler_without_double_borrow
-# Lib unit tests, ownership, owner: convergence C3 / C5 (stale-metadata and registry-merge expectations).
+
+# [owner: C4 width solver] integer/float literal and len() width inference
+codegen_correctness_test::option_param_consumed
+codegen_mcp_frame_content_length_rustc_test::mcp_frame_int_to_dec_len_must_rustc
+codegen_proactive_hardening_gates_test::len_to_int_formal_substring_must_cargo_check
+codegen_string_len_int_formal_test::string_len_passed_to_int_formal_must_agree
+float_inference_field_initializer_test::test_struct_tuple_field_with_type_alias
+inference_differential_test::corpus_closure_len_arithmetic_width
+inference_differential_test::corpus_closure_mutating_capture_is_mutable
+inference_differential_test::corpus_explicit_ref_pin_is_not_double_borrowed
+round2_findings_test::json_parse_target_type_inferred_from_later_use
+round2_findings_test::untyped_counter_compared_with_len_meets_int_formal
+type_inference_vec3_f32_test::test_vec3_cross_module_inference
+bug_untyped_zero_plus_vec_len_must_not_emit_i64_test::untyped_zero_plus_vec_len_must_not_emit_i64
+
+# [owner: codegen/wj-test crate] wj test crate format temps and demoted str formals
+codegen_wj_test_crate_str_formal_format_temp_test::wj_test_crate_format_temps_must_match_demoted_str_formals
+codegen_wj_test_crate_str_formal_format_temp_test::wj_test_crate_hashmap_formal_must_accept_borrowed_query
+
+# [owner: conformance] backend corpus and sender literal conversion
+backend_conformance_test::corpus_conforms_on_every_backend
+ecosystem_findings2_test::sender_send_string_channel_still_converts_literals
+
+# [owner: ownership] library unit tests recorded earlier (lib target; not part of the 'all' run, status unverified in this triage)
 analyzer::signature_registry::tests::merge_layered_fallback_keeps_mixed_owned_over_importer_stub
 analyzer::usage_tracking::storage_tracking::kill_factory_storage_tests::bare_itemstack_new_in_let_stores_item
 analyzer::usage_tracking::storage_tracking::kill_factory_storage_tests::error_json_concat_formal_stays_owned_string
@@ -93,14 +80,8 @@ codegen::rust::string_utilities::tests::static_impl_borrowed_string_formal_liter
 ir::formal_predicates::tests::method_call_arg_index_accounts_for_self_layout
 ir::signature_bridge::tests::analyzer_borrowed_bare_string_formal_stays_owned_without_emission
 ir::signature_bridge::tests::free_fn_plain_string_borrows_at_call_site
-# Width findings from a large multi-module program, a database project and the ecosystem (tests/compiler_findings_widths/),
-# owner: option C (typed collection literals and operator impls, C2) / the numeric solver.
-compiler_findings_widths_test::float_expression_to_float_parameter
-# Crate-surface formals in the numeric solver: the `rust/<crate>.wji` signature reaches the build metadata with `f32`, but
-# the registry entry the IR resolves (`half`) carries `float`; owner: C3 (callee identity by DefId, one signature per callee).
+
+# [owner: C4 width solver] new tests (added after the base) whose failure is ledgered in docs/known-issues
 compiler_findings_widths_test::float_literal_to_f32_crate_parameter
-# Owned-string coercion of a string literal in a tuple (here a match arm beside an `(int, string)` arm), not a width;
-# owner: the stream 7 string-ownership work (string literals in tuples converted to owned String).
 compiler_findings_widths_test::tuple_literal_in_match_arm
 drift_repros_test::explicit_ref_of_an_integer_literal_typechecks
-# owner: ownership inference (docs/drift/findings.md section L) and call adaptation.
