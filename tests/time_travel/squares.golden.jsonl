@@ -1,0 +1,11 @@
+{"column":19,"event":"stopped","file":"main.wj","function":"main","line":7,"reason":"start","step":1,"task":0}
+{"column":5,"event":"stopped","file":"main.wj","function":"square","line":3,"reason":"breakpoint","step":6,"task":0}
+{"event":"value","name":"y","value":"1"}
+{"event":"stack","frames":[{"column":5,"file":"main.wj","function":"square","line":3},{"column":27,"file":"main.wj","function":"main","line":10}]}
+{"column":5,"event":"stopped","file":"main.wj","function":"square","line":3,"reason":"breakpoint","step":10,"task":0}
+{"event":"value","name":"y","value":"4"}
+{"column":5,"event":"stopped","file":"main.wj","function":"square","line":3,"reason":"breakpoint","step":14,"task":0}
+{"event":"value","name":"y","value":"9"}
+{"event":"value","name":"x","value":"3"}
+{"event":"output","stream":"stdout","text":"acc 14\n"}
+{"code":0,"event":"exited","steps":16}

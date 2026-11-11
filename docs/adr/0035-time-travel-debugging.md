@@ -129,10 +129,11 @@ then diverges, which `exited` reports). Planned: write the grant into the journa
 ### 6. Cost model
 
 Without snapshots, `back N` from step K costs one re-execution of K-N steps in the walker; `continue` and `step` cost
-only the steps they run. A session of C commands that go back costs at most C full replays. The walker runs at about
-10 to 50 million simple statements a minute on the development machine, and a replay performs no I/O, so for the runs
-an agent debugs (a test, a failing seed, a short tool run: well under a million steps) a `back` costs under a few
-seconds. Periodic snapshots (a copy of the interpreter state every S steps, so `back` re-executes at most S steps) are
+only the steps they run. A session of C commands that go back costs at most C full replays. Measured on the development
+machine (2026-11-11, a loop of 1,000,004 statements under `wj replay --simulate`, `continue`): 0.46 s of user time,
+1.6 s wall on a loaded machine, against 0.18 s for `wj run --engine walker` with no debugger. A replay performs no I/O,
+so for the runs an agent debugs (a test, a failing seed, a short tool run: well under a million steps) a `back` costs
+about a second or less. Periodic snapshots (a copy of the interpreter state every S steps, so `back` re-executes at most S steps) are
 the optimization to reach for **only** when a measured session shows `back` above 5 seconds on a program people
 actually debug; the interpreter's state includes threads and native handles, so snapshots are a large piece of work
 that this design does not need yet.

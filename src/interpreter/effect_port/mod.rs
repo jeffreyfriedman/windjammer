@@ -198,6 +198,11 @@ impl EffectPort {
         }
     }
 
+    /// Events logged or answered so far (the debugger's journal position, ADR-0035).
+    pub(crate) fn seq(&self) -> u64 {
+        self.seq
+    }
+
     pub(crate) fn is_simulating(&self) -> bool {
         matches!(self.mode, Mode::Simulate(_))
     }
