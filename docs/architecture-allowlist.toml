@@ -164,7 +164,7 @@
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2245
-"src/analyzer/signature_registry.rs" = 2519
+"src/analyzer/signature_registry.rs" = 2484
 "src/analyzer/string_optimization.rs" = 2201
 "src/auto_clone.rs" = 2210
 "src/codegen/rust/call_signature_resolution.rs" = 3294

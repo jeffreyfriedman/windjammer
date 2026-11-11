@@ -28,7 +28,6 @@ apps/wj-webhook::tests/webhook_test.wj::test_post_webhook_rejects_oversized_even
 tests/drift_corpus/repros/closure_string_param_literal.wj | walker=exit0:18:106706863 resolved=exit0:18:106706863 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/dyn_fn_box_return.wj | walker=exit0:2:18021 resolved=exit0:2:18021 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/let_literal_captured_by_closure.wj | walker=exit0:2:18021 resolved=exit0:2:18021 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
-tests/drift_corpus/repros/literal_in_option_field_arm.wj | walker=exit0:5:597335755 resolved=exit0:5:597335755 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/map_get_loop_str.wj | walker=exit0:2:17897 resolved=exit0:2:17897 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/nested_vec_index_by_value.wj | walker=exit0:3:555189 resolved=exit0:3:555189 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)
 tests/drift_corpus/repros/shadow_match_binding_literal.wj | walker=exit0:8:843311487 resolved=exit0:8:843311487 compiled=exit1:0:17 | docs/drift/findings.md (minimal repro of this case)

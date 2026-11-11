@@ -1788,7 +1788,7 @@ tests/drift_corpus/repros/let_mut_zero_then_parse.wj	exit0:2:17990
 tests/drift_corpus/repros/literal_in_match_operand.wj#mainerr	none	
 tests/drift_corpus/repros/literal_in_match_operand.wj	exit0:2:18083	
 tests/drift_corpus/repros/literal_in_option_field_arm.wj#mainerr	none	
-tests/drift_corpus/repros/literal_in_option_field_arm.wj	exit1:0:17	
+tests/drift_corpus/repros/literal_in_option_field_arm.wj	exit0:5:597335755	
 tests/drift_corpus/repros/literal_option_through_closure.wj#mainerr	none	
 tests/drift_corpus/repros/literal_option_through_closure.wj	exit0:2:18052	
 tests/drift_corpus/repros/main_returns_err.wj#mainerr	none	

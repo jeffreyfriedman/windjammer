@@ -65,7 +65,6 @@ impl FormalScope {
     /// The formals codegen spells from the IR mode (`function_self_helpers::ir_value_formal`).
     fn spelled(&self, param: &Parameter) -> bool {
         crate::ir::formal_predicates::ir_spells_value_formal(param)
-            && !self.is_copy(&param.type_)
             && !crate::analyzer::Analyzer::is_generic_type_param(&param.type_)
     }
 

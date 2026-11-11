@@ -21,7 +21,7 @@ unannotated literal in positions where the surrounding type is not yet known, an
 | `shadow_match_binding_literal` | `let item = item + 1` in the arm that binds `item` |
 | `shadowed_option_literal_arms` | `let item = Some(5)`; later `match item { Some(item) => item * 3, None => 0 }` (arms get `i32` and `i64`) |
 | `literal_in_match_operand` | `(match inner(Some(7)) { Some(v) => v, None => 0 }) + 1`: literal in `Some(..)` and arm literal |
-| `literal_in_option_field_arm` | `let nx = match self.next { Some(v) => if v > 2 { Some(v - 1) } else { None }, ... }` in a method |
+| `literal_in_option_field_arm` | `let nx = match self.next { Some(v) => if v > 2 { Some(v - 1) } else { None }, ... }` in a method. **Fixed** on the ownership branch (the arm literal takes the field's `int` width): the case now agrees in all three modes and stays as a regression case |
 | `literal_option_through_closure` | `let maybe = Some(7)`, `let get = \|\| maybe`, `show(get())` with `show(x: Option<int>)` |
 | `closure_returns_literal_option` | closure `\|flag\| if flag { Some(1) } else { None }` passed to an `Option<int>` parameter |
 | `enum_variant_literal_payload` | `let t = Tag::B(4)` where `B(int)`. **Fixed** by the usize-class merge (tuple-variant payloads have their declared types): the case now agrees in all three modes and stays as a regression case |
@@ -32,7 +32,7 @@ Suggested fix direction: literals take the type of the expected/unified type, de
 
 Until then `wj check` reports the shapes whose widths are certain from the Rust the build emits (WJ0003, ADR-0033),
 and an interpreted run warns about them before the program's output: `let_literal_captured_by_closure`,
-`literal_in_option_field_arm`, `shadow_match_binding_literal`, `shadowed_option_literal_arms`,
+`shadow_match_binding_literal`, `shadowed_option_literal_arms`,
 `tests/conformance_programs/62_vec_alias_semantics.wj` and three value-position programs of `tests/engine_parity`.
 Their ledger lines stay: the interpreter still runs them, and the backend defect is still there.
 
