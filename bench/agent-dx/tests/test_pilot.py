@@ -82,6 +82,25 @@ class TrialRecord(unittest.TestCase):
             an = pilot.analyse_invocations(log)
             self.assertEqual(an["verify_calls_to_green"], 4)
 
+    def test_pilot6_fields_predictions_compile_errors_and_verify_arm(self):
+        log = [{"argv": a, "exit": e, "secs": 1, "out": o, "source": "SRC%d" % i} for i, (a, e, o) in enumerate([
+            (["run", "--interpret", "m"], 0, "warning: the compiled build would reject this: `x + y`"),
+            (["rustc", "main.rs"], 1, "error[E0308]: mismatched types\nerror[E0382]: borrow of moved value\nerror: aborting due to 2 previous errors"),
+            (["rustc", "main.rs"], 1, "error: expected one of `;`\nerror: could not compile"),
+            (["rustc", "main.rs"], 0, "")])]
+        for e in log:
+            e["verb"], e["mode"] = shim.classify(e["argv"], "rustc")
+        an = pilot.analyse_invocations(log, "rust")
+        self.assertEqual([p["call"] for p in an["predictions"]], [0])
+        self.assertEqual(an["predictions"][0]["source"], "SRC0")  # the marker is found in any tool output
+        self.assertEqual(an["compile_errors"], 3)   # 2 in the first failing call, 1 in the second (aborting/could not compile excluded)
+        self.assertEqual(an["failing_verify_calls"], 2)
+        self.assertEqual(an["fix_calls"], 3)                     # first failure, second failure, first success
+        self.assertEqual(self.run_one("V2", [["run", "--verify", "main.wj"]])["mode_violations"], 0)
+        self.assertEqual(self.run_one("V2", [["build", "main.wj"]])["mode_violations"], 1)
+        self.assertIn("--verify", arms.prompt(TASK, "V2"))
+        self.assertLessEqual(len(open(arms.pack_path("V2")).read().encode()), 2048)
+
     def test_divergence_flags(self):
         tr = self.run_one("A", [["run", "--interpret", "main.wj"]], compiled="fail", interp="pass")
         self.assertEqual(tr["divergence"], {"interp_pass": True, "compiled_pass": False, "diverged": True, "silent": True})

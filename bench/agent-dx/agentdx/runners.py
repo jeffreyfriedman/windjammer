@@ -113,7 +113,7 @@ class RustRunner(Runner):
 
     def build(self, wd):
         out_bin = os.path.join(self.build_dir(wd), "prog")
-        code, out, err, _, sec = _exec(["rustc", "--edition", "2021", "-C", "opt-level=1",
+        code, out, err, _, sec = _exec([os.environ.get("AGENTDX_RUSTC", "rustc"), "--edition", "2021", "-C", "opt-level=1",
                                         "--error-format=json", "-o", out_bin, self.src], wd, timeout=300)
         if code != 0:
             diags = dg.parse_rust_json(err) or dg.parse_text("rust", err)
