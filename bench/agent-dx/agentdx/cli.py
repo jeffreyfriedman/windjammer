@@ -96,6 +96,7 @@ def main(argv=None):
     p6.add_argument("--trials-dir", required=True)
     p6.add_argument("--md")
     p6.add_argument("--json")
+    p6.add_argument("--parallel-dir", help="trials dir of the discarded parallel run (appendix)")
     p6.add_argument("--notes", help="markdown appended verbatim (interpretation and limits)")
     p6.add_argument("--precision", help="JSON file of the prediction precision check; created by --check-predictions")
     p6.add_argument("--check-predictions", action="store_true", help="rebuild each shown prediction's source compiled (needs wj; slow)")
@@ -150,7 +151,9 @@ def main(argv=None):
             prec = P6.check_predictions(trs)
             if a.precision:
                 json.dump(prec, open(a.precision, "w"), indent=1)
-        md, js = P6.build(trs, prec)
+        side = lambda n: json.load(open(os.path.join(a.trials_dir, n))) if os.path.exists(os.path.join(a.trials_dir, n)) else None
+        md, js = P6.build(trs, prec, offline=side("precision_offline.json"), coverage=side("coverage.json"),
+                        parallel=PL.load_trials(a.parallel_dir) if a.parallel_dir else None)
         if a.notes:
             md += "\n" + open(a.notes).read()
         open(a.md, "w").write(md) if a.md else print(md)

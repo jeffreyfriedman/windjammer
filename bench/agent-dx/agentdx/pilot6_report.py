@@ -89,7 +89,7 @@ def adr_table(trials, precision, n_boot=2000):
     return rows, js
 
 
-def build(trials, precision, n_boot=2000):
+def build(trials, precision, n_boot=2000, offline=None, coverage=None, parallel=None):
     md, js = PR.build_report(trials, n_boot=n_boot)
     md = md.replace("# Agent preference pilot", "# Pilot 6: Rust vs Windjammer compiled-first vs Windjammer interpreted-first with predictions", 1)
     extra = ["", "## Cost and pass comparison: R, U, V2", "",
@@ -107,6 +107,26 @@ def build(trials, precision, n_boot=2000):
         cpc = c[0] / p[0] if p and p[0] > 0 else None
         js["comparison"][a] = {"pass": p, "cost": c, "cost_per_correct": cpc}
         extra.append(f"| {a} {A.ARMS[a]['name']} | {len(ts)} | {fmt(p)} | {fmt(c)} | {('%.3f' % cpc) if cpc else 'n/a'} | {fmt(tu, 1)} | {fmt(to, 0)} |")
+    # cost by task
+    tasks = sorted({t["task"] for t in trials})
+    extra += ["", "## Cost and turns by task (mean over 3 trials; USD / turns)", "", "| task | R | U | V2 |", "|---|---|---|---|"]
+    js["by_task"] = {}
+    for task in tasks:
+        cells = []
+        for a in ("R", "U", "V2"):
+            ts = [t for t in trials if t["task"] == task and t["arm"] == a]
+            if ts:
+                c, n = sum(t["usage"]["cost_usd"] for t in ts) / len(ts), sum(t["usage"]["turns"] for t in ts) / len(ts)
+                js["by_task"].setdefault(task, {})[a] = {"cost": c, "turns": n}
+                cells.append(f"{c:.3f} / {n:.1f}")
+            else:
+                cells.append("-")
+        extra.append(f"| {task} | " + " | ".join(cells) + " |")
+    extra += ["", "Mean cost per trial without the hardest task (t104):", ""]
+    for a in ("R", "U", "V2"):
+        ts = [t for t in trials if t["arm"] == a and not t["task"].startswith("t104")]
+        if ts:
+            extra.append(f"- {a}: {sum(t['usage']['cost_usd'] for t in ts) / len(ts):.4f} USD over {len(ts)} trials")
     # noisy trials
     extra += ["", "## Machine load and noisy trials", "",
               f"A trial is noisy when its mean load average exceeded {NOISY_LOAD:.0f}. Cost, tokens, turns and pass are not affected by load; wall and tool-wait are.", "",
@@ -143,4 +163,94 @@ def build(trials, precision, n_boot=2000):
                   f"U trials shown one: {sum(1 for t in trials if t['arm'] == 'U' and t.get('prediction_shown'))}."]
     if precision:
         js["precision"] = precision
+    if offline is not None or coverage is not None:
+        extra += ["", "## Predictions in the field (offline check with the same compiler)", ""]
+    if offline:
+        acc = [r for r in offline if r["build_accepts"]]
+        fp = [r for r in acc if r["prediction"]]
+        extra.append(f"Precision: `wj check` on the final program of every U and V2 trial ({len(offline)} programs, {len(acc)} accepted by the compiled build) printed the width/String "
+                     f"prediction for {len(fp)} of them (false positives: {len(fp)}).")
+        js["offline_precision"] = {"programs": len(offline), "build_accepted": len(acc), "false_positives": len(fp)}
+    if coverage:
+        hit = [r for r in coverage if r["check_predicts"]]
+        extra.append(f"Recall: of {len(coverage)} compiler-rejected programs logged in U and V2 trials (one per failing `wj` call), `wj check` predicted {len(hit)}. "
+                     f"`wj check` exited 0 on {sum(1 for r in coverage if r['check_exit'] == 0)} of them.")
+        js["coverage"] = {"rejected_programs": len(coverage), "predicted": len(hit)}
+    if parallel:
+        extra += ["", "## Appendix: the first run (two trials at a time), discarded for U and V2", "",
+                  "U and V2 were first run with two trials in parallel. All agent workspaces are called `ws`, which makes the compiled binary shared between trials "
+                  "(see `docs/drift/pilot6-repros/same_dir_name_runs_other_binary.md`): some `wj run --compiled` / `--verify` calls printed another trial's output and agents "
+                  "chased differences that were not in their programs. Those 60 trials were re-run one at a time (the main tables). Pass and silent divergence are unchanged "
+                  "(the hidden oracle builds in its own directory); cost, turns and tool-wait of the first run are inflated. Kept for the record:", "",
+                  "| arm | trials | pass@1 | cost USD | turns | tool-wait s |", "|---|---|---|---|---|---|"]
+        js["parallel_run"] = {}
+        for a in ("U", "V2"):
+            ts = [t for t in parallel if t["arm"] == a]
+            if ts:
+                m = lambda f: sum(f(t) for t in ts) / len(ts)
+                row = {"n": len(ts), "pass": m(lambda t: 1.0 if t["pass_final"] else 0.0), "cost": m(lambda t: t["usage"]["cost_usd"]),
+                       "turns": m(lambda t: t["usage"]["turns"]), "tool": m(lambda t: t["tool_wait_seconds"])}
+                js["parallel_run"][a] = row
+                extra.append(f"| {a} | {row['n']} | {row['pass']:.3f} | {row['cost']:.4f} | {row['turns']:.1f} | {row['tool']:.1f} |")
     return md + "\n".join(extra) + "\n", js
+
+
+COMPILE_FAIL = ("error[WJ", "error[E", "mismatched types", "could not compile")
+
+
+def failing_programs(work_dir, arms=("U", "V2")):
+    """Every logged `wj` call whose output carries a compiler diagnostic (not a program's own exit status), with its source."""
+    out = []
+    for name in sorted(os.listdir(work_dir)):
+        task, arm, trial = name.rsplit(".", 2)
+        if arm not in arms:
+            continue
+        p = os.path.join(work_dir, name, "shim.jsonl")
+        if not os.path.exists(p):
+            continue
+        for i, ln in enumerate(open(p)):
+            e = json.loads(ln)
+            if e["exit"] != 0 and e.get("source") and any(m in e["out"] for m in COMPILE_FAIL):
+                first = next((l for l in e["out"].splitlines() if l.startswith("error")), "")
+                out.append({"task": task, "arm": arm, "trial": int(trial), "call": i, "argv": e["argv"], "first_error": first[:200], "source": e["source"]})
+    return out
+
+
+def check_coverage(progs, wj, say=print):
+    """Run `wj check` (the V2 prediction path) on each failing program; record whether the prediction fired."""
+    import subprocess
+    rows = []
+    for p in progs:
+        d = tempfile.mkdtemp(prefix="p6cov-")
+        try:
+            open(os.path.join(d, "main.wj"), "w").write(p["source"])
+            r = subprocess.run([wj, "check", "main.wj"], cwd=d, capture_output=True, text=True, timeout=300)
+            txt = r.stdout + r.stderr
+            first = next((l for l in txt.splitlines() if l.startswith("error")), "")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        row = {k: p[k] for k in ("task", "arm", "trial", "call", "first_error")}
+        row.update({"check_exit": r.returncode, "check_predicts": PL.PREDICTION_MARK in txt, "check_first_error": first[:200]})
+        say(row)
+        rows.append(row)
+    return rows
+
+
+def offline_precision(trials, wj, say=print):
+    """No agent was shown a prediction? Then measure offline: run `wj check` on every final program (graded: the compiled build accepted it
+    when pass_final) and count predictions. A prediction on a program the build accepts is a false positive."""
+    import subprocess
+    rows = []
+    for t in trials:
+        if t["arm"] not in ("U", "V2"):
+            continue
+        d = tempfile.mkdtemp(prefix="p6prec-")
+        try:
+            open(os.path.join(d, "main.wj"), "w").write(t["final_source"])
+            r = subprocess.run([wj, "check", "main.wj"], cwd=d, capture_output=True, text=True, timeout=300)
+            txt = r.stdout + r.stderr
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+        rows.append({"task": t["task"], "arm": t["arm"], "trial": t["trial"], "build_accepts": t["final_grade"]["status"] != "build_error",
+                     "check_exit": r.returncode, "prediction": PL.PREDICTION_MARK in txt})
+    return rows

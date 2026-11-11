@@ -1,0 +1,9 @@
+pilot: 10 tasks x 3 arms x 3 trials = 90 trials, --max-turns 25, model sonnet
+estimated cost: expected $7.70 ($0.09/trial), worst case $35.50; budget $7.30, max trials 6
+t103_trait_pricing arm=R trial=0 pass=True turns=3 cost=0.021469000000000002 spent=$0.02
+t013_bst arm=U trial=0 pass=True turns=3 cost=0.039352000000000005 spent=$0.06
+t106_priority_queue arm=U trial=0 pass=True turns=3 cost=0.0260136 spent=$0.09
+t105_date_diff arm=V2 trial=0 pass=True turns=3 cost=0.028189199999999998 spent=$0.12
+t013_bst arm=V2 trial=0 pass=True turns=3 cost=0.0373042 spent=$0.15
+t011_lru_cache arm=U trial=0 pass=True turns=3 cost=0.0236132 spent=$0.18
+{"completed": 6, "aborted_reason": "trial counter 5+1 in flight reached max-trials 6", "spent_usd": 0.1759}

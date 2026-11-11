@@ -101,6 +101,23 @@ class TrialRecord(unittest.TestCase):
         self.assertIn("--verify", arms.prompt(TASK, "V2"))
         self.assertLessEqual(len(open(arms.pack_path("V2")).read().encode()), 2048)
 
+    def test_pilot6_report_marks_noisy_trials_and_renders_adr_table(self):
+        from agentdx import pilot6_report as P6
+        mk = lambda arm, task, load, cost, ok=True: {
+            "arm": arm, "task": task, "trial": 0, "lang": "wj" if arm != "R" else "rust", "pass_final": ok, "verify_calls": 1, "verify_calls_to_green": 1,
+            "usage": {"cost_usd": cost, "turns": 3, "tokens_in": 10, "tokens_out": 5, "permission_denials": 0}, "wall_seconds": 10.0, "thinking_seconds": 5.0,
+            "tool_wait_seconds": 2.0, "load_avg": load, "capability_denials": 0, "divergence": {"silent": False, "diverged": False, "interp_pass": ok, "compiled_pass": ok},
+            "diagnostic_categories": {}, "mode_violations": 0, "invocations": [], "first_source": "", "final_source": "", "predictions": [], "prediction_shown": False,
+            "verify_used": arm == "V2", "compile_errors": 0, "failing_verify_calls": 0, "fix_calls": 0, "final_grade": {"status": "pass"}, "diag_samples": []}
+        trials = [mk(a, t, load, c) for a, c in (("R", 0.03), ("U", 0.04), ("V2", 0.02)) for t, load in (("t1", 10.0), ("t2", 20.0))]
+        self.assertFalse(P6.noisy(trials[0]))
+        self.assertTrue(P6.noisy(trials[1]))
+        md, js = P6.build(trials, [], n_boot=50)
+        self.assertEqual(js["noisy"]["V2"]["noisy"], 1)
+        self.assertEqual(js["adr0033"]["cost per trial, USD"]["pass"], True)
+        self.assertEqual(js["adr0033"]["tool-wait, seconds"]["pass"], False)
+        self.assertIn("ADR-0033 acceptance table", md)
+
     def test_divergence_flags(self):
         tr = self.run_one("A", [["run", "--interpret", "main.wj"]], compiled="fail", interp="pass")
         self.assertEqual(tr["divergence"], {"interp_pass": True, "compiled_pass": False, "diverged": True, "silent": True})

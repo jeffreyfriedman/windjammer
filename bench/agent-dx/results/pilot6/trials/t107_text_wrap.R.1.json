@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::io::{self, Read, Write};\n\nfn main() {\n    let mut input = String::new();\n    io::stdin().read_to_string(&mut input).unwrap();\n    let (first, rest) = match input.find('\\n') {\n        Some(i) => (&input[..i], &input[i + 1..]),\n        None => (&input[..], \"\"),\n    };\n    let w = match first.trim().parse::<usize>() {\n        Ok(w) if w > 0 => w,\n        _ => {\n            println!(\"error: bad width\");\n            std::process::exit(1);\n        }\n    };\n    let mut out = String::new();\n    let mut line = String::new();\n    let mut len = 0usize;\n    for word in rest.split_whitespace() {\n        let wl = word.chars().count();\n        if len == 0 {\n            line.push_str(word);\n            len = wl;\n        } else if len + 1 + wl <= w {\n            line.push(' ');\n            line.push_str(word);\n            len += 1 + wl;\n        } else {\n            out.push_str(&line);\n            out.push('\\n');\n            line.clear();\n            line.push_str(word);\n            len = wl;\n        }\n    }\n    if len > 0 {\n        out.push_str(&line);\n        out.push('\\n');\n    }\n    io::stdout().write_all(out.as_bytes()).unwrap();\n}\n",
+ "first_source": "use std::io::{self, Read, Write};\n\nfn main() {\n    let mut input = String::new();\n    io::stdin().read_to_string(&mut input).unwrap();\n    let (first, rest) = match input.find('\\n') {\n        Some(i) => (&input[..i], &input[i + 1..]),\n        None => (&input[..], \"\"),\n    };\n    let w = match first.trim().parse::<usize>() {\n        Ok(w) if w > 0 => w,\n        _ => {\n            println!(\"error: bad width\");\n            std::process::exit(1);\n        }\n    };\n    let mut out = String::new();\n    let mut line = String::new();\n    let mut len = 0usize;\n    for word in rest.split_whitespace() {\n        let wl = word.chars().count();\n        if len == 0 {\n            line.push_str(word);\n            len = wl;\n        } else if len + 1 + wl <= w {\n            line.push(' ');\n            line.push_str(word);\n            len += 1 + wl;\n        } else {\n            out.push_str(&line);\n            out.push('\\n');\n            line.clear();\n            line.push_str(word);\n            len = wl;\n        }\n    }\n    if len > 0 {\n        out.push_str(&line);\n        out.push('\\n');\n    }\n    io::stdout().write_all(out.as_bytes()).unwrap();\n}\n",
+ "first_turn_input": 10468,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 3.176,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 35.1,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 4.81,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:22:04",
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 8.282,
+ "tool_result_tokens_est": 64,
+ "tool_wait_seconds": 3.18,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 9846,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10468,
+   "output": 3,
+   "result_chars": 223,
+   "turn": 1
+  },
+  {
+   "cache_read": 10466,
+   "cache_write": 929,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 11397,
+   "output": 321,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 8.282,
+  "cost_usd": 0.018815199999999997,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote `main.rs` to do the greedy re-flow. I ran only Example 2 (width 5, `abcdefgh ij k`), and it printed `abcdefgh` then `ij k`, as expected. I didn't run Example 1 or any of the other cases below.\n\n- **Wrapping:** the text is split on any whitespace, and words are packed onto a line with single spaces while the line stays within W. A word longer than W gets its own line unbroken.\n- **Empty tex",
+  "subtype": "success",
+  "tokens_in": 21865,
+  "tokens_out": 1058,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 16.28,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

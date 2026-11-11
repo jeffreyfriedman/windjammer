@@ -1,0 +1,125 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "U",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "compile_errors": 1,
+ "diag_samples": [
+  "error: bad width"
+ ],
+ "diagnostic_categories": {
+  "other": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 1,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::fs\nuse std::process\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut lines = text.lines()\n    let first = match lines.next() {\n        Some(l) => l.trim(),\n        None => \"\",\n    }\n    let w: int = match first.parse::<int>() {\n        Ok(n) => n,\n        Err(_) => 0,\n    }\n    if w <= 0 {\n        println(\"error: bad width\")\n        process::exit(1)\n    }\n    let mut cur = \"\"\n    let mut curlen: int = 0\n    for line in lines {\n        for word in line.split_whitespace() {\n            let wl: int = word.len() as int\n            if curlen == 0 {\n                cur = word\n                curlen = wl\n            } else if curlen + 1 + wl <= w {\n                cur = \"${cur} ${word}\"\n                curlen = curlen + 1 + wl\n            } else {\n                println(cur)\n                cur = word\n                curlen = wl\n            }\n        }\n    }\n    if curlen > 0 {\n        println(cur)\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::process\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut lines = text.lines()\n    let first = match lines.next() {\n        Some(l) => l.trim(),\n        None => \"\",\n    }\n    let w: int = match first.parse::<int>() {\n        Ok(n) => n,\n        Err(_) => 0,\n    }\n    if w <= 0 {\n        println(\"error: bad width\")\n        process::exit(1)\n    }\n    let mut cur = \"\"\n    let mut curlen: int = 0\n    for line in lines {\n        for word in line.split_whitespace() {\n            let wl: int = word.len() as int\n            if curlen == 0 {\n                cur = word\n                curlen = wl\n            } else if curlen + 1 + wl <= w {\n                cur = \"${cur} ${word}\"\n                curlen = curlen + 1 + wl\n            } else {\n                println(cur)\n                cur = word\n                curlen = wl\n            }\n        }\n    }\n    if curlen > 0 {\n        println(cur)\n    }\n}\n",
+ "first_turn_input": 11278,
+ "fix_calls": 1,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 3.561,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 1.444,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 25.4,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 6.03,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:57:50",
+ "schema": 2,
+ "task": "t107_text_wrap",
+ "thinking_seconds": 19.032,
+ "tool_result_tokens_est": 653,
+ "tool_wait_seconds": 5.0,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6780,
+   "cache_write": 4496,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11278,
+   "output": 17,
+   "result_chars": 2287,
+   "turn": 1
+  },
+  {
+   "cache_read": 11276,
+   "cache_write": 1941,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13219,
+   "output": 187,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 19.032,
+  "cost_usd": 0.0354116,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It builds with the compiled toolchain and passes Example 1, and a non-numeric width prints `error: bad width` and exits with status 1.\n\nI didn't run Example 2 or any other input (empty text, a zero or negative width), so those paths are untested.\n\nThe program reads the first line as the width. A width that is zero, negative or not an integer is treated as bad. It",
+  "subtype": "success",
+  "tokens_in": 24497,
+  "tokens_out": 785,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": null,
+ "verify_used": false,
+ "wall_seconds": 30.06,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

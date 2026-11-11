@@ -1,0 +1,122 @@
+[
+ {
+  "task": "t104_activity_log",
+  "arm": "U",
+  "trial": 0,
+  "call": 0,
+  "first_error": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "U",
+  "trial": 1,
+  "call": 0,
+  "first_error": "error[WJ0003]: mismatched types: expected `&_`, found `string`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "U",
+  "trial": 2,
+  "call": 0,
+  "first_error": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 0,
+  "call": 0,
+  "first_error": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 0,
+  "call": 1,
+  "first_error": "error[WJ0003]: mismatched types: expected `Vec<string>`, found `Map<Iter<'_, _>, {closure@...}>`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 1,
+  "call": 0,
+  "first_error": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "call": 0,
+  "first_error": "error[WJ0003]: mismatched types: expected `&HashMap<string, i64>`, found `HashMap<_, _>`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "call": 1,
+  "first_error": "error[WJ0003]: mismatched types: expected `string`, found `str`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "call": 3,
+  "first_error": "error[WJ0003]: mismatched types: expected `string`, found `str`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "call": 5,
+  "first_error": "error[WJ0003]: mismatched types: expected `string`, found `str`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "call": 6,
+  "first_error": "error[WJ0003]: mismatched types: expected `string`, found `str`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "call": 8,
+  "first_error": "error[WJ0003]: mismatched types: expected `string`, found `str`",
+  "check_exit": 0,
+  "check_predicts": false,
+  "check_first_error": ""
+ }
+]
