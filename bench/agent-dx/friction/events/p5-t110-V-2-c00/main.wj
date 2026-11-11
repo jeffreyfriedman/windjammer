@@ -1,0 +1,12 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut n = 0
+    for line in text.lines() {
+        let h = crc32fast::hash(line.as_bytes())
+        println("${h:08x}")
+        n += 1
+    }
+    println("lines: ${n}")
+}

@@ -1,0 +1,10 @@
+error: explicit .unwrap() call [W0002]
+  --> <ws>/main.wj:128:33
+  = note: .unwrap() is a Rust-specific panic convention
+  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`
+  = suggestion: prefer explicit error handling in Windjammer
+
+Error: Rust leakage errors:
+Rust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI
+Error: Rust leakage errors:
+Rust leakage errors in <ws>/main.wj -

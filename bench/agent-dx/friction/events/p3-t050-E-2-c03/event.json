@@ -1,0 +1,16 @@
+{
+  "id": "p3-t050-E-2-c03",
+  "pilot": "pilot3",
+  "task": "t050_cat_number",
+  "arm": "E",
+  "arm_name": "tiny-pack+mcp",
+  "trial": 2,
+  "call": 3,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "user-error-good-message",
+  "reason": "Windjammer lint with help/fix"
+}

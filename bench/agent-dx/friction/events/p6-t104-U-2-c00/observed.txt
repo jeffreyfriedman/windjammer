@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:47:1
+   |
+47 |             tb.cmp(ta)
+error[WJ0003]: mismatched types: expected `Ordering`, found `void`
+  --> main.wj:49:1
+   |
+49 |             a.cmp(b)

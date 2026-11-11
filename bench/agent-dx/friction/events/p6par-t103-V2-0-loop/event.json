@@ -1,0 +1,16 @@
+{
+  "id": "p6par-t103-V2-0-loop",
+  "pilot": "pilot6-parallel",
+  "task": "t103_trait_pricing",
+  "arm": "V2",
+  "arm_name": "interpreted-first+verify",
+  "trial": 0,
+  "call": -1,
+  "verb": "run",
+  "mode": "default",
+  "exit": 0,
+  "command": "wj run --verify main.wj",
+  "source": "none",
+  "class": "skipped-loop",
+  "reason": "interpreted-first arm; the first program run was `wj run --verify main.wj`, not `wj run --interpret`"
+}

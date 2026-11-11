@@ -1,0 +1,16 @@
+error[E0308]: mismatched types
+  --> main.rs:82:17
+   |
+79 | /             if is_int(&t) {
+82 | |                 String::from("error: token")
+   | |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `()`, found `String`
+83 | |             }
+   | |_____________- expected this to be `()`
+82 |                 String::from("error: token");
+   |                                             +
+help: you might have meant to return this value
+   |
+82 |                 return String::from("error: token");
+   |                 ++++++                             +
+
+For more information about this erro

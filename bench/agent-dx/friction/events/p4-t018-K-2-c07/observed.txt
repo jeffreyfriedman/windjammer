@@ -1,0 +1,13 @@
+error[E0614]: type `i64` cannot be dereferenced
+ --> main.rs:8:22
+  |
+8 |     counts.insert(w, *n + 1_i64);
+error[E0308]: mismatched types
+    --> main.rs:48:65
+     |
+  48 |         let c: i64 = 1000000000_i64 - counts.get(key).unwrap_or(0_i64);
+Some errors have detailed explanations: E0308, E0614.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 2 warnings emitted
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `ws` (bin "ws") due to 2 previous errors; 2 warnings emi

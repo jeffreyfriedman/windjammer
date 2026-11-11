@@ -1,0 +1,47 @@
+use std::fs
+
+fn emit(text: string, number: bool, counter: int) -> int {
+    if !number {
+        print(text)
+        return counter
+    }
+    let mut c = counter
+    for line in text.lines() {
+        c = c + 1
+        println("{:>6}\t{}", c, line)
+    }
+    c
+}
+
+fn main() {
+    let mut number = false
+    let mut names: Vec<string> = []
+    for a in std::env::args().skip(1) {
+        if a == "-n" {
+            number = true
+        } else {
+            names.push(a)
+        }
+    }
+    let mut counter = 0
+    let mut status = 0
+    if names.len() == 0 {
+        let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+        counter = emit(text, number, counter)
+    } else {
+        for n in names {
+            match fs::read_to_string(n.clone()) {
+                Ok(text) => {
+                    counter = emit(text, number, counter)
+                }
+                Err(_) => {
+                    println("cat: {}: No such file", n)
+                    status = 1
+                }
+            }
+        }
+    }
+    if status != 0 {
+        std::process::exit(status)
+    }
+}

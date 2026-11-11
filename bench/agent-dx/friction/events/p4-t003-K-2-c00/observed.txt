@@ -1,0 +1,16 @@
+error[WJ0003]: mismatched types: expected `int`, found `uint`
+  --> main.wj:6:22
+  |
+6 |     let mut cnt: Vec<int> = []
+error[WJ0003]: mismatched types: expected an owned `int`, found an owned `int`
+  --> main.wj:43:27
+   |
+43 |         let n = s.parse::<int>().unwrap_or(0)
+error[WJ0003]: mismatched types: expected `int`, found `uint`
+  --> main.wj:6:22
+  |
+6 |     let mut cnt: Vec<int> = []
+error[WJ0017]: trait bound not satisfied: the type `[i64]` cannot be indexed by `int`
+  --> main.wj:6:22
+  |
+6 |     let mut cnt: Vec<int> = []

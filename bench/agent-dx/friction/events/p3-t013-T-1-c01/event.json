@@ -1,0 +1,16 @@
+{
+  "id": "p3-t013-T-1-c01",
+  "pilot": "pilot3",
+  "task": "t013_bst",
+  "arm": "T",
+  "arm_name": "tiny-pack-only",
+  "trial": 1,
+  "call": 1,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

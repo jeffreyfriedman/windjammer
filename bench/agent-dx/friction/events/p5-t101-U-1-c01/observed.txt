@@ -1,0 +1,4 @@
+error[WJ0031]: `float` is not a reference, so it cannot be dereferenced
+  --> main.wj:8:12
+  |
+8 |     price: float,

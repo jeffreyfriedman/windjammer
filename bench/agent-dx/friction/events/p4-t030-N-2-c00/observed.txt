@@ -1,0 +1,9 @@
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = help: replace `println("error: unknown account {}", parts[1])` with `println("error: unknown account ${parts[1]}")` (or run `wj fix`)
+  = suggestion: println("error: unknown account ${parts[1]}")
+
+  = help: replace `println("error: unknown account {}", parts[1])` with `println("error: unknown account ${parts[1]}")` (or run `wj fix`)
+  = suggestion: println("error: unknown account ${parts[1]}")
+
+warning: `println` with a `{}` format string: use `${..}` interpolation [W0008]
+  = suggestion: println(

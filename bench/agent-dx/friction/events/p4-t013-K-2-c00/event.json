@@ -1,0 +1,16 @@
+{
+  "id": "p4-t013-K-2-c00",
+  "pilot": "pilot4",
+  "task": "t013_bst",
+  "arm": "K",
+  "arm_name": "compiled-first+sheet",
+  "trial": 2,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "p5-t101-W-0-c03",
+  "pilot": "pilot5",
+  "task": "t101_json_orders",
+  "arm": "W",
+  "arm_name": "interpreted+final-build",
+  "trial": 0,
+  "call": 3,
+  "verb": "run",
+  "mode": "interpret",
+  "exit": 1,
+  "command": "wj run --interpret main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

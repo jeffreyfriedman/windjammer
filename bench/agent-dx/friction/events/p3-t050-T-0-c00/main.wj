@@ -1,0 +1,60 @@
+use std::fs
+use std::env
+use std::process
+
+fn pad(n: int) -> string {
+    let mut s = "${n}"
+    while s.len() < 6 {
+        s = " " + s
+    }
+    s
+}
+
+fn emit(text: string, number: bool, counter: int) -> int {
+    let mut c = counter
+    if number {
+        for line in text.lines() {
+            c = c + 1
+            println("${pad(c)}\t${line}")
+        }
+    } else {
+        print("${text}")
+    }
+    c
+}
+
+fn main() {
+    let mut number = false
+    let mut files: Vec<string> = []
+    let mut first = true
+    for a in env::args() {
+        if first {
+            first = false
+        } else if a == "-n" {
+            number = true
+        } else {
+            files.push(a)
+        }
+    }
+    let mut counter = 0
+    let mut status = 0
+    if files.len() == 0 {
+        let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+        counter = emit(text, number, counter)
+    } else {
+        for f in files {
+            match fs::read_to_string(f) {
+                Ok(text) => {
+                    counter = emit(text, number, counter)
+                }
+                Err(_) => {
+                    println("cat: ${f}: No such file")
+                    status = 1
+                }
+            }
+        }
+    }
+    if status != 0 {
+        process::exit(status)
+    }
+}

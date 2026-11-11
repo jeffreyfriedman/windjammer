@@ -1,0 +1,7 @@
+error[E0782]: expected a type, found a trait
+   --> main.rs:134:15
+    |
+134 | fn report(s: &Shape) -> i64 {
+For more information about this error, try `rustc --explain E0782`.
+error: could not compile `ws` (bin "ws") due to 1 previous error; 1 warning emitted
+error: could not compile `ws` (bin "ws") due to 1 previous error; 1 warning emitted

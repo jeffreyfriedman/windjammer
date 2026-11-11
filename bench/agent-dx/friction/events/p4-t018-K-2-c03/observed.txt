@@ -1,0 +1,8 @@
+error[WJ0031]: `int` is not a reference, so it cannot be dereferenced
+  --> main.wj:17:21
+   |
+17 |             let kk: int = line.trim().parse().unwrap_or(0)
+error[WJ0003]: mismatched types: expected `&i64`, found `int`
+  --> main.wj:17:21
+   |
+17 |             let kk: int = line.trim().parse().unwrap_or(0)

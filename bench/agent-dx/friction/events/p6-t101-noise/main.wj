@@ -1,0 +1,49 @@
+use std::fs
+use std::json
+use std::collections::HashMap
+
+struct Item {
+    sku: string,
+    qty: int,
+    price: float,
+}
+
+struct Order {
+    id: int,
+    customer: string,
+    items: Vec<Item>,
+    note: Option<string>,
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let parsed = json.parse_string::<Vec<Order>>(text)
+    match parsed {
+        Ok(orders) => {
+            let mut totals: HashMap<string, float> = HashMap::new()
+            let mut names: Vec<string> = []
+            for o in orders {
+                let mut sum = 0.0
+                for it in o.items {
+                    sum += (it.qty as float) * it.price
+                }
+                if totals.contains_key(o.customer) {
+                    let cur = totals.get(o.customer).unwrap_or(0.0)
+                    totals.insert(o.customer, cur + sum)
+                } else {
+                    names.push(o.customer)
+                    totals.insert(o.customer, sum)
+                }
+            }
+            names.sort()
+            for n in names {
+                let t = totals.get(n).unwrap_or(0.0)
+                println("${n} ${t:.2}")
+            }
+        }
+        Err(_) => {
+            println("invalid input")
+            std::process::exit(1)
+        }
+    }
+}

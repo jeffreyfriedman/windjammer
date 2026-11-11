@@ -1,0 +1,16 @@
+{
+  "id": "p3-t013-F-0-c04",
+  "pilot": "pilot3",
+  "task": "t013_bst",
+  "arm": "F",
+  "arm_name": "tiny-pack+wj-docs",
+  "trial": 0,
+  "call": 4,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "unhelpful-message",
+  "reason": "raw rustc error on the generated Rust (main.rs location, no WJ code)"
+}

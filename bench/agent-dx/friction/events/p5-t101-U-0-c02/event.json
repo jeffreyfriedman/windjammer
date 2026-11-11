@@ -1,0 +1,16 @@
+{
+  "id": "p5-t101-U-0-c02",
+  "pilot": "pilot5",
+  "task": "t101_json_orders",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 0,
+  "call": 2,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 101,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "compiler-bug",
+  "reason": "raw rustc error on the generated Rust; message shape of a known drift class"
+}

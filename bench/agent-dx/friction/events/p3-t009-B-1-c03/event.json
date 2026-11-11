@@ -1,0 +1,16 @@
+{
+  "id": "p3-t009-B-1-c03",
+  "pilot": "pilot3",
+  "task": "t009_rpn_eval",
+  "arm": "B",
+  "arm_name": "compiled-first",
+  "trial": 1,
+  "call": 3,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "user-error-good-message",
+  "reason": "Windjammer lint with help/fix"
+}

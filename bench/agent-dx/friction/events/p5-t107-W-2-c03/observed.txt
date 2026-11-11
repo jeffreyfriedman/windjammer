@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> main.rs:33:27
+   |
+ 9 |     let mut cur = String::new();
+error[E0308]: mismatched types
+  --> main.rs:41:31
+   |
+ 9 |     let mut cur = String::new();
+For more information about this error, try `rustc --explain E0308`.
+warning: `windjammer` (bin "windjammer") generated 2 warnings
+error: could not compile `windjammer` (bin "windjammer") due to 2 previous errors; 2 warnings emitted
+Error: Cargo build failed
+error: could not compile `windjammer` (bin "windjammer") due to 2 previous errors; 2 warnings emitted
+Error: Cargo build failed
+Building Windjammer projec

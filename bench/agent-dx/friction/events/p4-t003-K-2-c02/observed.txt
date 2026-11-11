@@ -1,0 +1,16 @@
+error[E0308]: mismatched types
+  --> main.rs:17:22
+   |
+17 |     let mut l: u64 = 0_u32;
+error[E0308]: mismatched types
+  --> main.rs:18:9
+   |
+ 9 |     let mut i: u64 = 0_u32;
+error[E0308]: mismatched types
+    --> main.rs:44:42
+     |
+  44 |         let n: u64 = s.parse().unwrap_or(0_u32);
+error[E0308]: mismatched types
+  --> main.rs:45:16
+   |
+45 |         if n < 2_u32 {

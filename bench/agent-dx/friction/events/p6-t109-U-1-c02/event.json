@@ -1,0 +1,16 @@
+{
+  "id": "p6-t109-U-1-c02",
+  "pilot": "pilot6",
+  "task": "t109_spiral",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 1,
+  "call": 2,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "none",
+  "class": "program-output",
+  "reason": "the program's own non-zero exit (the task asks for it); not friction"
+}

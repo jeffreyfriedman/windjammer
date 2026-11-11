@@ -1,0 +1,16 @@
+{
+  "id": "p5-t108-U-2-c00",
+  "pilot": "pilot5",
+  "task": "t108_to_rpn",
+  "arm": "U",
+  "arm_name": "compiled-first",
+  "trial": 2,
+  "call": 0,
+  "verb": "run",
+  "mode": "compiled",
+  "exit": 1,
+  "command": "wj run --compiled main.wj",
+  "source": "reconstructed",
+  "class": "compiler-bug",
+  "reason": "rustc rejection translated to WJ0003-style; message shape of a known drift class"
+}
