@@ -11,6 +11,7 @@
 - [Programs that ask for what they need](showcase/authority.md)
 - [Made for agents](showcase/agents.md)
 - [How the interpreter stays honest](showcase/trust.md)
+- [What we have measured](showcase/measured.md)
 - [One source, many targets](showcase/one-source.md)
 - [Your Rust crates, as they are](showcase/rust-crates.md)
 
