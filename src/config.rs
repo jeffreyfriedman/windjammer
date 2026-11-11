@@ -60,6 +60,52 @@ pub struct WjConfig {
     /// Declares which side-effects this application is allowed to perform.
     #[serde(default)]
     pub app_capabilities: Option<AppCapabilities>,
+
+    /// `[module_features]`: a Cargo feature and the modules compiled only with it
+    /// (`desktop = ["desktop_window", "app_docking"]` emits `#[cfg(feature = "desktop")] pub mod desktop_window;`).
+    #[serde(default)]
+    pub module_features: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// The modules a project gates behind Cargo features (`[module_features]` of its `wj.toml`), by module name.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ModuleFeatures {
+    by_module: std::collections::BTreeMap<String, String>,
+}
+
+impl ModuleFeatures {
+    /// The `[module_features]` table of a configuration.
+    pub fn from_config(cfg: &WjConfig) -> Self {
+        let mut by_module = std::collections::BTreeMap::new();
+        for (feature, modules) in &cfg.module_features {
+            for m in modules {
+                by_module.insert(m.clone(), feature.clone());
+            }
+        }
+        Self { by_module }
+    }
+
+    /// The table of the nearest `wj.toml` at or above `dir` (none when no `wj.toml` is found or it does not parse).
+    pub fn near(dir: &Path) -> Self {
+        let start = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+        for d in start.ancestors() {
+            let candidate = d.join("wj.toml");
+            if candidate.is_file() {
+                return WjConfig::load_from_file(&candidate).map(|c| Self::from_config(&c)).unwrap_or_default();
+            }
+        }
+        Self::default()
+    }
+
+    /// The Cargo feature that gates `module`, if the project declares one.
+    pub fn feature_for(&self, module: &str) -> Option<&str> {
+        self.by_module.get(module).map(String::as_str)
+    }
+
+    /// `#[cfg(feature = "..")]` and a newline for a gated module, or nothing.
+    pub fn cfg_line(&self, module: &str) -> String {
+        self.feature_for(module).map(|f| format!("#[cfg(feature = \"{f}\")]\n")).unwrap_or_default()
+    }
 }
 
 /// `[build]` section in `wj.toml`.
@@ -415,4 +461,20 @@ impl WindjammerConfig {
         toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 
+}
+
+#[cfg(test)]
+mod module_features_tests {
+    use super::{ModuleFeatures, WjConfig};
+
+    /// `[module_features]` maps each listed module to its Cargo feature; unlisted modules have none.
+    #[test]
+    fn module_features_come_from_the_declaration() {
+        let cfg: WjConfig = toml::from_str("[package]\nname = \"p\"\n\n[module_features]\ndesktop = [\"desktop_window\", \"app_docking\"]\n").unwrap();
+        let f = ModuleFeatures::from_config(&cfg);
+        assert_eq!(f.feature_for("app_docking"), Some("desktop"));
+        assert_eq!(f.cfg_line("desktop_window"), "#[cfg(feature = \"desktop\")]\n");
+        assert_eq!(f.feature_for("desktop_other"), None);
+        assert_eq!(f.cfg_line("button"), "");
+    }
 }

@@ -148,6 +148,8 @@ pub fn generate_lib_rs(
 /// Generate mod.rs content for a submodule directory
 pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Result<String> {
     let mut content = String::from("// Auto-generated mod.rs by Windjammer\n\n");
+    // Feature-gated modules are declared in the project's `wj.toml` (`[module_features]`), never guessed from names.
+    let features = crate::config::ModuleFeatures::near(&module.path);
 
     // THE WINDJAMMER WAY: Find all .wj files in the directory (except mod.wj)
     let mut module_files = Vec::new();
@@ -241,16 +243,13 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
             if !submodule_names.contains(module_file)
                 && include_module_in_explicit_mod_wj(module_file, &pub_mods, false)
             {
-                // THE WINDJAMMER FIX: Desktop-only modules need feature gates
-                let needs_desktop_gate = module_file.starts_with("desktop_")
-                    || (module_file.starts_with("app_") && module_file != "app_reactive");
+                // A module the project gates behind a Cargo feature (`[module_features]`).
+                let gate = features.cfg_line(&module_file);
 
                 if is_test_module(module_file) {
                     content.push_str("#[cfg(test)]\n");
                 }
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
+                content.push_str(&gate);
                 content.push_str(&format!("pub mod {};\n", module_file));
             }
         }
@@ -262,15 +261,12 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
                 if include_module_in_explicit_mod_wj(&submodule.name, &pub_mods, true)
                     || is_test_module(&submodule.name)
                 {
-                    let needs_desktop_gate = submodule.name.starts_with("desktop_")
-                        || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                    let gate = features.cfg_line(&submodule.name);
 
                     if is_test_module(&submodule.name) {
                         content.push_str("#[cfg(test)]\n");
                     }
-                    if needs_desktop_gate {
-                        content.push_str("#[cfg(feature = \"desktop\")]\n");
-                    }
+                    content.push_str(&gate);
 
                     if submodule.is_public {
                         content.push_str(&format!("pub mod {};\n", submodule.name));
@@ -332,12 +328,9 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         if !files.is_empty() {
             content.push_str("// Auto-discovered modules\n");
             for submodule in files {
-                let needs_desktop_gate = submodule.name.starts_with("desktop_")
-                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                let gate = features.cfg_line(&submodule.name);
 
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
+                content.push_str(&gate);
                 content.push_str(&format!("pub mod {};\n", submodule.name));
             }
         }
@@ -345,12 +338,9 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
         if !subdirs.is_empty() {
             content.push_str("\n// Auto-discovered submodules\n");
             for submodule in subdirs {
-                let needs_desktop_gate = submodule.name.starts_with("desktop_")
-                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                let gate = features.cfg_line(&submodule.name);
 
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
+                content.push_str(&gate);
                 content.push_str(&format!("pub mod {};\n", submodule.name));
             }
         }
@@ -360,12 +350,9 @@ pub fn generate_mod_rs_for_submodule(module: &Module, output_dir: &Path) -> Resu
             content.push_str("\n// Auto-generated re-exports\n");
             // Use module.submodules exclusively (no duplication)
             for submodule in &module.submodules {
-                let needs_desktop_gate = submodule.name.starts_with("desktop_")
-                    || (submodule.name.starts_with("app_") && submodule.name != "app_reactive");
+                let gate = features.cfg_line(&submodule.name);
 
-                if needs_desktop_gate {
-                    content.push_str("#[cfg(feature = \"desktop\")]\n");
-                }
+                content.push_str(&gate);
                 content.push_str(&format!("pub use {}::*;\n", submodule.name));
             }
         } else {
