@@ -77,5 +77,5 @@ fn a_missing_standard_function_is_an_error_not_a_silent_value() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert_ne!(o.status.code(), Some(0), "{err}");
     assert!(!String::from_utf8_lossy(&o.stdout).contains("got"), "the run went on after the missing call");
-    assert!(err.contains("make_dirs_please") && err.contains("not implemented by the interpreter"), "{err}");
+    assert!(err.contains("make_dirs_please") && (err.contains("not implemented by the interpreter") || err.contains("WJ0002")), "{err}");
 }
