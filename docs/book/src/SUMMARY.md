@@ -40,6 +40,7 @@
 - [Targets: Rust, JavaScript, WebAssembly and Go](tutorial/targets.md)
 - [Shaders](tutorial/shaders.md)
 - [Testing](tutorial/testing.md)
+- [Debug a failing run deterministically](tutorial/time-travel.md)
 - [A final project](tutorial/final-project.md)
 - [Beyond the language](tutorial/beyond.md)
 

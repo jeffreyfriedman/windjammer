@@ -368,6 +368,34 @@ id = "wj fix --docs"
 statement = "Also migrate ```windjammer / ```wj code fences in .md files"
 
 [[promise]]
+id = "wj replay"
+statement = "Step through a recorded or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035)"
+
+[[promise]]
+id = "wj replay --script"
+statement = "Debugger commands, one per line; `-` or no script reads them from standard input"
+
+[[promise]]
+id = "wj replay --json"
+statement = "Print the debugger events as JSON Lines, one object per line"
+
+[[promise]]
+id = "wj replay --simulate"
+statement = "Debug the run of the deterministic simulated world instead of a recorded one"
+
+[[promise]]
+id = "wj replay --seed"
+statement = "With --simulate: the seed of the world"
+
+[[promise]]
+id = "wj replay --faults"
+statement = "With --simulate: probability that a file or network call fails, drawn from the seed"
+
+[[promise]]
+id = "wj replay --allow"
+statement = "Grant a capability as the recording did; nothing is performed either way"
+
+[[promise]]
 id = "wj reduce"
 statement = "Shrink a failing project to a minimal, anonymized reproduction (delta debugging)"
 

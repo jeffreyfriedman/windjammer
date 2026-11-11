@@ -306,6 +306,9 @@ pub fn run(cli: Cli) -> Result<()> {
                 allow_empty,
             })?;
         }
+        Commands::Replay { paths, script, json, simulate, seed, faults, allow } => {
+            windjammer::cli::replay::execute(windjammer::cli::replay::Args { paths, script, json, simulate, seed, faults, allow })?;
+        }
         Commands::Reduce {
             path,
             oracle,
