@@ -1,0 +1,149 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": false,
+  "interp_pass": false,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 45,
+  "status": "fail",
+  "total": 46
+ },
+ "final_source": "use std::collections::{BTreeMap, HashMap, VecDeque};\nuse std::io::{self, BufRead, BufWriter, Stdout, Write};\n\n#[derive(Clone, Copy, PartialEq, Eq)]\nenum Side {\n    Buy,\n    Sell,\n}\n\nimpl Side {\n    fn opposite(self) -> Side {\n        match self {\n            Side::Buy => Side::Sell,\n            Side::Sell => Side::Buy,\n        }\n    }\n}\n\n#[derive(Clone, Copy, PartialEq, Eq)]\nenum Kind {\n    Gtc,\n    Ioc,\n    Fok,\n}\n\nstruct Resting {\n    trader: String,\n    side: Side,\n    price: u64,\n    rem: u64,\n}\n\nstruct Book {\n    orders: HashMap<u64, Resting>,\n    bids: BTreeMap<u64, VecDeque<u64>>,\n    asks: BTreeMap<u64, VecDeque<u64>>,\n    positions: BTreeMap<String, (i64, i64)>,\n    next_id: u64,\n    out: BufWriter<Stdout>,\n    failed: bool,\n}\n\n/// Digits only, value within [lo, hi].\nfn number(s: &str, lo: u64, hi: u64) -> Option<u64> {\n    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {\n        return None;\n    }\n    let v: u64 = s.parse().ok()?;\n    (lo..=hi).contains(&v).then_some(v)\n}\n\nfn qty(s: &str) -> Option<u64> {\n    number(s, 1, 1_000_000)\n}\n\nfn price(s: &str) -> Option<u64> {\n    number(s, 1, 100_000)\n}\n\nfn order_id(s: &str) -> Option<u64> {\n    if s.len() > 7 {\n        return None;\n    }\n    number(s, 1, 9_999_999)\n}\n\ntype Order<'a> = (Side, &'a str, u64, Option<u64>, Kind);\n\nfn parse_order<'a>(f: &[&'a str]) -> Option<Order<'a>> {\n    let side = match *f.first()? {\n        \"buy\" | \"mbuy\" => Side::Buy,\n        \"sell\" | \"msell\" => Side::Sell,\n        _ => return None,\n    };\n    let market = f[0].starts_with('m');\n    match f {\n        [_, t, q] if market => Some((side, *t, qty(q)?, None, Kind::Ioc)),\n        [_, t, q, p] if !market => Some((side, *t, qty(q)?, Some(price(p)?), Kind::Gtc)),\n        [_, t, q, p, k] if !market => {\n            let kind = match *k {\n                \"ioc\" => Kind::Ioc,\n                \"fok\" => Kind::Fok,\n                _ => return None,\n            };\n            Some((side, *t, qty(q)?, Some(price(p)?), kind))\n        }\n        _ => None,\n    }\n}\n\n/// Whether a resting order at `price` trades with an incoming `side` order with `limit`.\nfn crosses(side: Side, price: u64, limit: Option<u64>) -> bool {\n    match limit {\n        None => true,\n        Some(l) => {\n            if side == Side::Buy {\n                price <= l\n            } else {\n                price >= l\n            }\n        }\n    }\n}\n\nimpl Book {\n    fn new() -> Self {\n        Book {\n            orders: HashMap::new(),\n            bids: BTreeMap::new(),\n            asks: BTreeMap::new(),\n            positions: BTreeMap::new(),\n            next_id: 1,\n            out: BufWriter::new(io::stdout()),\n            failed: false,\n        }\n    }\n\n    fn emit(&mut self, s: String) {\n        let _ = writeln!(self.out, \"{s}\");\n    }\n\n    fn error(&mut self, msg: String) {\n        self.emit(msg);\n        self.failed = true;\n    }\n\n    fn bad(&mut self) {\n        self.error(\"error: bad command\".into());\n    }\n\n    fn levels(&self, side: Side) -> &BTreeMap<u64, VecDeque<u64>> {\n        match side {\n            Side::Buy => &self.bids,\n            Side::Sell => &self.asks,\n        }\n    }\n\n    fn levels_mut(&mut self, side: Side) -> &mut BTreeMap<u64, VecDeque<u64>> {\n        match side {\n            Side::Buy => &mut self.bids,\n            Side::Sell => &mut self.asks,\n        }\n    }\n\n    fn command(&mut self, f: &[&str]) {\n        if f.iter().any(|s| s.is_empty()) {\n            return self.bad();\n        }\n        match f {\n            [\"book\"] => self.print_book(),\n            [\"pos\"] => self.print_pos(),\n            [\"cancel\", t, id] => match order_id(id) {\n                Some(id) => self.cancel(t, id),\n                None => self.bad(),\n            },\n            [\"amend\", t, id, q] => match (order_id(id), qty(q)) {\n                (Some(id), Some(q)) => self.amend(t, id, q),\n                _ => self.bad(),\n            },\n            _ => match parse_order(f) {\n                Some((side, t, q, p, kind)) => self.submit(side, t, q, p, kind),\n                None => self.bad(),\n            },\n        }\n    }\n\n    fn adjust(&mut self, trader: &str, dqty: i64, dcash: i64) {\n        let e = self\n            .positions\n            .entry(trader.to_string())\n            .or_insert((0, 0));\n        e.0 += dqty;\n        e.1 += dcash;\n    }\n\n    /// Best price on the `side.opposite()` book that crosses an incoming `side` order.\n    fn best(&self, side: Side, limit: Option<u64>) -> Option<u64> {\n        let levels = self.levels(side.opposite());\n        let p = if side == Side::Buy {\n            levels.keys().next()\n        } else {\n            levels.keys().next_back()\n        }?;\n        let p = *p;\n        crosses(side, p, limit).then_some(p)\n    }\n\n    /// Quantity of other traders' resting orders that cross the limit.\n    fn fillable(&self, side: Side, trader: &str, limit: Option<u64>) -> u64 {\n        let mut total = 0;\n        for (&p, queue) in self.levels(side.opposite()) {\n            if !crosses(side, p, limit) {\n                continue;\n            }\n            for rid in queue {\n                let r = &self.orders[rid];\n                if r.trader != trader {\n                    total += r.rem;\n                }\n            }\n        }\n        total\n    }\n\n    fn pop_front(&mut self, side: Side, price: u64) {\n        let levels = self.levels_mut(side);\n        let queue = levels.get_mut(&price).expect(\"level exists\");\n        queue.pop_front();\n        if queue.is_empty() {\n            levels.remove(&price);\n        }\n    }\n\n    fn submit(&mut self, side: Side, trader: &str, qty: u64, limit: Option<u64>, kind: Kind) {\n        let id = self.next_id;\n        self.next_id += 1;\n        self.positions.entry(trader.to_string()).or_insert((0, 0));\n        self.emit(format!(\"order {id}\"));\n\n        if kind == Kind::Fok && self.fillable(side, trader, limit) < qty {\n            self.emit(format!(\"reject {id} fok\"));\n            return;\n        }\n\n        let opp = side.opposite();\n        let mut left = qty;\n        while left > 0 {\n            let Some(price) = self.best(side, limit) else {\n                break;\n            };\n            let rid = *self.levels(opp)[&price].front().expect(\"non-empty level\");\n            let rtrader = self.orders[&rid].trader.clone();\n            if rtrader == trader {\n                self.pop_front(opp, price);\n                self.orders.remove(&rid);\n                self.emit(format!(\"cancel {rid} self-trade\"));\n                continue;\n            }\n\n            let rrem = self.orders[&rid].rem;\n            let q = left.min(rrem);\n            let (buy_id, sell_id) = if side == Side::Buy { (id, rid) } else { (rid, id) };\n            self.emit(format!(\"trade {buy_id} {sell_id} {q} @ {price}\"));\n\n            let cash = (q * price) as i64;\n            let q = q as i64;\n            if side == Side::Buy {\n                self.adjust(trader, q, -cash);\n                self.adjust(&rtrader, -q, cash);\n            } else {\n                self.adjust(&rtrader, q, -cash);\n                self.adjust(trader, -q, cash);\n            }\n\n            if rrem == q as u64 {\n                self.pop_front(opp, price);\n                self.orders.remove(&rid);\n            } else {\n                self.orders.get_mut(&rid).expect(\"resting order\").rem -= q as u64;\n            }\n            left -= q as u64;\n        }\n\n        if left > 0 {\n            match (kind, limit) {\n                (Kind::Gtc, Some(p)) => {\n                    self.levels_mut(side).entry(p).or_default().push_back(id);\n                    self.orders.insert(\n                        id,\n                        Resting {\n                            trader: trader.to_string(),\n                            side,\n                            price: p,\n                            rem: left,\n                        },\n                    );\n                    self.emit(format!(\"rest {id} {left}\"));\n                }\n                _ => self.emit(format!(\"drop {id} {left}\")),\n            }\n        }\n    }\n\n    /// Looks up a resting order that belongs to `trader`: (side, price, remaining).\n    fn owned(&self, trader: &str, id: u64) -> Result<(Side, u64, u64), String> {\n        let r = self\n            .orders\n            .get(&id)\n            .ok_or(format!(\"error: no such order {id}\"))?;\n        if r.trader != trader {\n            return Err(\"error: not owner\".into());\n        }\n        Ok((r.side, r.price, r.rem))\n    }\n\n    fn cancel(&mut self, trader: &str, id: u64) {\n        match self.owned(trader, id) {\n            Err(e) => self.error(e),\n            Ok((side, price, rem)) => {\n                let levels = self.levels_mut(side);\n                if let Some(queue) = levels.get_mut(&price) {\n                    queue.retain(|&x| x != id);\n                    if queue.is_empty() {\n                        levels.remove(&price);\n                    }\n                }\n                self.orders.remove(&id);\n                self.emit(format!(\"cancelled {id} {rem}\"));\n            }\n        }\n    }\n\n    fn amend(&mut self, trader: &str, id: u64, new_qty: u64) {\n        match self.owned(trader, id) {\n            Err(e) => self.error(e),\n            Ok((side, price, rem)) => {\n                if new_qty > rem {\n                    let queue = self\n                        .levels_mut(side)\n                        .get_mut(&price)\n                        .expect(\"level exists\");\n                    queue.retain(|&x| x != id);\n                    queue.push_back(id);\n                }\n                self.orders.get_mut(&id).expect(\"resting order\").rem = new_qty;\n                self.emit(format!(\"amended {id} {new_qty}\"));\n            }\n        }\n    }\n\n    fn level_lines(&self, side: Side) -> Vec<String> {\n        let mut lines: Vec<String> = self\n            .levels(side)\n            .iter()\n            .rev()\n            .map(|(p, queue)| {\n                let total: u64 = queue.iter().map(|id| self.orders[id].rem).sum();\n                format!(\"  {p} {total} {}\", queue.len())\n            })\n            .collect();\n        if lines.is_empty() {\n            lines.push(\"  (none)\".into());\n        }\n        lines\n    }\n\n    fn print_book(&mut self) {\n        let mut lines = vec![\"asks:\".to_string()];\n        lines.extend(self.level_lines(Side::Sell));\n        lines.push(\"bids:\".to_string());\n        lines.extend(self.level_lines(Side::Buy));\n        for l in lines {\n            self.emit(l);\n        }\n    }\n\n    fn print_pos(&mut self) {\n        if self.positions.is_empty() {\n            self.emit(\"(no traders)\".into());\n            return;\n        }\n        let lines: Vec<String> = self\n            .positions\n            .iter()\n            .map(|(name, (q, c))| format!(\"{name} {q} {c}\"))\n            .collect();\n        for l in lines {\n            self.emit(l);\n        }\n    }\n}\n\nfn main() {\n    let mut book = Book::new();\n    for line in io::stdin().lock().lines() {\n        let Ok(line) = line else { break };\n        let t = line.trim();\n        if t.is_empty() {\n            continue;\n        }\n        let f: Vec<&str> = t.split(' ').collect();\n        book.command(&f);\n    }\n    let _ = book.out.flush();\n    if book.failed {\n        std::process::exit(1);\n    }\n}\n",
+ "first_source": "use std::collections::{BTreeMap, HashMap, VecDeque};\nuse std::io::{self, BufRead, BufWriter, Stdout, Write};\n\n#[derive(Clone, Copy, PartialEq, Eq)]\nenum Side {\n    Buy,\n    Sell,\n}\n\nimpl Side {\n    fn opposite(self) -> Side {\n        match self {\n            Side::Buy => Side::Sell,\n            Side::Sell => Side::Buy,\n        }\n    }\n}\n\n#[derive(Clone, Copy, PartialEq, Eq)]\nenum Kind {\n    Gtc,\n    Ioc,\n    Fok,\n}\n\nstruct Resting {\n    trader: String,\n    side: Side,\n    price: u64,\n    rem: u64,\n}\n\nstruct Book {\n    orders: HashMap<u64, Resting>,\n    bids: BTreeMap<u64, VecDeque<u64>>,\n    asks: BTreeMap<u64, VecDeque<u64>>,\n    positions: BTreeMap<String, (i64, i64)>,\n    next_id: u64,\n    out: BufWriter<Stdout>,\n    failed: bool,\n}\n\n/// Digits only, value within [lo, hi].\nfn number(s: &str, lo: u64, hi: u64) -> Option<u64> {\n    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {\n        return None;\n    }\n    let v: u64 = s.parse().ok()?;\n    (lo..=hi).contains(&v).then_some(v)\n}\n\nfn qty(s: &str) -> Option<u64> {\n    number(s, 1, 1_000_000)\n}\n\nfn price(s: &str) -> Option<u64> {\n    number(s, 1, 100_000)\n}\n\nfn order_id(s: &str) -> Option<u64> {\n    if s.len() > 7 {\n        return None;\n    }\n    number(s, 1, 9_999_999)\n}\n\ntype Order<'a> = (Side, &'a str, u64, Option<u64>, Kind);\n\nfn parse_order<'a>(f: &[&'a str]) -> Option<Order<'a>> {\n    let side = match *f.first()? {\n        \"buy\" | \"mbuy\" => Side::Buy,\n        \"sell\" | \"msell\" => Side::Sell,\n        _ => return None,\n    };\n    let market = f[0].starts_with('m');\n    match f {\n        [_, t, q] if market => Some((side, *t, qty(q)?, None, Kind::Ioc)),\n        [_, t, q, p] if !market => Some((side, *t, qty(q)?, Some(price(p)?), Kind::Gtc)),\n        [_, t, q, p, k] if !market => {\n            let kind = match *k {\n                \"ioc\" => Kind::Ioc,\n                \"fok\" => Kind::Fok,\n                _ => return None,\n            };\n            Some((side, *t, qty(q)?, Some(price(p)?), kind))\n        }\n        _ => None,\n    }\n}\n\n/// Whether a resting order at `price` trades with an incoming `side` order with `limit`.\nfn crosses(side: Side, price: u64, limit: Option<u64>) -> bool {\n    match limit {\n        None => true,\n        Some(l) => {\n            if side == Side::Buy {\n                price <= l\n            } else {\n                price >= l\n            }\n        }\n    }\n}\n\nimpl Book {\n    fn new() -> Self {\n        Book {\n            orders: HashMap::new(),\n            bids: BTreeMap::new(),\n            asks: BTreeMap::new(),\n            positions: BTreeMap::new(),\n            next_id: 1,\n            out: BufWriter::new(io::stdout()),\n            failed: false,\n        }\n    }\n\n    fn emit(&mut self, s: String) {\n        let _ = writeln!(self.out, \"{s}\");\n    }\n\n    fn error(&mut self, msg: String) {\n        self.emit(msg);\n        self.failed = true;\n    }\n\n    fn bad(&mut self) {\n        self.error(\"error: bad command\".into());\n    }\n\n    fn levels(&self, side: Side) -> &BTreeMap<u64, VecDeque<u64>> {\n        match side {\n            Side::Buy => &self.bids,\n            Side::Sell => &self.asks,\n        }\n    }\n\n    fn levels_mut(&mut self, side: Side) -> &mut BTreeMap<u64, VecDeque<u64>> {\n        match side {\n            Side::Buy => &mut self.bids,\n            Side::Sell => &mut self.asks,\n        }\n    }\n\n    fn command(&mut self, f: &[&str]) {\n        if f.iter().any(|s| s.is_empty()) {\n            return self.bad();\n        }\n        match f {\n            [\"book\"] => self.print_book(),\n            [\"pos\"] => self.print_pos(),\n            [\"cancel\", t, id] => match order_id(id) {\n                Some(id) => self.cancel(t, id),\n                None => self.bad(),\n            },\n            [\"amend\", t, id, q] => match (order_id(id), qty(q)) {\n                (Some(id), Some(q)) => self.amend(t, id, q),\n                _ => self.bad(),\n            },\n            _ => match parse_order(f) {\n                Some((side, t, q, p, kind)) => self.submit(side, t, q, p, kind),\n                None => self.bad(),\n            },\n        }\n    }\n\n    fn adjust(&mut self, trader: &str, dqty: i64, dcash: i64) {\n        let e = self\n            .positions\n            .entry(trader.to_string())\n            .or_insert((0, 0));\n        e.0 += dqty;\n        e.1 += dcash;\n    }\n\n    /// Best price on the `side.opposite()` book that crosses an incoming `side` order.\n    fn best(&self, side: Side, limit: Option<u64>) -> Option<u64> {\n        let levels = self.levels(side.opposite());\n        let p = if side == Side::Buy {\n            levels.keys().next()\n        } else {\n            levels.keys().next_back()\n        }?;\n        let p = *p;\n        crosses(side, p, limit).then_some(p)\n    }\n\n    /// Quantity of other traders' resting orders that cross the limit.\n    fn fillable(&self, side: Side, trader: &str, limit: Option<u64>) -> u64 {\n        let mut total = 0;\n        for (&p, queue) in self.levels(side.opposite()) {\n            if !crosses(side, p, limit) {\n                continue;\n            }\n            for rid in queue {\n                let r = &self.orders[rid];\n                if r.trader != trader {\n                    total += r.rem;\n                }\n            }\n        }\n        total\n    }\n\n    fn pop_front(&mut self, side: Side, price: u64) {\n        let levels = self.levels_mut(side);\n        let queue = levels.get_mut(&price).expect(\"level exists\");\n        queue.pop_front();\n        if queue.is_empty() {\n            levels.remove(&price);\n        }\n    }\n\n    fn submit(&mut self, side: Side, trader: &str, qty: u64, limit: Option<u64>, kind: Kind) {\n        let id = self.next_id;\n        self.next_id += 1;\n        self.positions.entry(trader.to_string()).or_insert((0, 0));\n        self.emit(format!(\"order {id}\"));\n\n        if kind == Kind::Fok && self.fillable(side, trader, limit) < qty {\n            self.emit(format!(\"reject {id} fok\"));\n            return;\n        }\n\n        let opp = side.opposite();\n        let mut left = qty;\n        while left > 0 {\n            let Some(price) = self.best(side, limit) else {\n                break;\n            };\n            let rid = *self.levels(opp)[&price].front().expect(\"non-empty level\");\n            let rtrader = self.orders[&rid].trader.clone();\n            if rtrader == trader {\n                self.pop_front(opp, price);\n                self.orders.remove(&rid);\n                self.emit(format!(\"cancel {rid} self-trade\"));\n                continue;\n            }\n\n            let rrem = self.orders[&rid].rem;\n            let q = left.min(rrem);\n            let (buy_id, sell_id) = if side == Side::Buy { (id, rid) } else { (rid, id) };\n            self.emit(format!(\"trade {buy_id} {sell_id} {q} @ {price}\"));\n\n            let cash = (q * price) as i64;\n            let q = q as i64;\n            if side == Side::Buy {\n                self.adjust(trader, q, -cash);\n                self.adjust(&rtrader, -q, cash);\n            } else {\n                self.adjust(&rtrader, q, -cash);\n                self.adjust(trader, -q, cash);\n            }\n\n            if rrem == q as u64 {\n                self.pop_front(opp, price);\n                self.orders.remove(&rid);\n            } else {\n                self.orders.get_mut(&rid).expect(\"resting order\").rem -= q as u64;\n            }\n            left -= q as u64;\n        }\n\n        if left > 0 {\n            match (kind, limit) {\n                (Kind::Gtc, Some(p)) => {\n                    self.levels_mut(side).entry(p).or_default().push_back(id);\n                    self.orders.insert(\n                        id,\n                        Resting {\n                            trader: trader.to_string(),\n                            side,\n                            price: p,\n                            rem: left,\n                        },\n                    );\n                    self.emit(format!(\"rest {id} {left}\"));\n                }\n                _ => self.emit(format!(\"drop {id} {left}\")),\n            }\n        }\n    }\n\n    /// Looks up a resting order that belongs to `trader`: (side, price, remaining).\n    fn owned(&self, trader: &str, id: u64) -> Result<(Side, u64, u64), String> {\n        let r = self\n            .orders\n            .get(&id)\n            .ok_or(format!(\"error: no such order {id}\"))?;\n        if r.trader != trader {\n            return Err(\"error: not owner\".into());\n        }\n        Ok((r.side, r.price, r.rem))\n    }\n\n    fn cancel(&mut self, trader: &str, id: u64) {\n        match self.owned(trader, id) {\n            Err(e) => self.error(e),\n            Ok((side, price, rem)) => {\n                let levels = self.levels_mut(side);\n                if let Some(queue) = levels.get_mut(&price) {\n                    queue.retain(|&x| x != id);\n                    if queue.is_empty() {\n                        levels.remove(&price);\n                    }\n                }\n                self.orders.remove(&id);\n                self.emit(format!(\"cancelled {id} {rem}\"));\n            }\n        }\n    }\n\n    fn amend(&mut self, trader: &str, id: u64, new_qty: u64) {\n        match self.owned(trader, id) {\n            Err(e) => self.error(e),\n            Ok((side, price, rem)) => {\n                if new_qty > rem {\n                    let queue = self\n                        .levels_mut(side)\n                        .get_mut(&price)\n                        .expect(\"level exists\");\n                    queue.retain(|&x| x != id);\n                    queue.push_back(id);\n                }\n                self.orders.get_mut(&id).expect(\"resting order\").rem = new_qty;\n                self.emit(format!(\"amended {id} {new_qty}\"));\n            }\n        }\n    }\n\n    fn level_lines(&self, side: Side) -> Vec<String> {\n        let mut lines: Vec<String> = self\n            .levels(side)\n            .iter()\n            .rev()\n            .map(|(p, queue)| {\n                let total: u64 = queue.iter().map(|id| self.orders[id].rem).sum();\n                format!(\"  {p} {total} {}\", queue.len())\n            })\n            .collect();\n        if lines.is_empty() {\n            lines.push(\"  (none)\".into());\n        }\n        lines\n    }\n\n    fn print_book(&mut self) {\n        let mut lines = vec![\"asks:\".to_string()];\n        lines.extend(self.level_lines(Side::Sell));\n        lines.push(\"bids:\".to_string());\n        lines.extend(self.level_lines(Side::Buy));\n        for l in lines {\n            self.emit(l);\n        }\n    }\n\n    fn print_pos(&mut self) {\n        if self.positions.is_empty() {\n            self.emit(\"(no traders)\".into());\n            return;\n        }\n        let lines: Vec<String> = self\n            .positions\n            .iter()\n            .map(|(name, (q, c))| format!(\"{name} {q} {c}\"))\n            .collect();\n        for l in lines {\n            self.emit(l);\n        }\n    }\n}\n\nfn main() {\n    let mut book = Book::new();\n    for line in io::stdin().lock().lines() {\n        let Ok(line) = line else { break };\n        let t = line.trim();\n        if t.is_empty() {\n            continue;\n        }\n        let f: Vec<&str> = t.split(' ').collect();\n        book.command(&f);\n    }\n    let _ = book.out.flush();\n    if book.failed {\n        std::process::exit(1);\n    }\n}\n",
+ "first_turn_input": 14050,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 45,
+  "status": "fail",
+  "total": 46
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 0.402,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 54.7,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "model": "haiku",
+ "n_tool_calls": 2,
+ "other_seconds": 4.26,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": false,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T14:45:38",
+ "schema": 2,
+ "task": "t309_order_book",
+ "thinking_seconds": 101.934,
+ "tool_result_tokens_est": 184,
+ "tool_wait_seconds": 0.4,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 6847,
+   "cache_write": 7201,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 14050,
+   "output": 6,
+   "result_chars": 644,
+   "text_chars": 0,
+   "thinking_chars": 0,
+   "tool_input_chars": 12304,
+   "turn": 1,
+   "write_chars": 11265
+  },
+  {
+   "cache_read": 14048,
+   "cache_write": 25601,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 39651,
+   "output": 7,
+   "result_chars": 0,
+   "text_chars": 1303,
+   "thinking_chars": 0,
+   "tool_input_chars": 0,
+   "turn": 2,
+   "write_chars": 0
+  }
+ ],
+ "usage": {
+  "api_seconds": 101.934,
+  "cost_usd": 0.01958925,
+  "denied_commands": [],
+  "is_error": false,
+  "model_usage": {
+   "claude-haiku-5-5": {
+    "cacheCreationEphemeral1hInputTokens": 32802,
+    "cacheCreationEphemeral5mInputTokens": 0,
+    "cacheCreationInputTokens": 32802,
+    "cacheReadInputTokens": 20895,
+    "canonicalModel": "claude-haiku-5-5",
+    "contextWindow": 1000000,
+    "costBasis": "list",
+    "costUSD": 0.01958925,
+    "inputTokens": 4,
+    "maxOutputTokens": 128000,
+    "outputTokens": 25639,
+    "provider": "firstParty",
+    "thinkingTokens": 20397,
+    "webSearchRequests": 0
+   }
+  },
+  "permission_denials": 0,
+  "result_excerpt": "The solution is in `main.rs` in the working directory. It compiles with `rustc --edition 2021` and reproduces both examples exactly, including the exit status (0 for example 1, 1 for example 2 because of the `error:` lines).\n\nChoices I made where the spec was open:\n\n- **Error text for unknown orders.** The spec says `error: no such order ID`, but example 2 prints `error: no such order 1`. I follow",
+  "split": {
+   "cache_read": 20895,
+   "cache_write": 32802,
+   "fresh": 4,
+   "output": 25639
+  },
+  "subtype": "success",
+  "tokens_in": 53701,
+  "tokens_out": 25639,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 106.59,
+ "wj_version": ""
+}

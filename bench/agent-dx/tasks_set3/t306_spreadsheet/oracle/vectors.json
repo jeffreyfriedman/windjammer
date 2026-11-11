@@ -1,0 +1,272 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 10\nset A2 =A1*3\nset B1 =SUM(A1:A2)+MAX(1,A2)\nset A3 =B1\nget B1\nset A1 =A3\nset C1 =10/(A1-A1)\ndump\n",
+  "stdout": "B1 = 70\nerror: cycle A1 -> A3 -> B1 -> A1\nA1 = 10\nA2 = 30\nA3 = 70\nB1 = 70\nC1 = #DIV0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 5\nset B2 hello\nset C3 =A1+B2\nget C3\nset B2 7\nget C3\nclear A1\nget C3\nget A1\nget Z9\nset A1\nbogus\n",
+  "stdout": "C3 = #VALUE\nC3 = 12\nC3 = 7\nA1 = (empty)\nerror: bad command\nerror: bad command\nerror: bad command\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =65536*65536\nset A2 =A1*A1\nset A3 =A1*A1*0\nset A4 =0*A1*A1\nset A5 =SUM(A1:A1,A1)*A1\nget A2\ndump\n",
+  "stdout": "A2 = #OVERFLOW\nA1 = 4294967296\nA2 = #OVERFLOW\nA3 = #OVERFLOW\nA4 = 0\nA5 = #OVERFLOW\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dump\nget A1\n",
+  "stdout": "(empty sheet)\nA1 = (empty)\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =A1\nset A1 =1+A1*2\nset B1 =A1\nset A1 =B1\nset A1 =SUM(B1:B1)\nset A1 =SUM(A1:C3)\nget A1\n",
+  "stdout": "error: cycle A1 -> A1\nerror: cycle A1 -> A1\nerror: cycle A1 -> B1 -> A1\nerror: cycle A1 -> B1 -> A1\nerror: cycle A1 -> A1\nA1 = (empty)\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =C3\nset C3 =B2\nset B2 =SUM(A1:B1)\nset B1 =SUM(A1:A1)\nset A1 =MAX(B2,C3)\nset B1 =5\nset A1 =MIN(B1, 2)\nget A1\n",
+  "stdout": "error: cycle B2 -> A1 -> C3 -> B2\nA1 = 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =7/2\nset A2 =-7/2\nset A3 =7/-2\nset A4 =-(7)/2\nset B1 =1/0\nset B2 =B1+1\nset B3 =1+B1\nset B4 =SUM(B1,A1)\nset B5 =SUM(A1:B5)\ndump\n",
+  "stdout": "error: cycle B5 -> B5\nA1 = 3\nA2 = -3\nA3 = -3\nA4 = -3\nB1 = #DIV0\nB2 = #DIV0\nB3 = #DIV0\nB4 = #DIV0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 1000000\nset A2 =A1*A1\nset A3 =A2+1\nset A4 =A2-1\nset A5 =-A2\nset A6 =A5-1\ndump\n",
+  "stdout": "A1 = 1000000\nA2 = 1000000000000\nA3 = #OVERFLOW\nA4 = 999999999999\nA5 = -1000000000000\nA6 = #OVERFLOW\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 999999999\nset A2 =A1*A1\nset A3 =A2*1000\nset A4 =A2+A3\nset A5 =SUM(A1,A1,A1)*1000\nset A6 =A5-A5\nset A7 =A3-A3\nset A8 =-A2\ndump\n",
+  "stdout": "A1 = 999999999\nA2 = #OVERFLOW\nA3 = #OVERFLOW\nA4 = #OVERFLOW\nA5 = #OVERFLOW\nA6 = #OVERFLOW\nA7 = #OVERFLOW\nA8 = #OVERFLOW\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 3\nset A2 x y\nset A3 =\nset A4 =A1+\nset A5 =FOO(A1)\nset A6 =SUM()\nset A7 =ABS(A1:A2)\nset A8 =A1:A2\nset A9 =SUM(A1:A2:A3)\nset A10 =(A1\nset A11 =A1)\nset A12 =a1\nset A13 =A01\nset A14 =1 2\nset B1 =SUM (A1 , 4 )\nset B2 =ABS(0-5)\nset B3 =ABS(A2)\nset B4 =ABS(1,2)\nset B5 =1234567890\ndump\n",
+  "stdout": "error: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nerror: bad formula\nA1 = 3\nA2 = x y\nB1 = 7\nB2 = 5\nB3 = #VALUE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 1\nset A2 2\nset B1 =COUNT(A1:A5)\nset B2 =COUNT(A1:A5, 7, A1)\nset B3 =MIN(A3:A5)\nset B4 =MAX(A5:A3)\nset B5 =SUM(A3:A5)\nset C1 hi\nset C2 =C1\nset C3 =COUNT(C1:C2)\nset C4 =MIN(C1:C2, 4)\nset C5 =SUM(C2:C3)\ndump\n",
+  "stdout": "A1 = 1\nA2 = 2\nB1 = 2\nB2 = 4\nB3 = #VALUE\nB4 = #VALUE\nB5 = 0\nC1 = hi\nC2 = #VALUE\nC3 = #VALUE\nC4 = #VALUE\nC5 = #VALUE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 -0\nset A2 --5\nset A3 -5\nset A4 +5\nset A5 1234567890\nset A6 123456789\nset A7 -123456789\nset A8 =--3\nset A9 =-A3\nset A10 =- -A3\nget A1\ndump\n",
+  "stdout": "A1 = 0\nA1 = 0\nA2 = --5\nA3 = -5\nA4 = +5\nA5 = 1234567890\nA6 = 123456789\nA7 = -123456789\nA8 = 3\nA9 = 5\nA10 = -5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =B1\nset B1 =C1\nset C1 =D1\nset D1 =1\nget A1\nset D1 =A1\nset D1 =E1\nset E1 =A1\nset E1 =2\nget A1\nclear D1\nget A1\nset A1 =SUM(B1:D1)\nset A1 =SUM(A1:A1)\n",
+  "stdout": "A1 = 1\nerror: cycle D1 -> A1 -> B1 -> C1 -> D1\nerror: cycle E1 -> A1 -> B1 -> C1 -> D1 -> E1\nA1 = 2\nA1 = 0\nerror: cycle A1 -> A1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 1\nset  A2 2\nset A3  3\nget A1 \nget\nclear\nclear A1 B1\nset J20 =J20\nset J20 5\nset K1 2\nset A21 2\nget J20\nclear J20\nget J20\ndump x\n",
+  "stdout": "error: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: bad command\nerror: cycle J20 -> J20\nerror: bad command\nerror: bad command\nJ20 = 5\nJ20 = (empty)\nerror: bad command\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D4 999999\nset C2 =SUM(B4:B2,MIN(B2:B4,A4:B3,B3:B3),C1:C3)-MAX(A1,(19),B1:B3)\nset B1 1000000\nget A1\nget\nset B1 =SUM(A3-MIN(A1:A1,A2:A4,A3:A3))\nset C2 =MAX(A1:A1,A1:B3)\nget A1\nset D2 =C4\nset A2 999999\nset A3 =SUM(10+20,-A1-MIN(A1,A2:A1))\nset B3 =A1--16\ndump\nget A4\nget D1\nset B4 =SUM(B3/A2,A4,B2:A2)\nset D1 9\nset D3 1000000\nset A4 23\nget A1\nget B1\nset A2 =MAX(10,COUNT(A1,A1:A1)/A1)\nset B4 999999\nget A4\nset A1 two words\nset C1 =A3+-A2/A2\nset D3 -1\nset A1 =-COUNT(D4:B4,D3)\nset A1 1000000\nget D3\nset A1 =COUNT(MIN(A1:D3))-D1\nset D1 1000000\nset D2 -1\nget B1\nset D4 =MAX((A3),ABS(B2))\nset B2 =1000000*1000000\nset A2 19\nset C4 1000000\nset B2 1000000\nclear D4\nset B3 999999\nset A1 1000000\ndump\nset A1 =\nget A4\nset C3 =ABS((A4+B4))\nget B1\nclear A4\nset B3 31\nset D2 26\nset A1 x\nclear B2\nget D1\nset D1 =C3\nset C3 =-B3-8/A3/B3*A3\ndump\n",
+  "stdout": "error: cycle C2 -> C2\nA1 = (empty)\nerror: bad command\nA1 = (empty)\nA2 = 999999\nA3 = 30\nB1 = 0\nB3 = 16\nC2 = 999999\nD2 = 0\nD4 = 999999\nA4 = (empty)\nD1 = (empty)\nA1 = (empty)\nB1 = 7\nA4 = 23\nD3 = -1\nerror: cycle A1 -> A1\nB1 = 0\nA1 = 1000000\nA2 = 19\nA3 = -999989\nA4 = 23\nB1 = 0\nB2 = 1000000\nB3 = 999999\nB4 = 999999\nC1 = -999990\nC2 = 1000000\nC4 = 1000000\nD1 = 1000000\nD2 = -1\nD3 = -1\nerror: bad formula\nA4 = 23\nB1 = 0\nD1 = 1000000\nA1 = x\nA2 = 19\nA3 = #VALUE\nB1 = #VALUE\nB3 = 31\nB4 = 999999\nC1 = #VALUE\nC2 = #VALUE\nC3 = #VALUE\nC4 = 1000000\nD1 = #VALUE\nD2 = 26\nD3 = -1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set B4 =14\nset D3 x\nset A1 =SUM(C4:D4,C4:B3)\nset A3 =SUM(COUNT(A1:A2,A1:A2))\nget A4\ndump\nset C2 =18\nget\nclear D2\nset D2 16\nset A1 =SUM(A1)\nset D4 =15\nclear B1\nclear D3\nset C4 -4\nset D4 =C3\nset A2 999999\nset D4 =20\nset B2 =ABS(SUM(B1:B1))+A3\nset A2 =11*MIN(A1+1,A1:A1,(A1))\nset C4 =17\nnope\nset A2 1000000\nget A4\nset A4 =(5+12)\nset D4 =(B4)/C1*D2/16+11/C3\nset B4 0\nset B2 1000000\nset C3 =MAX(C2:B2)\nset D2 1000000\ndump\nset D1 =ABS(C3+C2)+-3-C4/17\nset C3 =SUM(B3:B4)\nset B2 two words\nget A1\nget B3\ndump\n",
+  "stdout": "A4 = (empty)\nA1 = 14\nA3 = 2\nB4 = 14\nD3 = x\nerror: bad command\nerror: cycle A1 -> A1\nerror: bad command\nA4 = (empty)\nA1 = #DIV0\nA2 = 1000000\nA3 = #DIV0\nA4 = 17\nB2 = 1000000\nB4 = 0\nC2 = 18\nC3 = 1000000\nC4 = 17\nD2 = 1000000\nD4 = #DIV0\nA1 = #DIV0\nB3 = (empty)\nA1 = #DIV0\nA2 = 1000000\nA3 = #DIV0\nA4 = 17\nB2 = two words\nB4 = 0\nC2 = 18\nC3 = 0\nC4 = 17\nD1 = 14\nD2 = 1000000\nD4 = #DIV0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set B4 =SUM(B1:A2,A4:A2,SUM(B1:A3))+(SUM(B3:B3,B3:A1))\nclear C3\nset B3 999999\nset D3 two words\nset D2 =(6)*MAX(C4:B3,A4+6)\nset A3 =A1\nset A4 n1\nset B2 =COUNT(A4:B1,A3:A4,A1:A3)\nclear C4\nget C2\nget B3\nset D4 1000000\nset C4 =SUM(SUM(A2,A3,A3:B1),B2:B3)+16+C1\nset A3 999999\nset A4 two words\nget D3\nset B3 =ABS(B2*D1)\nset C2 =ABS(SUM(6*13,B4:B3,11+A1))\nset C3 999999\nset A2 =A1\nset A1 =-D4*C2+SUM(B3:D1,A3)\nclear B3\nset A2 -15\nset A2 999999\nset B1 =ABS(A2+8-ABS(12))\nset D3 999999\nget D4\nset A4 =16\ndump\nset A2 999999\nget A2\nset D3 n1\nset B2 =MIN(A4:A1)\nset B3 x\nget C4\nget B4\nget C3\nset D2 =MAX(C1:B2,C2:C4)\nget B1\nget A1\nset B1 -14\nset C4 x\nset A1 =17\nset A2 =MAX(A1:A1,MAX(C4:A1,A1:A1),A1:A1)\nset C2 =SUM(B4:A2,D2:A1)+ABS(9)*C1/B1\nget B3\nclear B4\nset C3 1000000\nset A3 999999\nset A2 x\nset B3 999999\ndump\nset D1 =C4\nget D1\nset A4 two words\ndump\nget C1\nset D1 1000000\ndump\n",
+  "stdout": "error: cycle B2 -> B2\nC2 = (empty)\nB3 = 999999\nD3 = two words\nerror: cycle A1 -> C2 -> A1\nD4 = 1000000\nA2 = 999999\nA3 = 999999\nA4 = 16\nB1 = 999995\nB4 = 9999994\nC2 = 10000083\nC3 = 999999\nC4 = 5000007\nD2 = 59999964\nD3 = 999999\nD4 = 1000000\nA2 = 999999\nC4 = 5000039\nB4 = 10000042\nC3 = 999999\nB1 = 999995\nA1 = (empty)\nerror: cycle A2 -> A2\nerror: cycle C2 -> C2\nB3 = x\nA1 = 17\nA2 = x\nA3 = 999999\nA4 = 16\nB1 = -14\nB2 = 16\nB3 = 999999\nC2 = 1000105\nC3 = 1000000\nC4 = x\nD2 = 1000105\nD3 = n1\nD4 = 1000000\nD1 = #VALUE\nA1 = 17\nA2 = x\nA3 = 999999\nA4 = two words\nB1 = -14\nB2 = 17\nB3 = 999999\nC2 = 1000105\nC3 = 1000000\nC4 = x\nD1 = #VALUE\nD2 = 1000105\nD3 = n1\nD4 = 1000000\nC1 = (empty)\nA1 = 17\nA2 = x\nA3 = 999999\nA4 = two words\nB1 = -14\nB2 = 17\nB3 = 999999\nC2 = 1000105\nC3 = 1000000\nC4 = x\nD1 = 1000000\nD2 = 1000105\nD3 = n1\nD4 = 1000000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set C4 1000000\nset D1 =ABS(COUNT(B4:C4))\nget A4\nget\nget B4\nset A1 =\nset B2 =SUM(ABS(A1/2),A1:A4)\nset C4 two words\nset C1 =19+18-(B3)-MIN(C3:B4)\nset D2 =(2)\nget D2\nset B4 1000000\nget B4\nset A2 =(MIN(A1:A1,A1,A1:A1))*MIN(COUNT(A1,A1:A1),A1:A1)\nset D1 =D3\nset B2 =2\nset B2 =COUNT(A2:B1,SUM(A4:A3,(A3)),ABS(B1))\nget A1\nset D2 =SUM((C3)+B2,SUM(COUNT(A1:A2,B2:D1,A2:B3)))\nset C2 x\nset B2 -27\nset C1 =ABS(MIN(A1:B4,A4,B4*A3))\nclear B2\nset A1 1\nset A2 999999\nset B1 =SUM(A1:A2,A4:A3,A4:A2)\nset B3 =MIN(18)-SUM(B1:A3,19,B2:A1)+-A4\nset C4 =MIN(A3)\nget D1\nset D1 =9\nset D2 -26\nset B2 -17\nset C2 =COUNT(A4:A2,COUNT(B2-20,B4:A1))\nset A1 -6\nset C1 =-SUM(A3:B2,A3:B3,(6))\nset A2 1000000\nset C2 =MAX(A1:B2,ABS(A3),ABS(7)+MAX(B3:A4,A2:B4,A2:A1))\nset D3 999999\nget A1\nget D4\nset A1 =SUM(SUM(A1:C1))\nclear D4\nset B3 =MIN(A2)*-D2*15\ndump\nclear B4\nset D2 12\nclear C3\nget C4\nset A4 n1\nset C3 =B1*-A2+MIN(C1:A1,A2:B1,A1:B3)\nset C1 -22\nset A1 23\nget A2\nset D3 999999\ndump\n",
+  "stdout": "A4 = (empty)\nerror: bad command\nB4 = (empty)\nerror: bad formula\nD2 = 2\nB4 = 1000000\nerror: cycle B2 -> B2\nA1 = (empty)\nerror: cycle D2 -> D2\nerror: cycle B3 -> B3\nD1 = 0\nA1 = -6\nD4 = (empty)\nerror: cycle A1 -> A1\nA1 = -6\nA2 = 1000000\nB1 = 1999994\nB2 = -17\nB3 = 390000000\nB4 = 1000000\nC1 = -780999989\nC2 = 390000007\nC4 = 0\nD1 = 9\nD2 = -26\nD3 = 999999\nC4 = 0\nA2 = 1000000\nA1 = 23\nA2 = 1000000\nA4 = n1\nB1 = 2000023\nB2 = -17\nB3 = -180000000\nC1 = -22\nC2 = 2000023\nC3 = #OVERFLOW\nC4 = 0\nD1 = 9\nD2 = 12\nD3 = 999999\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get B3\nset D1 =-COUNT(B4:C4,A4)\nset C4 n1\nset D4 =SUM(D3:A1)\nset A1 =SUM(B1:A1)\nset B1 =A4*7*A3+A3-A4\nset C3 -26\nget D2\nset A2 =SUM(A1:A1,C1:A1)\nset D3 =(-11+C4)\nset A3 1000000\nset D4 =A1/D4*C2*C2-B4*C1+-17\nset A2 1000000\nset A3 =A2\nset D1 =8+ABS(MAX(6,A1:A3))\nget D1\nset C2 =7\nget D4\nset B2 -15\nclear A1\nset A3 =A2*A1*A1-1\nset D2 1000000\nset B3 two words\nset C1 two words\nget C2\nset B4 -6\nset D2 =SUM(7,C1:C3,A4)-11-A2*SUM((D4),B3/15)\nset C3 29\nset B2 19\nset C2 n1\nset B1 =ABS(SUM(D3,A3))*-12\nset B2 1000000\nset A3 =(COUNT(A1:A2,D1:A2)/6)\nset C2 999999\nset D4 =A4\nset A1 -17\nset C1 =SUM(A2:B1,B3:A1,A1)\nget D3\nset C1 1000000\nset D4 =(MAX(B2:B1,A4:A2,D3:C3))+B3*A4\nset D3 =-SUM(D2:B3)+A2\nset D1 =16\nset B4 =(19)-A3-B3+17/-A4\nget\nset B2 48\nset D2 =A3-2*SUM(D1,C3,3)+C1*A2*B1+4\nset B4 1\nset D1 25\nset A1 =A4*-(A3)\nset C2 =MAX(A4:A2,B2:A1)\nset C2 =SUM(A4:A2,C2)\nset C4 999999\ndump\n",
+  "stdout": "B3 = (empty)\nerror: cycle A1 -> A1\nD2 = (empty)\nerror: cycle D4 -> D4\nD1 = 1000008\nD4 = #VALUE\nC2 = 7\nerror: cycle D2 -> D4 -> D2\nerror: cycle A3 -> B1 -> A3\nD3 = #VALUE\nerror: cycle D3 -> D3\nerror: bad command\nerror: cycle A1 -> A3 -> A1\nerror: cycle C2 -> C2\nA1 = -17\nA2 = 1000000\nA3 = 288999999\nB1 = -3479999844\nB2 = 48\nB3 = two words\nB4 = 1\nC1 = 1000000\nC2 = 288999999\nC3 = 29\nC4 = 999999\nD1 = 25\nD2 = #OVERFLOW\nD3 = 999988\nD4 = #VALUE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "clear B1\nset C1 -25\nset A4 n1\nset C1 two words\nset D1 =B1\nset A1 =COUNT(C1/SUM(D2:D4,D1:C1,C3))\nget A1\nget B3\nset A3 =SUM(A2:A1,A2,A2+A2)-A2\nget C2\nset A1 =MIN(A3:C4)-COUNT(A2:D4,D3:C2)\nset C1 two words\nset B1 =((A1*A3))\nset D1 n1\nset C3 14\nget A3\nget\nget D1\nset B3 =ABS((A3))+ABS(A2*20)\nset C4 =MIN(A1:B3,B2:C2)\nget B4\nset A2 =MAX(A1:A3,14)\nclear D4\nset C2 =MIN(A2:A1,10)/15-(B2)\nget D1\nset C2 =-SUM(B1:B1,B4:A3,C1:A2)\nclear C1\nset A2 =6\nset D4 =D3\nset B1 =(SUM(A2:A4,A2:A2,A2/A1))\nset A4 =A1\nset A1 =\nset C3 6\nclear C3\nset C1 =COUNT(B2:A2,A1:C1)*B1\ndump\n",
+  "stdout": "A1 = #VALUE\nB3 = (empty)\nC2 = (empty)\nerror: cycle A1 -> A3 -> A1\nerror: cycle B1 -> A1 -> D1 -> B1\nA3 = #VALUE\nerror: bad command\nD1 = n1\nB4 = (empty)\nerror: cycle A2 -> A2\nD1 = n1\nerror: cycle C2 -> C2\nerror: bad formula\nerror: cycle C1 -> A1 -> C1\nA1 = #DIV0\nA2 = 6\nA3 = #DIV0\nA4 = #DIV0\nB1 = #DIV0\nB3 = #DIV0\nC2 = #DIV0\nC4 = #DIV0\nD1 = n1\nD4 = 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get A1\nset B1 =A4+A2\nset B2 =ABS(B1/(A4))\nset A3 =15\nset C2 =MAX(SUM(A2:B2,B2))/10\ndump\nset B1 =13\nset D2 =3\nset B3 18\nset D2 =A1\nget D2\nget C4\nset D1 =A1\nset C3 =C2\nset B2 44\nset B3 4\nget A1\nclear D3\nclear C4\nset A4 =A2\nset C3 -25\nset C2 =4\nget B2\nset C2 15\nset D4 =C3\nget B3\nset C2 =COUNT((SUM(B3,D2:A1)))\nget D1\nget A1\nset A2 =SUM(A1,A1:A1,A1)/(A1)*17\nset A2 =MIN(A1,A1:A1)\ndump\n",
+  "stdout": "A1 = (empty)\nA3 = 15\nB1 = 0\nB2 = #DIV0\nC2 = #DIV0\nD2 = 0\nC4 = (empty)\nA1 = (empty)\nB2 = 44\nB3 = 4\nerror: cycle C2 -> C2\nD1 = 0\nA1 = (empty)\nA2 = 0\nA3 = 15\nA4 = 0\nB1 = 13\nB2 = 44\nB3 = 4\nC2 = 15\nC3 = -25\nD1 = 0\nD2 = 0\nD4 = -25\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set B2 =A1\nset A3 999999\nset D4 =(B4)\nset A4 =A1*20+ABS(12)-11\nset A3 =ABS(SUM(A2:D2,A2:A1))\nset C2 =2+B3/16+19/SUM(C1,A2:C1,B2:B1)\nset D1 =10\nset A3 =17*A2+6+A2*COUNT(A2:A2,A1)\nset A1 36\nset A4 -10\nget B1\nset C3 =MAX((A2*12),B4:A1)\nset E1 3\nset C1 n1\nset C4 =C1*10\nget C2\nclear B3\nclear C1\nget B4\nget A2\nget C2\nclear D1\nget A3\nset D2 =ABS(SUM(7,C4:C2)/B3-10)\nset D4 =D1-6-9-B2\nset D4 =MIN(2,-MIN(C3,D3:B1,C3))\nset A1 999999\nset A2 999999\nset B1 =COUNT(A1-A1+A4/A3,4,A1:A2)\nset D4 =MIN(C4+18,B1*D1,A3:A1)*MAX(18+19,A1:B3,B4)\nset C3 =-8*A4+A3-6\nset A3 =(17/0*12)\ndump\nget B3\nget A4\nset A4 n1\nset B2 =SUM(A3:A2,SUM(A3:A2))\nset A1 =C3-COUNT(3)\nget A1\nset D3 =COUNT(19*A2,C1:C1,B3:A3)+(MAX(9))\nset B2 999999\nset D4 =COUNT(D3:A3)\nset D4 1000000\nset B2 =1000000*1000000\nset B2 =16\nset A1 =(13*C2)/SUM(A1:D2,B3:C2,(17))\nset C3 =SUM(A4:B2,B3:B3)\nset C3 1000000\nset A3 999999\nset D1 =MIN(A2+C1)\ndump\n",
+  "stdout": "error: cycle C2 -> C2\nB1 = (empty)\nC2 = (empty)\nB4 = (empty)\nA2 = (empty)\nC2 = (empty)\nA3 = 6\nA1 = 999999\nA2 = 999999\nA3 = #DIV0\nA4 = -10\nB1 = #DIV0\nB2 = 999999\nC3 = #DIV0\nC4 = 0\nD2 = #DIV0\nD4 = #DIV0\nE1 = 3\nB3 = (empty)\nA4 = -10\nA1 = #VALUE\nerror: cycle A1 -> A1\nA1 = 999999\nA2 = 999999\nA3 = 999999\nA4 = n1\nB1 = #VALUE\nB2 = 16\nC3 = 1000000\nC4 = 0\nD1 = 999999\nD2 = #DIV0\nD3 = 11\nD4 = 1000000\nE1 = 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D3 1\nget B2\nset D1 x\nset B1 1000000\nset D2 =D1/MIN(C4:A3,C2:B3)/-14\nset E1 3\nclear B1\nget D1\nset C1 n1\nset A4 =B4\nset A1 =(A3)\nset D3 two words\nset B2 1000000\nset D4 999999\nset D2 =SUM(B1:B4,C4:C3,7)\nset D4 1000000\nset A1 n1\nset D4 =C3\nset A3 =ABS(A2-A1)\nset B1 -29\nget B4\nset B1 =ABS(COUNT(A2:A2,A2:A3,A1:A2))\nset C4 1000000\nset A1 two words\nget B3\nclear C2\nset D1 999999\nset C1 =SUM(B3:B4,A2)-SUM(A3:A4,B1:A3,19)-(1/A2)\nset D1 =C4\nset D4 two words\nget C3\nset A2 999999\nget\nset C2 -13\nset D4 44\nset B3 =SUM(A4:A4)\nset B1 =SUM(MAX(SUM(A1:A4,A3:A2,6)))\nget A1\nset C3 =SUM(C2:B4)\nset B2 =A2\nset D4 =MAX(A1:C3,(D1/8))\nclear D4\nset B3 =SUM(A1/A2)+ABS((19))\nclear B3\nset C2 =MIN(B4*B4,B2:A4)-COUNT(B4:B4,5,15)/(B1)\nget A4\nset C1 =SUM(A2:A1,B4:B2)/ABS(ABS(A4))\nget A1\nset C3 =C1\nget D4\nget C4\nget C1\nget\nclear D3\nset A2 =-SUM(A1,2,A1:A1)+A1\nset D1 -3\nset B2 two words\nset B2 23\nset D1 =((B4))/MIN(A4:B2,A2:C3)\nset C1 =4\nset A1 32\nset C2 =(4)\nset D2 1000000\nget A2\nset A1 =D2\ndump\n",
+  "stdout": "B2 = (empty)\nD1 = x\nB4 = (empty)\nB3 = (empty)\nC3 = (empty)\nerror: bad command\nA1 = two words\nerror: cycle C3 -> C3\nA4 = 0\nA1 = two words\nD4 = (empty)\nC4 = 1000000\nC1 = #DIV0\nerror: bad command\nA2 = -34\nA1 = 1000000\nA2 = -1000002\nA3 = 2000002\nA4 = 0\nB1 = 3000006\nB2 = 23\nC1 = 4\nC2 = 4\nC3 = 4\nC4 = 1000000\nD1 = 0\nD2 = 1000000\nE1 = 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get B4\nset A3 =COUNT(A1:A1,MAX(MIN(A1:A1,A2),16+A1),A2:A2)\nset A3 =(SUM(A1))\nset D4 =SUM((C2*3),A2:C4)\nset D4 =--C1/(C1)\nset B1 1000000\nget A1\nset D2 =2\nset B4 =A4\nget C2\nget B4\nset C2 =COUNT(B3/6/A1,A3:C1,B1:B4)\nset C3 =MIN(C2:A1,-B2,B1+C1)+B2\nset B1 999999\nset A4 =COUNT(A2,MAX(14+0))\nget B1\nget A1\nset C2 n1\nset B4 1000000\nset A2 999999\nset C3 =(B3)\nset A1 25\nget C1\nset A4 =A1\nset A2 -27\nget D2\nset D3 25\nget B3\nclear B2\nget B1\nset C2 =MAX(A3:B2)\nset C4 =SUM(COUNT(B2:B2),A1:A3,A4:B3)\nset C4 18\nset D4 two words\nclear D1\nset A2 =ABS(--A1)\nset C1 20\nset A4 =MAX(A2:A2)\nget B4\nget A4\nset B4 999999\nset E1 3\nset C1 =COUNT(-B3,B2:B1,B2:A3)+B3*B2/A3\nset B2 50\nset D2 two words\nset D2 =A4-14*C3*MIN(C4:B4,C3:B3,A1:A2)\nset A2 =SUM(A1:A1,SUM(A1:A1,1,A1:A1),A1:A1)\ndump\nset D2 x\nset B3 =MIN(B1,((8)),3)\nset A1 =(D3)\nset C3 1000000\nset B3 =A3\nset C3 =(C1)/C1/9/ABS(A4)+COUNT(B2,A4:A2,C1:B2)\nset A2 1000000\nset B4 =(ABS(A2)/(A2))\nset A4 6\nset C4 -18\ndump\nset B2 999999\nset D3 =-16+B2+17--D2/-C1\nset D4 =MAX(B1:B1,A4:C1)\nset B1 -25\ndump\ndump\n",
+  "stdout": "B4 = (empty)\nA1 = (empty)\nC2 = (empty)\nB4 = 0\nerror: cycle C2 -> C2\nB1 = 999999\nA1 = (empty)\nC1 = (empty)\nD2 = 2\nB3 = (empty)\nB1 = 999999\nB4 = 1000000\nA4 = 25\nA1 = 25\nA2 = 101\nA3 = 25\nA4 = 101\nB1 = 999999\nB2 = 50\nB4 = 999999\nC1 = 6\nC2 = 101\nC3 = 0\nC4 = 18\nD2 = 101\nD3 = 25\nD4 = two words\nE1 = 3\nA1 = 25\nA2 = 1000000\nA3 = 25\nA4 = 6\nB1 = 999999\nB2 = 50\nB3 = 25\nB4 = 1\nC1 = 57\nC2 = 1000000\nC3 = 8\nC4 = -18\nD2 = x\nD3 = 25\nD4 = two words\nE1 = 3\nerror: cycle D3 -> C1 -> A3 -> A1 -> D3\nA1 = 25\nA2 = 1000000\nA3 = 25\nA4 = 6\nB1 = -25\nB2 = 999999\nB3 = 25\nB4 = 1\nC1 = 1000006\nC2 = 1000000\nC3 = 8\nC4 = -18\nD2 = x\nD3 = 25\nD4 = 1000006\nE1 = 3\nA1 = 25\nA2 = 1000000\nA3 = 25\nA4 = 6\nB1 = -25\nB2 = 999999\nB3 = 25\nB4 = 1\nC1 = 1000006\nC2 = 1000000\nC3 = 8\nC4 = -18\nD2 = x\nD3 = 25\nD4 = 1000006\nE1 = 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =ABS(B4)\nset A1 =MIN(D1:D1)\nset C4 =SUM(A3:B3)/SUM(A1,A2:B3)--MAX(A4:B1,B3,C3:C2)\nset E1 3\ndump\nset C1 =COUNT(B2:A1,6*5)*COUNT(A4:A2,B2:B4,3/11)\nset A2 =A1\nset B4 =A1\nset C4 1000000\nget B1\nset C1 =A1*COUNT(B2:A1)*A2*B4\nset D3 =-B4/8\nset C4 -14\nset B4 =A2\nset C3 =ABS(A1)*MIN(9/7,SUM(A1:A2,B2:A2))\nclear D1\nset B1 1000000\nset A3 =17\nset B1 9\nget A4\nset B2 =MAX(A3:A3,A2,D1:B3)\ndump\nset D1 =A4+-B3/A1\nset B3 two words\nclear A4\nget A3\nset A2 =(A1)+0\nget B1\nset D3 =MIN(C4:A1,ABS(D2))/(SUM(C3,C4:D1,B3:A1))\nset D2 21\nget A1\nset A2 two words\nset D3 -3\nclear C4\nset D2 =SUM(ABS(A1)-COUNT(A2:C1,A2:B3))\nget\nset B1 =MIN(A1:A1,A3:A2)\nset A1 =SUM(A1)\nget D1\nget A1\nget A4\nset D2 =COUNT(A1:C3)/-6\nset D3 =SUM(A1:C4,B4:A2)\nset A3 =ABS(SUM(A1*A2))\nget A1\nget A4\nset B2 =B1\nset C1 =B4\nget D3\nset C2 =MAX(MAX(A1,A3:C3),B1:A1,B3:B1)+ABS(A1)\nset A1 =SUM(A1)\nget C4\nset C1 =MIN(A3:A3)\nget A3\nget A3\nset B3 =12\nset D3 999999\nset B3 =COUNT(B1:A2,B2:A3)\nset A1 =12\nset A2 999999\nset C3 n1\nset C3 n1\nclear D1\nset D4 =COUNT(16-11,-C2)+D2\nset D2 =ABS(A4)\nset C1 999999\nget B2\ndump\n",
+  "stdout": "A1 = #VALUE\nC4 = #VALUE\nE1 = 3\nB1 = (empty)\nA4 = (empty)\nerror: cycle B2 -> B2\nA1 = #VALUE\nA2 = #VALUE\nA3 = 17\nB1 = 9\nB4 = #VALUE\nC1 = #VALUE\nC3 = #VALUE\nC4 = -14\nD3 = #VALUE\nE1 = 3\nerror: cycle D1 -> A1 -> D1\nA3 = 17\nB1 = 9\nerror: cycle D3 -> D3\nA1 = #VALUE\nerror: bad command\nerror: cycle A1 -> A1\nD1 = (empty)\nA1 = #VALUE\nA4 = (empty)\nA1 = #VALUE\nA4 = (empty)\nD3 = #VALUE\nerror: cycle A1 -> A1\nC4 = (empty)\nA3 = #VALUE\nA3 = #VALUE\nerror: cycle B3 -> B3\nB2 = 12\nA1 = 12\nA2 = 999999\nA3 = 11999988\nB1 = 12\nB2 = 12\nB3 = 12\nB4 = 999999\nC1 = 999999\nC2 = 12000000\nC3 = n1\nD2 = 0\nD3 = 999999\nD4 = 2\nE1 = 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set C1 =-1/(B2)-A3\nset B2 =SUM(A1:A2,ABS(ABS(D1)),A1:A1)\nset D2 29\nset C4 =A4\nget D2\nset D3 =12\nset C4 =B1\nget C2\nget C3\nset A1 =0\nset A3 =MAX(A1:A2)\nset D4 -6\nset C1 1000000\nget D1\nset B2 1000000\nset A4 =MAX(10)*A1-SUM(A1:A3,A1,A1:A1)\nset D3 =MIN(D1:A2)\nset D3 =12+COUNT(A3:A2,C1-C1,(B2))\nset C4 999999\nset D3 35\ndump\nset B4 1000000\nget A4\nset B4 =A1\nset A4 -10\nclear D1\ndump\nset A3 =ABS(A2/6/A2)\nget D3\nset B1 33\nget A1\nset B4 999999\nset A4 x\nset C4 =A2*-C2*A2\nset A4 =A1\nset C1 1000000\nset B2 x\nget B2\nset A2 -28\nset A2 =COUNT(MIN(A1:A1,A1:A1))+COUNT(A1:A1,A1:A1)\ndump\n",
+  "stdout": "D2 = 29\nC2 = (empty)\nC3 = (empty)\nD1 = (empty)\nA1 = 0\nA3 = 0\nA4 = 0\nB2 = 1000000\nC1 = 1000000\nC4 = 999999\nD2 = 29\nD3 = 35\nD4 = -6\nA4 = 0\nA1 = 0\nA3 = 0\nA4 = -10\nB2 = 1000000\nB4 = 0\nC1 = 1000000\nC4 = 999999\nD2 = 29\nD3 = 35\nD4 = -6\nD3 = 35\nA1 = 0\nB2 = x\nA1 = 0\nA2 = 3\nA3 = 0\nA4 = 0\nB1 = 33\nB2 = x\nB4 = 999999\nC1 = 1000000\nC4 = 0\nD2 = 29\nD3 = 35\nD4 = -6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D2 36\nclear D4\nset B1 =SUM(A3:A1)--A3\nset C4 =A3\nset A3 x\nset D2 =A4+A4*(C2)-MAX(8,3)/D1-B1\nset C3 =A3-B3+MIN(C1:B1,C2,A2:A1)\nget D2\nset C1 21\nset A2 =A1\nset A1 =A2/(D3)/COUNT(C3:D3,20,D2:B1)\nset B4 5\nset D1 =MAX(B2/B4-7*A4)\nset D3 =MAX(B1:B1,MAX(A4:B1,B4:C3))\nset A1 two words\nset C1 two words\nset C3 two words\nset A2 =MAX(MIN(A1)*MAX(A1:A1,A1:A1))\nget C1\nset C1 999999\nset D1 =16\nset B1 n1\nset D4 =SUM(14,D3:D2)\nset C4 44\nset D2 =COUNT(11)--17/COUNT(B1:D1,B1:D1,C1)\nget C4\nset D3 =18\nget B2\nset A1 =-6+MAX(C4:B3,D4:C1,B3:C1)+A3*A1+(A4)\nset D1 two words\nset D3 n1\nclear C4\nset C4 999999\nset C1 x\nset C3 999999\nclear C1\nset A2 =MAX(A1:A1,A1:A1)\nset B2 999999\nget C2\nset D2 =SUM(B1:A1,B2:A4,(C4))/SUM(A1:A4)\nset C3 =(ABS(A2+A4))\nset A1 =SUM(C1:A1)-5+A1\nset A3 =SUM(A1+A2,A1,A2+8)*SUM(A2:A2)\nset C4 999999\nset A3 =SUM(A2:A2)\nset C2 -19\nset A1 n1\nset D4 30\nclear C2\nset B3 =B4\nset C2 =0*A3\nset B3 =ABS(SUM(C1)*17+B2)\nset D4 =5\nclear B2\nset B3 x\nget C2\nset A1 =SUM(A1)\nset B1 =MIN(A1:A4)\nset C4 1000000\nset D4 18\nset B2 =MIN(A2:A3,MAX(SUM(16,C1:A2,B1:B1),A1:A4),SUM(A2:A4,(1)))\nset B3 two words\nset C2 =MIN(19+B2+ABS(A4),B1:A2,B2:B1)\ndump\n",
+  "stdout": "D2 = #DIV0\nerror: cycle A1 -> A2 -> A1\nC1 = two words\nC4 = 44\nB2 = (empty)\nerror: cycle A1 -> A1\nC2 = (empty)\nerror: cycle A1 -> A1\nC2 = #VALUE\nerror: cycle A1 -> A1\nerror: cycle B2 -> B2\nA1 = n1\nA2 = #VALUE\nA3 = #VALUE\nB1 = #VALUE\nB3 = two words\nB4 = 5\nC2 = #VALUE\nC3 = #VALUE\nC4 = 1000000\nD1 = two words\nD2 = #VALUE\nD3 = n1\nD4 = 18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D4 =15\nclear C1\nclear A2\nclear C2\nset C2 =(SUM(MIN(B4:A2,A3:A4,B1:B3)))\nset A1 =ABS((A1))\nset B2 =1000000*1000000\nset D4 =D3/D3+2+12\nget A3\nset A3 1000000\nclear A2\nset C3 =(MAX(9,B1:B1,C2:A2)*MAX(18,1,B1:A4))\nget A1\nset D4 x\nset D2 =9\nset A4 =SUM(A1:A2,A1:A2)+SUM(MIN(A1),A3:A2)\nset A4 =A2-19+A2+ABS(A3)\nset B2 =(COUNT(A1,A2))/A2\nset A2 =ABS(16)\nset A2 1000000\ndump\ndump\nget B1\nset D1 =C2/MIN(6,C3,A4)+B1+12+-C2\nclear B2\nset B3 =15-A3+SUM(A2:A1)/ABS(A3)+B2\nset D3 two words\nget C1\nset A4 two words\nset B4 =SUM(A4:B1,3,B2:B2)--7/ABS(A4-A2)\nset C3 35\nset A3 999999\nset A1 =8*COUNT(SUM(B3,C2),B2:B3)\nset B1 =15\nset C3 =16+(B3)\ndump\ndump\nget C1\nset D3 =MAX(SUM(ABS(16),D2))\nset A3 =(A2)\nset C1 999999\nset D4 =MIN(B3:C3,C3:C4)\nget C4\nget B2\nclear B4\ndump\nset A4 1000000\nset A4 2\nset D1 =SUM(C2:C3)-3*C4*ABS(11+C2)\nset A4 =MIN(-SUM(A2:A1,A1:A2))\nset B4 =B3*(A2+B2)\nget A3\nset D3 9\nset A3 =-A2+(13)\nset A3 1000000\nset D4 =-SUM(B3,ABS(C4))\nset B1 999999\nclear C1\nget D2\nset D4 37\ndump\nset B3 1000000\nset C2 =SUM(COUNT(A2:A1,A4:B4,B2-11),B4:A2,SUM(ABS(7)))\nset B2 =SUM(B1:A4)\nset D3 999999\nset D1 1000000\nset A4 =-(MAX(A3:A1,14))\ndump\n",
+  "stdout": "error: cycle A1 -> A1\nA3 = (empty)\nA1 = (empty)\nA2 = 1000000\nA3 = 1000000\nA4 = 2999981\nB2 = 0\nC2 = 0\nC3 = #OVERFLOW\nD2 = 9\nD4 = x\nA2 = 1000000\nA3 = 1000000\nA4 = 2999981\nB2 = 0\nC2 = 0\nC3 = #OVERFLOW\nD2 = 9\nD4 = x\nB1 = (empty)\nC1 = (empty)\nerror: cycle B4 -> B4\nerror: cycle A1 -> B3 -> A1\nA2 = 1000000\nA3 = 999999\nA4 = two words\nB1 = 15\nB3 = -999983\nC2 = -999983\nC3 = -999967\nD1 = #VALUE\nD2 = 9\nD3 = two words\nD4 = x\nA2 = 1000000\nA3 = 999999\nA4 = two words\nB1 = 15\nB3 = -999983\nC2 = -999983\nC3 = -999967\nD1 = #VALUE\nD2 = 9\nD3 = two words\nD4 = x\nC1 = (empty)\nC4 = (empty)\nB2 = (empty)\nA2 = 1000000\nA3 = 1000000\nA4 = two words\nB1 = 15\nB3 = -999984\nC1 = 999999\nC2 = -999984\nC3 = -999968\nD1 = #VALUE\nD2 = 9\nD3 = 25\nD4 = -999984\nA3 = 1000000\nD2 = 9\nA2 = 1000000\nA3 = 1000000\nA4 = -2000000\nB1 = 999999\nB3 = -999984\nB4 = -999984000000\nC2 = -999984000000\nC3 = -999968\nD1 = -999984999968\nD2 = 9\nD3 = 9\nD4 = 37\nerror: cycle B2 -> B2\nA2 = 1000000\nA3 = 1000000\nA4 = -1000000\nB1 = 999999\nB3 = 1000000\nB4 = 1000000000000\nC2 = #OVERFLOW\nC3 = 1000016\nD1 = 1000000\nD2 = 9\nD3 = 999999\nD4 = 37\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A3 =ABS(ABS(13)+(A1))\nset D1 =SUM(MAX(SUM(B4:C1,A3)),10,C4:B3)\nset C3 -5\nclear A3\nget A1\nget D3\nget C4\nset A3 =(-MIN(A1))\nset D2 -19\nset D2 1000000\nset D1 =MAX(B2:C1,COUNT(C1:A3)+COUNT(C4:C2,7,A4),B2:A3)\nget D3\nset A3 =A2\nclear D2\nset A3 =SUM(A1:A2)\nset C3 =MAX(20)-B3/A3/B1-C2+5\nset D4 999999\nclear C1\nset A3 n1\nset B3 =MAX(A4:A4)\nset A2 =C1\nget B2\nset D4 two words\nset B1 =A1\nset A1 =19\nset A3 =2\nclear B1\nset C1 x\nset A4 35\nset A2 1000000\nget A2\nset C3 two words\nset B1 =MAX(A3:A4)/(11)\nset C3 999999\nset A1 999999\nset D1 =SUM(A1:A4)\nget C4\nget D1\nset D4 7\nset A1 =SUM(-A1,C2:B1,D3)\nset A2 n1\nclear D4\nset D1 =COUNT(B1:B3,A2/11,-C1)*SUM(C2,COUNT(3,4,B2:A1),C4:B2)\nget B1\nset B1 =(A4)\nget C3\nset A3 =SUM(18,A2:A2,A1)\nset D4 =MIN(B2:A3,D3:D2,C4:B4)/SUM(A4:D2,C3:D1)\nset C1 =B3\nset C4 x\nget A2\nclear A4\nset B2 =SUM(B2:B1)\nset D4 =MIN(A2,B1:B3)+ABS(B2)+18\nget D3\nget D3\nset A2 -19\nset D2 1000000\nclear B3\nset C3 =C2\nset C3 =A3-MIN(2,A3:C1,A2:A4)\nset A4 1000000\nget B2\ndump\n",
+  "stdout": "A1 = (empty)\nD3 = (empty)\nC4 = (empty)\nD3 = (empty)\nB2 = (empty)\nA2 = 1000000\nC4 = (empty)\nD1 = 2000036\nerror: cycle A1 -> A1\nB1 = 3\nC3 = 999999\nerror: cycle D4 -> D4\nA2 = n1\nerror: cycle B2 -> B2\nD3 = (empty)\nD3 = (empty)\nerror: cycle C3 -> C3\nB2 = (empty)\nA1 = 999999\nA2 = -19\nA3 = 999998\nA4 = 1000000\nB1 = 1000000\nC1 = 0\nC3 = 0\nC4 = x\nD1 = 15\nD2 = 1000000\nD4 = -1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "clear D2\nset A1 =\nget B4\nset C2 =COUNT(B1:A1,MIN(B1:C1),A4:A4)\nset D1 =MIN(A2:B4,ABS(MAX(A1:A1,B1,C2)),SUM(19,A1)*MIN(A4:A3,A3))\nset B1 =-COUNT((A2),A1:A3,A1:A1)\nset D1 35\nclear A2\nset D2 =MAX(A3:A4)\nclear C1\nget B4\nset B1 =A3\nset D1 999999\nset A4 =MAX(A1:A3,A1:A2)\nset D2 1000000\nget A2\nclear A4\nclear D1\nclear C2\nset B1 =6+A4-14+10\nset D1 999999\nset B1 =MIN(ABS(A4))\nset C1 =(ABS(COUNT(A2:A3,A2)))\nget A4\nset D2 =C1\nset B3 =B1\nset C3 =ABS(ABS(SUM(B1:C2,A4:A4)))\nset B3 n1\nset D2 =C1\nclear C1\ndump\nset B3 =(MAX(B3:A4,A1:A4,19)+MAX(A2))\nset B2 =1000000*1000000\ndump\nset B2 =1000000*1000000\nset C1 13\nset D1 =1\nset D1 999999\nset A3 =MIN(A2:A1,A2,COUNT(A1:A1))*ABS(5*A1)\nset D2 =5/C2\nset D2 6\nclear D4\nset B3 999999\ndump\nset C3 =MIN((B4),B1:A2,SUM(8-8))\nset B2 =SUM(A4:B1)+A4-ABS(A1)\nset A1 n1\nset A3 -23\nset A2 999999\nset D3 1000000\nget A4\nset C3 999999\nset C1 =SUM(A3:B2)\nset D3 999999\nset D4 -17\nset A3 50\nset A2 =A1\nget B1\nget D2\nset A3 49\nset B4 =A4\nget A1\nset C1 =ABS(8)\ndump\n",
+  "stdout": "error: bad formula\nB4 = (empty)\nB4 = (empty)\nA2 = (empty)\nA4 = (empty)\nB1 = 0\nB3 = n1\nC3 = 0\nD1 = 999999\nD2 = 0\nerror: cycle B3 -> B3\nB1 = 0\nB2 = 1000000000000\nB3 = n1\nC3 = 1000000000000\nD1 = 999999\nD2 = 0\nA3 = 0\nB1 = 0\nB2 = 1000000000000\nB3 = 999999\nC1 = 13\nC3 = #OVERFLOW\nD1 = 999999\nD2 = 6\nerror: cycle B2 -> B2\nA4 = (empty)\nB1 = 0\nD2 = 6\nA1 = n1\nA1 = n1\nA2 = #VALUE\nA3 = 49\nB1 = 0\nB2 = 1000000000000\nB3 = 999999\nB4 = 0\nC1 = 8\nC3 = 999999\nD1 = 999999\nD2 = 6\nD3 = 999999\nD4 = -17\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set B3 =ABS(16)\nset C1 =(16)\nget A3\nset D1 =A2/SUM(B4:A1,B1+C1,19)\nget A1\ndump\nget A3\nset D3 =MIN(A1:B1,(10)/C1)\nset A3 two words\nset C2 =16+(SUM(B4))\nset C1 =4+B2*B1-(COUNT(B2:B1,A1:B4))\nget D3\nget B1\nget A1\nclear B1\ndump\nset A3 =MIN(A1:A2,A2)/COUNT(A2)+MIN(A3:A2,A2:A1)--A2\nset B4 n1\nset C4 =MAX(C3:B4)\nset B4 44\nset A1 =MAX(B4:D2)\nget B1\nset B2 n1\nset B4 999999\nget C1\nset A1 x\nset C3 29\nset A3 x\nset D4 1000000\nset B1 =A4\nget C1\nget C1\nset D2 46\nget B2\nget D1\nset A1 =\ndump\nset D2 =12\nset A4 5\nset A1 =SUM(A1)\nclear D1\nset A1 =MIN(B4:A4)\ndump\nget B1\nget C2\nset C1 7\nget D3\nclear A4\nget D4\nset B4 =A2-A1+A4*20-14-B2\nset B4 =18\nset D4 999999\nget D2\nget D2\nset C1 =A2\nset C2 =--MIN(A2:A3,A2:A4,B4)\nset A1 =SUM(D1:D4,B4)\nget B2\ndump\n",
+  "stdout": "A3 = (empty)\nA1 = (empty)\nB3 = 16\nC1 = 16\nD1 = 0\nA3 = (empty)\nD3 = 3\nB1 = (empty)\nA1 = (empty)\nA3 = two words\nB3 = 16\nC1 = 3\nC2 = 16\nD1 = 0\nD3 = 3\nerror: cycle A3 -> A3\nerror: cycle C4 -> C4\nerror: cycle A1 -> D3 -> A1\nB1 = (empty)\nC1 = #VALUE\nC1 = #VALUE\nC1 = #VALUE\nB2 = n1\nD1 = #VALUE\nerror: bad formula\nA1 = x\nA3 = x\nB1 = 0\nB2 = n1\nB3 = 16\nB4 = 999999\nC1 = #VALUE\nC2 = 1000015\nC3 = 29\nD1 = #VALUE\nD2 = 46\nD3 = #VALUE\nD4 = 1000000\nerror: cycle A1 -> A1\nA1 = 5\nA3 = x\nA4 = 5\nB1 = 5\nB2 = n1\nB3 = 16\nB4 = 999999\nC1 = #VALUE\nC2 = 1000015\nC3 = 29\nD2 = 12\nD3 = #VALUE\nD4 = 1000000\nB1 = 5\nC2 = 1000015\nD3 = 1\nD4 = 1000000\nerror: cycle B4 -> A1 -> B4\nD2 = 12\nD2 = 12\nerror: cycle A1 -> D3 -> A1\nB2 = n1\nA1 = 18\nA3 = x\nB1 = 0\nB2 = n1\nB3 = 16\nB4 = 18\nC1 = 0\nC2 = 18\nC3 = 29\nD2 = 12\nD3 = #DIV0\nD4 = 999999\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D3 =SUM(C4:B3)\nset C3 =ABS(SUM(C2*C1))\nset C3 =7\nset D2 =A1\nget C4\nset A1 =(6)\nset D1 =ABS(13-A3)\nset C2 =MAX(MIN(MAX(15),A1:B2,MIN(B2,B2:A1)),COUNT(C1,A2:B4),B4-8+B4/B1)\nset C2 two words\nget D1\nset D1 =C4/B2/(C2)+D2\nset D3 =C1\nget D4\nget B1\nset B3 =MIN(MAX(COUNT(B1:A3,A3),SUM(B2,B2:A1,B2)),MAX(A4:B2))\ndump\nset A1 999999\nset A2 =MIN(A1:A1)\nset C4 two words\ndump\nget D2\nset B1 =MIN(A2:A1,15,A3:A4)/COUNT(A1:A2)/A2\nset D1 999999\nset C3 =SUM(COUNT(MIN(A2),A1:A4,B1/12))\nset A4 4\nclear C4\nset C3 =COUNT(13*C1)*(3)\nset A1 =\nset D4 =COUNT(16-1,COUNT(19),A3:D2)-SUM(C2/1,B3:C3)\nset B4 999999\nset C2 =COUNT(B3:D4)\nget C3\nset B4 n1\nset C1 =14\nset D2 =B2\nset B4 n1\nget B4\nclear B4\nset C1 -4\nset D2 =C2\nset C1 =((8)+B1/A3)\nset C4 two words\nset B2 two words\nset B4 =COUNT(B1:B1,A1:A2)\nget B1\ndump\n",
+  "stdout": "C4 = (empty)\nD1 = 13\nD4 = (empty)\nB1 = (empty)\nerror: cycle B3 -> B3\nA1 = 6\nC2 = two words\nC3 = 7\nD1 = #DIV0\nD2 = 6\nD3 = 0\nA1 = 999999\nA2 = 999999\nC2 = two words\nC3 = 7\nC4 = two words\nD1 = #VALUE\nD2 = 999999\nD3 = 0\nD2 = 999999\nerror: bad formula\nerror: cycle C2 -> D4 -> C2\nC3 = 3\nB4 = n1\nB1 = 0\nA1 = 999999\nA2 = 999999\nA4 = 4\nB1 = 0\nB2 = two words\nB4 = 3\nC1 = #DIV0\nC2 = two words\nC3 = #DIV0\nC4 = two words\nD1 = 999999\nD2 = #VALUE\nD3 = #DIV0\nD4 = #VALUE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set C4 -1\nset A3 =A1\nset C2 1000000\nset B2 31\nset A1 1000000\nset C1 1000000\nset D1 =11*D2*COUNT(B4:A3,A4:A3)*A2\nclear D2\nset A1 1000000\nset D4 =20\nset C4 1\nget D4\nset A1 =SUM(A1)\nget D3\nclear A3\nget B4\ndump\nset B2 13\nset C4 1000000\nset D2 -9\nset B3 999999\nset D3 1000000\nset A1 =\nset B3 =A1\nset A4 -27\nset B3 =-MAX(A2,A2:A4,B2)/1/A4\nset B1 =ABS(MIN(SUM(A4:A3,A2:A1),A3:A3,B1:A2))\nset D4 48\nset A4 1\nget B4\nset B1 =ABS(A2)-(14)-13\nset A1 n1\nget D3\nset C4 =B4\nset B3 x\nset A4 =COUNT(A2:A3,A2:A3,(0*A2))\nclear D2\ndump\nclear D1\nget C2\nset C4 =A4*COUNT(7)+13\nset D4 =COUNT(1+A2,-C2,D1:B1)+MIN(C4:B4,A3:B4)\nget C3\nset B4 32\nset B4 two words\nclear D2\ndump\nget C3\nset D1 8\nset A4 x\nget D4\nset B4 =12*(B3+D3)\nset C4 n1\ndump\n",
+  "stdout": "D4 = 20\nerror: cycle A1 -> A1\nD3 = (empty)\nB4 = (empty)\nA1 = 1000000\nB2 = 31\nC1 = 1000000\nC2 = 1000000\nC4 = 1\nD1 = 0\nD4 = 20\nerror: bad formula\nerror: cycle B1 -> B1\nB4 = (empty)\nD3 = 1000000\nA1 = n1\nA4 = 1\nB1 = -27\nB2 = 13\nB3 = x\nC1 = 1000000\nC2 = 1000000\nC4 = 0\nD1 = 0\nD3 = 1000000\nD4 = 48\nC2 = 1000000\nC3 = (empty)\nA1 = n1\nA4 = 1\nB1 = -27\nB2 = 13\nB3 = x\nB4 = two words\nC1 = 1000000\nC2 = 1000000\nC4 = 14\nD3 = 1000000\nD4 = 5\nC3 = (empty)\nD4 = #VALUE\nA1 = n1\nA4 = x\nB1 = -27\nB2 = 13\nB3 = x\nB4 = #VALUE\nC1 = 1000000\nC2 = 1000000\nC4 = n1\nD1 = 8\nD3 = 1000000\nD4 = #VALUE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get C3\nset B2 =1000000*1000000\nset D2 =(10)\nget C1\nset A2 =-ABS(SUM(A1:A1))\nset D2 x\nget B4\nset A3 x\nset A2 38\nset C1 =B3\nset B1 =3/3+10/SUM(A1,A2:A2,A1:A4)+0/A2\nset D2 =D1*B3*13\nset B3 1000000\nset B1 =COUNT(A1:A3,A2:A1,A2--A4)\nset A1 =\nget C1\nget C1\nset D2 19\nset C4 two words\nset B3 =A2\nset C3 =B3\nclear C4\nclear D2\nset A4 =ABS(SUM(ABS(18)))\nget A4\nset D2 x\nset B2 =1000000*1000000\nset A3 =A1\nget C4\nset A1 48\nset B4 =-MIN(A2:B1)+SUM(A1:B2,15)\nget B1\nset A2 =A1\nset D3 =SUM(B3,A2:D2,C3:A4)\nget B2\nset B4 20\nset A1 -16\nset B4 18\nset D1 =MIN(ABS(4),C3,B3:A3)-SUM(C4:A3,COUNT(C1,B1))\nset C3 n1\nset C2 999999\ndump\n",
+  "stdout": "C3 = (empty)\nC1 = (empty)\nB4 = (empty)\nerror: bad formula\nC1 = 1000000\nC1 = 1000000\nA4 = 18\nC4 = (empty)\nB1 = 6\nB2 = 1000000000000\nA1 = -16\nA2 = -16\nA3 = -16\nA4 = 18\nB1 = 6\nB2 = 1000000000000\nB3 = -16\nB4 = 18\nC1 = -16\nC2 = 999999\nC3 = n1\nD1 = #VALUE\nD2 = x\nD3 = #OVERFLOW\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D3 =SUM(D1:D2)\nset A1 =\nset D3 two words\nset A3 5\nset B3 999999\nset D4 n1\nset D2 =20\ndump\nset C4 =B1\nset D2 =SUM(C3:C3)\nset C3 =SUM(-COUNT(0))\nset A3 =MAX(A1:A2)*A2/9/SUM(A2:A1)\nset C3 1000000\nset D4 =-COUNT(SUM(C2:D2,A2:A4,D1:C1))\nget B1\nset D2 =ABS(MAX(C3:A3,A2:B1,B4:A4))\nset C3 =SUM(C1:A1,A2/SUM(A1:B3,2,C1:A4))\nset C1 1000000\nset D4 =18\nset B1 =MIN(A1:A2)\nset A4 =SUM(A3:A3)\nset A3 1000000\nset A2 n1\nset A4 =(MAX(COUNT(13),B2:A2,ABS(A3)))\nset B2 -28\nset C2 =B4\nset C4 29\nset C2 999999\nset B2 -25\nget D2\nset B3 =ABS(ABS(4)+A4-B1)\nset A1 =-A3/D1-C3-A1\nset B1 =SUM(A4:A2,A3,16+7*A4)\nget B3\nset D4 =A1\nclear D4\ndump\n",
+  "stdout": "error: bad formula\nA3 = 5\nB3 = 999999\nD2 = 20\nD3 = two words\nD4 = n1\nB1 = (empty)\nerror: cycle C3 -> C3\nD2 = #VALUE\nerror: cycle A1 -> A1\nB3 = 9000012\nA2 = n1\nA3 = 1000000\nA4 = 1000000\nB1 = 10000016\nB2 = -25\nB3 = 9000012\nC1 = 1000000\nC2 = 999999\nC3 = 1000000\nC4 = 29\nD2 = 10000016\nD3 = two words\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "clear B1\nset D3 =14\nset A2 999999\nset D1 =C4\nclear D1\nset C4 9\nset C1 =-15\nget A1\nset C1 =14\nset D4 =D2\nset C3 =3-B3\nset D1 n1\nset D1 =B3\nnope\nset D1 =MIN(SUM(2),C3)\nset B3 =A2\nclear C1\nset D3 =MAX(SUM(C4:B3)*ABS(C1),COUNT(C4:A1,C4:B3),B1:B3)\nget D1\nset C4 999999\nset A4 1000000\ndump\nset D1 =(C4)/MAX(A3:C3,SUM(19),COUNT(B2:C1,B4:A2))\nget D4\nget C2\nset A2 1000000\nset B2 =(SUM(COUNT(A3:A3),A2:B1,B1:A4))\nclear B3\nset B2 =(ABS(A2))\nget C1\nclear A2\nset B2 999999\nclear C4\nset A2 two words\nset A2 =ABS(A1)*-12+A1/COUNT(A1:A1,3,A1:A1)\nset D3 26\nset A4 x\nset B3 =COUNT(B1,A3:A3,B1:A1)\nget A3\nclear B1\nset B2 x\nset B1 =1*8-18/8*COUNT(A2:A4,A2:A3,14)\nset C4 =5-20+MAX(C2:B2)+B1*A2/C3\nset D1 =ABS(SUM(A3:B1,D4:A4))\nset C1 1000000\ndump\n",
+  "stdout": "A1 = (empty)\nerror: bad command\nD1 = -999996\nA2 = 999999\nA4 = 1000000\nB3 = 999999\nC3 = -999996\nC4 = 999999\nD1 = -999996\nD3 = 999999\nD4 = 0\nD4 = 0\nC2 = (empty)\nerror: cycle B2 -> B2\nC1 = (empty)\nA3 = (empty)\nA2 = 0\nA4 = x\nB1 = 2\nB2 = x\nB3 = 2\nC1 = 1000000\nC3 = 1\nC4 = #VALUE\nD1 = #VALUE\nD3 = 26\nD4 = 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get D2\nset D1 =C3\nset A3 =A1/(A1)-3\nset A1 =12+SUM(MAX(B4:D4),(10),C4:C3)\nset D4 1000000\nset A4 =SUM(SUM(C2,A3:A1),A1:A3)-11+A3/A2*0\nget D3\nset B2 =(ABS(B1))\nget C1\nset B4 =D3\nset D1 =A3\nset B3 =SUM(A3:B2,A4:A4,A3:A2)\nset D3 x\nset D1 =11\nset D4 =(MIN(20,A1:D3)-MAX(B3:C3))\nset A2 =MAX(A1,A1:A1,A1:A1)/SUM(7)-COUNT(A1:A1,A1:A1)\ndump\nget A3\nset C2 =SUM(B2:C3,MAX(6)/MAX(A4:B4))\nset C2 -22\nset C4 =SUM(A2)\nget D4\nget A4\nset C2 =MAX(B1-SUM(B4:B1,B3))\nset B2 =A3\ndump\nset A1 =COUNT(B2:C3)\nclear C4\nset C2 =B3+(11)*A2\nset D3 =C1\nset D1 999999\nset A1 x\nset A2 =SUM(13/A1-A1,7,MAX(A1+A1,A1:A1,A1))\ndump\n",
+  "stdout": "D2 = (empty)\nD3 = (empty)\nC1 = (empty)\nerror: cycle B3 -> B3\nerror: cycle D4 -> A1 -> D4\nA1 = #VALUE\nA2 = #VALUE\nA3 = #VALUE\nA4 = #VALUE\nB2 = 0\nB4 = #VALUE\nD1 = 11\nD3 = x\nD4 = 1000000\nA3 = #VALUE\nerror: cycle C2 -> A4 -> C2\nerror: cycle C4 -> A2 -> A1 -> C4\nD4 = 1000000\nA4 = #VALUE\nA1 = #VALUE\nA2 = #VALUE\nA3 = #VALUE\nA4 = #VALUE\nB2 = #VALUE\nB4 = #VALUE\nC2 = #VALUE\nD1 = 11\nD3 = x\nD4 = 1000000\nerror: cycle A1 -> B2 -> A3 -> A1\nA1 = x\nA2 = #VALUE\nA3 = #VALUE\nA4 = #VALUE\nB2 = #VALUE\nB4 = 0\nC2 = #VALUE\nD1 = 999999\nD3 = 0\nD4 = 1000000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set D3 =SUM(A1:B2,SUM(C3:B1,C4:C2)/C1,D2:B4)\nset B1 =ABS(-D1+A1)\nset D4 two words\nset B2 23\nset D4 =--A1-SUM(B3)\nclear B3\nset B1 =A4\nset C1 =19\nclear B2\nset C1 1000000\nset B1 two words\nget A4\ndump\nset B1 =4\nget B1\nset A2 =ABS(COUNT(A1:A1,A1:A1,A1:A1)/A1/A1)\nset C4 =SUM(ABS(20-11),A3:C2,A3:B1)\nset D1 999999\nset D3 2\nset D4 =3\nset B4 1000000\nget B2\nget B2\nset D1 =SUM(C1:D2,B3:A1)\ndump\nset A2 n1\nset C1 =-B2--9\nset D1 =12\nget A1\nset D2 =-SUM(B4:A3,A3:B2,-C2)\ndump\n",
+  "stdout": "error: cycle D3 -> D3\nA4 = (empty)\nB1 = two words\nC1 = 1000000\nD4 = 0\nB1 = 4\nB2 = (empty)\nB2 = (empty)\nerror: cycle D1 -> D1\nA2 = #DIV0\nB1 = 4\nB4 = 1000000\nC1 = 1000000\nC4 = #DIV0\nD1 = 999999\nD3 = 2\nD4 = 3\nA1 = (empty)\nA2 = n1\nB1 = 4\nB4 = 1000000\nC1 = 9\nC4 = 13\nD1 = 12\nD2 = -1000000\nD3 = 2\nD4 = 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set B2 =COUNT(B1:C2,(A1*18))\nset B3 1000000\nset D3 two words\nset B2 =A2\nset C2 -12\nclear C1\nget D3\nget D2\nget C2\nset D3 =C4\nclear D1\nget\nset D1 =SUM(C3:B1)\nclear B4\nset C1 -27\nset B2 =COUNT(A3:A4,A1:B1,13)\nset C3 =(B1)/12/18\nset C4 two words\nclear D4\nclear A4\nget C2\nset D1 two words\nset A3 =B3\nset D3 =SUM(1)*ABS(3)/MAX(B2:A1,C3:D1,C1:B2)\nget B2\nclear A4\nset B2 =ABS((17)*A4+5)\nset B4 =18\nset D3 =C1\nset B2 x\nget B1\nget D3\nset C4 =8-18\nclear D3\nset A4 =COUNT(A2:A2)\nget C3\nget A4\nset C1 =COUNT(A2:B4)\ndump\nset A4 1000000\nget D2\nget B2\nget B1\nset B1 =SUM(A1:A3)\nset A4 =11\nget B1\nset C4 1000000\nset D1 =20+C1\nset A3 =COUNT(A1,A1:A2)-SUM(ABS(A2))\nget B2\ndump\nset D1 two words\nset C4 =B2\nset A3 =-0-MIN(A1:A2)\nset B1 =1\nset B3 =(-8-20)\nget A2\nget B4\nset A1 26\nget B2\nset B1 =MIN(A2:A1,A1:A3)\nset B1 =A4\nset B4 7\nset C1 11\nset A4 =COUNT(15+8+SUM(A1:A3))\nset C1 x\nget D4\ndump\n",
+  "stdout": "error: cycle B2 -> B2\nD3 = two words\nD2 = (empty)\nC2 = -12\nerror: bad command\nC2 = -12\nerror: cycle D3 -> D3\nB2 = 2\nB1 = (empty)\nD3 = -27\nC3 = 0\nA4 = 0\nA3 = 1000000\nA4 = 0\nB2 = x\nB3 = 1000000\nB4 = 18\nC1 = 4\nC2 = -12\nC3 = 0\nC4 = -10\nD1 = two words\nD2 = (empty)\nB2 = x\nB1 = (empty)\nB1 = 1000000\nB2 = x\nA3 = 1\nA4 = 11\nB1 = 1\nB2 = x\nB3 = 1000000\nB4 = 18\nC1 = 4\nC2 = -12\nC3 = 0\nC4 = 1000000\nD1 = 24\nA2 = (empty)\nB4 = 18\nB2 = x\nD4 = (empty)\nA1 = 26\nA3 = -26\nA4 = 1\nB1 = 1\nB2 = x\nB3 = -28\nB4 = 7\nC1 = x\nC2 = -12\nC3 = 0\nC4 = #VALUE\nD1 = two words\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set C1 =B2*A2*A2+COUNT(A4:B1)\nset C3 999999\nset C2 =A1/-12*B4\nset A1 =\ndump\nset C2 =-C1/-B4\nset C4 =C1\nset B3 =SUM(B1:A4,A3:A4,MIN(A2:B2))\nset A1 =SUM(A1)\nset A2 999999\nclear B4\nset B1 =ABS(17)-SUM(A3,3,9)*MIN(A1:A2)-A1*A3\nnope\nset C2 =-6+D1*B4+-A1\nset A1 =SUM(D1-A2,B1-8,C2:A1)+SUM(C3,11/C3,SUM(D1:B1,B4,A3:B2))\nset B3 =A2-2*(9)\nset D3 999999\nget C3\nset A3 =(COUNT(ABS(D2)))\nset B3 =6+COUNT(A2)/B2\nget D3\nclear B1\nget D1\nget A1\nget D4\nset D4 =C1\nclear A2\nset D4 x\nset B2 two words\nset C3 =ABS(SUM(C1,A1:B4,A1)+MIN(C1:B1,C2))\nclear A4\nclear B2\nget D3\nset D4 =D2\nset B2 =0-A2\nset C3 =-MAX(B3)-SUM(B3:C2)\nset D3 =B1\nset A2 1000000\nset B2 =A4\nclear C3\nset B3 =ABS(A4+A2-A4-4)\ndump\nset D4 36\nset C2 =SUM(B1:D4,MAX(A1:A1))-SUM(B4:C1)\nget B3\nclear B1\nset B4 =SUM((COUNT(7,B2:B2,B3:A2)),B1:B3)\nset B3 x\ndump\n",
+  "stdout": "error: bad formula\nC1 = 0\nC2 = 0\nC3 = 999999\nerror: cycle B3 -> B3\nerror: cycle A1 -> A1\nerror: bad command\nerror: cycle A1 -> A1\nC3 = 999999\nD3 = 999999\nD1 = (empty)\nA1 = (empty)\nD4 = (empty)\nD3 = 999999\nerror: cycle C3 -> C3\nA2 = 1000000\nA3 = 1\nB2 = 0\nB3 = 999996\nC1 = 4\nC2 = -6\nC4 = 4\nD3 = 0\nD4 = 0\nerror: cycle C2 -> C2\nB3 = 999996\nA2 = 1000000\nA3 = 1\nB2 = 0\nB3 = x\nB4 = 5\nC1 = 4\nC2 = -6\nC4 = 4\nD3 = 0\nD4 = 36\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A1 =SUM(D1:D1,ABS(9))+D4\nset B3 =5\nset C4 =B4\nget B2\nget D2\nset C3 =A3\nclear C4\nget B4\nset B1 -3\nclear B4\nset B2 n1\nget\nset D3 =(SUM(D2:A4)*C4+B3)\nclear C1\nget D4\nset B3 =SUM(A2:B2)-8\nset B2 =A4\nset C2 -26\nset D3 1000000\nclear D3\nset A4 999999\nset D1 =C3-2*C2/-C1*MIN(A3)\nget A1\nget C4\nget B2\nset D3 =-(B3-C4)\ndump\nset A4 -8\nset A3 =ABS(A1/1-ABS(5))\nset B2 =A1\nset D3 =C3\nset C2 =(2+A4+1)\nset A3 =3\nset B4 -3\nget B4\nset C3 23\nset C4 -10\nset B1 =1\nset A1 x\nset D4 1000000\nset D1 =ABS((SUM(17,C4)))\nset A4 1000000\nset B4 -18\nset B2 x\nget D4\nset A2 =SUM(A1:D3)\nset D1 n1\nget D3\nget B3\ndump\n",
+  "stdout": "B2 = (empty)\nD2 = (empty)\nB4 = (empty)\nerror: bad command\nerror: cycle D3 -> D3\nD4 = (empty)\nA1 = #DIV0\nC4 = (empty)\nB2 = 999999\nA1 = #DIV0\nA4 = 999999\nB1 = -3\nB2 = 999999\nB3 = 999991\nC2 = -26\nC3 = 0\nD1 = #DIV0\nD3 = -999991\nerror: cycle A3 -> A1 -> D1 -> A3\nB4 = -3\nD4 = 1000000\nerror: cycle A2 -> A2\nD3 = 23\nB3 = -8\nA1 = x\nA3 = 3\nA4 = 1000000\nB1 = 1\nB2 = x\nB3 = -8\nB4 = -18\nC2 = 1000003\nC3 = 23\nC4 = -10\nD1 = n1\nD3 = 23\nD4 = 1000000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A2 n1\nset D2 1000000\nclear B1\nset B3 999999\nclear A3\nclear A4\nset C3 =MIN(B2:B4)/MAX(A3:C1,B2,SUM(A1))\nset B2 =SUM(A2:A3,ABS(A3)-A4-A4,A2)\nset D2 22\nset B2 =MAX(A2:A4,5/11,COUNT(A4:A1,A4:A4))-(18/20)\nset A2 3\nset C1 =6*-MIN(B4:A1)\nset D1 =MAX(A4:B1)\nset B2 =A2/SUM(A2:A3,A1:A1)*A4-A3\nset A3 =A2\nset D1 1000000\nset B2 =B1/16-9+8\nset B1 =20+MIN(1/A4,A1:A2)\nset C2 -1\nset B2 two words\nget A1\nset A4 -24\nget\ndump\nset B3 34\nget A1\nset A2 -30\nset D1 1000000\nget D3\nset B1 -30\nset B2 two words\nset C4 999999\ndump\nclear D4\nset A1 =SUM(D4:D4,(COUNT(A3:D1,B3:B4,D3:A4)),18)\nset A4 =9/A2+A1*A1-13+ABS(A1)\nset C1 =SUM(B4:B1,B4:B2,B2:A2)\nclear D4\ndump\nset D1 =A2\nget D1\nset D4 =ABS(C1+C3)\nset B1 x\nset B3 =(-18-A1)\nset C4 31\nset A3 -5\nset C3 =MAX(A4:B1)\nset D3 =COUNT(B2*D1)+ABS(C4+D1)\nclear A1\nset B2 38\nset C3 two words\nclear B1\nset A3 =COUNT(A1:A1,A2:D1,(15)/MAX(A1))\nset B3 =ABS(A2/B1/-16)\nclear D2\nset B1 =-MAX(A3:A4,A2:A3)\nset B4 =B1+ABS(A1)/B3*A3*1\nset B3 two words\nset D1 =SUM(D4:A1,C1:B1,C4:B2)\nget D4\nget B2\ndump\nset A1 x\nset A1 x\nset B1 999999\ndump\nset B2 =SUM(A3:A2,4,A1:A3)/SUM(A4:A3)/SUM(A1:A3)\nset B1 =SUM(A4,A1:A3,C2:A2)\nset C4 =C2\ndump\n",
+  "stdout": "error: cycle C3 -> C3\nA1 = (empty)\nerror: bad command\nA2 = 3\nA3 = 3\nA4 = -24\nB1 = 20\nB2 = two words\nB3 = 999999\nC1 = 144\nC2 = -1\nD1 = 1000000\nD2 = 22\nA1 = (empty)\nD3 = (empty)\nA2 = -30\nA3 = -30\nA4 = -24\nB1 = -30\nB2 = two words\nB3 = 34\nC1 = 180\nC2 = -1\nC4 = 999999\nD1 = 1000000\nD2 = 22\nerror: cycle A1 -> A1\nA2 = -30\nA3 = -30\nA4 = -13\nB1 = -30\nB2 = two words\nB3 = 34\nC1 = 8\nC2 = -1\nC4 = 999999\nD1 = 1000000\nD2 = 22\nD1 = -30\nerror: cycle B1 -> A3 -> B1\nerror: cycle B4 -> A3 -> C1 -> B4\nerror: cycle D1 -> A3 -> D1\nD4 = #VALUE\nB2 = 38\nA2 = -30\nA3 = #DIV0\nA4 = -13\nB2 = 38\nB3 = two words\nC1 = 84\nC2 = -1\nC3 = two words\nC4 = 31\nD1 = -30\nD3 = 2\nD4 = #VALUE\nA1 = x\nA2 = -30\nA3 = #VALUE\nA4 = #VALUE\nB1 = 999999\nB2 = 38\nB3 = two words\nC1 = 1000083\nC2 = -1\nC3 = two words\nC4 = 31\nD1 = -30\nD3 = 2\nD4 = #VALUE\nerror: cycle B2 -> A3 -> B2\nerror: cycle B1 -> A3 -> B1\nA1 = x\nA2 = -30\nA3 = #VALUE\nA4 = #VALUE\nB1 = 999999\nB2 = 38\nB3 = two words\nC1 = 1000083\nC2 = -1\nC3 = two words\nC4 = -1\nD1 = -30\nD3 = 32\nD4 = #VALUE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set A2 -10\nset C4 =SUM(C2:B1,A2:A3,SUM(C2,B4:C2)/MIN(A4))\nget A1\nset B3 =A4\nset A1 =\nset B3 n1\nset D3 =((SUM(C1,C2:A3,C3)))\nset B4 =-B1+B1+A4-ABS(9)\nset B1 999999\nset A4 =MIN((A3+1),COUNT(20+13),A3:A3)\nset C4 =COUNT(A2:B1)\nset B4 n1\nset B3 =SUM(MIN(B1))\nget\nset A1 1000000\ndump\nget D1\nset D4 =MIN(B4-14,C4:B4,SUM(B3:C4,D2:B1))\nset A1 =MIN(C3:A3,ABS(MAX(C4:C4,D4,D2:C4)))\nset C3 -26\nset C3 =-C2/B1--17\nget D2\ndump\nclear A2\nset C4 =SUM(B1:A2,B3:B4)\nget B2\nset A4 999999\nset A2 =SUM(A1:A1)\nset D4 34\nset A1 =SUM(A1)\nclear B4\nset B4 26\nset C3 =(MAX(A2:C2,20+B3,B4))\nget C2\nset C3 =SUM(16)\nget A3\nset D2 =ABS(SUM(A4:A1))\nset D1 =B2\nset D1 =B2\nclear A1\nset C1 =B1\nclear C3\nset B3 -15\ndump\n",
+  "stdout": "error: cycle C4 -> C4\nA1 = (empty)\nerror: bad formula\nerror: bad command\nA1 = 1000000\nA2 = -10\nA4 = 1\nB1 = 999999\nB3 = 999999\nB4 = n1\nC4 = 3\nD3 = 999989\nD1 = (empty)\nerror: cycle A1 -> C4 -> A1\nD2 = (empty)\nA1 = 1000000\nA2 = -10\nA4 = 1\nB1 = 999999\nB3 = 999999\nB4 = n1\nC3 = 17\nC4 = 3\nD3 = 1000023\nD4 = #VALUE\nB2 = (empty)\nerror: cycle A1 -> A1\nC2 = (empty)\nA3 = (empty)\nA2 = 0\nA4 = 999999\nB1 = 999999\nB3 = -15\nB4 = 26\nC1 = 999999\nC4 = 1000010\nD1 = 0\nD2 = 999999\nD3 = 999984\nD4 = 34\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set C3 n1\nget A2\nclear A3\nset D1 =C2\nset A2 =A1\nset C2 999999\nset D3 =C4\nset A1 =--MAX(B2,C4:D2)\nset A2 =A1\nset D3 999999\ndump\nset D3 x\nclear C3\nset D4 n1\nget D4\nset D3 999999\nset C3 1000000\nset C4 =(-B3)/(SUM(10,A2:B2,A1:A2))\nset C1 n1\nset B4 =A4+B1+A1-0*(B3)\ndump\nset B2 =SUM(A2:D3,COUNT(A2:A4,A4:A1,A3:B1)*5,A4:B1)\ndump\nset C2 =SUM(B4:A4,A2,A4)*COUNT(A1:C1,B2:C1,B1:A4)/COUNT(B2:A1,A1:A1,B1:A4)\nset D3 n1\nset A3 =MAX(A1-A2-14)\nset B1 =(SUM(D2:A3,A1:A4,A1:A3))\ndump\nset A4 =A3\nset A3 999999\nset C1 =19\nset D4 1000000\ndump\nget D2\nset A4 =SUM(MAX(A2:A1,A1:A3,A1))--A2-A1\nclear B4\nset D4 1000000\nset D1 =SUM(A4,A2:A2)*20*A2*(COUNT(A3:A1,A4:B3))\nset D1 -21\nget D2\nset A3 =20\nset C4 =(A3-7*A1/B1)\nset A4 =COUNT(A2:A1,SUM(SUM(A1:D3,A1:A1)),A2:A3)\nset C4 =MAX((A3-A4),B3:B2,B3:A2)\nset A1 =-13+COUNT(A3,B3:A4,B1:B4)*(D3)--B3\nset B2 two words\nclear A1\ndump\nset B3 999999\nset C2 50\nset A3 -14\nset A2 =11*MIN(A1)\nset A2 =A1\nset C3 =SUM(SUM(B1+C2,B1:B1))\nset B4 -28\nset C2 two words\ndump\n",
+  "stdout": "A2 = (empty)\nA1 = 999999\nA2 = 999999\nC2 = 999999\nC3 = n1\nD1 = 999999\nD3 = 999999\nD4 = n1\nerror: cycle C4 -> A1 -> C4\nA1 = 1000000\nA2 = 1000000\nB4 = 1000000\nC1 = n1\nC2 = 999999\nC3 = 1000000\nD1 = 999999\nD3 = 999999\nD4 = n1\nerror: cycle B2 -> A1 -> B2\nA1 = 1000000\nA2 = 1000000\nB4 = 1000000\nC1 = n1\nC2 = 999999\nC3 = 1000000\nD1 = 999999\nD3 = 999999\nD4 = n1\nerror: cycle C2 -> A1 -> C2\nA1 = 1000000\nA2 = 1000000\nA3 = -14\nB1 = 6999957\nB4 = 7999957\nC1 = n1\nC2 = 999999\nC3 = 1000000\nD1 = 999999\nD3 = n1\nD4 = n1\nA1 = 1000000\nA2 = 1000000\nA3 = 999999\nA4 = 999999\nB1 = 10999995\nB4 = 12999994\nC1 = 19\nC2 = 999999\nC3 = 1000000\nD1 = 999999\nD3 = n1\nD4 = 1000000\nD2 = (empty)\nD2 = (empty)\nerror: cycle C4 -> A1 -> C4\nerror: cycle A4 -> B1 -> A4\nerror: cycle C4 -> A2 -> A1 -> C4\nerror: cycle A1 -> A4 -> A1\nA2 = 0\nA3 = 20\nA4 = 20\nB1 = 2000079\nB2 = two words\nC1 = 19\nC2 = 999999\nC3 = 1000000\nD1 = -21\nD3 = n1\nD4 = 1000000\nerror: cycle C3 -> B1 -> C3\nA2 = 0\nA3 = -14\nA4 = 0\nB1 = 1999957\nB2 = two words\nB3 = 999999\nB4 = -28\nC1 = 19\nC2 = two words\nC3 = 1000000\nD1 = -21\nD3 = n1\nD4 = 1000000\n"
+ }
+]

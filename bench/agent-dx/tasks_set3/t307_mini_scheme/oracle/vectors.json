@@ -1,0 +1,466 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define make-counter\n  (lambda ()\n    (let ((n 0))\n      (lambda () (set! n (+ n 1)) n))))\n(define c (make-counter))\n(c)\n(print (c))\n(print (c))\n(print (/ 1 0))\n",
+  "stdout": "2\n3\nerror line 9: division by zero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "; sum of squares\n(define sq (lambda (x) (* x x)))\n(define total 0)\n(define i 1)\n(while (<= i 5)\n  (set! total (+ total (sq i)))\n  (set! i (+ i 1)))\n(print total)\n(print sq)\n(print (< total 50))\n",
+  "stdout": "55\n<closure>\n#f\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "(print 1)\n(print (+ 1 2)\n",
+  "stdout": "parse error line 2: unclosed (\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "(print 1)\n(print 2))\n(print 3)\n",
+  "stdout": "parse error line 2: unexpected )\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "(print 1)\n\n(print 1234567890123456)\n",
+  "stdout": "parse error line 3: number too large\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define f (lambda (n) (if (= n 0) 0 (+ 1 (f (- n 1))))))\n(print (f 99))\n(print (f 100))\n",
+  "stdout": "99\nerror line 1: stack overflow\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (* 1000000 1000000000))\n(print (+ (* 1000000 1000000000) 1))\n",
+  "stdout": "1000000000000000\nerror line 2: overflow\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (* 4294967296 4294967296))\n",
+  "stdout": "error line 1: overflow\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (- 0 (* 999999999999999 1)))\n(print (- (* 999999999999999 1) 1 1))\n(print (- 5))\n(print (+))\n(print (*))\n(print (% -7 2))\n(print (/ -7 2))\n(print (% 7 -2))\n(print (/ 7 -2))\n(print (% 1 0))\n",
+  "stdout": "-999999999999999\n999999999999997\n-5\n0\n1\n-1\n-3\n1\n-3\nerror line 10: division by zero\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x 1)\n(print (set! x 5))\n(print x)\n(print (define y 2))\n(print (begin))\n(print (if #f 1))\n(print (and))\n(print (or))\n(print (and #t #f 7))\n(print (or #f #t 7))\n(print (or 1))\n",
+  "stdout": "1\n5\n0\n0\n0\n#t\n#f\n#f\n#t\nerror line 11: type error\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define x 10)\n(define f (lambda (x) (set! x (+ x 1)) x))\n(print (f 1))\n(print x)\n(define g (lambda () (set! x (+ x 1))))\n(g)\n(g)\n(print x)\n(let ((x 100)) (g) (print x))\n(print x)\n",
+  "stdout": "2\n10\n12\n100\n13\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define a 1)\n(define b (lambda () a))\n(define a 2)\n(print (b))\n(let ((a 5) (c a)) (print (+ a c)))\n(let ((a 5) (a 6)) a)\n",
+  "stdout": "2\n7\nerror line 6: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define loop (lambda () (loop)))\n(print 1)\n(loop)\n",
+  "stdout": "1\nerror line 1: stack overflow\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x 0)\n(while #t\n  (set! x (+ x 1)))\n",
+  "stdout": "error line 3: step limit\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (undefined-thing 1))\n",
+  "stdout": "error line 1: unbound variable undefined-thing\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print\n (+ 1\n    zzz))\n",
+  "stdout": "error line 3: unbound variable zzz\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define f (lambda (a b) a))\n(print (f 1))\n",
+  "stdout": "error line 2: wrong number of arguments\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define f (lambda (a b) a))\n(print\n  (f 1\n     2 3))\n",
+  "stdout": "error line 3: wrong number of arguments\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (5 3))\n",
+  "stdout": "error line 1: not a function\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (+ 1 #t))\n",
+  "stdout": "error line 1: type error\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(if 1 2 3)\n",
+  "stdout": "error line 1: type error\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define if 3)\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(lambda (x x) x)\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(lambda (+) 1)\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(lambda (x))\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(let ((x)) x)\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(let ((x 1 2)) x)\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (= 1 2 3))\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (/ 1))\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "()\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (()))\n",
+  "stdout": "error line 1: bad syntax\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define f (lambda () 1))\n(print (f))\n(print ((lambda (a) (* a a)) 7))\n(print (let () 4))\n(print (let ((f (lambda (n) (+ n 1)))) (f 1)))\n",
+  "stdout": "1\n49\n4\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define compose (lambda (f g) (lambda (x) (f (g x)))))\n(define inc (lambda (x) (+ x 1)))\n(define dbl (lambda (x) (* x 2)))\n(print ((compose inc dbl) 5))\n(print ((compose dbl inc) 5))\n",
+  "stdout": "11\n12\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x -5)\n(print -x)\n",
+  "stdout": "error line 2: unbound variable -x\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print 1) ; trailing\n;; only comment\n(print #t)(print #f)(print (not #t))\n(not 1)\n",
+  "stdout": "1\n#t\n#f\n#f\nerror line 4: type error\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print (while #f 1))\n(while #f)\n",
+  "stdout": "0\nerror line 2: bad syntax\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(print 1)\n(set! q 1)\n",
+  "stdout": "1\nerror line 2: unbound variable q\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x 5)\n(x)\n",
+  "stdout": "error line 2: not a function\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define x1 30)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 14))\n(print (bump2 1))\n(print (bump2 1))\n(print x1)\n(define fact3 (lambda (n) (if (<= n 1) 1 (* n (fact3 (- n 1))))))\n(print (fact3 10))\n\n\n(define gcd4 (lambda (a b) (if (= b 0) a (gcd4 b (% a b)))))\n(print (gcd4 42 70))\n(define gcd5 (lambda (a b) (if (= b 0) a (gcd5 b (% a b)))))\n(print (gcd5 27 68))\n(define mk6 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c7 (mk6 -9 8))\n(define c8 (mk6 1 1))\n(print (c7))\n(print (c8))\n(define fact9 (lambda (n) (if (<= n 1) 1 (* n (fact9 (- n 1))))))\n(print (fact9 8))\n\n(define x10 24)\n(define bump11 (lambda (k) (set! x10 (+ x10 k)) x10))\n(print (bump11 -8))\n(print (bump11 21))\n(print (bump11 29))\n(print (bump11 2))\n(print x10)\n\n\n(define acc12 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc13 (acc12 0))\n(print (acc13 18))\n(print (acc13 1))\n(print (acc13 18))\n(define a14 28)\n(define b15 (lambda () (set! a14 (- a14 1)) a14))\n(let ((a14 16) (z (b15))) (print (+ a14 z)))\n(print a14)\n(define acc16 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc17 (acc16 0))\n(print (acc17 8))\n(print (acc17 10))\n(print (acc17 3))\n(define x18 -6)\n(define bump19 (lambda (k) (set! x18 (+ x18 k)) x18))\n(print (bump19 16))\n(print (bump19 27))\n(print x18)\n(define a20 19)\n(define b21 (lambda () (set! a20 (- a20 1)) a20))\n(let ((a20 -4) (z (b21))) (print (+ a20 z)))\n(print a20)\n(define gcd22 (lambda (a b) (if (= b 0) a (gcd22 b (% a b)))))\n(print (gcd22 23 14))\n",
+  "stdout": "44\n45\n46\n46\n3628800\n14\n1\n-1\n2\n40320\n16\n37\n66\n68\n68\n#t\n#t\n#f\n43\n27\n#f\n#t\n#t\n10\n37\n37\n14\n18\n1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x1 -4)\n(define shadow2 (lambda (x1) (set! x1 (* x1 2)) x1))\n(print (shadow2 7))\n(print x1)\n(let ((x1 100)) (set! x1 (+ x1 1)) (print x1))\n(print x1)\n\n(define fact3 (lambda (n) (if (<= n 1) 1 (* n (fact3 (- n 1))))))\n(print (fact3 21))\n(define t4 0)\n(define i5 0)\n(while (< i5 8)\n  (set! t4 (+ t4 (* i5 4)))\n  (set! i5 (+ i5 1)))\n(print t4)\n\n(define fib6 (lambda (n) (if (< n 2) n (+ (fib6 (- n 1)) (fib6 (- n 2))))))\n(print (fib6 1))\n(print (if (> 17 29) 1 (- -9 -5)))\n; note\n(print (begin (+ 1 2) (* 25 23)))\n(define mk7 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c8 (mk7 15 -1))\n(define c9 (mk7 4 4))\n(print (c8))\n(print (c9))\n(print (c9))\n(print (c8))\n\n(define fact10 (lambda (n) (if (<= n 1) 1 (* n (fact10 (- n 1))))))\n(print (fact10 0))\n",
+  "stdout": "14\n-4\n101\n-4\nerror line 8: overflow\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n\n(define big 1)\n(while #t (set! big (* big 7)))\n(define t1 0)\n(define i2 1)\n(while (< i2 3)\n  (set! t1 (+ t1 (* i2 2)))\n  (set! i2 (+ i2 1)))\n(print t1)\n\n\n(define x3 13)\n(define bump4 (lambda (k) (set! x3 (+ x3 k)) x3))\n(print (bump4 -3))\n(print (bump4 17))\n(print (bump4 7))\n(print (bump4 15))\n(print x3)\n(define a5 12)\n(define b6 (lambda () (set! a5 (- a5 1)) a5))\n(let ((a5 25) (z (b6))) (print (+ a5 z)))\n(print a5)\n\n(define t7 0)\n(define i8 1)\n(while (< i8 8)\n  (set! t7 (+ t7 (* i8 4)))\n  (set! i8 (+ i8 1)))\n(print t7)\n(lambda ())\n(define comp9 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc10 (lambda (x) (+ x -9)))\n(define dbl11 (lambda (x) (* x 3)))\n(print ((comp9 inc10 dbl11) -1))\n(print ((comp9 dbl11 inc10) 8))\n(define gcd12 (lambda (a b) (if (= b 0) a (gcd12 b (% a b)))))\n(print (gcd12 8 6))\n(define acc13 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc14 (acc13 0))\n(print (acc14 20))\n(print (acc14 9))\n(print (acc14 12))\n",
+  "stdout": "error line 4: overflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define acc1 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc2 (acc1 0))\n(print (acc2 20))\n(print (acc2 6))\n(print (acc2 5))\n\n(define comp3 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc4 (lambda (x) (+ x 15)))\n(define dbl5 (lambda (x) (* x 2)))\n(print ((comp3 inc4 dbl5) 6))\n(print ((comp3 dbl5 inc4) -6))\n(define t6 0)\n(define i7 0)\n(while (< i7 4)\n  (set! t6 (+ t6 (* i7 3)))\n  (set! i7 (+ i7 1)))\n(print t6)\n(print (if (> 17 -6) -4 (- 13 -8)))\n; again\n(print (begin (+ 1 2) (* 4 8)))\n(define acc8 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc9 (acc8 0))\n(print (acc9 17))\n(print (acc9 18))\n(print (acc9 9))\n(define gcd10 (lambda (a b) (if (= b 0) a (gcd10 b (% a b)))))\n(print (gcd10 4 62))\n",
+  "stdout": "#t\n#t\n#f\n27\n18\n18\n-4\n32\n#t\n#f\n#f\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n\n(define x1 28)\n(define shadow2 (lambda (x1) (set! x1 (* x1 2)) x1))\n(print (shadow2 13))\n(print x1)\n(let ((x1 100)) (set! x1 (+ x1 1)) (print x1))\n(print x1)\n(define acc3 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc4 (acc3 0))\n(print (acc4 13))\n(print (acc4 10))\n(print (acc4 14))\n\n\n(print (if (> -1 11) -8 (- 30 1)))\n; x y z\n(print (begin (+ 1 2) (* 3 22)))\n\n(define fact5 (lambda (n) (if (<= n 1) 1 (* n (fact5 (- n 1))))))\n(print (fact5 1))\n(define mk6 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c7 (mk6 -7 28))\n(define c8 (mk6 16 5))\n(print (c7))\n(print (c7))\n(print (c8))\n(define fib9 (lambda (n) (if (< n 2) n (+ (fib9 (- n 1)) (fib9 (- n 2))))))\n(print (fib9 8))\n(define t10 0)\n(define i11 1)\n(while (< i11 8)\n  (set! t10 (+ t10 (* i11 4)))\n  (set! i11 (+ i11 1)))\n(print t10)\n(define x12 -9)\n(define bump13 (lambda (k) (set! x12 (+ x12 k)) x12))\n(print (bump13 7))\n(print (bump13 -8))\n(print (bump13 27))\n(print (bump13 10))\n(print x12)\n(define fact14 (lambda (n) (if (<= n 1) 1 (* n (fact14 (- n 1))))))\n(print (fact14 4))\n(define gcd15 (lambda (a b) (if (= b 0) a (gcd15 b (% a b)))))\n(print (gcd15 28 33))\n(define mk16 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c17 (mk16 25 9))\n(define c18 (mk16 22 3))\n(print (c17))\n(print (c17))\n(print (c17))\n\n(define fact19 (lambda (n) (if (<= n 1) 1 (* n (fact19 (- n 1))))))\n(print (fact19 15))\n\n\n(define a20 17)\n(define b21 (lambda () (set! a20 (- a20 1)) a20))\n(let ((a20 -9) (z (b21))) (print (+ a20 z)))\n(print a20)\n",
+  "stdout": "26\n28\n101\n28\n#t\n#t\n#f\n29\n66\n1\n21\n49\n21\n21\n112\n-2\n-10\n17\n27\n27\n24\n1\n34\n43\n52\n1307674368000\n7\n16\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "\n(define x1 -3)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 11))\n(print (bump2 20))\n(print x1)\n(print (if (> 1 17) 30 (- 21 -1)))\n; x y z\n(print (begin (+ 1 2) (* -3 -1)))\n(define comp3 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc4 (lambda (x) (+ x 24)))\n(define dbl5 (lambda (x) (* x 4)))\n(print ((comp3 inc4 dbl5) 30))\n(print ((comp3 dbl5 inc4) 14))\n(define acc6 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc7 (acc6 0))\n(print (acc7 13))\n(print (acc7 3))\n(print (acc7 1))\n(define x8 12)\n(define bump9 (lambda (k) (set! x8 (+ x8 k)) x8))\n(print (bump9 8))\n(print (bump9 -9))\n(print (bump9 8))\n(print x8)\n(define z (lambda (a) a))\n(z 1 2)\n(define x10 13)\n(define bump11 (lambda (k) (set! x10 (+ x10 k)) x10))\n(print (bump11 20))\n(print (bump11 17))\n(print (bump11 13))\n(print x10)\n(define a12 -8)\n(define b13 (lambda () (set! a12 (- a12 1)) a12))\n(let ((a12 -2) (z (b13))) (print (+ a12 z)))\n(print a12)\n(define t14 0)\n(define i15 0)\n(while (< i15 6)\n  (set! t14 (+ t14 (* i15 1)))\n  (set! i15 (+ i15 1)))\n(print t14)\n(define x16 4)\n(define shadow17 (lambda (x16) (set! x16 (* x16 2)) x16))\n(print (shadow17 29))\n(print x16)\n(let ((x16 100)) (set! x16 (+ x16 1)) (print x16))\n(print x16)\n(print (if (> 12 10) 16 (- -1 13)))\n; x y z\n(print (begin (+ 1 2) (* 6 -2)))\n\n\n(define x18 12)\n(define bump19 (lambda (k) (set! x18 (+ x18 k)) x18))\n(print (bump19 19))\n(print (bump19 0))\n(print (bump19 6))\n(print (bump19 7))\n(print x18)\n(define a20 19)\n(define b21 (lambda () (set! a20 (- a20 1)) a20))\n(let ((a20 2) (z (b21))) (print (+ a20 z)))\n(print a20)\n(define x22 21)\n(define bump23 (lambda (k) (set! x22 (+ x22 k)) x22))\n(print (bump23 -5))\n(print (bump23 10))\n(print (bump23 6))\n(print x22)\n(print 12345678901234567)\n",
+  "stdout": "parse error line 75: number too large\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define gcd1 (lambda (a b) (if (= b 0) a (gcd1 b (% a b)))))\n(print (gcd1 42 78))\n(define comp2 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc3 (lambda (x) (+ x 17)))\n(define dbl4 (lambda (x) (* x 3)))\n(print ((comp2 inc3 dbl4) 0))\n(print ((comp2 dbl4 inc3) 21))\n\n\n(define fib5 (lambda (n) (if (< n 2) n (+ (fib5 (- n 1)) (fib5 (- n 2))))))\n(print (fib5 1))\n\n\n(define t6 0)\n(define i7 2)\n(while (< i7 7)\n  (set! t6 (+ t6 (* i7 3)))\n  (set! i7 (+ i7 1)))\n(print t6)\n(define mk8 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c9 (mk8 -8 15))\n(define c10 (mk8 3 5))\n(print (c9))\n(print (c10))\n(print (c10))\n(print (c10))\n(print (c10))\n\n\n(define mk11 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c12 (mk11 29 17))\n(define c13 (mk11 -8 2))\n(print (c12))\n(print (c12))\n\n\n(define acc14 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc15 (acc14 0))\n(print (acc15 4))\n(print (acc15 3))\n(print (acc15 18))\n(define x16 15)\n(define shadow17 (lambda (x16) (set! x16 (* x16 2)) x16))\n(print (shadow17 9))\n(print x16)\n(let ((x16 100)) (set! x16 (+ x16 1)) (print x16))\n(print x16)\n\n(define fact18 (lambda (n) (if (<= n 1) 1 (* n (fact18 (- n 1))))))\n(print (fact18 0))\n(define mk19 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c20 (mk19 -7 2))\n(define c21 (mk19 -5 3))\n(print (c20))\n(print (c21))\n(print (c20))\n(print (c21))\n",
+  "stdout": "6\n17\n114\n1\n60\n7\n8\n13\n18\n23\n46\n63\n#f\n#f\n#t\n18\n15\n101\n15\n1\n-5\n-2\n-3\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define gcd1 (lambda (a b) (if (= b 0) a (gcd1 b (% a b)))))\n(print (gcd1 20 8))\n(define gcd2 (lambda (a b) (if (= b 0) a (gcd2 b (% a b)))))\n(print (gcd2 20 47))\n(define x3 3)\n(define bump4 (lambda (k) (set! x3 (+ x3 k)) x3))\n(print (bump4 1))\n(print (bump4 -9))\n(print (bump4 -3))\n(print (bump4 -6))\n(print x3)\n\n\n(define fib5 (lambda (n) (if (< n 2) n (+ (fib5 (- n 1)) (fib5 (- n 2))))))\n(print (fib5 8))\n\n(define fact6 (lambda (n) (if (<= n 1) 1 (* n (fact6 (- n 1))))))\n(print (fact6 0))\n",
+  "stdout": "4\n1\n4\n-5\n-8\n-14\n-14\n21\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define x1 11)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 26))\n(print (bump2 22))\n(print (bump2 -4))\n(print x1)\n(define t3 0)\n(define i4 1)\n(while (< i4 7)\n  (set! t3 (+ t3 (* i4 2)))\n  (set! i4 (+ i4 1)))\n(print t3)\n(define comp5 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc6 (lambda (x) (+ x -8)))\n(define dbl7 (lambda (x) (* x 4)))\n(print ((comp5 inc6 dbl7) 11))\n(print ((comp5 dbl7 inc6) 0))\n\n(define fib8 (lambda (n) (if (< n 2) n (+ (fib8 (- n 1)) (fib8 (- n 2))))))\n(print (fib8 11))\n(define gcd9 (lambda (a b) (if (= b 0) a (gcd9 b (% a b)))))\n(print (gcd9 32 18))\n",
+  "stdout": "37\n59\n55\n55\n42\n36\n-32\n89\n2\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n\n(print (/ 7 (- 3 3)))\n\n\n(define comp1 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc2 (lambda (x) (+ x 12)))\n(define dbl3 (lambda (x) (* x 3)))\n(print ((comp1 inc2 dbl3) 27))\n(print ((comp1 dbl3 inc2) 23))\n(print (if (> 5 -9) -7 (- 28 8)))\n; x y z\n(print (begin (+ 1 2) (* -7 17)))\n(define fib4 (lambda (n) (if (< n 2) n (+ (fib4 (- n 1)) (fib4 (- n 2))))))\n(print (fib4 7))\n(define x5 13)\n(define shadow6 (lambda (x5) (set! x5 (* x5 2)) x5))\n(print (shadow6 -6))\n(print x5)\n(let ((x5 100)) (set! x5 (+ x5 1)) (print x5))\n(print x5)\n(define fact7 (lambda (n) (if (<= n 1) 1 (* n (fact7 (- n 1))))))\n(print (fact7 8))\n(define a8 20)\n(define b9 (lambda () (set! a8 (- a8 1)) a8))\n(let ((a8 22) (z (b9))) (print (+ a8 z)))\n(print a8)\n",
+  "stdout": "error line 3: division by zero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define comp1 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc2 (lambda (x) (+ x 15)))\n(define dbl3 (lambda (x) (* x 3)))\n(print ((comp1 inc2 dbl3) 13))\n(print ((comp1 dbl3 inc2) 15))\n(define fact4 (lambda (n) (if (<= n 1) 1 (* n (fact4 (- n 1))))))\n(print (fact4 5))\n(define x5 17)\n(define bump6 (lambda (k) (set! x5 (+ x5 k)) x5))\n(print (bump6 27))\n(print (bump6 -1))\n(print (bump6 -3))\n(print x5)\n(print (if (> 4 25) 3 (- -7 27)))\n; again\n(print (begin (+ 1 2) (* 29 6)))\n(define x7 -1)\n(define bump8 (lambda (k) (set! x7 (+ x7 k)) x7))\n(print (bump8 21))\n(print (bump8 25))\n(print (bump8 6))\n(print x7)\n(define x9 7)\n(define bump10 (lambda (k) (set! x9 (+ x9 k)) x9))\n(print (bump10 10))\n(print (bump10 2))\n(print x9)\n\n(define comp11 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc12 (lambda (x) (+ x 9)))\n(define dbl13 (lambda (x) (* x 2)))\n(print ((comp11 inc12 dbl13) 16))\n(print ((comp11 dbl13 inc12) 25))\n",
+  "stdout": "54\n90\n120\n44\n43\n40\n40\n-34\n174\n20\n45\n51\n51\n17\n19\n19\n41\n68\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "(define t1 0)\n(define i2 3)\n(while (< i2 11)\n  (set! t1 (+ t1 (* i2 4)))\n  (set! i2 (+ i2 1)))\n(print t1)\n(print (if (> 9 19) 5 (- 5 24)))\n; note\n(print (begin (+ 1 2) (* 15 -6)))\n(define fact3 (lambda (n) (if (<= n 1) 1 (* n (fact3 (- n 1))))))\n(print (fact3 6))\n(define mk4 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c5 (mk4 13 22))\n(define c6 (mk4 27 5))\n(print (c5))\n(print (c5))\n(define t7 0)\n(define i8 3)\n(while (< i8 3)\n  (set! t7 (+ t7 (* i8 4)))\n  (set! i8 (+ i8 1)))\n(print t7)\n(print 12345678901234567)\n",
+  "stdout": "parse error line 25: number too large\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "\n(define x1 -3)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 -4))\n(print (bump2 17))\n(print (bump2 -7))\n(print x1)\n(print (+ 1 nothing))\n(define mk3 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c4 (mk3 22 -6))\n(define c5 (mk3 15 3))\n(print (c4))\n(print (c5))\n(print (c5))\n(print (c5))\n(define x6 18)\n(define bump7 (lambda (k) (set! x6 (+ x6 k)) x6))\n(print (bump7 -4))\n(print (bump7 -1))\n(print (bump7 29))\n(print x6)\n(define comp8 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc9 (lambda (x) (+ x 28)))\n(define dbl10 (lambda (x) (* x 4)))\n(print ((comp8 inc9 dbl10) -5))\n(print ((comp8 dbl10 inc9) 22))\n(define fib11 (lambda (n) (if (< n 2) n (+ (fib11 (- n 1)) (fib11 (- n 2))))))\n(print (fib11 2))\n(define z (lambda (a) a))\n(z 1 2)\n\n\n(print (1 2))\n\n(print (if (> 17 -8) -2 (- -3 9)))\n; note\n(print (begin (+ 1 2) (* 2 9)))\n\n\n(define t12 0)\n(define i13 1)\n(while (< i13 7)\n  (set! t12 (+ t12 (* i13 3)))\n  (set! i13 (+ i13 1)))\n(print t12)\n(define fib14 (lambda (n) (if (< n 2) n (+ (fib14 (- n 1)) (fib14 (- n 2))))))\n(print (fib14 1))\n(define fact15 (lambda (n) (if (<= n 1) 1 (* n (fact15 (- n 1))))))\n(print (fact15 16))\n(define fib16 (lambda (n) (if (< n 2) n (+ (fib16 (- n 1)) (fib16 (- n 2))))))\n(print (fib16 0))\n)\n",
+  "stdout": "parse error line 54: unexpected )\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n(define comp1 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc2 (lambda (x) (+ x -8)))\n(define dbl3 (lambda (x) (* x 2)))\n(print ((comp1 inc2 dbl3) -9))\n(print ((comp1 dbl3 inc2) 27))\n(define acc4 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc5 (acc4 0))\n(print (acc5 17))\n(print (acc5 10))\n(print (acc5 5))\n(define fact6 (lambda (n) (if (<= n 1) 1 (* n (fact6 (- n 1))))))\n(print (fact6 7))\n\n\n(define gcd7 (lambda (a b) (if (= b 0) a (gcd7 b (% a b)))))\n(print (gcd7 17 13))\n(print (if (> 27 21) 12 (- -4 6)))\n; note\n(print (begin (+ 1 2) (* 16 -2)))\n(define z (lambda (a) a))\n(z 1 2)\n(define mk8 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c9 (mk8 -1 17))\n(define c10 (mk8 19 3))\n(print (c9))\n(print (c10))\n(print (c9))\n(print (c10))\n",
+  "stdout": "-26\n38\n#t\n#t\n#f\n5040\n1\n12\n-32\nerror line 25: wrong number of arguments\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n\n(define x1 10)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 5))\n(print (bump2 26))\n(print (bump2 10))\n(print x1)\n(define x3 29)\n(define shadow4 (lambda (x3) (set! x3 (* x3 2)) x3))\n(print (shadow4 -5))\n(print x3)\n(let ((x3 100)) (set! x3 (+ x3 1)) (print x3))\n(print x3)\n\n(define fact5 (lambda (n) (if (<= n 1) 1 (* n (fact5 (- n 1))))))\n(print (fact5 1))\n(define t6 0)\n(define i7 1)\n(while (< i7 10)\n  (set! t6 (+ t6 (* i7 3)))\n  (set! i7 (+ i7 1)))\n(print t6)\n(print (if (> 9 -8) 11 (- 21 15)))\n; again\n(print (begin (+ 1 2) (* 21 4)))\n(define x8 14)\n(define bump9 (lambda (k) (set! x8 (+ x8 k)) x8))\n(print (bump9 23))\n(print (bump9 -7))\n(print (bump9 29))\n(print x8)\n(define x10 -9)\n(define shadow11 (lambda (x10) (set! x10 (* x10 2)) x10))\n(print (shadow11 -8))\n(print x10)\n(let ((x10 100)) (set! x10 (+ x10 1)) (print x10))\n(print x10)\n\n\n(define fact12 (lambda (n) (if (<= n 1) 1 (* n (fact12 (- n 1))))))\n(print (fact12 0))\n\n(define gcd13 (lambda (a b) (if (= b 0) a (gcd13 b (% a b)))))\n(print (gcd13 69 37))\n",
+  "stdout": "15\n41\n51\n51\n-10\n29\n101\n29\n1\n135\n11\n84\n37\n30\n59\n59\n-16\n-9\n101\n-9\n1\n1\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n(define t1 0)\n(define i2 1)\n(while (< i2 5)\n  (set! t1 (+ t1 (* i2 2)))\n  (set! i2 (+ i2 1)))\n(print t1)\n(define x3 28)\n(define shadow4 (lambda (x3) (set! x3 (* x3 2)) x3))\n(print (shadow4 4))\n(print x3)\n(let ((x3 100)) (set! x3 (+ x3 1)) (print x3))\n(print x3)\n(define gcd5 (lambda (a b) (if (= b 0) a (gcd5 b (% a b)))))\n(print (gcd5 9 25))\n(define mk6 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c7 (mk6 2 20))\n(define c8 (mk6 15 3))\n(print (c7))\n(print (c8))\n(print (c8))\n(print (c7))\n(define t9 0)\n(define i10 3)\n(while (< i10 8)\n  (set! t9 (+ t9 (* i10 1)))\n  (set! i10 (+ i10 1)))\n(print t9)\n(define mk11 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c12 (mk11 5 15))\n(define c13 (mk11 11 3))\n(print (c13))\n(print (c13))\n(define x14 6)\n(define bump15 (lambda (k) (set! x14 (+ x14 k)) x14))\n(print (bump15 -8))\n(print (bump15 5))\n(print x14)\n(define gcd16 (lambda (a b) (if (= b 0) a (gcd16 b (% a b)))))\n(print (gcd16 11 75))\n(define fib17 (lambda (n) (if (< n 2) n (+ (fib17 (- n 1)) (fib17 (- n 2))))))\n(print (fib17 12))\n\n(define fact18 (lambda (n) (if (<= n 1) 1 (* n (fact18 (- n 1))))))\n(print (fact18 21))\n\n\n(define gcd19 (lambda (a b) (if (= b 0) a (gcd19 b (% a b)))))\n(print (gcd19 68 15))\n\n(define fact20 (lambda (n) (if (<= n 1) 1 (* n (fact20 (- n 1))))))\n(print (fact20 4))\n(print (+ 1 nothing))\n\n\n(define x21 27)\n(define bump22 (lambda (k) (set! x21 (+ x21 k)) x21))\n(print (bump22 12))\n(print (bump22 22))\n(print (bump22 -6))\n(print x21)\n",
+  "stdout": "20\n8\n28\n101\n28\n1\n22\n18\n21\n42\n25\n14\n17\n-2\n3\n3\n1\n144\nerror line 48: overflow\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(if 5 1 2)\n\n(define t1 0)\n(define i2 1)\n(while (< i2 4)\n  (set! t1 (+ t1 (* i2 4)))\n  (set! i2 (+ i2 1)))\n(print t1)\n(define x3 11)\n(define shadow4 (lambda (x3) (set! x3 (* x3 2)) x3))\n(print (shadow4 5))\n(print x3)\n(let ((x3 100)) (set! x3 (+ x3 1)) (print x3))\n(print x3)\n(define fib5 (lambda (n) (if (< n 2) n (+ (fib5 (- n 1)) (fib5 (- n 2))))))\n(print (fib5 9))\n(define fib6 (lambda (n) (if (< n 2) n (+ (fib6 (- n 1)) (fib6 (- n 2))))))\n(print (fib6 10))\n\n(define a7 13)\n(define b8 (lambda () (set! a7 (- a7 1)) a7))\n(let ((a7 -2) (z (b8))) (print (+ a7 z)))\n(print a7)\n(define gcd9 (lambda (a b) (if (= b 0) a (gcd9 b (% a b)))))\n(print (gcd9 8 58))\n(define t10 0)\n(define i11 1)\n(while (< i11 10)\n  (set! t10 (+ t10 (* i11 2)))\n  (set! i11 (+ i11 1)))\n(print t10)\n\n(define x12 -1)\n(define shadow13 (lambda (x12) (set! x12 (* x12 2)) x12))\n(print (shadow13 -6))\n(print x12)\n(let ((x12 100)) (set! x12 (+ x12 1)) (print x12))\n(print x12)\n\n(define t14 0)\n(define i15 2)\n(while (< i15 10)\n  (set! t14 (+ t14 (* i15 3)))\n  (set! i15 (+ i15 1)))\n(print t14)\n(define fact16 (lambda (n) (if (<= n 1) 1 (* n (fact16 (- n 1))))))\n(print (fact16 6))\n",
+  "stdout": "error line 1: type error\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n\n(define gcd1 (lambda (a b) (if (= b 0) a (gcd1 b (% a b)))))\n(print (gcd1 31 2))\n(print (/ 7 (- 3 3)))\n(define comp2 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc3 (lambda (x) (+ x 5)))\n(define dbl4 (lambda (x) (* x 4)))\n(print ((comp2 inc3 dbl4) 1))\n(print ((comp2 dbl4 inc3) 21))\n(define gcd5 (lambda (a b) (if (= b 0) a (gcd5 b (% a b)))))\n(print (gcd5 8 85))\n\n\n(define fib6 (lambda (n) (if (< n 2) n (+ (fib6 (- n 1)) (fib6 (- n 2))))))\n(print (fib6 4))\n\n(define fact7 (lambda (n) (if (<= n 1) 1 (* n (fact7 (- n 1))))))\n(print (fact7 21))\n\n\n(define acc8 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc9 (acc8 0))\n(print (acc9 17))\n(print (acc9 11))\n(print (acc9 18))\n(define x10 10)\n(define shadow11 (lambda (x10) (set! x10 (* x10 2)) x10))\n(print (shadow11 1))\n(print x10)\n(let ((x10 100)) (set! x10 (+ x10 1)) (print x10))\n(print x10)\n(define gcd12 (lambda (a b) (if (= b 0) a (gcd12 b (% a b)))))\n(print (gcd12 62 2))\n",
+  "stdout": "1\nerror line 5: division by zero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n(define a1 22)\n(define b2 (lambda () (set! a1 (- a1 1)) a1))\n(let ((a1 19) (z (b2))) (print (+ a1 z)))\n(print a1)\n(define comp3 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc4 (lambda (x) (+ x 7)))\n(define dbl5 (lambda (x) (* x 3)))\n(print ((comp3 inc4 dbl5) 12))\n(print ((comp3 dbl5 inc4) 29))\n(define fact6 (lambda (n) (if (<= n 1) 1 (* n (fact6 (- n 1))))))\n(print (fact6 0))\n\n\n(define x7 24)\n(define bump8 (lambda (k) (set! x7 (+ x7 k)) x7))\n(print (bump8 14))\n(print (bump8 -5))\n(print (bump8 29))\n(print x7)\n(define x9 2)\n(define bump10 (lambda (k) (set! x9 (+ x9 k)) x9))\n(print (bump10 20))\n(print (bump10 3))\n(print x9)\n(define a11 11)\n(define b12 (lambda () (set! a11 (- a11 1)) a11))\n(let ((a11 0) (z (b12))) (print (+ a11 z)))\n(print a11)\n\n\n(define x13 21)\n(define shadow14 (lambda (x13) (set! x13 (* x13 2)) x13))\n(print (shadow14 6))\n(print x13)\n(let ((x13 100)) (set! x13 (+ x13 1)) (print x13))\n(print x13)\n(define t15 0)\n(define i16 2)\n(while (< i16 3)\n  (set! t15 (+ t15 (* i16 3)))\n  (set! i16 (+ i16 1)))\n(print t15)\n(define x17 3)\n(define shadow18 (lambda (x17) (set! x17 (* x17 2)) x17))\n(print (shadow18 0))\n(print x17)\n(let ((x17 100)) (set! x17 (+ x17 1)) (print x17))\n(print x17)\n(define x19 18)\n(define shadow20 (lambda (x19) (set! x19 (* x19 2)) x19))\n(print (shadow20 -3))\n(print x19)\n(let ((x19 100)) (set! x19 (+ x19 1)) (print x19))\n(print x19)\n(define acc21 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc22 (acc21 0))\n(print (acc22 12))\n(print (acc22 15))\n(print (acc22 4))\n(define a23 20)\n(define b24 (lambda () (set! a23 (- a23 1)) a23))\n(let ((a23 23) (z (b24))) (print (+ a23 z)))\n(print a23)\n(define a25 -7)\n(define b26 (lambda () (set! a25 (- a25 1)) a25))\n(let ((a25 4) (z (b26))) (print (+ a25 z)))\n(print a25)\n",
+  "stdout": "40\n21\n43\n108\n1\n38\n33\n62\n62\n22\n25\n25\n10\n10\n12\n21\n101\n21\n6\n0\n3\n101\n3\n-6\n18\n101\n18\n#t\n#t\n#f\n42\n19\n-4\n-8\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x1 1)\n(define shadow2 (lambda (x1) (set! x1 (* x1 2)) x1))\n(print (shadow2 2))\n(print x1)\n(let ((x1 100)) (set! x1 (+ x1 1)) (print x1))\n(print x1)\n(define fib3 (lambda (n) (if (< n 2) n (+ (fib3 (- n 1)) (fib3 (- n 2))))))\n(print (fib3 5))\n\n(define fact4 (lambda (n) (if (<= n 1) 1 (* n (fact4 (- n 1))))))\n(print (fact4 6))\n(define t5 0)\n(define i6 3)\n(while (< i6 6)\n  (set! t5 (+ t5 (* i6 1)))\n  (set! i6 (+ i6 1)))\n(print t5)\n(define acc7 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc8 (acc7 0))\n(print (acc8 2))\n(print (acc8 5))\n(print (acc8 2))\n(define fib9 (lambda (n) (if (< n 2) n (+ (fib9 (- n 1)) (fib9 (- n 2))))))\n(print (fib9 1))\n\n\n(print (+ 1 nothing))\n",
+  "stdout": "4\n1\n101\n1\n5\n720\n12\n#f\n#f\n#f\n1\nerror line 30: unbound variable nothing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define acc1 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc2 (acc1 0))\n(print (acc2 7))\n(print (acc2 1))\n(print (acc2 11))\n(define mk3 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c4 (mk3 15 14))\n(define c5 (mk3 -1 3))\n(print (c5))\n(print (c4))\n(print (c5))\n\n(define mk6 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c7 (mk6 16 23))\n(define c8 (mk6 9 3))\n(print (c7))\n(print (c7))\n(print (c8))\n(define acc9 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc10 (acc9 0))\n(print (acc10 8))\n(print (acc10 8))\n(print (acc10 20))\n(define t11 0)\n(define i12 1)\n(while (< i12 8)\n  (set! t11 (+ t11 (* i12 4)))\n  (set! i12 (+ i12 1)))\n(print t11)\n(define gcd13 (lambda (a b) (if (= b 0) a (gcd13 b (% a b)))))\n(print (gcd13 56 11))\n(print (if (> 18 27) 30 (- -2 26)))\n; again\n(print (begin (+ 1 2) (* 28 2)))\n(define t14 0)\n(define i15 2)\n(while (< i15 7)\n  (set! t14 (+ t14 (* i15 3)))\n  (set! i15 (+ i15 1)))\n(print t14)\n(define x16 16)\n(define shadow17 (lambda (x16) (set! x16 (* x16 2)) x16))\n(print (shadow17 18))\n(print x16)\n(let ((x16 100)) (set! x16 (+ x16 1)) (print x16))\n(print x16)\n",
+  "stdout": "#f\n#f\n#t\n2\n29\n5\n39\n62\n12\n#f\n#t\n#f\n112\n1\n-28\n56\n60\n36\n16\n101\n16\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "(define x1 -6)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 22))\n(print (bump2 -2))\n(print (bump2 12))\n(print (bump2 13))\n(print x1)\n\n\n(define fib3 (lambda (n) (if (< n 2) n (+ (fib3 (- n 1)) (fib3 (- n 2))))))\n(print (fib3 0))\n(define fact4 (lambda (n) (if (<= n 1) 1 (* n (fact4 (- n 1))))))\n(print (fact4 13))\n(define acc5 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc6 (acc5 0))\n(print (acc6 9))\n(print (acc6 13))\n(print (acc6 1))\n(define a7 -4)\n(define b8 (lambda () (set! a7 (- a7 1)) a7))\n(let ((a7 11) (z (b8))) (print (+ a7 z)))\n(print a7)\n(while #t (+ 1 1))\n(print 1\n",
+  "stdout": "parse error line 27: unclosed (\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n\n(define fact1 (lambda (n) (if (<= n 1) 1 (* n (fact1 (- n 1))))))\n(print (fact1 15))\n(if 5 1 2)\n(define fact2 (lambda (n) (if (<= n 1) 1 (* n (fact2 (- n 1))))))\n(print (fact2 4))\n\n\n(define x3 25)\n(define shadow4 (lambda (x3) (set! x3 (* x3 2)) x3))\n(print (shadow4 22))\n(print x3)\n(let ((x3 100)) (set! x3 (+ x3 1)) (print x3))\n(print x3)\n(define fib5 (lambda (n) (if (< n 2) n (+ (fib5 (- n 1)) (fib5 (- n 2))))))\n(print (fib5 4))\n(define gcd6 (lambda (a b) (if (= b 0) a (gcd6 b (% a b)))))\n(print (gcd6 85 32))\n(define acc7 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc8 (acc7 0))\n(print (acc8 18))\n(print (acc8 11))\n(print (acc8 4))\n",
+  "stdout": "1307674368000\nerror line 5: type error\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n(define t1 0)\n(define i2 2)\n(while (< i2 6)\n  (set! t1 (+ t1 (* i2 1)))\n  (set! i2 (+ i2 1)))\n(print t1)\n(define x3 6)\n(define bump4 (lambda (k) (set! x3 (+ x3 k)) x3))\n(print (bump4 3))\n(print (bump4 21))\n(print (bump4 -2))\n(print (bump4 -5))\n(print x3)\n\n(define x5 25)\n(define bump6 (lambda (k) (set! x5 (+ x5 k)) x5))\n(print (bump6 2))\n(print (bump6 28))\n(print x5)\n(define fib7 (lambda (n) (if (< n 2) n (+ (fib7 (- n 1)) (fib7 (- n 2))))))\n(print (fib7 11))\n(define acc8 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc9 (acc8 0))\n(print (acc9 20))\n(print (acc9 7))\n(print (acc9 9))\n(define fib10 (lambda (n) (if (< n 2) n (+ (fib10 (- n 1)) (fib10 (- n 2))))))\n(print (fib10 7))\n(define gcd11 (lambda (a b) (if (= b 0) a (gcd11 b (% a b)))))\n(print (gcd11 40 19))\n(define gcd12 (lambda (a b) (if (= b 0) a (gcd12 b (% a b)))))\n(print (gcd12 25 32))\n(define mk13 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c14 (mk13 24 5))\n(define c15 (mk13 -5 5))\n(print (c14))\n(print (c15))\n(print (c15))\n(print (c15))\n(print (c15))\n(define comp16 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc17 (lambda (x) (+ x 0)))\n(define dbl18 (lambda (x) (* x 3)))\n(print ((comp16 inc17 dbl18) 11))\n(print ((comp16 dbl18 inc17) -2))\n\n\n(define t19 0)\n(define i20 3)\n(while (< i20 3)\n  (set! t19 (+ t19 (* i20 2)))\n  (set! i20 (+ i20 1)))\n(print t19)\n\n\n(define fact21 (lambda (n) (if (<= n 1) 1 (* n (fact21 (- n 1))))))\n(print (fact21 13))\n(define x22 8)\n(define bump23 (lambda (k) (set! x22 (+ x22 k)) x22))\n(print (bump23 5))\n(print (bump23 25))\n(print (bump23 -6))\n(print (bump23 29))\n(print x22)\n(define a24 27)\n(define b25 (lambda () (set! a24 (- a24 1)) a24))\n(let ((a24 5) (z (b25))) (print (+ a24 z)))\n(print a24)\n",
+  "stdout": "14\n9\n30\n28\n23\n23\n27\n55\n55\n89\n#t\n#t\n#f\n13\n1\n1\n29\n0\n5\n10\n15\n33\n-6\n0\n6227020800\n13\n38\n32\n61\n61\n31\n26\n"
+ },
+ {
+  "args": [],
+  "code": 2,
+  "files": {},
+  "stdin": "(define t1 0)\n(define i2 0)\n(while (< i2 9)\n  (set! t1 (+ t1 (* i2 2)))\n  (set! i2 (+ i2 1)))\n(print t1)\n(define a3 5)\n(define b4 (lambda () (set! a3 (- a3 1)) a3))\n(let ((a3 -5) (z (b4))) (print (+ a3 z)))\n(print a3)\n(define comp5 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc6 (lambda (x) (+ x -3)))\n(define dbl7 (lambda (x) (* x 2)))\n(print ((comp5 inc6 dbl7) -1))\n(print ((comp5 dbl7 inc6) 2))\n(define acc8 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc9 (acc8 0))\n(print (acc9 6))\n(print (acc9 13))\n(print (acc9 10))\n\n\n(define acc10 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc11 (acc10 0))\n(print (acc11 15))\n(print (acc11 3))\n(print (acc11 1))\n\n\n(define fact12 (lambda (n) (if (<= n 1) 1 (* n (fact12 (- n 1))))))\n(print (fact12 16))\n(define fact13 (lambda (n) (if (<= n 1) 1 (* n (fact13 (- n 1))))))\n(print (fact13 8))\n\n(define fact14 (lambda (n) (if (<= n 1) 1 (* n (fact14 (- n 1))))))\n(print (fact14 10))\n(define a15 28)\n(define b16 (lambda () (set! a15 (- a15 1)) a15))\n(let ((a15 12) (z (b16))) (print (+ a15 z)))\n(print a15)\n\n\n(define acc17 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc18 (acc17 0))\n(print (acc18 9))\n(print (acc18 10))\n(print (acc18 6))\n\n(print (if (> 4 18) -9 (- -1 28)))\n; again\n(print (begin (+ 1 2) (* 15 -1)))\n(define mk19 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c20 (mk19 16 7))\n(define c21 (mk19 9 3))\n(print (c20))\n(print (c21))\n(print (c20))\n(print (c20))\n)\n",
+  "stdout": "parse error line 70: unexpected )\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "\n(define fib1 (lambda (n) (if (< n 2) n (+ (fib1 (- n 1)) (fib1 (- n 2))))))\n(print (fib1 2))\n\n(define fib2 (lambda (n) (if (< n 2) n (+ (fib2 (- n 1)) (fib2 (- n 2))))))\n(print (fib2 3))\n(define x3 1)\n(define shadow4 (lambda (x3) (set! x3 (* x3 2)) x3))\n(print (shadow4 -9))\n(print x3)\n(let ((x3 100)) (set! x3 (+ x3 1)) (print x3))\n(print x3)\n(define comp5 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc6 (lambda (x) (+ x 10)))\n(define dbl7 (lambda (x) (* x 3)))\n(print ((comp5 inc6 dbl7) 13))\n(print ((comp5 dbl7 inc6) 11))\n\n(define t8 0)\n(define i9 0)\n(while (< i9 8)\n  (set! t8 (+ t8 (* i9 1)))\n  (set! i9 (+ i9 1)))\n(print t8)\n(define mk10 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c11 (mk10 -1 14))\n(define c12 (mk10 30 4))\n(print (c11))\n(print (c11))\n(print (c12))\n(print (c12))\n(print (c12))\n(define comp13 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc14 (lambda (x) (+ x 27)))\n(define dbl15 (lambda (x) (* x 4)))\n(print ((comp13 inc14 dbl15) 9))\n(print ((comp13 dbl15 inc14) -6))\n(define t16 0)\n(define i17 3)\n(while (< i17 3)\n  (set! t16 (+ t16 (* i17 3)))\n  (set! i17 (+ i17 1)))\n(print t16)\n(print (+ 1 (< 1 2)))\n\n\n(define comp18 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc19 (lambda (x) (+ x 27)))\n(define dbl20 (lambda (x) (* x 3)))\n(print ((comp18 inc19 dbl20) -5))\n(print ((comp18 dbl20 inc19) 15))\n(define gcd21 (lambda (a b) (if (= b 0) a (gcd21 b (% a b)))))\n(print (gcd21 2 49))\n(print (if (> 20 22) 16 (- 7 2)))\n; note\n(print (begin (+ 1 2) (* -4 12)))\n\n\n(define acc22 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc23 (acc22 0))\n(print (acc23 16))\n(print (acc23 3))\n(print (acc23 2))\n(define fib24 (lambda (n) (if (< n 2) n (+ (fib24 (- n 1)) (fib24 (- n 2))))))\n(print (fib24 12))\n",
+  "stdout": "1\n2\n-18\n1\n101\n1\n49\n63\n28\n13\n27\n34\n38\n42\n63\n84\n0\nerror line 46: type error\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "(define x1 -3)\n(define bump2 (lambda (k) (set! x1 (+ x1 k)) x1))\n(print (bump2 -6))\n(print (bump2 13))\n(print (bump2 6))\n(print (bump2 20))\n(print x1)\n(define comp3 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc4 (lambda (x) (+ x -2)))\n(define dbl5 (lambda (x) (* x 4)))\n(print ((comp3 inc4 dbl5) 7))\n(print ((comp3 dbl5 inc4) 14))\n(define x6 12)\n(define bump7 (lambda (k) (set! x6 (+ x6 k)) x6))\n(print (bump7 1))\n(print (bump7 30))\n(print x6)\n(define gcd8 (lambda (a b) (if (= b 0) a (gcd8 b (% a b)))))\n(print (gcd8 72 16))\n(print (+ 1 nothing))\n(define gcd9 (lambda (a b) (if (= b 0) a (gcd9 b (% a b)))))\n(print (gcd9 19 42))\n(define t10 0)\n(define i11 3)\n(while (< i11 5)\n  (set! t10 (+ t10 (* i11 3)))\n  (set! i11 (+ i11 1)))\n(print t10)\n(define mk12 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c13 (mk12 -3 28))\n(define c14 (mk12 -8 1))\n(print (c13))\n(print (c13))\n(print (c13))\n(print (c13))\n(define mk15 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c16 (mk15 -4 21))\n(define c17 (mk15 8 3))\n(print (c16))\n(print (c16))\n\n\n(define fact18 (lambda (n) (if (<= n 1) 1 (* n (fact18 (- n 1))))))\n(print (fact18 6))\n\n\n(define comp19 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc20 (lambda (x) (+ x 30)))\n(define dbl21 (lambda (x) (* x 4)))\n(print ((comp19 inc20 dbl21) 24))\n(print ((comp19 dbl21 inc20) 18))\n",
+  "stdout": "-9\n4\n10\n30\n30\n26\n48\n13\n43\n43\n8\nerror line 20: unbound variable nothing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define x1 -6)\n(define shadow2 (lambda (x1) (set! x1 (* x1 2)) x1))\n(print (shadow2 2))\n(print x1)\n(let ((x1 100)) (set! x1 (+ x1 1)) (print x1))\n(print x1)\n(define fact3 (lambda (n) (if (<= n 1) 1 (* n (fact3 (- n 1))))))\n(print (fact3 13))\n(print (if (> -2 5) 27 (- 13 30)))\n; again\n(print (begin (+ 1 2) (* 28 11)))\n(print (if (> 3 14) -1 (- 0 -4)))\n; again\n(print (begin (+ 1 2) (* 16 -8)))\n\n(define x4 1)\n(define bump5 (lambda (k) (set! x4 (+ x4 k)) x4))\n(print (bump5 -6))\n(print (bump5 15))\n(print (bump5 22))\n(print x4)\n(define x6 27)\n(define bump7 (lambda (k) (set! x6 (+ x6 k)) x6))\n(print (bump7 -1))\n(print (bump7 6))\n(print (bump7 19))\n(print x6)\n\n(define x8 -7)\n(define shadow9 (lambda (x8) (set! x8 (* x8 2)) x8))\n(print (shadow9 -8))\n(print x8)\n(let ((x8 100)) (set! x8 (+ x8 1)) (print x8))\n(print x8)\n(define comp10 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc11 (lambda (x) (+ x -1)))\n(define dbl12 (lambda (x) (* x 2)))\n(print ((comp10 inc11 dbl12) 17))\n(print ((comp10 dbl12 inc11) -6))\n\n(define fact13 (lambda (n) (if (<= n 1) 1 (* n (fact13 (- n 1))))))\n(print (fact13 17))\n(define comp14 (lambda (f g) (lambda (x) (f (g x)))))\n(define inc15 (lambda (x) (+ x -6)))\n(define dbl16 (lambda (x) (* x 3)))\n(print ((comp14 inc15 dbl16) 16))\n(print ((comp14 dbl16 inc15) 14))\n(define fact17 (lambda (n) (if (<= n 1) 1 (* n (fact17 (- n 1))))))\n(print (fact17 14))\n",
+  "stdout": "4\n-6\n101\n-6\n6227020800\n-17\n308\n4\n-128\n-5\n10\n32\n32\n26\n32\n51\n51\n-16\n-7\n101\n-7\n33\n-14\n355687428096000\n42\n24\n87178291200\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(define a1 2)\n(define b2 (lambda () (set! a1 (- a1 1)) a1))\n(let ((a1 23) (z (b2))) (print (+ a1 z)))\n(print a1)\n\n\n(print (if (> 18 28) 24 (- 30 1)))\n; x y z\n(print (begin (+ 1 2) (* 9 -5)))\n(define t3 0)\n(define i4 2)\n(while (< i4 10)\n  (set! t3 (+ t3 (* i4 4)))\n  (set! i4 (+ i4 1)))\n(print t3)\n(define gcd5 (lambda (a b) (if (= b 0) a (gcd5 b (% a b)))))\n(print (gcd5 6 87))\n(define t6 0)\n(define i7 2)\n(while (< i7 7)\n  (set! t6 (+ t6 (* i7 1)))\n  (set! i7 (+ i7 1)))\n(print t6)\n(define t8 0)\n(define i9 3)\n(while (< i9 5)\n  (set! t8 (+ t8 (* i9 2)))\n  (set! i9 (+ i9 1)))\n(print t8)\n(define a10 27)\n(define b11 (lambda () (set! a10 (- a10 1)) a10))\n(let ((a10 6) (z (b11))) (print (+ a10 z)))\n(print a10)\n",
+  "stdout": "24\n1\n29\n-45\n176\n3\n20\n14\n32\n26\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(print (if (> 21 3) 6 (- -5 2)))\n; note\n(print (begin (+ 1 2) (* 22 -7)))\n(define gcd1 (lambda (a b) (if (= b 0) a (gcd1 b (% a b)))))\n(print (gcd1 29 72))\n(define acc2 (lambda (total)\n  (lambda (x)\n    (set! total (+ total x))\n    (and (> total 10) (or (< total 30) (= total 50))))))\n(define acc3 (acc2 0))\n(print (acc3 8))\n(print (acc3 8))\n(print (acc3 18))\n(define t4 0)\n(define i5 3)\n(while (< i5 6)\n  (set! t4 (+ t4 (* i5 1)))\n  (set! i5 (+ i5 1)))\n(print t4)\n(define fib6 (lambda (n) (if (< n 2) n (+ (fib6 (- n 1)) (fib6 (- n 2))))))\n(print (fib6 2))\n\n\n(define a7 11)\n(define b8 (lambda () (set! a7 (- a7 1)) a7))\n(let ((a7 10) (z (b8))) (print (+ a7 z)))\n(print a7)\n\n\n(define mk9 (lambda (start step)\n  (let ((n start))\n    (lambda () (set! n (+ n step)) n))))\n(define c10 (mk9 21 -4))\n(define c11 (mk9 19 3))\n(print (c11))\n(print (c10))\n(define fact12 (lambda (n) (if (<= n 1) 1 (* n (fact12 (- n 1))))))\n(print (fact12 17))\n(print (if (> 11 10) 6 (- 2 3)))\n; note\n(print (begin (+ 1 2) (* -2 11)))\n(define x13 30)\n(define bump14 (lambda (k) (set! x13 (+ x13 k)) x13))\n(print (bump14 -6))\n(print (bump14 24))\n(print (bump14 30))\n(print x13)\n(print (if (> 19 29) -8 (- 23 29)))\n; note\n(print (begin (+ 1 2) (* 24 22)))\n(define fact15 (lambda (n) (if (<= n 1) 1 (* n (fact15 (- n 1))))))\n(print (fact15 10))\n\n(define fib16 (lambda (n) (if (< n 2) n (+ (fib16 (- n 1)) (fib16 (- n 2))))))\n(print (fib16 6))\n",
+  "stdout": "6\n-154\n1\n#f\n#t\n#f\n12\n1\n20\n10\n22\n17\n355687428096000\n6\n-22\n24\n48\n78\n78\n-6\n528\n3628800\n8\n"
+ }
+]

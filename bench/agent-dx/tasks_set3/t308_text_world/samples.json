@@ -1,0 +1,16 @@
+[
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "room hall\nroom cellar\nroom attic\nexit hall n attic\nexit attic s hall\nexit hall d cellar iron-key\nexit cellar u hall\nthing iron-key 1 attic\nthing lamp 3 hall\nbox chest 10 20 hall\nthing coin 1 in:chest\nthing rock 40 cellar\nplayer hall 12\n---\nlook\ngo d\ngo n\nlook\ntake iron-key\ngo s\nunlock d\ngo d\nlook\ntake rock\ngo u\nopen chest\ntake coin from chest\ninv\nput lamp in chest\ntake lamp\nput lamp in chest\nlook\n",
+  "stdout": "== hall ==\nexits: n d(locked)\nitems: chest{closed}, lamp\nerror: door d is locked\n-> attic\n== attic ==\nexits: s\nitems: iron-key\ntaken iron-key\n-> hall\nunlocked d\n-> cellar\n== cellar ==\nexits: u\nitems: rock\nerror: too heavy\n-> hall\nopened chest\ntaken coin from chest\ncarrying: coin, iron-key (2/12)\nput lamp in chest\nerror: no lamp here\nerror: no lamp here\n== hall ==\nexits: n d\nitems: chest{lamp}\n"
+ },
+ {
+  "args": [],
+  "code": 1,
+  "files": {},
+  "stdin": "room a\nroom b\nexit a e b\nexit a e b\nthing x 1 nowhere\nbox bag 5 10 a open\nthing pebble 2 in:bag\nplayer a 6\nplayer b 6\nfoo\n---\nlook\ntake pebble\ntake bag\ninv\nclose bag\nput bag in bag\nfly\n",
+  "stdout": "error: bad world line 4\nerror: bad world line 5\nerror: bad world line 9\nerror: bad world line 10\n== a ==\nexits: e\nitems: bag{pebble}\nerror: no pebble here\nerror: too heavy\ncarrying: nothing (0/6)\nclosed bag\nerror: cannot put bag in itself\nerror: bad command\n"
+ }
+]
