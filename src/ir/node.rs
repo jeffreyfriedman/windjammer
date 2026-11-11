@@ -179,7 +179,8 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
         // Windjammer `int` lowers to Rust `i64` (see codegen::rust::types).
         Type::Int => BaseType::I64,
         Type::Int32 => BaseType::I32,
-        Type::Uint => BaseType::U32,
+        // `uint` is the unsigned counterpart of `int` (SPEC-TYP-001): u64, as the Rust backend spells it.
+        Type::Uint => BaseType::U64,
         Type::Float => BaseType::F64,
         Type::Bool => BaseType::Bool,
         Type::String => BaseType::String,
