@@ -29,7 +29,7 @@ Output:
 
 ## Explicit mutability
 
-**SPEC-STMT-002** A binding is immutable unless declared `let mut` (ADR-0002, accepted); assigning to an immutable binding is a compile-time error. [OPEN Q-007] The compiler currently infers `mut` silently and the interpreter does not check, so the program below is accepted.
+**SPEC-STMT-002** A binding is immutable unless declared `let mut` (ADR-0002, accepted); assigning to an immutable binding is a compile-time error. Changing a binding includes assigning to it or to its fields or elements, calling a method that changes it and passing it where the callee changes it (diagnostic WJ0051, the same in `wj check`, `wj build` and `wj run`). [OPEN Q-007] During the migration WJ0051 is a warning (the compiler still infers `mut` for the generated code), so the program below is accepted with a warning.
 
 <!-- example: tests/spec/statements/SPEC-STMT-002.wj -->
 <!-- ignore: known divergence Q-007; the example shows the specified behaviour, which the implementation does not have yet -->

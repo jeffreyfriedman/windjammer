@@ -23,7 +23,7 @@ ADR-0015 section 2 (Accepted) says these replace `as`. The parser rejects `int(a
 **Resolved in the interpreter** (interp-gaps2): interpolation uses a user `to_string(self)` as Display; SPEC-STR-009 is a normal example. The Rust backend still needs the generated `impl Display` bridge.
 
 ## Q-007 Explicit `let mut` (ADR-0002, Accepted) is not enforced
-The Rust backend still infers `mut` for locals (`auto_needs_mut`), and the interpreter accepts assignment to an immutable `let`. ADR-0002 migration (diagnostic + `wj fix`) has not landed. Rec.: front-end diagnostic "`x` is assigned but not declared `mut`" (also the first concrete step of ADR-0005 option C). Repro: SPEC-STMT-002 (xfail).
+Migration step 1 landed: WJ0051 ("`x` is changed but is not declared `mut`", `src/check/local_mut/`) reports every local changed without `mut` (assignment, field/element assignment, a method with a `&mut self` receiver by the solver or `std/rust_core.wji`, an argument the callee changes, closures), identically in `wj check`, `wj build` and `wj run`, with a machine-applicable fix (`wj fix <path>`, `wj check --fix`). It is a warning while sources migrate; the Rust backend still infers `mut` for locals (`auto_needs_mut`). Remaining: migrate the corpora, flip `local_mut::REQUIRED` to an error, delete the local inference. Repro: SPEC-STMT-002 (xfail until the flip).
 
 ## Q-008 Range patterns
 **Resolved** by the parser-gaps merge (481081ee): range patterns parse and run (interpreter, Rust, portable backends; corpus programs 152-159). SPEC-PAT-008 is now a normal example.

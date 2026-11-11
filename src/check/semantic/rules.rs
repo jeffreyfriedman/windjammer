@@ -77,10 +77,6 @@ pub enum Kind {
     Bool,
 }
 
-/// ADR-0002 migration switch: today the compiler infers `mut` for locals, so assigning to a
-/// binding declared without `mut` is reported as a warning (WJ0004). When the ADR-0002 migration
-/// makes explicit `let mut` mandatory, flip this to `true` to make it an error.
-pub const MUTABILITY_REQUIRED: bool = false;
 
 /// Scalar kind of a declared type, if it is one of the four scalars.
 pub fn type_kind(t: &crate::parser::Type) -> Option<Kind> {

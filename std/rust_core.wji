@@ -1,5 +1,9 @@
 // std/rust_core.wji - the typed surface of the Rust core types Windjammer programs call methods on.
 //
+// A receiver declared `&mut self` changes the value it is called on (ADR-0002: a local binding changed that way is
+// declared `let mut`); every other receiver is written `self`. The gate checks both directions against rustc: a
+// `&mut self` method is rejected on an immutable binding, any other method is accepted on one.
+//
 // Each `trait` is named after the Rust type and declares that type's methods in Windjammer types, with the
 // type's own parameters as the trait's generics and a method's own parameters as the method's generics
 // (`parse<F>` takes its `F` from a turbofish). `usize` is an index slot (ADR-0028): an argument there is an
@@ -13,22 +17,25 @@ pub trait Vec<T> {
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
-    fn push(self, value: T);
-    fn pop(self) -> Option<T>;
+    fn push(&mut self, value: T);
+    fn pop(&mut self) -> Option<T>;
     fn get(self, index: usize) -> Option<&T>;
-    fn get_mut(self, index: usize) -> Option<&mut T>;
+    fn get_mut(&mut self, index: usize) -> Option<&mut T>;
     fn first(self) -> Option<&T>;
     fn last(self) -> Option<&T>;
-    fn insert(self, index: usize, value: T);
-    fn remove(self, index: usize) -> T;
-    fn swap_remove(self, index: usize) -> T;
-    fn swap(self, a: usize, b: usize);
-    fn truncate(self, len: usize);
-    fn split_off(self, at: usize) -> Vec<T>;
+    fn insert(&mut self, index: usize, value: T);
+    fn remove(&mut self, index: usize) -> T;
+    fn swap_remove(&mut self, index: usize) -> T;
+    fn swap(&mut self, a: usize, b: usize);
+    fn truncate(&mut self, len: usize);
+    fn split_off(&mut self, at: usize) -> Vec<T>;
     fn contains(self, value: &T) -> bool;
-    fn clear(self);
+    fn clear(&mut self);
     fn iter(self) -> Iterator<&T>;
-    fn iter_mut(self) -> Iterator<&mut T>;
+    fn iter_mut(&mut self) -> Iterator<&mut T>;
+    fn sort(&mut self);
+    fn reverse(&mut self);
+    fn dedup(&mut self);
     fn into_iter(self) -> Iterator<T>;
 }
 
@@ -40,10 +47,10 @@ pub trait Iterator<T> {
     fn filter_map<U>(self, f: fn(T) -> Option<U>) -> Iterator<U>;
     fn fold<A>(self, init: A, f: fn(A, T) -> A) -> A;
     fn for_each(self, f: fn(T));
-    fn any(self, f: fn(T) -> bool) -> bool;
-    fn all(self, f: fn(T) -> bool) -> bool;
-    fn find(self, f: fn(&T) -> bool) -> Option<T>;
-    fn position(self, f: fn(T) -> bool) -> Option<usize>;
+    fn any(&mut self, f: fn(T) -> bool) -> bool;
+    fn all(&mut self, f: fn(T) -> bool) -> bool;
+    fn find(&mut self, f: fn(&T) -> bool) -> Option<T>;
+    fn position(&mut self, f: fn(T) -> bool) -> Option<usize>;
     fn take_while(self, f: fn(&T) -> bool) -> Iterator<T>;
     fn skip_while(self, f: fn(&T) -> bool) -> Iterator<T>;
     fn rev(self) -> Iterator<T>;
@@ -61,27 +68,28 @@ pub trait Iterator<T> {
     fn min(self) -> Option<T>;
     fn max(self) -> Option<T>;
     fn last(self) -> Option<T>;
-    fn next(self) -> Option<T>;
-    fn nth(self, n: usize) -> Option<T>;
+    fn next(&mut self) -> Option<T>;
+    fn nth(&mut self, n: usize) -> Option<T>;
     fn collect(self) -> Vec<T>;
 }
 
 pub trait VecDeque<T> {
+    fn new() -> VecDeque<T>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
-    fn push_back(self, value: T);
-    fn push_front(self, value: T);
-    fn pop_back(self) -> Option<T>;
-    fn pop_front(self) -> Option<T>;
+    fn push_back(&mut self, value: T);
+    fn push_front(&mut self, value: T);
+    fn pop_back(&mut self) -> Option<T>;
+    fn pop_front(&mut self) -> Option<T>;
     fn front(self) -> Option<&T>;
     fn back(self) -> Option<&T>;
     fn get(self, index: usize) -> Option<&T>;
-    fn get_mut(self, index: usize) -> Option<&mut T>;
-    fn remove(self, index: usize) -> Option<T>;
-    fn swap(self, a: usize, b: usize);
-    fn truncate(self, len: usize);
-    fn split_off(self, at: usize) -> VecDeque<T>;
-    fn swap_remove_back(self, index: usize) -> Option<T>;
+    fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+    fn remove(&mut self, index: usize) -> Option<T>;
+    fn swap(&mut self, a: usize, b: usize);
+    fn truncate(&mut self, len: usize);
+    fn split_off(&mut self, at: usize) -> VecDeque<T>;
+    fn swap_remove_back(&mut self, index: usize) -> Option<T>;
     fn contains(self, value: &T) -> bool;
 }
 
@@ -91,9 +99,9 @@ pub trait HashMap<K, V> {
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
     fn get(self, key: &K) -> Option<&V>;
-    fn get_mut(self, key: &K) -> Option<&mut V>;
-    fn insert(self, key: K, value: V) -> Option<V>;
-    fn remove(self, key: &K) -> Option<V>;
+    fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    fn insert(&mut self, key: K, value: V) -> Option<V>;
+    fn remove(&mut self, key: &K) -> Option<V>;
     fn contains_key(self, key: &K) -> bool;
 }
 
@@ -102,26 +110,28 @@ pub trait BTreeMap<K, V> {
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
     fn get(self, key: &K) -> Option<&V>;
-    fn get_mut(self, key: &K) -> Option<&mut V>;
-    fn insert(self, key: K, value: V) -> Option<V>;
-    fn remove(self, key: &K) -> Option<V>;
+    fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    fn insert(&mut self, key: K, value: V) -> Option<V>;
+    fn remove(&mut self, key: &K) -> Option<V>;
     fn contains_key(self, key: &K) -> bool;
 }
 
 pub trait HashSet<T> {
+    fn new() -> HashSet<T>;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
-    fn insert(self, value: T) -> bool;
-    fn remove(self, value: &T) -> bool;
+    fn insert(&mut self, value: T) -> bool;
+    fn remove(&mut self, value: &T) -> bool;
     fn contains(self, value: &T) -> bool;
 }
 
 pub trait BTreeSet<T> {
+    fn new() -> BTreeSet<T>;
     fn len(self) -> usize;
     fn is_empty(self) -> bool;
-    fn insert(self, value: T) -> bool;
-    fn remove(self, value: &T) -> bool;
+    fn insert(&mut self, value: T) -> bool;
+    fn remove(&mut self, value: &T) -> bool;
     fn contains(self, value: &T) -> bool;
 }
 
@@ -135,6 +145,7 @@ pub trait Option<T> {
     // On `Option<&T>`: the copy of the referent (references carry no width).
     fn copied(self) -> Option<T>;
     fn cloned(self) -> Option<T>;
+    fn take(&mut self) -> Option<T>;
 }
 
 pub trait Result<T, E> {
@@ -149,6 +160,7 @@ pub trait Result<T, E> {
 }
 
 pub trait String {
+    fn new() -> String;
     fn len(self) -> usize;
     fn capacity(self) -> usize;
     fn is_empty(self) -> bool;
@@ -162,8 +174,11 @@ pub trait String {
     fn starts_with(self, pattern: &str) -> bool;
     fn ends_with(self, pattern: &str) -> bool;
     fn parse<F>(self) -> Result<F, String>;
-    fn push_str(self, text: &str);
-    fn truncate(self, len: usize);
+    fn push_str(&mut self, text: &str);
+    fn truncate(&mut self, len: usize);
+    fn push(&mut self, ch: char);
+    fn pop(&mut self) -> Option<char>;
+    fn clear(&mut self);
     fn split(self, pattern: &str) -> Iterator<&str>;
     fn split_whitespace(self) -> Iterator<&str>;
     fn lines(self) -> Iterator<&str>;

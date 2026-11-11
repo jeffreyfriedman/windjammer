@@ -71,6 +71,8 @@ fn every_core_surface_entry_typechecks_in_rustc() {
     let surface = CoreSurface::parse();
     let entries = surface.entries();
     assert!(!entries.is_empty());
+    let mut reading = String::new();
+    let mut changing: Vec<(String, String)> = Vec::new();
     for (i, (ty, method)) in entries.iter().enumerate() {
         // An associated function (`Vec::new`) is called on the type, with its generics instantiated.
         if surface.is_static(ty, method) {
@@ -105,7 +107,21 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         };
         let ret_ty = if method == "parse" { "Result<i64, _>".to_string() } else { ret_ty };
         let line = format!("fn e{i}(mut r: {recv}) {{ let _x: {ret_ty} = r.{method}{turbofish}({}){tail}; }}\n", args.join(", "));
-        src.push_str(&if ty == "Float" { line.replace("i64", "f64") } else { line });
+        src.push_str(&if ty == "Float" { line.replace("i64", "f64") } else { line.clone() });
+        // ADR-0002: the receiver mode. The same call on an immutable binding (`r`, not `mut r`) compiles exactly
+        // when the entry is not declared `&mut self`.
+        let immutable = line.replacen("(mut r:", "(r:", 1).replacen(&format!("fn e{i}("), &format!("fn m{i}("), 1);
+        let immutable = if ty == "Float" { immutable.replace("i64", "f64") } else { immutable };
+        let as_type = match ty.as_str() {
+            "Integer" => Type::Int,
+            "Float" => Type::Float,
+            _ => Type::Parameterized(ty.clone(), generics.iter().map(|g| Type::Generic(g.clone())).collect()),
+        };
+        if surface.changes_receiver(&as_type, method) == Some(true) {
+            changing.push((format!("{ty}::{method}"), immutable));
+        } else {
+            reading.push_str(&immutable);
+        }
     }
     let dir = tempfile::TempDir::new().unwrap();
     let file = dir.path().join("surface.rs");
@@ -121,4 +137,41 @@ fn every_core_surface_entry_typechecks_in_rustc() {
         "std/rust_core.wji disagrees with rustc:\n{}\n--- generated\n{src}",
         String::from_utf8_lossy(&out.stderr)
     );
+    receiver_modes_agree_with_rustc(&src, &reading, &changing);
+}
+
+/// Methods not declared `&mut self` accept an immutable receiver binding; each one declared `&mut self` is rejected
+/// on one (E0596). One file per direction; the rejected calls are told apart by the line rustc reports.
+fn receiver_modes_agree_with_rustc(prelude_and_entries: &str, reading: &str, changing: &[(String, String)]) {
+    assert!(changing.len() >= 30, "too few `&mut self` entries: {}", changing.len());
+    let prelude: String = prelude_and_entries.lines().take(3).map(|l| format!("{l}\n")).collect();
+    let dir = tempfile::TempDir::new().unwrap();
+    let run = |name: &str, body: &str| {
+        let file = dir.path().join(name);
+        std::fs::write(&file, format!("{prelude}{body}")).unwrap();
+        std::process::Command::new("rustc")
+            .args(["--crate-type", "lib", "--edition", "2021", "--emit", "metadata", "--out-dir"])
+            .arg(dir.path())
+            .arg(&file)
+            .output()
+            .unwrap()
+    };
+    let out = run("reading.rs", reading);
+    assert!(
+        out.status.success(),
+        "a method not declared `&mut self` in std/rust_core.wji changes its receiver:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let body: String = changing.iter().map(|(_, l)| l.as_str()).collect();
+    let out = run("changing.rs", &body);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // each entry is one line after the 3-line prelude; rustc names the line of the rejected call
+    let rejected: std::collections::BTreeSet<usize> = stderr
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("--> "))
+        .filter_map(|loc| loc.split(':').nth(1)?.parse::<usize>().ok())
+        .collect();
+    let accepted: Vec<&str> =
+        changing.iter().enumerate().filter(|(i, _)| !rejected.contains(&(i + 4))).map(|(_, (n, _))| n.as_str()).collect();
+    assert!(accepted.is_empty(), "declared `&mut self` in std/rust_core.wji but rustc accepts an immutable receiver: {accepted:?}\n{stderr}");
 }

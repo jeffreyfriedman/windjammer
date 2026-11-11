@@ -30,6 +30,6 @@ fn drain_while(q: Queue, limit: int, keep: fn(string) -> bool) -> int {
 
 fn main() {
     println("${within(1, 9, |n| n > 0)}")
-    let q = Queue { items: ["a", "b", "stop"] }
+    let mut q = Queue { items: ["a", "b", "stop"] }
     println("${drain_while(q, 10, |s| s != "stop")}")
 }
