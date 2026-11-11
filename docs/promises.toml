@@ -269,6 +269,10 @@ id = "wj cache prune --aggressive"
 statement = "Also clear debug incremental trees when reclaiming"
 
 [[promise]]
+id = "wj cache prune --force"
+statement = "Also delete what a running build holds or wrote within the last hour (normally left alone)"
+
+[[promise]]
 id = "wj cache setup"
 statement = "Write env.sh / env.ps1 for bare `cargo` invocations"
 

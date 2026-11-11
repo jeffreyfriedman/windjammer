@@ -76,10 +76,15 @@ impl<'ast> CodeGenerator<'ast> {
             }
             out
         } else {
+            let deref_operand = matches!(func_name, "assert_eq" | "assert_ne").then(|| self.borrowed_assert_operand(arguments)).flatten();
             arguments
                 .iter()
-                .map(|(_label, arg)| {
+                .enumerate()
+                .map(|(i, (_label, arg))| {
                     let generated = self.generate_expression(arg);
+                    if deref_operand == Some(i) {
+                        return format!("*{generated}");
+                    }
                     // Deref borrowed Copy params in assert_eq!/assert_ne!
                     // to avoid E0277 (&i32 != i32 for PartialEq)
                     if matches!(func_name, "assert_eq" | "assert_ne") {
@@ -113,6 +118,24 @@ impl<'ast> CodeGenerator<'ast> {
                 .collect()
         };
         Some(format!("{}!({})", func_name, args.join(", ")))
+    }
+
+    /// `assert_eq(first, wanted)` with `first: &String` and `wanted: String` (or any `&T` beside an owned `T`):
+    /// Rust has no `&T == T`, so the borrowed operand is compared through its referent. Index of that operand.
+    fn borrowed_assert_operand(&self, arguments: &[(Option<String>, &Expression<'ast>)]) -> Option<usize> {
+        let [(_, left), (_, right)] = arguments else { return None };
+        let (l, r) = (self.infer_expression_type(left)?, self.infer_expression_type(right)?);
+        let borrowed = |t: &crate::parser::Type| matches!(t, crate::parser::Type::Reference(_));
+        let (pl, pr) = (crate::codegen::rust::collection_detection::peel_type_reference(&l), crate::codegen::rust::collection_detection::peel_type_reference(&r));
+        let both_text = crate::codegen::rust::types::is_windjammer_text_type(pl) && crate::codegen::rust::types::is_windjammer_text_type(pr);
+        if pl != pr && !both_text {
+            return None;
+        }
+        match (borrowed(&l), borrowed(&r)) {
+            (true, false) => Some(0),
+            (false, true) => Some(1),
+            _ => None,
+        }
     }
 
     /// Lower Windjammer `assert(cond)` / `assert(cond, msg)` to Rust `assert!`.

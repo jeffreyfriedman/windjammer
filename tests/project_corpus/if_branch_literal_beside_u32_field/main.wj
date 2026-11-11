@@ -1,0 +1,9 @@
+// `let batch = if pending > 4 { 4 } else { pending }` with a u32 field: the literal is a u32. Expected by hand: pending 10 -> batch 4 -> pending 6, done 4.
+// expect: 6 4
+mod sched
+
+fn main() {
+    let s = sched::Sched { pending: 10, done: 0 }
+    let t = s.step()
+    println("${t.pending} ${t.done}")
+}

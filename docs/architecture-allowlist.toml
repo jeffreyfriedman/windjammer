@@ -203,7 +203,6 @@
 "src/codegen/rust/call_expression_generation/trait_call_generation.rs::generate_call_on_field_access" = 699
 "src/codegen/rust/call_signature_resolution.rs::effective_param_ownership" = 314
 "src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 373
-"src/codegen/rust/data_structure_generation.rs::generate_tuple" = 317
 "src/codegen/rust/expression_generation.rs::generate_expression_immut" = 453
 "src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 649
 "src/codegen/rust/for_statement_generation.rs::generate_for_statement" = 565

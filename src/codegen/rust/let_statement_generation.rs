@@ -1561,10 +1561,7 @@ impl<'ast> CodeGenerator<'ast> {
             .numeric_inference
             .as_ref()
             .is_some_and(|ni| ni.get_int_type(literal) == crate::type_inference::IntType::I64);
-        let semantic_default = self.current_ir_function.as_ref().is_some_and(|f| {
-            crate::ir::numeric_defaults::literal_key(literal)
-                .is_some_and(|k| f.default_int_literals.contains(&k))
-        });
+        let semantic_default = self.solver_literal_width(literal) == Some(&crate::ir::safety_type::BaseType::I64);
         solved_i64 || semantic_default
     }
 }

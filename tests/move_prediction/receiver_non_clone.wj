@@ -1,3 +1,4 @@
+// oracle: check
 // WJ0007: `with_seen` takes `self`, so calling it consumes `inbox`; `Inbox` holds a channel end, which
 // cannot be copied, so the later read of `inbox` cannot be made valid by the compiler.
 use std::sync::mpsc
@@ -17,5 +18,6 @@ fn main() {
     let pair = mpsc::channel()
     let inbox = Inbox { rx: pair.1, seen: 0 }
     let next = inbox.with_seen(1)
+//~@16+15 ERROR WJ0007 `inbox` is used after `inbox.with_seen()` consumed it
     println("${next.seen} ${inbox.seen}")
 }

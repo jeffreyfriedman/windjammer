@@ -34,6 +34,10 @@ pub(crate) struct IdiomScratch {
     /// ADR-0014: list literals (by element-slice address) in return position of a function whose
     /// declared return type is a `Vec`: tail expressions, `return` values, `if`/`match` arm tails.
     pub(crate) return_position_list_literals: HashSet<usize>,
+    /// Tuple slot types for the next tuple literal only (a match arm next to a sibling arm of tuple type).
+    pub(crate) expected_tuple_slots: Option<Vec<Type>>,
+    /// Tuple slot types for every tuple literal element of the list literal being generated.
+    pub(crate) list_elem_tuple_slots: Option<Vec<Type>>,
 }
 
 impl<'ast> CodeGenerator<'ast> {

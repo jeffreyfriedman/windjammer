@@ -93,8 +93,39 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn generate_with_list_context(&mut self, value: &Expression<'ast>, target: Option<&Type>) -> String {
         let prev = self.array_literal_as_list;
         self.array_literal_as_list = matches!(value, Expression::Array { .. }) && !matches!(target, Some(Type::Array(..)));
+        let prev_slots = std::mem::replace(&mut self.idiom.list_elem_tuple_slots, target.and_then(Self::list_element_tuple_slots));
         let s = self.generate_expression(value);
+        self.idiom.list_elem_tuple_slots = prev_slots;
         self.array_literal_as_list = prev;
         s
+    }
+
+    /// Slot types of the tuples a list type holds: `Vec<(string, int)>` (also under `Result` / `Option`) gives `[string, int]`.
+    pub(in crate::codegen::rust) fn list_element_tuple_slots(list: &Type) -> Option<Vec<Type>> {
+        let list = match list {
+            Type::Result(ok, _) => ok.as_ref(),
+            Type::Option(inner) => inner.as_ref(),
+            other => other,
+        };
+        let elem = match list {
+            Type::Vec(elem) => elem.as_ref(),
+            Type::Parameterized(_, args) if crate::type_classification::type_is_vec_container(list) => args.first()?,
+            _ => return None,
+        };
+        match elem {
+            Type::Tuple(slots) => Some(slots.clone()),
+            _ => None,
+        }
+    }
+
+    /// Tuple slots for a list literal that is a call argument (the formal's `Vec<(..)>`) or in return position.
+    pub(in crate::codegen::rust) fn return_or_argument_element_tuple_slots(&self, elements: &[&Expression<'ast>]) -> Option<Vec<Type>> {
+        if let Some(slots) = self.call_arg_expected_type.as_ref().and_then(Self::list_element_tuple_slots) {
+            return Some(slots);
+        }
+        if !self.idiom.return_position_list_literals.contains(&(elements.as_ptr() as usize)) {
+            return None;
+        }
+        self.current_function_return_type.as_ref().and_then(Self::list_element_tuple_slots)
     }
 }
