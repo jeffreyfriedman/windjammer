@@ -1,0 +1,13 @@
+use crate::reader::Reader
+
+pub fn allowed(policy: Reader, who: string, relation: string, n: int) -> int {
+    let mut hits = 0
+    let mut i = 0
+    while i < n {
+        if policy.check(who, relation) {
+            hits = hits + 1
+        }
+        i = i + 1
+    }
+    hits
+}

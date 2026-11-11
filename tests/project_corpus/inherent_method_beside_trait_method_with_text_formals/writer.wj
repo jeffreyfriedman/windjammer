@@ -1,0 +1,12 @@
+use crate::policy::Policy
+
+pub struct Writer {
+    pub log: Vec<string>,
+}
+
+impl Policy for Writer {
+    fn check(self, who: string, relation: string) -> bool {
+        self.log.push(relation)
+        who.len() > 0
+    }
+}

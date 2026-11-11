@@ -144,6 +144,8 @@ pub struct SignatureRegistry {
     /// Write-back restores trait AST `string` onto these without touching
     /// inherent homonyms (`DbReportReader::report_lines`).
     trait_impl_method_keys: HashSet<String>,
+    /// `Type::method` keys of inherent impls (`impl Type`) the program declares.
+    pub(super) inherent_method_keys: HashSet<String>,
     /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
     /// `csv_mod.rs`, `async` from `async_runtime.rs`) — never a hand-maintained list.
     runtime_std_modules: HashSet<String>,
@@ -230,6 +232,7 @@ impl SignatureRegistry {
             method_index: HashMap::new(),
             trait_method_keys: HashSet::new(),
             trait_impl_method_keys: HashSet::new(),
+            inherent_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
             runtime_std_rust_stems: HashMap::new(),
             runtime_type_modules: HashMap::new(),
@@ -1037,47 +1040,6 @@ impl SignatureRegistry {
         self.trait_impl_method_keys.insert(key);
     }
 
-    /// True when `key` (or a module-qualified alias) is a trait-impl method.
-    pub fn is_trait_impl_method_key(&self, key: &str) -> bool {
-        if self.trait_impl_method_key_matches_local(key) {
-            return true;
-        }
-        self.global_fallback
-            .as_ref()
-            .is_some_and(|g| g.is_trait_impl_method_key(key))
-    }
-
-    fn trait_impl_method_key_matches_local(&self, key: &str) -> bool {
-        if self.trait_impl_method_keys.contains(key) {
-            return true;
-        }
-        if let Some((parent, method)) = key.rsplit_once("::") {
-            if parent.contains("::") {
-                if let Some(type_name) = parent.rsplit("::").next() {
-                    let short = format!("{type_name}::{method}");
-                    if self.trait_impl_method_keys.contains(&short) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    /// `Type::method` keys from `impl Trait for Type` on this layer plus fallback.
-    pub fn all_trait_impl_method_keys(&self) -> Vec<String> {
-        let mut keys: Vec<String> = self.trait_impl_method_keys.iter().cloned().collect();
-        keys.sort();
-        if let Some(g) = self.global_fallback.as_ref() {
-            for k in g.all_trait_impl_method_keys() {
-                if !keys.iter().any(|e| e == &k) {
-                    keys.push(k);
-                }
-            }
-        }
-        keys.sort();
-        keys
-    }
 
     /// Every local signature in key order (never hash order).
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
@@ -1597,6 +1559,8 @@ impl SignatureRegistry {
                         };
                         if block.trait_name.is_some() {
                             registry.record_trait_impl_method_key(qualified_name.clone());
+                        } else {
+                            registry.inherent_method_keys.insert(format!("{base_type_name}::{}", func.name));
                         }
                         registry.add_function(qualified_name, sig.clone());
                         // Never register inherent methods under the bare name — that
@@ -1937,6 +1901,7 @@ impl SignatureRegistry {
             .extend(other.trait_method_keys.iter().cloned());
         self.trait_impl_method_keys
             .extend(other.trait_impl_method_keys.iter().cloned());
+        self.inherent_method_keys.extend(other.inherent_method_keys.iter().cloned());
         self.runtime_std_modules
             .extend(other.runtime_std_modules.iter().cloned());
         self.runtime_std_rust_stems
