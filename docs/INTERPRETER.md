@@ -36,6 +36,27 @@ N for `std::process::exit(N)`; 2 for "unsupported in the interpreter" (names the
 Arguments pass through (`std::env::args`), stdin is inherited. A test asserts the interpreter never spawns `cargo`/`rustc`
 (shims on `PATH` that leave a marker file); the one exception is the host bridge build below, done once per Rust change.
 
+## Runtime errors
+
+A failed interpreted run explains itself (ADR-0036). After the Rust-shaped head (`thread 'main' panicked at file:line:col:`
+and the message), stderr shows, under `stack backtrace:`, the failing source line with a caret, the Windjammer frames
+(`0: `pick` at p.wj:3:5`, innermost first; every other frame at the call it is executing) and `locals in `pick`:`, the
+bindings of the innermost frame (the newest 8, values in Debug style, at most 80 characters, no user code run to print
+them). `assert_eq` shows both sides; `unwrap`, `expect`, indexing, division by zero, overflow and `panic` all take this
+path.
+
+- `wj run --error-format json` replaces the text with one line in the diagnostics schema family (`docs/diagnostics-schema.json`):
+  `command: "run"`, one diagnostic (`WJ0170` panic, `WJ0171` `main` returned `Err`, `WJ0172` other) with `primary_span`,
+  `stack` and `locals`, and `exit_code` on the report.
+- `--no-locals` drops the bindings. A binding or field named like a credential (`password`, `passwd`, `secret`, `token`,
+  `api_key`, `apikey`, `credential`, `private_key`, `auth`), a string equal to an environment variable's value (8+
+  characters) and a `Secret*` type show `<redacted>`.
+- The detail is stderr only. stdout and the exit status are those of a run without it, and everything before
+  `stack backtrace:` is unchanged, so the interpreted-versus-compiled comparison (INTERPRETER_CONTRACT.md) is untouched;
+  `tests/runtime_error_report_test.rs` checks it for every failure kind. Compiled programs print Rust's panic message
+  and keep the same exit statuses; run the program with `wj run --interpret` to get the stack and locals.
+- Capture happens only when an error leaves a frame; the happy path has no extra work.
+
 ## Projects
 
 **One module system.** The interpreter loads a program with the compiler's own file walker and module paths

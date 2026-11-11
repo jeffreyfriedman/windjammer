@@ -27,6 +27,7 @@ These things follow.
 
 | Area | What differs | Why |
 |---|---|---|
+| Runtime error detail | after `stack backtrace:` the interpreter prints the call stack and the failing frame's bindings (`--error-format json`, `--no-locals`; ADR-0036); stdout and the exit status never change | compiled programs have no names for their registers |
 | Speed, memory, stack depth | the interpreter is slower on hot numeric code and has its own recursion limit (ADR-0020) | it is an interpreter |
 | `HashMap` / `HashSet` iteration order | the interpreter iterates in key order (`--hash-seed N` shuffles reproducibly); Rust's order is unspecified | decision D6: Rust's convention. Programs must not depend on the order; the drift probes print sorted keys |
 | Real-time clocks, randomness, network | the interpreter can run with `--deterministic-time`, `--simulate`, `--mock-http` | non-determinism cannot be compared |

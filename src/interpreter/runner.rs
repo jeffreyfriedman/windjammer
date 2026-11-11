@@ -100,6 +100,10 @@ pub struct RunOptions {
     pub jit_debug: bool,
     /// `WJ_JIT_MUTANT` (debug builds): a machine-code check to leave out, for mutation tests.
     pub jit_mutant: Option<String>,
+    /// `--error-format json`: a failed run prints one diagnostics-schema report line on stderr (ADR-0036).
+    pub json_errors: bool,
+    /// `--no-locals`: leave the failing frame's bindings out of the error report.
+    pub no_locals: bool,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -193,6 +197,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         }
         // a live run waits out its sleeps; reproducible runs (deterministic time, simulation, record and replay,
         // which must stay byte-identical) keep them virtual (ADR-0021, "Sleep in live runs")
+        it.set_capture_locals(!opts.no_locals, host_env().into_iter().map(|(_, v)| v).collect());
         it.set_real_sleep(!opts.deterministic_time && opts.simulate.is_none() && opts.record.is_none() && opts.replay.is_none());
         if let Err(m) = setup_code_mode(&mut it, &opts) {
             eprintln!("error: {m}");
@@ -218,17 +223,17 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
             if fallback && super::preflight::is_preflight(&e) {
                 return RunOutcome::NeedsCompiled(e);
             }
-            eprintln!("{}", e.render());
+            report_failure(&e, exit_code_for(&e), opts.json_errors);
             return RunOutcome::Exited(exit_code_for(&e));
         }
         if hot {
             it.enable_hot_reload();
         }
         let code = match it.call_main() {
-            Ok(v) => main_result_code(&mut it, &v),
+            Ok(v) => main_result_code_in(&mut it, &v, opts.json_errors),
             Err(e) => {
                 if !matches!(e.kind, ErrorKind::Exit(_)) {
-                    eprintln!("{}", e.render());
+                    report_failure(&e, exit_code_for(&e), opts.json_errors);
                 }
                 exit_code_for(&e)
             }
@@ -254,12 +259,29 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
 
 /// `fn main() -> Result<..>` returning `Err(e)`: like the compiled program, print `Error: {e:?}` on stderr and exit 1.
 pub fn main_result_code(it: &mut Interpreter, v: &Value) -> i32 {
+    main_result_code_in(it, v, false)
+}
+
+/// One failed run on stderr: the Rust-shaped text, or (`--error-format json`) one schema line.
+fn report_failure(e: &RuntimeError, exit: i32, json: bool) {
+    if json {
+        eprintln!("{}", super::error_report::runtime_error_json(e, exit));
+    } else {
+        eprintln!("{}", e.render());
+    }
+}
+
+fn main_result_code_in(it: &mut Interpreter, v: &Value, json: bool) -> i32 {
     if let Value::Enum(e) = v {
         if &*e.ty == "Result" && &*e.variant == "Err" {
             if let super::value::Payload::Tuple(items) = &e.payload {
                 let text = items.first().map(|x| it.debug_string(x).unwrap_or_default()).unwrap_or_default();
                 it.flush();
-                it.write_err(&format!("Error: {text}\n"));
+                if json {
+                    it.write_err(&format!("{}\n", super::error_report::main_err_json(&text)));
+                } else {
+                    it.write_err(&format!("Error: {text}\n"));
+                }
                 return 1;
             }
         }

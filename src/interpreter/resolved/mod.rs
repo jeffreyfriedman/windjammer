@@ -58,6 +58,8 @@ pub(crate) struct CompiledFn {
     ret_int: Option<IntTy>,
     /// Every slot is typed: once the parameters are bound the frame holds only integers (and `Unit`).
     scalar: bool,
+    /// Every declared local and its slot, for the bindings shown when the function fails (`failure_locals.rs`).
+    names: Vec<(&'static str, usize)>,
     /// Replay the walker's `expect_tail_type` at entry.
     tail_hint: bool,
     /// Calls so far and the machine-code form (`jit.rs`, `--features jit`).
@@ -133,11 +135,17 @@ impl Interpreter {
     fn run_body(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize) -> R {
         match &c.body {
             Body::V(code) => {
-                let r = code(self, base);
+                let mut r = code(self, base);
+                if let Err(Ctl::Err(e)) = &mut r {
+                    self.attach_slot_locals(e, &c.names, base);
+                }
                 self.finish_value(f, c, r)
             }
             Body::I(code, u, t) => {
-                let r = code(self, base);
+                let mut r = code(self, base);
+                if let Err(Ctl::Err(e)) = &mut r {
+                    self.attach_slot_locals(e, &c.names, base);
+                }
                 self.finish_int(f, r, *u, *t).map(|v| Value::Int(v as i128, *t))
             }
         }
@@ -159,11 +167,17 @@ impl Interpreter {
                     self.run_body(f, c, base).and_then(|v| typed::unbox(v, t))
                 }
                 Body::I(code, u, _) => {
-                    let r = code(self, base);
+                    let mut r = code(self, base);
+                    if let Err(Ctl::Err(e)) = &mut r {
+                        self.attach_slot_locals(e, &c.names, base);
+                    }
                     self.finish_int(f, r, *u, t)
                 }
                 Body::V(code) => {
-                    let r = code(self, base);
+                    let mut r = code(self, base);
+                    if let Err(Ctl::Err(e)) = &mut r {
+                        self.attach_slot_locals(e, &c.names, base);
+                    }
                     self.finish_value(f, c, r).and_then(|v| typed::unbox(v, t))
                 }
             },

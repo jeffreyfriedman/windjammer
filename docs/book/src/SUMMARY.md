@@ -26,6 +26,7 @@
 - [Ownership and borrowing, inferred](tutorial/ownership.md)
 - [Structs, enums, traits and generics](tutorial/types-and-traits.md)
 - [Errors and Result](tutorial/errors.md)
+- [Read a runtime error](tutorial/runtime-errors.md)
 - [Modules and packages](tutorial/modules.md)
 - [Collections and strings](tutorial/collections-and-strings.md)
 - [Closures](tutorial/closures.md)
