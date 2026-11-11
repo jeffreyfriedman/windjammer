@@ -84,7 +84,7 @@ def decompose_trial(tr, cfg):
     price = cfg["prices"][tr["model"]]
     u = tr.get("usage") or {}
     split = u.get("split") or {"fresh": 0, "cache_write": 0, "cache_read": 0, "output": u.get("tokens_out") or 0}
-    return CD.decompose(split, tr.get("turn_log") or [], tr.get("final_source", ""), price, u.get("cost_usd"))
+    return CD.decompose(split, tr.get("turn_log") or [], tr.get("final_source", ""), price, u.get("cost_usd"), u.get("model_usage"))
 
 
 def run_matrix(cfg, out_dir, agent_for, say=print, grader=PL.default_grader, real_wj=None):
@@ -188,9 +188,13 @@ def _dry_run(cfg, prior_trials_dir, say):
         sim.record(m, cfg["models"][m]["expected_usd_per_trial"] * (4.0 if m == list(cfg["models"])[-1] else 1.0))
     say(f"guard simulation (last model at 4x its estimate): spent ${sim.spent:.2f} <= cap ${cfg['hard_cap_usd']:.2f}; stopped: {stopped or 'none'}")
     _check(sim.spent <= cfg["hard_cap_usd"], "guard simulation overspent the cap", problems)
+    rustc = os.environ.get("AGENTDX_RUSTC")
+    _check(bool(rustc) and os.path.exists(rustc) and "/.cargo/bin/" not in rustc,
+           "AGENTDX_RUSTC must name the real rustc binary (not the rustup proxy), as in pilot 6, so arm R's compiler calls are logged", problems)
     # the cost decomposition, on recorded trials, priced for every model of the matrix
-    if prior_trials_dir and os.path.isdir(prior_trials_dir):
-        demo(cfg, prior_trials_dir, say)
+    for d in prior_trials_dir or []:
+        if os.path.isdir(d):
+            demo(cfg, d, say)
     return problems
 
 
@@ -198,24 +202,25 @@ def demo(cfg, trials_dir, say=print):
     """Decompose recorded trials (pilot 6 is sonnet, stream-json): the calibration against Claude Code's own cost, and
     the same token counts priced for every model of the matrix."""
     trials = [json.load(open(os.path.join(trials_dir, f))) for f in sorted(os.listdir(trials_dir)) if f.endswith(".json")]
-    say(f"cost decomposition on {len(trials)} recorded trials ({trials_dir}); thinking tokens are an estimate "
-        "(output tokens minus visible text and tool inputs; pilot-6 records lack the per-turn text sizes, so it is not computed for them)")
+    say(f"cost decomposition on {len(trials)} recorded trials ({trials_dir}); thinking is exact where Claude Code reported "
+        "modelUsage.thinkingTokens (pilot-7 records), otherwise not separated (pilot-6 records)")
     by_arm = {}
     for tr in trials:
         u = tr.get("usage") or {}
         split = u.get("split") or _split_from_turns(tr.get("turn_log") or [], u.get("tokens_out") or 0)
         for m in cfg["models"]:
-            d = CD.decompose(split, tr.get("turn_log") or [], tr.get("final_source", ""), cfg["prices"][m], u.get("cost_usd"))
+            d = CD.decompose(split, tr.get("turn_log") or [], tr.get("final_source", ""), cfg["prices"][m], u.get("cost_usd"), u.get("model_usage"))
             by_arm.setdefault((tr["arm"], m), []).append(d)
-    say("  arm  model   turns  lines  ctx$/turn  context$  output$  total$ (computed)  reported$  calibration")
+    say("  arm  model   turns  lines  ctx$/turn  context$  output$  thinking$  total$ (computed)  reported$  calibration")
     for (arm, m), ds in sorted(by_arm.items()):
         mean = lambda f: sum(f(d) for d in ds) / len(ds)
         ctx = mean(lambda d: d["usd"]["fresh_input"] + d["usd"]["cache_write"] + d["usd"]["cache_read"])
-        outp = mean(lambda d: d["usd"]["output_visible"] + d["usd"]["output_thinking_est"])
+        outp = mean(lambda d: d["usd"]["output_visible"])
+        think = mean(lambda d: d["usd"]["output_thinking_est"])
         rep = mean(lambda d: d["usd_reported"] or 0)
         cal = rep and mean(lambda d: d["usd_total_computed"]) / rep
         say(f"  {arm:4} {m:7} {mean(lambda d: d['turns'] or 0):5.1f} {mean(lambda d: d['final_program_lines']):6.1f} "
-            f"{mean(lambda d: d['usd_context_per_turn'] or 0):9.4f} {ctx:9.4f} {outp:8.4f} {mean(lambda d: d['usd_total_computed']):9.4f} "
+            f"{mean(lambda d: d['usd_context_per_turn'] or 0):9.4f} {ctx:9.4f} {outp:8.4f} {think:9.4f} {mean(lambda d: d['usd_total_computed']):9.4f} "
             f"{rep:17.4f} {cal:11.2f}")
     say("  (reported$ is what the recorded model cost; calibration = computed / reported for the model the pilot used)")
 

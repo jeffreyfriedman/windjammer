@@ -78,10 +78,24 @@ class DryRunTest(unittest.TestCase):
         c = cfg(tasks=["t101_json_orders", "t103_trait_pricing", "t104_activity_log", "t105_date_diff", "t106_priority_queue",
                        "t107_text_wrap", "t108_to_rpn", "t109_spiral"])
         out = []
-        problems = P7.dry_run(c, None, say=out.append)
+        problems = [p for p in P7.dry_run(c, None, say=out.append) if "AGENTDX_RUSTC" not in p]
         self.assertEqual(problems, [], problems)
         self.assertTrue(any("144 trials" in l for l in out), out)
 
     def test_dry_run_reports_a_missing_task(self):
         problems = P7.dry_run(cfg(tasks=["t999_nope"]), None, say=lambda *_: None)
         self.assertTrue(any("t999_nope" in p for p in problems))
+
+
+class RelativeWorkdirTest(unittest.TestCase):
+    def test_build_dir_is_absolute_for_a_relative_workdir(self):
+        from agentdx import runners
+        import tempfile
+        here = os.getcwd()
+        with tempfile.TemporaryDirectory() as d:
+            os.chdir(d)
+            try:
+                os.makedirs("rel/ws")
+                self.assertTrue(os.path.isabs(runners.RustRunner().build_dir("rel/ws")))
+            finally:
+                os.chdir(here)
