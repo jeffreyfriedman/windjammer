@@ -1,0 +1,13 @@
+// A method forwards its `Csr` parameter to a sibling method through a local alias of `self`; the callee
+// mutates the value (a `&mut` formal), so the forward passes the borrow on. Expected by hand: walk sees two ids -> runs 2,
+// and the joined path walks one id -> runs 1.
+// expect: 2 1
+mod graph
+
+fn main() {
+    let mut csr = graph::Csr { ids: [1, 2], visits: 0 }
+    let h = graph::Host { runs: 0 }.run_joined("walk", csr, 0)
+    let csr2 = graph::Csr { ids: [3], visits: 0 }
+    let h2 = graph::Host { runs: 0 }.run_joined("walk", csr2, 5)
+    println("${h.runs} ${h2.runs}")
+}

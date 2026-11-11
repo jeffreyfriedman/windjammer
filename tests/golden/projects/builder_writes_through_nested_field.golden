@@ -1,0 +1,63 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod port;
+
+// Re-export public items
+pub use port::*;
+// ==== main.rs ====
+mod port;
+fn main() {
+    let p = port::Port::new(1_u32).append(5_i64).append_all(&vec![6_i64, 7_i64]);
+    println!("{} {}", p.buffer.items.len(), p.buffer.pending);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod port;
+
+// Re-export public items
+pub use port::*;
+// ==== port.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Buffer {
+    pub items: Vec<i64>,
+    pub pending: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+pub struct Port {
+    pub id: u32,
+    pub buffer: Buffer,
+}
+
+impl Port {
+#[inline]
+pub fn new(id: u32) -> Port {
+        Port { id, buffer: Buffer { items: Vec::new(), pending: 0_u64 } }
+}
+#[inline]
+pub fn append(mut self, v: i64) -> Port {
+        self.buffer.items.push(v);
+        self.buffer.pending += 1;
+        self
+}
+#[inline]
+pub fn append_all(self, vs: &Vec<i64>) -> Port {
+        let mut port = self;
+        let mut i = 0_usize;
+        while i < vs.len() {
+            port = port.append(vs[i]);
+            i += 1;
+        }
+        port
+}
+}
+

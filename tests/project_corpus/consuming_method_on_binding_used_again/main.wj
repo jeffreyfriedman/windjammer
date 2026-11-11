@@ -1,0 +1,12 @@
+// A method that takes its receiver by value (it rebinds `self` and changes the copy) is called on a binding
+// that is used again afterwards: the call works on a copy. Expected by hand: key 2 found, the returned store
+// is unchanged (0 hits); key 9 not found.
+// expect: true 0 false
+mod store
+
+fn main() {
+    let s = store::Store { rows: [1, 2, 3], hits: 0 }
+    let r = store::probe(s, 2)
+    let r2 = store::probe(r.0, 9)
+    println("${r.1} ${r2.0.hits} ${r2.1}")
+}
