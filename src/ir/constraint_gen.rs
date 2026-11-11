@@ -104,6 +104,9 @@ pub struct FunctionConstraints {
     pub element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
     /// Index uses whose expression can carry a conversion (`v[i]`, an argument at a `usize` formal): (key, var).
     pub index_use_keys: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar)>,
+    /// Each read of a local or parameter (by the identifier's source position) and the variable of the binding it
+    /// reads (lexical scoping): a width published per use names the right binding when a name is rebound.
+    pub ident_uses: Vec<((usize, usize), ConstraintVar)>,
 }
 
 /// Walks the AST body and emits constraints for the unified solver.
@@ -131,6 +134,7 @@ struct AstConstraintWalker<'a, 'ast> {
     index_uses: Vec<ConstraintVar>,
     element_stores: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar, ConstraintVar)>,
     index_use_keys: Vec<(crate::ir::numeric_facts::ConversionKey, ConstraintVar)>,
+    ident_uses: Vec<((usize, usize), ConstraintVar)>,
     /// Declared types of annotated locals (`let q: VecDeque<int> = ...`), for receiver classification.
     local_decl_types: HashMap<String, BaseType>,
     /// Names bound by `for v in a..b`.
@@ -344,6 +348,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             index_uses: Vec::new(),
             element_stores: Vec::new(),
             index_use_keys: Vec::new(),
+            ident_uses: Vec::new(),
             local_decl_types: HashMap::new(),
             range_loop_vars: std::collections::HashSet::new(),
             bind_counts: std::collections::BTreeMap::new(),
@@ -971,7 +976,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         match expr {
             Expression::Literal { value, location } => self.walk_literal(value, location),
 
-            Expression::Identifier { name, .. } => self.resolve_identifier(name),
+            Expression::Identifier { name, location, .. } => {
+                let v = self.resolve_identifier(name);
+                if let Some(l) = location {
+                    self.ident_uses.push(((l.line, l.column), v));
+                }
+                v
+            }
 
             Expression::Binary {
                 left, op, right, ..
@@ -1485,6 +1496,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             index_uses: self.index_uses,
             element_stores: self.element_stores,
             index_use_keys: self.index_use_keys,
+            ident_uses: self.ident_uses,
             execution_constraints: self.execution_constraints,
         }
     }

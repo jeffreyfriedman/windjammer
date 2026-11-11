@@ -299,7 +299,7 @@ fn known_gap_generic_copy_out_of_list_fails_compiled() {
 fn known_gap_idioms_fail_compiled() {
     let _g = compiled_lock();
     let wj = env!("CARGO_BIN_EXE_wj");
-    for (file, code) in [("iter_find_closure.wj", "WJ0003"), ("join_unwrap_or_literal.wj", "WJ0003")] {
+    for (file, code) in [("iter_find_closure.wj", "WJ0003")] {
         let repro = real().root.join("tests/book_repros").join(file);
         let interp = std::process::Command::new(wj).args(["run", "--interpret"]).arg(&repro).output().unwrap();
         assert!(interp.status.success(), "{file}: the interpreter runs the repro");
@@ -307,6 +307,22 @@ fn known_gap_idioms_fail_compiled() {
         let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
         assert!(!compiled.status.success() && text.contains(code), "{file}: the compiled gap is fixed: delete the repro, its entry here and its docs/known-gaps.md text\n{text}");
     }
+}
+
+/// A finding from writing the book, fixed: `join()` on a thread handle returns the closure's result
+/// (`JoinHandle<T>` and `thread::spawn` in std/rust_core.wji), so the `unwrap_or` literal is that `int` and the
+/// compiled program runs (it stopped with WJ0003: the literal was typed i32 against the joined i64).
+#[test]
+fn thread_join_unwrap_or_literal_runs_compiled() {
+    let _g = compiled_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let prog = tmp.path().join("main.wj");
+    let src = "use std::thread\n\nfn work() -> int {\n    21\n}\n\nfn main() {\n    let a = thread::spawn(move || work())\n    let b = thread::spawn(move || work())\n    let total = a.join().unwrap_or(0) + b.join().unwrap_or(0)\n    println(\"total ${total}\")\n}\n";
+    std::fs::write(&prog, src).unwrap();
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let compiled = compiled_cmd(wj).arg(&prog).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&compiled.stdout), String::from_utf8_lossy(&compiled.stderr));
+    assert!(compiled.status.success() && text.contains("total 42"), "the joined sum compiles and prints 42\n{text}");
 }
 
 #[test]

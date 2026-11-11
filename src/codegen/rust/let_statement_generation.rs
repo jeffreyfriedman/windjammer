@@ -832,9 +832,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // `.len()` while-counters already in `usize_variables` must not be
                 // demoted by `-> i32` return-width scan (cast at `return i` instead).
-                let solver_local_width = var_name.and_then(|n| self.solver_local_width(n).cloned());
-                let len_while_usize_counter =
-                    var_name.is_some_and(|n| self.usize_variables.contains(n));
+                let solver_local_width = self.solver_binding_width(var_name, value);
+                let len_while_usize_counter = solver_local_width.is_none() && var_name.is_some_and(|n| self.usize_variables.contains(n));
                 let u32_while_peer_counter = mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && var_name.is_some_and(|n| {

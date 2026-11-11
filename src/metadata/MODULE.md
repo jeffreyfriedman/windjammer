@@ -23,7 +23,7 @@ Layer `tooling`. May import: every module in a lower layer (support < syntax < r
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`extract_struct_field_types`, `load_merged_external_struct_fields`, `meta_cache_path` (src/metadata/mod.rs).
+`extract_struct_field_types` (struct fields and, from `variant_payloads`, tuple-variant payload types keyed `Enum::Variant`), `collect_variant_payloads`, `load_merged_external_struct_fields`, `meta_cache_path` (src/metadata/mod.rs).
 
 ## Tests
 src/metadata/tests.rs; cross-crate behavior in tests/compiler_*.

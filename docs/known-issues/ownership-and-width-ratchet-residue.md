@@ -53,9 +53,10 @@ Call-site code consults, for the same callee, (a) the per-file codegen registry 
 `method_is_map_key_qualified_with_project`, `emitted_owned_arg_contract`, `callee_arg_is_hard_owned`) mix them. The
 fixed instance is `fp.validate(&arg)` where (b) said `Borrowed` while the emitted formal (a) was owned. Remaining
 entries (`library_multipass_ownership_codegen_test::test_match_borrow_break_*`, `ref_mut_logic_layered_test::
-test_if_let_method_return_option`, `svo_bfs_layout_test`, `library_multipass_map_key_codegen_test::
-test_library_multipass_graph_bfs_hashmap_compiles`) fail rustc or assertions for shape-specific reasons (match
-borrow-break clones, `unsafe` FFI parentheses, ...) and were not root-caused in this stream.
+test_if_let_method_return_option`, `svo_bfs_layout_test`) fail rustc or assertions for shape-specific reasons (match
+borrow-break clones, `unsafe` FFI parentheses, ...) and were not root-caused in this stream. (`graph_bfs_hashmap_compiles` is
+fixed: in a nested module with `use std::collections::HashMap`, `HashMap::new()` took the std declaration's `Self`
+instead of the core surface type, so the map's value class was opaque and `base + 1` printed `1_i32`.)
 
 WP 9 (one ownership owner) is the structural fix: the final registry must be produced once, before any codegen, and
 call sites must read only it.

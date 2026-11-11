@@ -102,12 +102,8 @@ fn held_classes(fc: &FunctionConstraints, result: &SolverResult) -> BTreeSet<u32
     for &v in u.loop_bindings.iter().chain(&u.unknown_lengths).chain(&u.unknown_fields).chain(&u.opaque) {
         held.extend(view.class(v));
     }
-    // Bindings of one name with different widths cannot be named by one fact: their classes stay legacy.
-    for (_, widths) in binding_widths(fc, &view) {
-        if widths.iter().any(|w| w.1 != widths[0].1) {
-            held.extend(widths.iter().filter_map(|(v, _)| view.class(*v)));
-        }
-    }
+    // Bindings of one name with different widths are not named by one NUM-LOCAL-WIDTH fact (see `publish`); their
+    // classes are still published, and each read carries its own binding's width (NUM-USE-WIDTH).
     // The parts of a held container are held too (an opaque `Vec` holds its elements).
     loop {
         let more: Vec<u32> = result
@@ -169,6 +165,20 @@ pub fn publish(fc: &FunctionConstraints, result: &SolverResult, ir_fn: &mut IrFu
             if ws.iter().all(|x| x.as_ref() == Some(w)) {
                 ir_fn.solver_local_widths.insert(name, w.clone());
             }
+        }
+    }
+    // NUM-USE-WIDTH: each read of a local has its binding's width, also when the name is rebound with another width.
+    // A binding that holds a borrow keeps its reference type (no width for its reads), as for NUM-LOCAL-WIDTH.
+    // Only reads of `let`/pattern bindings: parameters keep their declared spelling paths.
+    let borrowed: BTreeSet<u32> =
+        fc.binding_vars.iter().filter(|(n, _)| fc.unmodelled.borrowed_bindings.contains(n)).map(|(_, v)| v.0).collect();
+    let bindings: BTreeSet<u32> = fc.binding_vars.iter().map(|(_, v)| v.0).collect();
+    for (key, var) in &fc.ident_uses {
+        if borrowed.contains(&var.0) || !bindings.contains(&var.0) {
+            continue;
+        }
+        if let Some(w) = view.published(*var) {
+            ir_fn.use_widths.insert(*key, w);
         }
     }
     // NUM-USIZE-TO-INT: an index source in a class of another width is converted where it is produced.
@@ -255,6 +265,20 @@ mod tests {
     fn rebound_name_with_two_widths_is_held() {
         let f = facts("pub fn f(n: i32, v: Vec<int>) -> i32 {\n    let x = n + 1\n    let mut k = 0\n    while k < v.len() {\n        k = k + 1\n    }\n    let x = k\n    n\n}\n", "f");
         assert!(f.solver_local_widths.get("x").is_none(), "{:?}", f.solver_local_widths);
+    }
+
+    /// NUM-USE-WIDTH: a counter bound twice, once against a `len()` (usize) and once against a `u32` it is passed as,
+    /// has no single name width, but each read carries its own binding's width and the literals are published.
+    #[test]
+    fn rebound_counter_reads_carry_their_bindings_width() {
+        let src = "fn deg(v: int) -> u32 {\n    3\n}\nfn at(v: int, i: u32) -> int {\n    v\n}\npub fn f(ids: Vec<int>, v: int) -> bool {\n    if ids.len() > 0 {\n        let mut i = 0\n        while i < ids.len() {\n            i = i + 1\n        }\n        return false\n    }\n    let d = deg(v)\n    let mut i = 0\n    while i < d {\n        let _ = at(v, i)\n        i = i + 1\n    }\n    true\n}\n";
+        let f = facts(src, "f");
+        assert!(f.solver_local_widths.get("i").is_none(), "{:?}", f.solver_local_widths);
+        let first: Vec<_> = f.use_widths.iter().filter(|((l, _), _)| *l == 10 || *l == 11).map(|(_, w)| w.clone()).collect();
+        let second: Vec<_> = f.use_widths.iter().filter(|((l, _), _)| (17..=19).contains(l)).map(|(_, w)| w.clone()).collect();
+        assert!(!first.is_empty() && first.iter().all(|w| *w == BaseType::Usize), "{:?}", f.use_widths);
+        assert!(second.iter().filter(|w| **w == BaseType::U32).count() >= 3, "{:?}", f.use_widths);
+        assert!(f.literal_widths.values().any(|w| *w == BaseType::U32), "{:?}", f.literal_widths);
     }
 
     /// A local bound to a borrow (`&i`, `opt.unwrap_or(&0)`) holds a reference, not an integer: the

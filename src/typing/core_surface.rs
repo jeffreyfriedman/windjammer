@@ -140,6 +140,15 @@ pub fn is_element_container(name: &str) -> bool {
     ELEMENT_CONTAINERS.contains(&crate::type_classification::type_name_leaf(name))
 }
 
+/// The surface types whose one type parameter is the value they hand back (`JoinHandle<T>`: `join` returns it); the
+/// solver relates it as an element, but they have no sequence methods.
+const HANDLE_TYPES: [&str; 1] = ["JoinHandle"];
+
+/// Whether a surface type name holds one value of its type parameter (the solver's `Part::Elem`).
+pub fn has_element_part(name: &str) -> bool {
+    is_element_container(name) || HANDLE_TYPES.contains(&crate::type_classification::type_name_leaf(name))
+}
+
 /// The surface types whose two type parameters are a key and a value (the solver's `Part::Key` / `Part::Value`).
 const MAP_CONTAINERS: [&str; 2] = ["HashMap", "BTreeMap"];
 
@@ -161,9 +170,11 @@ pub fn self_type(type_name: &str, generics: &[String]) -> Type {
 
 /// The surface type a receiver type names, with its type arguments (`&Vec<int>` -> `Vec`, `[int]`).
 fn head(receiver: &Type) -> Option<(&'static str, Vec<Type>)> {
-    const NAMES: [&str; 11] = ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List"];
-    // Windjammer's `List<T>` (the enumerable methods' result) is the surface's `Vec<T>`.
-    const SYNONYMS: [(&str, &str); 1] = [("List", "Vec")];
+    const NAMES: [&str; 13] =
+        ["Vec", "VecDeque", "HashMap", "BTreeMap", "HashSet", "BTreeSet", "Option", "Result", "String", "Iterator", "List", "JoinHandle", "thread"];
+    // Windjammer's `List<T>` (the enumerable methods' result) is the surface's `Vec<T>`; the `thread` module's
+    // functions are declared on the surface trait `Thread` (`thread` is a keyword, so it cannot name a trait).
+    const SYNONYMS: [(&str, &str); 2] = [("List", "Vec"), ("thread", "Thread")];
     let known = |n: &str| {
         let k = NAMES.iter().copied().find(|k| *k == crate::type_classification::type_name_leaf(n))?;
         Some(SYNONYMS.iter().find(|(s, _)| *s == k).map_or(k, |(_, v)| *v))
