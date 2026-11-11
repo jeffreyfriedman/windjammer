@@ -1,0 +1,385 @@
+// Replays the friction corpus (bench/agent-dx/friction/events/) against a `wj` binary and measures the offline cost
+// proxies of ADR-0037: (a) friction still open per task, (b) diagnostic tokens per error and the share of error codes
+// that carry a machine-applicable fix, (c) turns to green for an automatic fix-applier, (d) build noise per compiled
+// build. No LLM; the result is a function of the corpus and the compiler.
+//
+//   wj run --interpret --allow 'fs.read=**' --allow 'fs.write=**' --allow 'process=*' --allow 'env.read=*' \
+//       bench/agent-dx/friction/replay.wj -- --wj /abs/path/to/wj [--repo .] [--write] [--only ID-PREFIX]
+//
+// --write  writes events/<id>/status.txt, friction/status.json and the `cost.*` keys of docs/generated/measured.json.
+// Exit: 0 replayed; 1 the fix gate failed (applying a fix created a new diagnostic) or an open compiler bug is missing
+// from friction/open-bugs.md; 2 bad usage or the corpus could not be read.
+//
+// Per event with a program: `wj check --error-format agent` (and the human format, for size); when check accepts, a
+// compiled run `wj run --compiled` on the task's first visible input. Status:
+//   fixed              check and the compiled build accept it (no longer friction)
+//   open-compiler-bug  check accepts, the compiled build rejects it (interpreter green, build red)
+//   user-error         check rejects it with a coded diagnostic and a help line or fix (the language working)
+//   unhelpful          check or the build rejects it without a code, help or fix
+//   noisy / quiet      noise events: the compiled run printed / did not print anything besides the program's output
+//   unverifiable       no program was recorded (error text only); behaviour events are `behavioural`
+use std::env
+use std::fs
+use std::json
+use std::process
+use std::strings
+
+struct Res {
+    status: string,
+    first: string,
+    errors: int,
+    human_bytes: int,
+    agent_bytes: int,
+    noise_lines: int,
+}
+
+fn q(s: string) -> string {
+    "'" + strings::replace(s, "'", "'\\''") + "'"
+}
+
+/// Runs a shell line; returns (status, stdout + stderr).
+fn sh(line: string) -> (int, string) {
+    match process::run_with_output("sh", ["-c", line]) {
+        Ok(o) => (o.status as int, o.stdout + o.stderr),
+        Err(e) => (127, e),
+    }
+}
+
+fn agent_lines(out: string) -> Vec<string> {
+    let mut v: Vec<string> = Vec::new()
+    for l in strings::split_lines(out) {
+        if strings::contains(l, ": error WJ") || strings::contains(l, ": error W0") || strings::contains(l, ": warning W") {
+            v.push(l)
+        }
+    }
+    v
+}
+
+fn error_lines(lines: Vec<string>) -> Vec<string> {
+    let mut v: Vec<string> = Vec::new()
+    for l in lines {
+        if strings::contains(l, ": error ") {
+            v.push(l)
+        }
+    }
+    v
+}
+
+/// `CODE: message` without the location (fixes move text, so positions are not comparable across rounds).
+fn key_of(line: string) -> string {
+    let parts = strings::split(line, ": error ")
+    if parts.len() > 1 {
+        return strings::split(parts[1], " | ")[0]
+    }
+    let w = strings::split(line, ": warning ")
+    if w.len() > 1 { strings::split(w[1], " | ")[0] } else { line }
+}
+
+fn code_of(line: string) -> string {
+    strings::split(key_of(line), ":")[0]
+}
+
+fn is_noise(l: string) -> bool {
+    strings::starts_with(l, "warning:") || strings::contains(l, "Building Windjammer project") || strings::contains(l, "Transpilation complete")
+        || strings::starts_with(l, "Output:") || strings::starts_with(l, "Running ") || strings::starts_with(l, "   Compiling")
+}
+
+fn replay_one(wj: string, dir: string, class: string, stdin: string) -> Res {
+    let c = "cd " + q(dir) + " && "
+    let (cs, agent) = sh(c + q(wj) + " check --error-format agent main.wj 2>&1")
+    let lines = agent_lines(agent)
+    if cs != 0 {
+        let errs = error_lines(lines)
+        let (_, human) = sh(c + q(wj) + " check main.wj 2>&1")
+        let mut helpful = errs.len() > 0
+        for e in errs {
+            if !strings::contains(e, "| help:") && !strings::contains(e, "| fix") {
+                helpful = false
+            }
+        }
+        let first = if errs.len() > 0 { key_of(errs[0]) } else { "check failed without a diagnostic" }
+        return Res { status: if helpful { "user-error" } else { "unhelpful" }, first: first, errors: errs.len().max(1) as int,
+            human_bytes: human.len() as int, agent_bytes: agent.len() as int, noise_lines: 0 }
+    }
+    let input = if stdin.len() > 0 { " < stdin.txt" } else { " < /dev/null" }
+    let (_, out) = sh(c + "WJ_ERROR_FORMAT=agent " + q(wj) + " run --compiled main.wj" + input + " 2>&1 >/dev/null")
+    let cerrs = error_lines(agent_lines(out))
+    if cerrs.len() > 0 {
+        let (_, human) = sh(c + q(wj) + " run --compiled main.wj" + input + " 2>&1 >/dev/null")
+        return Res { status: "open-compiler-bug", first: key_of(cerrs[0]), errors: cerrs.len() as int, human_bytes: human.len() as int,
+            agent_bytes: out.len() as int, noise_lines: 0 }
+    }
+    let mut noise = 0
+    for l in strings::split_lines(out) {
+        if is_noise(l) {
+            noise = noise + 1
+        }
+    }
+    let st = if class == "noise" { if noise > 0 { "noisy" } else { "quiet" } } else { "fixed" }
+    Res { status: st, first: "", errors: 0, human_bytes: 0, agent_bytes: 0, noise_lines: noise }
+}
+
+struct Sim {
+    had_fix: bool,
+    rounds: int,
+    green: bool,
+    new_diags: int,
+}
+
+/// Apply every machine-applicable fix (`wj check --fix`) and re-check until no error is left or no fix applies.
+fn simulate(wj: string, src_dir: string, scratch: string) -> Sim {
+    sh("rm -rf " + q(scratch) + " && mkdir -p " + q(scratch) + " && cp " + q(src_dir + "/main.wj") + " " + q(scratch + "/main.wj"))
+    let c = "cd " + q(scratch) + " && "
+    let mut rounds = 0
+    let mut new_diags = 0
+    let mut had = false
+    while rounds < 5 {
+        let (st, before) = sh(c + q(wj) + " check --error-format agent main.wj 2>&1")
+        let lines = agent_lines(before)
+        let mut fixable = false
+        for l in lines {
+            if strings::contains(l, "| fix(auto") {
+                fixable = true
+            }
+        }
+        if st == 0 || !fixable {
+            return Sim { had_fix: had, rounds: rounds, green: st == 0, new_diags: new_diags }
+        }
+        had = true
+        let mut seen: Vec<string> = Vec::new()
+        for l in agent_lines(before) {
+            seen.push(key_of(l))
+        }
+        sh(c + q(wj) + " check --fix main.wj >/dev/null 2>&1")
+        rounds = rounds + 1
+        let (_, after) = sh(c + q(wj) + " check --error-format agent main.wj 2>&1")
+        for l in agent_lines(after) {
+            if !seen.contains(key_of(l)) {
+                println("  fix gate: a fix created `${key_of(l)}`")
+                new_diags = new_diags + 1
+            }
+        }
+    }
+    let (st, _) = sh(c + q(wj) + " check main.wj >/dev/null 2>&1")
+    Sim { had_fix: had, rounds: rounds, green: st == 0, new_diags: new_diags }
+}
+
+fn field(v: json::Value, k: string) -> string {
+    match json::get(v, k) {
+        Some(x) => json::as_str(x) ?? "",
+        None => "",
+    }
+}
+
+fn jstr(s: string) -> string {
+    json::stringify(json::json_string(s)) ?? "\"\""
+}
+
+fn metric(value: string, commit: string, cmd: string) -> string {
+    "{\"value\": " + value + ", \"commit\": " + jstr(commit) + ", \"command\": " + jstr(cmd) + "}"
+}
+
+fn ratio(a: int, b: int) -> string {
+    if b == 0 {
+        return "0"
+    }
+    let x = (a * 1000 / b) as f64 / 1000.0
+    x.to_string()
+}
+
+/// measured.json with `keys` replaced (other keys kept, in their order), one key per line as the file is written.
+fn merge_measured(old: string, keys: Vec<(string, string)>, commit: string, cmd: string) -> string {
+    let doc = json::parse(old) ?? json::object()
+    let mut names: Vec<string> = Vec::new()
+    for (k, _) in keys {
+        names.push(k)
+    }
+    let mut lines: Vec<string> = Vec::new()
+    for k in json::keys(doc) {
+        if !names.contains(k) {
+            let v = json::get(doc, k) ?? json::object()
+            lines.push("  " + jstr(k) + ": " + (json::stringify(v) ?? "null"))
+        }
+    }
+    for (k, v) in keys {
+        lines.push("  " + jstr(k) + ": " + metric(v, commit, cmd))
+    }
+    "{\n" + strings::join(lines, ",\n") + "\n}\n"
+}
+
+fn main() {
+    let args = env::args()
+    let mut wj = ""
+    let mut repo = "."
+    let mut write = false
+    let mut only = ""
+    let mut i = 1
+    while i < args.len() {
+        if args[i] == "--wj" && i + 1 < args.len() {
+            wj = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--repo" && i + 1 < args.len() {
+            repo = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--only" && i + 1 < args.len() {
+            only = args[i + 1]
+            i = i + 1
+        } else if args[i] == "--write" {
+            write = true
+        }
+        i = i + 1
+    }
+    if wj == "" || !strings::starts_with(wj, "/") {
+        println("usage: replay.wj -- --wj /absolute/path/to/wj [--repo DIR] [--write] [--only ID-PREFIX]")
+        process::exit(2)
+    }
+    let fdir = repo + "/bench/agent-dx/friction"
+    let mut ids: Vec<string> = Vec::new()
+    for e in fs::read_dir(fdir + "/events") ?? Vec::new() {
+        if strings::starts_with(e.name(), only) {
+            ids.push(e.name())
+        }
+    }
+    ids.sort()
+    if ids.len() == 0 {
+        println("replay: no events under ${fdir}/events")
+        process::exit(2)
+    }
+    let (_, version) = sh(q(wj) + " --version")
+    let after_commit = strings::split(version, "commit ")
+    let commit = if after_commit.len() > 1 { strings::split(after_commit[1], " ")[0] } else { "unknown" }
+    let open_list = fs::read_to_string(fdir + "/open-bugs.md") ?? ""
+    let scratch = env::temp_dir() + "/wj-friction-replay"
+    sh("rm -rf " + q(scratch) + " && mkdir -p " + q(scratch))
+    let mut rows: Vec<string> = Vec::new()
+    let mut tasks: Vec<string> = Vec::new()
+    let mut replayable = 0
+    let mut still = 0
+    let mut open_bugs = 0
+    let mut unlisted = 0
+    let mut recorded_friction = 0
+    let mut err_events = 0
+    let mut human_tok = 0
+    let mut agent_tok = 0
+    let mut codes: Vec<string> = Vec::new()
+    let mut fixed_codes: Vec<string> = Vec::new()
+    let mut sim_events = 0
+    let mut sim_green = 0
+    let mut sim_rounds = 0
+    let mut sim_new = 0
+    let mut noise_builds = 0
+    let mut noise_lines = 0
+    for id in ids {
+        let d = fdir + "/events/" + id
+        let ev = json::parse(fs::read_to_string(d + "/event.json") ?? "{}") ?? json::object()
+        let class = field(ev, "class")
+        let task = field(ev, "task")
+        if class != "program-output" {
+            recorded_friction = recorded_friction + 1
+        }
+        let mut st = Res { status: "unverifiable", first: "", errors: 0, human_bytes: 0, agent_bytes: 0, noise_lines: 0 }
+        if class == "skipped-loop" {
+            st.status = "behavioural"
+        } else if fs::exists(d + "/main.wj") {
+            let work = scratch + "/" + id
+            sh("mkdir -p " + q(work) + " && cp " + q(d) + "/main.wj " + q(work) + "/ && (cp " + q(d) + "/stdin.txt " + q(work) + "/ 2>/dev/null; true)")
+            st = replay_one(wj, work, class, fs::read_to_string(d + "/stdin.txt") ?? "")
+            if class == "program-output" && st.status == "fixed" {
+                st.status = "not-friction"
+            }
+            replayable = replayable + 1
+            if !tasks.contains(task) {
+                tasks.push(task)
+            }
+            if st.status == "open-compiler-bug" || st.status == "unhelpful" || st.status == "noisy" {
+                still = still + 1
+            }
+            if st.status == "open-compiler-bug" {
+                open_bugs = open_bugs + 1
+                if !strings::contains(open_list, id) {
+                    println("  not in open-bugs.md: ${id} (${st.first})")
+                    unlisted = unlisted + 1
+                }
+            }
+            if class == "noise" {
+                noise_builds = noise_builds + 1
+                noise_lines = noise_lines + st.noise_lines
+            }
+            if st.errors > 0 {
+                err_events = err_events + 1
+                human_tok = human_tok + st.human_bytes / 4 / st.errors
+                agent_tok = agent_tok + st.agent_bytes / 4 / st.errors
+                let (_, a) = sh("cd " + q(work) + " && WJ_ERROR_FORMAT=agent " + q(wj) + " check main.wj 2>&1; true")
+                let mut all = error_lines(agent_lines(a))
+                if st.status == "open-compiler-bug" {
+                    let (_, b) = sh("cd " + q(work) + " && WJ_ERROR_FORMAT=agent " + q(wj) + " run --compiled main.wj < /dev/null 2>&1 >/dev/null")
+                    all = error_lines(agent_lines(b))
+                }
+                for l in all {
+                    let code = code_of(l)
+                    if !codes.contains(code) {
+                        codes.push(code)
+                    }
+                    if strings::contains(l, "| fix(auto") && !fixed_codes.contains(code) {
+                        fixed_codes.push(code)
+                    }
+                }
+            }
+            if st.status == "user-error" || st.status == "unhelpful" {
+                let sim = simulate(wj, d, scratch + "/sim-" + id)
+                if sim.had_fix {
+                    sim_events = sim_events + 1
+                    sim_rounds = sim_rounds + sim.rounds
+                    if sim.green {
+                        sim_green = sim_green + 1
+                    }
+                }
+                sim_new = sim_new + sim.new_diags
+            }
+        }
+        println("${id} ${class} -> ${st.status} ${st.first}")
+        if write {
+            fs::write(d + "/status.txt", st.status + (if st.first.len() > 0 { ": " + st.first } else { "" }) + "\n").unwrap_or(())
+        }
+        rows.push("    " + jstr(id) + ": {\"class\": " + jstr(class) + ", \"status\": " + jstr(st.status) + ", \"first\": " + jstr(st.first)
+            + ", \"errors\": " + st.errors.to_string() + ", \"human_bytes\": " + st.human_bytes.to_string() + ", \"agent_bytes\": "
+            + st.agent_bytes.to_string() + ", \"noise_lines\": " + st.noise_lines.to_string() + "}")
+    }
+    let per_task = ratio(still, tasks.len() as int)
+    let cmd = "wj run --interpret bench/agent-dx/friction/replay.wj -- --wj WJ --write"
+    let mut m: Vec<(string, string)> = Vec::new()
+    m.push(("cost.friction.events_recorded", recorded_friction.to_string()))
+    m.push(("cost.friction.events_replayable", replayable.to_string()))
+    m.push(("cost.friction.events_open", still.to_string()))
+    m.push(("cost.friction.tasks_replayable", tasks.len().to_string()))
+    m.push(("cost.friction.open_per_task", per_task))
+    m.push(("cost.friction.open_compiler_bugs", open_bugs.to_string()))
+    m.push(("cost.diag.error_events", err_events.to_string()))
+    m.push(("cost.diag.tokens_per_error_human", (if err_events > 0 { human_tok / err_events } else { 0 }).to_string()))
+    m.push(("cost.diag.tokens_per_error_agent", (if err_events > 0 { agent_tok / err_events } else { 0 }).to_string()))
+    m.push(("cost.diag.error_codes_seen", codes.len().to_string()))
+    m.push(("cost.diag.error_codes_with_fix", fixed_codes.len().to_string()))
+    m.push(("cost.diag.fix_coverage", ratio(fixed_codes.len() as int, codes.len() as int)))
+    m.push(("cost.fixsim.events_with_fix", sim_events.to_string()))
+    m.push(("cost.fixsim.reached_green", sim_green.to_string()))
+    m.push(("cost.fixsim.mean_rounds", ratio(sim_rounds, sim_events)))
+    m.push(("cost.fixsim.new_diagnostics", sim_new.to_string()))
+    m.push(("cost.noise.compiled_builds", noise_builds.to_string()))
+    m.push(("cost.noise.lines_per_build", ratio(noise_lines, noise_builds)))
+    println("")
+    for (k, v) in m {
+        println("${k} = ${v}")
+    }
+    if write {
+        let mut text = "{\n  \"_generated\": \"bench/agent-dx/friction/replay.wj --write; do not edit\",\n  \"wj\": " + jstr(strings::trim(version)) + ",\n  \"events\": {\n"
+        text = text + strings::join(rows, ",\n") + "\n  }\n}\n"
+        fs::write(fdir + "/status.json", text).unwrap_or(())
+        let mpath = repo + "/docs/generated/measured.json"
+        fs::write(mpath, merge_measured(fs::read_to_string(mpath) ?? "{}", m, commit, cmd)).unwrap_or(())
+        println("wrote ${fdir}/status.json and the cost.friction/diag/fixsim/noise keys of ${mpath}")
+    }
+    if sim_new > 0 || unlisted > 0 {
+        println("replay: FAIL (${sim_new} diagnostic(s) created by fixes, ${unlisted} open compiler bug(s) missing from open-bugs.md)")
+        process::exit(1)
+    }
+}

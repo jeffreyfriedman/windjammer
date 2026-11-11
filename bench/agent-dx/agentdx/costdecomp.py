@@ -5,9 +5,10 @@ read, output tokens), the per-turn log from stream-json (calls, tool-result char
 tool-input characters), the final program, and the model's per-token prices (agentdx/pilot7_config.json). Nothing is
 typed by hand: every dollar figure is tokens x price.
 
-Thinking tokens. Claude Code's usage does not report thinking tokens separately: `output_tokens` includes them, and the
-current models return thinking blocks with empty text by default. So `thinking_tokens_est` = output tokens minus the
-visible output (assistant text plus tool-call inputs, characters / 3.5), floored at 0, and is marked an estimate.
+Thinking tokens. Claude Code's `modelUsage` (in the result event) reports `thinkingTokens` per model; when present that
+exact count is used. Otherwise (older records) `thinking` = output tokens minus the visible output (assistant text plus
+tool-call inputs, characters / 3.5), floored at 0, and is marked an estimate. Cache writes: `modelUsage` splits 5-minute
+and 1-hour writes, priced at `cache_write` and `cache_write_1h`.
 """
 CHARS_PER_TOKEN = 3.5
 
@@ -16,20 +17,25 @@ def tokens(chars):
     return round((chars or 0) / CHARS_PER_TOKEN)
 
 
-def decompose(split, turn_log, final_source, price, reported_usd=None):
-    """split: {"fresh", "cache_write", "cache_read", "output"} totals; turn_log: stream turns; price: USD per million."""
+def decompose(split, turn_log, final_source, price, reported_usd=None, model_usage=None):
+    """split: {"fresh", "cache_write", "cache_read", "output"} totals; turn_log: stream turns; price: USD per million;
+    model_usage: Claude Code's `modelUsage` (exact thinking tokens, 5-minute / 1-hour cache writes) when recorded."""
     fresh, cw, cr, out = (split.get(k) or 0 for k in ("fresh", "cache_write", "cache_read", "output"))
+    mu = list((model_usage or {}).values())
+    exact_thinking = sum(m.get("thinkingTokens") or 0 for m in mu) if mu and all("thinkingTokens" in m for m in mu) else None
+    cw_1h = sum(m.get("cacheCreationEphemeral1hInputTokens") or 0 for m in mu) if mu else 0
+    cw_5m = cw - cw_1h
     turns = turn_log or []
     visible = sum((t.get("text_chars") or 0) + (t.get("tool_input_chars") or 0) for t in turns)
     write_chars = sum(t.get("write_chars") or 0 for t in turns)
     visible_tok = tokens(visible)
     have_stream = any("text_chars" in t for t in turns)
-    thinking = max(0, out - visible_tok) if have_stream else None
+    thinking = exact_thinking if exact_thinking is not None else (max(0, out - visible_tok) if have_stream else None)
     usd = {
         "fresh_input": fresh * price["input"] / 1e6,
-        "cache_write": cw * price["cache_write"] / 1e6,
+        "cache_write": (cw_5m * price["cache_write"] + cw_1h * price.get("cache_write_1h", 2 * price["input"])) / 1e6,
         "cache_read": cr * price["cache_read"] / 1e6,
-        "output_visible": min(out, visible_tok if have_stream else out) * price["output"] / 1e6,
+        "output_visible": (out - (thinking or 0)) * price["output"] / 1e6,
         "output_thinking_est": (thinking or 0) * price["output"] / 1e6,
     }
     total = sum(usd.values())
@@ -48,7 +54,8 @@ def decompose(split, turn_log, final_source, price, reported_usd=None):
         "usd_reported": reported_usd,
         "usd_calibration": round(total / reported_usd, 3) if reported_usd else None,
         "usd_context_per_turn": round(context_usd / n_turns, 6) if n_turns else None,
-        "thinking_is_estimate": True,
+        "thinking_is_estimate": exact_thinking is None,
+        "cache_write_1h": cw_1h,
     }
 
 

@@ -89,7 +89,7 @@ def main(argv=None):
     p7.add_argument("--config", default=P7.CONFIG)
     p7.add_argument("--out", default="results/pilot7")
     p7.add_argument("--dry-run", action="store_true")
-    p7.add_argument("--prior", default="results/pilot6/trials", help="recorded trials for the decomposition demo of --dry-run")
+    p7.add_argument("--prior", action="append", default=None, help="recorded trials for the decomposition demo of --dry-run (repeatable; default: pilot 6 and the pilot-7 validation smoke)")
     p7.add_argument("--yes", action="store_true", help="launch (owner decision; never in CI)")
     p7r = sub.add_parser("pilot7-report")
     p7r.add_argument("--config", default=P7.CONFIG)
@@ -121,7 +121,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.cmd == "pilot7":
         cfg = P7.load_config(a.config)
-        problems = P7.dry_run(cfg, a.prior)
+        problems = P7.dry_run(cfg, a.prior or ["results/pilot6/trials", "results/pilot7-validation/trials"])
         for p in problems:
             print(f"PROBLEM: {p}")
         print("dry run: ready" if not problems else f"dry run: {len(problems)} problem(s)")
