@@ -164,9 +164,9 @@
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2245
-"src/analyzer/signature_registry.rs" = 2526
+"src/analyzer/signature_registry.rs" = 2519
 "src/analyzer/string_optimization.rs" = 2201
-"src/auto_clone.rs" = 2211
+"src/auto_clone.rs" = 2210
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4009
 "src/codegen/rust/function_generation_prepare.rs" = 12771
@@ -174,7 +174,7 @@
 "src/codegen/rust/int_promotion_type_inference.rs" = 2183
 "src/codegen/rust/ir_call_site.rs" = 10432
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2156
-"src/codegen/rust/self_analysis.rs" = 2027
+"src/codegen/rust/self_analysis.rs" = 2026
 "src/codegen/rust/signature_promotion.rs" = 4519
 "src/codegen/rust/statement_generation.rs" = 2432
 "src/codegen/rust/stdlib_method_traits.rs" = 2430
@@ -197,9 +197,9 @@
 "src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 639
 "src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1229
 "src/codegen/rust/block_generation.rs::generate_block" = 307
-"src/codegen/rust/block_generation.rs::generate_block_expr" = 503
+"src/codegen/rust/block_generation.rs::generate_block_expr" = 499
 "src/codegen/rust/call_expression_generation/argument_generation/regular_call_arguments.rs::collect_regular_function_arguments" = 905
-"src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 738
+"src/codegen/rust/call_expression_generation/function_call_generation.rs::generate_plain_function_call" = 737
 "src/codegen/rust/call_expression_generation/trait_call_generation.rs::generate_call_on_field_access" = 699
 "src/codegen/rust/call_signature_resolution.rs::effective_param_ownership" = 314
 "src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 373
@@ -226,7 +226,7 @@
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
 "src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 971
 "src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2140
-"src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 318
+"src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 317
 "src/codegen/rust/program_generation.rs::generate_program" = 999
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345
 "src/codegen/rust/type_balancing.rs::balance_eq_operands_for_rust" = 497
