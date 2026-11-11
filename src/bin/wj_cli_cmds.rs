@@ -407,7 +407,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Cache { action } => match action {
             CacheCommand::Path { verify } => windjammer::cli::cache::execute_path(verify)?,
             CacheCommand::Status => windjammer::cli::cache::execute_status()?,
-            CacheCommand::Prune { aggressive } => windjammer::cli::cache::execute_prune(aggressive)?,
+            CacheCommand::Prune { aggressive, force } => windjammer::cli::cache::execute_prune(aggressive, force)?,
             CacheCommand::Warm => windjammer::cli::cache::execute_warm()?,
             CacheCommand::Setup => windjammer::cli::cache::execute_setup()?,
         },

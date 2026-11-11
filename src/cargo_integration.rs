@@ -717,6 +717,7 @@ pub fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> 
     // Shared cache: reuse compiled deps across projects; avoid polluting output_dir/target.
     let _ = crate::cargo_cache::reclaim();
     let target_dir = crate::cargo_cache::shared_target_dir();
+    let _tree = crate::cargo_cache::active::hold_path(&target_dir);
     let output = Command::new("cargo")
         .arg("build")
         .arg("--message-format=json")
