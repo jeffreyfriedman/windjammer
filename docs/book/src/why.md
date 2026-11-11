@@ -2,7 +2,7 @@
 
 Systems languages ask you to say a great deal about memory before they let you say what your program does. Scripting
 languages let you say what your program does and leave the rest to a runtime. Windjammer aims at both: write the
-program, keep the performance.
+program, and still get native output.
 
 ## What it gives you
 
@@ -10,7 +10,7 @@ program, keep the performance.
 You never write `&`, `&mut` or a lifetime, and you can always see the choice the compiler made with
 `wj explain-ownership`, or read the generated Rust. The [ownership chapter](tutorial/ownership.md) shows how.
 
-**Instant feedback, native output.** `wj run` starts a program in milliseconds, with no build step. `wj build`
+**A short loop, native output.** `wj run` interprets, with no build step ([measured](showcase/fast-loop.md)). `wj build`
 turns the same source into Rust and then into a native binary. Go, JavaScript and WebAssembly targets sit alongside; see
 [Compile targets](reference/targets.md).
 
@@ -29,10 +29,10 @@ search (`wj docs`) answers questions without a network, and the language surface
 
 | If you know | Windjammer keeps | Windjammer changes |
 |---|---|---|
-| Rust | the performance, the output (it compiles to Rust), the crates | no `&`, `&mut`, lifetimes, `.clone()` or `.to_string()` in everyday code |
-| Go | the appetite for simplicity and fast feedback | sum types with exhaustive `match`, generics with traits |
+| Rust | the output (it compiles to Rust), the crates | no `&`, `&mut`, lifetimes, `.clone()` or `.to_string()` in everyday code |
+| Go | the appetite for simplicity and a short feedback loop | sum types with exhaustive `match`, generics with traits |
 | TypeScript | the light syntax and string interpolation | static types all the way down, and a native binary |
-| Python | the instant edit-and-run loop | static types, and a path to a native binary without a rewrite |
+| Python | the edit-and-run loop with no build step | static types, and a path to a native binary without a rewrite |
 
 The appendix has a migration guide for each of these.
 

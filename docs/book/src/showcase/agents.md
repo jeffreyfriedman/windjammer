@@ -3,7 +3,8 @@
 <!-- feature: showcase-agents -->
 
 A coding agent works in a loop: write, check, run, read the feedback, fix. Windjammer is built so every turn of that loop
-is cheap and unambiguous. People benefit from the same things.
+is short and unambiguous. People benefit from the same things. What has and has not been measured about agents is on
+[What we have measured](measured.md).
 
 ## Diagnostics are data
 
@@ -47,7 +48,7 @@ $ wj run mutate.wj
 ## No Rust toolchain needed to check
 
 `wj check` is the compiler front end alone: lexer, parser, name resolution, ownership, numeric inference and the effect
-analysis. It never starts `cargo` or `rustc`, so the feedback arrives in milliseconds and works on a machine with nothing
+analysis. It never starts `cargo` or `rustc`, so there is no compile step between your edit and the answer, and it works on a machine with nothing
 else installed. With only the `wj` directory on the path:
 
 ```sh,verify
@@ -60,7 +61,7 @@ $ env PATH="$(dirname "$(command -v wj)")" wj check ok.wj
 0 error(s)
 ```
 
-## Instant runs
+## Runs with no build
 
 `wj run` interprets, so the second half of the loop needs no build either, and `wj eval` answers a question in one line:
 
