@@ -292,6 +292,31 @@ predictable families, and `--verify` (or the opt-in background build) becomes th
   the load average is usually above the core count, so the bound keeps it off most of the time; that is the intended
   behaviour for an opt-in on a busy host.
 
+## Measurement (offline, no LLM calls): what `--verify` would have told the pilot-5 agents
+
+Method: the final program of every pilot-5 trial in arms V (interpreted-first) and W (interpreted plus final build),
+taken from the trial records (`final_source`), run with `wj run --verify` on sample 0 of its task, on the head of this
+slice with a warm shared build cache. The six `t110_crc_lines` trials are left out: their workspace declared the
+`crc32fast` crate in a `wj.toml` that the records do not keep. A live pilot arm with `--verify` in the prompt costs
+LLM calls and is an owner decision; this replay is free.
+
+| Outcome on this head (54 trials) | Trials |
+|---|---|
+| compiled build OK, compiled run matches the interpreted run | 45 |
+| compiled build OK, not run a second time (effects beyond the console) | 5 |
+| the interpreter ran it, the compiled build failed (`t104_activity_log` V, all three) | 3 |
+| the program fails in the interpreter too (`t102_file_tally` V.0, a non-interpreted std call) | 1 |
+
+- The pilot recorded ten silent divergences. On this head the backend fixes since pilot 5 made `t101` and `t107` build
+  and match; the three that remain (`t104`, `map_get_in_sort_by_closure`, a closure returning `()` where `Ordering` is
+  expected) are exactly the trials `--verify` flags. No passing trial was flagged: `--verify` gave no false alarm.
+- `wj check` predicted none of the three (their first rustc error is outside families A to C), which is why `--verify`
+  is the complement of the predictions rather than a replacement.
+- Cost: median 2 s, maximum 10 s of wall time per `--verify` with a warm cache, against 3.9 s of mean tool-wait for arm
+  W's separate final build in the pilot.
+- Projection, not a measurement: an interpreted-first arm that ends with `--verify` would have seen every remaining
+  divergence at the cost of one call; the pilot acceptance metric above is what confirms it.
+
 ## Consequences
 
 - `wj check` on a family-A program now fails with WJ0003 at the line, with the workaround; an interpreted run prints
