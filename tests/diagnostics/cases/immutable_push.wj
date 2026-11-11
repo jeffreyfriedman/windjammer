@@ -1,7 +1,9 @@
-// expect: none
-// Windjammer infers `mut` for locals: this program is valid.
+// expect: WJ0051
+// A method that changes its receiver (`push` is `&mut self`) changes the binding: it must be `let mut` (ADR-0002).
+// oracle: check
 fn main() {
     let items = [1, 2, 3]
     items.push(4)
+//~@5+5 WARN WJ0051 `items` is changed
     println("${items.len()}")
 }

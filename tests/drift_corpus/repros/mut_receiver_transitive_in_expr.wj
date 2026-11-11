@@ -1,5 +1,5 @@
 // A method that mutates only by calling another mutating method inside an expression (`1 + self.step()`): the caller's
-// `let g` is emitted without `mut` (rustc E0596). The interpreter has no such rule and runs it.
+// binding is declared `let mut g` (ADR-0002; without it `wj check` reports WJ0051).
 struct Gen { state: int }
 impl Gen {
     fn step(self) -> int {
@@ -11,7 +11,7 @@ impl Gen {
     }
 }
 fn main() {
-    let g = Gen { state: 0 }
+    let mut g = Gen { state: 0 }
     let r = g.plus_one()
     println("${r}")
 }

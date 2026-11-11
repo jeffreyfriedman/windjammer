@@ -473,7 +473,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj test` | Run tests |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
-| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
+| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms and add the `mut` of changed locals (WJ0051) |
 | `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
 | `wj check` | Type check without building |
 | `wj add` | Add a dependency to wj.toml |
@@ -716,7 +716,7 @@ Usage: wj fmt [OPTIONS] [PATH]...
 
 ### `wj fix`
 
-Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms
+Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms and add the `mut` of changed locals (WJ0051)
 
 ```text
 Usage: wj fix [OPTIONS] <PATH>

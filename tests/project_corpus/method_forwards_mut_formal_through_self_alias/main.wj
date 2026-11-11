@@ -7,7 +7,7 @@ mod graph
 fn main() {
     let mut csr = graph::Csr { ids: [1, 2], visits: 0 }
     let h = graph::Host { runs: 0 }.run_joined("walk", csr, 0)
-    let csr2 = graph::Csr { ids: [3], visits: 0 }
+    let mut csr2 = graph::Csr { ids: [3], visits: 0 }
     let h2 = graph::Host { runs: 0 }.run_joined("walk", csr2, 5)
     println("${h.runs} ${h2.runs}")
 }

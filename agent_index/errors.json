@@ -194,6 +194,22 @@
     ],
     "title": "Pattern match not exhaustive"
   },
+  "WJ0051": {
+    "causes": [
+      "`let x = ..` followed by `x = ..`, `x += ..` or `x.field = ..`",
+      "Calling a method that changes the value (`push`, `insert`, a method that changes `self`)"
+    ],
+    "code": "WJ0051",
+    "example": "// Wrong:\nlet items = Vec::new()\nitems.push(1)\n\n// Correct:\nlet mut items = Vec::new()\nitems.push(1)",
+    "explanation": "A local binding (`let`, a `for` loop variable) is immutable unless declared `mut` (ADR-0002). The program assigns to it, assigns to a field or element of it, calls a method that changes it, or passes it to a function that changes it. `wj fix` adds the `mut`.",
+    "maturity": "HighConfidence",
+    "rust_codes": [],
+    "solutions": [
+      "Declare the binding `let mut x` (`let (mut a, b)`, `for mut x in`)",
+      "Run `wj fix <path>` to insert every missing `mut`"
+    ],
+    "title": "Local binding changed but not declared mut"
+  },
   "WJ0160": {
     "causes": [
       "Returning a scratch string or a handle of a local arena",

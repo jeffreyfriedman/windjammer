@@ -469,7 +469,7 @@ pub enum Commands {
         paths: Vec<PathBuf>,
     },
 
-    /// Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms
+    /// Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms and add the `mut` of changed locals (WJ0051)
     Fix {
         /// File or directory to rewrite in place
         #[arg(value_name = "PATH")]

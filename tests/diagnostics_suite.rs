@@ -258,8 +258,8 @@ fn check_has_no_false_positives_on_the_build_corpus() {
     }
     files.sort();
     let semantic = [
-        "WJ0001", "WJ0002", "WJ0003", "WJ0004", "WJ0005", "WJ0006", "WJ0008", "WJ0009", "WJ0013",
-        "WJ0014", "WJ0021",
+        "WJ0001", "WJ0002", "WJ0003", "WJ0005", "WJ0006", "WJ0008", "WJ0009", "WJ0013",
+        "WJ0014", "WJ0021", "WJ0051",
     ];
     // Corpus files the build accepts although they contain a real error that only rustc reports.
     let true_positives = [

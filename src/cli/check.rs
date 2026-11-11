@@ -124,6 +124,15 @@ pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
         checked.sources.get(f).or_else(|| full.as_deref().and_then(|g| checked.sources.get(g))).cloned().or_else(|| std::fs::read_to_string(f).ok())
     };
     if errors == 0 {
+        // ADR-0002: a local changed without `mut` is reported exactly as `wj check` and `wj build` report it (stderr;
+        // the program's output and exit status are untouched)
+        for d in checked.report.diagnostics.iter().filter(|d| d.code == crate::check::local_mut::CODE) {
+            let mut d = d.clone();
+            for sp in d.primary_span.iter_mut().chain(d.secondary_spans.iter_mut()) {
+                sp.file = short(&sp.file);
+            }
+            eprintln!("{}", render::render(&d, &source_of));
+        }
         // ADR-0033: integer widths the compiled build would mix are a backend defect, not a language error. `wj check`
         // reports them as errors; an interpreted run warns before the program's output and runs it (scripts that
         // are only ever interpreted keep working)

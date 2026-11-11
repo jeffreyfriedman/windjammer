@@ -362,7 +362,7 @@ tests/diagnostics/cases/field_literal_mismatch.wj WJ0003
 tests/diagnostics/cases/forbidden_derive_copy.wj WJ0023
 tests/diagnostics/cases/format_placeholder.wj W0008
 tests/diagnostics/cases/function_typo.wj WJ0002
-tests/diagnostics/cases/immutable_reassign.wj WJ0004
+tests/diagnostics/cases/immutable_reassign.wj WJ0051
 tests/diagnostics/cases/invalid_character.wj WJ0012
 tests/diagnostics/cases/let_int_to_string.wj WJ0003
 tests/diagnostics/cases/let_string_to_int.wj WJ0003
@@ -550,7 +550,7 @@ tests/spec/numeric/SPEC-NUM-011.wj WJ0011
 tests/spec/optionals/SPEC-OPT-004.wj WJ0011
 tests/spec/pipe/SPEC-PIPE-006.wj W0002
 tests/spec/pipe/SPEC-PIPE-007.wj WJ0011
-tests/spec/statements/SPEC-STMT-002.wj WJ0004
+tests/spec/statements/SPEC-STMT-002.wj WJ0051
 tests/spec/statements/SPEC-STMT-005.wj W0003
 tests/spec/stdlib/SPEC-STD-001.wj W0002
 tests/spec/stdlib/SPEC-STD-002.wj W0002,W0010
