@@ -1,0 +1,1073 @@
+{
+ "n_trials": 90,
+ "arms": {
+  "pass": {
+   "R": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "U": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "V2": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  "verify": {
+   "R": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "U": [
+    1.7,
+    1.2,
+    2.2333333333333334
+   ],
+   "V2": [
+    1.9,
+    1.2666666666666666,
+    2.7333333333333334
+   ]
+  },
+  "to_green": {
+   "R": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "U": [
+    1.1428571428571428,
+    1.0,
+    1.4285714285714286
+   ],
+   "V2": [
+    1.5833333333333333,
+    1.0,
+    2.64
+   ]
+  },
+  "turns": {
+   "R": [
+    3.0,
+    3.0,
+    3.0
+   ],
+   "U": [
+    3.8,
+    3.0,
+    4.833333333333333
+   ],
+   "V2": [
+    4.766666666666667,
+    3.3333333333333335,
+    7.2
+   ]
+  },
+  "tok_in": {
+   "R": [
+    22774.7,
+    22310.733333333334,
+    23448.8
+   ],
+   "U": [
+    32248.966666666667,
+    25207.733333333334,
+    43667.13333333333
+   ],
+   "V2": [
+    41135.36666666667,
+    29005.6,
+    62533.6
+   ]
+  },
+  "tok_out": {
+   "R": [
+    1710.2,
+    1290.5666666666666,
+    2323.8333333333335
+   ],
+   "U": [
+    1797.5666666666666,
+    1453.1666666666667,
+    2212.4
+   ],
+   "V2": [
+    1869.4,
+    1441.7333333333333,
+    2530.9333333333334
+   ]
+  },
+  "cost": {
+   "R": [
+    0.033378580000000005,
+    0.026034213333333334,
+    0.042406860000000005
+   ],
+   "U": [
+    0.03883897333333333,
+    0.03297324333333333,
+    0.045949246666666665
+   ],
+   "V2": [
+    0.04014156333333333,
+    0.03135440666666667,
+    0.05323332333333333
+   ]
+  },
+  "wall": {
+   "R": [
+    22.054333333333332,
+    19.415000000000003,
+    25.344333333333335
+   ],
+   "U": [
+    34.074333333333335,
+    28.392333333333333,
+    41.24466666666667
+   ],
+   "V2": [
+    39.388333333333335,
+    28.997666666666664,
+    52.79966666666667
+   ]
+  },
+  "think": {
+   "R": [
+    13.7919,
+    11.266166666666667,
+    17.174633333333336
+   ],
+   "U": [
+    17.823,
+    13.716800000000001,
+    23.505066666666668
+   ],
+   "V2": [
+    17.1403,
+    13.144666666666666,
+    22.0271
+   ]
+  },
+  "tool": {
+   "R": [
+    2.1136666666666666,
+    1.607,
+    2.6109999999999998
+   ],
+   "U": [
+    11.337,
+    7.84,
+    16.068666666666665
+   ],
+   "V2": [
+    17.427,
+    8.683,
+    30.113333333333333
+   ]
+  },
+  "denied": {
+   "R": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U": [
+    0.03333333333333333,
+    0.0,
+    0.13333333333333333
+   ],
+   "V2": [
+    0.03333333333333333,
+    0.0,
+    0.13333333333333333
+   ]
+  },
+  "capden": {
+   "R": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "V2": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "load": {
+   "R": [
+    36.67333333333333,
+    31.7,
+    42.690000000000005
+   ],
+   "U": [
+    46.69666666666667,
+    39.669999999999995,
+    53.663333333333334
+   ],
+   "V2": [
+    47.82666666666667,
+    39.766666666666666,
+    56.39333333333333
+   ]
+  },
+  "silent": {
+   "R": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "V2": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "diffs": {
+  "pass": {
+   "R-U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "R-V2": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U-V2": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "verify": {
+   "R-U": [
+    -0.7,
+    -1.2000000000000002,
+    -0.19999999999999996
+   ],
+   "R-V2": [
+    -0.8999999999999999,
+    -1.7333333333333334,
+    -0.2666666666666666
+   ],
+   "U-V2": [
+    -0.19999999999999996,
+    -0.8666666666666667,
+    0.16666666666666696
+   ]
+  },
+  "to_green": {
+   "R-U": [
+    -0.1428571428571428,
+    -0.4285714285714286,
+    0.0
+   ],
+   "R-V2": [
+    -0.5833333333333333,
+    -1.6666666666666665,
+    0.0
+   ],
+   "U-V2": [
+    -0.3333333333333335,
+    -1.238095238095238,
+    0.0
+   ]
+  },
+  "turns": {
+   "R-U": [
+    -0.7999999999999998,
+    -1.8666666666666663,
+    0.0
+   ],
+   "R-V2": [
+    -1.7666666666666666,
+    -4.233333333333333,
+    -0.3666666666666667
+   ],
+   "U-V2": [
+    -0.9666666666666668,
+    -2.8,
+    -0.09999999999999964
+   ]
+  },
+  "tok_in": {
+   "R-U": [
+    -9474.266666666666,
+    -20513.833333333336,
+    -2640.0999999999985
+   ],
+   "R-V2": [
+    -18360.666666666668,
+    -40077.5,
+    -6880.733333333334
+   ],
+   "U-V2": [
+    -8886.400000000001,
+    -24259.100000000006,
+    209.90000000000146
+   ]
+  },
+  "tok_out": {
+   "R-U": [
+    -87.36666666666656,
+    -698.8333333333333,
+    666.1000000000001
+   ],
+   "R-V2": [
+    -159.20000000000005,
+    -1000.9666666666667,
+    695.8666666666666
+   ],
+   "U-V2": [
+    -71.83333333333348,
+    -487.5666666666666,
+    178.26666666666665
+   ]
+  },
+  "cost": {
+   "R-U": [
+    -0.005460393333333327,
+    -0.015733069999999995,
+    0.005307030000000004
+   ],
+   "R-V2": [
+    -0.006762983333333326,
+    -0.02311403333333333,
+    0.006433909999999994
+   ],
+   "U-V2": [
+    -0.0013025899999999993,
+    -0.011307836666666668,
+    0.00495872666666667
+   ]
+  },
+  "wall": {
+   "R-U": [
+    -12.020000000000003,
+    -20.45433333333333,
+    -5.148333333333337
+   ],
+   "R-V2": [
+    -17.334000000000003,
+    -31.646666666666665,
+    -5.860333333333333
+   ],
+   "U-V2": [
+    -5.314,
+    -18.02799999999999,
+    5.75833333333334
+   ]
+  },
+  "think": {
+   "R-U": [
+    -4.0311,
+    -10.062533333333333,
+    1.4964999999999993
+   ],
+   "R-V2": [
+    -3.3484,
+    -8.9741,
+    1.8222999999999985
+   ],
+   "U-V2": [
+    0.6827000000000005,
+    -3.121533333333332,
+    4.804966666666665
+   ]
+  },
+  "tool": {
+   "R-U": [
+    -9.223333333333333,
+    -14.250666666666667,
+    -5.506666666666666
+   ],
+   "R-V2": [
+    -15.313333333333333,
+    -27.681333333333335,
+    -6.490000000000001
+   ],
+   "U-V2": [
+    -6.09,
+    -18.65833333333334,
+    3.9273333333333333
+   ]
+  },
+  "denied": {
+   "R-U": [
+    -0.03333333333333333,
+    -0.13333333333333333,
+    0.0
+   ],
+   "R-V2": [
+    -0.03333333333333333,
+    -0.13333333333333333,
+    0.0
+   ],
+   "U-V2": [
+    0.0,
+    -0.06666666666666668,
+    0.06666666666666668
+   ]
+  },
+  "capden": {
+   "R-U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "R-V2": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U-V2": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "load": {
+   "R-U": [
+    -10.02333333333334,
+    -19.203333333333333,
+    -0.37333333333333485
+   ],
+   "R-V2": [
+    -11.153333333333336,
+    -20.89333333333333,
+    -2.0899999999999963
+   ],
+   "U-V2": [
+    -1.1299999999999955,
+    -11.17666666666667,
+    8.56333333333334
+   ]
+  },
+  "silent": {
+   "R-U": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "R-V2": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "U-V2": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "friction": [
+  {
+   "id": "type-mismatch",
+   "title": "type mismatch (often int/float, string/&str)",
+   "fix_kind": "diagnostic text",
+   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+   "wasted_calls": 12,
+   "est_tokens": 108431,
+   "example": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:47:1\n   |\n47 |         } else {\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:49:1\n   |\n49 |         }\nerror[WJ0003]: mismatched types: expected `&_`, found `string`\n  --> main.wj:19:29\n   |\n19 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`\n  --> main.wj:19:29\n   |\n19 |     let mut counts: HashMap<string, int> = HashMap::new()",
+   "arms": [
+    "U",
+    "V2"
+   ],
+   "n_trials": 6,
+   "n_tasks": 1,
+   "rank": 1,
+   "priority": "P0"
+  },
+  {
+   "id": "other:error",
+   "title": "unclassified failure: error",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 6,
+   "est_tokens": 53931,
+   "example": "error",
+   "arms": [
+    "U",
+    "V2"
+   ],
+   "n_trials": 6,
+   "n_tasks": 1,
+   "rank": 2,
+   "priority": "P0"
+  },
+  {
+   "id": "slow-command:run-default",
+   "title": "slow `wj run` (default) >= 30s",
+   "fix_kind": "performance",
+   "fix_location": "build cache / runtime pre-build; see wall-time table",
+   "wasted_calls": 5,
+   "est_tokens": 45416,
+   "example": "",
+   "arms": [
+    "V2"
+   ],
+   "n_trials": 3,
+   "n_tasks": 3,
+   "rank": 3,
+   "priority": "P0"
+  },
+  {
+   "id": "other:error: bad width",
+   "title": "unclassified failure: error: bad width",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 5,
+   "est_tokens": 44848,
+   "example": "error: bad width",
+   "arms": [
+    "U",
+    "V2"
+   ],
+   "n_trials": 5,
+   "n_tasks": 1,
+   "rank": 4,
+   "priority": "P1"
+  },
+  {
+   "id": "slow-command:run-compiled",
+   "title": "slow `wj run` (compiled) >= 30s",
+   "fix_kind": "performance",
+   "fix_location": "build cache / runtime pre-build; see wall-time table",
+   "wasted_calls": 1,
+   "est_tokens": 8894,
+   "example": "",
+   "arms": [
+    "U"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 5,
+   "priority": "P1"
+  }
+ ],
+ "aps": {
+  "U-vs-R": {
+   "point": {
+    "P": 1.0,
+    "I": 0.7894736842105263,
+    "T": 0.719159855726868,
+    "W": 0.6472418144644551,
+    "APS": 81.85513560012586
+   },
+   "n_tasks": 10,
+   "ci": {
+    "P": [
+     1.0,
+     1.0
+    ],
+    "I": [
+     0.625,
+     1.0
+    ],
+    "T": [
+     0.5635059657191499,
+     0.8931196356543827
+    ],
+    "W": [
+     0.5165203172781372,
+     0.8046508020916423
+    ],
+    "APS": [
+     72.01148298182848,
+     92.45481950619904
+    ]
+   }
+  },
+  "V2-vs-R": {
+   "point": {
+    "P": 1.0,
+    "I": 0.6293706293706294,
+    "T": 0.5693531647267008,
+    "W": 0.5599204502179156,
+    "APS": 72.52419352934866
+   },
+   "n_tasks": 10,
+   "ci": {
+    "P": [
+     1.0,
+     1.0
+    ],
+    "I": [
+     0.44999999999999996,
+     0.8910891089108911
+    ],
+    "T": [
+     0.4104019524988573,
+     0.7749580605231441
+    ],
+    "W": [
+     0.43091044578623716,
+     0.782049228469219
+    ],
+    "APS": [
+     61.20367570220639,
+     85.65623145141562
+    ]
+   }
+  }
+ },
+ "attribution": {
+  "R": {
+   "first_turn_input": 10553.533333333333,
+   "pack_tokens": 0.0,
+   "tool_result_tokens": 71.4,
+   "docs_calls": 0.0,
+   "mcp_calls": 0.0,
+   "tokens_in": 22774.7,
+   "turns": 3.0
+  },
+  "U": {
+   "first_turn_input": 11363.5,
+   "pack_tokens": 455.14285714285717,
+   "tool_result_tokens": 536.4666666666667,
+   "docs_calls": 0.2,
+   "mcp_calls": 0.0,
+   "tokens_in": 32248.966666666667,
+   "turns": 3.8
+  },
+  "V2": {
+   "first_turn_input": 11544.5,
+   "pack_tokens": 526.8571428571429,
+   "tool_result_tokens": 434.7,
+   "docs_calls": 0.1,
+   "mcp_calls": 0.0,
+   "tokens_in": 41135.36666666667,
+   "turns": 4.766666666666667
+  }
+ },
+ "friction_by_arm": {
+  "R": [],
+  "U": [
+   {
+    "id": "other:error",
+    "title": "unclassified failure: error",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 26682,
+    "example": "error",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error: bad width",
+    "title": "unclassified failure: error: bad width",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 26682,
+    "example": "error: bad width",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 3,
+    "est_tokens": 26682,
+    "example": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:47:1\n   |\n47 |         } else {\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:49:1\n   |\n49 |         }\nerror[WJ0003]: mismatched types: expected `&_`, found `string`\n  --> main.wj:19:29\n   |\n19 |     let mut counts: HashMap<string, int> = HashMap::new()\nerror[WJ0003]: mismatched types: expected an owned `string`, found a borrowed `string`\n  --> main.wj:19:29\n   |\n19 |     let mut counts: HashMap<string, int> = HashMap::new()",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "slow-command:run-compiled",
+    "title": "slow `wj run` (compiled) >= 30s",
+    "fix_kind": "performance",
+    "fix_location": "build cache / runtime pre-build; see wall-time table",
+    "wasted_calls": 1,
+    "est_tokens": 8894,
+    "example": "",
+    "arms": [
+     "U"
+    ],
+    "n_trials": 1,
+    "n_tasks": 1,
+    "rank": 4,
+    "priority": "P1"
+   }
+  ],
+  "V2": [
+   {
+    "id": "type-mismatch",
+    "title": "type mismatch (often int/float, string/&str)",
+    "fix_kind": "diagnostic text",
+    "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+    "wasted_calls": 9,
+    "est_tokens": 81749,
+    "example": "error[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:47:1\n   |\n47 |         } else {\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:49:1\n   |\n49 |         }\nwj verify: the interpreter ran the program, but the compiled build failed (see the errors above): rustc is stricter than the interpreter here, so `wj build` would fail too\nann 3 47 edit\nbob 2 4 login\nmalformed: 2",
+    "arms": [
+     "V2"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 1,
+    "priority": "P0"
+   },
+   {
+    "id": "slow-command:run-default",
+    "title": "slow `wj run` (default) >= 30s",
+    "fix_kind": "performance",
+    "fix_location": "build cache / runtime pre-build; see wall-time table",
+    "wasted_calls": 5,
+    "est_tokens": 45416,
+    "example": "",
+    "arms": [
+     "V2"
+    ],
+    "n_trials": 3,
+    "n_tasks": 3,
+    "rank": 2,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error",
+    "title": "unclassified failure: error",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 3,
+    "est_tokens": 27250,
+    "example": "error",
+    "arms": [
+     "V2"
+    ],
+    "n_trials": 3,
+    "n_tasks": 1,
+    "rank": 3,
+    "priority": "P0"
+   },
+   {
+    "id": "other:error: bad width",
+    "title": "unclassified failure: error: bad width",
+    "fix_kind": "diagnostic text (triage)",
+    "fix_location": "inspect example, then file under a rule",
+    "wasted_calls": 2,
+    "est_tokens": 18167,
+    "example": "error: bad width",
+    "arms": [
+     "V2"
+    ],
+    "n_trials": 2,
+    "n_tasks": 1,
+    "rank": 4,
+    "priority": "P1"
+   }
+  ]
+ },
+ "comparison": {
+  "R": {
+   "pass": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "cost": [
+    0.033378580000000005,
+    0.026034213333333334,
+    0.042406860000000005
+   ],
+   "cost_per_correct": 0.033378580000000005
+  },
+  "U": {
+   "pass": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "cost": [
+    0.03883897333333333,
+    0.03297324333333333,
+    0.045949246666666665
+   ],
+   "cost_per_correct": 0.03883897333333333
+  },
+  "V2": {
+   "pass": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "cost": [
+    0.04014156333333333,
+    0.03135440666666667,
+    0.05323332333333333
+   ],
+   "cost_per_correct": 0.04014156333333333
+  }
+ },
+ "by_task": {
+  "t011_lru_cache": {
+   "R": {
+    "cost": 0.023794966666666667,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.030499833333333337,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.028792866666666667,
+    "turns": 3.0
+   }
+  },
+  "t013_bst": {
+   "R": {
+    "cost": 0.037975166666666664,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.048766699999999996,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.044848066666666665,
+    "turns": 3.0
+   }
+  },
+  "t101_json_orders": {
+   "R": {
+    "cost": 0.06861136666666666,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.033543699999999996,
+    "turns": 3.6666666666666665
+   },
+   "V2": {
+    "cost": 0.031869433333333336,
+    "turns": 4.333333333333333
+   }
+  },
+  "t103_trait_pricing": {
+   "R": {
+    "cost": 0.023222266666666668,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.04317763333333333,
+    "turns": 6.333333333333333
+   },
+   "V2": {
+    "cost": 0.044117500000000004,
+    "turns": 7.0
+   }
+  },
+  "t104_activity_log": {
+   "R": {
+    "cost": 0.028179866666666664,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.061747166666666665,
+    "turns": 7.0
+   },
+   "V2": {
+    "cost": 0.08360269999999999,
+    "turns": 12.333333333333334
+   }
+  },
+  "t105_date_diff": {
+   "R": {
+    "cost": 0.030087866666666668,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.03734606666666667,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.0425672,
+    "turns": 4.666666666666667
+   }
+  },
+  "t106_priority_queue": {
+   "R": {
+    "cost": 0.0276153,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.0322915,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.030143533333333337,
+    "turns": 3.0
+   }
+  },
+  "t107_text_wrap": {
+   "R": {
+    "cost": 0.024405799999999995,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.027326,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.0251894,
+    "turns": 3.3333333333333335
+   }
+  },
+  "t108_to_rpn": {
+   "R": {
+    "cost": 0.040593266666666676,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.03690566666666667,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.036029700000000005,
+    "turns": 3.0
+   }
+  },
+  "t109_spiral": {
+   "R": {
+    "cost": 0.029299933333333333,
+    "turns": 3.0
+   },
+   "U": {
+    "cost": 0.03678546666666667,
+    "turns": 3.0
+   },
+   "V2": {
+    "cost": 0.034255233333333336,
+    "turns": 4.0
+   }
+  }
+ },
+ "noisy": {
+  "R": {
+   "trials": 30,
+   "noisy": 30,
+   "wall_all": 22.054333333333332,
+   "wall_quiet": null,
+   "tool_all": 2.1136666666666666,
+   "tool_quiet": null,
+   "load": 36.67333333333333
+  },
+  "U": {
+   "trials": 30,
+   "noisy": 28,
+   "wall_all": 34.074333333333335,
+   "wall_quiet": 24.759999999999998,
+   "tool_all": 11.337,
+   "tool_quiet": 5.51,
+   "load": 46.69666666666667
+  },
+  "V2": {
+   "trials": 30,
+   "noisy": 28,
+   "wall_all": 39.388333333333335,
+   "wall_quiet": 37.69,
+   "tool_all": 17.427,
+   "tool_quiet": 10.95,
+   "load": 47.82666666666667
+  }
+ },
+ "rust_errors": {
+  "trials_with_errors": 0,
+  "n": 30,
+  "errors_per_trial": 0.0,
+  "fix_calls_per_trial": 0.0
+ },
+ "adr0033": {
+  "pass@1 (compiled oracle)": {
+   "bar": ">= 0.95",
+   "value": "1.000 [1.000, 1.000]",
+   "pass": true
+  },
+  "cost per trial, USD": {
+   "bar": "<= 0.030",
+   "value": "0.040 [0.031, 0.053]",
+   "pass": false
+  },
+  "tool-wait, seconds": {
+   "bar": "<= 1.0",
+   "value": "17.43 all trials [8.68, 30.11]; 10.95 on 2 quiet trials (load <= 16)",
+   "pass": false
+  },
+  "silent divergence": {
+   "bar": "<= 0.05",
+   "value": "0.000 [0.000, 0.000]",
+   "pass": true
+  },
+  "no prediction for a program the build accepts": {
+   "bar": "0 false positives",
+   "value": "0 of 0 predictions shown to V2 agents",
+   "pass": true
+  },
+  "machine load within 10% of the comparison arm": {
+   "bar": "within 10%",
+   "value": "V2 47.8 vs U/R 41.7",
+   "pass": false
+  }
+ },
+ "offline_precision": {
+  "programs": 60,
+  "build_accepted": 60,
+  "false_positives": 0
+ },
+ "coverage": {
+  "rejected_programs": 12,
+  "predicted": 0
+ },
+ "parallel_run": {
+  "U": {
+   "n": 30,
+   "pass": 1.0,
+   "cost": 0.04398196333333334,
+   "turns": 5.4,
+   "tool": 32.913333333333334
+  },
+  "V2": {
+   "n": 30,
+   "pass": 1.0,
+   "cost": 0.04174064333333334,
+   "turns": 4.666666666666667,
+   "tool": 15.514000000000001
+  }
+ }
+}

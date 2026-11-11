@@ -1,0 +1,64 @@
+use std::fs
+use std::collections::HashMap
+
+fn all_digits(s: string) -> bool {
+    if s.len() == 0 {
+        return false
+    }
+    for c in s.chars() {
+        if c < '0' || c > '9' {
+            return false
+        }
+    }
+    true
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut counts: HashMap<string, int> = HashMap::new()
+    let mut totals: HashMap<string, int> = HashMap::new()
+    let mut acts: HashMap<string, int> = HashMap::new()
+    let mut users: Vec<string> = []
+    let mut bad = 0
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|p| p.to_string()).collect()
+        if parts.len() != 3 || !all_digits(parts[2]) {
+            bad += 1
+            continue
+        }
+        let u = parts[0]
+        let n: int = parts[2].parse::<int>().unwrap_or(0)
+        if !counts.contains_key(u) {
+            users.push(u)
+        }
+        let c = counts.get(u).unwrap_or(0)
+        counts.insert(u, c + 1)
+        let t = totals.get(u).unwrap_or(0)
+        totals.insert(u, t + n)
+        let key = "${u}\t${parts[1]}"
+        let a = acts.get(key).unwrap_or(0)
+        acts.insert(key, a + 1)
+    }
+    let mut keyed: Vec<(int, string)> = []
+    for u in users {
+        keyed.push((0 - totals.get(u).unwrap_or(0), u))
+    }
+    keyed.sort()
+    let users: Vec<string> = keyed.map(|p| p.1)
+    for u in users {
+        let mut best = ""
+        let mut bc = 0
+        for k in acts.keys() {
+            let sp: Vec<string> = k.split("\t").map(|p| p.to_string()).collect()
+            if sp[0] == u {
+                let v = acts.get(k).unwrap_or(0)
+                if v > bc || (v == bc && sp[1] < best) {
+                    bc = v
+                    best = sp[1]
+                }
+            }
+        }
+        println("${u} ${counts.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}")
+    }
+    println("malformed: ${bad}")
+}

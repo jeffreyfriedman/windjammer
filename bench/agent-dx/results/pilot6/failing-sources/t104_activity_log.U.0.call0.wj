@@ -1,0 +1,68 @@
+use std::fs
+use std::collections::HashMap
+
+fn all_digits(s: string) -> bool {
+    if s.len() == 0 {
+        return false
+    }
+    for c in s.chars() {
+        if c < '0' || c > '9' {
+            return false
+        }
+    }
+    true
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut bad = 0
+    let mut counts: HashMap<string, int> = HashMap::new()
+    let mut totals: HashMap<string, int> = HashMap::new()
+    let mut acts: HashMap<string, int> = HashMap::new()
+    let mut users: Vec<string> = []
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|p| p.to_string()).collect()
+        if parts.len() != 3 || !all_digits(parts[2]) {
+            bad += 1
+            continue
+        }
+        let u = parts[0]
+        let secs: int = parts[2].parse::<int>().unwrap_or(0)
+        if !counts.contains_key(u) {
+            users.push(u)
+        }
+        let c = counts.get(u).unwrap_or(0)
+        counts.insert(u, c + 1)
+        let t = totals.get(u).unwrap_or(0)
+        totals.insert(u, t + secs)
+        let key = "${u} ${parts[1]}"
+        let a = acts.get(key).unwrap_or(0)
+        acts.insert(key, a + 1)
+    }
+    users.sort_by(|a, b| {
+        let ta = totals.get(a).unwrap_or(0)
+        let tb = totals.get(b).unwrap_or(0)
+        if ta != tb {
+            tb.cmp(ta)
+        } else {
+            a.cmp(b)
+        }
+    })
+    for u in users {
+        let mut best = ""
+        let mut bc = 0
+        for k in acts.keys() {
+            let pre = "${u} "
+            if k.starts_with(pre) {
+                let act = k[pre.len()..k.len()]
+                let n = acts.get(k).unwrap_or(0)
+                if n > bc || (n == bc && act < best) {
+                    bc = n
+                    best = act
+                }
+            }
+        }
+        println("${u} ${counts.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}")
+    }
+    println("malformed: ${bad}")
+}

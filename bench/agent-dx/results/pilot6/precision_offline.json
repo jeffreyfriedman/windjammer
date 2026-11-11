@@ -1,0 +1,482 @@
+[
+ {
+  "task": "t011_lru_cache",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t011_lru_cache",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t011_lru_cache",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t011_lru_cache",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t011_lru_cache",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t011_lru_cache",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t013_bst",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t013_bst",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t013_bst",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t013_bst",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t013_bst",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t013_bst",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t101_json_orders",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t101_json_orders",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t101_json_orders",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t101_json_orders",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t101_json_orders",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t101_json_orders",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t103_trait_pricing",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t103_trait_pricing",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t103_trait_pricing",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t103_trait_pricing",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t103_trait_pricing",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t103_trait_pricing",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t104_activity_log",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t105_date_diff",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t105_date_diff",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t105_date_diff",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t105_date_diff",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t105_date_diff",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t105_date_diff",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t106_priority_queue",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t106_priority_queue",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t106_priority_queue",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t106_priority_queue",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t106_priority_queue",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t106_priority_queue",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t107_text_wrap",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t107_text_wrap",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t107_text_wrap",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t107_text_wrap",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t107_text_wrap",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t107_text_wrap",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t108_to_rpn",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t108_to_rpn",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t108_to_rpn",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t108_to_rpn",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t108_to_rpn",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t108_to_rpn",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t109_spiral",
+  "arm": "U",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t109_spiral",
+  "arm": "U",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t109_spiral",
+  "arm": "U",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t109_spiral",
+  "arm": "V2",
+  "trial": 0,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t109_spiral",
+  "arm": "V2",
+  "trial": 1,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ },
+ {
+  "task": "t109_spiral",
+  "arm": "V2",
+  "trial": 2,
+  "build_accepts": true,
+  "check_exit": 0,
+  "prediction": false
+ }
+]
