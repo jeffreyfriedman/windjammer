@@ -6,6 +6,8 @@
 
 pub mod active;
 pub mod build_profile;
+mod test_api;
+pub use test_api::enforce_size_budget_for_test;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -464,12 +466,6 @@ fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u6
         ));
     }
     freed
-}
-
-/// [`enforce_size_budget`] for the cache tests.
-#[doc(hidden)]
-pub fn enforce_size_budget_for_test(tree: &Path, budget: u64, report: &mut PruneReport) -> u64 {
-    enforce_size_budget(tree, budget, report)
 }
 
 fn collect_files(dir: &Path, out: &mut Vec<(SystemTime, u64, PathBuf)>) {
