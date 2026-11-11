@@ -224,6 +224,10 @@ pub struct Interpreter {
     /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
     pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
     pub(crate) cur: Option<&'static Location>,
+    /// Render the failing frame's bindings into an error (`--no-locals` turns it off; ADR-0036).
+    pub(crate) capture_locals: bool,
+    /// Environment values (8+ characters) the failing frame's bindings are compared with before they are shown.
+    pub(crate) secret_env: Vec<String>,
     pub(crate) output: Vec<String>,
     pub(crate) capture_output: bool,
     /// Standard error captured too (`set_capture_stderr`): hosts without a process stderr, such as the browser playground.
@@ -331,6 +335,8 @@ impl Interpreter {
             hash_seed: 0,
             backtrace: Vec::new(),
             cur: None,
+            capture_locals: true,
+            secret_env: Vec::new(),
             output: Vec::new(),
             capture_output: false,
             err_output: None,
@@ -397,6 +403,11 @@ impl Interpreter {
     }
 
     /// Wait out sleeps in real time (a live `wj run`; see `Sched::real_sleep`).
+    pub fn set_capture_locals(&mut self, on: bool, env_values: Vec<String>) {
+        self.capture_locals = on;
+        self.secret_env = env_values.into_iter().filter(|v| v.chars().count() >= 8).collect();
+    }
+
     pub fn set_real_sleep(&mut self, on: bool) {
         self.sched.real_sleep = on;
     }

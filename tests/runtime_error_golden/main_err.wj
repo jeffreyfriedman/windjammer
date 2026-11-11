@@ -1,0 +1,4 @@
+fn main() -> Result<(), string> {
+    println("reading")
+    Err("config missing")
+}

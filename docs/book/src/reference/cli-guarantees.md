@@ -159,6 +159,8 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj run --jit-mutant` | Interpreted runs (internal, hidden from help; env WJ_JIT_MUTANT): in debug builds, leave one machine-code check out for the mutation gate; release builds ignore it | tested |
 | `wj run --engine` | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) | tested |
 | `wj run --hash-seed` | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) | tested |
+| `wj run --error-format` | Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036) | tested |
+| `wj run --no-locals` | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) | tested |
 | `wj run --hot` | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) | preview |
 | `wj run --release` | Like --compiled, with optimizations | preview |
 | `wj run --watch` | Re-run on every source change (restarts long-running programs) | preview |

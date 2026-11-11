@@ -61,6 +61,7 @@ wj fmt FILE                     # formatter; wj lint FILE checks Rust-isms; wj f
 ```
 
 Exit status of a program: 0 ok, 101 panic, N for `process::exit(N)`, 2 means "unsupported in the interpreter".
+A failed interpreted run prints the failing source line, the call stack (`0: `f` at file:line:col`) and the values of the failing frame's bindings (`locals in `f``): fix from that output, do not add prints. `wj run --interpret --error-format json FILE` prints the same as one diagnostics-schema line (`stack`, `locals`) on stderr; `--no-locals` leaves the values out. Values named like secrets or equal to an environment variable show `<redacted>`.
 `wj check` passing does not mean `wj run --interpret` passes, and the interpreter accepts more than `wj build`
 (see "Compiled path gaps").
 
@@ -580,6 +581,8 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--jit-debug` | JIT_DEBUG |  | Interpreted runs: report on stderr which loops run as machine code and why others do not |
 | `--jit-mutant` | NAME |  | Interpreted runs (debug builds only): leave one machine-code check out (mutation tests) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
+| `--error-format` | FORMAT | human | Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036) |
+| `--no-locals` | NO_LOCALS |  | Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether) |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--record` | FILE |  | Interpreted runs: write every effect (file, env, process, network and stdin results, real-clock readings) to FILE, a replayable log (ADR-0021) |
 | `--replay` | FILE |  | Interpreted runs: re-run from an effect log written by --record: every effect is answered from the log and none is performed; seeds, arguments and the time mode come from the log (ADR-0021) |

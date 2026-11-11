@@ -215,6 +215,17 @@ pub enum Commands {
         #[arg(long)]
         no_lint: bool,
 
+        /// Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source
+        /// line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema
+        /// with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036)
+        #[arg(long, value_name = "FORMAT", default_value = "human", value_parser = ["human", "json"])]
+        error_format: String,
+
+        /// Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when
+        /// they look like secrets, and this drops them altogether)
+        #[arg(long)]
+        no_locals: bool,
+
         /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
         deterministic_time: bool,

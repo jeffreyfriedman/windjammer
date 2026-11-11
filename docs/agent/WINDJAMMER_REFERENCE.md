@@ -20,6 +20,7 @@ wj fmt FILE                     # formatter; wj lint FILE checks Rust-isms; wj f
 ```
 
 Exit status of a program: 0 ok, 101 panic, N for `process::exit(N)`, 2 means "unsupported in the interpreter".
+A failed interpreted run prints the failing source line, the call stack (`0: `f` at file:line:col`) and the values of the failing frame's bindings (`locals in `f``): fix from that output, do not add prints. `wj run --interpret --error-format json FILE` prints the same as one diagnostics-schema line (`stack`, `locals`) on stderr; `--no-locals` leaves the values out. Values named like secrets or equal to an environment variable show `<redacted>`.
 `wj check` passing does not mean `wj run --interpret` passes, and the interpreter accepts more than `wj build`
 (see "Compiled path gaps").
 
