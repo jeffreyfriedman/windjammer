@@ -560,6 +560,7 @@ Usage: wj cache prune [OPTIONS]
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `--aggressive` | AGGRESSIVE |  | Also clear debug incremental trees when reclaiming |
+| `--force` | FORCE |  | Also delete what a running build holds or wrote within the last hour (normally left alone) |
 
 ## `wj cache warm`
 
