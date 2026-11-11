@@ -171,6 +171,18 @@ pub trait String {
     fn bytes(self) -> Iterator<u8>;
 }
 
+// A thread handle (`std::thread::JoinHandle<T>`): `join` returns the spawned closure's result, or the panic payload.
+pub trait JoinHandle<T> {
+    fn join(self) -> Result<T, ThreadPanic>;
+    fn is_finished(self) -> bool;
+}
+
+// The `std::thread` functions (`thread::spawn(move || work())` is a handle to the closure's result type), declared on
+// `Thread` because `thread` is a keyword.
+pub trait Thread {
+    fn spawn<T>(f: fn() -> T) -> JoinHandle<T>;
+}
+
 // Integer methods, for every integer type `T` (`int`, `i32`, `u8`, `usize`, ...): `T` is the receiver's type, so
 // an argument or result of type `T` has the receiver's width (`10.min(3)`: one class); exponents, rotations and
 // shift amounts are `u32` and bit counts are `u32`, as in Rust. Signed-only methods (`abs`, `signum`) are checked

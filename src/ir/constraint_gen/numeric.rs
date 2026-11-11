@@ -238,7 +238,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
         // Option C stage C1: a method of a Rust core type is typed by `std/rust_core.wji` (index slots,
         // lengths, element and payload types); a same-named registry signature is a homonym and is not used.
-        let surface = self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
+        // `thread::spawn(..)`: a function of a std module the core surface declares (the receiver is a module name,
+        // not a value).
+        let module_function = match object {
+            Expression::Identifier { name, .. } if self.bound_var(name).is_none() => {
+                self.emit_surface_static_call(&format!("{name}::{method}"), arguments, &arg_vars, result)
+            }
+            _ => false,
+        };
+        let surface = module_function
+            || self.emit_numeric_method_constraints(object, obj_var, method, arguments, &arg_vars, result)
             || self.emit_core_surface_constraints(expr, object, obj_var, method, arguments, &arg_vars, result);
         if let Some(sig) = sig.as_ref().filter(|_| !surface) {
             self.emit_call_site_constraints(sig, &arg_vars, arguments);
@@ -458,7 +467,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// The variable a name is bound to here, without creating one.
-    fn bound_var(&self, name: &str) -> Option<ConstraintVar> {
+    pub(super) fn bound_var(&self, name: &str) -> Option<ConstraintVar> {
         self.scopes.iter().rev().find_map(|s| s.get(name)).or_else(|| self.param_vars.get(name)).copied()
     }
 
@@ -485,6 +494,11 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 // `strings.split(text, "-")`: a module function's declared return type.
                 if let Expression::Identifier { name, .. } = &**object {
                     if self.bound_var(name).is_none() && !self.analyzed.decl.parameters.iter().any(|p| &p.name == name) {
+                        // A std module function the core surface declares (`thread::spawn`) is typed by the surface.
+                        if let Some((type_name, (generics, _, _, ret))) = self.surface_static(&format!("{name}::{method}")) {
+                            let ty = ret.unwrap_or_else(|| crate::typing::core_surface::self_type(type_name, &generics));
+                            return Some(ty).filter(|t| !contains_generic(t));
+                        }
                         let sig = self.resolve_callee_signature(&format!("{}::{}", name, method), arguments.len())?;
                         return sig.return_type.clone();
                     }
@@ -495,6 +509,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Expression::Call { function, arguments, .. } => {
                 let name = Self::extract_callee_name(function)?;
+                // A core type's associated function (`HashMap::new()`) is typed by the core surface, never by a
+                // same-named declaration a `use` brings into scope (std's `HashMap::new() -> Self`).
+                if let Some((type_name, (generics, _, _, ret))) = self.surface_static(&name) {
+                    let ty = ret.unwrap_or_else(|| crate::typing::core_surface::self_type(type_name, &generics));
+                    return Some(ty).filter(|t| !contains_generic(t));
+                }
                 self.resolve_free_callee_signature(&name, arguments.len())?.return_type.clone()
             }
             other => {

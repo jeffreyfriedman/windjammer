@@ -1,0 +1,37 @@
+#[inline]
+fn out_degree(v: i64) -> u32 {
+    (v % 4_i64) as u32
+}
+
+#[inline]
+fn neighbor_at(v: i64, index: u32) -> i64 {
+    v + index as i64
+}
+
+#[inline]
+fn has_neighbor(ids: &Vec<i64>, vertex: i64, expected: i64) -> bool {
+    if !ids.is_empty() {
+        let mut i = 0_usize;
+        while i < ids.len() {
+            if ids[i] == vertex {
+                return true;
+            }
+            i += 1;
+        }
+        return false;
+    }
+    let degree = out_degree(vertex);
+    let mut i = 0_u32;
+    while i < degree {
+        if neighbor_at(vertex, i) == expected {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+fn main() {
+    println!("{} {}", has_neighbor(&vec![1_i64, 2_i64], 2_i64, 0_i64), has_neighbor(&vec![], 3_i64, 5_i64));
+}
+
