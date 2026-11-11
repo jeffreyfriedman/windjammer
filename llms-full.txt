@@ -471,6 +471,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
+| `wj replay` | Step through a recorded (`wj run --record LOG`) or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035) |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
 | `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms and add the `mut` of changed locals (WJ0051) |
@@ -677,6 +678,24 @@ Usage: wj test [OPTIONS] [PATH]
 | `--watch` | WATCH |  | Re-run the tests on every source change |
 | `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
 | `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
+
+### `wj replay`
+
+Step through a recorded (`wj run --record LOG`) or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035)
+
+```text
+Usage: wj replay [OPTIONS] <LOG PROGRAM>...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATHS>` | LOG PROGRAM |  | `LOG PROGRAM`: an effect log written by `wj run --record` and the program it recorded; with --simulate, only `PROGRAM` |
+| `--script` | FILE |  | Debugger commands, one per line (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`, `where`); `-` or no script reads them from standard input |
+| `--json` | JSON |  | Print the events as JSON Lines, one object per line (for agents and scripts) |
+| `--simulate` | SIMULATE |  | Debug the run of the deterministic simulated world instead of a recorded one (as `wj run --simulate`) |
+| `--seed` | N | 1 | With --simulate: the seed of the world |
+| `--faults` | RATE | 0 | With --simulate: probability (0 to 1) that a file or network call fails |
+| `--allow` | EFFECT[=RESOURCE] |  | Grant a capability as the recording did, `EFFECT[=RESOURCE]` (repeatable); nothing is performed either way |
 
 ### `wj reduce`
 
