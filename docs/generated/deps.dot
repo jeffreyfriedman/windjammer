@@ -129,6 +129,7 @@ digraph deps {
   "auto_clone_tests" -> "lexer" [label="2"];
   "auto_clone_tests" -> "parser" [label="27"];
   "auto_clone_tests" -> "test_utils" [label="1",color=red,fontcolor=red];
+  "build_utils" -> "config" [label="6"];
   "build_utils" -> "module_system" [label="4"];
   "build_utils" -> "project_paths" [label="1"];
   "build_utils" -> "rust_integration_tests" [label="2"];
@@ -226,10 +227,10 @@ digraph deps {
   "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="395"];
+  "codegen" -> "ir" [label="399"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="700"];
+  "codegen" -> "parser" [label="701"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="3"];
   "codegen" -> "source_map" [label="9"];
@@ -254,7 +255,7 @@ digraph deps {
   "compiler" -> "ir" [label="14"];
   "compiler" -> "lexer" [label="4"];
   "compiler" -> "linter" [label="2"];
-  "compiler" -> "metadata" [label="47"];
+  "compiler" -> "metadata" [label="48"];
   "compiler" -> "module_system" [label="2"];
   "compiler" -> "optimizer" [label="1"];
   "compiler" -> "package" [label="1"];
@@ -358,7 +359,7 @@ digraph deps {
   "ir" -> "type_classification" [label="31"];
   "ir" -> "type_display" [label="2"];
   "ir" -> "type_inference" [label="7"];
-  "ir" -> "typing" [label="18"];
+  "ir" -> "typing" [label="21"];
   "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
   "linter" -> "auto_clone" [label="1"];
@@ -371,8 +372,9 @@ digraph deps {
   "metadata" -> "analyzer" [label="30"];
   "metadata" -> "codegen" [label="5"];
   "metadata" -> "compiler" [label="5",color=red,fontcolor=red];
-  "metadata" -> "parser" [label="19"];
+  "metadata" -> "parser" [label="24"];
   "metadata" -> "type_classification" [label="2"];
+  "module_system" -> "config" [label="1"];
   "module_system" -> "project_paths" [label="1"];
   "module_system" -> "resolve" [label="1"];
   "module_system" -> "test_module_gate" [label="2"];
@@ -444,5 +446,5 @@ digraph deps {
   "typing" -> "lexer" [label="1"];
   "typing" -> "parser" [label="2"];
   "typing" -> "parser_impl" [label="1"];
-  "typing" -> "type_classification" [label="3"];
+  "typing" -> "type_classification" [label="4"];
 }
