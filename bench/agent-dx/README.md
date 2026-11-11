@@ -158,6 +158,13 @@ wall time split into API time (thinking) and `wj` tool-wait, diagnostic categori
 directory, and `tests/test_pilot.py` plants a canary in the oracle and scans every agent-visible file, prompt and argument for it.
 Design and optimization loop: `docs/design/agent-preference.md`.
 
+## Pilot 6 (Rust vs Windjammer compiled-first vs interpreted-first with `--verify`)
+
+Arms `R` (plain Rust, `rustc` from `AGENTDX_RUSTC`), `U` and `V2` (`packs/pilot6/sheet_v2.md`); 10 tasks from both task sets are linked into one directory
+and selected with `AGENTDX_TASKS_DIR`. Run the Windjammer arms one trial at a time (`--workers 1`) and with a private `WJ_CARGO_TARGET_ROOT`: workspaces named alike share a
+compiled binary (`docs/drift/pilot6-repros/same_dir_name_runs_other_binary.md`). Report: `python3 -m agentdx pilot6-report --trials-dir results/pilot6 --notes results/pilot6/notes.md --md ... --json ...`
+(results and the ADR-0033 acceptance table in `results/pilot6/report.md`).
+
 ## Self-tests (`tests/`, `python3 -m unittest discover -s tests`)
 
 - `test_oracle.py`: vectors reproducible from seeds; samples are a subset of the hidden vectors; every task has >= 25 cases with

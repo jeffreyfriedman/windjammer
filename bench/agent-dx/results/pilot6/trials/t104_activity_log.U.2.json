@@ -1,0 +1,138 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "U",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [
+  "error[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:47:1\n   |\n47 |             tb.cmp(ta)\nerror[WJ0003]: mismatched types: expected `Ordering`, found `void`\n  --> main.wj:49:1\n   |\n49 |             a.cmp(b)"
+ ],
+ "diagnostic_categories": {
+  "syntax": 1
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 1,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 37,
+  "status": "pass",
+  "total": 37
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let mut totals: HashMap<string, int> = HashMap::new()\n    let mut acts: HashMap<string, int> = HashMap::new()\n    let mut malformed = 0\n    for line in text.lines() {\n        let parts: Vec<string> = line.split(\" \").map(|s| s.to_string()).collect()\n        if parts.len() != 3 {\n            malformed += 1\n            continue\n        }\n        let user = parts[0]\n        let action = parts[1]\n        let secs = parts[2]\n        let mut ok = secs.len() > 0\n        for c in secs.chars() {\n            if c < '0' || c > '9' {\n                ok = false\n            }\n        }\n        if !ok {\n            malformed += 1\n            continue\n        }\n        let n: int = secs.parse::<int>().unwrap_or(-1)\n        if n < 0 {\n            malformed += 1\n            continue\n        }\n        counts.insert(user, counts.get(user).unwrap_or(0) + 1)\n        totals.insert(user, totals.get(user).unwrap_or(0) + n)\n        let key = \"${user}\\t${action}\"\n        acts.insert(key, acts.get(key).unwrap_or(0) + 1)\n    }\n    let mut users: Vec<string> = []\n    for k in counts.keys() {\n        users.push(k)\n    }\n    users.sort_by(|a, b| {\n        let ta = totals.get(a).unwrap_or(0)\n        let tb = totals.get(b).unwrap_or(0)\n        let c = tb.cmp(ta)\n        c.then(a.cmp(b))\n    })\n    for u in users {\n        let mut best = \"\"\n        let mut bc = 0\n        for k in acts.keys() {\n            let parts: Vec<string> = k.split(\"\\t\").map(|s| s.to_string()).collect()\n            if parts[0] == u {\n                let c = acts.get(k).unwrap_or(0)\n                if c > bc || (c == bc && parts[1] < best) {\n                    bc = c\n                    best = parts[1]\n                }\n            }\n        }\n        println(\"${u} ${counts.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}\")\n    }\n    println(\"malformed: ${malformed}\")\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut counts: HashMap<string, int> = HashMap::new()\n    let mut totals: HashMap<string, int> = HashMap::new()\n    let mut acts: HashMap<string, int> = HashMap::new()\n    let mut malformed = 0\n    for line in text.lines() {\n        let parts: Vec<string> = line.split(\" \").map(|s| s.to_string()).collect()\n        if parts.len() != 3 {\n            malformed += 1\n            continue\n        }\n        let user = parts[0]\n        let action = parts[1]\n        let secs = parts[2]\n        let mut ok = secs.len() > 0\n        for c in secs.chars() {\n            if c < '0' || c > '9' {\n                ok = false\n            }\n        }\n        if !ok {\n            malformed += 1\n            continue\n        }\n        let n: int = secs.parse::<int>().unwrap_or(-1)\n        if n < 0 {\n            malformed += 1\n            continue\n        }\n        counts.insert(user, counts.get(user).unwrap_or(0) + 1)\n        totals.insert(user, totals.get(user).unwrap_or(0) + n)\n        let key = \"${user}\\t${action}\"\n        acts.insert(key, acts.get(key).unwrap_or(0) + 1)\n    }\n    let mut users: Vec<string> = []\n    for k in counts.keys() {\n        users.push(k)\n    }\n    users.sort_by(|a, b| {\n        let ta = totals.get(a).unwrap_or(0)\n        let tb = totals.get(b).unwrap_or(0)\n        if ta != tb {\n            tb.cmp(ta)\n        } else {\n            a.cmp(b)\n        }\n    })\n    for u in users {\n        let mut best = \"\"\n        let mut bc = 0\n        for k in acts.keys() {\n            let parts: Vec<string> = k.split(\"\\t\").map(|s| s.to_string()).collect()\n            if parts[0] == u {\n                let c = acts.get(k).unwrap_or(0)\n                if c > bc || (c == bc && parts[1] < best) {\n                    bc = c\n                    best = parts[1]\n                }\n            }\n        }\n        println(\"${u} ${counts.get(u).unwrap_or(0)} ${totals.get(u).unwrap_or(0)} ${best}\")\n    }\n    println(\"malformed: ${malformed}\")\n}\n",
+ "first_turn_input": 11366,
+ "fix_calls": 2,
+ "interp_grade": {
+  "categories": [],
+  "passed": 37,
+  "status": "pass",
+  "total": 37
+ },
+ "invocations": [
+  {
+   "categories": [
+    "syntax"
+   ],
+   "exit": 1,
+   "mode": "compiled",
+   "secs": 8.713,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 26.62,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 70.3,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 4,
+ "other_seconds": 4.67,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T12:33:47",
+ "schema": 2,
+ "task": "t104_activity_log",
+ "thinking_seconds": 15.994,
+ "tool_result_tokens_est": 527,
+ "tool_wait_seconds": 35.33,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 10745,
+   "cache_write": 619,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11366,
+   "output": 7,
+   "result_chars": 1277,
+   "turn": 1
+  },
+  {
+   "cache_read": 11364,
+   "cache_write": 2042,
+   "calls": [
+    "Edit",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 13408,
+   "output": 7,
+   "result_chars": 568,
+   "turn": 2
+  },
+  {
+   "cache_read": 13406,
+   "cache_write": 745,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 14153,
+   "output": 306,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 15.994,
+  "cost_usd": 0.0380775,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It compiles with `wj build` and runs correctly on the one input I tried. I did not run the two task examples exactly as given.\n\nThat input was Example 1's lines plus two bad lines (`bad line` and `y b -4`). It printed `ann 3 47 edit`, `bob 2 4 login` and `malformed: 2`, which is what the task describes. The compiler printed only warnings, one of them an unused `m",
+  "subtype": "success",
+  "tokens_in": 38927,
+  "tokens_out": 2089,
+  "turns": 5
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 2,
+ "verify_used": false,
+ "wall_seconds": 55.99,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

@@ -1,0 +1,147 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V2",
+ "arm_name": "interpreted-first+verify",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [
+  "Building Windjammer project from \"~/src/wj-wt/pilot6/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.2/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/pilot6-root/run/d9b3336b8b796047\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input",
+  "Building Windjammer project from \"~/src/wj-wt/pilot6/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.2/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/pilot6-root/run/d9b3336b8b796047\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input"
+ ],
+ "diagnostic_categories": {
+  "other": 2
+ },
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 2,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "final_source": "use std::fs\nuse std::json\nuse std::collections::HashMap\n\nstruct Item {\n    sku: string,\n    qty: int,\n    price: float,\n}\n\nstruct Order {\n    id: int,\n    customer: string,\n    items: Vec<Item>,\n    note: Option<string>,\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let parsed = json.parse_string::<Vec<Order>>(text)\n    match parsed {\n        Ok(orders) => {\n            let mut totals: HashMap<string, float> = HashMap::new()\n            let mut names: Vec<string> = []\n            for o in orders {\n                if !totals.contains_key(o.customer) {\n                    totals.insert(o.customer, 0.0)\n                    names.push(o.customer)\n                }\n                let mut t = totals.get(o.customer).unwrap_or(0.0)\n                for it in o.items {\n                    t += (it.qty as float) * it.price\n                }\n                totals.insert(o.customer, t)\n            }\n            names.sort()\n            for n in names {\n                let t = totals.get(n).unwrap_or(0.0)\n                println(\"${n} ${t:.2}\")\n            }\n        }\n        Err(_) => {\n            println(\"invalid input\")\n            std::process::exit(1)\n        }\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::json\nuse std::collections::HashMap\n\nstruct Item {\n    sku: string,\n    qty: int,\n    price: float,\n}\n\nstruct Order {\n    id: int,\n    customer: string,\n    items: Vec<Item>,\n    note: Option<string>,\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let parsed = json.parse_string::<Vec<Order>>(text)\n    match parsed {\n        Ok(orders) => {\n            let mut totals: HashMap<string, float> = HashMap::new()\n            let mut names: Vec<string> = []\n            for o in orders {\n                if !totals.contains_key(o.customer) {\n                    totals.insert(o.customer, 0.0)\n                    names.push(o.customer)\n                }\n                let mut t = totals.get(o.customer).unwrap_or(0.0)\n                for it in o.items {\n                    t += (it.qty as float) * it.price\n                }\n                totals.insert(o.customer, t)\n            }\n            names.sort()\n            for n in names {\n                let t = totals.get(n).unwrap_or(0.0)\n                println(\"${n} ${t:.2}\")\n            }\n        }\n        Err(_) => {\n            println(\"invalid input\")\n            std::process::exit(1)\n        }\n    }\n}\n",
+ "first_turn_input": 11708,
+ "fix_calls": 2,
+ "interp_grade": {
+  "categories": [],
+  "passed": 38,
+  "status": "pass",
+  "total": 38
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 7.237,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "default",
+   "secs": 1.768,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "other"
+   ],
+   "exit": 1,
+   "mode": "default",
+   "secs": 1.658,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 69.1,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 3,
+ "other_seconds": 3.48,
+ "pack_bytes": 1844,
+ "pack_file": "sheet_v2.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T12:43:12",
+ "schema": 2,
+ "task": "t101_json_orders",
+ "thinking_seconds": 11.929,
+ "tool_result_tokens_est": 395,
+ "tool_wait_seconds": 10.66,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 11086,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11708,
+   "output": 6,
+   "result_chars": 596,
+   "turn": 1
+  },
+  {
+   "cache_read": 11706,
+   "cache_write": 1252,
+   "calls": [
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 12960,
+   "output": 32,
+   "result_chars": 787,
+   "turn": 2
+  },
+  {
+   "cache_read": 12958,
+   "cache_write": 537,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13497,
+   "output": 184,
+   "result_chars": 0,
+   "turn": 3
+  }
+ ],
+ "usage": {
+  "api_seconds": 11.929,
+  "cost_usd": 0.025023000000000004,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`, and `wj run --verify main.wj` passes. The interpreter and the compiled build give the same output and exit status.\n\n- **Example 1:** I ran it, and the output was `ann 18.00` then `bob 3.50`.\n- **Invalid input:** empty input and truncated JSON both print `invalid input` and exit with status 1.\n\nI did not run Example 2 (an empty `items` list), a missing `note`, or ",
+  "subtype": "success",
+  "tokens_in": 38165,
+  "tokens_out": 1180,
+  "turns": 4
+ },
+ "verify_calls": 3,
+ "verify_calls_to_green": null,
+ "verify_used": true,
+ "wall_seconds": 26.07,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

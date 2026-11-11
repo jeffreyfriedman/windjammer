@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "V2",
+ "arm_name": "interpreted-first+verify",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nfn best(prios: Vec<int>) -> int {\n    let mut bi: int = 0\n    let mut i: int = 1\n    let n: int = prios.len() as int\n    while i < n {\n        if prios[i as usize] > prios[bi as usize] {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut prios: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        let n: int = parts.len() as int\n        if n == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && n == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => {\n                    names.push(parts[1])\n                    prios.push(p)\n                }\n                Err(_) => println(\"error\"),\n            }\n        } else if parts[0] == \"pop\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(prios)\n                println(\"${names[b as usize]}\")\n                names.remove(b as usize)\n                prios.remove(b as usize)\n            }\n        } else if parts[0] == \"peek\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(prios)\n                println(\"${names[b as usize]}\")\n            }\n        } else if parts[0] == \"size\" && n == 1 {\n            println(\"${names.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while names.len() > 0 {\n        let b = best(prios)\n        println(\"${names[b as usize]} ${prios[b as usize]}\")\n        names.remove(b as usize)\n        prios.remove(b as usize)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn best(prios: Vec<int>) -> int {\n    let mut bi: int = 0\n    let mut i: int = 1\n    let n: int = prios.len() as int\n    while i < n {\n        if prios[i as usize] > prios[bi as usize] {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut prios: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()\n        let n: int = parts.len() as int\n        if n == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && n == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => {\n                    names.push(parts[1])\n                    prios.push(p)\n                }\n                Err(_) => println(\"error\"),\n            }\n        } else if parts[0] == \"pop\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(prios)\n                println(\"${names[b as usize]}\")\n                names.remove(b as usize)\n                prios.remove(b as usize)\n            }\n        } else if parts[0] == \"peek\" && n == 1 {\n            if names.len() == 0 {\n                println(\"empty\")\n            } else {\n                let b = best(prios)\n                println(\"${names[b as usize]}\")\n            }\n        } else if parts[0] == \"size\" && n == 1 {\n            println(\"${names.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while names.len() > 0 {\n        let b = best(prios)\n        println(\"${names[b as usize]} ${prios[b as usize]}\")\n        names.remove(b as usize)\n        prios.remove(b as usize)\n    }\n}\n",
+ "first_turn_input": 11508,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "default",
+   "secs": 3.044,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 22.2,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 2.55,
+ "pack_bytes": 1844,
+ "pack_file": "sheet_v2.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:58:17",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 15.642,
+ "tool_result_tokens_est": 179,
+ "tool_wait_seconds": 3.04,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 0,
+ "turn_log": [
+  {
+   "cache_read": 6878,
+   "cache_write": 4628,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11508,
+   "output": 6,
+   "result_chars": 627,
+   "turn": 1
+  },
+  {
+   "cache_read": 11506,
+   "cache_write": 1553,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13061,
+   "output": 333,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 15.642,
+  "cost_usd": 0.041540400000000005,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "`main.wj` is written and passes `wj run --verify`. The interpreter and the compiled build gave matching output on the input I ran, with exit status 0.\n\nThat input was Example 1's commands, plus a bad priority (`add x q`), an unknown command (`foo`) and Example 2's two `add` lines. It printed `error` for the two bad lines and the correct job order for the rest. I didn't run Example 2 as a standalon",
+  "subtype": "success",
+  "tokens_in": 24569,
+  "tokens_out": 1497,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": true,
+ "wall_seconds": 21.23,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

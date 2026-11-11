@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "R",
+ "arm_name": "rust",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::io::{self, BufRead};\n\nfn best(v: &Vec<(String, i64)>) -> Option<usize> {\n    let mut b: Option<usize> = None;\n    for (i, j) in v.iter().enumerate() {\n        match b {\n            None => b = Some(i),\n            Some(k) => {\n                if j.1 > v[k].1 {\n                    b = Some(i);\n                }\n            }\n        }\n    }\n    b\n}\n\nfn main() {\n    let stdin = io::stdin();\n    let mut q: Vec<(String, i64)> = Vec::new();\n    let mut out = String::new();\n    for line in stdin.lock().lines() {\n        let line = line.unwrap();\n        let t: Vec<&str> = line.split_whitespace().collect();\n        match t.as_slice() {\n            [\"add\", name, p] => match p.parse::<i64>() {\n                Ok(p) => q.push((name.to_string(), p)),\n                Err(_) => out.push_str(\"error\\n\"),\n            },\n            [\"pop\"] => match best(&q) {\n                Some(i) => {\n                    let e = q.remove(i);\n                    out.push_str(&format!(\"{}\\n\", e.0));\n                }\n                None => out.push_str(\"empty\\n\"),\n            },\n            [\"peek\"] => match best(&q) {\n                Some(i) => out.push_str(&format!(\"{}\\n\", q[i].0)),\n                None => out.push_str(\"empty\\n\"),\n            },\n            [\"size\"] => out.push_str(&format!(\"{}\\n\", q.len())),\n            _ => out.push_str(\"error\\n\"),\n        }\n    }\n    out.push_str(\"left:\\n\");\n    while let Some(i) = best(&q) {\n        let e = q.remove(i);\n        out.push_str(&format!(\"{} {}\\n\", e.0, e.1));\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_source": "use std::io::{self, BufRead};\n\nfn best(v: &Vec<(String, i64)>) -> Option<usize> {\n    let mut b: Option<usize> = None;\n    for (i, j) in v.iter().enumerate() {\n        match b {\n            None => b = Some(i),\n            Some(k) => {\n                if j.1 > v[k].1 {\n                    b = Some(i);\n                }\n            }\n        }\n    }\n    b\n}\n\nfn main() {\n    let stdin = io::stdin();\n    let mut q: Vec<(String, i64)> = Vec::new();\n    let mut out = String::new();\n    for line in stdin.lock().lines() {\n        let line = line.unwrap();\n        let t: Vec<&str> = line.split_whitespace().collect();\n        match t.as_slice() {\n            [\"add\", name, p] => match p.parse::<i64>() {\n                Ok(p) => q.push((name.to_string(), p)),\n                Err(_) => out.push_str(\"error\\n\"),\n            },\n            [\"pop\"] => match best(&q) {\n                Some(i) => {\n                    let e = q.remove(i);\n                    out.push_str(&format!(\"{}\\n\", e.0));\n                }\n                None => out.push_str(\"empty\\n\"),\n            },\n            [\"peek\"] => match best(&q) {\n                Some(i) => out.push_str(&format!(\"{}\\n\", q[i].0)),\n                None => out.push_str(\"empty\\n\"),\n            },\n            [\"size\"] => out.push_str(&format!(\"{}\\n\", q.len())),\n            _ => out.push_str(\"error\\n\"),\n        }\n    }\n    out.push_str(\"left:\\n\");\n    while let Some(i) = best(&q) {\n        let e = q.remove(i);\n        out.push_str(&format!(\"{} {}\\n\", e.0, e.1));\n    }\n    print!(\"{}\", out);\n}\n",
+ "first_turn_input": 10517,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "native",
+   "secs": 4.205,
+   "verb": "native"
+  }
+ ],
+ "lang": "rust",
+ "load_avg": 76.0,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 10.85,
+ "pack_bytes": 0,
+ "pack_file": "",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:40:22",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 18.964,
+ "tool_result_tokens_est": 72,
+ "tool_wait_seconds": 4.21,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 2,
+ "turn_log": [
+  {
+   "cache_read": 9895,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 10517,
+   "output": 3,
+   "result_chars": 252,
+   "turn": 1
+  },
+  {
+   "cache_read": 10515,
+   "cache_write": 1198,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 11715,
+   "output": 258,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 18.964,
+  "cost_usd": 0.021871,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution to `main.rs`. It compiles, and I ran it on one combined input, which gave the expected output for both examples (the second only after `pop` had emptied the queue). I did not test other edge cases.\n\nIt keeps the jobs in a list in the order they were added. For each `pop` or `peek` it picks the highest priority and breaks ties by earliest position. At the end it prints `left:` ",
+  "subtype": "success",
+  "tokens_in": 22232,
+  "tokens_out": 1255,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 34.02,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}

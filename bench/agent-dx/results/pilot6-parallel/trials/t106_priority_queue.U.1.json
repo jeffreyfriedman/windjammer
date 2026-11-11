@@ -1,0 +1,112 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "U",
+ "arm_name": "compiled-first",
+ "capability_denials": 0,
+ "compile_errors": 0,
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": true,
+  "diverged": false,
+  "interp_pass": true,
+  "silent": false
+ },
+ "docs_calls": 0,
+ "failing_verify_calls": 0,
+ "final_build_calls": 0,
+ "final_build_diag": [],
+ "final_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "final_source": "use std::fs\n\nfn best(prios: Vec<int>) -> int {\n    let mut bi: int = -1\n    let mut i: int = 0\n    let n: int = prios.len() as int\n    while i < n {\n        if bi < 0 || prios[i as usize] > prios[bi as usize] {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut prios: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let k: int = parts.len() as int\n        if k == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && k == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => {\n                    names.push(parts[1])\n                    prios.push(p)\n                }\n                Err(_) => println(\"error\")\n            }\n        } else if parts[0] == \"pop\" && k == 1 {\n            let b = best(prios)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(names[b as usize])\n                names.remove(b as usize)\n                prios.remove(b as usize)\n            }\n        } else if parts[0] == \"peek\" && k == 1 {\n            let b = best(prios)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(names[b as usize])\n            }\n        } else if parts[0] == \"size\" && k == 1 {\n            println(\"${names.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while names.len() > 0 {\n        let b = best(prios)\n        println(\"${names[b as usize]} ${prios[b as usize]}\")\n        names.remove(b as usize)\n        prios.remove(b as usize)\n    }\n}\n",
+ "first_source": "use std::fs\n\nfn best(prios: Vec<int>) -> int {\n    let mut bi: int = -1\n    let mut i: int = 0\n    let n: int = prios.len() as int\n    while i < n {\n        if bi < 0 || prios[i as usize] > prios[bi as usize] {\n            bi = i\n        }\n        i += 1\n    }\n    bi\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut names: Vec<string> = []\n    let mut prios: Vec<int> = []\n    for line in text.lines() {\n        let parts: Vec<string> = line.split_whitespace().collect()\n        let k: int = parts.len() as int\n        if k == 0 {\n            println(\"error\")\n        } else if parts[0] == \"add\" && k == 3 {\n            match parts[2].parse::<int>() {\n                Ok(p) => {\n                    names.push(parts[1])\n                    prios.push(p)\n                }\n                Err(_) => println(\"error\")\n            }\n        } else if parts[0] == \"pop\" && k == 1 {\n            let b = best(prios)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(names[b as usize])\n                names.remove(b as usize)\n                prios.remove(b as usize)\n            }\n        } else if parts[0] == \"peek\" && k == 1 {\n            let b = best(prios)\n            if b < 0 {\n                println(\"empty\")\n            } else {\n                println(names[b as usize])\n            }\n        } else if parts[0] == \"size\" && k == 1 {\n            println(\"${names.len()}\")\n        } else {\n            println(\"error\")\n        }\n    }\n    println(\"left:\")\n    while names.len() > 0 {\n        let b = best(prios)\n        println(\"${names[b as usize]} ${prios[b as usize]}\")\n        names.remove(b as usize)\n        prios.remove(b as usize)\n    }\n}\n",
+ "first_turn_input": 11310,
+ "fix_calls": 0,
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "compiled",
+   "secs": 8.468,
+   "verb": "run"
+  }
+ ],
+ "lang": "wj",
+ "load_avg": 33.7,
+ "mcp_calls": {},
+ "mode_violations": 0,
+ "n_tool_calls": 2,
+ "other_seconds": 2.84,
+ "pack_bytes": 1593,
+ "pack_file": "sheet_noloop.md",
+ "pass_final": true,
+ "prediction_shown": false,
+ "predictions": [],
+ "recorded_at": "2026-11-11T11:22:35",
+ "schema": 2,
+ "task": "t106_priority_queue",
+ "thinking_seconds": 12.427,
+ "tool_result_tokens_est": 301,
+ "tool_wait_seconds": 8.47,
+ "tools_exposed": [
+  "Bash",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Read",
+  "Write"
+ ],
+ "trial": 1,
+ "turn_log": [
+  {
+   "cache_read": 10688,
+   "cache_write": 620,
+   "calls": [
+    "Write",
+    "Bash"
+   ],
+   "fresh": 2,
+   "input_total": 11310,
+   "output": 3,
+   "result_chars": 1055,
+   "turn": 1
+  },
+  {
+   "cache_read": 11308,
+   "cache_write": 1705,
+   "calls": [],
+   "fresh": 2,
+   "input_total": 13015,
+   "output": 290,
+   "result_chars": 0,
+   "turn": 2
+  }
+ ],
+ "usage": {
+  "api_seconds": 12.427,
+  "cost_usd": 0.0249676,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the solution in `main.wj`. It builds and runs with `wj run --compiled`.\n\nI ran a test input based on Example 1, then `foo`, `add x` and `add y -1`. The output matched what I expect:\n- Example 1's commands printed `b`, `c`, `2`, `c`, `a`, `empty`.\n- `foo` and `add x` each printed `error`.\n- The final `left:` listing showed `y -1`.\n\nI didn't run Example 2 separately.\n\nA few choices the spec ",
+  "subtype": "success",
+  "tokens_in": 24325,
+  "tokens_out": 1346,
+  "turns": 3
+ },
+ "verify_calls": 1,
+ "verify_calls_to_green": 1,
+ "verify_used": false,
+ "wall_seconds": 23.74,
+ "wj_version": "wj 0.50.0 (commit 82d5ac0579cd 2026-11-11, clean, release, built 2026-11-11T15:36:39Z)"
+}
