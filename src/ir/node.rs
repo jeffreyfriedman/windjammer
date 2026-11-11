@@ -110,10 +110,6 @@ pub struct IrFunction {
     /// the solver, which is the deletion list for C5.
     pub ownership_trail: std::collections::BTreeMap<String, Vec<(&'static str, OwnedType)>>,
 
-    /// Semantic fact NUM-DEFAULT-INT (C4): integer literals (by the literal's own source position,
-    /// `numeric_defaults::literal_key`) whose class no context constrains; they are `int` (i64).
-    pub default_int_literals: std::collections::BTreeSet<(usize, usize)>,
-
     /// Semantic fact NUM-LITERAL-WIDTH (C4): integer literals (by their own source position) whose
     /// width the solver fixed from their uses (`i == 0` with `i: i64`, a push into `Vec<i32>`).
     /// Only signed 32/64-bit widths are published; unsigned and index widths stay with the
@@ -384,7 +380,6 @@ impl IrFunction {
             body: Vec::new(),
             ownership_trail: std::collections::BTreeMap::new(),
             module_path: analyzed.module_path.clone(),
-            default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
             literal_widths: std::collections::BTreeMap::new(),
             solver_i64_locals: std::collections::BTreeSet::new(),
             solver_local_widths: std::collections::BTreeMap::new(),
