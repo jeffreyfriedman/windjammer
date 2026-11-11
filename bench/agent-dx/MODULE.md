@@ -49,6 +49,9 @@ Python and TypeScript, using identical tasks and one language-neutral oracle. No
 | `friction.py` | Friction list: rules + unclassified grouping, fix location, priority by estimated tokens. |
 | `pilot_report.py` | Pilot report (arm means, paired diffs, per-task, categories, divergence, friction). |
 | `pilot6_report.py` | Pilot 6 report (R vs U vs V2): noisy-trial marking (load > 16), ADR-0033 acceptance table, cost per correct program, Rust compile-error tally, offline prediction precision/recall, parallel-run appendix. |
+| `costdecomp.py` | Pilot 7 cost decomposition per trial: fresh / cache-write / cache-read / output tokens times the model's prices, thinking as an estimate (output minus visible text and tool inputs), program lines and write-call tokens, calibration against Claude Code's reported cost; attribution of an arm difference. |
+| `pilot7.py`, `pilot7_config.json` | Pilot 7: models x arms x tasks x trials from the config (price table with its date, per-model trial caps, hard cap), `MatrixGuard` (hard cap, per-model projection after N trials), `dry_run` (no LLM: matrix, workspaces, argv, guard simulation, decomposition of recorded trials priced per model). |
+| `pilot7_report.py` | Pilot 7 report per model and arm with task-clustered CIs, the decomposition, and the attribution of the Rust-versus-Windjammer difference for the most expensive model. |
 | `cli.py` | `python3 -m agentdx <toolchains|gen|baseline|run|pilot|pilot-report|pilot6-report|replay|report|check-workspace>`. |
 
 ## Invariants
