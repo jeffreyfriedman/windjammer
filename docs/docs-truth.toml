@@ -14,6 +14,11 @@ reason = "recorded replay fixtures: copies of other repositories' documents and 
 
 [[exclude]]
 check = "claims"
+glob = "bench/agent-dx/results/**"
+reason = "benchmark result records: report.md is produced by `agentdx pilot6-report` from report.json (plus the recorded notes.md it appends), every number is as of that run and is pinned by the harness tests; the book and docs quote them through generated regions"
+
+[[exclude]]
+check = "claims"
 glob = "CHANGELOG.md"
 reason = "release notes record numbers as of their release"
 

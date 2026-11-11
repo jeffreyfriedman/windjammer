@@ -4,9 +4,9 @@ Source: `bench/agent-dx/results/pilot6/` (arms R rust, U compiled-first, V2 inte
 `wj 0.50.0` commit 82d5ac0579cd built from `next/v0.50.0`, 2026-11-11. Programs that the compiler rejected are in `results/pilot6/failing-sources/`; minimal programs for each class are in
 [pilot6-repros/](pilot6-repros/) (interpreter and compiled behaviour checked on this build). Format as in [pilot5-findings.md](pilot5-findings.md).
 
-Result in one line: no silent divergence in any trial (0 of 60 U and V2 trials ended with a program the interpreter ran and the build rejected), 90 of 90 trials passed the hidden oracle, and every compiler
+Result in one line: no silent divergence in any trial (no U or V2 trial ended with a program the interpreter ran and the build rejected), every trial passed the hidden oracle, and every compiler
 rejection that agents met was loud (a `WJ0003` from the compiled build, shown by `wj run --compiled` or `wj run --verify`). All entries below are therefore friction (extra turns, tokens, tool-wait), not wrong output.
-`wj check` accepted all 12 rejected programs (exit 0, no prediction).
+`wj check` accepted every one of the rejected programs (exit 0, no prediction).
 
 ## F. Findings (compiler and tooling)
 
@@ -17,7 +17,7 @@ rejection that agents met was loud (a `WJ0003` from the compiled build, shown by
 | 3. `map_insert_indexed_vec_string` | prints `edit` | `WJ0003 expected string, found str` (points at an unrelated `Vec<string>` line) | 1 trial, 5 failing calls, 25 turns, USD 0.15 (V2, t104) | `let ps: Vec<string> = key.split_whitespace().collect()`, `let act = ps[1]`, `best.insert(u, act)` into `HashMap<string, string>` |
 | 4. `nested_map_unwrap_or_new` | prints `1` | `WJ0003 expected &HashMap<string, i64>, found HashMap<_, _>` | 1 (V2, t104) | `let mut m = actions.get(u).unwrap_or(HashMap::new())`, then `m.insert(..)`, `actions.insert(u, m)` |
 | 5. `adapter_into_vec_annotation` | prints `a b` | `WJ0003 expected Vec<string>, found Map<Iter<_>, closure>` | 1 (V2, t104) | `let names: Vec<string> = keyed.map(\|p\| p.1)`: the sheet's own advice ("adapters start at the collection") produces a lazy `Map` in the compiled build and a `Vec` in the interpreter |
-| 6. `noise_warnings_in_build_output` | n/a | every compiled build that uses `fs` prints rustc `unused import` warnings for `windjammer_runtime::fs::Metadata`, `DirEntry` (and `json::Value`, `process::ProcessOutput`), and an index expression is emitted as `totals[(i as usize)]` (`unnecessary parentheses`) | U 30 of 30 trials had these in a tool result (V2 0 of 30: `--verify` prints the compiled program's stderr only when outputs differ) | `use std::fs` plus `totals[i] += 2.5`; harmless to the build, ~300 tokens of tool output per call that an agent reads |
+| 6. `noise_warnings_in_build_output` | n/a | every compiled build that uses `fs` prints rustc `unused import` warnings for `windjammer_runtime::fs::Metadata`, `DirEntry` (and `json::Value`, `process::ProcessOutput`), and an index expression is emitted as `totals[(i as usize)]` (`unnecessary parentheses`) | every U trial had these in a tool result (no V2 trial did: `--verify` prints the compiled program's stderr only when outputs differ) | `use std::fs` plus `totals[i] += 2.5`; harmless to the build, ~300 tokens of tool output per call that an agent reads |
 | 7. unminimised: `expected &_, found string` at a `HashMap<string, int>` annotation | prints the right counts | `WJ0003 mismatched types: expected &_, found string` | 1 (U, t104) | source: `results/pilot6/failing-sources/t104_activity_log.U.1.call0.wj` (`contains_key(u)`, `counts.insert(u, counts.get(u).unwrap_or(0) + 1)`, `users.push(u)` with `u = parts[0]`); the lines above compiled on their own in a 12-line extract, so the trigger is a combination in the larger program |
 
 Notes:
