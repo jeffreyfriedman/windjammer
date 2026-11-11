@@ -1,0 +1,35 @@
+pub struct Csr {
+    pub ids: Vec<i64>,
+    pub visits: u64,
+}
+
+pub fn walk(csr: Csr) -> u64 {
+    csr.visits = csr.visits + 1
+    csr.ids.len() as u64
+}
+
+pub struct Host {
+    pub runs: u64,
+}
+
+impl Host {
+    pub fn execute(self, kind: string, csr: Csr) -> u64 {
+        if kind == "walk" {
+            return walk(csr)
+        }
+        0
+    }
+
+    pub fn run_joined(self, kind: string, csr: Csr, extra: i64) -> Host {
+        let mut host = self
+        if extra > 0 {
+            let mut copy = Csr { ids: [extra], visits: 0 }
+            let n = host.execute(kind, copy)
+            host.runs = host.runs + n
+            return host
+        }
+        let n = host.execute(kind, csr)
+        host.runs = host.runs + n
+        host
+    }
+}

@@ -1,0 +1,67 @@
+// ==== acc.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::ops::double;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Acc {
+    pub total: i64,
+}
+impl Acc {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.total.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Acc {
+#[inline]
+pub fn double(&self, slot: usize) -> usize {
+        slot + 1_usize
+}
+#[inline]
+pub fn run(&mut self, v: i64) -> i64 {
+        self.total += double(v);
+        self.total
+}
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod acc;
+pub mod ops;
+
+// Re-export public items
+pub use acc::*;
+pub use ops::*;
+// ==== main.rs ====
+mod ops;
+mod acc;
+fn main() {
+    let mut a = acc::Acc { total: 0_i64 };
+    println!("{}", a.run(21_i64));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod acc;
+pub mod ops;
+
+// Re-export public items
+pub use acc::*;
+pub use ops::*;
+// ==== ops.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[inline]
+pub fn double(v: i64) -> i64 {
+    v * 2_i64
+}
+

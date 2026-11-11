@@ -131,7 +131,7 @@ impl<'ast> CodeGenerator<'ast> {
                         } else {
                             None
                         }
-                    });
+                    }).map(|t| self.impl_self_name(t)); // `let host = self`: `Self` is the impl's type
                 let receiver_type_name = receiver_type_name_owned.as_deref();
                 let is_external_module_method = match object {
                     Expression::Identifier { name, .. } => {

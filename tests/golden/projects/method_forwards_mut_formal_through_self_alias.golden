@@ -1,0 +1,79 @@
+// ==== graph.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Csr {
+    pub ids: Vec<i64>,
+    pub visits: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Host {
+    pub runs: u64,
+}
+impl Host {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.runs.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Host {
+#[inline]
+pub fn execute(&self, kind: &str, csr: &mut Csr) -> u64 {
+        if kind == "walk" {
+            return walk(csr);
+        }
+        0_u64
+}
+#[inline]
+pub fn run_joined(mut self, kind: String, csr: &mut Csr, extra: i64) -> Host {
+        let mut host = self;
+        if extra > 0_i64 {
+            let mut copy = Csr { ids: vec![extra], visits: 0_u64 };
+            let n = host.execute(&kind, &mut copy);
+            host.runs += n;
+            return host;
+        }
+        let n = host.execute(&kind, csr);
+        host.runs += n;
+        host
+}
+}
+
+#[inline]
+pub fn walk(csr: &mut Csr) -> u64 {
+    csr.visits += 1;
+    csr.ids.len() as u64
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod graph;
+
+// Re-export public items
+pub use graph::*;
+// ==== main.rs ====
+mod graph;
+fn main() {
+    let mut csr = graph::Csr { ids: vec![1_i64, 2_i64], visits: 0_u64 };
+    let h = graph::Host { runs: 0_u64 }.run_joined(String::from("walk"), &mut csr, 0_i64);
+    let mut csr2 = graph::Csr { ids: vec![3_i64], visits: 0_u64 };
+    let h2 = graph::Host { runs: 0_u64 }.run_joined(String::from("walk"), &mut csr2, 5_i64);
+    println!("{} {}", h.runs, h2.runs);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod graph;
+
+// Re-export public items
+pub use graph::*;

@@ -550,7 +550,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             };
-            if let Some(t) = inferred_type {
+            if let Some(t) = inferred_type.map(|t| self.impl_self_type_named(t)) { // `let host = self`: `Host`
                 self.local_var_types.insert(name.to_string(), t.clone());
                 if matches!(t, Type::Int32) {
                     self.codegen_i32_binding_names.insert(name.to_string());

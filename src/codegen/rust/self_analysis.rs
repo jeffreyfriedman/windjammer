@@ -1475,13 +1475,9 @@ pub fn statement_modifies_variable(stmt: &Statement, var_name: &str) -> bool {
 // =============================================================================
 
 /// Check if an expression is a self.field modification
+/// An assignment target rooted at `self` (`self.n`, `self.buffer.count`, `self.items[i].k`) writes through the receiver.
 pub fn expression_is_self_field_modification(expr: &Expression) -> bool {
-    match expr {
-        Expression::FieldAccess { object, .. } => {
-            matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-        }
-        _ => false,
-    }
+    is_self_field_chain(expr)
 }
 
 /// Check if an expression modifies self.
@@ -1703,8 +1699,10 @@ pub fn resolve_self_field_chain_type_name(
     >,
 ) -> Option<String> {
     let fields = field_types.get(struct_name)?;
-    resolve_self_field_chain_type(expr, fields).and_then(|ty| type_to_custom_name(&ty))
+    resolve_self_field_chain_type(expr, fields, field_types).and_then(|ty| type_to_custom_name(&ty))
 }
+
+type FieldTypes = std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>;
 
 fn type_to_custom_name(ty: &crate::parser::Type) -> Option<String> {
     crate::type_classification::type_to_registry_base(ty)
@@ -1713,6 +1711,7 @@ fn type_to_custom_name(ty: &crate::parser::Type) -> Option<String> {
 fn resolve_self_field_chain_type(
     expr: &Expression,
     fields: &std::collections::HashMap<String, crate::parser::Type>,
+    field_types: &FieldTypes,
 ) -> Option<crate::parser::Type> {
     use crate::parser::Type;
     match expr {
@@ -1720,12 +1719,12 @@ fn resolve_self_field_chain_type(
             if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
                 fields.get(field.as_str()).cloned()
             } else {
-                let base = resolve_self_field_chain_type(object, fields)?;
-                lookup_field_on_type(&base, field)
+                let base = resolve_self_field_chain_type(object, fields, field_types)?;
+                lookup_field_on_type(&base, field, field_types)
             }
         }
         Expression::Index { object, .. } => {
-            let base = resolve_self_field_chain_type(object, fields)?;
+            let base = resolve_self_field_chain_type(object, fields, field_types)?;
             match base {
                 Type::Vec(inner) | Type::Array(inner, _) => Some(*inner),
                 Type::Parameterized(name, params) if name == "Vec" && !params.is_empty() => {
@@ -1738,10 +1737,10 @@ fn resolve_self_field_chain_type(
     }
 }
 
-fn lookup_field_on_type(ty: &crate::parser::Type, field: &str) -> Option<crate::parser::Type> {
-    // Nested field access on non-struct types is rare in this path; defer to None.
-    let _ = (ty, field);
-    None
+/// The declared type of `field` on the struct `ty` names (`self.buffer.edges`: `edges` of `buffer`'s struct).
+fn lookup_field_on_type(ty: &crate::parser::Type, field: &str, field_types: &FieldTypes) -> Option<crate::parser::Type> {
+    let name = type_to_custom_name(ty)?;
+    field_types.get(name.as_str()).or_else(|| field_types.get(name.rsplit("::").next().unwrap_or(&name)))?.get(field).cloned()
 }
 
 /// Check if an expression accesses struct fields

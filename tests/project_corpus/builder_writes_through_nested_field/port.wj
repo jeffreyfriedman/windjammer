@@ -1,0 +1,31 @@
+pub struct Buffer {
+    pub items: Vec<i64>,
+    pub pending: u64,
+}
+
+pub struct Port {
+    pub id: u32,
+    pub buffer: Buffer,
+}
+
+impl Port {
+    pub fn new(id: u32) -> Port {
+        Port { id: id, buffer: Buffer { items: Vec::new(), pending: 0 } }
+    }
+
+    pub fn append(self, v: i64) -> Port {
+        self.buffer.items.push(v)
+        self.buffer.pending = self.buffer.pending + 1
+        self
+    }
+
+    pub fn append_all(self, vs: Vec<i64>) -> Port {
+        let mut port = self
+        let mut i = 0
+        while i < vs.len() {
+            port = port.append(vs[i])
+            i = i + 1
+        }
+        port
+    }
+}
