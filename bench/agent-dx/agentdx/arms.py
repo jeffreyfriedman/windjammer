@@ -30,6 +30,14 @@ LOOP_TEXT = {
         "- `wj run --compiled main.wj` to build and run the program (pass program input on stdin)\n"
         "- `wj test .` if you write `*_test.wj` tests\n"
         "Do not use `--interpret`."),
+    "interpreted-verify": (
+        "Development loop (required): iterate with the fast interpreted tools.\n"
+        "- `wj check main.wj` for diagnostics\n"
+        "- `wj run --interpret main.wj` to run the program (pass program input on stdin)\n"
+        "- `wj test --interpret .` if you write `*_test.wj` tests\n"
+        "As the last step before you finish, run `wj run --verify main.wj` (same input on stdin): it runs the interpreter, builds the "
+        "program with the production compiler (the final grade uses it) and compares the two outputs. Fix and re-run if it reports a problem. "
+        "Do not use `wj run --compiled`."),
     "interpreted-plus-build": (
         "Development loop (required): iterate with the fast interpreted tools.\n"
         "- `wj check --json main.wj` for diagnostics\n"
@@ -72,6 +80,8 @@ ARMS = {
     "U": {"name": "compiled-first", "loop": "compiled-first", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
     "V": {"name": "interpreted-first", "loop": "interpreted-first", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
     "W": {"name": "interpreted+final-build", "loop": "interpreted-plus-build", "pack_file": "pilot5/sheet_noloop.md", "bash": "core+docs", "lang": "wj"},
+    # pilot 6: U (compiled-first) and R (rust) as before; V2 = interpreted-first with width/String predictions and `wj run --verify` as the last step
+    "V2": {"name": "interpreted-first+verify", "loop": "interpreted-verify", "pack_file": "pilot6/sheet_v2.md", "bash": "core+docs", "lang": "wj"},
     "P": {"name": "python", "loop": "native-python", "pack": False, "lang": "python"},
     "G": {"name": "go", "loop": "native-go", "pack": False, "lang": "go"},
     "R": {"name": "rust", "loop": "native-rust", "pack": False, "lang": "rust"},

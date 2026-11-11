@@ -70,6 +70,10 @@ def _usage(j):
             "result_excerpt": str(j.get("result", ""))[:400]}
 
 
+PREDICTION_MARK = "the compiled build would reject this"     # ADR-0033 width/String prediction (wj check error, wj run --interpret warning)
+RUSTC_ERR = re.compile(r"^error(\[E\d+\])?:(?! aborting| could not compile)", re.M)
+
+
 def analyse_invocations(log, lang="wj"):
     """Summaries of the shim log: per-verify-call table, invocations-to-green, mode violations, categories."""
     inv, cats = [], {}
@@ -89,9 +93,23 @@ def analyse_invocations(log, lang="wj"):
         else:
             break
     caps = sum(1 for e in log if re.search(r"WJ004\d|capabilit", e.get("out", "")) and e["exit"] != 0)
+    preds = [{"call": i, "source": e.get("source", ""), "argv": e["argv"], "exit": e["exit"]}
+             for i, e in enumerate(log) if PREDICTION_MARK in e.get("out", "")]
+    errs = [len(RUSTC_ERR.findall(e.get("out", ""))) for e in log if e["verb"] in S.VERIFY_VERBS and e["exit"] != 0]
+    fix_calls, first_fail = 0, None   # pilot 6: verify calls from the first failing one until the next success (the agent's compile-fix loop)
+    for i, r in enumerate(ver):
+        if first_fail is None and r["exit"] != 0:
+            first_fail = i
+        if first_fail is not None:
+            fix_calls += 1
+            if r["exit"] == 0:
+                break
+    if first_fail is None:
+        fix_calls = 0
     return {"capability_denials": caps, "final_build_calls": sum(1 for r in inv if r["verb"] == "build"),
             "invocations": inv, "verify_calls": len(ver), "verify_calls_to_green": green,
             "tool_wait_seconds": round(sum(r["secs"] for r in inv), 2), "categories": cats,
+            "predictions": preds, "compile_errors": sum(errs), "failing_verify_calls": len(errs), "fix_calls": fix_calls,
             "first_source": next((e["source"] for e in log if e.get("source")), "")}
 
 
@@ -102,7 +120,7 @@ def violations(arm, inv):
         return 0
     if loop == "interpreted-plus-build":
         return sum(1 for r in inv if r["verb"] in S.VERIFY_VERBS and r["mode"] == "compiled" and r["verb"] != "build")
-    bad = "compiled" if loop == "interpreted-first" else "interpret"
+    bad = "compiled" if loop in ("interpreted-first", "interpreted-verify") else "interpret"
     return sum(1 for r in inv if r["verb"] in S.VERIFY_VERBS and r["mode"] == bad)
 
 
@@ -159,7 +177,7 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
     log = os.path.join(tdir, "shim.jsonl")
     shim_dir = os.path.join(tdir, "shimbin")
     tool = A.SHIMMED[lang]
-    real = (real_wj or wj_bin()) if lang == "wj" else shutil.which(tool)
+    real = (real_wj or wj_bin()) if lang == "wj" else (os.environ.get("AGENTDX_RUSTC") if tool == "rustc" else None) or shutil.which(tool)
     S.install(shim_dir, real, log, os.path.join(ws, src), tool)
     load0 = os.getloadavg()[0]
     t0 = time.time()
@@ -186,6 +204,9 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           "docs_calls": sum(1 for r in an["invocations"] if r["verb"] in ("docs", "explain")),
           "pack_file": os.path.basename(A.pack_path(arm) or ""), "pack_bytes": len(open(A.pack_path(arm)).read()) if A.pack_path(arm) else 0,
           **(res.get("extra") or {}),
+          "predictions": an["predictions"], "prediction_shown": bool(an["predictions"]), "compile_errors": an["compile_errors"],
+          "failing_verify_calls": an["failing_verify_calls"], "fix_calls": an["fix_calls"], "verify_used": any("--verify" in e["argv"] for e in S.read_log(log, tool)),
+          "wj_version": os.environ.get("AGENTDX_WJ_VERSION", ""),
           "invocations": an["invocations"], "verify_calls": an["verify_calls"],
           "verify_calls_to_green": an["verify_calls_to_green"], "diagnostic_categories": an["categories"],
           "mode_violations": violations(arm, an["invocations"]),

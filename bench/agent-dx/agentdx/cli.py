@@ -1,9 +1,10 @@
 """Command line: python3 -m agentdx <command>."""
 import argparse
 import json
+import os
 import sys
 
-from . import baseline, budget as BU, driver, gen, pilot as PL, pilot_report as PR, arms as AR, replay as R, report as RP, tasks as T, toolchains, workspace as W
+from . import pilot6_report as P6, baseline, budget as BU, driver, gen, pilot as PL, pilot_report as PR, arms as AR, replay as R, report as RP, tasks as T, toolchains, workspace as W
 from .paths import LANGS
 
 
@@ -91,6 +92,13 @@ def main(argv=None):
     pr.add_argument("--prev", help="trials dir of a previous pilot; adds a delta table")
     pr.add_argument("--md")
     pr.add_argument("--json")
+    p6 = sub.add_parser("pilot6-report", help="pilot 6 report: R vs U vs V2, noisy trials, ADR-0033 table, prediction precision")
+    p6.add_argument("--trials-dir", required=True)
+    p6.add_argument("--md")
+    p6.add_argument("--json")
+    p6.add_argument("--notes", help="markdown appended verbatim (interpretation and limits)")
+    p6.add_argument("--precision", help="JSON file of the prediction precision check; created by --check-predictions")
+    p6.add_argument("--check-predictions", action="store_true", help="rebuild each shown prediction's source compiled (needs wj; slow)")
     p = sub.add_parser("replay", help="re-grade recorded transcripts deterministically (no LLM)")
     p.add_argument("--transcripts", required=True)
     p.add_argument("--no-regrade", action="store_true", help="use recorded results only (no toolchains)")
@@ -130,6 +138,21 @@ def main(argv=None):
     elif a.cmd == "pilot-report":
         trs = PL.load_trials(a.trials_dir)
         md, js = PR.build_report(trs, prev=PL.load_trials(a.prev) if a.prev else None)
+        open(a.md, "w").write(md) if a.md else print(md)
+        if a.json:
+            json.dump(js, open(a.json, "w"), indent=1, default=str)
+    elif a.cmd == "pilot6-report":
+        trs = PL.load_trials(a.trials_dir)
+        prec = []
+        if a.precision and os.path.exists(a.precision):
+            prec = json.load(open(a.precision))
+        if a.check_predictions:
+            prec = P6.check_predictions(trs)
+            if a.precision:
+                json.dump(prec, open(a.precision, "w"), indent=1)
+        md, js = P6.build(trs, prec)
+        if a.notes:
+            md += "\n" + open(a.notes).read()
         open(a.md, "w").write(md) if a.md else print(md)
         if a.json:
             json.dump(js, open(a.json, "w"), indent=1, default=str)
