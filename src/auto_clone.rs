@@ -1633,12 +1633,11 @@ impl AutoCloneAnalysis {
                 .collect();
 
             for field_move in &field_moves {
-                // Ignore projection-parent Reads (`buf` in later `buf.next`) — Rust allows
-                // moving distinct fields of an owned struct without cloning.
-                let root_used_later = root_usages.iter().any(|u| {
-                    u.kind != UsageKind::Definition
-                        && !u.is_projection_parent
-                        && u.statement_idx > field_move.statement_idx
+                // The root or an intermediate path (`request.obj` after `request.obj.kind` moved) used whole
+                // later; projection-parent Reads (`buf` in `buf.next`) are not: distinct fields may move.
+                let prefixes = path.match_indices('.').skip(1).filter_map(|(pos, _)| usage_map.get(&path[..pos]));
+                let root_used_later = std::iter::once(root_usages).chain(prefixes).flatten().any(|u| {
+                    u.kind != UsageKind::Definition && !u.is_projection_parent && u.statement_idx > field_move.statement_idx
                 });
                 let field_used_later = field_usages.iter().any(|u| {
                     u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx

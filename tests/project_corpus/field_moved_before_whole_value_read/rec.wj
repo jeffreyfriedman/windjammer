@@ -1,0 +1,50 @@
+pub struct Node {
+    pub id: string,
+    pub x: f64,
+}
+
+pub struct Hit {
+    pub id: string,
+    pub dist: f64,
+}
+
+pub struct Obj {
+    pub kind: string,
+    pub key: string,
+}
+
+pub struct Request {
+    pub obj: Obj,
+    pub rel: string,
+}
+
+fn distance(node: Node, q: f64) -> f64 {
+    node.x - q
+}
+
+pub fn score(node: Node, q: f64) -> Hit {
+    Hit { id: node.id, dist: distance(node, q) }
+}
+
+fn known(kind: string, rel: string) -> bool {
+    let mut seen: Vec<string> = Vec::new()
+    seen.push(kind)
+    seen.push(rel)
+    seen.len() == 2
+}
+
+fn describe(obj: Obj, rel: string) -> string {
+    let mut out = obj.kind
+    out.push_str(":")
+    out.push_str(obj.key)
+    out.push_str("#")
+    out.push_str(rel)
+    out
+}
+
+pub fn expand(request: Request) -> string {
+    if !known(request.obj.kind, request.rel) {
+        return ""
+    }
+    describe(request.obj, request.rel)
+}

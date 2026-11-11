@@ -399,7 +399,8 @@ impl IrFunction {
                 }),
             ),
             clone_sites: std::collections::BTreeMap::new(),
-            element_reads: crate::ir::clone_facts::owned_element_reads(&analyzed.decl.body),
+            // A function returning `&T` returns the element by reference (`fn get(self, i) -> &Item { self.items[i] }`).
+            element_reads: crate::ir::clone_facts::owned_element_reads(&analyzed.decl.body, analyzed.decl.return_type.as_ref().is_none_or(|t| !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)))),
             field_copy_sites: crate::ir::clone_facts::field_copy_sites(
                 &analyzed.decl.body,
                 &crate::ir::liveness::read_after(&params, &analyzed.decl.body, false),

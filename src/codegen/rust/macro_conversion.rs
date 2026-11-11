@@ -99,6 +99,14 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
+                        // `assert_eq!` borrows both operands itself, so an element place is passed as
+                        // the place: a borrow added to `make()[0]` would compare `&Vec` with `Vec`.
+                        if matches!(arg, Expression::Index { .. })
+                            && generated.starts_with('&')
+                            && !generated.starts_with("&mut ")
+                        {
+                            return generated[1..].to_string();
+                        }
                     }
                     generated
                 })

@@ -1,0 +1,10 @@
+// A public builder stores its text parameter inside a loop: each pass may store it, so the formal stays a
+// concrete `String` (cloned per store), not `impl Into<String>`. Expected by hand: entry 2 renamed to "b".
+// expect: a b
+mod table
+
+fn main() {
+    let t = table::Table { entries: [table::Entry { id: 1, owner: "a" }, table::Entry { id: 2, owner: "x" }] }
+    let u = t.set_owner(2, "b")
+    println("${u.entries[0].owner} ${u.entries[1].owner}")
+}

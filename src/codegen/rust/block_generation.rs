@@ -569,11 +569,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // Also try infer_match_bound_types for richer type info
-                    let match_bound_type_entries = if use_copied_option {
-                        self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
-                    } else {
-                        self.infer_match_bound_types(value, &arm.pattern)
-                    };
+                    let match_bound_type_entries = self.arm_payload_types(value, &arm.pattern, use_copied_option, match_binds_refs_flag);
                     for (var_name, var_type) in &match_bound_type_entries {
                         self.local_var_types
                             .insert(var_name.clone(), var_type.clone());
