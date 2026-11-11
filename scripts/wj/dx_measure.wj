@@ -9,6 +9,7 @@
 // (the project cache filled) and cold (`.wj-cache` removed), median of N runs, CPU seconds.
 use std::env
 use std::fs
+use std::process
 use std::strings
 use wj_proc::sh
 use wj_proc::quote
@@ -244,10 +245,8 @@ fn main() {
     if args.len() > 3 && args[2] == "--runs" {
         runs = args[3].parse::<int>().unwrap_or(5)
     }
-    let scratch = strings.trim(match sh("mktemp -d /tmp/wj-dx.XXXXXX") {
-        Ok(o) => o.stdout,
-        Err(_) => "/tmp/wj-dx",
-    })
+    let scratch = env.get_or("TMPDIR", "/tmp") + "/wj-dx-${process.pid()}"
+    let _ = fs.create_dir_all(scratch)
     output_cost(wj, scratch)
     speed(wj, scratch, runs)
     let _ = sh("rm -rf ${quote(scratch)}")

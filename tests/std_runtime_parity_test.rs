@@ -6,6 +6,9 @@
 //! the Rust sources (`pub fn` lines); neither the interpreter's registry nor the sink table is consulted.
 //! `WJ_PRINT_GAPS=1` prints the current gap list (to regenerate the ledger after a deliberate change).
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -181,7 +184,8 @@ fn main() {
 const EXPECTED: &str = "6869\nhi\nbad hex\nAQID\n3 1 3\n";
 
 fn run(args: &[&str]) -> (String, String) {
-    let d = std::env::temp_dir().join(format!("wj-std-parity-{}-{}", std::process::id(), args.len()));
+    let _scr = Scratch::new("std-parity");
+    let d = _scr.path().to_path_buf();
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     let f = d.join("prog.wj");

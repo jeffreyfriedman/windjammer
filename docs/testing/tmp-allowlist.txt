@@ -9,7 +9,6 @@ scripts/wj/bench_effects_overhead.wj	2
 scripts/wj/check_negative_oracle.wj	1
 scripts/wj/diagnostics_leak_report.wj	1
 scripts/wj/drift_corpus.wj	2
-scripts/wj/drift_gate.wj	2
 scripts/wj/drift_selftest.wj	3
 scripts/wj/interpreter_project_bench.wj	1
 scripts/wj/port_gates.wj	2

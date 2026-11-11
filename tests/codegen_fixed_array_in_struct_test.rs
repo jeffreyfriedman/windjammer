@@ -65,30 +65,18 @@ fn main() {
 
 #[test]
 fn test_standalone_array_uses_fixed_syntax() {
-    // Array literals everywhere now generate fixed-size syntax [...]
+    // SPEC-TYP-005: an untyped `[a, b, c]` bound to a local is the growable list (`Vec`); a declared `[T; N]` is the fixed array.
     let code = test_utils::compile_single(
         r#"
 fn main() {
     let items = [1, 2, 3]
+    let fixed: [int; 3] = [4, 5, 6]
+    println("${items.len()} ${fixed.len()}")
 }
 "#,
     );
-
-    // Should use fixed-size array syntax (tip may suffix element widths).
-    assert!(
-        code.contains("[1, 2, 3]")
-            || code.contains("[1_i32, 2_i32, 3_i32]")
-            || (code.contains('[') && code.contains("1_") && !code.contains("vec![")),
-        "Array literal should use fixed-size syntax [...]. Generated:\n{}",
-        code
-    );
-
-    // Should NOT use vec![] (unless explicit vec![] macro is used in source)
-    assert!(
-        !code.contains("vec![1, 2, 3]"),
-        "Array literal should NOT use vec![...] macro. Generated:\n{}",
-        code
-    );
+    assert!(code.contains("vec![1_i64, 2_i64, 3_i64]"), "untyped literal should be a Vec. Generated:\n{}", code);
+    assert!(code.contains("[4_i64, 5_i64, 6_i64]") && !code.contains("vec![4_i64"), "declared [int; 3] should stay fixed. Generated:\n{}", code);
 }
 
 #[test]

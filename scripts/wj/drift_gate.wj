@@ -16,6 +16,7 @@
 // compiled run (a build-slot gate); DRIFT_BASE_REF (default next/v0.50.0) names the ref the ledger may only
 // shrink against. Exit status 1 when any step fails.
 use std::env
+use std::fs
 use std::process
 use std::strings
 use wj_proc::sh
@@ -126,10 +127,8 @@ fn wj_step(name: string, wj: string, args: string) -> Step {
 
 fn corpus_step(wj: string, compiled: string, prune: bool, adopt: string) -> Step {
     // every file of a run lives in a directory of its own, so concurrent gate runs cannot touch each other
-    let run_dir = match sh("mktemp -d /tmp/wj-drift-gate.XXXXXX") {
-        Ok(r) => strings.trim(r.stdout),
-        Err(_) => "/tmp/wj-drift-gate",
-    }
+    let run_dir = env.get_or("TMPDIR", "/tmp") + "/wj-drift-gate-${process.pid()}"
+    let _ = fs.create_dir_all(run_dir)
     let results = "${run_dir}/results.tsv"
     let gen_results = "${run_dir}/gen.tsv"
     let base_copy = "${run_dir}/base-ledger.txt"
@@ -268,10 +267,8 @@ fn ensure_ecosystem() -> Result<string, string> {
 // expected output runs under the walker, the resolved engine and the compiled backend; the divergences are listed
 // in tests/spec_oracle/known_divergences.txt, a shrink-only ledger judged by drift_ledger.wj like the corpus one.
 fn spec_step(wj: string, compiled: string) -> Step {
-    let run_dir = match sh("mktemp -d /tmp/wj-drift-spec.XXXXXX") {
-        Ok(r) => strings.trim(r.stdout),
-        Err(_) => "/tmp/wj-drift-spec",
-    }
+    let run_dir = env.get_or("TMPDIR", "/tmp") + "/wj-drift-spec-${process.pid()}"
+    let _ = fs.create_dir_all(run_dir)
     let t0 = now()
     let rows = "${run_dir}/spec.tsv"
     let ledger = "tests/spec_oracle/known_divergences.txt"
