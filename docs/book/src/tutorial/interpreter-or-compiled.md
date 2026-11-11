@@ -8,7 +8,7 @@
 Windjammer has two ways to run a program, and they are meant to give the same answers: for a program the interpreter accepts, its standard output, exit status and panic location match the compiled program's (see [the interpreter's contract](https://github.com/jeffreyfriedman/windjammer/blob/main/docs/testing/INTERPRETER_CONTRACT.md)).
 
 * The **interpreter** runs your source directly. There is no build step, a whole multi-module project starts in
-  milliseconds, and it needs no Rust toolchain. It is the default for `wj run`.
+  no build step, and it needs no Rust toolchain. It is the default for `wj run`.
 * The **compiled path** transpiles the program to Rust and builds it with `cargo`. It produces a native binary and the
   full speed of optimised Rust. `wj build` and `wj run --compiled` take it, and `--release` turns the optimiser on.
 
@@ -75,10 +75,10 @@ failing project to a small, anonymised reproduction. The current list of differe
 
 ## Speed
 
-The interpreter starts fast and runs ordinary code quickly, and it compiles hot integer loops to machine code as it
-goes. Compiled Rust is faster still, and the gap grows with the amount of computation. A useful rule of thumb: if the
-program spends its time waiting for files, the network or the user, the interpreter is plenty; if it spends its time
-computing, build it.
+The interpreter has no build step, and its start-up cost is measured in [A fast edit-run loop](../showcase/fast-loop.md). A
+compiled program pays for a build once and then runs as optimised Rust. Which one finishes your program sooner depends on how
+much work the program does, so measure the one you care about: if it spends its time waiting for files, the network or the
+user, the build buys little; if it spends its time computing, build it.
 
 ## Targets beyond Rust
 

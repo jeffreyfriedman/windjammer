@@ -30,7 +30,7 @@ the pairs that do not pass listed on the [compile targets](../reference/targets.
 <!-- wj:end -->
 
 **The drift corpus.** Real programs written by someone other than the interpreter's authors, taken from the
-windjammer-ecosystem repository, run under the tree-walking interpreter, the faster resolved engine and the compiled
+windjammer-ecosystem repository, run under the tree-walking interpreter, the resolved engine and the compiled
 backend, with each result compared. The number of cases:
 
 <!-- wj:gen name=metric key=drift.corpus_cases -->

@@ -1,7 +1,7 @@
 # Introduction
 
 Windjammer is a compiled language with the feel of a scripting language. You write plain values and functions; the
-compiler works out who owns what, when to borrow and when to copy. The same source runs instantly in an interpreter
+compiler works out who owns what, when to borrow and when to copy. The same source runs in an interpreter with no build step
 while you iterate, and compiles to native Rust when you ship.
 
 ```wj

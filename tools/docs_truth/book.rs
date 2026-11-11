@@ -374,6 +374,7 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     out.extend(sample_shape(&inv));
     out.extend(super::book_features::check(ctx, cfg));
     out.extend(super::book_playground::check(ctx));
+    out.extend(super::book_pilot::claims(ctx));
     for (file, line) in &inv.orphans {
         out.push(Finding::fail("book", file, *line, "a `go,run`, `ts,run` or `rust,generated` fence must follow the Windjammer program it belongs to"));
     }

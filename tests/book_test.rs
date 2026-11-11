@@ -592,3 +592,45 @@ fn book_pages_may_link_to_the_playground_page() {
     std::fs::remove_file(s.dir.path().join("docs/book/playground/index.html")).unwrap();
     assert!(s.fails("playground file"), "{}", show(&s.findings()));
 }
+
+// ---------------------------------------------------------------------------------------------
+// Comparative claims need a generated number beside them
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn a_comparative_claim_without_a_generated_number_fails() {
+    let s = Scratch::new();
+    for claim in ["Windjammer is cheaper than Rust for agents.", "The interpreter is faster than a build.", "It needs fewer tokens."] {
+        s.page(&format!("{GOOD}\n{claim}\n"));
+        assert!(s.fails("comparative claim"), "{claim}: {}", show(&s.findings()));
+    }
+    // the same sentence next to a generated metric passes
+    s.page(&format!("{GOOD}\nThe interpreter is faster than a build:\n\n<!-- wj:gen name=metric key=book.examples -->\n3\n<!-- wj:end -->\n"));
+    assert!(!s.fails("comparative claim"), "{}", show(&s.findings()));
+    // a claim inside a code fence is not prose
+    s.page(&format!("{GOOD}\n```text\nfaster than\n```\n"));
+    assert!(!s.fails("comparative claim"), "{}", show(&s.findings()));
+}
+
+#[test]
+fn the_book_has_no_unbacked_comparative_claims() {
+    let fs: Vec<_> = docs_truth::book_pilot::claims(&real());
+    assert_eq!(failures(&fs), 0, "{}", show(&fs));
+}
+
+#[test]
+fn the_measured_page_still_matches_the_pilot() {
+    // docs/book/src/showcase/measured.md says Windjammer is not cheaper than plain Rust and that every setup passed. If a
+    // newer pilot changes either fact, the page needs rewriting, not just regenerating.
+    let text = std::fs::read_to_string(real().root.join(docs_truth::book_pilot::REPORT)).unwrap();
+    let r: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let mean = |arm: &str, key: &str| r["arms"][key][arm][0].as_f64().unwrap();
+    for arm in ["R", "U", "V2"] {
+        assert_eq!(mean(arm, "pass"), 1.0, "{arm} no longer passes everything: update showcase/measured.md");
+    }
+    assert!(mean("R", "cost") <= mean("U", "cost") && mean("R", "cost") <= mean("V2", "cost"), "Rust is no longer the cheapest arm: update showcase/measured.md");
+    for pair in ["R-U", "R-V2", "U-V2"] {
+        let a = r["diffs"]["cost"][pair].as_array().unwrap();
+        assert!(a[1].as_f64().unwrap() <= 0.0 && a[2].as_f64().unwrap() >= 0.0, "{pair}: the cost interval excludes zero now: update showcase/measured.md");
+    }
+}
