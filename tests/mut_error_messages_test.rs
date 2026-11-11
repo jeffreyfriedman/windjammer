@@ -12,11 +12,23 @@
 
 /// TDD Test: Mutability Semantics
 ///
-/// **Current `wj` behavior:** Reassignment to a `let` without `let mut` is handled by inferring
-/// `let mut` in generated Rust, so the driver often succeeds. Tests below document that behavior;
-/// when native immutability errors are implemented, they should expect `Err` and stderr text again.
+/// ADR-0002: reassigning a `let` without `let mut` is the error WJ0051, one per binding, located at the assignment
+/// with the declaration as a second span; with `let mut` the program compiles.
 #[path = "common/test_utils.rs"]
 mod test_utils;
+
+/// WJ0051 diagnostics for one source: (binding, line of the change, line of the declaration).
+fn mut_errors(code: &str) -> Vec<(String, usize, usize)> {
+    windjammer::check::local_mutability_sources(&[("test.wj".to_string(), code.to_string())])
+        .iter()
+        .map(|d| {
+            assert!(d.is_error(), "WJ0051 is an error");
+            let p = d.primary_span.as_ref().unwrap();
+            let s = &d.secondary_spans[0];
+            (code[s.byte_start..s.byte_end].to_string(), p.line_start, s.line_start)
+        })
+        .collect()
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -28,13 +40,7 @@ fn main() {
 }
 "#;
 
-    let result = test_utils::compile_single_result(code);
-    let generated = result.expect("wj build");
-    assert!(
-        generated.contains("let mut x"),
-        "When native errors are missing, expect `let mut x` in output. Got:\n{}",
-        generated
-    );
+    assert_eq!(mut_errors(code), [("x".to_string(), 4, 3)]);
 }
 
 #[test]
@@ -133,13 +139,7 @@ fn main() {
 }
 "#;
 
-    let result = test_utils::compile_single_result(code);
-    let generated = result.expect("wj build");
-    assert!(
-        generated.contains("let mut x") && generated.contains("let mut y"),
-        "Expect inferred `let mut` for each reassigned local. Got:\n{}",
-        generated
-    );
+    assert_eq!(mut_errors(code), [("x".to_string(), 6, 3), ("y".to_string(), 7, 4)]);
 }
 
 #[test]
@@ -152,11 +152,5 @@ fn main() {
 }
 "#;
 
-    let result = test_utils::compile_single_result(code);
-    let generated = result.expect("wj build");
-    assert!(
-        generated.contains("let mut x"),
-        "Expect `let mut x` in generated output. Got:\n{}",
-        generated
-    );
+    assert_eq!(mut_errors(code), [("x".to_string(), 4, 3)]);
 }

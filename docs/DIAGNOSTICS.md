@@ -33,7 +33,7 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 | WJ0011 / WJ0012 | syntax error, invalid character (with line/column) |
 | WJ0013 | wrong argument count |
 | WJ0003 (conditions, assignments, calls) | non-`bool` `if`/`while` condition; assigning another type to a typed local; `let x: int = f()` where `f` returns `string` |
-| WJ0051 | a local binding (`let`, `for`) changed without `mut`: assigned, a field or element assigned, a method that changes it (`&mut self` by the solver or `std/rust_core.wji`), an argument the callee changes, also inside closures (ADR-0002; `check/local_mut/`, whole program, the same in `wj build` and `wj run`; warning until `local_mut::REQUIRED` flips; fix adds `mut`) |
+| WJ0051 | a local binding (`let`, a `for` variable over a range) changed without `mut`: assigned, a field or element assigned, a method that changes it (`&mut self` by the solver or `std/rust_core.wji`), an argument the callee changes, also inside closures (ADR-0002; `check/local_mut/`, whole program, the same in `wj build` and `wj run`; an error, and the Rust backend no longer infers local `mut`; fix adds `mut`) |
 | WJ0005 (annotations) | `let x: Name` where `Name` is declared nowhere |
 | WJ0030 | `Enum::Variant` that the enum does not declare |
 | WJ0010 | `match` over a user enum that misses variants |

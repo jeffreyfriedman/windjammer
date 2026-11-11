@@ -70,7 +70,7 @@ fn json_string_field(body: string, key: string) -> string {
 }
 
 fn test_health_returns_ok() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/health", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
     assert_str_contains(reply.body, "ok")
@@ -78,7 +78,7 @@ fn test_health_returns_ok() {
 }
 
 fn test_health_accepts_path_without_leading_slash() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "health", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
     assert_str_contains(reply.body, "ok")
@@ -103,7 +103,7 @@ fn test_register_accepts_trailing_slash_via_router() {
 }
 
 fn test_welcome_page_uses_html_content_type() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
     assert_str_contains(reply.body, "<html")
@@ -254,7 +254,7 @@ fn test_login_rejects_empty_password() {
 }
 
 fn test_security_headers_on_json_response() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/health", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
     assert_str_contains(reply.extra_headers, "X-Frame-Options")
@@ -263,7 +263,7 @@ fn test_security_headers_on_json_response() {
 }
 
 fn test_security_headers_on_options_preflight() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle(
         "OPTIONS",
         "/login",
@@ -404,7 +404,7 @@ fn test_login_rejects_bad_password() {
 }
 
 fn test_me_requires_bearer_token() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/me", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 401)
 }
@@ -587,7 +587,7 @@ fn test_me_accepts_access_token_cookie() {
 }
 
 fn test_logout_clears_access_token_cookie() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("POST", "/logout", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
     assert_str_contains(reply.set_cookie, "access_token=")
@@ -653,7 +653,7 @@ fn test_rate_limit_returns_429_on_login() {
 }
 
 fn test_options_preflight_sets_cors_origin() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle(
         "OPTIONS",
         "/login",
@@ -670,7 +670,7 @@ fn test_options_preflight_sets_cors_origin() {
 }
 
 fn test_cors_origin_on_json_response() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle(
         "GET",
         "/health",
@@ -686,7 +686,7 @@ fn test_cors_origin_on_json_response() {
 }
 
 fn test_gzip_when_accepted() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/health", "", "gzip", "", "", "", 0, "")
     assert_eq(reply.content_encoding, "gzip")
     match gzip_decode_body(reply.body) {
@@ -696,7 +696,7 @@ fn test_gzip_when_accepted() {
 }
 
 fn test_welcome_page_uses_template() {
-    let app = AuthApp::new(default_config())
+    let mut app = AuthApp::new(default_config())
     let reply = app.handle("GET", "/", "", "", "", "", "", 0, "")
     assert_eq(reply.status, 200)
     assert_str_contains(reply.body, "<h1>")

@@ -15,7 +15,7 @@ use crate::parser::{SourceLocation, Type, UnaryOp};
 pub enum Kind {
     /// `let` (also each name of a `let` pattern).
     Let,
-    /// A `for` loop variable.
+    /// A `for` loop variable over a range.
     For,
     /// Parameters, closure parameters, match arm and other pattern bindings: never reported.
     Other,
@@ -256,7 +256,11 @@ impl<'f> Walker<'f> {
             Statement::For { pattern, iterable, body, location, .. } => {
                 self.expr(iterable);
                 self.scopes.push(Vec::new());
-                self.bind_pattern(pattern, None, Kind::For, false, location);
+                // A loop over a range binds a fresh integer each iteration: assigning to it needs `for mut`. A loop
+                // over a collection binds its elements, and an assignment writes through to the element (the
+                // borrow is inferred, ADR-0002 keeps reference modes inferred): not a local to declare `mut`.
+                let kind = if matches!(iterable, Expression::Range { .. }) { Kind::For } else { Kind::Other };
+                self.bind_pattern(pattern, None, kind, false, location);
                 self.block(body);
                 self.scopes.pop();
             }

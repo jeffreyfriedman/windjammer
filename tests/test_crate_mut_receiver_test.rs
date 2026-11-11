@@ -23,7 +23,7 @@ fn binding_mutated_through_a_library_receiver_is_mut_in_a_test_crate() {
     .unwrap();
     std::fs::write(
         d.join("tests/hub_test.wj"),
-        "use crate::Hub\n\nfn test_handle_counts_lines() {\n    let hub = Hub::new()\n    let first = hub.handle(\"a\")\n    let second = hub.handle(\"b\")\n    assert_eq(first, 1)\n    assert_eq(second, 2)\n}\n",
+        "use crate::Hub\n\nfn test_handle_counts_lines() {\n    let mut hub = Hub::new()\n    let first = hub.handle(\"a\")\n    let second = hub.handle(\"b\")\n    assert_eq(first, 1)\n    assert_eq(second, 2)\n}\n",
     )
     .unwrap();
     let o = Command::new(WJ).arg("test").env("WJ_CAPS", "warn").current_dir(d.path()).output().unwrap();

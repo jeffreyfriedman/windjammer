@@ -24,7 +24,7 @@ fn tokenize(src: &str) -> Vec<Token> {
     let mut toks: Vec<Token> = vec![];
     let mut i = 0_usize;
     while i < chars.len() {
-        let mut c = chars[i];
+        let c = chars[i];
         if c.is_numeric() {
             let mut n = 0_i64;
             while i < chars.len() && chars[i].is_numeric() {

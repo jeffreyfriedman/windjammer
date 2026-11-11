@@ -63,7 +63,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// The pattern of a `let`. A tuple destructure (`let (c, k) = p`) binds each part with the type of the
-    /// value's element, and a part the body mutates (`c.bump()` with `&mut self`) is bound `mut`.
+    /// value's element; a part is `mut` only when the source says so (`let (mut c, k) = p`, ADR-0002).
     pub(in crate::codegen::rust) fn generate_let_pattern(&mut self, pattern: &Pattern<'ast>, value: &Expression<'ast>) -> String {
         let Pattern::Tuple(parts) = pattern else {
             return self.generate_pattern(pattern);
@@ -75,14 +75,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        let parts: Vec<Pattern<'ast>> = parts
-            .iter()
-            .map(|part| match part {
-                Pattern::Identifier(n) if self.variable_needs_mut(n) => Pattern::MutBinding(n.clone()),
-                other => other.clone(),
-            })
-            .collect();
-        self.generate_pattern(&Pattern::Tuple(parts))
+        // the pattern's own `mut`s, never inferred for a local (ADR-0002)
+        self.generate_pattern(&Pattern::Tuple(parts.to_vec()))
     }
 
     /// A non-Copy field bound out of a borrowed root (`let a = r.who.name` with `r: &Req`) cannot move: it is

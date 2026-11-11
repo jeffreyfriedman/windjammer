@@ -222,10 +222,14 @@ fn copied_on_an_option_of_string_slices_is_the_identity() {
     assert!(!g.contains(".copied()") && !g.contains(".cloned()"), "{g}");
 }
 
+/// A binding changed by a method called inside `${..}` declares its `mut` (ADR-0002) and keeps it; without it, WJ0051.
 #[test]
 fn method_call_inside_interpolation_makes_the_binding_mutable() {
+    let plain = "struct Counter { n: int }\nimpl Counter {\n    fn bump(self) -> int {\n        self.n = self.n + 1\n        self.n\n    }\n}\nstruct Wrap { c: Counter }\nimpl Wrap {\n    fn go(self) -> int {\n        self.c.bump()\n    }\n}\nfn main() {\n    let w = Wrap { c: Counter { n: 0 } }\n    println(\"${w.go()}\")\n}\n";
+    let d = windjammer::check::local_mutability_sources(&[("m.wj".to_string(), plain.to_string())]);
+    assert!(d.len() == 1 && d[0].message.starts_with("`w`"), "{d:?}");
     let g = typechecks(
-        "struct Counter { n: int }\nimpl Counter {\n    fn bump(self) -> int {\n        self.n = self.n + 1\n        self.n\n    }\n    fn get(self) -> int {\n        self.n\n    }\n}\nstruct Wrap { c: Counter }\nimpl Wrap {\n    fn go(self) -> int {\n        self.c.bump()\n    }\n}\nfn main() {\n    let w = Wrap { c: Counter { n: 0 } }\n    println(\"${w.go()}\")\n    let c = Counter { n: 0 }\n    println(\"${c.get()}\")\n}\n",
+        "struct Counter { n: int }\nimpl Counter {\n    fn bump(self) -> int {\n        self.n = self.n + 1\n        self.n\n    }\n    fn get(self) -> int {\n        self.n\n    }\n}\nstruct Wrap { c: Counter }\nimpl Wrap {\n    fn go(self) -> int {\n        self.c.bump()\n    }\n}\nfn main() {\n    let mut w = Wrap { c: Counter { n: 0 } }\n    println(\"${w.go()}\")\n    let c = Counter { n: 0 }\n    println(\"${c.get()}\")\n}\n",
     );
     assert!(g.contains("let mut w") && g.contains("let c ="), "{g}");
 }
@@ -285,7 +289,7 @@ fn match_on_an_integer_without_a_wildcard_panics_at_run_time_instead_of_failing_
 #[test]
 fn self_mutability_reaches_a_caller_through_return_in_loop_and_while_condition() {
     let g = typechecks(
-        "struct Srv {\n    hits: Vec<int>,\n}\n\nimpl Srv {\n    fn record(self, v: int) -> int {\n        if v > 0 {\n            self.hits.push(v)\n            return 1\n        }\n        0\n    }\n\n    fn step(self) -> bool {\n        loop {\n            return self.record(1) > 5\n        }\n    }\n\n    fn serve_client(self) -> int {\n        let mut n = 0\n        while self.step() {\n            n = n + 1\n        }\n        n\n    }\n}\n\nfn main() {\n    let s = Srv { hits: [] }\n    println(\"${s.serve_client()}\")\n}\n",
+        "struct Srv {\n    hits: Vec<int>,\n}\n\nimpl Srv {\n    fn record(self, v: int) -> int {\n        if v > 0 {\n            self.hits.push(v)\n            return 1\n        }\n        0\n    }\n\n    fn step(self) -> bool {\n        loop {\n            return self.record(1) > 5\n        }\n    }\n\n    fn serve_client(self) -> int {\n        let mut n = 0\n        while self.step() {\n            n = n + 1\n        }\n        n\n    }\n}\n\nfn main() {\n    let mut s = Srv { hits: [] }\n    println(\"${s.serve_client()}\")\n}\n",
     );
     assert!(g.contains("fn serve_client(&mut self)") && g.contains("fn step(&mut self)"), "{g}");
 }

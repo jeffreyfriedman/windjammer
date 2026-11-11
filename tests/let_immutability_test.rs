@@ -12,15 +12,25 @@
 
 /// Tests for `let` immutability-by-default semantics
 ///
-/// **Current `wj` behavior (CI truth):** The compiler still infers `let mut` when a binding is
-/// mutated (push, compound assignment, etc.). A future pass may emit Windjammer-native immutability
-/// errors instead; until then, these tests assert successful builds and, where useful, that output
-/// contains `let mut` for mutated locals.
-///
-/// Intended philosophy (Rust/Swift-style explicit `let mut` at the source level) is not fully
-/// enforced in the driver yet.
+/// ADR-0002: `let mut` is explicit. A mutated local without it stops `wj build` with WJ0051 before any code is
+/// generated; an explicit `let mut` is kept in the output and a plain `let` stays plain.
 #[path = "common/test_utils.rs"]
 mod test_utils;
+
+/// `wj build --no-cargo` on `source`, which must fail; its stderr.
+fn build_stderr(source: &str) -> String {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let f = tmp.path().join("test.wj");
+    std::fs::write(&f, source).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", "--no-cargo", "--output"])
+        .arg(tmp.path().join("build"))
+        .arg(&f)
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "the build must stop");
+    String::from_utf8_lossy(&out.stderr).to_string()
+}
 
 // ============================================================================
 // TEST 1: `let` generates `let` (no mut) in Rust output
@@ -80,10 +90,7 @@ fn main() {
 }
 
 // ============================================================================
-// TEST 3: mutating a `let` binding without `let mut` — current compiler infers `let mut`
-//
-// When native immutability diagnostics land, this test should expect failure; for now wj build
-// succeeds and codegen includes `let mut items`.
+// TEST 3: mutating a `let` binding without `let mut` is WJ0051 (ADR-0002)
 // ============================================================================
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -95,12 +102,8 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
-    assert!(
-        generated.contains("let mut items"),
-        "Current codegen should infer `let mut` for mutated Vec binding. Got:\n{}",
-        generated
-    );
+    let stderr = build_stderr(source);
+    assert!(stderr.contains("WJ0051") && stderr.contains("`items` is changed"), "a mutated `let` is WJ0051, got:\n{stderr}");
 }
 
 // ============================================================================
@@ -131,7 +134,7 @@ fn main() {
 }
 
 // ============================================================================
-// TEST 5: compound assignment — current compiler infers `let mut count`
+// TEST 5: compound assignment to a plain `let` is WJ0051
 // ============================================================================
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -143,12 +146,8 @@ fn main() {
 }
 "#;
 
-    let (generated, _stderr) = test_utils::compile_via_cli_with_stderr(source);
-    assert!(
-        generated.contains("let mut count"),
-        "Current codegen should infer `let mut` for compound assignment. Got:\n{}",
-        generated
-    );
+    let stderr = build_stderr(source);
+    assert!(stderr.contains("WJ0051") && stderr.contains("`count` is assigned"), "compound assignment to a `let` is WJ0051, got:\n{stderr}");
 }
 
 // ============================================================================
