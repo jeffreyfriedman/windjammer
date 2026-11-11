@@ -1,0 +1,37 @@
+// An index found by a counter over `len()` is stored into an `int` that starts at -1 (not found) and is used after
+// `as usize`; later the same name is bound to a `usize`. The counter indexes with a conversion (NUM-USIZE-TO-INT at
+// the index) and each `idx` keeps its own width (was `let mut idx = -1_usize`, E0600).
+fn tally(names: Vec<string>) -> Vec<int> {
+    let mut areas: Vec<string> = Vec::new()
+    let mut total: Vec<int> = Vec::new()
+    let mut found: Vec<int> = Vec::new()
+    for n in names {
+        let mut idx = -1
+        let mut k = 0
+        while k < areas.len() {
+            if areas[k] == n {
+                idx = k
+            }
+            k += 1
+        }
+        if idx < 0 {
+            areas.push(n)
+            total.push(0)
+            idx = (areas.len() - 1) as int
+        }
+        total[idx as usize] = total[idx as usize] + 1
+        found.push(idx)
+    }
+    let mut ci = 0
+    while ci < found.len() {
+        let idx = found[ci] as usize
+        total[idx] = total[idx] + 1
+        ci += 1
+    }
+    total
+}
+
+fn main() {
+    let t = tally(["a", "b", "a"])
+    println("${t[0]} ${t[1]}")
+}

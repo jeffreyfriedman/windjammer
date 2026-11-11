@@ -235,12 +235,13 @@ mod tests {
         assert_eq!(f.index_source_widths.values().collect::<Vec<_>>(), vec![&BaseType::I64]);
     }
 
-    /// An index use in a class of another width needs a conversion at the index: held.
+    /// NUM-USIZE-TO-INT at the index: an index in a class of another width keeps that width and is converted where it
+    /// indexes a sequence (`v[k]` prints `v[k as usize]`).
     #[test]
-    fn index_use_of_an_int_class_is_held() {
+    fn index_use_of_an_int_class_is_converted_at_the_index() {
         let f = facts("pub fn f(v: Vec<string>, n: int) -> string {\n    let k = n + 1\n    v[k]\n}\n", "f");
-        assert!(f.solver_local_widths.get("k").is_none(), "{:?}", f.solver_local_widths);
-        assert!(f.literal_widths.is_empty(), "{:?}", f.literal_widths);
+        assert_eq!(f.solver_local_widths.get("k"), Some(&BaseType::I64), "{:?}", f.solver_local_widths);
+        assert_eq!(f.usize_conversions.values().collect::<Vec<_>>(), vec![&BaseType::Usize], "{:?}", f.usize_conversions);
     }
 
     /// A `usize` counter pushed into a returned `Vec<int>` is converted at the argument (it flows into the slot).
