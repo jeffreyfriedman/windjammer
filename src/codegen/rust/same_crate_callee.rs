@@ -23,6 +23,24 @@ impl<'ast> CodeGenerator<'ast> {
         self.call_targets = crate::resolve::resolve_program(&input).callee_def_paths();
     }
 
+    /// A bare call `name(..)` inside an impl that names a method of the impl (lowered to `self.name(..)` /
+    /// `Self::name(..)`), not an imported free function of the same name.
+    pub(crate) fn bare_call_is_sibling_method(&self, name: &str) -> bool {
+        self.in_impl_block && self.current_impl_methods.contains(name) && !self.imported_fn_names.contains_key(name)
+    }
+
+    /// The registry key of the free function a bare call `name(..)` names through the file's `use` import, when
+    /// the bare key holds a same-named method (a trait's `list_items(self, ..)`): name-keyed lookups would
+    /// read the method's formals. `None` for any other call (C3 identity by declaration).
+    pub(crate) fn imported_free_function_key(&self, name: &str, resolved: Option<&crate::analyzer::FunctionSignature>) -> Option<String> {
+        if resolved.is_some_and(|s| s.has_self_receiver) || self.bare_call_is_sibling_method(name) {
+            return None;
+        }
+        let path = self.imported_fn_names.get(name)?;
+        let registries = std::iter::once(&self.signature_registry).chain(self.global_signature_registry.as_deref());
+        registries.filter(|r| r.key_holds_method(name)).find_map(|r| r.imported_free_function(path)).map(|(key, _)| key)
+    }
+
     /// The resolver's definition path for this callee expression (`a::take`, `Counter::new`).
     pub(crate) fn resolved_callee_path(&self, callee: &Expression<'_>) -> Option<&str> {
         self.call_targets.get(&(callee as *const Expression<'_> as usize)).map(String::as_str)
@@ -66,5 +84,36 @@ impl<'ast> CodeGenerator<'ast> {
             return std::borrow::Cow::Owned(q);
         }
         std::borrow::Cow::Borrowed(callee_name)
+    }
+
+    /// Shared-borrow slot at a plain call `f(..)` whose signature codegen resolved (`resolved`). The name-keyed
+    /// lookups ([`Self::preregistered_free_call_arg_expects_borrow`], [`Self::callee_arg_expects_shared_borrow_at_call`])
+    /// read the wrong formals in two cases, where the resolved signature decides instead:
+    /// - `f` is a parameter or local (`accept: fn(int) -> bool`): it shadows every function named `f`;
+    /// - the bare registry key `f` holds a method of the same name (a trait's `list_items(self, ..)`) while
+    ///   the call resolved to a free function.
+    pub(in crate::codegen::rust) fn free_call_arg_expects_shared_borrow(
+        &self,
+        callee: &str,
+        resolved: Option<&crate::analyzer::FunctionSignature>,
+        arg_index: usize,
+    ) -> bool {
+        let bare = !callee.contains("::");
+        let shadowed = bare
+            && (self.current_function_params.iter().any(|p| p.name == callee)
+                || self.local_variable_scopes.iter().any(|s| s.contains(callee)));
+        if shadowed {
+            return resolved.is_some_and(|sig| self.ir_sig_arg_expects_shared_borrow(sig, arg_index));
+        }
+        match resolved.filter(|_| self.imported_free_function_key(callee, resolved).is_some()) {
+            Some(sig) => {
+                self.preregistered_free_call_arg_expects_borrow(callee, arg_index)
+                    || self.ir_sig_arg_expects_shared_borrow(sig, arg_index)
+            }
+            None => {
+                self.preregistered_free_call_arg_expects_borrow(callee, arg_index)
+                    || self.callee_arg_expects_shared_borrow_at_call(callee, arg_index)
+            }
+        }
     }
 }

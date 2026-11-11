@@ -1,0 +1,10 @@
+fn make() -> Vec<Vec<u8>> {
+    let a: Vec<u8> = [97]
+    let b: Vec<u8> = [98]
+    [a, b]
+}
+
+pub fn check() {
+    let want: Vec<u8> = [97]
+    assert_eq(make()[0], want)
+}

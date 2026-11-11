@@ -1,0 +1,91 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod rec;
+
+// Re-export public items
+pub use rec::*;
+// ==== main.rs ====
+mod rec;
+fn main() {
+    let h = rec::score(rec::Node { id: String::from("a"), x: 3.0_f64 }, 1.0_f64);
+    let r = rec::Request { obj: rec::Obj { kind: String::from("doc"), key: String::from("7") }, rel: String::from("viewer") };
+    println!("{} {} {}", h.id, h.dist, rec::expand(r));
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod rec;
+
+// Re-export public items
+pub use rec::*;
+// ==== rec.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Node {
+    pub id: String,
+    pub x: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+#[repr(C)]
+pub struct Hit {
+    pub id: String,
+    pub dist: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Obj {
+    pub kind: String,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+pub struct Request {
+    pub obj: Obj,
+    pub rel: String,
+}
+
+#[inline]
+pub fn distance(node: &Node, q: f64) -> f64 {
+    node.x - q
+}
+
+#[inline]
+pub fn score(node: Node, q: f64) -> Hit {
+    Hit { id: node.id.clone(), dist: distance(&node, q) }
+}
+
+#[inline]
+pub fn known(kind: String, rel: String) -> bool {
+    let mut seen: Vec<String> = Vec::new();
+    seen.push(kind);
+    seen.push(rel);
+    seen.len() == 2_usize
+}
+
+#[inline]
+pub fn expand(request: Request) -> String {
+    if !known(request.obj.kind.clone(), request.rel.clone()) {
+        return String::new();
+    }
+    describe(request.obj, &request.rel)
+}
+
+#[inline]
+pub fn describe(obj: Obj, rel: &str) -> String {
+    let mut out = obj.kind;
+    out.push_str(":");
+    out.push_str(&obj.key);
+    out.push_str("#");
+    out.push_str(rel);
+    out
+}
+

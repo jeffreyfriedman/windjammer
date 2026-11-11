@@ -7,6 +7,8 @@ use crate::parser::Type;
 
 use super::OwnershipMode;
 
+mod identity;
+
 /// True when `a` and `b` differ only by shared/mut ref wrapping of the same inner type
 /// (codegen ownership demotion of one function, not a cross-module overload).
 fn param_types_are_ownership_refinement(a: &Type, b: &Type) -> bool {
@@ -815,6 +817,11 @@ impl SignatureRegistry {
         self.get_signature(name).is_some_and(|sig| !sig.is_extern) && Self::stdlib().get_signature(name).is_none()
     }
 
+    /// This registry, then each layer of its fallback chain.
+    fn layers(&self) -> impl Iterator<Item = &SignatureRegistry> {
+        std::iter::successors(Some(self), |reg| reg.global_fallback.as_deref())
+    }
+
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
         if let Some(sig) = self.signatures.get(name) {
             return Some(sig);
@@ -822,20 +829,6 @@ impl SignatureRegistry {
         self.global_fallback
             .as_ref()
             .and_then(|g| g.get_signature(name))
-    }
-
-    /// Lexical scope (C3): inside module `m`, a bare `f` is `m::f` when `m` defines it. Returns that
-    /// module-qualified key when it is registered on this layer or the fallback chain.
-    pub fn scoped_key(&self, module_path: &[String], name: &str) -> Option<String> {
-        if module_path.is_empty() || name.contains("::") {
-            return None;
-        }
-        let key = format!("{}::{name}", module_path.join("::"));
-        self.has_key_in_chain(&key).then_some(key)
-    }
-
-    fn has_key_in_chain(&self, key: &str) -> bool {
-        self.signatures.contains_key(key) || self.global_fallback.as_ref().is_some_and(|g| g.has_key_in_chain(key))
     }
 
     /// Check if a key exists in this registry's own `signatures` map (not the

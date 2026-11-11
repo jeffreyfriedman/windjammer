@@ -19,7 +19,7 @@ mod usecases;
 mod routes;
 fn main() {
     let deps = usecases::Deps { shelf: shelf::Shelf { items: vec!["a".to_string(), "b".to_string()] }, tag: String::from("t") };
-    println!("{}", routes::handle(&deps, "t"));
+    println!("{}", routes::handle(deps, String::from("t")));
 }
 
 // ==== mod.rs ====
@@ -49,7 +49,7 @@ use super::*;
 
 use crate::usecases::{Deps, list_items};
 #[inline]
-pub fn handle(deps: &Deps, tenant_slug: &str) -> i64 {
+pub fn handle(deps: Deps, tenant_slug: String) -> i64 {
     list_items(deps, tenant_slug).len() as i64
 }
 

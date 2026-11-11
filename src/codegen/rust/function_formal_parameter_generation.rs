@@ -3326,7 +3326,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Count bare `param_name` identifier occurrences in `body` (call args, lets,
     /// struct fields, returns). Used to block `impl Into<String>` when the formal
-    /// would be moved more than once (P3.615).
+    /// would be moved more than once (P3.615); a use inside a loop body counts twice (it repeats).
     fn count_param_identifier_uses(param_name: &str, body: &[&Statement<'_>]) -> usize {
         fn count_expr(expr: &Expression<'_>, param_name: &str) -> usize {
             match expr {
@@ -3400,13 +3400,13 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } => {
                     count_expr(iterable, param_name)
-                        + body
+                        + 2 * body
                             .iter()
                             .map(|s| count_stmt(s, param_name))
                             .sum::<usize>()
                 }
                 Statement::Loop { body, .. } => {
-                    body.iter().map(|s| count_stmt(s, param_name)).sum()
+                    2 * body.iter().map(|s| count_stmt(s, param_name)).sum::<usize>()
                 }
                 Statement::Match { value, arms, .. } => {
                     count_expr(value, param_name)

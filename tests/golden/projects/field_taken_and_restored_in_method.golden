@@ -1,0 +1,68 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod outer;
+
+// Re-export public items
+pub use outer::*;
+// ==== main.rs ====
+mod outer;
+fn main() {
+    let mut o = outer::Outer { inner: outer::Inner { name: String::from("a"), tags: vec![], at: outer::Tag { value: 0_u64 } }, n: 0_u64 };
+    let k = o.bump();
+    println!("{} {}", k, o.n);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod outer;
+
+// Re-export public items
+pub use outer::*;
+// ==== outer.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Tag {
+    pub value: u64,
+}
+impl Tag {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.value.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+pub struct Inner {
+    pub name: String,
+    pub tags: Vec<String>,
+    pub at: Tag,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[repr(C)]
+pub struct Outer {
+    pub inner: Inner,
+    pub n: u64,
+}
+
+impl Outer {
+#[inline]
+pub fn bump(&mut self) -> usize {
+        let mut inner = self.inner.clone();
+        inner.tags.push(String::from("x"));
+        let k = inner.tags.len();
+        self.inner = inner;
+        self.n += 1;
+        k
+}
+}
+

@@ -80,11 +80,11 @@ pub struct Line {
 }
 
 #[inline]
-pub fn lookup(tenant_slug: String, wanted: &str) -> Result<bool, String> {
+pub fn lookup(tenant_slug: &str, wanted: &str) -> Result<bool, String> {
     let slug = tenant_slug;
     let code = wanted;
     let r = ListReader { n: 0_i64 };
-    let items = r.list(slug);
+    let items = r.list(slug.to_string());
     if items.is_empty() {
         return Err(String::from("none"));
     }
@@ -101,7 +101,7 @@ pub fn validate(tenant_slug: &str, lines: Vec<Line>) -> Result<(), String> {
     let slug = tenant_slug;
     for line in lines {
         let code = line.code.clone();
-        match lookup(slug.clone().to_string(), &code) {
+        match lookup(&slug, &code) {
             Ok(true) => {
             },
             Ok(false) => {

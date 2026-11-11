@@ -428,6 +428,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // PRE-PASS: Collect import aliases so type_to_rust skips stdlib mappings
         // when the user has defined their own alias (e.g., `use std::collections::HashMap as Map`)
+        self.imported_fn_names = crate::parser::use_imports::imported_paths(&program.items);
         for item in &program.items {
             if let Item::Use {
                 alias: Some(alias_name),
@@ -453,7 +454,6 @@ impl<'ast> CodeGenerator<'ast> {
                 if path.len() >= 2 {
                     if let Some(last) = path.last() {
                         if last.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
-                            self.imported_fn_names.insert(last.clone());
                             if !path.first().is_some_and(|seg| matches!(seg.as_str(), "std" | "crate" | "super" | "self")) {
                                 self.import_fn_alias_map
                                     .insert(last.clone(), path.join("::"));

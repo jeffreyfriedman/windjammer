@@ -45,9 +45,9 @@ pub fn borrowed_returned_fields(
 /// An element cannot move out of its collection, so a non-Copy element is cloned there
 /// (CLONE-BORROWED-TO-OWNED); a Copy element is copied. Call arguments are not included: the
 /// callee's formal decides (OWN-CALL-FORMAL). By node, with the root binding.
-pub fn owned_element_reads(body: &[&Statement<'_>]) -> BTreeMap<usize, String> {
+pub fn owned_element_reads(body: &[&Statement<'_>], returns_value: bool) -> BTreeMap<usize, String> {
     let mut out = BTreeMap::new();
-    element_stmts(body, true, &|e, _| element_root(e), &mut out);
+    element_stmts(body, returns_value, &|e, _| element_root(e), &mut out);
     out
 }
 
@@ -65,7 +65,86 @@ pub fn field_copy_sites(
         read_after.get(&stmt).is_some_and(|names| names.contains(&root)).then_some(root)
     };
     element_stmts(body, true, &pick, &mut out);
+    // Within one literal the elements evaluate in order: `Hit { id: node.id, d: dist(node) }` moves
+    // `node.id` before `node` is read whole by a later element.
+    let mut literals = Vec::new();
+    body.iter().for_each(|s| stmt_literals(s, &mut literals));
+    for elems in literals {
+        for (i, e) in elems.iter().enumerate() {
+            if let Some(root) = binding_field_root(e) {
+                if elems[i + 1..].iter().any(|later| reads_whole(later, &root)) {
+                    out.insert(node_id(e), root);
+                }
+            }
+        }
+    }
     out
+}
+
+/// The element lists of every struct, tuple and array literal in a statement.
+fn stmt_literals<'a, 'ast>(s: &'a Statement<'ast>, out: &mut Vec<Vec<&'a Expression<'ast>>>) {
+    match s {
+        Statement::Let { value, .. } | Statement::Assignment { value, .. } | Statement::Return { value: Some(value), .. } => {
+            expr_literals(value, out)
+        }
+        Statement::Expression { expr, .. } => expr_literals(expr, out),
+        Statement::If { condition, then_block, else_block, .. } => {
+            expr_literals(condition, out);
+            then_block.iter().chain(else_block.iter().flatten()).for_each(|t| stmt_literals(t, out));
+        }
+        Statement::For { body, .. } | Statement::While { body, .. } | Statement::Loop { body, .. } => {
+            body.iter().for_each(|t| stmt_literals(t, out))
+        }
+        Statement::Match { value, arms, .. } => {
+            expr_literals(value, out);
+            arms.iter().for_each(|a| expr_literals(a.body, out));
+        }
+        _ => {}
+    }
+}
+
+fn expr_literals<'a, 'ast>(e: &'a Expression<'ast>, out: &mut Vec<Vec<&'a Expression<'ast>>>) {
+    match e {
+        Expression::StructLiteral { fields, .. } => {
+            out.push(fields.iter().map(|(_, f)| &**f).collect());
+            fields.iter().for_each(|(_, f)| expr_literals(f, out));
+        }
+        Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+            out.push(elements.iter().map(|x| &**x).collect());
+            elements.iter().for_each(|x| expr_literals(x, out));
+        }
+        Expression::Call { arguments, .. } => arguments.iter().for_each(|(_, a)| expr_literals(a, out)),
+        Expression::MethodCall { object, arguments, .. } => {
+            expr_literals(object, out);
+            arguments.iter().for_each(|(_, a)| expr_literals(a, out));
+        }
+        Expression::Block { statements, .. } => statements.iter().for_each(|s| stmt_literals(s, out)),
+        _ => {}
+    }
+}
+
+/// `e` reads `root` whole (not only through a field projection `root.f`).
+fn reads_whole(e: &Expression<'_>, root: &str) -> bool {
+    match e {
+        Expression::Identifier { name, .. } => name == root,
+        Expression::FieldAccess { object, .. } => {
+            !matches!(&**object, Expression::Identifier { .. }) && reads_whole(object, root)
+        }
+        Expression::Call { function, arguments, .. } => {
+            reads_whole(function, root) || arguments.iter().any(|(_, a)| reads_whole(a, root))
+        }
+        Expression::MethodCall { object, arguments, .. } => {
+            reads_whole(object, root) || arguments.iter().any(|(_, a)| reads_whole(a, root))
+        }
+        Expression::Binary { left, right, .. } => reads_whole(left, root) || reads_whole(right, root),
+        Expression::Unary { operand, .. } => reads_whole(operand, root),
+        Expression::Cast { expr, .. } | Expression::TryOp { expr, .. } => reads_whole(expr, root),
+        Expression::Index { object, index, .. } => reads_whole(object, root) || reads_whole(index, root),
+        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, f)| reads_whole(f, root)),
+        Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements.iter().any(|x| reads_whole(x, root)),
+        Expression::MacroInvocation { args, .. } => args.iter().any(|x| reads_whole(x, root)),
+        _ => false,
+    }
 }
 
 fn binding_field_root(e: &Expression<'_>) -> Option<String> {
@@ -207,7 +286,7 @@ mod tests {
     fn owned_element_reads_are_value_positions_not_call_arguments() {
         let src = "struct Row { a: string }\nfn f(v: Vec<string>) -> Row {\n let x = v[0]\n take(v[1])\n let n = v[2].len()\n Row { a: v[3] }\n}\nfn take(s: string) {}\n";
         let d = decl_of(src, "f");
-        let reads = owned_element_reads(&d.body);
+        let reads = owned_element_reads(&d.body, true);
         assert_eq!(reads.len(), 1, "the struct field `v[3]`; not a let initialiser, an argument or a receiver");
         assert!(reads.values().all(|r| r == "v"));
     }
@@ -223,6 +302,19 @@ mod tests {
         let ps: Vec<&str> = d.parameters.iter().map(|p| p.name.as_str()).collect();
         let ra = crate::ir::liveness::read_after(&ps, &d.body, false);
         assert!(field_copy_sites(&d.body, &ra).is_empty(), "`p` is not read after its field moves");
+    }
+
+    #[test]
+    fn a_field_moved_before_a_later_literal_element_reads_the_binding_is_a_copy_site() {
+        let src = "struct N { id: string, x: f64 }\nstruct H { id: string, d: f64 }\nfn d(n: N) -> f64 { n.x }\nfn f(n: N) -> H {\n H { id: n.id, d: d(n) }\n}\nfn g(n: N) -> H {\n H { id: n.id, d: n.x }\n}\n";
+        let d = decl_of(src, "f");
+        let ps: Vec<&str> = d.parameters.iter().map(|p| p.name.as_str()).collect();
+        let ra = crate::ir::liveness::read_after(&ps, &d.body, false);
+        assert_eq!(field_copy_sites(&d.body, &ra).len(), 1, "`d(n)` reads `n` whole after `n.id` moved");
+        let d = decl_of(src, "g");
+        let ps: Vec<&str> = d.parameters.iter().map(|p| p.name.as_str()).collect();
+        let ra = crate::ir::liveness::read_after(&ps, &d.body, false);
+        assert!(field_copy_sites(&d.body, &ra).is_empty(), "`n.x` reads another field: distinct fields may move");
     }
 
     #[test]
