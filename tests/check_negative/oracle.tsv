@@ -143,8 +143,8 @@ tests/diagnostics/cases/field_literal_mismatch.wj	39a98b0f5ad785d8	ok	fail
 tests/diagnostics/cases/forbidden_derive_copy.wj	4945758853f0419c	fail	skip
 tests/diagnostics/cases/format_placeholder.wj	95d77624e955279f	ok	ok
 tests/diagnostics/cases/function_typo.wj	6e9b0a209d1e50ac	ok	fail
-tests/diagnostics/cases/immutable_push.wj	e35a953dd49b699d	ok	ok
-tests/diagnostics/cases/immutable_reassign.wj	bed8e4a976d02b63	ok	ok
+tests/diagnostics/cases/immutable_push.wj	ac66da191539e3ca	fail	skip
+tests/diagnostics/cases/immutable_reassign.wj	3812bb26697ac435	fail	skip
 tests/diagnostics/cases/invalid_character.wj	c0fa1bc8691086a6	fail	skip
 tests/diagnostics/cases/let_int_to_string.wj	8e36f0c0f7176c09	ok	fail
 tests/diagnostics/cases/let_string_to_int.wj	09f59df22f4dac50	ok	fail

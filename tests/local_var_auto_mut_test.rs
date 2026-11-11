@@ -10,17 +10,14 @@
     feature = "analyzer_tests",
 ))]
 
-// TDD: Local variable auto-mutability inference
-//
-// When a local variable is initialized from a constructor and then used
-// with a &mut self method call, the codegen should emit `let mut` even
-// if the Windjammer source doesn't explicitly write `let mut`.
-//
-// Example:
-//   let voxelizer = CsgVoxelizer::new(scene)
-//   voxelizer.voxelize(...)  // voxelize takes &mut self
-//
-// Generated Rust should be: let mut voxelizer = CsgVoxelizer::new(scene);
+// A local declared `let mut` (ADR-0002: local mutability is explicit) and then used with a method whose receiver is
+// `&mut self` keeps its `mut` in the generated Rust, in one file and across files. Without the `mut`, `wj check`
+// reports WJ0051 (each source is checked both ways below).
+
+fn reports_wj0051(files: &[(&str, &str)], name: &str) -> bool {
+    let sources: Vec<(String, String)> = files.iter().map(|(f, t)| (f.to_string(), t.replace(&format!("let mut {name}"), &format!("let {name}")))).collect();
+    windjammer::check::local_mutability_sources(&sources).iter().any(|d| d.message.starts_with(&format!("`{name}`")))
+}
 
 use tempfile::TempDir;
 use windjammer::{build_project_ext, CompilationTarget};
@@ -51,7 +48,7 @@ impl Processor {
 }
 
 pub fn run_processor() -> i32 {
-    let proc = Processor::new()
+    let mut proc = Processor::new()
     proc.process(42)
 }
 "#,
@@ -61,6 +58,8 @@ pub fn run_processor() -> i32 {
     let result = build_project_ext(&src, &build, CompilationTarget::Rust, false, false, &[]);
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
+    let text = std::fs::read_to_string(src.join("processor.wj")).unwrap();
+    assert!(reports_wj0051(&[("processor.wj", &text)], "proc"), "without `mut`, WJ0051");
     let generated = std::fs::read_to_string(build.join("processor.rs")).unwrap();
     assert!(
         generated.contains("let mut proc"),
@@ -107,7 +106,7 @@ pub struct Demo {
 
 impl Demo {
     pub fn init(self) {
-        let v = Voxelizer::new(10)
+        let mut v = Voxelizer::new(10)
         self.grid = v.voxelize()
     }
 }
@@ -118,6 +117,8 @@ impl Demo {
     let result = build_project_ext(&src, &build, CompilationTarget::Rust, false, false, &[]);
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
+    let text = std::fs::read_to_string(src.join("voxelizer.wj")).unwrap();
+    assert!(reports_wj0051(&[("voxelizer.wj", &text)], "v"), "without `mut`, WJ0051");
     let generated = std::fs::read_to_string(build.join("voxelizer.rs")).unwrap();
     assert!(
         generated.contains("let mut v"),
@@ -171,7 +172,7 @@ pub struct Demo {
 
 impl Demo {
     pub fn init(self) {
-        let v = CsgVoxelizer::new(10)
+        let mut v = CsgVoxelizer::new(10)
         self.grid = v.voxelize(64)
     }
 }
@@ -182,6 +183,9 @@ impl Demo {
     let result = build_project_ext(&src, &build, CompilationTarget::Rust, false, false, &[]);
     assert!(result.is_ok(), "Build failed: {:?}", result.err());
 
+    let lib = std::fs::read_to_string(src.join("voxelizer.wj")).unwrap();
+    let demo = std::fs::read_to_string(src.join("demo.wj")).unwrap();
+    assert!(reports_wj0051(&[("voxelizer.wj", &lib), ("demo.wj", &demo)], "v"), "without `mut`, WJ0051 across files");
     let generated = std::fs::read_to_string(build.join("demo.rs")).unwrap();
     assert!(
         generated.contains("let mut v"),

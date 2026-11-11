@@ -14,8 +14,8 @@
 //!
 //! TDD tests for automatic mutability inference. Current codegen may use `if let Some(x) = &v[i]`
 //! (or `Some(ref mut x)`) when mutating through indexed `Option`s; this suite accepts equivalent
-//! patterns that `rustc` can accept. Reassignment in branches without `let mut` is a known gap: see
-//! `test_let_mut_for_reassigned_var`.
+//! patterns that `rustc` can accept. Local bindings declare their own `mut` (ADR-0002); the `let mut` tests check it
+//! is kept, and `test_let_no_mut_when_read_only` that none is added.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -90,7 +90,7 @@ pub fn read_quantity(slots: Vec<Option<Slot>>, i: usize) -> i32 {
 fn test_let_mut_for_reassigned_var() {
     let src = r#"
 pub fn check(condition: bool) -> bool {
-    let dirty = false
+    let mut dirty = false
     if condition {
         dirty = true
     }
@@ -110,7 +110,7 @@ fn test_let_mut_for_field_mutation() {
     let src = r#"
 pub struct Point { pub x: f32, pub y: f32 }
 pub fn update_point() {
-    let p = Point { x: 0.0, y: 0.0 }
+    let mut p = Point { x: 0.0, y: 0.0 }
     p.x = 1.0
 }
 "#;
@@ -126,7 +126,7 @@ pub fn update_point() {
 fn test_let_mut_for_compound_assignment() {
     let src = r#"
 pub fn counter() -> i32 {
-    let count = 0
+    let mut count = 0
     count += 1
     count += 1
     count

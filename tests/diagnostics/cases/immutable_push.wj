@@ -4,6 +4,6 @@
 fn main() {
     let items = [1, 2, 3]
     items.push(4)
-//~@5+5 WARN WJ0051 `items` is changed
+//~@5+5 ERROR WJ0051 `items` is changed
     println("${items.len()}")
 }

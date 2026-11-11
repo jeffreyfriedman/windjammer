@@ -269,7 +269,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-STD-005 | stdlib.md | `stdlib/SPEC-STD-005.wj` |
 | SPEC-STD-006 | stdlib.md | untestable |
 | SPEC-STMT-001 | statements.md | `statements/SPEC-STMT-001.wj` |
-| SPEC-STMT-002 | statements.md | `statements/SPEC-STMT-002.wj` (xfail Q-007) |
+| SPEC-STMT-002 | statements.md | `statements/SPEC-STMT-002.wj` |
 | SPEC-STMT-003 | statements.md | `statements/SPEC-STMT-003.wj` |
 | SPEC-STMT-004 | statements.md | `statements/SPEC-STMT-004.wj` |
 | SPEC-STMT-005 | statements.md | `statements/SPEC-STMT-005.wj` |

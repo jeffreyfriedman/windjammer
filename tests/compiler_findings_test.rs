@@ -154,7 +154,7 @@ impl Counter {
 }
 
 fn main() {
-    let c = Counter::new()
+    let mut c = Counter::new()
     c.add("a", 7)
     println(c.get("a"))
     println(c.get("b"))
@@ -411,7 +411,7 @@ impl Bus {
 }
 
 fn main() {
-    let b = Bus { levels: vec![] }
+    let mut b = Bus { levels: vec![] }
     b.set_levels(vec![0.5])
     println(b.levels.len())
 }
