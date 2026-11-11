@@ -40,6 +40,7 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj cache path --verify` | Use the ephemeral verify cache (integration / codegen cargo checks) | tested |
 | `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) | tested |
 | `wj cache prune --aggressive` | Also clear debug incremental trees when reclaiming | tested |
+| `wj cache prune --force` | Also delete what a running build holds or wrote within the last hour (normally left alone) | tested |
 | `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations | tested |
 | `wj cache status` | Show cache sizes and free disk | tested |
 | `wj check` | Type check without building | tested |

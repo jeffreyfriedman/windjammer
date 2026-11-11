@@ -55,11 +55,12 @@ pub fn execute_status() -> Result<()> {
     Ok(())
 }
 
-pub fn execute_prune(aggressive: bool) -> Result<()> {
+pub fn execute_prune(aggressive: bool, force: bool) -> Result<()> {
     // Soft reclaim before reporting so long agent sessions stay under the threshold.
     let report = prune(PruneOptions {
         aggressive,
         auto_low_disk: true,
+        force,
         ..PruneOptions::default()
     });
 
@@ -74,6 +75,10 @@ pub fn execute_prune(aggressive: bool) -> Result<()> {
 
     if report.freed_bytes == 0 && report.removed_paths.is_empty() {
         println!("{} Nothing to prune", "ok".green());
+        // what was left alone, and why (a running build, files written within the hour)
+        for msg in &report.messages {
+            println!("  {}", msg);
+        }
     } else {
         println!(
             "{} Freed approximately {}",

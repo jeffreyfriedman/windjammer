@@ -126,6 +126,7 @@ pub fn execute(path: Option<&Path>, bin: Option<&str>, args: &[String], no_lint:
         say(&format!("compiled build OK; not run a second time ({})", why.join(", ")));
         return interp_code;
     }
+    let _tree = crate::cargo_cache::active::hold(crate::cargo_cache::TargetKind::Shared);
     let mut compiled = crate::cli::run::compiled_command(&workdir, false, args);
     compiled.stdout(Stdio::piped()).stderr(Stdio::piped());
     let out = match run_with_stdin(compiled, stdin.as_deref()) {
