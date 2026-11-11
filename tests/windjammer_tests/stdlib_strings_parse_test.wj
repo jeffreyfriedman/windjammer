@@ -4,11 +4,11 @@ use std::strings
 pub fn test_split_lines_crlf_and_trailing_newline() {
     let text = "a\nb\r\nc\n"
     let lines = strings.split_lines(text)
-    assert_eq(lines.len() as i32, 4)
+    // SPEC-STR-018: follows str::lines(): a final line terminator adds no empty last element
+    assert_eq(lines.len() as i32, 3)
     assert(lines[0] == "a", "first line")
     assert(lines[1] == "b", "second line")
     assert(lines[2] == "c", "third line")
-    assert(lines[3] == "", "trailing empty line")
 }
 
 pub fn test_split_whitespace_tabs() {

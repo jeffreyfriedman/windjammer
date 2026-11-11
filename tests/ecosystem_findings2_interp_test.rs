@@ -282,7 +282,7 @@ fn sync_graduation_vocabulary_moves_values_through_a_channel() {
 #[test]
 fn path_functions_follow_the_runtime() {
     expect(
-        "use std::path\n\nfn main() {\n    println(\"${path.has_extension(\"a/b.wj\", \"wj\")} ${path.is_absolute(\"/x\")} ${path.exists(\"/definitely/not/here\")}\")\n    println(\"${path.components(\"a/b/c\").len()}\")\n    match path.strip_prefix(\"/a/b/c\", \"/a\") {\n        Some(p) => println(p),\n        None => println(\"none\"),\n    }\n}\n",
+        "use std::path\n\nfn main() {\n    println(\"${path.has_extension(\"a/b.wj\", \"wj\")} ${path.is_absolute(\"/x\")} ${path.exists(\"definitely-not-here\")}\")\n    println(\"${path.components(\"a/b/c\").len()}\")\n    match path.strip_prefix(\"/a/b/c\", \"/a\") {\n        Some(p) => println(p),\n        None => println(\"none\"),\n    }\n}\n",
         "true true false\n3\nb/c\n",
     );
 }

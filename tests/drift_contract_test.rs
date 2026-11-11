@@ -16,6 +16,9 @@
 //! (scripts/wj/drift_gate.wj) is what compares behaviour; this is the cheap tripwire that fails in the default
 //! test run when someone adds a divergence without raising the ceiling in the same diff.
 
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::Scratch;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -147,7 +150,8 @@ fn every_drift_finding_repro_is_in_the_corpus() {
 /// Self-test: the scan finds each way a finding names a repro, and skips closed findings.
 #[test]
 fn the_repro_scan_reads_paths_tables_and_repro_dirs() {
-    let dir = std::env::temp_dir().join(format!("wj-drift-scan-{}", std::process::id()));
+    let _scr = Scratch::new("drift-scan");
+    let dir = _scr.path().to_path_buf();
     fs::create_dir_all(dir.join("pilot9-repros")).unwrap();
     fs::write(dir.join("pilot9-repros/in_dir.wj"), "").unwrap();
     fs::write(

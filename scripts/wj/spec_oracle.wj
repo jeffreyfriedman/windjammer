@@ -339,10 +339,8 @@ fn main() {
         }
         i += 1
     }
-    let scratch = match sh("mktemp -d /tmp/wj-spec-oracle.XXXXXX") {
-        Ok(r) => strings.trim(r.stdout),
-        Err(_) => "/tmp/wj-spec-oracle",
-    }
+    let scratch = env.get_or("TMPDIR", "/tmp") + "/wj-spec-oracle-${process.pid()}"
+    let _ = fs.create_dir_all(scratch)
     let baseline = read_baseline()
     let mut out = ""
     let mut recorded = ""
