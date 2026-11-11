@@ -1,0 +1,106 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod policy;
+pub mod reader;
+pub mod scan;
+pub mod writer;
+
+// Re-export public items
+pub use policy::*;
+pub use reader::*;
+pub use scan::*;
+pub use writer::*;
+// ==== main.rs ====
+use crate::policy::Policy;
+mod policy;
+mod reader;
+mod writer;
+mod scan;
+fn main() {
+    let r = reader::Reader { allowed: vec!["viewer".to_string()] };
+    let mut w = writer::Writer { log: vec![] };
+    let _ok = w.check("bob".to_string(), "editor".to_string());
+    println!("{} {}", scan::allowed(&r, "alice", "viewer", 3_i64), w.log.len());
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod policy;
+pub mod reader;
+pub mod scan;
+pub mod writer;
+
+// Re-export public items
+pub use policy::*;
+pub use reader::*;
+pub use scan::*;
+pub use writer::*;
+// ==== policy.rs ====
+#[allow(unused_imports)]
+use super::*;
+pub trait Policy {
+    fn check(&mut self, who: String, relation: String) -> bool;
+}
+
+// ==== reader.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Reader {
+    pub allowed: Vec<String>,
+}
+
+impl Reader {
+#[inline]
+pub fn check(&self, who: &str, relation: &str) -> bool {
+        for a in &self.allowed {
+            if a == relation && !who.is_empty() {
+                return true;
+            }
+        }
+        false
+}
+}
+
+// ==== scan.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::reader::Reader;
+#[inline]
+pub fn allowed(policy: &Reader, who: &str, relation: &str, n: i64) -> i64 {
+    let mut hits = 0_i64;
+    let mut i = 0_i64;
+    while i < n {
+        if policy.check(who, relation) {
+            hits += 1;
+        }
+        i += 1;
+    }
+    hits
+}
+
+// ==== writer.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use crate::policy::Policy;
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[repr(C)]
+pub struct Writer {
+    pub log: Vec<String>,
+}
+
+impl Policy for Writer {
+#[inline]
+fn check(&mut self, who: String, relation: String) -> bool {
+        self.log.push(relation);
+        !who.is_empty()
+}
+}
+
