@@ -15,11 +15,11 @@ Method: the 123 names were re-run with `--exact --test-threads=2` (a) at the las
 | FIXED since base (fail at base, pass at head) | 2 |
 | Stray line from a generated fixture (`test_split_lines_crlf_and_trailing_newline`) | counted under `windjammer_fixtures_integration::stdlib_strings_parse` |
 
-Regressions by owner stream: ownership (value formals / IR) 34, C4 width solver 12, interpreter / stdlib runtime 3, goldens-gates 2 (families below; the stream assignment is by test family, not by bisect, except where noted).
+Regressions by owner stream: ownership (value formals / IR) 30, C4 width solver 16, interpreter / stdlib runtime 5, goldens-gates 2 (families below; the stream assignment is by test family, not by bisect, except where noted).
 
 ## Bisect evidence (budget stopped after 1 completed step)
 
-Representatives run at `895fcf1fa` (2026-11-09, after the green6 merge), 20 first-parent commits after the base-equivalent plus 56 more: 10 of 15 representatives already fail there (so their cause lies between `20f859b1a` and `895fcf1fa`): bug_mutating_method_needs_mut_self, bug_module_file_ctor_must_move_self_field, codegen_fixed_array_in_struct, ecosystem_findings2_interp::path_functions_follow_the_runtime, int_float_arithmetic_complete (f32 *= i32), interpreter_slot_gate, self_consuming_ownership, vec_index_context, vec_repeat_syntax, windjammer_fixtures_integration::stdlib_strings_parse. 5 pass there (so their cause is later than `895fcf1fa`): dogfood_lsm_engine_put_owned_key_after_pending_push, interpreter_conformance_oracle::compiled_panic_formats_its_arguments, mixed_int_float_arithmetic, ownership_integration_test::test_parameter_owned_vec, library_multipass_map_key (hashmap_with_capacity). A second step at `1ac4c7edc` was cancelled. The introducing merge per test is therefore NOT determined; candidate merges are in `git log --first-parent 20f859b1a..895fcf1fa` (ownership-recv "IR-decided value formals", "public formals follow the IR rule", ownership-6 value-formal fixed point, c2/C4 width merges).
+Representatives run at `895fcf1fa` (2026-11-09, after the green6 merge), line 56 of the 112 first-parent commits after the base-equivalent: 10 of 15 representatives already fail there (so their cause lies between `20f859b1a` and `895fcf1fa`): bug_mutating_method_needs_mut_self, bug_module_file_ctor_must_move_self_field, codegen_fixed_array_in_struct, ecosystem_findings2_interp::path_functions_follow_the_runtime, int_float_arithmetic_complete (f32 *= i32), interpreter_slot_gate, self_consuming_ownership, vec_index_context, vec_repeat_syntax, windjammer_fixtures_integration::stdlib_strings_parse. 5 pass there (so their cause is later than `895fcf1fa`): dogfood_lsm_engine_put_owned_key_after_pending_push, interpreter_conformance_oracle::compiled_panic_formats_its_arguments, mixed_int_float_arithmetic, ownership_integration_test::test_parameter_owned_vec, library_multipass_map_key (hashmap_with_capacity). A second step at `1ac4c7edc` was cancelled. The introducing merge per test is therefore NOT determined; candidate merges are in `git log --first-parent 20f859b1a..895fcf1fa` (ownership-recv "IR-decided value formals", "public formals follow the IR rule", ownership-6 value-formal fixed point, c2/C4 width merges).
 
 ## Family verdicts
 
@@ -177,8 +177,8 @@ Listed, owner-tagged and grouped, in `.config/known-test-failures.txt` (fail at 
 
 ## Top fixes by tests unblocked
 
-1. Ownership value-formal regressions (IR value-formal / mut-self / self-move): about 34 regression tests plus 20 ledgered ones.
-2. C4 width solver: f32 *= i32 casts, suffix spelling and usize formals: about 12 tests (4 are stale assertions fixable by editing the tests).
+1. Ownership value-formal regressions (IR value-formal / mut-self / self-move): 30 regression tests plus 20 ledgered ones.
+2. C4 width solver: f32 *= i32 casts, suffix spelling and usize formals: 16 tests (4 are stale assertions fixable by editing the tests).
 3. Re-record goldens (build_output_golden, convergence_gates_test::gate1) after 1 and 2 land: 2 tests.
-4. Interpreter / stdlib runtime (slot gate, split_lines CRLF, path functions): 3 tests.
+4. Interpreter / stdlib runtime (slot gate, split_lines CRLF, path functions): 5 tests.
 5. Stale installed binary and load flakes: 17 tests, fixed by `wj install-dev` and not running the full suite above 2 threads.
