@@ -36,7 +36,9 @@ const VIEWER: &str = r#"
 use crate::builder::set_if
 use crate::builder::VoxelGrid
 
-const VIEWER_GRID: int = 64
+// The grid size is declared `i32`: it flows into `set_if`'s i32 coordinates. (An `int` const is i64 by
+// ADR-0015, and narrowing it to an i32 formal would need an explicit conversion, NUM-MIXED.)
+const VIEWER_GRID: i32 = 64
 
 fn build_door_frame(grid: VoxelGrid) {
     let cx = VIEWER_GRID / 2
