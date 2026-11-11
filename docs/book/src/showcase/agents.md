@@ -19,11 +19,12 @@ fn main() {
     println("${x}")
 }
 EOF
-$ wj check --json mutate.wj
+$ wj check --json mutate.wj; echo "exit $?"
 "schema_version": 2
 "code": "WJ0051"
 "applicability": "machine_applicable"
 "replacement": "mut "
+exit 1
 ```
 
 The fix is a byte-exact edit with an applicability level, so a tool can apply `machine_applicable` fixes without reading

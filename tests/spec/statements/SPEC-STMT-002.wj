@@ -1,6 +1,6 @@
 // spec: SPEC-STMT-002
-// mode: parse-error
-// xfail: Q-007
+// mode: check-error
+// expect-error: WJ0051: `x` is assigned after its declaration but is not declared `mut`
 fn main() {
     let x = 1
     x = 2

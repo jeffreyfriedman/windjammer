@@ -111,32 +111,47 @@ fn wj(args: &[&str], dir: &std::path::Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_wj")).args(args).current_dir(dir).env("NO_COLOR", "1").output().unwrap()
 }
 
-/// The `warning[WJ0051]` block (header and span lines) of a rendered report.
+/// The `error[WJ0051]` block (header and span lines) of a rendered report.
 fn block(text: &str) -> Vec<String> {
     let start = text.lines().position(|l| l.contains("[WJ0051]")).unwrap_or_else(|| panic!("no WJ0051 in:\n{text}"));
     text.lines().skip(start).take_while(|l| !l.trim().is_empty() && !l.starts_with("  = ")).map(str::to_string).collect()
 }
 
 #[test]
-fn check_build_and_both_runs_report_the_same_warning_and_the_program_still_runs() {
+fn check_build_and_both_runs_report_the_same_error_and_refuse_the_program() {
     let dir = tempfile::TempDir::new().unwrap();
     let src = with_counter("fn main() {\n    let c = Counter { n: 0 }\n    c.bump()\n    println(\"${c.get()}\")\n}\n");
     std::fs::write(dir.path().join("m.wj"), &src).unwrap();
     let check = wj(&["check", "m.wj"], dir.path());
-    assert!(check.status.success(), "a warning does not fail `wj check`");
+    assert_eq!(check.status.code(), Some(1), "WJ0051 is an error");
     let reference = block(&String::from_utf8_lossy(&check.stdout));
-    assert!(reference[0].starts_with("warning[WJ0051]"), "{reference:?}");
+    assert!(reference[0].starts_with("error[WJ0051]"), "{reference:?}");
     let run = wj(&["run", "--interpret", "m.wj"], dir.path());
-    assert_eq!(String::from_utf8_lossy(&run.stdout), "1\n", "stdout is the program's alone");
-    assert_eq!(run.status.code(), Some(0));
+    assert_eq!(run.status.code(), Some(1));
+    assert!(run.stdout.is_empty(), "nothing runs: {}", String::from_utf8_lossy(&run.stdout));
     assert_eq!(block(&String::from_utf8_lossy(&run.stderr)), reference);
     let build = wj(&["build", "--no-cargo", "-o", "out", "m.wj"], dir.path());
-    assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
+    assert!(!build.status.success(), "the build stops before generating code");
     assert_eq!(block(&String::from_utf8_lossy(&build.stderr)), reference);
-    // `wj fix` inserts the `mut`; afterwards every command is silent about it
+    assert!(!dir.path().join("out/m.rs").exists(), "no code is generated");
+    // `wj fix` inserts the `mut`; afterwards every command accepts the program and it runs
     let fix = wj(&["fix", "m.wj"], dir.path());
     assert!(fix.status.success(), "{}", String::from_utf8_lossy(&fix.stderr));
     assert!(std::fs::read_to_string(dir.path().join("m.wj")).unwrap().contains("let mut c = Counter"));
     let again = wj(&["check", "m.wj"], dir.path());
-    assert!(!String::from_utf8_lossy(&again.stdout).contains("WJ0051"));
+    assert!(again.status.success(), "{}", String::from_utf8_lossy(&again.stdout));
+    let run = wj(&["run", "--interpret", "m.wj"], dir.path());
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "1\n");
+}
+
+/// The Rust backend no longer infers `mut` for a local: the generated binding is `mut` exactly when the source is.
+#[test]
+fn generated_rust_declares_mut_only_where_the_source_does() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let src = "fn main() {\n    let mut v = Vec::new()\n    v.push(1)\n    let (mut a, b) = (1, 2)\n    a += b\n    let w = [3]\n    println(\"${v.len()} ${a} ${w.len()}\")\n}\n";
+    std::fs::write(dir.path().join("m.wj"), src).unwrap();
+    let build = wj(&["build", "--no-cargo", "-o", "out", "m.wj"], dir.path());
+    assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
+    let rust = std::fs::read_to_string(dir.path().join("out/m.rs")).unwrap();
+    assert!(rust.contains("let mut v") && rust.contains("mut a") && !rust.contains("mut w") && !rust.contains("mut b"), "{rust}");
 }

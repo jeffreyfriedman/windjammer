@@ -15,7 +15,7 @@ mod types;
 mod walk;
 
 use super::front::Parsed;
-use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, Severity, SourceIndex};
+use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex};
 use crate::ir::stdlib_tables::StdlibTables;
 use crate::parser::ast::core::Item;
 use std::sync::Arc;
@@ -24,8 +24,6 @@ use walk::{Change, Found, Kind, Walker};
 /// The registry code.
 pub const CODE: &str = "WJ0051";
 
-/// ADR-0002 migration switch: a warning while existing sources gain their `mut` (`wj fix`); an error afterwards.
-pub const REQUIRED: bool = false;
 
 /// `WJ0051` diagnostics for every file of one program.
 pub fn run(parsed: &[&Parsed], tables: Arc<StdlibTables>) -> Vec<Diagnostic> {
@@ -86,19 +84,14 @@ fn diagnostic(f: &Found, ix: &SourceIndex<'_>, loc: &super::locate::Locator<'_>,
     let at_name = decl::binding_offset(ix.text(), masked, end, keyword, name)?;
     let declared = ix.span(at_name, at_name + name.len()).with_label("declared without `mut`");
     let changed = loc.word(&f.at, name)?.with_label(label(f));
-    let severity = if REQUIRED { Severity::Error } else { Severity::Warning };
     let message = match f.change {
         Change::Assign { .. } => format!("`{name}` is assigned after its declaration but is not declared `mut`"),
         _ => format!("`{name}` is changed but is not declared `mut`"),
     };
-    let note = if REQUIRED {
-        "local bindings are immutable unless declared `mut` (ADR-0002)"
-    } else {
-        "local bindings are immutable unless declared `mut` (ADR-0002); this is accepted for now and becomes an error in a coming release: `wj fix` adds the `mut`"
-    };
+    let note = "local bindings are immutable unless declared `mut` (ADR-0002); `wj fix` adds every missing `mut`";
     let help = if f.binding.kind == Kind::For { format!("declare it `for mut {name} in ..`") } else { format!("declare it with `mut {name}`") };
     Some(
-        Diagnostic::new(CODE, severity, message)
+        Diagnostic::error(CODE, message)
             .at(changed)
             .with_secondary(declared)
             .with_help(help)
