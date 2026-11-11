@@ -37,6 +37,8 @@ pub struct RunOptions {
     pub no_lint: bool,
     /// Interpreted runs: start a bounded background compiled build of the same content (ADR-0033, `cli::speculate`).
     pub speculate: bool,
+    /// Diagnostic format and build progress (ADR-0037); decided by the CLI driver.
+    pub output: super::run::Output,
 }
 
 /// Run once; returns the process exit status. A path of `-` reads the program from stdin (`wj run -`).
@@ -68,11 +70,11 @@ fn execute_path(opts: &RunOptions) -> i32 {
         lint(&target.entry, !opts.no_lint);
     }
     match opts.mode {
-        Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release),
-        _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false),
+        Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release, opts.output),
+        _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false, opts.output),
         Mode::Interpret | Mode::Auto => {
             // The interpreter must not be more permissive than the compiler: same front end as `wj check`.
-            if let Err(e) = crate::cli::check::require_clean(&target.entry, !opts.no_lint) {
+            if let Err(e) = crate::cli::check::require_clean(&target.entry, !opts.no_lint, opts.output.format) {
                 eprintln!("Error: {e}");
                 return 1;
             }
@@ -81,7 +83,7 @@ fn execute_path(opts: &RunOptions) -> i32 {
                 Ok(h) => h,
                 Err(m) if auto => {
                     eprintln!("wj: running compiled (cargo): {}; use `wj run --compiled` to skip this check", m);
-                    return run_compiled(&target, &opts.args, &opts.target, false);
+                    return run_compiled(&target, &opts.args, &opts.target, false, opts.output);
                 }
                 Err(m) => {
                     eprintln!("error: unsupported in the interpreter: {}", m);
@@ -92,7 +94,7 @@ fn execute_path(opts: &RunOptions) -> i32 {
                 Ok(c) => c,
                 Err(m) if auto => {
                     eprintln!("wj: running compiled (cargo): {}; use `wj run --compiled` to skip this check", m);
-                    return run_compiled(&target, &opts.args, &opts.target, false);
+                    return run_compiled(&target, &opts.args, &opts.target, false, opts.output);
                 }
                 Err(m) => {
                     eprintln!("error: unsupported in the interpreter: {}", m);
@@ -118,7 +120,7 @@ fn execute_path(opts: &RunOptions) -> i32 {
                 }
                 RunOutcome::NeedsCompiled(e) => {
                     eprintln!("{}", fallback_notice(&e));
-                    run_compiled(&target, &opts.args, &opts.target, false)
+                    run_compiled(&target, &opts.args, &opts.target, false, opts.output)
                 }
             }
         }
@@ -180,7 +182,7 @@ pub(crate) fn build_input(t: &RunTarget) -> Result<PathBuf, String> {
     Ok(t.entry.clone())
 }
 
-fn run_compiled(t: &RunTarget, args: &[String], target: &str, release: bool) -> i32 {
+fn run_compiled(t: &RunTarget, args: &[String], target: &str, release: bool, out: super::run::Output) -> i32 {
     let input = match build_input(t) {
         Ok(p) => p,
         Err(m) => {
@@ -188,7 +190,7 @@ fn run_compiled(t: &RunTarget, args: &[String], target: &str, release: bool) -> 
             return 1;
         }
     };
-    match super::run::execute_status(&input, args, target, release) {
+    match super::run::execute_status(&input, args, target, release, out) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("error: {:#}", e);

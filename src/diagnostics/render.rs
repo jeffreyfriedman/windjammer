@@ -13,7 +13,56 @@ fn level(s: Severity) -> &'static str {
     }
 }
 
-/// Render one diagnostic. `source_of` returns the text of a file (for the code excerpt).
+/// Output format of a diagnostic: `Human` (the rustc-like layout) or `Agent` (one line per diagnostic: location, code,
+/// message, the first help line and the fixes; no code excerpt, notes or explain line). The CLI driver picks it from
+/// `--error-format agent` or `WJ_ERROR_FORMAT=agent` (ADR-0037) and passes it down; nothing here reads the environment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Format {
+    #[default]
+    Human,
+    Agent,
+}
+
+impl Format {
+    /// `agent` -> Agent; anything else (or nothing) -> Human.
+    pub fn parse(name: Option<&str>) -> Format {
+        if name == Some("agent") {
+            Format::Agent
+        } else {
+            Format::Human
+        }
+    }
+}
+
+/// One line: `file:line:col: level CODE: message | help: .. | fix: .. => `replacement``.
+pub fn render_agent(d: &Diagnostic) -> String {
+    let at = d.primary_span.as_ref().map(|s| format!("{}:{}:{}: ", s.file, s.line_start, s.col_start)).unwrap_or_default();
+    let mut out = format!("{at}{} {}: {}", level(d.severity), d.code, d.message.replace('\n', " "));
+    if let Some(h) = d.help.first().filter(|h| !d.fixes.iter().any(|f| &f.description == *h)) {
+        out.push_str(&format!(" | help: {}", h.replace('\n', " ")));
+    }
+    for f in &d.fixes {
+        let auto = matches!(f.applicability, super::model::Applicability::MachineApplicable);
+        out.push_str(&format!(" | fix{}: {}", if auto { "(auto: wj check --fix)" } else { "" }, f.description));
+        if let [e] = f.edits.as_slice() {
+            if !e.replacement.contains('\n') && e.replacement.len() <= 80 {
+                out.push_str(&format!(" => `{}`", e.replacement));
+            }
+        }
+    }
+    out.push('\n');
+    out
+}
+
+/// Render one diagnostic in `format`.
+pub fn render_as(d: &Diagnostic, source_of: &dyn Fn(&str) -> Option<String>, format: Format) -> String {
+    match format {
+        Format::Agent => render_agent(d),
+        Format::Human => render(d, source_of),
+    }
+}
+
+/// Render one diagnostic (human layout). `source_of` returns the text of a file (for the code excerpt).
 pub fn render(d: &Diagnostic, source_of: &dyn Fn(&str) -> Option<String>) -> String {
     let mut out = format!("{}[{}]: {}\n", level(d.severity), d.code, d.message);
     if let Some(span) = &d.primary_span {
