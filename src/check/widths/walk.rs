@@ -186,6 +186,9 @@ impl<'a> Walker<'a> {
         for a in args.iter().flatten() {
             self.expr(a);
         }
+        if m.path.is_ident("format") {
+            return Ty::Str;
+        }
         Ty::Unknown
     }
 
@@ -226,6 +229,7 @@ impl<'a> Walker<'a> {
         match e {
             E::Lit(l) => match &l.lit {
                 syn::Lit::Int(i) => Ty::int(i.suffix()),
+                syn::Lit::Str(_) => Ty::Ref(Box::new(Ty::StrSlice)),
                 _ => Ty::Unknown,
             },
             E::Paren(p) => self.expr(&p.expr),
@@ -322,12 +326,18 @@ impl<'a> Walker<'a> {
             }
             E::Closure(c) => {
                 self.scopes.push(HashMap::new());
+                let mut params = Vec::new();
                 for p in &c.inputs {
+                    let t = match p {
+                        syn::Pat::Type(pt) => self.items.of(&pt.ty, self.self_ty.as_deref()),
+                        _ => Ty::Unknown,
+                    };
+                    params.push(t);
                     self.pattern(p, Ty::Unknown);
                 }
                 self.expr(&c.body);
                 self.scopes.pop();
-                Ty::Unknown
+                Ty::Closure(params)
             }
             E::Range(r) => {
                 let a = r.start.as_ref().map_or(Ty::Unknown, |x| self.expr(x));
@@ -402,6 +412,13 @@ impl<'a> Walker<'a> {
             // shifts take any integer width on the right; `&&`/`||` are bool
             B::Shl(_) | B::Shr(_) | B::ShlAssign(_) | B::ShrAssign(_) => l.bare().clone(),
             B::And(_) | B::Or(_) => Ty::Unknown,
+            // `String + X` and `String += X` exist only for `X = &str` (drift family C: an owned `String` on the right)
+            B::Add(_) | B::AddAssign(_) if l == Ty::Str => {
+                if r == Ty::Str {
+                    self.clash(e, &Ty::Ref(Box::new(Ty::StrSlice)), &r);
+                }
+                if matches!(b.op, B::Add(_)) { Ty::Str } else { Ty::Unknown }
+            }
             op => {
                 if let (Ty::Int(x), Ty::Int(y)) = (l.bare(), r.bare()) {
                     if x != y {
@@ -452,12 +469,24 @@ impl<'a> Walker<'a> {
             [s] if s == "Some" && self.items.prelude("Some") && c.args.len() == 1 && self.lookup(s).is_none() => {
                 Ty::Opt(Box::new(self.expr(&c.args[0])))
             }
+            // a local bound to a closure: its annotated parameters
+            [f] if matches!(self.lookup(f), Some(Ty::Closure(_))) => {
+                let Some(Ty::Closure(ps)) = self.lookup(f).cloned() else { return Ty::Unknown };
+                self.args(e, Some(&ps), &c.args);
+                Ty::Unknown
+            }
             // a local closure of the same name shadows the function
             [f] if self.lookup(f).is_none() && self.fns.contains_key(f) => {
                 let fns = self.fns;
                 let sig = &fns[f];
                 self.args(e, Some(&sig.params), &c.args);
                 sig.ret.clone()
+            }
+            // constructors of std types (the file cannot define items of these names: `prelude` checks)
+            [t, m] if self.items.prelude(t) && self.std_constructor(t, m).is_some() => {
+                let ty = self.std_constructor(t, m).unwrap_or(Ty::Unknown);
+                self.args(e, None, &c.args);
+                ty
             }
             [t, m] => {
                 let t = if t == "Self" { self.self_ty.clone().unwrap_or_default() } else { t.clone() };
@@ -498,7 +527,18 @@ impl<'a> Walker<'a> {
         let got: Vec<Ty> = m.args.iter().map(|a| self.expr(a)).collect();
         // std types the file cannot add inherent methods to
         match (recv.bare(), name.as_str(), got.as_slice()) {
-            (t @ (Ty::Int(_) | Ty::Opt(_) | Ty::Seq(_)), "clone", []) => t.clone(),
+            (t @ (Ty::Int(_) | Ty::Opt(_) | Ty::Seq(_) | Ty::Str | Ty::Map | Ty::Set), "clone", []) => t.clone(),
+            // lookups take the key by reference (`&Q`); an owned integer or `String` is never accepted (drift family B)
+            (Ty::Map, "get" | "get_mut" | "contains_key" | "remove", [k]) | (Ty::Set, "get" | "contains" | "remove", [k]) | (Ty::Seq(_), "contains", [k])
+                if matches!(k, Ty::Int(_) | Ty::Str) =>
+            {
+                let k = k.clone();
+                self.clash(e, &Ty::Ref(Box::new(k.clone())), &k);
+                Ty::Unknown
+            }
+            (Ty::Str | Ty::StrSlice, "to_string" | "to_owned" | "repeat" | "to_uppercase" | "to_lowercase" | "replace", _) => Ty::Str,
+            (Ty::Str | Ty::StrSlice, "trim" | "as_str", []) => Ty::Ref(Box::new(Ty::StrSlice)),
+            (Ty::Int(_), "to_string", []) => Ty::Str,
             (Ty::Opt(t), "unwrap" | "expect", _) => (**t).clone(),
             (Ty::Opt(t), "unwrap_or", [d]) => {
                 let (t, d) = ((**t).clone(), d.clone());
@@ -511,6 +551,16 @@ impl<'a> Walker<'a> {
             },
             (Ty::Seq(_), "len", []) => Ty::int("usize"),
             _ => Ty::Unknown,
+        }
+    }
+
+    /// `String::new()`, `HashMap::new()` and the like: the type a std constructor returns.
+    fn std_constructor(&self, t: &str, m: &str) -> Option<Ty> {
+        match (t, m) {
+            ("String", "new" | "from" | "with_capacity") => Some(Ty::Str),
+            ("HashMap" | "BTreeMap", "new" | "with_capacity") => Some(Ty::Map),
+            ("HashSet" | "BTreeSet", "new" | "with_capacity") => Some(Ty::Set),
+            _ => None,
         }
     }
 

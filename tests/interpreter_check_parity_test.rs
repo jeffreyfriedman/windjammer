@@ -1,7 +1,9 @@
 //! Differential gate: the interpreter must not be more permissive than the compiler front end.
 //!
 //! Invariant: `wj run --interpret FILE` refuses (exit != 0, program never starts) every program
-//! `wj check FILE` rejects, and does not refuse a program `wj check` accepts. Historical miss: the
+//! `wj check FILE` rejects, and does not refuse a program `wj check` accepts. One decided exception (ADR-0033 (d)):
+//! a program whose only check errors are strictness predictions (WJ0003 "the compiled build would reject this": a
+//! correct program whose generated Rust rustc would not accept) runs, with the prediction as a stderr warning. Historical miss: the
 //! interpreter ran `let x: int = "s"` and printed `s`.
 //!
 //! Programs: the labelled mutation operators of `common/check_diff_gen.rs` (each MUST be rejected by
@@ -20,6 +22,8 @@ const SEEDS: [u64; 2] = [7, 424242];
 
 struct Outcome {
     check_ok: bool,
+    /// Every check error is a strictness prediction (ADR-0033).
+    check_strictness_only: bool,
     run_ok: bool,
     run_stdout: String,
     run_stderr: String,
@@ -43,8 +47,12 @@ fn exercise(src: &str) -> Outcome {
         .env("NO_COLOR", "1")
         .output()
         .unwrap();
+    let check_out = String::from_utf8_lossy(&check.stdout).to_string();
+    let errors: Vec<&str> = check_out.lines().filter(|l| l.starts_with("error[")).collect();
+    let strictness = !errors.is_empty() && errors.iter().all(|l| l.contains("the compiled build would reject this"));
     Outcome {
         check_ok: check.status.success(),
+        check_strictness_only: strictness,
         run_ok: run.status.success(),
         run_stdout: String::from_utf8_lossy(&run.stdout).to_string(),
         run_stderr: String::from_utf8_lossy(&run.stderr).to_string(),
@@ -55,6 +63,13 @@ fn exercise(src: &str) -> Outcome {
 fn judge(name: &str, o: &Outcome) -> Option<String> {
     let refused =
         o.run_stderr.contains("not running") && o.run_stderr.contains("`wj check` reports");
+    if !o.check_ok && o.check_strictness_only {
+        let warned = o.run_stderr.contains("warning[WJ0003]: this runs interpreted, but the compiled build would reject it");
+        if refused || !warned {
+            return Some(format!("{name}: a strictness prediction must warn and run, not refuse (refused={refused}, warned={warned})"));
+        }
+        return None;
+    }
     if !o.check_ok && (o.run_ok || !o.run_stdout.is_empty() || !refused) {
         return Some(format!("{name}: `wj check` rejects it but the interpreter did not refuse it (ok={}, stdout={:?})", o.run_ok, o.run_stdout));
     }
@@ -129,6 +144,7 @@ fn the_historical_miss_is_refused() {
 fn selftest_judge_detects_a_permissive_interpreter() {
     let permissive = Outcome {
         check_ok: false,
+        check_strictness_only: false,
         run_ok: true,
         run_stdout: "s\n".into(),
         run_stderr: String::new(),
@@ -136,6 +152,7 @@ fn selftest_judge_detects_a_permissive_interpreter() {
     assert!(judge("m", &permissive).is_some());
     let crashed_not_refused = Outcome {
         check_ok: false,
+        check_strictness_only: false,
         run_ok: false,
         run_stdout: String::new(),
         run_stderr: "boom".into(),
@@ -146,6 +163,7 @@ fn selftest_judge_detects_a_permissive_interpreter() {
     );
     let over = Outcome {
         check_ok: true,
+        check_strictness_only: false,
         run_ok: false,
         run_stdout: String::new(),
         run_stderr: "Error: not running x: `wj check` reports 1 error(s)".into(),
@@ -153,9 +171,23 @@ fn selftest_judge_detects_a_permissive_interpreter() {
     assert!(judge("m", &over).is_some());
     let good = Outcome {
         check_ok: false,
+        check_strictness_only: false,
         run_ok: false,
         run_stdout: String::new(),
         run_stderr: "Error: not running x: `wj check` reports 1 error(s)".into(),
     };
     assert!(judge("m", &good).is_none());
+    // ADR-0033 (d): a strictness prediction warns and runs; refusing it, or running without the warning, is wrong
+    let warned = Outcome {
+        check_ok: false,
+        check_strictness_only: true,
+        run_ok: true,
+        run_stdout: "6\n".into(),
+        run_stderr: "warning[WJ0003]: this runs interpreted, but the compiled build would reject it: ...".into(),
+    };
+    assert!(judge("m", &warned).is_none());
+    let silent = Outcome { run_stderr: String::new(), ..warned };
+    assert!(judge("m", &silent).is_some());
+    let refused = Outcome { run_ok: false, run_stdout: String::new(), run_stderr: "Error: not running x: `wj check` reports 1 error(s)".into(), ..silent };
+    assert!(judge("m", &refused).is_some());
 }

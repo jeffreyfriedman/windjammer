@@ -178,17 +178,46 @@ fn signatures(f: &syn::File, items: &Items) -> (HashMap<String, Sig>, Methods) {
     (fns, methods)
 }
 
+/// Which drift family a clash belongs to (docs/drift/findings.md): A widths, B a reference expected (lookups,
+/// adapters), C `String` against `&str`.
+fn family(c: &Clash) -> char {
+    let stringy = |t: &Ty| matches!(t.bare(), Ty::Str | Ty::StrSlice);
+    let reference = |t: &Ty| matches!(t, Ty::Ref(_));
+    if stringy(&c.left) || stringy(&c.right) {
+        'C'
+    } else if reference(&c.left) != reference(&c.right) {
+        'B'
+    } else {
+        'A'
+    }
+}
+
 fn diagnostic(c: &Clash, source: &str, file: &str) -> Diagnostic {
     let (a, b) = (c.left.show(), c.right.show());
-    let mut d = Diagnostic::error(
-        "WJ0003",
-        format!("the compiled build would reject this: `{}` needs one integer type but gets `{a}` and `{b}` (in `fn {}` of the generated code)", c.expr, c.function),
-    )
-    .with_help("give the literal or the binding it comes from the type `int` (`let five: int = 5`, `1 as int`), and both the interpreter and the compiled build accept it")
-    .with_note("the program is correct and the interpreter runs it; rustc is stricter: it would not accept the Rust the compiler generates here, so `wj build` would fail (a build error, not a crash)")
-    .with_note("`int` is `i64`; the compiled backend typed one side of this expression `i32` (or another width), and Rust never converts integer widths implicitly. The backend defect is tracked as family A in docs/drift/findings.md");
+    let fam = family(c);
+    let (what, help, cause) = match fam {
+        'A' => (
+            format!("needs one integer type but gets `{a}` and `{b}`"),
+            "give the literal or the binding it comes from the type `int` (`let five: int = 5`, `1 as int`), and both the interpreter and the compiled build accept it",
+            "`int` is `i64`; the compiled backend typed one side of this expression `i32` (or another width), and Rust never converts integer widths implicitly",
+        ),
+        'B' => (
+            format!("needs `{a}` but the generated code passes `{b}`"),
+            "the compiled backend passes the value where Rust takes a reference (a lookup key, an adapter argument); binding the value to a local first sometimes avoids it",
+            "Rust's lookups (`get`, `contains`, `contains_key`, `remove`) take their key by reference and never borrow implicitly",
+        ),
+        _ => (
+            format!("needs `{a}` but the generated code passes `{b}`"),
+            "the compiled backend passes a `String` where Rust needs `&str` or the reverse; a `string` binding with an explicit type (`let s: string = ...`) sometimes avoids it",
+            "Rust converts between `String` and `&str` only explicitly (`.to_string()`, `&s`), never at a call, an assignment or a `+`",
+        ),
+    };
+    let mut d = Diagnostic::error("WJ0003", format!("the compiled build would reject this: `{}` {what} (in `fn {}` of the generated code)", c.expr, c.function))
+        .with_help(help)
+        .with_note("the program is correct and the interpreter runs it; rustc is stricter: it would not accept the Rust the compiler generates here, so `wj build` would fail (a build error, not a crash)")
+        .with_note(format!("{cause}. The backend defect is tracked as family {fam} in docs/drift/findings.md"));
     if let Some(sp) = locate(c, source, file) {
-        d = d.at(sp.with_label("widths differ here"));
+        d = d.at(sp.with_label(if fam == 'A' { "widths differ here" } else { "types differ here" }));
     }
     d
 }
