@@ -1,0 +1,25 @@
+// A `usize` value (a function declared `-> usize`) passed to `int` formals, also through `end - 1`: two exact
+// widths meet in one class, so the class stays with the legacy deciders, which convert at each argument. The
+// solver must not hand them whichever width the union kept (it printed `sub(body, .., end)`, E0308).
+fn byte_len(text: string) -> usize {
+    text.len()
+}
+
+fn sub(text: string, from: int, to: int) -> string {
+    if from >= to {
+        return ""
+    }
+    text
+}
+
+fn trim_hashes(body: string) -> string {
+    let mut end = byte_len(body)
+    while end > 0 && sub(body, end - 1, end) == "#" {
+        end = end - 1
+    }
+    sub(body, 0, end)
+}
+
+fn main() {
+    println(trim_hashes("ab"))
+}
