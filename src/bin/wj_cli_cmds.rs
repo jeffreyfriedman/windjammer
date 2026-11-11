@@ -171,8 +171,7 @@ pub fn run(cli: Cli) -> Result<()> {
             compiled,
             release,
             watch,
-            verify, speculate,
-            hot,
+            verify, speculate, hot,
             sched_seed,
             hash_seed,
             engine,
@@ -306,9 +305,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 allow_empty,
             })?;
         }
-        Commands::Replay { paths, script, json, simulate, seed, faults, allow } => {
-            windjammer::cli::replay::execute(windjammer::cli::replay::Args { paths, script, json, simulate, seed, faults, allow })?;
-        }
+        Commands::Replay { paths, script, json, simulate, seed, faults, allow } => windjammer::cli::replay::execute(windjammer::cli::replay::Args { paths, script, json, simulate, seed, faults, allow })?,
         Commands::Reduce {
             path,
             oracle,
