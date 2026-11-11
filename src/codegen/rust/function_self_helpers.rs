@@ -56,7 +56,6 @@ impl<'ast> CodeGenerator<'ast> {
     /// lowers element comparisons in a loop over them for owned entries. `None` when the IR has no mode.
     fn ir_value_formal(&mut self, param: &Parameter<'ast>, analyzed: &AnalyzedFunction<'ast>, unused: &std::collections::HashSet<String>) -> Option<String> {
         let plain = crate::ir::formal_predicates::ir_spells_value_formal(param)
-            && !self.is_type_copy(&param.type_)
             && !matches!(&param.type_, Type::Custom(n) if crate::analyzer::Analyzer::is_generic_type_param(&Type::Custom(n.clone())));
         // Public formals too: other crates' call sites read the emitted formals from `metadata.json`.
         if self.in_trait_impl || !plain {

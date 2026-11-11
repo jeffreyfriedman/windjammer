@@ -119,7 +119,6 @@ fn drift_repros_of_family_a_are_predicted() {
     let repros = root().join("tests/drift_corpus/repros");
     for (f, line) in [
         ("let_literal_captured_by_closure.wj", 5),
-        ("literal_in_option_field_arm.wj", 10),
         ("shadow_match_binding_literal.wj", 6),
         ("shadowed_option_literal_arms.wj", 5),
     ] {

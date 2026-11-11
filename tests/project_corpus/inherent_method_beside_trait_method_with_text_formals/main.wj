@@ -5,12 +5,11 @@
 mod policy
 mod reader
 mod writer
-mod scan
 use crate::policy::Policy
 
 fn main() {
     let r = reader::Reader { allowed: ["viewer"] }
     let mut w = writer::Writer { log: [] }
     let ok = w.check("bob", "editor")
-    println("${scan::allowed(r, "alice", "viewer", 3)} ${w.log.len()}")
+    println("${reader::allowed(r, "alice", "viewer", 3)} ${w.log.len()}")
 }

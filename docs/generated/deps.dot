@@ -115,7 +115,7 @@ digraph deps {
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
-  "analyzer" -> "parser" [label="134"];
+  "analyzer" -> "parser" [label="137"];
   "analyzer" -> "stdlib_scanner" [label="2"];
   "analyzer" -> "stdlib_surface" [label="1"];
   "analyzer" -> "test_utils" [label="1"];
