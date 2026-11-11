@@ -60,7 +60,6 @@ fn wrap(name: string) -> Holder {
         local_types: HashMap::new(),
         body: Vec::new(),
         ownership_trail: Default::default(),
-        default_int_literals: Default::default(),
         literal_widths: Default::default(),
         solver_i64_locals: Default::default(),
         solver_local_widths: Default::default(),

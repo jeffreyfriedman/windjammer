@@ -1,0 +1,57 @@
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod sched;
+
+// Re-export public items
+pub use sched::*;
+// ==== main.rs ====
+mod sched;
+fn main() {
+    let s = sched::Sched { pending: 10_u32, done: 0_u32 };
+    let t = s.step();
+    println!("{} {}", t.pending, t.done);
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod sched;
+
+// Re-export public items
+pub use sched::*;
+// ==== sched.rs ====
+#[allow(unused_imports)]
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Sched {
+    pub pending: u32,
+    pub done: u32,
+}
+impl Sched {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.pending.to_ne_bytes());
+        __bytes.extend_from_slice(&self.done.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Sched {
+#[inline]
+pub fn step(self) -> Sched {
+        let batch = {
+            if self.pending > 4_u32 {
+                4_u32
+            } else {
+                self.pending
+            }
+        };
+        Sched { pending: self.pending - batch, done: self.done + batch }
+}
+}
+
