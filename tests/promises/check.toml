@@ -139,10 +139,11 @@ exit = 1
 stdout_has = ["\"code\": \"WJ0010\""]
 
 [[case]]
-name = "check reports a local changed without mut (WJ0051), with its fix"
-polarity = "positive"
+name = "check rejects a local changed without mut (WJ0051), with its fix"
+polarity = "negative"
 files = { "m.wj" = "struct Counter {\n    n: int,\n}\nimpl Counter {\n    fn bump(self) {\n        self.n = self.n + 1\n    }\n}\nfn main() {\n    let c = Counter { n: 0 }\n    c.bump()\n    println(\"${c.n}\")\n}\n" }
 args = ["check", "--json", "{w}/m.wj"]
+exit = 1
 stdout_has = ["\"code\": \"WJ0051\"", "\"replacement\": \"mut \""]
 
 [[case]]
@@ -167,3 +168,10 @@ polarity = "positive"
 files = { "m.wj" = "struct P { x: int }\n\nimpl P {\n    fn to_string(self) -> string {\n        \"(${self.x})\"\n    }\n}\n\nfn main() {\n    let p = P { x: 1 }\n    println(\"${p}\")\n}\n" }
 args = ["check", "{w}/m.wj"]
 exit = 0
+
+[[case]]
+name = "check accepts a local declared mut that the program changes (WJ0051)"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let mut v = Vec::new()\n    v.push(1)\n    println(\"${v.len()} WJ0051-free\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]

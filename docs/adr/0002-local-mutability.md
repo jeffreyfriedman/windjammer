@@ -6,7 +6,7 @@ last_verified: 3406ef05bb35
 
 - **Status:** Accepted (2026-10-10) — explicit `let mut` (Rust-like). Rationale (owner): inferred mutability can cause surprising, unintended behavior. Ownership of references (&, &mut, owned) stays inferred; only local binding mutability is explicit. Migration: compiler diagnostic with an automatic fix (`wj fix`) that adds `mut`, then remove `auto_needs_mut`.
 - **Date:** 2026-10-10
-- **Implementation:** step 1 (2026-11): diagnostic WJ0051 (`src/check/local_mut/`) as a warning in `wj check`, `wj build` and `wj run`, with `wj fix` inserting `mut`; the repository's own sources declare `mut`. Step 2: migrate downstream corpora, make WJ0051 an error, delete `auto_needs_mut` for locals (Q-007).
+- **Implementation:** done (2026-11). Step 1: diagnostic WJ0051 (`src/check/local_mut/`) as a warning in `wj check`, `wj build` and `wj run`, with `wj fix` inserting `mut`. Step 2: the corpora declare their `mut` (this repository, windjammer-ecosystem, windjammer-ui), WJ0051 is an error, and the Rust backend's local `mut` inference (`auto_needs_mut`) is deleted; parameters, `self` and match-arm bindings stay inferred. Q-007 resolved. Downstream projects migrate with `wj fix <dir>` (docs/reference/explicit-mut-migration.md).
 - **Related:** [language-design/ownership-inference.md](../language-design/ownership-inference.md), `src/codegen/rust/let_statement_generation.rs`, `src/codegen/rust/function_formal_parameter_generation.rs`, `src/codegen/rust/variable_analysis/mut_inference.rs`
 
 ## Context

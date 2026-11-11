@@ -44,7 +44,7 @@ fn main() {
 Write `let mut` for any local you change: assigning to it, assigning to one of its fields, or calling a method that
 changes it (`push`, `insert`, or a method of your own that changes `self`). A local changed without `mut` is reported as
 `WJ0051` by `wj check`, `wj build` and `wj run` alike, with an automatic fix (`wj fix` adds every missing `mut`;
-`wj explain WJ0051` explains it). It is a warning while existing code migrates and becomes an error in a coming release.
+`wj explain WJ0051` explains it).
 
 ## The everyday types
 

@@ -18,9 +18,11 @@ use wj_json_doc::object
 use wj_proc::sh
 use wj_proc::quote
 
+// An insertion at a 1-based line and character column (std::strings slices by characters, not bytes).
 struct Insert {
     file: string,
-    at: int,
+    line: int,
+    col: int,
     text: string,
 }
 
@@ -112,42 +114,45 @@ fn inserts_for(wj: string, unit: string) -> Vec<Insert> {
         }
         for f in items(get(d, "fixes") ?? object()) {
             for e in items(get(f, "edits") ?? object()) {
-                out.push(Insert { file: str_of(e, "file"), at: int_of(e, "byte_start"), text: str_of(e, "replacement") })
+                out.push(Insert { file: str_of(e, "file"), line: int_of(e, "line_start"), col: int_of(e, "col_start"), text: str_of(e, "replacement") })
             }
         }
     }
     out
 }
 
-// `text` with every insertion of `file` applied (from the end, so earlier offsets stay valid).
+// `text` with every insertion of `file` applied, the last position first so earlier positions stay valid.
 fn apply(text: string, file: string, inserts: Vec<Insert>) -> string {
-    let mut offsets: Vec<int> = Vec::new()
-    let mut texts: Vec<string> = Vec::new()
+    let mut lines = strings.split(text, "\n")
+    let mut mine: Vec<Insert> = Vec::new()
     for ins in inserts {
-        if ins.file == file && ins.at >= 0 {
-            offsets.push(ins.at)
-            texts.push(ins.text)
+        if ins.file == file && ins.line >= 1 && ins.col >= 1 {
+            mine.push(ins)
         }
     }
-    let mut out = text
     let mut done: Vec<int> = Vec::new()
-    while done.len() < offsets.len() {
-        // the largest offset not applied yet
+    while done.len() < mine.len() {
         let mut best = -1
-        let mut best_i = 0
+        let mut best_key = -1
         let mut i = 0
-        while i < offsets.len() {
-            if !done.contains(&i) && offsets[i] > best {
-                best = offsets[i]
-                best_i = i
+        while i < mine.len() {
+            let key = mine[i].line * 100000 + mine[i].col
+            if !done.contains(&i) && key > best_key {
+                best_key = key
+                best = i
             }
             i += 1
         }
-        done.push(best_i)
-        let at = best as usize
-        out = strings.substring(out, 0, at) + texts[best_i] + strings.substring(out, at, strings.len(out))
+        done.push(best)
+        let ins = mine[best as usize]
+        let li = (ins.line - 1) as usize
+        if li < lines.len() {
+            let line = lines[li]
+            let at = (ins.col - 1) as usize
+            lines[li] = strings.substring(line, 0, at) + ins.text + strings.substring(line, at, strings.char_count(line))
+        }
     }
-    out
+    strings.join(lines, "\n")
 }
 
 fn main() {
@@ -210,7 +215,7 @@ fn main() {
             }
             let new_text = apply(text, f, inserts)
             if new_text != text {
-                n += strings.len(new_text) as int - strings.len(text) as int
+                n += strings.char_count(new_text) as int - strings.char_count(text) as int
                 if !check {
                     let _ = fs.write(f, new_text)
                 }
