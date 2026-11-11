@@ -41,6 +41,23 @@ pub fn use_local_target() -> bool {
 }
 
 /// Platform cache root: `WJ_CARGO_TARGET_ROOT` or OS default.
+/// The `version` a generated crate declares: `0.1.0` plus build metadata that names the crate's own directory.
+///
+/// Every generated crate builds into the shared target directory, where cargo identifies a root package by name and
+/// version only (not by its path). Two crates with the same name (projects whose directories share a name, every
+/// test crate) were one unit there: cargo took the second for fresh and kept the first one's binary, so `wj run
+/// --compiled` ran another project's program. Build metadata (`+wj<hash>`) makes the unit distinct per directory,
+/// is ignored by version requirements, and changes no crate or binary name.
+pub fn crate_version(crate_dir: &Path) -> String {
+    let canon = std::fs::canonicalize(crate_dir).unwrap_or_else(|_| crate_dir.to_path_buf());
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in canon.to_string_lossy().bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    format!("0.1.0+wj{h:016x}")
+}
+
 pub fn cache_root() -> PathBuf {
     if let Ok(root) = std::env::var(ENV_ROOT) {
         let trimmed = root.trim();

@@ -160,7 +160,8 @@ pub enum Commands {
         watch: bool,
 
         /// Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the
-        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr
+        /// compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. Stdin is read
+        /// once for both runs; when no input arrives within 2 s it is taken as empty
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 
