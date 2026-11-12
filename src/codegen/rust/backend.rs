@@ -69,15 +69,29 @@ edition = "2021"
         // Add detected dependencies with path references
         for dep in deps {
             let dep_line = match dep.as_str() {
-                "game_host_core" => {
-                    "game-host-core = { path = \"../game-host/game-host-core\" }\n".to_string()
-                }
-                "windjammer_app" => {
-                    "windjammer-app = { path = \"../game-host/game-host-core\" }\n".to_string()
-                }
-                "windjammer_runtime" => {
-                    "windjammer-runtime = { path = \"../windjammer/crates/windjammer-runtime\" }\n".to_string()
-                }
+                // Sibling-checkout layouts are never assumed: game crates come from
+                // WJ_GAME_CORE_PATH when set, else the registry.
+                "game_host_core" => match std::env::var("WJ_GAME_CORE_PATH") {
+                    Ok(p) if !p.is_empty() => format!(
+                        "game-host-core = {{ path = \"{}\" }}\n",
+                        crate::cargo_toml::sanitize_path_for_toml(std::path::Path::new(&p))
+                    ),
+                    _ => "game-host-core = \"*\"\n".to_string(),
+                },
+                "windjammer_app" => match std::env::var("WJ_GAME_CORE_PATH") {
+                    Ok(p) if !p.is_empty() => format!(
+                        "windjammer-app = {{ path = \"{}\" }}\n",
+                        crate::cargo_toml::sanitize_path_for_toml(std::path::Path::new(&p))
+                    ),
+                    _ => "windjammer-app = \"*\"\n".to_string(),
+                },
+                // The runtime comes from the compiler's own embedded copy, wherever it is installed.
+                "windjammer_runtime" => format!(
+                    "windjammer-runtime = {{ path = \"{}\" }}\n",
+                    crate::cargo_toml::sanitize_path_for_toml(
+                        &crate::cargo_toml::find_windjammer_runtime_path()
+                    )
+                ),
                 _ => {
                     // Unknown external crate, add as crates.io dependency
                     format!("{} = \"*\"\n", dep)
