@@ -165,9 +165,11 @@ pub enum Commands {
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch", "hot", "record", "replay"])]
         verify: bool,
 
-        /// Diagnostic format: `human` (default) or `agent`, one compact line per diagnostic (location, code, message,
-        /// first help, fixes) for tools and coding agents; `WJ_ERROR_FORMAT=agent` sets it for every command
-        #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent"])]
+        /// How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic
+        /// (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one
+        /// last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status
+        /// do not change. `WJ_ERROR_FORMAT` sets the default for every command
+        #[arg(long, value_name = "FORMAT", value_parser = ["human", "agent", "json"])]
         error_format: Option<String>,
 
         /// Interpreted runs: also start a compiled build of the same content in the background (lowest priority,
@@ -220,12 +222,6 @@ pub enum Commands {
         /// compile errors still refuse it
         #[arg(long)]
         no_lint: bool,
-
-        /// Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source
-        /// line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema
-        /// with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036)
-        #[arg(long, value_name = "FORMAT", default_value = "human", value_parser = ["human", "json"])]
-        error_format: String,
 
         /// Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when
         /// they look like secrets, and this drops them altogether)
