@@ -145,6 +145,7 @@ corpus_tests!(
     self_field_arg_into_mut_self_method,
     str_array_element_in_owned_branch,
     borrowed_text_alias_reassigned_owned,
+    owned_text_ordered_against_borrowed_text,
     nested_closure_typed_param,
 );
 

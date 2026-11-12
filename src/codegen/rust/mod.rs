@@ -84,6 +84,7 @@ mod match_binding_type_inference;
 pub mod match_statement_generation;
 mod element_borrow_conflict;
 mod text_alias_let;
+mod text_comparison_operands;
 mod move_at_last_use;
 pub mod method_signature;
 pub mod operator_generation;

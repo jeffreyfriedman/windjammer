@@ -1422,10 +1422,10 @@ impl<'ast> CodeGenerator<'ast> {
         // A borrowed `&str` local (a `text[a..b]` slice) compared with an owned `string` local: Rust compares
         // `&str` with `&str`, so the owned side is viewed as one (`act < best.as_str()`).
         if is_comparison {
-            let (l_slice, r_slice) = (self.is_str_slice_local(left), self.is_str_slice_local(right));
-            if l_slice && !r_slice && self.is_owned_text_local(right) {
+            let (l_slice, r_slice) = (self.borrowed_text_operand(left, op), self.borrowed_text_operand(right, op));
+            if l_slice && !r_slice && self.owned_text_operand(right, op) {
                 right_str = format!("{right_str}.as_str()");
-            } else if r_slice && !l_slice && self.is_owned_text_local(left) {
+            } else if r_slice && !l_slice && self.owned_text_operand(left, op) {
                 left_str = format!("{left_str}.as_str()");
             }
         }
@@ -1626,7 +1626,7 @@ impl<'ast> CodeGenerator<'ast> {
 
 impl<'ast> CodeGenerator<'ast> {
     /// A local whose type is a borrowed `&str` (a binding of a `text[a..b]` slice).
-    fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
+    pub(in crate::codegen::rust) fn is_str_slice_local(&self, e: &Expression<'ast>) -> bool {
         matches!(e, Expression::Identifier { .. })
             && self.infer_expression_type(e).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
     }

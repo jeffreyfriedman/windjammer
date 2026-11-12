@@ -184,6 +184,9 @@ value-formal fixed point already publishes receiver modes, so the gate can be a 
   (`raw = s.trim()`) copies with `to_string()` (`raw.clone()` stayed `&str`, E0308 at `body = <String>`).
 - The demoted-text rewrite `{param}.clone()` -> `{param}.to_string()` matched any text ending in the parameter name
   (`self.rooms.clone()` for a parameter `s` became `self.room` + `s.to_string()`); it now matches the whole binding.
+- Ordering owned text against borrowed text (`it.date < from`, `from` a read-only `string` parameter emitted as
+  `&str`; `owned < b`) views the owned side as `&str` (`codegen/rust/text_comparison_operands.rs`); Rust has
+  `PartialEq<&str> for String` but no `PartialOrd<&str>` (was E0308). Equality keeps its native form.
 - A Copy struct named `Vec3` is not the `Vec` collection: two `starts_with("Vec")` guesses now compare the type's base
   name, so the bare-pass hint no longer borrows `Vec3` arguments into owned formals.
 
