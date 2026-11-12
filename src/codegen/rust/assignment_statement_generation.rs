@@ -635,7 +635,10 @@ impl<'ast> CodeGenerator<'ast> {
         let borrowed_text = self.is_text_slice_expr(value)
             || matches!(value, Expression::Identifier { name, .. }
                 if self.infer_expression_type(value).is_some_and(|t| crate::codegen::rust::stdlib_method_traits::is_str_reference(&t))
-                    || (self.borrowed_iterator_vars.contains(name) && !self.match_arm_bindings.contains(name.as_str())));
+                    || (self.borrowed_iterator_vars.contains(name)
+                        && !self.match_arm_bindings.contains(name.as_str())
+                        // a later `let` of the same name that holds an owned value is not the loop binding
+                        && !self.local_var_types.get(name.as_str()).is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))));
         if borrowed_text
             && self.infer_expression_type(target).is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && crate::codegen::rust::types::is_windjammer_text_type(&t))
             && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
