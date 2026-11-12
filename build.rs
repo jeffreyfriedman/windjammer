@@ -1,5 +1,7 @@
 #[path = "build_support/identity_key.rs"]
 mod identity_key;
+#[path = "build_support/stable_build.rs"]
+mod stable_build;
 #[path = "build_support/test_modules.rs"]
 mod test_modules;
 
@@ -57,7 +59,9 @@ fn generate_test_all_rs() {
         path_for_attr(&tests_dir_abs, "common/test_utils.rs")
     ));
 
+    println!("cargo:rerun-if-changed=tests/common/test_utils.rs");
     for module in &modules {
+        println!("cargo:rerun-if-changed=tests/{}", module.rel_path);
         content.push_str(&format!(
             "#[path = \"{}\"]\nmod {};\n\n",
             path_for_attr(&tests_dir_abs, &module.rel_path),
@@ -65,10 +69,7 @@ fn generate_test_all_rs() {
         ));
     }
 
-    let existing = fs::read_to_string(&generated_path).unwrap_or_default();
-    if existing != content {
-        fs::write(&generated_path, &content).expect("write generated all_tests_generated.rs");
-    }
+    stable_build::write_if_changed(&generated_path, &content).expect("write generated all_tests_generated.rs");
 }
 
 /// Emit `$OUT_DIR/embedded_assets_generated.rs`: byte tables for the runtime assets
@@ -142,20 +143,15 @@ fn generate_embedded_assets() {
         code.push_str(&format!("pub const {name}_HASH: u64 = {h};\n"));
     }
     let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-    fs::write(
-        Path::new(&out_dir).join("embedded_assets_generated.rs"),
-        code,
-    )
-    .expect("write embedded assets table");
+    // Only when the table changed: the library `include!`s this file, so a newer mtime alone recompiles it.
+    stable_build::write_if_changed(&Path::new(&out_dir).join("embedded_assets_generated.rs"), &code)
+        .expect("write embedded assets table");
 }
 
 /// Run `git <args>` in the manifest dir; `None` when git or the repository is unavailable.
 fn git_output(args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into()))
-        .output()
-        .ok()?;
+    let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let out = stable_build::git_command(std::path::Path::new(&dir), args).output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -165,12 +161,14 @@ fn git_output(args: &[&str]) -> Option<String> {
 /// Toolchain identity (`wj --version`, `wj doctor`): commit hash, commit date, dirty flag, profile, build date.
 /// Commit date (not wall-clock time) is the only time value that may reach generated output; the wall-clock
 /// build date is read by `toolchain::identity` for `--version` alone (gate: tests/toolchain_identity_test.rs).
-/// The build date is kept in OUT_DIR so it only changes when the commit or dirty flag does: an edit to a
-/// test file reruns this script without forcing the library to recompile.
+/// The build date is kept in OUT_DIR so it only changes when the commit or dirty flag does.
+/// A rerun of this script recompiles the library (cargo treats a rerun as a changed dependency), so what it
+/// watches is kept narrow: not `.git/index` (`git status` rewrites it), not the whole `tests/` tree.
 fn emit_toolchain_identity() {
     use std::fs;
     use std::path::Path;
-    for rel in ["HEAD", "index", "packed-refs"] {
+    // Not `index`: `git status` rewrites it, and the dirty state is already tracked through `src`, `std` and the test modules.
+    for rel in ["HEAD", "packed-refs"] {
         if let Some(p) = git_output(&["rev-parse", "--git-path", rel]) {
             println!("cargo:rerun-if-changed={p}");
         }
@@ -187,7 +185,7 @@ fn emit_toolchain_identity() {
     let dirty = git_output(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into());
     // Uncommitted changes are part of the identity: two dirty builds of one commit are different binaries.
-    let diff = if dirty { git_output(&["diff", "HEAD"]).unwrap_or_default() } else { String::new() };
+    let diff = if dirty { git_output(&["diff-index", "-p", "HEAD"]).unwrap_or_default() } else { String::new() };
     let untracked: Vec<(String, Vec<u8>)> = git_output(&["ls-files", "--others", "--exclude-standard", "--", "src", "std", "build.rs", "Cargo.toml"])
         .unwrap_or_default()
         .lines()
@@ -223,7 +221,10 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     emit_toolchain_identity();
     generate_embedded_assets();
-    println!("cargo:rerun-if-changed=tests");
+    // Not `tests` as a whole: cargo scans a watched directory recursively, and the test suite writes files
+    // into it (tests/generated, per-project .wj-cache dirs, fixture scratch files), so every test run made
+    // the next build dirty and recompiled the library. Only the discovered test modules are watched (in
+    // `generate_test_all_rs`); a test file added later is caught by tests/build_rerun_stability_test.rs.
     println!("cargo:rerun-if-changed=build_support");
     println!("cargo::rustc-check-cfg=cfg(tarpaulin)");
 
