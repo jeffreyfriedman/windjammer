@@ -144,6 +144,7 @@ digraph deps {
   "cargo_toml" -> "compiler_config" [label="5"];
   "cargo_toml" -> "config" [label="7"];
   "cargo_toml" -> "embedded_assets" [label="2"];
+  "cargo_toml" -> "package" [label="1"];
   "check" -> "analyzer" [label="3"];
   "check" -> "codegen" [label="1"];
   "check" -> "diagnostics" [label="27"];
@@ -172,7 +173,7 @@ digraph deps {
   "cli" -> "compiler_config" [label="3"];
   "cli" -> "config" [label="4"];
   "cli" -> "debug_env" [label="1"];
-  "cli" -> "diagnostics" [label="29"];
+  "cli" -> "diagnostics" [label="30"];
   "cli" -> "ejector" [label="2"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
@@ -184,7 +185,7 @@ digraph deps {
   "cli" -> "linter" [label="5"];
   "cli" -> "metadata" [label="1"];
   "cli" -> "module_system" [label="12"];
-  "cli" -> "package" [label="17"];
+  "cli" -> "package" [label="18"];
   "cli" -> "parser" [label="5"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="6"];
@@ -395,6 +396,7 @@ digraph deps {
   "package" -> "lexer" [label="1"];
   "package" -> "module_system" [label="1"];
   "package" -> "parser" [label="2"];
+  "package" -> "toolchain" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
   "parser" -> "lexer" [label="31"];
   "parser" -> "parser_impl" [label="27"];

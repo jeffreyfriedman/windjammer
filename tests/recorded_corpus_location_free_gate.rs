@@ -5,7 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-const FORBIDDEN: &[&str] = &["/Users/", "/home/", "/private/", "/var/folders/", "~/", "C:\\Users\\"];
+/// `~/.wj` and friends name the product's own home layout and are fine; these name a developer's machine.
+const FORBIDDEN: &[&str] =
+    &["/Users/", "/home/", "/private/", "/var/folders/", "~/src/", "~/Library/", "~/.rustup", "~/.cargo", "~/Documents/", "C:\\Users\\"];
 
 /// Directories under tests/ that hold hand-written prose about paths, not recorded data.
 fn exempt(rel: &str) -> bool {
