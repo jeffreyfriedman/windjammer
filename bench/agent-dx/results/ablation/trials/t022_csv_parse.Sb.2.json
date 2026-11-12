@@ -5,7 +5,7 @@
  "arm_name": "sheet-minus-ownership",
  "capability_denials": 0,
  "diag_samples": [
-  "error: explicit .iter() call [W0003]\n  --> <ws>/main.wj:38:25\n  = note: Windjammer supports direct iteration\n  = help: use direct iteration: `for x in collection`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpfpTjZk\"\nRust leakage errors in /private/tm"
+  "error: explicit .iter() call [W0003]\n  --> <ws>/main.wj:38:25\n  = note: Windjammer supports direct iteration\n  = help: use direct iteration: `for x in collection`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpfpTjZk\"\nRust leakage errors in {TMP}"
  ],
  "diagnostic_categories": {
   "lint-style": 1,

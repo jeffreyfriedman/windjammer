@@ -5,7 +5,7 @@
  "arm_name": "sheet-minus-ownership",
  "capability_denials": 0,
  "diag_samples": [
-  "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:119:41\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n\nwarning: explicit .clone() call [W0005]\n  --> :126:615400034\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"/private/tmp"
+  "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:119:41\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n\nwarning: explicit .clone() call [W0005]\n  --> :126:615400034\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"{TMP}"
  ],
  "diagnostic_categories": {
   "lint-style": 1,

@@ -5,7 +5,7 @@
  "arm_name": "sheet-minus-ownership",
  "capability_denials": 0,
  "diag_samples": [
-  "error: explicit .iter() call [W0003]\n  --> <ws>/main.wj:35:29\n  = note: Windjammer supports direct iteration\n  = help: use direct iteration: `for x in collection`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpTp086n\"\nRust leakage errors in /p",
+  "error: explicit .iter() call [W0003]\n  --> <ws>/main.wj:35:29\n  = note: Windjammer supports direct iteration\n  = help: use direct iteration: `for x in collection`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmpTp086n\"\nRust leakage errors in /p",
   "error[E0308]: mismatched types\n  --> main.rs:28:17\n   |\n28 |         if v == 0_i64 {\nerror[E0277]: can't compare `u64` with `i64`\n    --> main.rs:28:14\n     |\n  28 |         if v == 0_i64 {\n     = note: this error originates in the macro `impl_partial_eq_for_primitive` which comes from the expansion of the macro `partialeq_numeric` (in Nightly builds, run with -Z macro-backtrace for more info)\n\nerror[E0308]: mismatched types\n  --> main.rs:34:19\nerror[E0308]: mismatched types\n  --> main.rs:34:19\n   |\n34 |         while v > 0_i64 {"
  ],
  "diagnostic_categories": {

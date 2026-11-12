@@ -5,7 +5,7 @@
  "arm_name": "compiled-first",
  "diag_samples": [
   "`usize`\n   |                     |\n   |                     expected due to the type of this binding\n\nerror[E0308]: mismatched types\n  --> main.rs:43:48\n   |\n43 |                     self.right[cur as usize] = id;\n   |                     ------------------------   ^^ expected `i64`, found `usize`\n   |                     |\n   |                     expected due to the type of this binding\n\nwarning: unreachable expression\n  --> main.rs:49:9\n   |\n23 | /         loop {\n24 | |             let k = self.key[cur as usize];\n25 | |             if x == k {\n26 | |                 return false;\n...  |\n47 ",
-  "Running <ws> (target: rust)\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmp5OiCfg\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmp5OiCfg\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^"
+  "Running <ws> (target: rust)\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}/.tmp5OiCfg\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"{TMP}/.tmp5OiCfg\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^"
  ],
  "diagnostic_categories": {
   "other": 2,

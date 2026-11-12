@@ -568,3 +568,8 @@ path = "tests/lint_clone_need_test.rs"
 [[test]]
 name = "portability_checkout_layout_gate"
 path = "tests/portability_checkout_layout_gate.rs"
+
+# Recorded corpora hold no absolute paths: cargo test --test recorded_corpus_location_free_gate
+[[test]]
+name = "recorded_corpus_location_free_gate"
+path = "tests/recorded_corpus_location_free_gate.rs"

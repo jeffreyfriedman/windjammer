@@ -826,7 +826,7 @@
    "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
    "wasted_calls": 6,
    "est_tokens": 53947,
-   "example": "error: string literal `.to_string()` is forbidden Rust leakage [W0006]\n  --> <ws>/main.wj:51:35\n  = note: Windjammer string literals are already `string`; `.to_string()` is a Rustism\n  = help: prefer bare string literal \u2014 codegen emits `String::from(\"\u2026\")`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/2",
+   "example": "error: string literal `.to_string()` is forbidden Rust leakage [W0006]\n  --> <ws>/main.wj:51:35\n  = note: Windjammer string literals are already `string`; `.to_string()` is a Rustism\n  = help: prefer bare string literal \u2014 codegen emits `String::from(\"\u2026\")`\nError: Rust leakage errors:\nRust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI\nBuilding Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{TMP}",
    "arms": [
     "B",
     "E",
