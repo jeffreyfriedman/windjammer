@@ -467,8 +467,8 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj new` | Create a new Windjammer project |
 | `wj build` | Build a Windjammer project |
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
-| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
-| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway |
+| `wj eval` | Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted |
 | `wj mcp` | MCP tools as typed Windjammer: bindings for code mode (ADR-0021) |
 | `wj mcp bind` | Generate a typed Windjammer module for the tools of an MCP server: one function per tool, structs for its arguments and results |
 | `wj test` | Run tests |
@@ -570,7 +570,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 | `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
 | `--release` | RELEASE |  | Like --compiled, with optimizations |
 | `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
-| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty |
+| `--verify` | VERIFY |  | Interpret, then build compiled and, when the program only reads stdin and writes to the console, run the compiled program again and compare its output and exit status (ADR-0033). Reports on stderr. The interpreted output streams as the program prints. Stdin is read once for both runs; when no input arrives within 2 s it is taken as empty |
 | `--error-format` | FORMAT |  | How diagnostics and failed runs report on stderr: `human` (default); `agent`, one compact line per diagnostic (location, code, message, first help, fixes) for tools and coding agents; or `json` (interpreted runs: one last line in the diagnostics schema with `stack` and `locals`, ADR-0036). Program stdout and the exit status do not change. `WJ_ERROR_FORMAT` sets the default for every command |
 | `--speculate` | SPECULATE |  | Interpreted runs: also start a compiled build of the same content in the background (lowest priority, offline, one at a time, skipped on a busy machine); the next interpreted run reports a failed build (ADR-0033) |
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
@@ -605,7 +605,7 @@ Usage: wj run [OPTIONS] [PATH [ARGS]...]...
 
 ### `wj repl`
 
-Start the Windjammerscript REPL (interactive interpreter)
+Start the Windjammerscript REPL (interactive interpreter): a persistent session whose input continues on the next line until it parses, with `:history` and `!N` to recall inputs; it warns when the compiled build would reject an input and runs it anyway
 
 ```text
 Usage: wj repl
@@ -613,7 +613,7 @@ Usage: wj repl
 
 ### `wj eval`
 
-Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
+Evaluate Windjammer and print the result: `wj eval 'strings.to_upper("hi")'`, `wj eval 'let x = 6; x * 7'`. A `;` or newline inside a string or a block does not split the input. The common std modules are imported (strings, math, json, time, fs, env, HashMap, HashSet); runs interpreted
 
 ```text
 Usage: wj eval <CODE>

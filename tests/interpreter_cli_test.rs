@@ -260,3 +260,40 @@ fn run_passes_program_flags_after_the_path_and_args_is_a_vec() {
     assert!(o.status.success(), "{}", err(&o));
     assert_eq!(out(&o), "4 a b c\n");
 }
+
+fn repl(input: &str) -> Output {
+    let mut child = Command::new(WJ).arg("repl").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    child.stdin.as_mut().unwrap().write_all(input.as_bytes()).unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn repl_continues_an_unfinished_expression_and_string_until_it_parses() {
+    let o = repl("let total = 1 +\n  2 +\n  3\ntotal\nlet s = \"one;\ntwo\"\ns.len()\n");
+    assert_eq!(out(&o).lines().collect::<Vec<_>>(), vec!["6", "8"], "{}", err(&o));
+}
+
+#[test]
+fn repl_keeps_a_semicolon_inside_a_string() {
+    let o = repl("let s = \"a;b\"\ns\n");
+    assert_eq!(out(&o).lines().collect::<Vec<_>>(), vec!["\"a;b\""], "{}", err(&o));
+    let e = Command::new(WJ).args(["eval", "let s = \"a;b\"; s"]).output().unwrap();
+    assert_eq!(out(&e).trim(), "a;b", "{}", err(&e));
+}
+
+#[test]
+fn repl_lists_history_and_recalls_an_input() {
+    let o = repl("let x = 20\nx + 1\n:history\n!2\n!!\n!9\n");
+    let s = out(&o);
+    assert!(s.contains("  1  let x = 20") && s.contains("  2  x + 1"), "{s}");
+    // `x + 1` printed once on its own, then twice more by `!2` and `!!`
+    assert_eq!(s.lines().filter(|l| *l == "21").count(), 3, "{s}");
+    assert!(err(&o).contains("no input 9"), "{}", err(&o));
+}
+
+#[test]
+fn repl_warns_about_a_predicted_compiled_rejection_and_still_runs_it() {
+    let o = repl("let five = 5\nlet add5 = |x: int| x + five\nadd5(1)\n");
+    assert_eq!(out(&o).lines().collect::<Vec<_>>(), vec!["6"], "{}", err(&o));
+    assert!(err(&o).contains("warning: the compiled build would reject this"), "{}", err(&o));
+}

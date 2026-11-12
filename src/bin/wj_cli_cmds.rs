@@ -616,7 +616,7 @@ fn run_repl() -> Result<()> {
         eprintln!("wj: Rust crate calls are not available in this REPL: {e}");
         None
     });
-    windjammer::interpreter::repl::run_repl_with(crates);
+    windjammer::interpreter::repl::run_repl_with(crates, Some(windjammer::cli::eval::predict_session));
     Ok(())
 }
 
