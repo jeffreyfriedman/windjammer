@@ -1,0 +1,1 @@
+user-error: W0001: explicit ownership annotation

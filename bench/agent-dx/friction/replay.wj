@@ -79,9 +79,14 @@ fn code_of(line: string) -> string {
     strings::split(key_of(line), ":")[0]
 }
 
+/// A line of a successful compiled run that is neither the program's output nor a Windjammer diagnostic: build
+/// progress, incremental-cache notes, rustc warnings about the generated Rust. Windjammer's own lints (`[W0016]`,
+/// `warning W0017`) are diagnostics about the source, not noise.
 fn is_noise(l: string) -> bool {
-    strings::starts_with(l, "warning:") || strings::contains(l, "Building Windjammer project") || strings::contains(l, "Transpilation complete")
-        || strings::starts_with(l, "Output:") || strings::starts_with(l, "Running ") || strings::starts_with(l, "   Compiling")
+    let wj_lint = strings::contains(l, "[W0") || strings::contains(l, " W0")
+    (strings::starts_with(l, "warning:") && !wj_lint) || strings::contains(l, "Building Windjammer project")
+        || strings::contains(l, "Transpilation complete") || strings::starts_with(l, "Output:") || strings::starts_with(l, "Running ")
+        || strings::starts_with(l, "   Compiling") || strings::starts_with(l, "\u{26a1}") || strings::starts_with(l, "\u{27f3}")
 }
 
 fn replay_one(wj: string, dir: string, class: string, stdin: string) -> Res {
