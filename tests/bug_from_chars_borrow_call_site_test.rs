@@ -26,12 +26,15 @@ pub fn rebuild(chars: Vec<char>) -> string {
 "#;
 
     let rs = test_utils::compile_single(source);
+    // A formal that is only lent on is borrowed itself (`chars: &Vec<char>`) and passed as is: `&Vec<char>`
+    // coerces to `&[char]`, no move and no copy.
+    let lent_on = rs.contains("chars: &Vec<char>") && rs.contains("from_chars(chars)");
     assert!(
-        rs.contains("from_chars(&chars") || rs.contains("from_chars(& chars"),
+        lent_on || rs.contains("from_chars(&chars") || rs.contains("from_chars(& chars"),
         "owned Vec<char> into borrowed from_chars must auto-borrow. Got:\n{rs}"
     );
     assert!(
-        !rs.contains("from_chars(chars)") || rs.contains("from_chars(&chars"),
+        lent_on || !rs.contains("from_chars(chars)") || rs.contains("from_chars(&chars"),
         "must not move Vec<char> into & formal. Got:\n{rs}"
     );
 }
