@@ -73,7 +73,7 @@ examples/syntax_tests/37_combined_features/main.wj W0005
 examples/syntax_tests/38_named_bound_sets/main.wj W0005
 examples/syntax_tests/39_stdlib_modules/main.wj W0003
 examples/syntax_tests/99_error_test/main.wj WJ0002,WJ0003,WJ0005
-examples/testing_examples.wj W0001,W0002,W0004,W0007,W0008,WJ0021
+examples/testing_examples.wj W0001,W0002,W0004,W0007,W0008
 examples/tests/test_math.wj W0009
 examples/traits.wj W0001,W0004,W0007
 examples/wasm_hello/main.wj W0001
