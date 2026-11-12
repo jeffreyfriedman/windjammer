@@ -59,8 +59,11 @@ fn base_of(root: &Path) -> PathBuf {
     crate::metadata::find_project_root(dir).map_or_else(|| canon(dir), |p| canon(&p))
 }
 
-/// Placeholder that stands for the project root inside stored cache text.
-const ROOT_MARK: &str = "{PROJECT_ROOT}";
+/// Placeholders that stand for the project root inside stored cache text, one per spelling a path may use: as the
+/// checked paths spell it, absolute, and canonical (they differ through symlinks, e.g. macOS `/var` -> `/private/var`).
+const MARK_GIVEN: &str = "{PROJECT_ROOT}";
+const MARK_ABS: &str = "{PROJECT_ROOT_ABS}";
+const MARK_REAL: &str = "{PROJECT_ROOT_REAL}";
 
 /// The JSON-escaped spelling of a path, without the quotes.
 fn json_spelling(p: &Path) -> Option<String> {
@@ -68,41 +71,41 @@ fn json_spelling(p: &Path) -> Option<String> {
     Some(j.trim_matches('"').to_string()).filter(|s| !s.is_empty() && s != "/" && s != ".")
 }
 
-/// The project root as the checked paths spell it (the spelling the diagnostics use), then every other spelling a
-/// stored path may start with (absolute, canonical), JSON-escaped.
-fn root_spellings(root: &Path) -> (Option<String>, Vec<String>) {
+/// (placeholder, spelling) pairs for the project of `root`, in priority order.
+fn root_spellings(root: &Path) -> Vec<(&'static str, String)> {
     let dir = if root.is_file() { root.parent().unwrap_or(root) } else { root };
     let given = crate::metadata::find_project_root(dir);
-    let mut v: Vec<PathBuf> = vec![base_of(root)];
+    let mut v: Vec<(&'static str, String)> = Vec::new();
     if let Some(p) = &given {
-        v.push(p.clone());
-        if let Ok(a) = std::path::absolute(p) {
-            v.push(a);
-        }
+        v.extend(json_spelling(p).map(|s| (MARK_GIVEN, s)));
+        v.extend(std::path::absolute(p).ok().and_then(|a| json_spelling(&a)).map(|s| (MARK_ABS, s)));
     }
-    let primary = given.as_deref().and_then(json_spelling).or_else(|| json_spelling(&base_of(root)));
-    let mut all: Vec<String> = v.iter().filter_map(|p| json_spelling(p)).collect();
-    all.sort_by_key(|s| std::cmp::Reverse(s.len()));
-    all.dedup();
-    (primary, all)
+    v.extend(json_spelling(&base_of(root)).map(|s| (MARK_REAL, s)));
+    v
 }
 
-/// Serialized cache text with the project root replaced by a placeholder: a stored cache holds no absolute
+/// Serialized cache text with the project root replaced by placeholders: a stored cache holds no absolute
 /// location, so a copied or moved checkout carries none and a stale entry from another location never matches.
 pub(super) fn mask_root(root: &Path, text: &str) -> String {
-    let mut t = text.to_string();
-    for sp in root_spellings(root).1 {
-        t = t.replace(&sp, ROOT_MARK);
-    }
-    t
+    let mut sp = root_spellings(root);
+    // a spelling that equals an earlier one is covered by it; the longest spelling is replaced first
+    let mut seen = std::collections::HashSet::new();
+    sp.retain(|(_, s)| seen.insert(s.clone()));
+    sp.sort_by_key(|(_, s)| std::cmp::Reverse(s.len()));
+    sp.iter().fold(text.to_string(), |t, (mark, s)| t.replace(s.as_str(), mark))
 }
 
-/// Inverse of [`mask_root`] for the project at `root`: the root is restored in the spelling the checked paths use.
+/// Inverse of [`mask_root`] for the project at `root`: each placeholder gets back the spelling it stood for.
 pub(super) fn unmask_root(root: &Path, text: &str) -> String {
-    match root_spellings(root).0 {
-        Some(sp) => text.replace(ROOT_MARK, &sp),
-        None => text.to_string(),
+    let sp = root_spellings(root);
+    let mut t = text.to_string();
+    for mark in [MARK_REAL, MARK_ABS, MARK_GIVEN] {
+        // a spelling missing here (no distinct absolute form) falls back to the first one known
+        if let Some((_, s)) = sp.iter().find(|(m, _)| *m == mark).or_else(|| sp.first()) {
+            t = t.replace(mark, s);
+        }
     }
+    t
 }
 
 /// `(path, text)` inputs with the project root stripped from each path, so the fingerprint is location-free.

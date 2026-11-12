@@ -65,7 +65,7 @@ fn stored_cache_files_hold_no_absolute_path() {
             for sp in spellings(d.path()) {
                 assert!(!text.contains(&sp), "{name} embeds the checkout location {sp}");
             }
-            assert!(text.contains("{PROJECT_ROOT}"), "{name} names files relative to the project root");
+            assert!(text.contains("{PROJECT_ROOT"), "{name} names files relative to the project root");
         }
     });
 }
