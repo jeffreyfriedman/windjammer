@@ -115,10 +115,14 @@ fn module_file_noncopy_enum_match_must_not_demote_before_as_float() {
     let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("MultiFile lib.rs:\n{rs}");
-    assert_no_clone_before_as_float(rs, "noncopy+match");
+    // `as_float` only reads a Copy payload, so it borrows `self` (SELF-READ) and `evaluate` may borrow its
+    // `Val` formals: no copy anywhere. Owned formals are fine too; a borrow plus a clone is the bug.
+    let borrows = rs.contains("fn as_float(&self)") && rs.contains("a: &Val") && rs.contains("b: &Val");
+    let cloned = rs.contains(".clone().as_float()") || rs.contains("a.clone()") || rs.contains("b.clone()");
+    assert!(!cloned, "RED (noncopy+match): enum cloned before as_float:\n{rs}");
     assert!(
-        rs.contains("a: Val") && rs.contains("b: Val"),
-        "RED: evaluate formals must stay owned Val:\n{rs}"
+        borrows || (rs.contains("a: Val") && rs.contains("b: Val")),
+        "RED: evaluate formals must be owned, or borrowed with a borrowing as_float:\n{rs}"
     );
     test.cargo_check().expect("cargo-check");
 }
