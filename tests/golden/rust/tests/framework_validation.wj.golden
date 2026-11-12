@@ -144,21 +144,21 @@ fn test_division_case_2() {
 
 #[test]
 fn test_addition_commutative() {
-    let iterations = 100_i32;
-    for i in 0_i32..iterations {
-        let a = i * 13_i32 % 1000_i32;
-        let b = i * 17_i32 % 1000_i32;
+    let iterations = 100_i64;
+    for i in 0_i64..iterations {
+        let a = i * 13_i64 % 1000_i64;
+        let b = i * 17_i64 % 1000_i64;
         assert_eq!(a + b, b + a);
     }
 }
 
 #[test]
 fn test_addition_associative() {
-    let iterations = 100_i32;
-    for i in 0_i32..iterations {
-        let a = i * 13_i32 % 1000_i32;
-        let b = i * 17_i32 % 1000_i32;
-        let c = i * 19_i32 % 1000_i32;
+    let iterations = 100_i64;
+    for i in 0_i64..iterations {
+        let a = i * 13_i64 % 1000_i64;
+        let b = i * 17_i64 % 1000_i64;
+        let c = i * 19_i64 % 1000_i64;
         assert_eq!(a + b + c, a + b + c);
     }
 }
@@ -219,11 +219,11 @@ fn test_benchmark_example() {
 
 #[test]
 fn test_fast_operation() {
-    let mut sum = 0_i32;
-    for i in 0_i32..1000_i32 {
-        sum += i;
+    let mut sum = 0_i64;
+    for i in 0_i64..1000_i64 {
+        sum += i as i64;
     }
-    assert_eq!(sum, 499500);
+    assert_eq!(sum, 499500_i64);
 }
 
 #[test]

@@ -1,0 +1,140 @@
+// ==== geom.rs ====
+#[allow(unused_imports)]
+use super::*;
+
+use std::ops::Add;
+use std::ops::Sub;
+use std::ops::Mul;
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct P3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+impl P3 {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(12);
+        __bytes.extend_from_slice(&self.x.to_ne_bytes());
+        __bytes.extend_from_slice(&self.y.to_ne_bytes());
+        __bytes.extend_from_slice(&self.z.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl Add for P3 {
+    type Output = P3;
+
+#[inline]
+fn add(self, o: P3) -> P3 {
+        P3 { x: self.x + o.x, y: self.y + o.y, z: self.z + o.z }
+}
+}
+
+impl Sub for P3 {
+    type Output = P3;
+
+#[inline]
+fn sub(self, o: P3) -> P3 {
+        P3 { x: self.x - o.x, y: self.y - o.y, z: self.z - o.z }
+}
+}
+
+impl Mul<f32> for P3 {
+    type Output = P3;
+
+#[inline]
+fn mul(self, s: f32) -> P3 {
+        P3 { x: self.x * s, y: self.y * s, z: self.z * s }
+}
+}
+
+impl P3 {
+#[inline]
+pub fn length(&self) -> f32 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub struct Bounds {
+    pub lo: P3,
+    pub hi: P3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[repr(C)]
+pub struct Slot {
+    pub w: f32,
+}
+impl Slot {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(4);
+        __bytes.extend_from_slice(&self.w.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[inline]
+pub fn find_slot(slots: &Vec<Slot>, i: usize) -> Option<Slot> {
+    if i < slots.len() {
+        return Some(slots[i]);
+    }
+    None
+}
+
+// ==== lib.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod geom;
+
+// Re-export public items
+pub use geom::*;
+// ==== main.rs ====
+use self::geom::P3;
+use self::geom::Bounds;
+use self::geom::Slot;
+mod geom;
+#[inline]
+fn centre(b: Bounds) -> P3 {
+    (b.lo + b.hi) * 0.5_f32
+}
+
+fn main() {
+    let b = Bounds { lo: P3 { x: 0.0_f32, y: 0.0_f32, z: 0.0_f32 }, hi: P3 { x: 2.0_f32, y: 4.0_f32, z: 6.0_f32 } };
+    let c = centre(b);
+    println!("{} {} {}", c.x, c.y, c.z);
+    let p = P3 { x: 4.0_f32, y: 6.0_f32, z: 1.0_f32 };
+    let q = P3 { x: 1.0_f32, y: 2.0_f32, z: 1.0_f32 };
+    let d = (p - q).length();
+    println!("{}", d);
+    let slots = vec![Slot { w: 2.5_f32 }];
+    println!("{} {}", width_of(&slots, 0_usize), width_of(&vec![Slot { w: 1.0_f32 }], 5_usize));
+}
+
+#[inline]
+fn width_of(slots: &Vec<Slot>, i: usize) -> f32 {
+    let mut w = 0.0_f32;
+    match geom::find_slot(slots, i) {
+        Some(s) => {
+            w = s.w;
+        },
+        None => {
+            w = 0.0_f32;
+        },
+    }
+    w
+}
+
+// ==== mod.rs ====
+// Auto-generated mod.rs by Windjammer CLI
+// This file declares all generated Windjammer modules
+
+pub mod geom;
+
+// Re-export public items
+pub use geom::*;

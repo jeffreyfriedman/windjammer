@@ -20,7 +20,7 @@ fn first_word(s: &str) -> Option<String> {
 
 #[test]
 fn parses_valid() {
-    assert_eq!(parse_age("42"), Ok(42));
+    assert_eq!(parse_age("42"), Ok(42_i64));
 }
 
 #[test]
