@@ -1,0 +1,29 @@
+// expect: b c
+// expect: 2
+// A non-final if/else whose branch ends in a value-returning call (Vec::remove returns
+// the element) is a statement: the value is discarded, the function still returns its tail.
+fn drop_at(items: Vec<string>, at: int, front: bool) -> Vec<string> {
+    let mut v = items
+    if front {
+        v.remove(0)
+    } else {
+        v.remove(at)
+    }
+    v
+}
+fn count_after(n: int) -> int {
+    let mut v: Vec<int> = [1, 2, 3]
+    if n > 0 {
+        v.pop()
+    } else if n < 0 {
+        v.remove(0)
+    } else {
+        v.push(4)
+    }
+    v.len() as int
+}
+fn main() {
+    let v = drop_at(["a", "b", "c"], 1, true)
+    println("${v.join(" ")}")
+    println("${count_after(1)}")
+}

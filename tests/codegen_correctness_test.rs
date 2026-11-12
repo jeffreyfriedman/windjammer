@@ -133,6 +133,7 @@ corpus_tests!(
     loop_return_in_else_branch,
     text_slice_into_owned_string,
     generic_element_read_clone,
+    nested_closure_typed_param,
 );
 
 // ------------------------------------------------------------------ generated programs

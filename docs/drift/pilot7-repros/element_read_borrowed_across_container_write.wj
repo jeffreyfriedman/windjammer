@@ -1,0 +1,28 @@
+// expect: 3 7
+// expect: 0 false
+struct Order {
+    id: int,
+    owner: string,
+    qty: int,
+    alive: bool,
+}
+struct Book {
+    orders: Vec<Order>,
+}
+impl Book {
+    fn fill(self, best: int, q: int) -> int {
+        let r = self.orders[best]
+        self.orders[best].qty = r.qty - q
+        if r.qty - q == 0 {
+            self.orders[best].alive = false
+        }
+        r.id
+    }
+}
+fn main() {
+    let mut b = Book { orders: [Order { id: 7, owner: "x", qty: 5, alive: true }] }
+    let id = b.fill(0, 2)
+    println("${b.orders[0].qty} ${id}")
+    b.fill(0, 3)
+    println("${b.orders[0].qty} ${b.orders[0].alive}")
+}

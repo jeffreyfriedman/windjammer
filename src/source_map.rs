@@ -226,11 +226,35 @@ impl SourceMap {
             .collect()
     }
 
+    /// The recorded Rust file a reported path names: the path itself when recorded, else the only
+    /// recorded file whose trailing path components equal a relative `file`.
+    pub fn recorded_rust_file(&self, file: &Path) -> Option<PathBuf> {
+        if self.mappings_vec.iter().any(|m| m.rust_file == file) {
+            return Some(file.to_path_buf());
+        }
+        if file.is_absolute() {
+            return None;
+        }
+        let mut hits = self.mappings_vec.iter().map(|m| &m.rust_file).filter(|r| r.ends_with(file));
+        let first = hits.next()?.clone();
+        hits.all(|r| *r == first).then_some(first)
+    }
+
     /// Map a Rust location to a Windjammer location
     ///
     /// This is the primary method used by error_mapper.rs to translate
     /// Rust compiler errors back to Windjammer source locations.
     pub fn map_rust_to_windjammer(&self, rust_location: &Location) -> Option<Location> {
+        // cargo reports a span relative to the package root (`main.rs`) while the map records the
+        // path the compiler wrote (`/…/run/<hash>/main.rs`): use the one recorded file it names.
+        let resolved;
+        let rust_location = match self.recorded_rust_file(&rust_location.file) {
+            Some(file) if file != rust_location.file => {
+                resolved = Location { file, ..rust_location.clone() };
+                &resolved
+            }
+            _ => rust_location,
+        };
         // Try exact match first
         if let Some(mapping) = self.lookup(&rust_location.file, rust_location.line) {
             return Some(Location {
@@ -274,6 +298,18 @@ mod tests {
         let source_map = SourceMap::new();
         assert_eq!(source_map.len(), 0);
         assert!(source_map.is_empty());
+    }
+
+    /// cargo reports `main.rs` relative to the package; the map records the absolute path written.
+    #[test]
+    fn package_relative_rust_path_maps_to_the_recorded_file() {
+        let mut m = SourceMap::new();
+        m.add_mapping("/cache/run/abc/main.rs", 19, 0, "main.wj", 14, 0);
+        let got = m.map_rust_to_windjammer(&Location { file: PathBuf::from("main.rs"), line: 19, column: 28 });
+        assert_eq!(got.map(|l| l.line), Some(14));
+        // Two recorded files with that name: ambiguous, so no guess.
+        m.add_mapping("/cache/run/def/main.rs", 19, 0, "other.wj", 3, 0);
+        assert_eq!(m.recorded_rust_file(Path::new("main.rs")), None);
     }
 
     #[test]

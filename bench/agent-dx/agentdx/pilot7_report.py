@@ -13,8 +13,21 @@ PARTS = [("context (fresh + cache write + cache read)", lambda d: d["usd"]["fres
          ("thinking (estimate)", lambda d: d["usd"]["output_thinking_est"])]
 
 
-def load(out_dir, models):
+def load_all(out_dir, models):
     return {m: PL.load_trials(os.path.join(out_dir, m)) for m in models}
+
+
+def load(out_dir, models):
+    """Trials that are graded: a timed-out trial is excluded from every metric (its spend is still counted below)."""
+    return {m: [t for t in ts if not t.get("excluded_from_grading")] for m, ts in load_all(out_dir, models).items()}
+
+
+def spend_section(all_trials):
+    rows = ["## Spend and exclusions", "", "| model | trials | timeouts (excluded from grading, spend counted) | charged USD |", "|---|---|---|---|"]
+    for m, ts in all_trials.items():
+        rows.append(f"| {m} | {len(ts)} | {sum(1 for t in ts if t.get('status') == 'timeout')} | "
+                    f"{sum((t['usage'].get('charged_usd') if t['usage'].get('charged_usd') is not None else t['usage'].get('cost_usd')) or 0 for t in ts):.4f} |")
+    return rows + [""]
 
 
 def clusters(trials, arm, f):
@@ -32,7 +45,11 @@ def fmt(ci, nd):
 def build(out_dir, cfg, n_boot=2000):
     models, arms = list(cfg["models"]), cfg["arms"]
     data = load(out_dir, models)
-    md = ["# Pilot 7: models x arms", "", f"Price table: {cfg['prices']['_date']} ({cfg['prices']['_source']})", ""]
+    every = load_all(out_dir, models)
+    seeds = sorted({t.get("seed") for ts in every.values() for t in ts if "seed" in t}, key=str)
+    versions = sorted({t.get("wj_version", "") for ts in every.values() for t in ts})
+    md = ["# Pilot 7: models x arms", "", f"Order seed: {', '.join(map(str, seeds)) or 'not recorded'}. wj: {'; '.join(versions) or 'not recorded'}.", "",
+          f"Price table: {cfg['prices']['_date']} ({cfg['prices']['_source']})", ""]
     for m in models:
         tr = data[m]
         if not tr:
@@ -51,6 +68,7 @@ def build(out_dir, cfg, n_boot=2000):
             ci = S.paired_diff_ci(clusters(tr, base, lambda t: t["usage"]["cost_usd"]), clusters(tr, a, lambda t: t["usage"]["cost_usd"]), n_boot)
             md.append(f"- {base} - {a}: {fmt(ci, 4)}")
         md.append("")
+    md += spend_section(every)
     top = models[-1]
     md += decomposition_section(top, data[top], arms, cfg["prices"][top])
     return "\n".join(md) + "\n"
