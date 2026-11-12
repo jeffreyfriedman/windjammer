@@ -12,6 +12,7 @@ mod host_api;
 // Raw sockets (ADR-0032): one source shared with `windjammer-runtime` (crates/windjammer-runtime/src/net_core/mod.rs).
 #[path = "../../crates/windjammer-runtime/src/net_core/mod.rs"]
 pub(crate) mod net_core;
+pub mod debugger;
 pub mod durable_rt;
 pub mod limits;
 pub mod mcp_host;
