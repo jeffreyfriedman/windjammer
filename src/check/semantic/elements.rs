@@ -5,10 +5,8 @@
 
 use super::rules::{self, Kind};
 use crate::parser::{Expression, Type};
-use crate::stdlib_surface::std_functions;
-use crate::typing::core_surface::CoreSurface;
+use super::declared::Declared;
 use std::collections::{HashMap, HashSet};
-use std::sync::OnceLock;
 
 /// What a function body has bound so far, as far as kinds go.
 pub struct Scope<'a> {
@@ -20,11 +18,7 @@ pub struct Scope<'a> {
     pub aliases: &'a HashMap<String, String>,
     /// Every name bound in the function (a local hides a module alias).
     pub names: &'a HashSet<String>,
-}
-
-fn surface() -> &'static CoreSurface {
-    static S: OnceLock<CoreSurface> = OnceLock::new();
-    S.get_or_init(CoreSurface::parse)
+    pub declared: &'a Declared,
 }
 
 /// The scalar kind of the elements of a declared sequence type (`Vec<char>`, `Iterator<char>`).
@@ -52,19 +46,18 @@ pub fn iterable_element(scope: &Scope<'_>, e: &Expression<'_>) -> Option<Kind> {
         Expression::Call { function: Expression::Identifier { name, .. }, .. } => {
             let (head, func) = name.rsplit_once("::")?;
             let module = scope.aliases.get(head).filter(|_| !scope.names.contains(head))?;
-            element_of_type(&std_functions::declared_return(module, func)?)
+            element_of_type(scope.declared.std_return(module, func)?)
         }
         Expression::MethodCall { object, method, .. } => {
             if let Expression::Identifier { name, .. } = &**object {
                 if let Some(module) = scope.aliases.get(name).filter(|_| !scope.names.contains(name)) {
-                    return element_of_type(&std_functions::declared_return(module, method)?);
+                    return element_of_type(scope.declared.std_return(module, method)?);
                 }
             }
             if !is_string(scope, object) {
                 return None;
             }
-            let sig = surface().method_signature(&Type::String, method, &[])?;
-            element_of_type(&sig.ret?)
+            element_of_type(&scope.declared.string_method_return(method)?)
         }
         _ => None,
     }
