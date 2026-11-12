@@ -147,7 +147,7 @@ pub fn create_cargo_toml_with_deps(
     use std::fs;
 
     // THE WINDJAMMER WAY: Copy FFI dependencies from source project's Cargo.toml
-    // This enables projects with FFI (like a game engine project) to compile correctly
+    // This enables projects with FFI to compile correctly
     let mut source_cargo_deps = Vec::new();
 
     // Search upward for Cargo.toml (similar to windjammer.toml search)
@@ -339,123 +339,53 @@ pub fn create_cargo_toml_with_deps(
             continue; // Skip Rust keywords
         }
 
-        // THE WINDJAMMER WAY: Check if windjammer engine crates are imported
-        // If so, add them as path dependencies to the local framework
-        if crate_name == "game_host"
-            || crate_name == "game-host"
-            || crate_name == "game_host_core"
-            || crate_name == "game-host-core"
-            || crate_name == "windjammer_app"
-            || crate_name == "windjammer-app"
-            || crate_name == "windjammer_runtime"
-            || crate_name == "windjammer-runtime"
-        {
-            // Try to find a game engine project in the workspace
-            // First, check if game-host_PATH env var is set (for development)
-            if let Some(game_path) = config.game_path.clone() {
-                if game_path.exists() {
+        // Declared path dependencies (`CompilerConfig::crate_paths`, `WJ_CRATE_PATHS`) win over
+        // every default: any crate, keyed by name (`-` and `_` are the same name).
+        let normalized_name = crate_name.replace('_', "-");
+        if let Some(crate_dir) = config.crate_paths.get(&normalized_name) {
+            if crate_dir.exists() {
+                external_deps.push(format!(
+                    "{} = {{ path = \"{}\" }}",
+                    normalized_name,
+                    crate::cargo_toml::sanitize_path_for_toml(crate_dir)
+                ));
+                continue; // Skip the crates.io fallback
+            }
+        }
+
+        if matches!(
+            normalized_name.as_str(),
+            "windjammer-app" | "windjammer-runtime"
+        ) {
+            // The runtime crate resolves via the explicit override, else the embedded copy.
+            // Sibling checkouts are never probed (cwd/checkout-independent); other crates
+            // must come from `config.crate_paths` or Cargo.toml.
+            if normalized_name == "windjammer-runtime" {
+                let final_path = crate::cargo_toml::find_windjammer_runtime_path_with(
+                    config.runtime_path.as_deref(),
+                );
+                if !final_path.as_os_str().is_empty() && final_path.exists() {
+                    // Use the actual crate name declared by the manifest at that path.
+                    let declared = std::fs::read_to_string(final_path.join("Cargo.toml"))
+                        .ok()
+                        .and_then(|content| {
+                            content
+                                .lines()
+                                .find(|l| l.trim().starts_with("name"))
+                                .and_then(|line| line.split('"').nth(1).map(str::to_string))
+                        })
+                        .unwrap_or_else(|| normalized_name.clone());
                     external_deps.push(format!(
-                        "game-host = {{ path = \"{}\" }}",
-                        crate::cargo_toml::sanitize_path_for_toml(&game_path)
+                        "{} = {{ path = \"{}\" }}",
+                        declared,
+                        crate::cargo_toml::sanitize_path_for_toml(&final_path)
                     ));
                     continue; // Skip the crates.io fallback
                 }
             }
 
-            // Second: the runtime crate resolves via the explicit override, else the
-            // embedded copy. Sibling checkouts are never probed (cwd/checkout-independent);
-            // other engine crates must come from `config.game_path` or Cargo.toml.
-            let final_path = if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
-                crate::cargo_toml::find_windjammer_runtime_path_with(config.runtime_path.as_deref())
-            } else {
-                PathBuf::new() // Empty path, will fallback to crates.io
-            };
-
-            if !final_path.as_os_str().is_empty() && final_path.exists() {
-                // Read the actual crate name from Cargo.toml at the path
-                let cargo_toml_path = final_path.join("Cargo.toml");
-                let crate_name_normalized = if cargo_toml_path.exists() {
-                    // Try to read the actual crate name from Cargo.toml
-                    if let Ok(content) = std::fs::read_to_string(&cargo_toml_path) {
-                        // Parse name = "..." line
-                        if let Some(line) = content.lines().find(|l| l.trim().starts_with("name")) {
-                            if let Some(name_part) = line.split('"').nth(1) {
-                                name_part.to_string()
-                            } else {
-                                // Fallback: guess based on crate_name
-                                if crate_name.contains("_core") || crate_name.contains("-core") {
-                                    "game-host-core".to_string()
-                                } else if crate_name.contains("_app") || crate_name.contains("-app")
-                                {
-                                    "windjammer-app".to_string()
-                                } else if crate_name.contains("_runtime")
-                                    || crate_name.contains("-runtime")
-                                {
-                                    "windjammer-runtime".to_string()
-                                } else {
-                                    "game-host".to_string()
-                                }
-                            }
-                        } else {
-                            // Fallback: guess based on crate_name
-                            if crate_name.contains("_core") || crate_name.contains("-core") {
-                                "game-host-core".to_string()
-                            } else if crate_name.contains("_app") || crate_name.contains("-app") {
-                                "windjammer-app".to_string()
-                            } else if crate_name.contains("_runtime")
-                                || crate_name.contains("-runtime")
-                            {
-                                "windjammer-runtime".to_string()
-                            } else {
-                                "game-host".to_string()
-                            }
-                        }
-                    } else {
-                        // Fallback: guess based on crate_name
-                        if crate_name.contains("_core") || crate_name.contains("-core") {
-                            "game-host-core".to_string()
-                        } else if crate_name.contains("_app") || crate_name.contains("-app") {
-                            "windjammer-app".to_string()
-                        } else if crate_name.contains("_runtime") || crate_name.contains("-runtime")
-                        {
-                            "windjammer-runtime".to_string()
-                        } else {
-                            "game-host".to_string()
-                        }
-                    }
-                } else {
-                    // Fallback: guess based on crate_name
-                    if crate_name.contains("_core") || crate_name.contains("-core") {
-                        "game-host-core".to_string()
-                    } else if crate_name.contains("_app") || crate_name.contains("-app") {
-                        "windjammer-app".to_string()
-                    } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
-                        "windjammer-runtime".to_string()
-                    } else {
-                        "game-host".to_string()
-                    }
-                };
-
-                external_deps.push(format!(
-                    "{} = {{ path = \"{}\" }}",
-                    crate_name_normalized,
-                    crate::cargo_toml::sanitize_path_for_toml(&final_path)
-                ));
-                continue; // Skip the crates.io fallback
-            }
-
             // Fallback: assume it's on crates.io (for published version)
-            let crate_name_normalized =
-                if crate_name.contains("_core") || crate_name.contains("-core") {
-                    "game-host-core"
-                } else if crate_name.contains("_app") || crate_name.contains("-app") {
-                    "windjammer-app"
-                } else if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
-                    "windjammer-runtime"
-                } else {
-                    "game-host"
-                };
-            external_deps.push(format!("{} = \"*\"", crate_name_normalized));
+            external_deps.push(format!("{} = \"*\"", normalized_name));
         } else {
             // All other external crates are assumed to be from crates.io
             external_deps.push(format!("{} = \"*\"", crate_name));
@@ -470,7 +400,7 @@ pub fn create_cargo_toml_with_deps(
     deps.push("serde = { version = \"1.0\", features = [\"derive\"] }".to_string());
 
     // THE WINDJAMMER WAY: Merge in FFI dependencies from source Cargo.toml
-    // This enables dogfooding with game engine that has FFI dependencies
+    // This enables dogfooding with projects that have FFI dependencies
     deps.extend(source_cargo_deps);
 
     // Smart deduplication: extract package names and keep more specific versions

@@ -4564,8 +4564,10 @@ impl<'ast> CodeGenerator<'ast> {
             &self.current_function_return_type,
         );
         let in_match_needing_string = self.in_match_arm_needing_string;
+        // An `if`/`else` value whose sibling branch is an owned `String` (`coerce_string_literals_to_owned`).
+        let owned_branch_value = self.coerce_string_literals_to_owned && self.in_expression_context;
 
-        if !returns_string && !in_match_needing_string {
+        if !returns_string && !in_match_needing_string && !owned_branch_value {
             return;
         }
 

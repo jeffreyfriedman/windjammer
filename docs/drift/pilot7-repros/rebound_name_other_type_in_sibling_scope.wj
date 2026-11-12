@@ -1,0 +1,16 @@
+// expect: 1
+// expect: a
+// expect: bb
+// `let n = amount(..)` (int) in one block and `for n in names` (string) later: the int binding is
+// emitted as `bal.push(n.to_string())` (E0308). Local types are looked up by name, not by scope.
+fn amount(s: string) -> int { s.len() as int }
+fn main() {
+    let names: Vec<string> = ["a", "bb"]
+    let mut bal: Vec<int> = []
+    if names.len() > 0 {
+        let n = amount(names[0])
+        bal.push(n)
+    }
+    println("${bal[0]}")
+    for n in names { println(n) }
+}

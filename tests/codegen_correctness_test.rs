@@ -138,6 +138,7 @@ corpus_tests!(
     field_iterated_inside_outer_loop,
     loop_mut_shadowed_after_write,
     element_read_then_collection_changed,
+    nested_closure_typed_param,
 );
 
 // ------------------------------------------------------------------ generated programs
