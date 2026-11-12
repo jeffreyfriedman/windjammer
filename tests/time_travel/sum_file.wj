@@ -4,14 +4,15 @@ fn total(text: string) -> int {
     let mut sum = 0
     for line in text.lines() {
         let n = line.trim().parse::<int>().unwrap()
+    //~@44 ERROR W0002 explicit
         sum = sum + n
     }
     sum
 }
-
 fn main() {
     let text = fs::read_to_string("numbers.txt").unwrap()
     println("read ${text.len()} bytes")
     let sum = total(text)
     println("sum ${sum}")
 }
+// oracle: check
