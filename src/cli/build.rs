@@ -55,6 +55,16 @@ fn report_local_mutability(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The compiler configuration of a build of `path`: `config` plus what the project's effects decide (ADR-0021).
+/// Shared with the in-process generator of the predictions (`cli::widths_gate`), which must build as `wj build` does.
+pub(crate) fn with_project_facts(config: crate::compiler_config::CompilerConfig, path: &Path, library: bool) -> Result<crate::compiler_config::CompilerConfig> {
+    // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
+    let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
+    // ADR-0021 E4b: the calls of `durable fn`s that are journaled steps
+    let (steps, reads) = crate::check::durable_sites::discover_split(path).map_err(anyhow::Error::msg)?;
+    Ok(config.with_durable_steps(steps).with_durable_read_steps(reads))
+}
+
 /// Build options for JavaScript target
 pub struct BuildOptions {
     pub tree_shake: bool,
@@ -106,11 +116,7 @@ pub fn execute(
     // ADR-0026: a call that does not match a Rust crate's signature surface stops the build before code generation
     stop_on_rust_crate_errors(path)?;
     report_local_mutability(path)?;
-    // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
-    let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
-    // ADR-0021 E4b: the calls of `durable fn`s that are journaled steps
-    let (steps, reads) = crate::check::durable_sites::discover_split(path).map_err(anyhow::Error::msg)?;
-    let config = config.with_durable_steps(steps).with_durable_read_steps(reads);
+    let config = with_project_facts(config, path, library)?;
 
     if target_str.eq_ignore_ascii_case("rust") {
         if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
