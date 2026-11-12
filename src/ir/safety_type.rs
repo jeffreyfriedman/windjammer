@@ -159,6 +159,14 @@ pub enum BaseType {
     Inferred,
 }
 
+impl BaseType {
+    /// A number, `bool` or `char`: a value that holds no borrow.
+    pub fn is_scalar(&self) -> bool {
+        use BaseType::*;
+        matches!(self, Bool | I8 | I16 | I32 | I64 | I128 | U8 | U16 | U32 | U64 | U128 | Usize | Isize | F32 | F64 | Char)
+    }
+}
+
 /// Ownership mode for an IR node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OwnedType {

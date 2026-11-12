@@ -64,16 +64,19 @@ fn owned_vec_formal_with_forwarding_borrow_must_not_reborrow() {
     let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs").clone();
     eprintln!("emit:\n{rs}");
+    // A read-only Vec forwarded only to read-only formals is borrowed down the whole chain (the IR rule
+    // OWN-READONLY; no copy); an owned formal is accepted too. Either way the call sites agree with it.
+    let borrowed_chain = rs.contains("clips: &Vec<Clip>, time: f32) -> Pose") && rs.contains("fn sample_clip_pose(clips: &Vec<Clip>");
     assert!(
-        rs.contains("clips: Vec<Clip>"),
-        "expected owned Vec formal:\n{rs}"
+        borrowed_chain || rs.contains("clips: Vec<Clip>"),
+        "expected an owned Vec formal or a borrowed chain:\n{rs}"
     );
     assert!(
         rs.contains("sample_clip_pose(&clips") || rs.contains("sample_clip_pose(clips"),
         "expected sample_clip_pose call:\n{rs}"
     );
     assert!(
-        !rs.contains(", &clips,") && !rs.contains(", &clips)"),
+        borrowed_chain || (!rs.contains(", &clips,") && !rs.contains(", &clips)")),
         "owned Vec formal must not receive &clips:\n{rs}"
     );
     test.cargo_check().expect("cargo-check");

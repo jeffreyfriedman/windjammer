@@ -200,7 +200,7 @@
 "src/typing/core_surface.rs" = 1
 
 [fallback_legacy]
-"src/analyzer/signature_registry.rs" = 48
+"src/analyzer/signature_registry.rs" = 46
 "src/codegen/rust/call_expression_generation/argument_generation/field_access_method_args.rs" = 6
 "src/codegen/rust/call_expression_generation/argument_generation/mod.rs" = 1
 "src/codegen/rust/call_expression_generation/argument_generation/regular_call_arguments.rs" = 1
