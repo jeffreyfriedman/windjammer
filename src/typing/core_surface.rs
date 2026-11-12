@@ -113,7 +113,14 @@ impl CoreSurface {
         let e = self
             .table
             .get(&(type_name.to_string(), method.to_string()))
-            .or_else(|| is_element_container(type_name).then(|| self.enumerable.get(method)).flatten())?;
+            .or_else(|| is_element_container(type_name).then(|| self.enumerable.get(method)).flatten())
+            // Direct iteration: `v.skip(n)` on a sequence is `v.iter().skip(n)` (ADR-0014), so a sequence also has the
+            // iterator adapters, over the same element `T` (`skip` / `take` counts are `usize` slots).
+            .or_else(|| {
+                (is_element_container(type_name) && type_name != ITERATOR)
+                    .then(|| self.table.get(&(ITERATOR.to_string(), method.to_string())))
+                    .flatten()
+            })?;
         if e.is_static {
             return None;
         }
