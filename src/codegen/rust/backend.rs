@@ -11,12 +11,32 @@ use anyhow::Result;
 
 /// Rust code generation backend
 pub struct RustBackend {
-    // Future: Move CodeGenerator internals here
+    /// Where the `windjammer-runtime` crate lives, given by the driver (never guessed from a sibling
+    /// checkout or a directory name). `None`: the registry release matching this compiler.
+    runtime_path: Option<std::path::PathBuf>,
+    /// Where the game crates live, given by the driver. `None`: the registry.
+    game_core_path: Option<std::path::PathBuf>,
+}
+
+fn toml_path(p: &std::path::Path) -> String {
+    p.display().to_string().replace('\\', "/")
 }
 
 impl RustBackend {
     pub fn new() -> Self {
-        Self {}
+        Self { runtime_path: None, game_core_path: None }
+    }
+
+    /// Point generated manifests at a `windjammer-runtime` checkout or the compiler's embedded copy.
+    pub fn with_runtime_path(mut self, path: std::path::PathBuf) -> Self {
+        self.runtime_path = Some(path);
+        self
+    }
+
+    /// Point generated manifests at the game crates.
+    pub fn with_game_core_path(mut self, path: std::path::PathBuf) -> Self {
+        self.game_core_path = Some(path);
+        self
     }
 
     /// Extract external crate dependencies from generated Rust code
@@ -69,29 +89,19 @@ edition = "2021"
         // Add detected dependencies with path references
         for dep in deps {
             let dep_line = match dep.as_str() {
-                // Sibling-checkout layouts are never assumed: game crates come from
-                // WJ_GAME_CORE_PATH when set, else the registry.
-                "game_host_core" => match std::env::var("WJ_GAME_CORE_PATH") {
-                    Ok(p) if !p.is_empty() => format!(
-                        "game-host-core = {{ path = \"{}\" }}\n",
-                        crate::cargo_toml::sanitize_path_for_toml(std::path::Path::new(&p))
-                    ),
-                    _ => "game-host-core = \"*\"\n".to_string(),
+                // Sibling-checkout layouts are never assumed: locations come from the driver.
+                "game_host_core" => match &self.game_core_path {
+                    Some(p) => format!("game-host-core = {{ path = \"{}\" }}\n", toml_path(p)),
+                    None => "game-host-core = \"*\"\n".to_string(),
                 },
-                "windjammer_app" => match std::env::var("WJ_GAME_CORE_PATH") {
-                    Ok(p) if !p.is_empty() => format!(
-                        "windjammer-app = {{ path = \"{}\" }}\n",
-                        crate::cargo_toml::sanitize_path_for_toml(std::path::Path::new(&p))
-                    ),
-                    _ => "windjammer-app = \"*\"\n".to_string(),
+                "windjammer_app" => match &self.game_core_path {
+                    Some(p) => format!("windjammer-app = {{ path = \"{}\" }}\n", toml_path(p)),
+                    None => "windjammer-app = \"*\"\n".to_string(),
                 },
-                // The runtime comes from the compiler's own embedded copy, wherever it is installed.
-                "windjammer_runtime" => format!(
-                    "windjammer-runtime = {{ path = \"{}\" }}\n",
-                    crate::cargo_toml::sanitize_path_for_toml(
-                        &crate::cargo_toml::find_windjammer_runtime_path()
-                    )
-                ),
+                "windjammer_runtime" => match &self.runtime_path {
+                    Some(p) => format!("windjammer-runtime = {{ path = \"{}\" }}\n", toml_path(p)),
+                    None => format!("windjammer-runtime = \"{}\"\n", env!("CARGO_PKG_VERSION")),
+                },
                 _ => {
                     // Unknown external crate, add as crates.io dependency
                     format!("{} = \"*\"\n", dep)
@@ -333,7 +343,9 @@ fn main() {
     #[test]
     fn test_cargo_toml_includes_tracked_dependencies() {
         // GREEN: Test that Cargo.toml includes dependencies extracted from code
-        let backend = RustBackend::new();
+        let backend = RustBackend::new()
+            .with_runtime_path(std::path::PathBuf::from("/opt/wj/runtime"))
+            .with_game_core_path(std::path::PathBuf::from("/opt/wj/game-core"));
         let generated_code = r#"
 use game_host_core::math::Vec3;
 use windjammer_runtime::test::assert_eq;
@@ -366,5 +378,14 @@ fn test() {}
             cargo_toml.contains("windjammer-runtime = { path = "),
             "Should have proper dependency declaration for runtime"
         );
+    }
+
+    #[test]
+    fn test_cargo_toml_never_assumes_a_sibling_checkout() {
+        let cargo_toml = RustBackend::new().generate_cargo_toml_with_code(
+            "use game_host_core::math::Vec3;\nuse windjammer_runtime::test::assert_eq;\n",
+        );
+        assert!(!cargo_toml.contains("../"), "no relative sibling paths:\n{cargo_toml}");
+        assert!(!cargo_toml.contains("path = "), "no path unless the driver gave one:\n{cargo_toml}");
     }
 }
