@@ -6,6 +6,7 @@
 //! (integer-width semantics) / `format` (println/format!) / `builtins` (stdlib).
 
 use super::builtins::Registry;
+use super::failure_locals::MainErrSite;
 use super::error::{ErrorKind, Frame, RuntimeError, Span, R};
 use super::value::{Slot, Value};
 use crate::parser::{Decorator, Parameter, Program, Statement, Type};
@@ -228,6 +229,10 @@ pub struct Interpreter {
     pub(crate) cur: Option<&'static Location>,
     /// Render the failing frame's bindings into an error (`--no-locals` turns it off; ADR-0036).
     pub(crate) capture_locals: bool,
+    /// Where `main` produced the `Err` it returned: the span and the bindings, noted as `main` returns (ADR-0036).
+    pub(crate) main_err_site: Option<MainErrSite>,
+    /// `for` bodies that change their loop variable, by body address (`analysis::loop_var_mutated`).
+    pub(crate) loop_mut_cache: HashMap<usize, bool>,
     /// Environment values (8+ characters) the failing frame's bindings are compared with before they are shown.
     pub(crate) secret_env: Vec<String>,
     pub(crate) output: Vec<String>,
@@ -344,6 +349,8 @@ impl Interpreter {
             backtrace: Vec::new(),
             cur: None,
             capture_locals: true,
+            main_err_site: None,
+            loop_mut_cache: HashMap::new(),
             secret_env: Vec::new(),
             output: Vec::new(),
             capture_output: false,

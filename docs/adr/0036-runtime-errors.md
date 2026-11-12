@@ -111,11 +111,14 @@ errors"); no measurable change is allowed.
 ## Limits stated plainly
 
 - A function run as machine code (`jit`) that panics is re-run by the closure engine, which produces the panic and
-  the locals; the bindings are the closure frame's slots, so a block-local binding that already ended may still show
-  its last value.
+  the locals. The bindings are the walker's: the names are those of the function's own scope, and the slots of a
+  block that ended are released when it ends, so a binding of an ended block is not reported
+  (`tests/runtime_error_report_test.rs::locals_match_the_walkers_across_engines_and_the_jit`).
 - Panics inside spawned tasks print the same detail for the task's innermost frame.
-- `Err` returned from `main` carries no span and no locals: the frame has ended; the Debug form of the error is the
-  message.
+- `Err` returned from `main` carries the span of the `Err(..)`, `return` or `?` expression that produced it, and the
+  bindings of `main`'s frame at that point, when `main` produced the value itself (the `WJ0171` report; the text
+  form is unchanged). A value `main` returns after storing it elsewhere is reported at the last located expression
+  that ran in `main`.
 
 ## Alternatives rejected
 

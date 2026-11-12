@@ -165,6 +165,9 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
             }
             _ => Err(panic_ctl("variant has no fields")),
         },
+        (Value::Native(n), Proj::Field(name)) => n
+            .field(name)
+            .ok_or_else(|| panic_ctl(format!("no field `{}` on {}", name, n.type_name()))),
         (Value::Ref(p0), _) => project(&p0.read()?, p),
         (Value::Rc(slot), _) => project(&slot.borrow().clone(), p),
         (v, p) => Err(panic_ctl(format!("cannot project {:?} out of {}", p, v.type_name()))),

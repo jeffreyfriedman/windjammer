@@ -863,6 +863,9 @@ impl Interpreter {
             Err(Ctl::Break(_)) | Err(Ctl::Continue(_)) => Err(semantic("`break`/`continue` outside of a loop")),
             other => other,
         };
+        if let Ok(v) = &r {
+            self.note_main_err(&f.name, v, |it| it.walker_locals());
+        }
         let r = match r {
             Ok(v) => match f.ret {
                 None => Ok(Value::Unit),
@@ -959,6 +962,9 @@ impl Interpreter {
             return Ok(recv); // Rc::clone: another handle to the same allocation
         }
         let recv = deref_value(recv)?;
+        if method == crate::parser::optional_chain::OPT_CHAIN && matches!(&recv, Value::Enum(e) if &*e.ty == "Result") {
+            return self.result_member_chain(recv, arguments, loc);
+        }
         // which user method (if any) will run? decides argument ref-ness
         let user = self.find_user_method(&recv, method);
         let args = self.eval_args(arguments, user.as_ref(), true)?;
@@ -977,6 +983,23 @@ impl Interpreter {
             self.note_moves(arguments.iter().map(|(_, e)| *e));
         }
         Ok(r)
+    }
+
+    /// `items(n)?.len()` reads as optional chaining (`?.`), but on a `Result` it is `?` followed by `.len()`, as the
+    /// compiled build treats it: `Ok(v)` continues with `v.len()` (not lifted into an option), `Err(e)` returns it.
+    fn result_member_chain(
+        &mut self,
+        recv: Value,
+        arguments: &'static [(Option<String>, &'static Expression<'static>)],
+        loc: Option<&'static Location>,
+    ) -> R {
+        let args = self.eval_args(arguments, None, true)?;
+        self.mark(loc);
+        let payload = self.eval_try(recv)?;
+        match args.into_iter().next() {
+            Some(Value::Func(c)) => self.call_callable(&c, vec![payload]),
+            _ => Err(semantic("`?.` without a member")),
+        }
     }
 
     pub(crate) fn find_user_method(&self, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {

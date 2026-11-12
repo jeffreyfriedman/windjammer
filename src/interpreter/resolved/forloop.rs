@@ -48,6 +48,10 @@ pub(super) fn for_stmt(cx: &mut Cx, s: S, pattern: &'static Pattern<'static>, it
     if cx.boxed_ident(iterable) {
         return None;
     }
+    // a loop variable the body changes, over a place, writes through to its element: the walker does that
+    if Interpreter::is_place_expr(iterable) && crate::interpreter::analysis::loop_var_mutated(cx.it, cx.module, pattern, body) {
+        return None;
+    }
     let site = Rc::new(OsrSite::new(s, cx.all_locals(), Rc::downgrade(&cx.reg)));
     let src = match iterable {
         Expression::Range { start, end, inclusive, .. } => match (expr::expr(cx, start)?, expr::expr(cx, end)?) {

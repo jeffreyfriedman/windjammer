@@ -286,12 +286,11 @@ impl Parser {
                 Token::QuestionQuestion if self.double_try_follows() => self.double_try(expr),
                 Token::Question if self.at_optional_chain() => self.parse_optional_chain(expr)?,
                 Token::Question => {
-                    // TryOp: expr? (no ternary operator, so no ambiguity)
+                    // TryOp: expr? (no ternary operator, so no ambiguity); its location is the `?` itself
+                    // (not the token after it), so an `Err` it returns is reported at the `?`
+                    let location = self.current_location();
                     self.advance();
-                    self.alloc_expr(Expression::TryOp {
-                        expr,
-                        location: self.current_location(),
-                    })
+                    self.alloc_expr(Expression::TryOp { expr, location })
                 }
                 Token::LBracket => {
                     self.advance();

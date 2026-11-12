@@ -237,7 +237,7 @@
 "src/interpreter/builtins/seq.rs::register_vec" = 354
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 301
-"src/parser/call_expression_parser.rs::parse_postfix_chain" = 459
+"src/parser/call_expression_parser.rs::parse_postfix_chain" = 458
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
 "src/parser/primary_expression_parser.rs::parse_primary_expression_inner" = 543
 "src/parser/type_parser.rs::parse_type_core" = 428

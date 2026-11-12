@@ -50,6 +50,33 @@ pub fn analyze(it: &mut Interpreter, f: &Rc<FuncDef>) -> (Vec<bool>, bool) {
     (out, self_mut && !returns_self)
 }
 
+/// Does a `for` body change its loop variable (assign it, assign through it, or call a mutating method on it)?
+/// The parser drops the `mut` marker of a loop variable (ADR-0002 keeps it for `wj check`), but a variable the body
+/// changes is declared `mut` in every program the compiler accepts, and then the compiled loop iterates by `&mut`:
+/// the interpreter writes the variable back to its element. Cached per loop body.
+pub(crate) fn loop_var_mutated(it: &mut Interpreter, module: usize, pattern: &'static Pattern<'static>, body: &'static [&'static Statement<'static>]) -> bool {
+    let key = body.as_ptr() as usize;
+    if let Some(v) = it.loop_mut_cache.get(&key) {
+        return *v;
+    }
+    fn names(p: &'static Pattern<'static>, out: &mut Vec<&'static str>) {
+        match p {
+            Pattern::Identifier(n) | Pattern::MutBinding(n) => out.push(n.as_str()),
+            Pattern::Tuple(ps) => ps.iter().for_each(|q| names(q, out)),
+            _ => {}
+        }
+    }
+    let mut vars = Vec::new();
+    names(pattern, &mut vars);
+    let mut set = Muts::default();
+    for s in body {
+        scan_stmt(it, module, s, &mut set);
+    }
+    let v = vars.iter().any(|n| set.contains(n) || set.rebound.contains(n));
+    it.loop_mut_cache.insert(key, v);
+    v
+}
+
 fn root(e: &'static Expression<'static>) -> Option<&'static str> {
     match e {
         Expression::Identifier { name, .. } => Some(name.as_str()),
@@ -137,7 +164,13 @@ fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>
                 scan_expr(it, module, a.body, out);
             }
         }
-        Statement::For { iterable, body, .. } => {
+        Statement::For { pattern, iterable, body, .. } => {
+            // a loop variable the body changes iterates its collection by `&mut`: the collection's root is mutated
+            if loop_var_mutated(it, module, pattern, body) {
+                if let Some(r) = root(iterable) {
+                    out.insert(r);
+                }
+            }
             scan_expr(it, module, iterable, out);
             for x in body {
                 scan_stmt(it, module, x, out);

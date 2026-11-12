@@ -189,6 +189,5 @@ fn mut_loop_variables_write_through_in_the_generated_rust() {
     assert!(compiled.status.success());
     let native = Command::new(dir.path().join("m.bin")).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&native.stdout), "11 12 3 6\n", "the compiled loops write through");
-    // The interpreter does not write a loop variable back to its element yet (docs/known-issues/
-    // interpreter-loop-variable-write-through.md); the drift gate ledgers it.
+    // The interpreter writes the loop variable back too (tests/interpreter_correctness_test.rs).
 }
