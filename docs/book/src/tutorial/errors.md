@@ -82,6 +82,36 @@ fn main() {
 }
 ```
 
+## Matching the wrong one of the two
+
+`Option` has `Some` and `None`; `Result` has `Ok` and `Err`. Writing the patterns of one against a value of the other is a
+common slip, and the compiler names it rather than leaving you with a generic type error. The message says what the value
+is, what the pattern is, and which variant becomes which:
+
+```sh,verify
+$ cat > pick.wj <<'EOF'
+fn find(n: int) -> Option<int> {
+    if n > 0 {
+        return Some(n)
+    }
+    None
+}
+
+fn main() {
+    match find(3) {
+        Ok(v) => println("got ${v}"),
+        Err(e) => println("none"),
+    }
+}
+EOF
+$ wj check pick.wj || true
+error[WJ0003]: mismatched types: expected `Option`, found `Result` pattern `Ok(..)`
+  = help: `find` returns a `Option`: match `Some(v)` and `None` instead of the `Result` variants (`Ok` becomes `Some`)
+  = fix (auto-fixable): match the `Option` with `Some`
+```
+
+The fix is mechanical, so `wj check --fix` can apply it.
+
 ## Defaults and chaining for optional values
 
 For a quick default, `??` takes the value inside an option, or the right-hand side when there is none. The right side is
