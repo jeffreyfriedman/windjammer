@@ -1,0 +1,23 @@
+// expect: exits: none
+// expect: exits: n s
+// expect: 42 -42
+// expect: 7 7
+// An `if`/`else` value whose branches mix an owned `string` (a call result, an owned local) with
+// borrowed text (a literal, a slice) is one owned `string`.
+fn join_all(parts: Vec<string>) -> string {
+    parts.join(" ")
+}
+fn digits_of(cs: Vec<char>) {
+    let mut t = ""
+    for c in cs { t = t + c.to_string() }
+    let digits = if t.len() > 0 && t[0..1] == "-" { t[1..t.len()] } else { t }
+    println("${digits} ${t}")
+}
+fn main() {
+    let empty: Vec<string> = []
+    let two: Vec<string> = ["n", "s"]
+    println("exits: ${if empty.len() == 0 { "none" } else { join_all(empty) }}")
+    println("exits: ${if two.len() == 0 { "none" } else { join_all(two) }}")
+    digits_of(['-', '4', '2'])
+    digits_of(['7'])
+}

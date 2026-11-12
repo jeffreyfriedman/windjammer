@@ -1,0 +1,25 @@
+// expect: 30
+// expect: 2
+struct Node {
+    w: int,
+    args: Vec<int>,
+}
+struct Graph {
+    nodes: Vec<Node>,
+}
+impl Graph {
+    fn total(self, n: int) -> int {
+        let mut sum = 0
+        for a in self.nodes[n].args {
+            if self.nodes[a].w > 0 {
+                sum += self.nodes[a].w
+            }
+        }
+        sum
+    }
+}
+fn main() {
+    let g = Graph { nodes: [Node { w: 0, args: [1, 2] }, Node { w: 10, args: [] }, Node { w: 20, args: [] }] }
+    println("${g.total(0)}")
+    println("${g.nodes[0].args.len()}")
+}

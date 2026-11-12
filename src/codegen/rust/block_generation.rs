@@ -336,7 +336,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // statements get their semicolons.
                 let old_expr_ctx = self.in_expression_context;
                 self.in_expression_context = false;
-                output.push_str(&self.generate_statement(stmt));
+                output.push_str(&self.generate_discarded_statement(stmt));
                 self.in_expression_context = old_expr_ctx;
             } else {
                 // Last statement of a non-Expression type (e.g., Statement::If used as block value):
@@ -350,6 +350,20 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_block_local_idx = saved_local_idx;
         self.skip_block_indices = saved_skips;
         output
+    }
+
+    /// A non-final statement of a block: its value is discarded. An `if`/`else` there is a
+    /// statement, so each branch tail ends with `;` even when it has a value (`v.remove(i)`
+    /// yields the element), as an `if` without `else` already does. Decided by statement
+    /// position, not by the tail's type or name.
+    fn generate_discarded_statement(&mut self, stmt: &Statement<'ast>) -> String {
+        if !matches!(stmt, Statement::If { else_block: Some(_), .. }) {
+            return self.generate_statement(stmt);
+        }
+        let old_void = std::mem::replace(&mut self.in_void_block, true);
+        let out = self.generate_statement(stmt);
+        self.in_void_block = old_void;
+        out
     }
 
     /// Statement bookkeeping shared by the block emitters: auto-clone index and block position.
@@ -853,7 +867,7 @@ impl<'ast> CodeGenerator<'ast> {
             } else if !is_last {
                 let old_expr_ctx = self.in_expression_context;
                 self.in_expression_context = false;
-                output.push_str(&self.generate_statement(stmt));
+                output.push_str(&self.generate_discarded_statement(stmt));
                 self.in_expression_context = old_expr_ctx;
             } else {
                 output.push_str(&self.generate_statement(stmt));

@@ -101,6 +101,11 @@ impl<'ast> CodeGenerator<'ast> {
             ) || (self.in_expression_context && any_branch_suggests_owned_coercion));
         if coerce_string_in_branches {
             self.coerce_string_literals_to_owned = true;
+            // A sibling branch yields an owned `String`, so this value is owned even inside
+            // `format!` arguments (which otherwise keep literals as `&str`).
+            if !any_branch_has_as_str {
+                self.suppress_string_conversion.set(false);
+            }
         }
 
         // P3.370: `mean_a = if c { mean_a / n as f32 } else { 0.0 }` — else must not stay `_f64`
