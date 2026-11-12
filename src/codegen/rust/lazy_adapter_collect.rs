@@ -11,7 +11,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// `std/rust_core.wji` as returning an `Iterator`) and the binding is declared as a list.
     pub(in crate::codegen::rust) fn collect_declared_list_from_adapter(&self, value: &Expression<'ast>, declared: &Type, value_str: &mut String) {
         let Expression::MethodCall { method, .. } = value else { return };
-        if !crate::type_classification::type_is_vec_container(declared) || value_str.contains(".collect") {
+        if !crate::type_classification::type_is_vec_container(declared) || value_str.ends_with(">()") {
             return;
         }
         let yields_iterator = CoreSurface::parse()
