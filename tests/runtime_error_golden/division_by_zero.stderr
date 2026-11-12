@@ -1,0 +1,12 @@
+thread 'main' panicked at division_by_zero.wj:3:11:
+attempt to divide by zero
+stack backtrace:
+  --> division_by_zero.wj:3:11
+ 3 |     total / count
+   |           ^
+  0: `average` at division_by_zero.wj:3:11
+  1: `main` at division_by_zero.wj:7:23
+locals in `average`:
+  total = 30
+  count = 0
+  label = "mean"

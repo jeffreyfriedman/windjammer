@@ -760,6 +760,14 @@ id = "wj run --hash-seed"
 statement = "Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)"
 
 [[promise]]
+id = "wj run --error-format"
+statement = "Interpreted runs: how a failed run reports on stderr: `human` (default: the panic message, the failing source line, the call stack and the bindings of the failing frame) or `json` (one line in the diagnostics schema with `stack` and `locals`). Program stdout and the exit status do not change (ADR-0036)"
+
+[[promise]]
+id = "wj run --no-locals"
+statement = "Interpreted runs: leave the bindings of the failing frame out of the error report (they are redacted when they look like secrets, and this drops them altogether)"
+
+[[promise]]
 id = "wj run --hot"
 statement = "Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)"
 pending = "no acceptance cases yet"

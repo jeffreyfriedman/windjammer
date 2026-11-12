@@ -1,0 +1,14 @@
+thread 'main' panicked at assert_eq_sides.wj:3:14:
+assertion `left == right` failed: sums differ
+  left: 7
+ right: 10
+stack backtrace:
+  --> assert_eq_sides.wj:3:14
+ 3 |     assert_eq(actual, expected, "sums differ")
+   |              ^
+  0: `check` at assert_eq_sides.wj:3:14
+  1: `main` at assert_eq_sides.wj:7:15
+locals in `check`:
+  expected = 10
+  actual = 7
+  label = "sum"

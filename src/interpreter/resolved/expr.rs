@@ -11,6 +11,7 @@ use super::island::{self, Island};
 use super::typed::{self, small, unbox, I};
 use super::{Code, CompiledFn};
 use crate::interpreter::engine::{FuncDef, Interpreter};
+use crate::interpreter::eval_expr::lead_loc;
 use crate::interpreter::error::{semantic, unsupported, R};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::intrinsics::Intrinsic;
@@ -104,11 +105,11 @@ fn is_cmp(op: BinaryOp) -> bool {
 /// anything else must evaluate to a bool.
 pub(super) fn cond(cx: &mut Cx, e: E, what: &'static str, deref: bool) -> Option<Cond> {
     match e {
-        Expression::Binary { left, op, right, location } if is_cmp(*op) => {
+        Expression::Binary { left, op, right, .. } if is_cmp(*op) => {
             let (l, r) = (expr_eval(cx, left)?, expr_eval(cx, right)?);
             Some(match (l, r) {
-                (X::I(l, _), X::I(r, _)) => typed::compare(*op, l, r, location.as_ref())?,
-                (l, r) => fast::compare(l.operand(), r.operand(), *op, location.as_ref(), what)?,
+                (X::I(l, _), X::I(r, _)) => typed::compare(*op, l, r, lead_loc(e))?,
+                (l, r) => fast::compare(l.operand(), r.operand(), *op, lead_loc(e), what)?,
             })
         }
         Expression::Binary { left, op: op @ (BinaryOp::And | BinaryOp::Or), right, .. } if boolish(left) && boolish(right) => {
@@ -191,9 +192,9 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
                 }))
             }
         },
-        Expression::Binary { left, op, right, location } if !matches!(op, BinaryOp::And | BinaryOp::Or) => {
+        Expression::Binary { left, op, right, .. } if !matches!(op, BinaryOp::And | BinaryOp::Or) => {
             let (l, r) = (expr_eval(cx, left)?, expr_eval(cx, right)?);
-            binary(l, *op, r, location.as_ref())
+            binary(l, *op, r, lead_loc(e))
         }
         Expression::Binary { left, op, right, .. } => {
             let (l, r) = (expr_eval(cx, left)?.code(), expr_eval(cx, right)?.code());
@@ -241,9 +242,9 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             }
         }
         Expression::Cast { expr: inner, type_, location } => cast(cx, inner, type_, location.as_ref())?,
-        Expression::Index { object, index, location } => {
+        Expression::Index { object, index, .. } => {
             let (o, i) = (expr_eval(cx, object)?.code(), expr_eval(cx, index)?.code());
-            let loc = location.as_ref();
+            let loc = lead_loc(e);
             X::V(Box::new(move |it, b| {
                 let obj = o(it, b)?;
                 let idx = i(it, b)?;

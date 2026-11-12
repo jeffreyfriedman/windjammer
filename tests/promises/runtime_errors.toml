@@ -1,0 +1,49 @@
+# Acceptance cases for self-explaining runtime errors (ADR-0036): the stack and the failing frame's bindings in text and
+# JSON, `--no-locals`, and the rule that the detail is stderr only.
+
+[[case]]
+name = "a failed interpreted run shows the call stack and the values of the failing frame"
+polarity = "positive"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "fn pick(scores: Vec<int>, which: int) -> int {\n    scores[which]\n}\n\nfn main() {\n    println(\"picking\")\n    println(\"${pick([90, 85, 70], 5)}\")\n}\n" }
+args = ["run", "--interpret", "--no-lint", "{w}/m.wj"]
+exit = 101
+stdout_has = ["picking"]
+stderr_has = ["0: `pick` at", "1: `main` at", "locals in `pick`:", "which = 5", "scores = [90, 85, 70]"]
+
+[[case]]
+name = "--error-format json prints one diagnostics-schema line with the stack and the locals"
+polarity = "positive"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "fn pick(scores: Vec<int>, which: int) -> int {\n    scores[which]\n}\n\nfn main() {\n    println(\"${pick([90, 85, 70], 5)}\")\n}\n" }
+args = ["run", "--interpret", "--no-lint", "--error-format", "json", "{w}/m.wj"]
+exit = 101
+stderr_has = ["\"command\":\"run\"", "\"code\":\"WJ0170\"", "\"stack\":[", "\"locals\":[", "\"name\":\"which\""]
+
+[[case]]
+name = "an unknown --error-format is refused"
+polarity = "negative"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "fn main() {\n    println(\"x\")\n}\n" }
+args = ["run", "--interpret", "--error-format", "xml", "{w}/m.wj"]
+exit = 2
+output_has = ["human", "json"]
+
+[[case]]
+name = "--no-locals keeps the stack and leaves the bindings out; a secret-named binding is never shown"
+polarity = "negative"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "fn login(password: string, which: int) -> int {\n    let v = [1]\n    v[which]\n}\n\nfn main() {\n    println(\"${login(\"hunter2\", 4)}\")\n}\n" }
+args = ["run", "--interpret", "--no-lint", "--no-locals", "{w}/m.wj"]
+exit = 101
+stderr_has = ["0: `login` at"]
+output_lacks = ["locals in", "hunter2"]
+
+[[case]]
+name = "--no-locals still reports the stack of a failed run"
+polarity = "positive"
+covers = ["feature interpreter-matches-compiled"]
+files = { "m.wj" = "fn pick(scores: Vec<int>, which: int) -> int {\n    scores[which]\n}\n\nfn main() {\n    println(\"${pick([90, 85, 70], 5)}\")\n}\n" }
+args = ["run", "--interpret", "--no-lint", "--no-locals", "{w}/m.wj"]
+exit = 101
+stderr_has = ["0: `pick` at", "1: `main` at"]
