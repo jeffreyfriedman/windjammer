@@ -1,0 +1,54 @@
+pub struct VoxelGrid {
+    size: i32,
+}
+
+impl VoxelGrid {
+    pub fn new() -> VoxelGrid {
+        VoxelGrid { size: 1 }
+    }
+}
+
+pub struct MaterialPalette {
+    count: i32,
+}
+
+impl MaterialPalette {
+    pub fn new() -> MaterialPalette {
+        MaterialPalette { count: 0 }
+    }
+}
+
+pub struct Camera {
+    fov: f32,
+}
+
+impl Camera {
+    pub fn new() -> Camera {
+        Camera { fov: 70.0 }
+    }
+}
+
+pub struct SceneBuilder {
+    voxel_grids: Vec<VoxelGrid>,
+    cameras: Vec<Camera>,
+    materials: MaterialPalette,
+}
+
+impl SceneBuilder {
+    pub fn new() -> SceneBuilder {
+        SceneBuilder {
+            voxel_grids: Vec::new(),
+            cameras: Vec::new(),
+            materials: MaterialPalette::new(),
+        }
+    }
+
+    pub fn add_voxel_grid(self, grid: VoxelGrid) -> SceneBuilder {
+        self.voxel_grids.push(grid)
+        SceneBuilder {
+            voxel_grids: self.voxel_grids,
+            cameras: self.cameras,
+            materials: self.materials,
+        }
+    }
+}

@@ -1,0 +1,48 @@
+use crate::domain::Store
+
+fn encode(store: Store) -> string {
+    store.items.join(",")
+}
+
+fn decode(text: string) -> Result<Store, string> {
+    Ok(Store { items: text.split(",").map(|x| x.to_string()).collect() })
+}
+
+fn apply(store: Store, kind: string, title: string) -> Result<(Store, string), string> {
+    if kind == "add" {
+        match store.add(title) {
+            Ok(pair) => Ok((pair.0, "added ${pair.1}")),
+            Err(e) => Err(e),
+        }
+    } else if kind == "list" {
+        let raw = store.into_items()
+        Ok((Store { items: raw }, "listed"))
+    } else if kind == "export" {
+        let snapshot = encode(store)
+        match decode(snapshot) {
+            Ok(copy) => {
+                let raw = copy.into_items()
+                match decode(snapshot) {
+                    Ok(restored) => Ok((restored, "x ${raw.len()}")),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
+    } else if kind == "import" {
+        let imported = title.split(",").map(|x| x.to_string()).collect()
+        if title == "merge" {
+            let result = store.merge_from(imported)
+            Ok((result.0, "imported ${result.1}"))
+        } else {
+            Ok((Store { items: imported }, "imported"))
+        }
+    } else {
+        Ok((store.clear_all(), "cleared"))
+    }
+}
+
+pub fn run_args(store: Store, kind: string, title: string) -> Result<(Store, string), string> {
+    apply(store, kind, title)
+}
+

@@ -57,7 +57,7 @@ impl FormalScope {
                     || crate::type_classification::is_copy_primitive(leaf)
                     || crate::type_classification::is_known_copy_aggregate(leaf)
             }
-            Type::Parameterized(base, args) if base == "Option" => args.iter().all(|a| self.is_copy(a)),
+            Type::Parameterized(base, args) if crate::type_classification::is_option_type_name(base) => args.iter().all(|a| self.is_copy(a)),
             _ => false,
         }
     }
@@ -153,14 +153,21 @@ pub(crate) fn lower_program_to_fixed_point(
     registry: &mut SignatureRegistry,
     fields: &HashMap<String, HashMap<String, Type>>,
     copy_types: &HashSet<String>,
+    self_field_move_experiment: bool,
 ) -> crate::ir::pipeline::IrModule {
     let scope = FormalScope::new(std::slice::from_ref(program), copy_types);
-    let mut module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, registry, Some(fields));
+    let pipeline = || {
+        crate::ir::IrPipeline::with_config(crate::ir::pipeline::IrPipelineConfig {
+            self_owned_after_last_field_move: self_field_move_experiment,
+            ..Default::default()
+        })
+    };
+    let mut module = pipeline().lower_to_ir(analyzed, registry, Some(fields));
     for _ in 1..MAX_ROUNDS {
         if !scope.publish(registry, None, &module.functions, analyzed) {
             break;
         }
-        module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, registry, Some(fields));
+        module = pipeline().lower_to_ir(analyzed, registry, Some(fields));
     }
     module
 }

@@ -1,0 +1,14 @@
+use crate::material::MaterialPalette
+use crate::material::VoxelMaterialEditor
+
+pub struct VoxelEditor {
+    material_editor: VoxelMaterialEditor,
+}
+
+impl VoxelEditor {
+    pub fn new(grid_size: i32) -> VoxelEditor {
+        let palette = MaterialPalette::new()
+        let material_editor = VoxelMaterialEditor::new(palette.copy())
+        VoxelEditor { material_editor: material_editor }
+    }
+}

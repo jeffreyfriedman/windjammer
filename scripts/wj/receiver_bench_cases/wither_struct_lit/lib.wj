@@ -1,0 +1,19 @@
+pub struct Graph {
+    pub n: i32,
+}
+
+pub struct Builder {
+    pub graph: Graph,
+    pub items: Vec<i32>,
+    pub label: string,
+}
+
+impl Builder {
+    pub fn with_label(self, label: string) -> Builder {
+        Builder {
+            graph: self.graph,
+            items: self.items,
+            label: label,
+        }
+    }
+}
