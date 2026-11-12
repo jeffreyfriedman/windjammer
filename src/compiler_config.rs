@@ -32,8 +32,10 @@ pub struct CompilerConfig {
     pub stdlib_path: Option<PathBuf>,
     /// Override the `windjammer-runtime` crate path used in generated Cargo.toml.
     pub runtime_path: Option<PathBuf>,
-    /// Override the a game engine project workspace path for generated Cargo.toml.
-    pub game_path: Option<PathBuf>,
+    /// Path dependencies for generated Cargo.toml, keyed by crate name (`-` and `_` spell the
+    /// same name; keys are stored with `-`). Set via `WJ_CRATE_PATHS=name=/dir:name2=/dir2`
+    /// (entries separated like `PATH`).
+    pub crate_paths: std::collections::BTreeMap<String, PathBuf>,
     /// Run the opt-in auto-arena optimizer pass (`scratch_reuse`, ADR-0025; `WJ_AUTO_ARENA=1`).
     pub auto_arena: bool,
     /// Rust statement installing the program's capability grant at the start of `main` (ADR-0021: only when some
@@ -64,7 +66,7 @@ impl Default for CompilerConfig {
             emit_source_maps: false,
             stdlib_path: None,
             runtime_path: None,
-            game_path: None,
+            crate_paths: Default::default(),
             auto_arena: false,
             capability_install: None,
             durable_steps: Default::default(),
@@ -73,6 +75,21 @@ impl Default for CompilerConfig {
             unchecked_arithmetic: false,
         }
     }
+}
+
+/// Parse `name=/dir[:name2=/dir2]` (separator as in `PATH`); malformed entries are skipped.
+fn parse_crate_paths(value: Option<&str>) -> std::collections::BTreeMap<String, PathBuf> {
+    let mut out = std::collections::BTreeMap::new();
+    let Some(value) = value else { return out };
+    for entry in std::env::split_paths(value) {
+        let entry = entry.to_string_lossy().to_string();
+        if let Some((name, dir)) = entry.split_once('=') {
+            if !name.is_empty() && !dir.is_empty() {
+                out.insert(name.replace('_', "-"), PathBuf::from(dir));
+            }
+        }
+    }
+    out
 }
 
 impl CompilerConfig {
@@ -104,7 +121,7 @@ impl CompilerConfig {
             emit_source_maps: false,
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
-            game_path: path("game-host_PATH"),
+            crate_paths: parse_crate_paths(get("WJ_CRATE_PATHS").as_deref()),
             auto_arena: on("WJ_AUTO_ARENA"),
             capability_install: None,
             durable_steps: Default::default(),

@@ -23,7 +23,7 @@ fn default_is_production_all_cutover_on() {
     assert!(!config.emit_aosoa_hints);
     assert!(config.stdlib_path.is_none());
     assert!(config.runtime_path.is_none());
-    assert!(config.game_path.is_none());
+    assert!(config.crate_paths.is_empty());
     assert!(config.cache_locality_json.is_none());
 }
 
@@ -49,7 +49,7 @@ fn from_lookup_reads_every_documented_toggle() {
         ("WJ_EMIT_AOSOA_HINTS", "1"),
         ("WINDJAMMER_STDLIB", "/s"),
         ("WINDJAMMER_RUNTIME_PATH", "/r"),
-        ("game-host_PATH", "/g"),
+        ("WJ_CRATE_PATHS", "acme_core=/g:other=/o"),
         ("WJ_CACHE_LOCALITY_JSON", "/c.json"),
     ]));
     assert!(!config.ir_cutover.ownership);
@@ -60,7 +60,8 @@ fn from_lookup_reads_every_documented_toggle() {
     assert!(config.emit_aosoa_hints);
     assert_eq!(config.stdlib_path, Some(PathBuf::from("/s")));
     assert_eq!(config.runtime_path, Some(PathBuf::from("/r")));
-    assert_eq!(config.game_path, Some(PathBuf::from("/g")));
+    assert_eq!(config.crate_paths.get("acme-core"), Some(&PathBuf::from("/g")));
+    assert_eq!(config.crate_paths.get("other"), Some(&PathBuf::from("/o")));
     assert_eq!(config.cache_locality_json, Some(PathBuf::from("/c.json")));
 }
 

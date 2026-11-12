@@ -92,20 +92,15 @@ fn install_plugins(bin: &Path, dry_run: bool) -> Result<usize> {
     let repo_root = find_repo_root(&current_exe);
     let mut count = 0usize;
 
-    let plugin_search_dirs: Vec<PathBuf> = if let Some(root) = &repo_root {
-        vec![
-            root.join("target/release"),
-            root.join("target/debug"),
-            root.parent()
-                .unwrap_or(root)
-                .join("game-host/wj-plugins/wj-game/target/release"),
-            root.parent()
-                .unwrap_or(root)
-                .join("game-host/wj-plugins/wj-vgraph/target/release"),
-        ]
+    let mut plugin_search_dirs: Vec<PathBuf> = if let Some(root) = &repo_root {
+        vec![root.join("target/release"), root.join("target/debug")]
     } else {
         vec![]
     };
+    // Extra plugin build directories are declared, never guessed from sibling checkouts.
+    if let Some(dirs) = std::env::var_os("WJ_PLUGIN_PATH") {
+        plugin_search_dirs.extend(std::env::split_paths(&dirs));
+    }
 
     let plugin_names = ["wj-game", "wj-lint", "wj-vgraph"];
 

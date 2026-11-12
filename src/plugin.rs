@@ -12,8 +12,9 @@ pub fn execute_plugin(plugin_name: &str, args: &[String]) -> Result<i32> {
 
     // Search order (TDD: support multiple plugin locations):
     // 1. ./wj-plugins/wj-<plugin>/target/release/wj-<plugin> (standard)
-    // 2. ./wj-<plugin>/target/release/wj-<plugin> (alternate, e.g. a game engine project repo)
-    // 3. wj-<plugin> in $PATH (global)
+    // 2. ./wj-<plugin>/target/release/wj-<plugin> (alternate, a plugin project checkout)
+    // 3. <dir>/wj-<plugin> for each dir in $WJ_PLUGIN_PATH (PATH-style list; explicit, never guessed)
+    // 4. wj-<plugin> in $PATH (global)
 
     let locations = vec![
         PathBuf::from(".")
@@ -25,13 +26,11 @@ pub fn execute_plugin(plugin_name: &str, args: &[String]) -> Result<i32> {
             .join(&binary_name)
             .join("target/release")
             .join(&binary_name),
-        PathBuf::from("..")
-            .join("game-host")
-            .join("wj-plugins")
-            .join(&binary_name)
-            .join("target/release")
-            .join(&binary_name),
     ];
+    let mut locations = locations;
+    if let Some(dirs) = std::env::var_os("WJ_PLUGIN_PATH") {
+        locations.extend(std::env::split_paths(&dirs).map(|d| d.join(&binary_name)));
+    }
 
     for local_plugin in &locations {
         if local_plugin.exists() {
