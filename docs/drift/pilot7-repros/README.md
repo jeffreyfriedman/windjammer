@@ -13,12 +13,17 @@ Fixed on `wt/pilot7-tasks` (cases in `tests/codegen_correctness_corpus/`):
 | `index_by_borrowed_loop_var.wj` | a borrowed loop element used as an index was emitted `*(a as usize)` | t306 |
 | `if_value_owned_and_borrowed_text.wj` | an `if`/`else` value mixing an owned `string` with a literal or a slice kept the borrowed branch | t307, t308 |
 
+Fixed on `wt/width-11` (moved to `tests/codegen_correctness_corpus/`, judged by `tests/codegen_correctness_test.rs`):
+
+| Corpus case | Defect | Tasks |
+|---|---|---|
+| `int_element_compared_with_len_and_used_as_index.wj` | an `int` element read compared with `.len()` and used as an index got mixed `i64`/`usize`; the element of a declared local `Vec` now has a static type, so the class is decided by the solver | t304 |
+| `struct_field_read_moves_literal_to_i32.wj` | a struct field read through a local `Vec` held the solver class and the legacy decider printed `0_i32`; the field now has its declared type, the class is published | t305 |
+
 Open, with the owning stream:
 
 | Repro | Defect | Owner | Tasks |
 |---|---|---|---|
-| `int_element_compared_with_len_and_used_as_index.wj` | an `int` element read compared with `.len()` and used as an index gets mixed `i64`/`usize` | wt/width-11 (int width mixes) | t304 |
-| `struct_field_read_moves_literal_to_i32.wj` | a struct field read holds the solver class, and the legacy decider types `0 - net[d]` as `0_i32` | wt/width-11 (int width mixes; drift family A) | t305 |
 | `rebound_name_other_type_in_sibling_scope.wj` | an `int` local converted with `.to_string()` because a later `for n in names` binds `n` as a string | wt/ownership-9 (scope-aware local types) | t305, t308 |
 | `for_over_mut_param_then_push.wj` | `for o in out` over a `&mut Vec` parameter moves it before `out.push` | wt/ownership-9 (for-mut loop shapes) | t307 |
 | `self_field_arg_into_mut_self_method.wj` | `self.special(self.forms[h].s, ..)` borrows a field of `self` into a `&mut self` call | wt/ownership-9 (&T/T adaptation) | t307, t309 |

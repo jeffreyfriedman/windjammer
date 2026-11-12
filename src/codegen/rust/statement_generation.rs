@@ -679,7 +679,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // ADR-0014: `let x = [a, b]` is a growable list unless annotated as a fixed array.
                 let prev_list = self.array_literal_as_list;
                 self.array_literal_as_list = Self::list_literal_wanted(value, type_.as_ref());
+                self.binding_value_depth += 1;
                 let generated = self.generate_let_statement_with_context(pattern, *mutable, type_, value, location);
+                self.binding_value_depth -= 1;
                 self.array_literal_as_list = prev_list;
                 self.append_let_else(generated, stmt)
             }
@@ -765,7 +767,12 @@ impl<'ast> CodeGenerator<'ast> {
                 value,
                 compound_op,
                 ..
-            } => self.generate_assignment_statement(target, value, compound_op),
+            } => {
+                self.binding_value_depth += 1;
+                let out = self.generate_assignment_statement(target, value, compound_op);
+                self.binding_value_depth -= 1;
+                out
+            }
             Statement::Thread { body, .. } => self.generate_thread_statement(body),
             Statement::Async { body, .. } => self.generate_async_statement(body),
             Statement::Defer { statement, .. } => self.generate_defer_statement(statement, stmt),

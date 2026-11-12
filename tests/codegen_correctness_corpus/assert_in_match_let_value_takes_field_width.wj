@@ -1,0 +1,25 @@
+// expect: ok
+// `assert_eq(r.status, 200)` inside a `match` used as a `let` value: the binding `r` is the `Some` payload of the
+// declared `Option<Resp>`, so the literal takes the `u16` field's width (it was emitted `200_i32`).
+pub struct Resp {
+    pub status: u16,
+    pub body: string,
+}
+
+fn route(code: int) -> Option<Resp> {
+    if code > 0 {
+        return Some(Resp { status: 200, body: "ok" })
+    }
+    None
+}
+
+fn main() {
+    let body = match route(1) {
+        Some(r) => {
+            assert_eq(r.status, 200)
+            r.body + ""
+        },
+        None => "",
+    }
+    println(body)
+}

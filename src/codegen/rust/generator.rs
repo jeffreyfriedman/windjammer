@@ -110,6 +110,9 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_function_name: Option<String>,
     pub(crate) current_function_type_bounds: Vec<(String, Vec<String>)>,
     pub(crate) current_function_return_type: Option<Type>,
+    /// Inside the value of a `let` or an assignment: a block tail there is the binding's value, never the function's
+    /// return value, so the return-width tail casts do not apply.
+    pub(crate) binding_value_depth: u32,
     // WINDJAMMER TRAIT INFERENCE: Analyzed trait methods with inferred signatures from ALL impls
     pub(crate) analyzed_trait_methods: std::collections::HashMap<
         String,
@@ -649,6 +652,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_name: None,
             current_function_type_bounds: Vec::new(),
             current_function_return_type: None,
+            binding_value_depth: 0,
             current_function_body: Vec::new(),
             full_function_body_snapshot: Vec::new(),
             suppress_string_conversion: Cell::new(false),
