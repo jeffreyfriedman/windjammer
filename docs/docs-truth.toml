@@ -18,6 +18,16 @@ glob = "CHANGELOG.md"
 reason = "release notes record numbers as of their release"
 
 [[exclude]]
+check = "claims"
+glob = "bench/agent-dx/results/**"
+reason = "agent-pilot reports and notes record the numbers of one recorded run (the trial records beside them are the data); the live cost proxies are in docs/generated/measured.json"
+
+[[exclude]]
+check = "claims"
+glob = "docs/drift/pilot*-findings.md"
+reason = "findings of one recorded agent pilot, dated and tied to its trial records"
+
+[[exclude]]
 check = "fences"
 glob = "CHANGELOG.md"
 reason = "release notes quote the syntax as it was at their release"

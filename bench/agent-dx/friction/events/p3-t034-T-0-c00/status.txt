@@ -1,0 +1,1 @@
+open-compiler-bug: WJ0034: a trait cannot be used as a plain type
