@@ -1010,7 +1010,7 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 // field emit may have appended `.clone()` before we chose the
                 // Copy borrow-break path — strip so we never get `.clone().clone()`.
-                let mut owned = value_str.clone();
+                let mut owned = if use_owned_copy_borrow_break { self.strip_leading_borrow_prefix(&value_str) } else { value_str.clone() }; // a Copy scrutinee is copied (arms bind payloads by value)
                 while owned.ends_with(".clone()") {
                     owned.truncate(owned.len() - ".clone()".len());
                 }

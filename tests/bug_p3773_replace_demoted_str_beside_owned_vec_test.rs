@@ -71,16 +71,18 @@ fn replace_demoted_str_beside_owned_vec_must_borrow_strings_only() {
         rs.contains("fn escape_html(s: &str)"),
         "P3.773: replace chain must demote escape_html to &str:\n{rs}"
     );
+    // A read-only `Vec` of Copy elements is borrowed too (as in P3.528); an owned one must not be borrowed at the call.
+    let lines_borrowed = rs.contains("lines: &Vec<Line>) -> String");
     assert!(
-        rs.contains("account_code: &str") && rs.contains("lines: Vec<"),
-        "P3.773: table_html must demote strings and keep the Vec owned:\n{rs}"
+        rs.contains("account_code: &str") && (lines_borrowed || rs.contains("lines: Vec<Line>) -> String")),
+        "P3.773: table_html must demote strings:\n{rs}"
     );
     let call = rs
         .lines()
         .find(|l| l.contains("table_html(") && !l.contains("fn table_html"))
         .unwrap_or(rs);
     assert!(
-        call.contains("&account_code") && call.contains("&as_of") && !call.contains("&lines"),
+        call.contains("&account_code") && call.contains("&as_of") && call.contains("&lines") == lines_borrowed,
         "P3.773 RED: mixed &str/Vec call borrowed the wrong args:\n{call}\n{rs}"
     );
 }

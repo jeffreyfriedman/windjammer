@@ -86,6 +86,75 @@ shows the stages as `analyzer= solver= ir= emitted=`.
   convert a literal for an owned `String` formal; listed in `project_rejects.txt`), `param_rebound_then_compared`
   and `use_imported_homonym_by_value` (pass here; the larger-project failures they stand for did not reproduce).
 
+### C5 receiver design conflict: SELF-GETTER against "self owned when dead after the last field move" (wt/ownership-8)
+
+A group of older tests asserts an owned receiver where the spec's SELF-GETTER choice (above) borrows `self` and
+clones the moved fields: `self_consuming_ownership_test::test_method_moving_non_copy_field_mid_body`,
+`bug_module_file_owned_self_wither_must_move_fields_test` (both), `ecosystem_findings_handoff_test::store_threaded_through_adapter_functions_stays_owned`
+(the `Store` methods `add`, `into_items` and `merge_from` are snapshot methods, so `apply` only reads its store),
+`bug_module_file_owned_copy_into_new_must_not_borrow_test::module_file_associated_new_owned_palette_must_not_demote`
+(`copy(self)` is a snapshot, so `new` only reads `palette`),
+`library_multipass_ownership_codegen_test::test_nested_self_field_snapshot_clones_before_owned_call`,
+`library_multipass_ownership_codegen_test::test_builder_mutate_then_move_fields_uses_owned_self` and
+`bug_module_file_ctor_must_move_self_field_test` (both). Every current output compiles; they differ in where the
+copy is made.
+
+Evaluation of the open rule "`self` is owned when it is dead after its last field move":
+
+- It decides from the callee alone. Whether owned `self` is cheaper depends on the callers: a caller that keeps
+  using the object must then copy the whole object (CLONE-USE-AFTER-MOVE) instead of the moved fields, which is
+  why SELF-GETTER chose `&self`. A benchmark over the corpora (clone count and size at call sites under both
+  rules) decides; it is not run yet.
+- It must not apply to a method that writes `self` (the builder and constructor tests: `self.voxel_grids.push(..)`
+  then a struct literal of the fields; `self.grid = 1` after `Vox::new(self.scene)`). Under `&mut self` the caller
+  sees those writes; owned `self` would drop them for a caller that keeps the object, which changes what the
+  program prints (the interpreter keeps the writes). Those shapes stay `&mut self` with a field clone under either
+  rule; the tests' owned expectation is the design question, not a codegen bug.
+- Restricted to methods that never write `self`, the rule would turn the snapshot-family tests above green and
+  reverse SELF-GETTER for exactly those shapes. Adopting it is an owner decision with the benchmark as evidence;
+  until then the tests stay red and the spec rule stands.
+
+#### Benchmark (wt/ownership-8, 2026-11-12) and decision: not adopted
+
+The candidate was implemented in the IR (a post-solve step from the solved receiver mode and the body's `self`
+uses in evaluation order) behind a temporary switch, measured, and removed again. Rule as measured: `self` is
+owned when the method never writes `self` (not `&mut`, not a mutated parameter), moves at least one non-Copy field
+of `self` into a struct literal, tuple, array, `let` or assignment (not in a loop or closure, no field twice), and
+uses no moved field and not `self` whole after the first move. A first run that also counted a field returned as the
+result (`fn name(self) -> string { self.title }`) cost clones at call sites that keep the object
+(`tests/inference_corpus/returned_field_of_borrowed_receiver.wj` 2 -> 4), so getters were left to SELF-GETTER. A
+companion step made a by-value parameter owned when it receives an owned-`self` call (as an argument to an owned
+formal is).
+
+`.clone()` calls in the generated Rust, rule off -> on (the generated code of each target, counted by the benchmark
+script, `wj build --no-cargo`):
+
+| corpus | targets | off -> on |
+|---|---|---|
+| the nine receiver tests' programs | 9 | 17 -> 12 |
+| `tests/project_corpus` | 39 | 6 -> 6 |
+| `tests/inference_corpus` | 23 | 10 -> 10 |
+| `examples/verified` | 169 | 17 -> 15 |
+| ecosystem packages and apps | 74 | 839 -> 836 |
+
+Changed programs: `mid_body` 2 -> 0, `wither_push` 2 -> 0, `wither_struct_lit` 1 -> 0,
+`examples/verified/struct_default_builder.wj` 2 -> 0, `apps/wj-proxy` 18 -> 17, `apps/wj-taskflow` 51 -> 49. In
+`copy_into_new`, `nested_snapshot` and `store_threaded` the field clone moved from the callee to a whole-receiver
+clone at the call site (count unchanged). Bytes cloned were not estimated: the cloned values are `Vec` and `String`
+contents whose size the compiler does not know.
+
+Compile check: `apps/wj-proxy` builds with the rule off and fails with it on (rustc E0507:
+`apply_security(self.list_logs())` inside a `&mut self` method, where `list_logs` became `fn list_logs(self)`).
+The only correct spelling there is `self.clone().list_logs()`, a copy of the whole `ProxyApp` instead of its
+`logs` field. That is the cost SELF-GETTER avoids, and it is decided by the call site, which a callee-local rule
+cannot see.
+
+Decision: not adopted. The clone total falls (-10 of 889) but one ecosystem app stops compiling, and the
+correct repair makes that call site copy more than SELF-GETTER does. SELF-GETTER stays, and the receiver tests stay
+red as ledgered above. The next candidate is call-site gated: `self` owned only when every call site in the
+compilation owns its receiver at a last use (no call through a borrowed `self`, parameter, field or element). The
+value-formal fixed point already publishes receiver modes, so the gate can be a fixed-point fact.
+
 ## Name-based guesses (decide from declarations instead)
 
 The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a
@@ -123,8 +192,8 @@ reality (lower it with `cargo test --test all heuristic_surface_test::regenerate
 mutation check adds one guess of each kind to a real file and requires all three sections to fail. The gate also
 fails when the line below does not match the allow-list.
 
-Current totals (2026-11-09, after merging wt/c2 and the ownership O4 steps including public formals; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
-`H-NAME-MATCHES` 527, `H-MATCH-ARM-NAMES` 1127, `H-FALLBACK-LEGACY` 128 (total 1782)
+Current totals (2026-11-11, after U11 moved the trait-impl key helpers out of the signature registry; seeded at 1925 on 2026-11-04, the prelude constructors `Some` `None` `Ok` `Err` are a documented convention since stage C2):
+`H-NAME-MATCHES` 527, `H-MATCH-ARM-NAMES` 1127, `H-FALLBACK-LEGACY` 126 (total 1780)
 
 Breakdown at seeding (2026-11-04):
 
@@ -140,7 +209,7 @@ Breakdown at seeding (2026-11-04):
 Largest files: name matches `ir_call_site.rs` 32, `program_generation.rs` 24, `match_statement_generation.rs` 23,
 `statement_generation.rs` 22; match-arm names are dominated by the other backends' builtin tables
 (`portable/builtins.rs` 259, `javascript/emit/builtin.rs` 244, `go/emit/builtin.rs` 237), which map std function names
-to target spellings and should come from the declared std surface; fallback/legacy `analyzer/signature_registry.rs` 48
+to target spellings and should come from the declared std surface; fallback/legacy `analyzer/signature_registry.rs` 48 at seeding, 46 now
 (the C3 bare-name searches), `signature_promotion.rs` 17, `ir_call_site.rs` 16.
 
 Solver meters at the same time (next, 2026-11-04): `D-WIDTH-OWNERS` 51, `D-OWN-STAGES` 9, `D-CLONE-OUTSIDE-SOLVER` 19,
@@ -224,6 +293,7 @@ Each deletion is a separate commit that reports `LOC deleted` and the `explain_c
 | O4 fixed point (wt/ownership-6): after each IR lowering round the solved value-formal and receiver modes are published to the registry (and every file's analysis registry) under the keys that name their function; lowering repeats until none changes, so callers read callees' solved modes (`compiler/value_formal_fixed_point.rs`). Also: IR and codegen identity fixes (a `Type::method` IR before a same-named trait declaration; a bare call never names a method; a local shadows a function), owned-field clones (a borrowed root's field bound by `let`, a field path moved and read again), match on a borrowed parameter binds references, tuple-pattern `let` bindings get `mut` | wt/ownership-6 | 49 | 297 | project rejects -1 (`stored_through_let_alias`); corpus +6 neutral database-project repros (F32 F33 F34 F39 F40, all passing) |
 | C2 structured types (HasPart, surface binding, closures, patterns, aliases, opaque hold, published defaults) | wt/c2 | 233 (C1 surface binder, push element-store name check, old pattern binder) | 1236 (src; codegen+analyzer +80 / -9) | 51 -> 35; rustc rejects -5; narrowing casts 11 -> 6 |
 | C4 width-9: rebound names publish per read (NUM-USE-WIDTH; the lexical-scope class hold is retired), a core type's associated function is typed by the surface even when a `use` brings a std declaration of it (`HashMap::new()` in a nested module), `JoinHandle<T>` / `thread::spawn` on the surface, cross-crate tuple-variant payload types in `metadata.json`, a pushed float literal's solved width types the vector; `[module_features]` replaces the `desktop_*`/`app_*` name gate | wt/width-9 | 8 name-gated prefix checks + 1 helper (module generation), 1 class hold | see branch report | 35 -> 35; rustc rejects unchanged; project corpus unchanged |
+| C5/O4 (wt/ownership-8, merging the wt/ownership-7 snapshot): OWN-STORED covers a mutable local initialised from a by-value formal (`let mut out = state` moves the formal, no copy inside); liveness treats solver-typed scalar locals as holding no borrow and a read in a sibling `if`/`match` arm as no re-read; Copy aggregate formals stay owned (the snapshot backs out spelling them from the IR mode, per the emission contract). SELF-READ: a `match self` on a non-Copy enum whose arms use only Copy payload bindings (by the enum declaration) borrows `self`. Single-file builds run the value-formal fixed point in `attach_ir_module_if_missing`, so a forwarder reads its callee's solved formal (`Merchant::add_item` into `Inventory::add_item`) | wt/ownership-8 | 0 | ~150 | goldens: one changed, reviewed and rustc-clean (a moved formal instead of a clone); gates 0/1/3/4 and the project gate pass; receiver design conflicts ledgered above |
 
 ### Regression fixed: the usize class broke nine ecosystem targets (wt/c4-regress)
 

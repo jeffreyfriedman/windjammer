@@ -76,7 +76,8 @@ rule; it exists because the solver's own body walk is incomplete. Status: Diverg
 
 ### OWN-STORED
 **Rule.** A parameter moved into a struct literal, enum payload, tuple, array, `Some(..)`, or a collection method that
-stores its argument (`push`, `insert`) is owned.
+stores its argument (`push`, `insert`), or used to initialise a mutable local (`let mut out = state`), is owned:
+the local is the parameter's value, changed in place, so a borrow would need a copy inside.
 **Example.** `fn wrap(b: Bag, t: string) -> Holder { Holder { bag: b, tag: t } }` emits both parameters owned.
 **Status.** Diverges in one shape (D-OWN-STORE-ASSIGN): storing through a field assignment, `h.tag = n`, demotes `n`
 to `&str` and copies inside, while `push(n)` keeps `n` owned and moves.
@@ -129,7 +130,11 @@ It is listed so `wj explain-ownership` can name it. ADR-0001 requires it to disa
 ### SELF-READ
 **Rule.** A method that only reads `self` takes `&self`.
 **Example.** `fn get(self) -> int { self.n }` emits `fn get(&self) -> i64`.
-**Status.** Conforms.
+A `match self` on an enum that is not Copy, whose arms use only bindings of Copy payloads (by the enum's
+declaration), reads too: `match self { Value::Float(v) => v, _ => 0.0 }` with a `Text(string)` variant emits `&self`;
+the payload is copied out. An all-Copy enum keeps `self` by value (a Copy aggregate is an owned formal).
+**Status.** Conforms for enums declared in the same file; a variant declared in another file still makes the
+receiver owned when its binding is used.
 
 ### SELF-MUT
 **Rule.** A method that assigns to a field of `self`, calls a `&mut self` method on `self` or on a field of it, or

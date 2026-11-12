@@ -827,8 +827,8 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
 ) {
     // Trait owned-string call-site contracts apply to instance methods only (port traits /
     // E0053). Static associated methods (`Squad::new`, `BuildFingerprint::collect_wj_files`)
-    // keep body-converged `&str` — global declaration stubs must not downgrade them.
-    if !sig.has_self_receiver {
+    // keep body-converged `&str` — global declaration stubs must not downgrade them; nor do inherent homonyms.
+    if !sig.has_self_receiver || global.is_inherent_method_of(method, sig) {
         return;
     }
     for (key, trait_sig) in trait_definition_sigs_for_method(global, method) {

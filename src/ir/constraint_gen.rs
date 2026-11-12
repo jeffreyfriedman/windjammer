@@ -17,6 +17,8 @@
 use crate::analyzer::{AnalyzedFunction, FunctionSignature, OwnershipMode, SignatureRegistry};
 #[path = "constraint_gen/numeric.rs"]
 pub(crate) mod numeric;
+#[path = "constraint_gen/stored.rs"]
+mod stored;
 #[path = "constraint_gen/structure.rs"]
 mod structure;
 use numeric::{emit_numeric_class_constraint, is_int_literal_tree, literal_rule, literal_to_base_type};
@@ -743,12 +745,14 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         match stmt {
             Statement::Let {
                 pattern,
+                mutable,
                 type_,
                 value,
                 else_block,
                 ..
             } => {
                 let val_var = self.walk_expression(value);
+                self.emit_owned_for_mut_local_of_param(*mutable, pattern, value);
                 if let (Pattern::Identifier(n) | Pattern::MutBinding(n), Expression::Identifier { .. }) = (pattern, &**value) {
                     self.let_aliases.insert(n.clone());
                 }

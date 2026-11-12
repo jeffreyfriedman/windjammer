@@ -1,0 +1,15 @@
+// Two unrelated types define `check`: `Reader` in an inherent impl (it only reads its text, so the formals are `&str`)
+// and `Writer` through a trait whose declaration keeps `string` owned. A call on a `Reader` takes `Reader::check`'s
+// formals, never the trait's. Expected by hand: "viewer" allowed on 3 passes; the writer logs 1.
+// expect: 3 1
+mod policy
+mod reader
+mod writer
+use crate::policy::Policy
+
+fn main() {
+    let r = reader::Reader { allowed: ["viewer"] }
+    let mut w = writer::Writer { log: [] }
+    let ok = w.check("bob", "editor")
+    println("${reader::allowed(r, "alice", "viewer", 3)} ${w.log.len()}")
+}

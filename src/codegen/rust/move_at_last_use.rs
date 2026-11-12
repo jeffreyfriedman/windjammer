@@ -41,9 +41,11 @@ impl<'ast> CodeGenerator<'ast> {
         let entry: Vec<&str> = func.parameters.iter().map(|p| p.name.as_str()).collect();
         let always_move = self.config.liveness_mutation_always_move;
         let ir = self.current_ir_function.as_ref();
+        // Locals the solver typed as scalars hold no borrow of the value they were computed from.
+        let scalars: BTreeSet<String> = ir.map(|f| f.local_types.iter().filter(|(_, t)| t.base.is_scalar() && !matches!(t.ownership, crate::ir::safety_type::OwnedType::Ref(_) | crate::ir::safety_type::OwnedType::MutRef(_))).map(|(n, _)| n.clone()).collect()).unwrap_or_default();
         self.clone_facts = CloneFacts {
-            last_use_nodes: crate::ir::liveness::last_moves(&entry, &func.body, always_move),
-            read_after: crate::ir::liveness::read_after(&entry, &func.body, always_move),
+            last_use_nodes: crate::ir::liveness::last_moves_typed(&entry, &func.body, always_move, &scalars),
+            read_after: crate::ir::liveness::read_after_typed(&entry, &func.body, always_move, &scalars),
             plain_bindings: crate::ir::liveness::plain_bindings(&entry, &func.body),
             returned_fields: ir.map(|f| f.returned_fields.clone()).unwrap_or_default(),
             clone_sites: ir.map(|f| f.clone_sites.clone()).unwrap_or_default(),

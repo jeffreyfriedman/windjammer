@@ -142,3 +142,25 @@ impl FormalScope {
         changed
     }
 }
+
+/// A single-file build (`attach_ir_module_if_missing`) lowers its program the way a library build lowers each
+/// file: in rounds, publishing the solved value-formal and
+/// receiver modes into `registry` until none changes, so a caller reads its callee's solved mode instead of the
+/// analyzer's prediction (`Merchant::add_item` forwarding `item` to `Inventory::add_item`, which stores it).
+pub(crate) fn lower_program_to_fixed_point(
+    program: &Program,
+    analyzed: &[AnalyzedFunction],
+    registry: &mut SignatureRegistry,
+    fields: &HashMap<String, HashMap<String, Type>>,
+    copy_types: &HashSet<String>,
+) -> crate::ir::pipeline::IrModule {
+    let scope = FormalScope::new(std::slice::from_ref(program), copy_types);
+    let mut module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, registry, Some(fields));
+    for _ in 1..MAX_ROUNDS {
+        if !scope.publish(registry, None, &module.functions, analyzed) {
+            break;
+        }
+        module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, registry, Some(fields));
+    }
+    module
+}

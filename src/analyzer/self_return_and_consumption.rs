@@ -786,8 +786,11 @@ impl<'ast> Analyzer<'ast> {
     /// vs. just returning literals without using the bindings.
     pub(crate) fn match_arms_consume_bound_values(&self, arms: &[crate::parser::MatchArm]) -> bool {
         for arm in arms {
-            // Get all variable names bound in the pattern
-            let bound_vars = self.pattern_bound_variables(&arm.pattern);
+            // The names the pattern binds, less those whose declared payload type is Copy: a Copy payload
+            // is copied out of a borrowed scrutinee (`match *self`), so using it consumes nothing (SELF-READ).
+            let copied = self.copy_payload_bindings(&arm.pattern);
+            let bound_vars: Vec<String> =
+                self.pattern_bound_variables(&arm.pattern).into_iter().filter(|v| !copied.contains(v)).collect();
 
             // Check if the arm body uses any of these variables in a consuming way
             if self.expression_uses_variables_consuming(arm.body, &bound_vars) {
@@ -796,6 +799,55 @@ impl<'ast> Analyzer<'ast> {
         }
 
         false
+    }
+
+    /// Names an enum-variant pattern binds directly to a payload whose declared type (this program's enum
+    /// declaration) is Copy. A variant declared elsewhere is unknown here and binds nothing copied. An enum whose
+    /// every payload is Copy is itself Copy (the emitted enum derives it): its value is copied whole, so `self`
+    /// stays by value (Copy aggregates are owned formals, as in the emission contract) and nothing is listed.
+    fn copy_payload_bindings(&self, pattern: &Pattern) -> Vec<String> {
+        use crate::parser::ast::EnumVariantData;
+        use crate::parser::EnumPatternBinding;
+        let Pattern::EnumVariant(path, binding) = pattern else { return Vec::new() };
+        let mut segments = path.rsplit("::");
+        let (Some(variant), Some(enum_name)) = (segments.next(), segments.next()) else { return Vec::new() };
+        let Some(variants) = self.enum_variant_payloads.get(enum_name) else { return Vec::new() };
+        let copy = |ty: Option<&Type>| ty.is_some_and(|t| self.is_copy_type(t));
+        let payload_types = |data: &EnumVariantData| -> Vec<Type> {
+            match data {
+                EnumVariantData::Unit => Vec::new(),
+                EnumVariantData::Tuple(types) => types.clone(),
+                EnumVariantData::Struct(fields) => fields.iter().map(|(_, t)| t.clone()).collect(),
+            }
+        };
+        if variants.iter().all(|(_, data)| payload_types(data).iter().all(|t| copy(Some(t)))) {
+            return Vec::new();
+        }
+        let Some(data) = variants.iter().find(|(name, _)| name == variant).map(|(_, data)| data) else { return Vec::new() };
+        match (binding, data) {
+            (EnumPatternBinding::Single(name), EnumVariantData::Tuple(types)) if types.len() == 1 && copy(types.first()) => {
+                vec![name.clone()]
+            }
+            (EnumPatternBinding::Tuple(patterns), EnumVariantData::Tuple(types)) => patterns
+                .iter()
+                .zip(types)
+                .filter_map(|(p, t)| match p {
+                    Pattern::Identifier(name) if copy(Some(t)) => Some(name.clone()),
+                    _ => None,
+                })
+                .collect(),
+            (EnumPatternBinding::Struct(fields, _), EnumVariantData::Struct(decl)) => fields
+                .iter()
+                .filter_map(|(field, p)| {
+                    let ty = decl.iter().find(|(n, _)| n == field).map(|(_, t)| t);
+                    match p {
+                        Pattern::Identifier(name) if copy(ty) => Some(name.clone()),
+                        _ => None,
+                    }
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 
     pub(crate) fn pattern_bound_variables(&self, pattern: &Pattern) -> Vec<String> {
