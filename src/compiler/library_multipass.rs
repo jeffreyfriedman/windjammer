@@ -1794,9 +1794,7 @@ fn keep_own_definitions(
 ) {
     for name in own_defs {
         let Some(own) = own_analysis.signatures.get(name) else { continue };
-        let foreign = local.get_signature(name).is_some_and(|cur| {
-            cur.formal_param_types != own.formal_param_types || cur.return_type != own.return_type
-        });
+        let foreign = local.get_signature(name).is_some_and(|cur| !cur.declares_same_function(own));
         if foreign {
             local.signatures.insert(name.clone(), own.clone());
         }

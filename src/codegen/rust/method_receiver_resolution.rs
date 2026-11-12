@@ -34,4 +34,15 @@ impl<'ast> CodeGenerator<'ast> {
             self.struct_method_ast_formal_param_types.get(base).is_some_and(|m| m.contains_key(method))
         })
     }
+
+    /// The type a receiver is built from by declaration when inference has no type for it: `RailItem::new(..)` on a
+    /// type this file declares or imports (`use dep::RailItem`). Its methods are `RailItem`'s, wherever its crate's
+    /// signatures are; a same-named method of a type of another crate is not one of them.
+    pub(in crate::codegen::rust) fn receiver_static_call_type(&self, object: &Expression<'ast>) -> Option<String> {
+        let Expression::Call { function, .. } = object else { return None };
+        let name = super::ast_utilities::extract_function_name(function);
+        let (ty, _) = name.rsplit_once("::")?;
+        let leaf = ty.rsplit("::").next()?;
+        self.idiom.file_scope_type_names.contains(leaf).then(|| leaf.to_string())
+    }
 }

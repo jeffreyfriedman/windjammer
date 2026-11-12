@@ -250,6 +250,11 @@ path = "tests/convergence_gates_test.rs"
 name = "identity_corpus"
 path = "tests/identity_corpus_test.rs"
 
+# Bare-name signature lookups per file may only shrink (callee identity by declaration): cargo test --release --test bare_name_lookup_ratchet
+[[test]]
+name = "bare_name_lookup_ratchet"
+path = "tests/bare_name_lookup_ratchet_test.rs"
+
 # Convergence gates for multi-file projects (golden Rust, rustc on the crate, interpreter vs compiled): cargo test --release --test project_gates
 [[test]]
 name = "project_gates"

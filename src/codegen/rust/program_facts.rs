@@ -29,6 +29,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) file_scope_is_open: bool,
     /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
     pub(crate) foreign_imported_types: HashSet<String>,
+    /// Free functions this file declares at top level: a bare call names one of them before a same-named
+    /// function of any other module (lexical scope beats imports and other files).
+    pub(crate) file_scope_fn_names: HashSet<String>,
     /// Functions of the standard library this file imports by name or through a glob
     /// (`use std::log::*` brings `debug`): they shadow a language intrinsic of the same name (ADR-0014).
     pub(crate) imported_std_fn_names: HashSet<String>,
@@ -65,6 +68,7 @@ impl<'ast> CodeGenerator<'ast> {
         let idiom = &mut self.idiom;
         idiom.file_scope_type_names.clear();
         idiom.foreign_imported_types.clear();
+        idiom.file_scope_fn_names.clear();
         idiom.file_scope_is_open = false;
         idiom.imported_std_fn_names.clear();
         for item in &program.items {
@@ -100,6 +104,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 Item::Mod { .. } => idiom.file_scope_is_open = true,
+                Item::Function { decl, .. } => {
+                    idiom.file_scope_fn_names.insert(decl.name.clone());
+                }
                 _ => {}
             }
         }

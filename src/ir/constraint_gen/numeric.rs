@@ -212,7 +212,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ) {
                     None
                 } else {
-                    self.resolve_callee_signature(method, arguments.len())
+                    // A receiver of known type calls its own `Type::method` (not registered here) or a trait's method;
+                    // an inherent method of another type under the same bare name is not it.
+                    self.resolve_callee_signature(method, arguments.len()).filter(|s| {
+                        receiver_type.as_deref().is_none_or(|rt| {
+                            self.registry.is_none_or(|reg| !reg.is_inherent_method_of_another_type(method, s, rt))
+                        })
+                    })
                 }
             })
             .cloned();
