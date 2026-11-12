@@ -1,6 +1,4 @@
 use windjammer_runtime::fs;
-use windjammer_runtime::fs::Metadata;
-use windjammer_runtime::fs::DirEntry;
 #[inline]
 fn roundtrip(path: String) -> Result<String, String> {
     fs::write(&path, "line1\nline2\n")?;
