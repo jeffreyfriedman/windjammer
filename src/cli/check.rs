@@ -24,9 +24,31 @@ pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: 
     Ok(())
 }
 
+/// The per-file analysis cache shared by every checkout of this user (`<cache root>/analysis`, content-keyed:
+/// `check/shared_cache.rs`).
+fn share_analysis() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let store = AnalysisDir(crate::cargo_cache::entries::AnalysisStore { dir: crate::cargo_cache::entries::analysis_dir() });
+        check::shared_cache::install(std::sync::Arc::new(store));
+    });
+}
+
+struct AnalysisDir(crate::cargo_cache::entries::AnalysisStore);
+
+impl check::shared_cache::SharedStore for AnalysisDir {
+    fn get(&self, key: &str) -> Option<String> {
+        self.0.get(key)
+    }
+    fn put(&self, key: &str, text: &str) {
+        self.0.put(key, text)
+    }
+}
+
 /// The lexer reports bad characters by panicking; the checker catches that and reports a
 /// diagnostic, so the default panic message would only be noise.
 fn check_quietly(root: &Path) -> Result<Checked> {
+    share_analysis();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let result = check::check_path(root, &CheckOptions::default());
@@ -102,6 +124,9 @@ pub fn require_clean(path: &Path, lints_block: bool, format: render::Format) -> 
     // lone script never gets a `.wj-cache` written next to it. The cache never changes diagnostics (ADR-0020,
     // round 3 rung 4; gate: tests/check_cache_differential_test.rs).
     let use_cache = check::effects::manifest_path(path).is_some();
+    if use_cache {
+        share_analysis();
+    }
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let checked = check::check_path(path, &CheckOptions { use_cache });

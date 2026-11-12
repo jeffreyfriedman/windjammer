@@ -26,6 +26,8 @@ pub struct FileMemo {
     path: PathBuf,
     stored: Stored,
     dirty: bool,
+    /// Content-keyed cache shared across checkouts (`shared_cache.rs`), when the driver installed one.
+    shared: Option<super::shared_cache::Shared>,
 }
 
 pub fn text_hash(text: &str) -> String {
@@ -36,7 +38,7 @@ pub fn text_hash(text: &str) -> String {
 
 impl FileMemo {
     /// The memo for checks of `root`; `ambient` is the digest from `ambient::fingerprint`.
-    pub fn open(root: &Path, ambient: &str) -> Self {
+    pub fn open(root: &Path, ambient: &str, ambient_portable: Option<String>) -> Self {
         let path = super::cache::path_for(root, "files");
         let header = format!("{}|{ambient}", super::cache::identity());
         let stored = std::fs::read_to_string(&path)
@@ -44,15 +46,29 @@ impl FileMemo {
             .and_then(|t| serde_json::from_str::<Stored>(&t).ok())
             .filter(|s| s.format == FORMAT && s.header == header)
             .unwrap_or(Stored { format: FORMAT, header, entries: BTreeMap::new() });
-        Self { path, stored, dirty: false }
+        Self { path, stored, dirty: false, shared: super::shared_cache::Shared::current(ambient_portable) }
     }
 
-    pub fn get(&self, file: &str, text: &str) -> Option<Vec<Diagnostic>> {
-        let (hash, diags) = self.stored.entries.get(file)?;
-        (*hash == text_hash(text)).then(|| diags.clone())
+    /// The analysis of `file`: from this checkout's memo, else from the shared content-keyed cache.
+    pub fn get(&mut self, file: &str, text: &str) -> Option<Vec<Diagnostic>> {
+        if let Some((hash, diags)) = self.stored.entries.get(file) {
+            if *hash == text_hash(text) {
+                return Some(diags.clone());
+            }
+        }
+        let diags = self.shared.as_ref()?.get(file, text)?;
+        self.put_local(file, text, &diags);
+        Some(diags)
     }
 
     pub fn put(&mut self, file: &str, text: &str, diags: &[Diagnostic]) {
+        self.put_local(file, text, diags);
+        if let Some(s) = &self.shared {
+            s.put(file, text, diags);
+        }
+    }
+
+    fn put_local(&mut self, file: &str, text: &str, diags: &[Diagnostic]) {
         self.stored.entries.insert(file.to_string(), (text_hash(text), diags.to_vec()));
         self.dirty = true;
     }
