@@ -430,6 +430,7 @@ impl Interpreter {
                 let Callable::Path(p) = &**f else { unreachable!() };
                 Ok(self.builtins.constant(&format!("{p}::{field}")).expect("checked"))
             }
+            Value::Native(n) if n.field(field).is_some() => Ok(n.field(field).expect("checked")),
             other => Err(semantic(format!("no field `{}` on value of type `{}`", field, other.type_name()))),
         }
     }

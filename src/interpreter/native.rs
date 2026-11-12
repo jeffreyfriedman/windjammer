@@ -26,6 +26,11 @@ pub trait Native: Any {
     fn display(&self) -> Option<String> {
         None
     }
+    /// A public field of the std struct this object stands for (`DirEntry.name`, `Metadata.size`): the
+    /// declaration in `std/*.wj` lists the fields, so a field read works as well as the accessor method.
+    fn field(&self, _name: &str) -> Option<Value> {
+        None
+    }
     /// Elements in iteration order, for collections that `for` / `into_iter` can walk.
     fn iter_items(&self) -> Option<Vec<Value>> {
         None
