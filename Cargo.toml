@@ -598,3 +598,13 @@ path = "tests/recorded_corpus_location_free_gate.rs"
 [[test]]
 name = "untracked_files_gate"
 path = "tests/untracked_files_gate.rs"
+
+# Check caches under .wj-cache hold no absolute path: cargo test --test check_cache_location_free
+[[test]]
+name = "check_cache_location_free"
+path = "tests/check_cache_location_free_test.rs"
+
+# A match whose arms name the other wrapper's variants is an error: cargo test --test match_variant_pattern_test
+[[test]]
+name = "match_variant_pattern_test"
+path = "tests/match_variant_pattern_test.rs"

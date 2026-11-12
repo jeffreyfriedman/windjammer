@@ -1,0 +1,17 @@
+error[WJ0003]: mismatched types: expected `Result`, found `Option` pattern `Some(..)`
+  --> match_option_pattern_on_result.wj:8:9
+  |
+8 |         Some(v) => println("${v}"),
+  |         ^^^^ an `Option` pattern, but the value is a `Result`
+  = help: `env::var` returns a `Result`: match `Ok(v)` and `Err(_)` instead of the `Option` variants (`Some` becomes `Ok`)
+  = fix (auto-fixable): match the `Result` with `Ok`
+  = explain: wj explain WJ0003
+
+error[WJ0003]: mismatched types: expected `Result`, found `Option` pattern `None`
+  --> match_option_pattern_on_result.wj:10:9
+   |
+10 |         None => {},
+   |         ^^^^ an `Option` pattern, but the value is a `Result`
+  = help: `env::var` returns a `Result`: match `Ok(v)` and `Err(_)` instead of the `Option` variants (`None` becomes `Err(_)`)
+  = fix (auto-fixable): match the `Result` with `Err(_)`
+  = explain: wj explain WJ0003

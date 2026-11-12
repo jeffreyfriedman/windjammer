@@ -353,6 +353,19 @@ impl TestDatabase {
         self.connected = false;
         self.data.clear();
     }
+    
+    // Helpers used by the decorator examples
+    fn is_connected(&self) -> bool {
+        self.connected
+    }
+    
+    fn insert(&mut self, item: string) {
+        self.data.push(item);
+    }
+    
+    fn count(&self) -> int {
+        self.data.len() as int
+    }
 }
 
 @test
@@ -881,26 +894,6 @@ fn calculate_area(width: int, height: int) -> int {
 fn test_multiplication_associative_safe(a: int, b: int, c: int) {
     // Property test with timeout protection
     assert_eq((a * b) * c, a * (b * c));
-}
-
-// Helper struct for decorator examples
-struct TestDatabase {
-    connected: bool,
-    data: Vec<string>,
-}
-
-impl TestDatabase {
-    fn is_connected(&self) -> bool {
-        self.connected
-    }
-    
-    fn insert(&mut self, item: string) {
-        self.data.push(item);
-    }
-    
-    fn count(&self) -> int {
-        self.data.len() as int
-    }
 }
 
 // ============================================================================

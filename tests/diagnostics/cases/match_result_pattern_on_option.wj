@@ -1,0 +1,13 @@
+// expect: WJ0003
+// `env::get` returns an Option: a `match` with `Ok` / `Err` arms never matches.
+// oracle: check
+use std::env
+
+fn main() {
+    match env::get("HOME") {
+        Ok(v) => println("${v}"),
+//~@9+2 ERROR WJ0003 expected `Option`, found `Result` pattern `Ok(..)`
+        Err(_) => {},
+//~@9+3 ERROR WJ0003 expected `Option`, found `Result` pattern `Err(..)`
+    }
+}
