@@ -58,7 +58,7 @@ fn main() {
     let text: String = String::from("a b");
     for tok in text.split(" ") {
         if tok == "a" {
-            let _ = println!("a");
+            println!("a");
         }
     }
     let mut it = "5\n6".lines();

@@ -2,7 +2,7 @@ fn main() {
     let mut stack = vec![1_i64, 2_i64, 3_i64];
     loop {
         if let Some(top) = stack.pop() {
-            let _ = println!("{}", top);
+            println!("{}", top);
         } else {
             break;
         }
