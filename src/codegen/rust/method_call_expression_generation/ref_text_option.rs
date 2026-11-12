@@ -17,6 +17,9 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> Option<Type> {
         let [(_, arg)] = arguments else { return None };
+        // only a method the surface declares on `Option` can qualify: ask that before inferring the receiver, whose
+        // type walks the whole call chain (once per link, that is exponential in a long builder chain)
+        self.core_surface().declared("Option", method)?;
         let literal_text = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
         let new_collection = matches!(arg, Expression::Call { function, arguments, .. }
             if arguments.is_empty() && matches!(function, Expression::FieldAccess { .. } | Expression::Identifier { .. }));
@@ -35,7 +38,7 @@ impl<'ast> CodeGenerator<'ast> {
         let cloneable = crate::codegen::rust::types::is_windjammer_text_type(target)
             || crate::type_classification::type_is_vec_container(target)
             || matches!(target.as_ref(), Type::Parameterized(n, _) | Type::Custom(n) if crate::type_classification::is_map_type_name(n));
-        (owned_default && cloneable && CoreSurface::parse().method_signature(&recv, method, &[])?.params.first() == Some(payload.as_ref()))
+        (owned_default && cloneable && self.core_surface().method_signature(&recv, method, &[])?.params.first() == Some(payload.as_ref()))
             .then(|| target.as_ref().clone())
     }
 
