@@ -566,6 +566,19 @@ impl Interpreter {
         }
     }
 
+    /// `call_value` for one argument: a compiled closure is called without allocating an argument vector.
+    pub(crate) fn call_value1(&mut self, f: &Value, x: Value) -> R {
+        if let Value::Func(c) = f {
+            let mut one = [x];
+            if let Some(r) = self.call_compiled_closure(c, &mut one) {
+                return r;
+            }
+            let [x] = one; // declined before it took the argument
+            return self.call_callable(c, vec![x]);
+        }
+        self.call_value(f, vec![x])
+    }
+
     pub(crate) fn call_callable(&mut self, c: &Rc<Callable>, mut args: Vec<Value>) -> R {
         match &**c {
             Callable::Closure { params, body, env, module, self_ty, tparams } => {
