@@ -28,6 +28,8 @@ pub mod error;
 mod eval_expr;
 mod eval_stmt;
 pub mod features;
+pub mod error_report;
+mod failure_locals;
 mod fasthash;
 mod format;
 mod from_impls;

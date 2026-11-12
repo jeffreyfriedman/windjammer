@@ -8,7 +8,8 @@
   "properties": {
     "schema_version": { "const": 2 },
     "windjammer_version": { "type": "string" },
-    "command": { "enum": ["check", "build", "test"] },
+    "command": { "enum": ["check", "build", "test", "run"] },
+    "exit_code": { "type": "integer", "description": "`run` only: the exit status of the failed run (101 for a panic, as compiled Rust)" },
     "success": { "type": "boolean", "description": "true when there are no error-severity diagnostics" },
     "summary": {
       "type": "object",
@@ -66,8 +67,8 @@
       "properties": {
         "code": { "type": "string", "pattern": "^(WJ|W)[0-9]{4}$", "description": "Stable; never reused. WJxxxx = error classes, Wxxxx = lints." },
         "severity": { "enum": ["error", "warning", "note", "help"] },
-        "category": { "enum": ["syntax", "name_resolution", "type", "ownership", "mutability", "module", "lint", "effects", "internal"] },
-        "origin": { "enum": ["front_end", "rustc_mapped", "lint", "internal"], "description": "rustc_mapped and internal mark front-end coverage gaps (ADR-0005)." },
+        "category": { "enum": ["syntax", "name_resolution", "type", "ownership", "mutability", "module", "lint", "effects", "runtime", "internal"] },
+        "origin": { "enum": ["front_end", "rustc_mapped", "lint", "runtime", "internal"], "description": "rustc_mapped and internal mark front-end coverage gaps (ADR-0005)." },
         "message": { "type": "string" },
         "primary_span": { "oneOf": [{ "$ref": "#/$defs/span" }, { "type": "null" }] },
         "secondary_spans": { "type": "array", "items": { "$ref": "#/$defs/span" } },
@@ -79,6 +80,17 @@
           "required": ["explain", "url"],
           "properties": { "explain": { "type": "string", "description": "shell command, e.g. `wj explain WJ0001`" }, "url": { "type": "string" } }
         },
+        "stack": {
+          "type": "array",
+          "description": "`run` only: Windjammer frames, innermost first; `span` is the place the frame is executing (the failing expression for frame 0, the call site for the others)",
+          "items": { "type": "object", "required": ["function", "span"], "properties": { "function": { "type": "string" }, "span": { "oneOf": [{ "$ref": "#/$defs/span" }, { "type": "null" }] } } }
+        },
+        "locals": {
+          "type": "array",
+          "description": "`run` only: bindings of the failing frame (at most 8, values truncated; `redacted` ones show `<redacted>`)",
+          "items": { "type": "object", "required": ["name", "value", "redacted"], "properties": { "name": { "type": "string" }, "value": { "type": "string" }, "redacted": { "type": "boolean" } } }
+        },
+        "locals_omitted": { "type": "integer", "minimum": 1, "description": "`run` only: bindings that did not fit under the cap" },
         "maturity": { "enum": ["proven", "high_confidence", "heuristic", "hint"] }
       }
     }

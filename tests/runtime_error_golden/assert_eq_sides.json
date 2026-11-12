@@ -1,0 +1,83 @@
+{
+  "command": "run",
+  "diagnostics": [
+    {
+      "category": "runtime",
+      "code": "WJ0170",
+      "docs": {
+        "explain": "wj explain WJ0170",
+        "url": "https://windjammer.dev/errors/WJ0170"
+      },
+      "help": [
+        "the bindings of the failing frame are in `locals`; `--no-locals` leaves them out"
+      ],
+      "locals": [
+        {
+          "name": "expected",
+          "redacted": false,
+          "value": "10"
+        },
+        {
+          "name": "actual",
+          "redacted": false,
+          "value": "7"
+        },
+        {
+          "name": "label",
+          "redacted": false,
+          "value": "\"sum\""
+        }
+      ],
+      "maturity": "proven",
+      "message": "assertion `left == right` failed: sums differ\n  left: 7\n right: 10",
+      "origin": "runtime",
+      "primary_span": {
+        "byte_end": 75,
+        "byte_start": 74,
+        "col_end": 15,
+        "col_start": 14,
+        "file": "assert_eq_sides.wj",
+        "line_end": 3,
+        "line_start": 3
+      },
+      "severity": "error",
+      "stack": [
+        {
+          "function": "check",
+          "span": {
+            "byte_end": 75,
+            "byte_start": 74,
+            "col_end": 15,
+            "col_start": 14,
+            "file": "assert_eq_sides.wj",
+            "line_end": 3,
+            "line_start": 3
+          }
+        },
+        {
+          "function": "main",
+          "span": {
+            "byte_end": 138,
+            "byte_start": 137,
+            "col_end": 16,
+            "col_start": 15,
+            "file": "assert_eq_sides.wj",
+            "line_end": 7,
+            "line_start": 7
+          }
+        }
+      ]
+    }
+  ],
+  "exit_code": 101,
+  "schema_version": 2,
+  "success": false,
+  "summary": {
+    "elapsed_ms": 0,
+    "errors": 1,
+    "files_cached": 0,
+    "files_checked": 0,
+    "warnings": 0
+  },
+  "windjammer_version": "X"
+}

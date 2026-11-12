@@ -1,0 +1,8 @@
+fn average(total: int, count: int) -> int {
+    let label = "mean"
+    total / count
+}
+
+fn main() {
+    println("${average(30, 0)}")
+}

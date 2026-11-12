@@ -855,7 +855,10 @@ impl Interpreter {
                 None => Ok(Value::Unit),
                 Some(t) => deref_value(v).and_then(|v| self.coerce(v, t)),
             },
-            Err(Ctl::Err(e)) => Err(Ctl::Err(Box::new(self.annotate(*e)))),
+            Err(Ctl::Err(mut e)) => {
+                self.attach_walker_locals(&mut e);
+                Err(Ctl::Err(Box::new(self.annotate(*e))))
+            }
             other => other,
         };
         let r = self.exit_scope_vars(0, r);
