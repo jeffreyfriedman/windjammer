@@ -9,7 +9,7 @@ use super::OwnershipMode;
 
 mod identity;
 mod snapshot;
-pub use snapshot::{install_layer_store, LayerStore};
+pub use snapshot::{install_layer_store, shared_entry, LayerStore};
 
 /// True when `a` and `b` differ only by shared/mut ref wrapping of the same inner type
 /// (codegen ownership demotion of one function, not a cross-module overload).

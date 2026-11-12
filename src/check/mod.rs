@@ -153,7 +153,7 @@ pub fn local_mutability_sources(sources: &[(String, String)]) -> Vec<Diagnostic>
     let mut sink = Vec::new();
     let parsed: Vec<front::Parsed> = sources.iter().filter_map(|(f, t)| front::parse(f, t, &mut sink)).collect();
     let refs: Vec<&front::Parsed> = parsed.iter().filter(|p| !project::is_shader(p)).collect();
-    let tables = std::sync::Arc::new(crate::ir::stdlib_tables::StdlibTables::compute());
+    let tables = std::sync::Arc::new(crate::ir::stdlib_tables::StdlibTables::load_or_compute());
     let found = local_mut::run(&refs, tables);
     std::panic::set_hook(previous);
     finish(found)
