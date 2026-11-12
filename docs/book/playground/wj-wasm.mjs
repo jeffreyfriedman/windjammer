@@ -3,6 +3,7 @@
 //
 // The module imports nothing from JavaScript: no clock, no network, no files, no entropy. Its exports:
 //   wj_alloc(len) -> ptr, wj_free(ptr, len), wj_run(ptr, len, fuel, output_bytes, seed) -> result length,
+//   wj_run_project(ptr, len, fuel, output_bytes, seed) -> result length (the input is the JSON [{path, source}, ...]),
 //   wj_result_ptr()/wj_result_len() -> the result JSON ({stdout, stderr, diagnostics, exit_code, steps}).
 //
 // Every run gets a fresh instance of the compiled module: a run starts from clean memory (the interpreter keeps
@@ -28,18 +29,25 @@ export async function compile(bytes) {
   return module;
 }
 
-/** Run one program in a fresh instance; returns {stdout, stderr, diagnostics, exit_code, steps}. */
-export async function run(module, source, opts = {}) {
+/**
+ * Run one program in a fresh instance; `input` is the source text, or an array of {path, source} for a program of
+ * several files (the files are the whole file system the run sees; paths relative to the project, `main.wj` or
+ * `src/main.wj` the entry). Returns {stdout, stderr, diagnostics, exit_code, steps}. */
+export async function run(module, input, opts = {}) {
   // an option left undefined keeps its default (a spread would copy the undefined over it)
   const o = { ...DEFAULTS };
   for (const [k, v] of Object.entries(opts)) if (v !== undefined) o[k] = v;
   const ex = (await WebAssembly.instantiate(module, {})).exports;
-  const bytes = encoder.encode(source);
+  const project = Array.isArray(input);
+  if (project && typeof ex.wj_run_project !== "function") {
+    throw new Error("windjammer_playground.wasm does not export wj_run_project (rebuild it)");
+  }
+  const bytes = encoder.encode(project ? JSON.stringify(input.map(({ path, source }) => ({ path, source }))) : input);
   const ptr = ex.wj_alloc(bytes.length);
   new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
   let len;
   try {
-    len = ex.wj_run(ptr, bytes.length, o.fuel, o.outputBytes, o.seed);
+    len = (project ? ex.wj_run_project : ex.wj_run)(ptr, bytes.length, o.fuel, o.outputBytes, o.seed);
   } catch (e) {
     // a trap is an interpreter defect (a Rust panic), never the program's own panic (that is exit status 101);
     // the panic hook left its message as the result, still readable in the trapped instance's memory
