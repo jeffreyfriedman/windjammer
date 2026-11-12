@@ -41,7 +41,7 @@ pub fn dep_entry(manifest_dir: &Path, crate_name: &str) -> Option<DepEntry> {
         toml::Value::String(v) => e.req = Some(v.clone()),
         toml::Value::Table(t) => {
             e.req = t.get("version").and_then(|v| v.as_str()).map(str::to_string);
-            e.path = t.get("path").and_then(|v| v.as_str()).map(|p| manifest_dir.join(p));
+            e.path = t.get("path").and_then(|v| v.as_str()).map(|p| crate::package::graph::dep_path(manifest_dir, p));
             e.package = t.get("package").and_then(|v| v.as_str()).unwrap_or(key).to_string();
             e.features = t.get("features").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
             e.default_features = t.get("default-features").and_then(|v| v.as_bool()).unwrap_or(true);
