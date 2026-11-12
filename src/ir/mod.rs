@@ -39,8 +39,6 @@ pub mod pipeline;
 pub mod expr_static_type;
 pub mod receiver_type;
 pub mod safety_type;
-pub(crate) mod self_field_move;
-pub(crate) mod value_formal_fixed_point;
 pub mod shadow;
 pub mod signature_bridge;
 pub mod solver;

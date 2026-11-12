@@ -30,9 +30,6 @@ pub struct IrPipelineConfig {
     pub enable_execution_modes: bool,
     pub enable_numeric_unification: bool,
     pub target: CompilationTarget,
-    /// Benchmark experiment only (`ir::self_field_move`, removed before merge): `self` is owned when dead
-    /// after its last field move and never written. Off by default.
-    pub self_owned_after_last_field_move: bool,
 }
 
 impl Default for IrPipelineConfig {
@@ -43,7 +40,6 @@ impl Default for IrPipelineConfig {
             enable_execution_modes: true,
             enable_numeric_unification: true,
             target: CompilationTarget::Rust,
-            self_owned_after_last_field_move: false,
         }
     }
 }
@@ -272,10 +268,6 @@ impl IrPipeline {
                 }
 
                 ir_fn.record_ownership_stage("pipeline::retain_mutated_mutref");
-                if self.config.self_owned_after_last_field_move {
-                    apply_self_field_move_experiment(af, ir_fn, &struct_field_types);
-                    apply_owned_receiver_experiment(af, ir_fn, registry);
-                }
 
                 // Write local variable types from solver (none for a class two exact widths met: see `solved_local_base`).
                 let conflicted = width_conflict_classes(&result);
@@ -518,40 +510,6 @@ pub struct FileIrModule {
     pub module: IrModule,
 }
 
-/// Benchmark experiment (`ir::self_field_move`): a borrowed, never-written `self` that is dead after its
-/// last field move becomes owned.
-fn apply_self_field_move_experiment(af: &crate::analyzer::AnalyzedFunction, ir_fn: &mut IrFunction, fields: &HashMap<String, HashMap<String, crate::parser::Type>>) {
-    if ir_fn.mutated_params.contains("self") {
-        return;
-    }
-    let Some(parent) = af.decl.parent_type.as_deref() else { return };
-    let base = parent.split('<').next().unwrap_or(parent);
-    let non_copy = crate::ir::self_field_move::field_non_copy(fields.get(base));
-    let Some(st) = ir_fn.param_types.get_mut("self").filter(|t| matches!(t.ownership, OwnedType::Ref(_))) else { return };
-    if crate::ir::self_field_move::self_owned_after_last_field_move(&af.decl.body, af.decl.return_type.is_some(), &non_copy) {
-        st.ownership = OwnedType::Owned;
-    }
-}
-
-/// Benchmark experiment, companion of [`apply_self_field_move_experiment`]: a by-value parameter that is the
-/// receiver of a method whose solved `self` is owned (`store.add(t)` with `fn add(self, ..)`) is an owned use,
-/// as an argument to an owned formal is (OWN-CALL-FORMAL); otherwise the call site copies the whole value.
-fn apply_owned_receiver_experiment(af: &crate::analyzer::AnalyzedFunction, ir_fn: &mut IrFunction, registry: &crate::analyzer::SignatureRegistry) {
-    for (binding, method) in crate::ir::self_field_move::direct_method_calls(&af.decl.body) {
-        let Some(param) = af.decl.parameters.iter().find(|p| p.name == binding && p.name != "self") else { continue };
-        if !crate::ir::formal_predicates::ir_spells_value_formal(param) {
-            continue;
-        }
-        let crate::parser::Type::Custom(type_name) = &param.type_ else { continue };
-        let owned_receiver = registry.get_signature(&format!("{type_name}::{method}")).is_some_and(|sig| {
-            sig.has_self_receiver && sig.param_ownership.first() == Some(&crate::analyzer::OwnershipMode::Owned)
-        });
-        if let Some(st) = ir_fn.param_types.get_mut(&binding).filter(|t| owned_receiver && matches!(t.ownership, OwnedType::Ref(_))) {
-            st.ownership = OwnedType::Owned;
-        }
-    }
-}
-
 /// Collection of IR modules from a multi-file build.
 #[derive(Debug)]
 pub struct IrModuleSet {
@@ -676,7 +634,6 @@ mod tests {
             enable_execution_modes: false,
             enable_numeric_unification: true,
             target: CompilationTarget::Rust,
-            self_owned_after_last_field_move: false,
         };
         let mut pipeline = IrPipeline::with_config(config);
         let module = pipeline.lower_to_ir(&analyzed, &registry, None);

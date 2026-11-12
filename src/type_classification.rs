@@ -483,11 +483,6 @@ pub fn is_language_level_owned_string_macro(name: &str) -> bool {
     matches!(name, "format")
 }
 
-/// `Option` spelled as a parameterized type name (`Parameterized("Option", [T])`), the std declaration.
-pub fn is_option_type_name(name: &str) -> bool {
-    name == "Option"
-}
-
 /// Language-level Option/Result constructors that wrap a payload (`None` has none).
 pub fn is_option_result_payload_constructor(name: &str) -> bool {
     matches!(name, "Some" | "Ok" | "Err")

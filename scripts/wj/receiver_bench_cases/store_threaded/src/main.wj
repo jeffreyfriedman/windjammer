@@ -1,6 +1,0 @@
-mod domain
-mod adapters
-
-fn main() {
-    println("x")
-}
