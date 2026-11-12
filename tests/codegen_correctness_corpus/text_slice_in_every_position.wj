@@ -1,0 +1,46 @@
+// A text slice (`s[a..b]`, borrowed) and a substring (`s.substring(a, b)`, owned) in every value position: the tail
+// of a function returning `string`, a `return`, a `let`, a call argument, the left of `+`, an assignment and a
+// comparison. Each is converted to an owned `string` at most once, wherever it lands.
+// expect: e e l l
+// expect: he lo
+// expect: hel+lo yes
+fn tail_substring(s: string, i: int) -> string {
+    s.substring(i, i + 1)
+}
+
+fn tail_slice(s: string, i: int) -> string {
+    s[i..i + 1]
+}
+
+fn return_substring(s: string, i: int) -> string {
+    if i < 10 {
+        return s.substring(i, i + 1)
+    }
+    ""
+}
+
+fn return_slice(s: string, i: int) -> string {
+    if i < 10 {
+        return s[i..i + 1]
+    }
+    ""
+}
+
+fn shout(t: string) -> string {
+    t + "!"
+}
+
+fn main() {
+    let s = "hello"
+    println("${tail_substring(s, 1)} ${tail_slice(s, 1)} ${return_substring(s, 2)} ${return_slice(s, 3)}")
+    let a = s.substring(0, 2)
+    let b = s[3..5]
+    println("${a} ${b}")
+    let mut joined = s.substring(0, 3) + "+"
+    joined = joined + s[3..5]
+    let mut owned = ""
+    owned = s.substring(0, 1)
+    let same = owned == s[0..1]
+    println("${joined} ${if same { "yes" } else { "no" }}")
+    let _ = shout(s.substring(0, 1))
+}

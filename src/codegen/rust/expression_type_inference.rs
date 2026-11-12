@@ -1133,7 +1133,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// `text[a..b]` on a `string` (the desugared slice form): Rust slices it to a borrowed `&str`.
     pub(in crate::codegen::rust) fn is_text_slice_expr(&self, e: &Expression) -> bool {
         let Expression::MethodCall { object, .. } = e else { return false };
-        Self::let_value_borrows_text(e)
+        // a form whose declared result is an owned `string` (`s.substring(a, b)`) is lowered to an owned value already
+        let declared_owned = self.infer_expression_type(e).is_some_and(|t| !matches!(t, Type::Reference(_)) && crate::codegen::rust::types::is_windjammer_text_type(&t));
+        !declared_owned
+            && Self::let_value_borrows_text(e)
             && self.infer_expression_type(object).is_some_and(|t| {
                 crate::codegen::rust::types::is_windjammer_text_type(crate::codegen::rust::collection_detection::peel_type_reference(&t))
             })
