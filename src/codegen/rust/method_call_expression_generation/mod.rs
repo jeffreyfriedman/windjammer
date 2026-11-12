@@ -5,6 +5,7 @@
 use crate::parser::*;
 
 mod arguments;
+mod element_closure_params;
 mod finalize;
 mod idiom_lowering;
 mod receiver;

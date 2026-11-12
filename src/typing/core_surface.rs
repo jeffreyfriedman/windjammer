@@ -150,6 +150,9 @@ pub fn surface_type_name(receiver: &Type) -> Option<&'static str> {
     head(receiver).map(|(n, _)| n)
 }
 
+/// The surface type whose methods are the iterator adapters (`map`, `filter`, ..).
+pub const ITERATOR: &str = "Iterator";
+
 /// The surface types whose one type parameter is an element (`Vec<T>`, `Iterator<T>`, the sets).
 const ELEMENT_CONTAINERS: [&str; 6] = ["Vec", "VecDeque", "HashSet", "BTreeSet", "Iterator", "List"];
 

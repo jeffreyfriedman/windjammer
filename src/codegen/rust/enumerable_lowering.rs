@@ -131,6 +131,10 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(t) = self.thread_call_type(object, method, arguments) {
             return Some(t);
         }
+        // `map.get(k).unwrap_or("")` is an owned copy of the stored value
+        if let Some(owned) = self.ref_default_call_type(object, method, arguments) {
+            return Some(owned);
+        }
         let m = enumerable::lookup(method, arguments.len())?;
         let recv_name = self.infer_type_name(object);
         if self.receiver_defines_method(recv_name.as_deref(), method) {

@@ -1221,7 +1221,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             combined_imports.push_str(&imports);
         }
-        let combined_imports = Self::dedupe_rust_import_lines(&combined_imports);
+        let combined_imports = Self::prune_unused_runtime_type_imports(&Self::dedupe_rust_import_lines(&combined_imports), &body);
 
         let mut output = String::new();
         if !combined_imports.is_empty() {
