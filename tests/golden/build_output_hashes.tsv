@@ -24,7 +24,7 @@ algo_stack_calculator.wj	ac672c71879c1713
 algo_state_machine.wj	0a6e1864a9c37334
 algo_statistics.wj	aae8958c60f9e4e8
 algo_temperature_table.wj	bf618d7dbcf5f4c5
-algo_tokenizer.wj	95f19acb1ea42de0
+algo_tokenizer.wj	5476fe74552dfaa2
 algo_word_frequency.wj	1e6a3e08b3db7787
 basics_arithmetic.wj	3cb84b5c6f9bcbc7
 basics_bool_logic.wj	5eb1f032cfd387fa
@@ -62,7 +62,7 @@ error_map_err_ok.wj	18163a7af0be3e18
 error_panic_exit_code.wj	e614db5188409646
 error_unwrap_or_expect.wj	348fbc4b15210e60
 from_conversion.wj	672967a86af56c6c
-generics_function.wj	9967d28b10cea940
+generics_function.wj	0472f9ef72b08644
 generics_struct.wj	d0475e7d6fca599e
 hashmap_basics.wj	3b4d4c0340e31737
 hashmap_iterate_sorted.wj	2eb2715b4624137e
@@ -72,14 +72,14 @@ hashset_basics.wj	26df97f14d06ba39
 idiom_agentdx_regressions.wj	ca223e93c3447ec2
 if_let_chain.wj	bc78b8078b068c10
 intrinsic_user_shadow.wj	459bd2e7a44696ad
-iter_any_all_count.wj	24a07f829ff4f9eb
+iter_any_all_count.wj	a13e7ba93929d642
 iter_collect_hashmap.wj	c948148686b40079
 iter_enumerate_zip.wj	8f234736347ed928
 iter_filter_map_flat.wj	0f741df26fd45bee
 iter_flat_map_chain.wj	730c30a6a7da630a
 iter_fold_sum.wj	06e17e5f72cd14b0
 iter_group_by_manual.wj	187c644f1ce15ee2
-iter_map_filter.wj	1199bd71681d5341
+iter_map_filter.wj	aaad820d156bed62
 iter_min_max_by.wj	94abe852f490ffce
 iter_partition_unzip.wj	62cac0a360e08d5d
 iter_scan_running_total.wj	315a9eef1d74bb5f
@@ -107,12 +107,12 @@ option_combinators.wj	2528abb0a477e092
 option_filter_zip_flatten.wj	f723a43771ad6259
 option_take_replace.wj	0d7877c036ccdd1b
 pipe_basics.wj	fabe7255daab6550
-pipe_method_stage.wj	bad7e8e0ef57ffe3
+pipe_method_stage.wj	4b8f0c39c73fe5b3
 pipe_result_question.wj	6874afaa8d0ac113
 prog_bit_counting.wj	b69f1d74ef327bde
 prog_csv_parse.wj	e6fa8999a0fbc585
 prog_event_handlers.wj	b47be22f3b051d6e
-prog_game_of_life.wj	15714ad7f80f307e
+prog_game_of_life.wj	02dabb74c87235d2
 prog_lru_cache.wj	8a4cb217a4c05046
 prog_matrix_transpose.wj	6f9ce57ea40e347b
 prog_priority_scheduler.wj	3949ab6e90654d6d
@@ -128,7 +128,7 @@ result_question_mark.wj	b48d15976b2fd666
 sort_stability_keys.wj	224d2c559aaae8d5
 std_cmp_ordering.wj	2ccc34db611bdb1e
 std_env_args.wj	5b2405ac17b00951
-std_fs_roundtrip.wj	182ae2dbccee3774
+std_fs_roundtrip.wj	dba6d48200759dba
 std_math_functions.wj	355c199a09d87cba
 strings_basics.wj	4b82beb427c377c3
 strings_build.wj	f7364806d2a301aa
@@ -163,7 +163,7 @@ vec_2d_grid.wj	073ba174a67f08eb
 vec_basics.wj	e2bba7420da2ff73
 vec_contains_position.wj	54602916406b293a
 vec_insert_remove.wj	38371a62a62de837
-vec_of_structs.wj	e05acc9e9164f688
+vec_of_structs.wj	e176f7c73a061e0d
 vec_slices_windows.wj	24abe1ee23c8ab75
 vec_sort_dedup.wj	6c7f99eef11b04dc
 vecdeque_queue.wj	346d6220db6c8634

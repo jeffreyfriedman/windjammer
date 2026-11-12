@@ -11,7 +11,7 @@ fn main() {
     for p in &people {
         println!("{} {}", p.name, p.age);
     }
-    match people.max_by_key(|p| p.age) {
+    match people.iter().max_by_key(|p| p.age) {
         Some(oldest) => println!("oldest: {}", oldest.name),
         None => println!("nobody"),
     }

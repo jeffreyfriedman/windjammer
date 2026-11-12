@@ -1,5 +1,5 @@
 #[inline]
-fn largest<T: PartialOrd>(items: Vec<T>) -> T {
+fn largest<T: Clone + PartialOrd>(items: Vec<T>) -> T {
     let mut best = items[0].clone();
     for i in items {
         if i > best {
