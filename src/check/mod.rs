@@ -52,7 +52,7 @@ pub struct Checked {
 pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     let start = Instant::now();
     let (sources, keyed) = inputs(path)?;
-    let fp = cache::fingerprint(&keyed);
+    let fp = cache::fingerprint(&cache::relative_inputs(path, &keyed));
     let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
     let was_cached = cached.is_some();
     let diagnostics = match cached {
