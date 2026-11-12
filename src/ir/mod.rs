@@ -45,6 +45,7 @@ pub mod solver;
 pub mod stdlib_tables;
 pub mod taint;
 pub mod target_encodings;
+pub(crate) mod value_formal_fixed_point;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
 pub use capability_profiles::{
