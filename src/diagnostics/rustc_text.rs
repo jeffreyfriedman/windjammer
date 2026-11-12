@@ -143,7 +143,7 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
         Some("E0499") | Some("E0502") | Some("E0505") | Some("E0506") => t(
             "WJ0016",
             format!("`{name}` is borrowed in conflicting ways at the same time"),
-            Some("finish using the first reference before taking the second"),
+            Some("a value read from it is still in use while it changes (the compiled build borrows reads instead of copying them): read what you need into a local before the change (`let v = obj.field`), or copy the value with `.clone()` (`let r = items[i].clone()`)"),
         ),
         Some("E0599") => {
             let ty = between(msg, "for ", " in").unwrap_or("this type");
