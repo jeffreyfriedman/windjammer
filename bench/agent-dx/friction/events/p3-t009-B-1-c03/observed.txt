@@ -5,4 +5,4 @@ error: string literal `.to_string()` is forbidden Rust leakage [W0006]
 Error: Rust leakage errors:
 Rust leakage errors in <ws>/main.wj -- fix or use `extern fn` for FFI
 Building Windjammer project from "<ws>" (target: rust)
-Output: "/var/folders/k8/2
+Output: "{TMP}

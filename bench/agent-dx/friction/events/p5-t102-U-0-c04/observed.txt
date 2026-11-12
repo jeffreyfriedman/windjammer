@@ -1,5 +1,5 @@
 Building Windjammer project from "<ws>" (target: rust)
-Output: "~/Library/Caches/windjammer/run/9204507b99da240a"
+Output: "{CACHE}/run/9204507b99da240a"
 
 Success! Transpilation complete!
 

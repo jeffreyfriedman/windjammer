@@ -1,11 +1,11 @@
 Building Windjammer project from "<ws>" (target: rust)
-Output: "/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpgOGtpT"
+Output: "{TMP}/.tmpgOGtpT"
 
 Success! Transpilation complete!
 
 Success! Transpilation complete (cargo build skipped)!
 Run cargo build manually:
-  cd "/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpgOGtpT" && cargo build
+  cd "{TMP}/.tmpgOGtpT" && cargo build
 warning: unused import: `windjammer_runtime::fs::DirEntry`
  --> main.rs:2:5
   |

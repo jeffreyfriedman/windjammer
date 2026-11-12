@@ -6,7 +6,7 @@
  "capability_denials": 0,
  "diag_samples": [
   "error: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:29:49\n  = note: .unwrap() is a Rust-specific panic convention\n  = help: give a default with `x ?? default`, propagate with `x?`, or handle it with `match` / `if let`\n  = suggestion: prefer explicit error handling in Windjammer\n\nerror: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:32:53\nerror: explicit .unwrap() call [W0002]\n  --> <ws>/main.wj:32:",
-  "error[E0599]: no method named `trim` found for enum `Result<T, E>` in the current scope\n    --> main.rs:28:34\n     |\n  28 |     let t: i64 = io::read_line().trim().parse().unwrap_or(0_i64);\n     |                                  ^^^^ method not found in `Result<std::string::String, std::io::Error>`\n     |\nnote: the method `trim` exists on the type `std::string::String`\n    --> ~/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/str/mod.rs:2186:5\nerror[E0599]: no method named `trim` found for enum `Result<T, E>` in the current scope\n    "
+  "error[E0599]: no method named `trim` found for enum `Result<T, E>` in the current scope\n    --> main.rs:28:34\n     |\n  28 |     let t: i64 = io::read_line().trim().parse().unwrap_or(0_i64);\n     |                                  ^^^^ method not found in `Result<std::string::String, std::io::Error>`\n     |\nnote: the method `trim` exists on the type `std::string::String`\n    --> {RUSTUP_HOME}/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/str/mod.rs:2186:5\nerror[E0599]: no method named `trim` found for enum `Result<T, E>` in the current scope\n    "
  ],
  "diagnostic_categories": {
   "lint-style": 1,

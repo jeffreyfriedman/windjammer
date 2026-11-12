@@ -605,7 +605,7 @@
   "denied_commands": [
    "cat > main.wj <<'EOF'\nuse std::env\nuse std::fs\nuse std::io\nuse std::process\n\nfn main() {\n    let args = env::args()\n    println(\"${args:?}\")\n    let s = io::read_all_stdin()\n    println(\"${s:?}\")\n}\nEO",
    "for t in input gets read_to_end lines console tty; do echo \"== $t\"; wj docs $t 2>&1 | grep -E '^\\[' | head -6; done",
-   "head -90 /private/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/wj-embedded/windjammer-runtime-0.50.0-1672ae1a53d33ac4/src/io.rs",
+   "head -90 {TMP}/wj-embedded/windjammer-runtime-0.50.0-1672ae1a53d33ac4/src/io.rs",
    "printf 'one\\ntwo' > a; printf 'three\\n\\nfive\\n' > b; printf 'x\\ny' | wj run --compiled main.wj -n a zz b 2>&1 | tail -12; echo \"st=$?\""
   ],
   "is_error": true,
