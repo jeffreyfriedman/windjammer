@@ -1,0 +1,23 @@
+// expect: 0
+// `has(self.rooms, ..)` is emitted as `has(self.rooms.to_string().clone(), ..)` (E0599) when the
+// caller has a `string` parameter whose name is a suffix of the argument text (`s`, `ms`, `rooms`);
+// with the parameter named `q` or `sx` it is `self.rooms.clone()`. Decided by text, not by the formal.
+fn has(list: Vec<string>, z: string) -> bool {
+    for x in list {
+        if x == z { return true }
+    }
+    false
+}
+struct W {
+    rooms: Vec<string>,
+}
+impl W {
+    fn parse_loc(self, s: string) -> int {
+        if has(self.rooms, s) { return 0 }
+        -1
+    }
+}
+fn main() {
+    let w = W { rooms: ["hall"] }
+    println("${w.parse_loc("hall")}")
+}
