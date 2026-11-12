@@ -6,7 +6,7 @@ pub fn test_integer_comparison_before_indexing() {
     if idx >= n {
         idx = n - 1_i32;
     }
-    let value = data[(idx as usize)];
+    let value = data[idx as usize];
     assert!(value == 3.0_f64, "Should get middle element");
 }
 
@@ -17,7 +17,7 @@ pub fn test_integer_arithmetic_then_indexing() {
     let offset = count / 2_i32;
     let adjusted = offset + 1_i32;
     if adjusted < count {
-        let val = nums[(adjusted as usize)];
+        let val = nums[adjusted as usize];
         let _ = assert!(val == 30_i64, "Should index correctly");
     }
 }
@@ -31,7 +31,7 @@ pub fn test_percentage_calculation_then_indexing() {
     let idx = numer / 100_i32;
     assert!(idx >= 0_i32, "Index should be non-negative");
     assert!(idx < n, "Index should be in bounds");
-    let result = values[(idx as usize)];
+    let result = values[idx as usize];
     assert!(result == 5_i64, "Should get 50th percentile");
 }
 

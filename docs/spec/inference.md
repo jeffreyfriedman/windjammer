@@ -336,7 +336,7 @@ describe both, so the solver publishes the width of every read by its source pos
 ### NUM-USIZE-TO-INT
 **Rule (ADR-0028).** A `usize` value that enters a slot of another integer width is converted at that site: an index
 source whose class resolved to `W` is emitted `(v.len() as W)`; a `usize` class pushed into a `Vec<W>` is converted at
-the argument. The solver places these conversions (`IrFunction::usize_conversions`); the backend prints them.
+the argument; an index of another width is converted where it indexes a sequence (`v[k as usize]` with `k: int`). The solver places these conversions (`IrFunction::usize_conversions`); the backend prints them.
 
 ### NUM-STD-SIG
 **Rule (ADR-0029, option C stage C1).** A method of a Rust core type (`Vec`, `VecDeque`, `HashMap`, `BTreeMap`,
