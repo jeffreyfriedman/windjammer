@@ -52,9 +52,8 @@ fn rustc_rejects_file(f: &Path) -> Option<String> {
 /// The Rust `wj build --no-cargo` emits for the single file at `path` (the text the prediction is confirmed on).
 fn built_rust(path: &Path) -> Option<String> {
     let out = tempfile::tempdir().unwrap();
-    windjammer::build_project(path, out.path(), windjammer::CompilationTarget::Rust, false).ok()?;
     let stem = path.file_stem()?.to_string_lossy().to_string();
-    std::fs::read_to_string(out.path().join(format!("{stem}.rs"))).ok()
+    windjammer::cli::widths_gate::built_in_process(path, out.path())?.into_iter().find(|(p, _)| p.file_stem().is_some_and(|s| s.to_string_lossy() == stem)).map(|(_, t)| t)
 }
 
 fn n(rust: &str) -> usize {
@@ -119,8 +118,8 @@ fn drift_repros_of_the_families_are_predicted() {
     let repros = root().join("tests/drift_corpus/repros");
     for (f, line) in [
         ("let_literal_captured_by_closure.wj", 5),
-        ("shadow_match_binding_literal.wj", 6),
-        ("shadowed_option_literal_arms.wj", 5),
+        // `shadow_match_binding_literal` and `shadowed_option_literal_arms` are no longer here: `wj build` (the
+        // configuration the prediction now builds with) emits `1_i64` for both and rustc accepts them
         // family B (a reference expected) and C (`String` against `&str`)
         ("explicit_ref_literal_arg.wj", 9),
         ("closure_string_param_literal.wj", 6),
@@ -234,12 +233,10 @@ fn predictions_across_the_corpora() {
         "tests/diagnostics/cases/numeric_string_to_int.wj 1",
         "tests/diagnostics_oracle/check/let_string_to_int.wj 1",
         "tests/diagnostics_oracle/check/numeric_string_to_int.wj 1",
-        "tests/dogfood/voxel_raymarch.wj 7",
+        "tests/dogfood/voxel_raymarch.wj 4",
         "tests/drift_corpus/repros/closure_string_param_literal.wj 1",
         "tests/drift_corpus/repros/explicit_ref_literal_arg.wj 2",
         "tests/drift_corpus/repros/let_literal_captured_by_closure.wj 1",
-        "tests/drift_corpus/repros/shadow_match_binding_literal.wj 1",
-        "tests/drift_corpus/repros/shadowed_option_literal_arms.wj 1",
         "tests/effects/corpus/fs_helper_and_closure.wj 1",
         "tests/engine_parity/closure_params.wj 1",
         "tests/engine_parity/closures_compiled.wj 1",

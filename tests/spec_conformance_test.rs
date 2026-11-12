@@ -407,7 +407,8 @@ fn rule_examples_in_chapters_match_the_test_files() {
             let Some(rest) = l.strip_prefix("<!-- example: ") else { continue };
             let rel = rest.trim_end_matches(" -->");
             let src = std::fs::read_to_string(root.join(rel)).unwrap_or_else(|_| panic!("{rel} missing"));
-            let body: Vec<&str> = src.lines().skip_while(|l| l.starts_with("//") && l.contains(": ") && is_header(l)).collect();
+            // `//~` lines are span-oracle markers for the repo-wide diagnostics gate, not part of the example the chapter shows
+            let body: Vec<&str> = src.lines().skip_while(|l| l.starts_with("//") && l.contains(": ") && is_header(l)).filter(|l| !l.starts_with("//~")).collect();
             // the fence follows the marker, optionally after one `<!-- ignore: .. -->` / `<!-- should_fail: .. -->` reason line
             let start = lines.iter().skip(i + 1).position(|l| l.starts_with("```")).map(|k| i + 1 + k + 1).unwrap_or(lines.len());
             let mut block = Vec::new();

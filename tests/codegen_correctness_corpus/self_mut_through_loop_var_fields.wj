@@ -9,8 +9,8 @@ impl Counter {
 pub struct Inner { c: Counter, items: Vec<Counter> }
 pub struct Outer { inner: Inner, list: Vec<Inner> }
 impl Outer {
-    pub fn c(self) { for i in self.list { i.c.inc() } }
-    pub fn h(self) { for c in self.inner.items { c.inc() } }
+    pub fn c(self) { for mut i in self.list { i.c.inc() } }
+    pub fn h(self) { for mut c in self.inner.items { c.inc() } }
     pub fn total(self) -> int { self.inner.items.len() as int + self.list[0].c.n }
 }
 fn main() {
