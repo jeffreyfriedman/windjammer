@@ -20,6 +20,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) text_option_locals: HashSet<String>,
     /// Parameters of the comparator closure being generated (`sort_by(|a, b| ..)`): they are `&T`.
     pub(crate) ref_closure_params: HashSet<String>,
+    /// Parameters of an iterator adapter's closure, with the reference depth of their type from the adapter's
+    /// declaration (`v.filter(|n| ..)`: `&&T`, `v.map(|x| ..)`: `&T`); operators dereference them to the value.
+    pub(crate) adapter_closure_param_depth: std::collections::HashMap<String, usize>,
     /// Names a type annotation in this file can refer to: items declared here and `use` imports.
     pub(crate) file_scope_type_names: HashSet<String>,
     /// True when the file has a glob import or nested `mod` (name scope is not tracked precisely).

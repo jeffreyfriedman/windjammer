@@ -1,0 +1,29 @@
+// An adapter's closure takes the type its declaration gives (std/rust_core.wji): over a list, `map`, `any` and
+// `position` (`fn(T)`) receive `&T`, `filter` and `find` (`fn(&T)`) receive `&&T`. Operators in the body work on
+// the value, as in the interpreter. An unannotated list of struct literals is a list of that struct.
+// expect: Some(5)
+// expect: [8, 4]
+// expect: [5, 3]
+// expect: true Some(2)
+// expect: 1 ["b"]
+struct Item {
+    name: string,
+    qty: int,
+}
+
+fn main() {
+    let v = [5, 3, 8, 4]
+    let first = v.find(|x| x > 4)
+    println("${first:?}")
+    let evens: Vec<int> = v.filter(|n| n % 2 == 0).collect()
+    println("${evens:?}")
+    let odd: Vec<int> = v.filter(|n| *n % 2 == 1).filter(|n| n < 7).collect()
+    println("${odd:?}")
+    let any_big = v.any(|x| x > 7)
+    let pos = v.position(|x| x == 8)
+    println("${any_big} ${pos:?}")
+    let items = [Item { name: "a", qty: 2 }, Item { name: "b", qty: 0 }]
+    let stocked = items.filter(|it| it.qty > 0).count()
+    let empty: Vec<string> = items.filter(|it| it.qty == 0).map(|it| it.name).collect()
+    println("${stocked} ${empty:?}")
+}

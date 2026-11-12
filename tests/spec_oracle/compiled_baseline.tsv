@@ -6,7 +6,7 @@ spec::attributes/SPEC-ATTR-001	build-fail
 spec::attributes/SPEC-ATTR-002	ok
 spec::attributes/SPEC-ATTR-003	ok
 spec::attributes/SPEC-ATTR-004	build-fail
-spec::closures/SPEC-CLOS-001	build-fail
+spec::closures/SPEC-CLOS-001	ok
 spec::closures/SPEC-CLOS-002	ok
 spec::closures/SPEC-CLOS-003	ok
 spec::closures/SPEC-CLOS-004	ok
@@ -91,7 +91,7 @@ spec::items/SPEC-ITEM-005	ok
 spec::items/SPEC-ITEM-006	ok
 spec::items/SPEC-ITEM-007	ok
 spec::items/SPEC-ITEM-009	ok
-spec::items/SPEC-ITEM-010	build-fail
+spec::items/SPEC-ITEM-010	ok
 spec::items/SPEC-ITEM-011	ok
 spec::lexical/SPEC-LEX-001	ok
 spec::lexical/SPEC-LEX-002	ok

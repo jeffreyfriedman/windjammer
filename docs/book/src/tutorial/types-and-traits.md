@@ -228,8 +228,8 @@ fn main() {
 }
 ```
 
-A generic function that copies an element out of a list and compares it, such as a `largest` over `Vec<T>`, needs
-`T: PartialOrd + Clone` today on the compiled path. [Known gaps](https://github.com/jeffreyfriedman/windjammer/blob/main/docs/known-gaps.md) tracks it.
+A generic function that copies an element out of a list, such as a `largest` over `Vec<T>` that starts from
+`items[0]`, needs only the bound its comparisons use (`T: PartialOrd`): the compiler adds the `Clone` that the copy needs.
 
 ## The pipe operator
 

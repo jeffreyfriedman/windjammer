@@ -68,7 +68,7 @@ fn is_reference_type(ty: &Type) -> bool {
     matches!(ty, Type::Reference(_))
 }
 
-fn is_str_reference(ty: &Type) -> bool {
+pub(crate) fn is_str_reference(ty: &Type) -> bool {
     matches!(ty, Type::Reference(inner) if matches!(&**inner, Type::Custom(n) if n == "str"))
 }
 
