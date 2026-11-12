@@ -45,3 +45,35 @@ fn dir_entry_name_field_reads_like_the_name_method() {
     assert!(r.stdout.contains("size=5 5 file=true"), "{}", r.stdout);
 }
 
+/// Compiled (`#[serde(deny_unknown_fields)]` on a struct with named fields, none on an enum or an empty struct):
+/// the interpreter denies in exactly those cases (ADR-0027).
+#[test]
+fn json_unknown_fields_follow_the_compiled_derive() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = r#"use std::json
+
+struct Point {
+    x: int,
+}
+
+struct Empty {
+}
+
+enum Shape {
+    Rect { w: int, h: int },
+}
+
+fn main() {
+    let a: Result<Point, string> = json::parse_string("{\"x\":1,\"y\":2}")
+    println("struct: ${a.is_err()}")
+    let b: Result<Empty, string> = json::parse_string("{\"y\":2}")
+    println("empty: ${b.is_ok()}")
+    let c: Result<Shape, string> = json::parse_string("{\"Rect\":{\"w\":1,\"h\":2,\"depth\":3}}")
+    println("variant: ${c.is_ok()}")
+}
+"#;
+    let r = run(dir.path(), src);
+    assert_eq!(r.code, 0, "{}", r.stderr);
+    assert_eq!(r.stdout, "struct: true\nempty: true\nvariant: true\n", "{}", r.stderr);
+}
+
