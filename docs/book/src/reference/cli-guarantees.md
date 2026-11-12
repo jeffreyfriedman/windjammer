@@ -64,6 +64,13 @@ Generated from `docs/promises.toml`. *Tested* entries have acceptance cases that
 | `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms | tested |
 | `wj fix --check` | Do not write; exit non-zero if any file would change | tested |
 | `wj fix --docs` | Also migrate ```windjammer / ```wj code fences in .md files | tested |
+| `wj replay` | Step through a recorded or simulated run deterministically: breakpoints, stepping, going back, and the values of bindings at any step, from a script of commands (ADR-0035) | tested |
+| `wj replay --script` | Debugger commands, one per line; `-` or no script reads them from standard input | tested |
+| `wj replay --json` | Print the debugger events as JSON Lines, one object per line | tested |
+| `wj replay --simulate` | Debug the run of the deterministic simulated world instead of a recorded one | tested |
+| `wj replay --seed` | With --simulate: the seed of the world | tested |
+| `wj replay --faults` | With --simulate: probability that a file or network call fails, drawn from the seed | tested |
+| `wj replay --allow` | Grant a capability as the recording did; nothing is performed either way | tested |
 | `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) | tested |
 | `wj reduce --oracle` | Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present) | tested |
 | `wj reduce --output` | Output directory for the minimal project and repro.md | tested |

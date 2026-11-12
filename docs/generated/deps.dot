@@ -177,7 +177,7 @@ digraph deps {
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
   "cli" -> "formatter" [label="1"];
-  "cli" -> "interpreter" [label="17"];
+  "cli" -> "interpreter" [label="19"];
   "cli" -> "intrinsics" [label="2"];
   "cli" -> "ir" [label="7"];
   "cli" -> "lexer" [label="4"];
@@ -341,9 +341,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="4"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="4"];
-  "interpreter" -> "parser" [label="125"];
+  "interpreter" -> "parser" [label="127"];
   "interpreter" -> "resolve" [label="13"];
-  "interpreter" -> "source_map" [label="14"];
+  "interpreter" -> "source_map" [label="16"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="2"];

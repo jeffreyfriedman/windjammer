@@ -420,6 +420,39 @@ pub enum Commands {
         compiled: bool,
     },
 
+    /// Step through a recorded (`wj run --record LOG`) or simulated run deterministically: breakpoints, stepping,
+    /// going back, and the values of bindings at any step, from a script of commands (ADR-0035)
+    Replay {
+        /// `LOG PROGRAM`: an effect log written by `wj run --record` and the program it recorded; with --simulate, only `PROGRAM`
+        #[arg(value_name = "LOG PROGRAM", num_args = 1..=2, required = true)]
+        paths: Vec<PathBuf>,
+
+        /// Debugger commands, one per line (`break LINE`, `continue`, `step [N]`, `back [N]`, `print NAME`, `locals`,
+        /// `where`); `-` or no script reads them from standard input
+        #[arg(long, value_name = "FILE")]
+        script: Option<PathBuf>,
+
+        /// Print the events as JSON Lines, one object per line (for agents and scripts)
+        #[arg(long)]
+        json: bool,
+
+        /// Debug the run of the deterministic simulated world instead of a recorded one (as `wj run --simulate`)
+        #[arg(long)]
+        simulate: bool,
+
+        /// With --simulate: the seed of the world
+        #[arg(long, value_name = "N", default_value = "1", requires = "simulate")]
+        seed: u64,
+
+        /// With --simulate: probability (0 to 1) that a file or network call fails
+        #[arg(long, value_name = "RATE", default_value = "0", requires = "simulate")]
+        faults: f64,
+
+        /// Grant a capability as the recording did, `EFFECT[=RESOURCE]` (repeatable); nothing is performed either way
+        #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
+        allow: Vec<String>,
+    },
+
     /// Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
     Reduce {
         /// Project directory or .wj file to reduce
