@@ -62,41 +62,45 @@ fn base_of(root: &Path) -> PathBuf {
 /// Placeholder that stands for the project root inside stored cache text.
 const ROOT_MARK: &str = "{PROJECT_ROOT}";
 
-/// The spellings of the project root a stored path may start with (canonical, and as given), JSON-escaped, longest first.
-fn root_spellings(root: &Path) -> Vec<String> {
+/// The JSON-escaped spelling of a path, without the quotes.
+fn json_spelling(p: &Path) -> Option<String> {
+    let j = serde_json::to_string(&p.to_string_lossy()).ok()?;
+    Some(j.trim_matches('"').to_string()).filter(|s| !s.is_empty() && s != "/" && s != ".")
+}
+
+/// The project root as the checked paths spell it (the spelling the diagnostics use), then every other spelling a
+/// stored path may start with (absolute, canonical), JSON-escaped.
+fn root_spellings(root: &Path) -> (Option<String>, Vec<String>) {
     let dir = if root.is_file() { root.parent().unwrap_or(root) } else { root };
+    let given = crate::metadata::find_project_root(dir);
     let mut v: Vec<PathBuf> = vec![base_of(root)];
-    if let Some(p) = crate::metadata::find_project_root(dir) {
+    if let Some(p) = &given {
         v.push(p.clone());
-        if let Ok(a) = std::path::absolute(&p) {
+        if let Ok(a) = std::path::absolute(p) {
             v.push(a);
         }
     }
-    let mut out: Vec<String> = v
-        .iter()
-        .filter_map(|p| serde_json::to_string(&p.to_string_lossy()).ok())
-        .map(|j| j.trim_matches('"').to_string())
-        .filter(|s| !s.is_empty() && s != "/" && s != ".")
-        .collect();
-    out.sort_by_key(|s| std::cmp::Reverse(s.len()));
-    out.dedup();
-    out
+    let primary = given.as_deref().and_then(json_spelling).or_else(|| json_spelling(&base_of(root)));
+    let mut all: Vec<String> = v.iter().filter_map(|p| json_spelling(p)).collect();
+    all.sort_by_key(|s| std::cmp::Reverse(s.len()));
+    all.dedup();
+    (primary, all)
 }
 
 /// Serialized cache text with the project root replaced by a placeholder: a stored cache holds no absolute
 /// location, so a copied or moved checkout carries none and a stale entry from another location never matches.
 pub(super) fn mask_root(root: &Path, text: &str) -> String {
     let mut t = text.to_string();
-    for sp in root_spellings(root) {
+    for sp in root_spellings(root).1 {
         t = t.replace(&sp, ROOT_MARK);
     }
     t
 }
 
-/// Inverse of [`mask_root`] for the project at `root`.
+/// Inverse of [`mask_root`] for the project at `root`: the root is restored in the spelling the checked paths use.
 pub(super) fn unmask_root(root: &Path, text: &str) -> String {
-    match root_spellings(root).first() {
-        Some(sp) => text.replace(ROOT_MARK, sp),
+    match root_spellings(root).0 {
+        Some(sp) => text.replace(ROOT_MARK, &sp),
         None => text.to_string(),
     }
 }
