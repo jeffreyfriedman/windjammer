@@ -9,6 +9,11 @@ use std::path::{Path, PathBuf};
 
 include!(concat!(env!("OUT_DIR"), "/embedded_assets_generated.rs"));
 
+/// Fingerprint of the baked-in trees the runtime signature scan reads (the runtime crate and `std/`).
+pub fn scan_inputs_fingerprint() -> String {
+    format!("{RUNTIME_CRATE_HASH:016x}{STD_WJ_HASH:016x}")
+}
+
 /// Which embedded tree to materialize.
 #[derive(Clone, Copy)]
 pub enum Asset {
