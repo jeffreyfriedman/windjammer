@@ -34,7 +34,7 @@ pub fn run(parsed: &[&Parsed], tables: Arc<StdlibTables>) -> Vec<Diagnostic> {
         if facts.unanalyzed.contains(&p.file) {
             continue;
         }
-        let mut w = Walker::new(&facts);
+        let mut w = Walker::new(&facts).with_loop_mut(p.parser.loop_mut_bindings());
         functions(&p.program.items, &mut w);
         let ix = SourceIndex::new(p.file.clone(), &p.text);
         let loc = super::locate::Locator::new(&ix);

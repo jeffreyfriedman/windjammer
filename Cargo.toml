@@ -426,6 +426,10 @@ name = "interpreter_features"
 path = "tests/interpreter_features_test.rs"
 
 [[test]]
+name = "interpreter_one_thread_tasks"
+path = "tests/interpreter_one_thread_tasks_test.rs"
+
+[[test]]
 name = "interpreter_projects"
 path = "tests/interpreter_projects_test.rs"
 

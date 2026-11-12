@@ -27,6 +27,18 @@ pub unsafe extern "C" fn wj_free(ptr: *mut u8, len: usize) {
     drop(Vec::from_raw_parts(ptr, 0, len.max(1)));
 }
 
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        // `panic = "abort"` traps right after this hook; the host reads this result from the trapped instance's memory
+        let o = super::Outcome {
+            stderr: format!("internal error in the playground interpreter: {info}\n"),
+            exit_code: 70,
+            ..Default::default()
+        };
+        RESULT.with(|r| *r.borrow_mut() = o.to_json().into_bytes());
+    }));
+}
+
 /// Run the UTF-8 source at `ptr..ptr+len`; returns the length of the result JSON at `wj_result_ptr()`.
 /// Numbers arrive as JavaScript numbers (f64).
 ///
@@ -40,15 +52,7 @@ pub unsafe extern "C" fn wj_run(
     output_bytes: f64,
     seed: f64,
 ) -> usize {
-    std::panic::set_hook(Box::new(|info| {
-        // `panic = "abort"` traps right after this hook; the host reads this result from the trapped instance's memory
-        let o = super::Outcome {
-            stderr: format!("internal error in the playground interpreter: {info}\n"),
-            exit_code: 70,
-            ..Default::default()
-        };
-        RESULT.with(|r| *r.borrow_mut() = o.to_json().into_bytes());
-    }));
+    install_panic_hook();
     let source = String::from_utf8_lossy(std::slice::from_raw_parts(ptr, len)).into_owned();
     let opts = Options {
         fuel: fuel as u64,
@@ -59,6 +63,44 @@ pub unsafe extern "C" fn wj_run(
     let n = json.len();
     RESULT.with(|r| *r.borrow_mut() = json);
     n
+}
+
+/// Run a program of several files: the bytes at `ptr..ptr+len` are the JSON array `[{"path": ..., "source": ...}, ...]`.
+/// Same result and limits as [`wj_run`].
+///
+/// # Safety
+/// `ptr..ptr+len` must be readable (a `wj_alloc` buffer the host filled).
+#[no_mangle]
+pub unsafe extern "C" fn wj_run_project(
+    ptr: *const u8,
+    len: usize,
+    fuel: f64,
+    output_bytes: f64,
+    seed: f64,
+) -> usize {
+    install_panic_hook();
+    let text = String::from_utf8_lossy(std::slice::from_raw_parts(ptr, len)).into_owned();
+    let opts = Options { fuel: fuel as u64, output_bytes: output_bytes as usize, seed: seed as u64 };
+    let outcome = match parse_files(&text) {
+        Some(files) => super::run_project(&files, &opts),
+        None => super::Outcome {
+            stderr: "the project is not a JSON array of {path, source} objects\n".to_string(),
+            exit_code: 1,
+            ..Default::default()
+        },
+    };
+    let json = outcome.to_json().into_bytes();
+    let n = json.len();
+    RESULT.with(|r| *r.borrow_mut() = json);
+    n
+}
+
+fn parse_files(text: &str) -> Option<Vec<(String, String)>> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    v.as_array()?
+        .iter()
+        .map(|f| Some((f.get("path")?.as_str()?.to_string(), f.get("source")?.as_str()?.to_string())))
+        .collect()
 }
 
 /// Length of the last result JSON (also after a trap: see the panic hook in `wj_run`).
