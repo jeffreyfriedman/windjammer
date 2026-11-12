@@ -203,3 +203,32 @@ fn main() {
         assert_eq!(String::from_utf8_lossy(&o.stdout), "10 30 2 102 104 11 2 3 4\n", "{engine:?}: {}", String::from_utf8_lossy(&o.stderr));
     }
 }
+
+/// A binding that shadows the loop variable in the body is not written back (OWN-LOOP-WRITE: the write goes through
+/// the binding the `for` introduced). Walker, resolved and resolved without the JIT agree.
+#[test]
+fn a_shadowing_binding_in_the_body_is_not_written_back_to_the_element() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drift_corpus/repros/for_mut_variable_shadowed_after_write.wj")).unwrap();
+    std::fs::write(dir.path().join("p.wj"), &src).unwrap();
+    for engine in [vec!["--engine", "walker"], vec!["--engine", "resolved"], vec!["--engine", "resolved", "--no-jit"]] {
+        let o = Command::new(WJ).current_dir(dir.path()).args(["run", "--interpret", "--no-lint"]).args(&engine).arg("p.wj").output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&o.stdout), "0\n0\n3 5\n", "{engine:?}: {}", String::from_utf8_lossy(&o.stderr));
+    }
+}
+
+/// `(self.layers[i].before)(x)` calls the closure stored in the field (it failed with "`Layer` has no method
+/// `before`"); the three engines agree, in a loop hot enough for the resolved engine to compile its function.
+#[test]
+fn a_parenthesised_field_call_calls_the_stored_closure_in_every_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drift_corpus/repros/call_closure_field_parenthesized.wj")).unwrap();
+    let hot = src.replace("fn main() {", "fn main() {\n    let mut warm = 0\n    while warm < 300 {\n        warm += 1\n    }");
+    for text in [&src, &hot] {
+        std::fs::write(dir.path().join("p.wj"), text).unwrap();
+        for engine in [vec!["--engine", "walker"], vec!["--engine", "resolved"], vec!["--engine", "resolved", "--no-jit"]] {
+            let o = Command::new(WJ).current_dir(dir.path()).args(["run", "--interpret", "--no-lint"]).args(&engine).arg("p.wj").output().unwrap();
+            assert_eq!(String::from_utf8_lossy(&o.stdout), "11\n8\n", "{engine:?}: {}", String::from_utf8_lossy(&o.stderr));
+        }
+    }
+}

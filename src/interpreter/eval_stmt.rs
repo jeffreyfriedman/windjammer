@@ -405,9 +405,12 @@ impl Interpreter {
                 }
             }
         }
+        // the bindings this `for` introduced, by slot: a later `let row = ..` in the body shadows the name but is
+        // another binding, and must not be written back
+        let bound: Vec<(&str, Slot)> = if elem.is_some() { loop_var_names(pattern).into_iter().filter_map(|n| self.lookup_var(n).map(|sl| (n, sl))).collect() } else { Vec::new() };
         let r = self.exec_stmts(body);
         if let (Some(elem), false) = (elem, matches!(&r, Err(Ctl::Err(_)))) {
-            if let Some(new) = self.rebuild_element(pattern, &elem.read()?) {
+            if let Some(new) = Self::rebuild_element(pattern, &elem.read()?, &bound) {
                 elem.write(new)?;
             }
         }
@@ -415,15 +418,15 @@ impl Interpreter {
         loop_exit(r, label)
     }
 
-    /// The element a loop pattern describes, from the current values of its variables (`None`: a pattern shape
-    /// that has no write-back).
-    fn rebuild_element(&self, pat: &Pattern<'static>, old: &Value) -> Option<Value> {
+    /// The element a loop pattern describes, from the current values of its variables' own slots (`None`: a
+    /// pattern shape that has no write-back).
+    fn rebuild_element(pat: &Pattern<'static>, old: &Value, bound: &[(&str, Slot)]) -> Option<Value> {
         match pat {
-            Pattern::Identifier(n) | Pattern::MutBinding(n) => self.lookup_var(n).map(|s| s.borrow().clone()),
+            Pattern::Identifier(n) | Pattern::MutBinding(n) => bound.iter().find(|(b, _)| *b == n.as_str()).map(|(_, sl)| sl.borrow().clone()),
             Pattern::Wildcard => Some(old.clone()),
             Pattern::Tuple(ps) => match old {
                 Value::Tuple(vs) if vs.len() == ps.len() => {
-                    ps.iter().zip(vs.iter()).map(|(p, v)| self.rebuild_element(p, v)).collect::<Option<Vec<_>>>().map(Value::tuple)
+                    ps.iter().zip(vs.iter()).map(|(p, v)| Self::rebuild_element(p, v, bound)).collect::<Option<Vec<_>>>().map(Value::tuple)
                 }
                 _ => None,
             },
@@ -564,3 +567,12 @@ pub(crate) fn loop_exit(r: R, my_label: Option<&str>) -> R<Option<Value>> {
     }
 }
 
+
+/// The names a loop pattern binds (identifier and tuple shapes).
+fn loop_var_names<'p>(p: &'p Pattern<'static>) -> Vec<&'p str> {
+    match p {
+        Pattern::Identifier(n) | Pattern::MutBinding(n) => vec![n.as_str()],
+        Pattern::Tuple(ps) => ps.iter().flat_map(loop_var_names).collect(),
+        _ => Vec::new(),
+    }
+}
