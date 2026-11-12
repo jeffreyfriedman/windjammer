@@ -137,6 +137,8 @@ corpus_tests!(
     collect_after_map_item_type,
     substring_tail_value,
     text_slice_in_every_position,
+    callable_struct_fields,
+    dyn_fn_signature,
 );
 
 // ------------------------------------------------------------------ generated programs

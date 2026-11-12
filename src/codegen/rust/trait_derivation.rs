@@ -144,7 +144,7 @@ impl CodeGenerator<'_> {
                     && args.iter().all(|a| self.type_is_serde_derivable(a, depth))
             }
             Type::Custom(name) => self.named_type_is_serde_derivable(name, depth),
-            Type::FunctionPointer { .. } | Type::TraitObject(_) | Type::ImplTrait(_) => false,
+            Type::FunctionPointer { .. } | Type::ClosureTrait { .. } | Type::TraitObject(_) | Type::ImplTrait(_) => false,
             _ => true,
         }
     }
@@ -191,7 +191,8 @@ impl CodeGenerator<'_> {
     /// that (transitively) holds `dyn` / `trait X` or other non-derivable std types.
     pub(super) fn type_precludes_auto_debug_clone(&self, type_: &Type) -> bool {
         match type_ {
-            Type::TraitObject(_) | Type::ImplTrait(_) => true,
+            // a closure trait object, and a `fn(A) -> R` field (emitted `Box<dyn Fn(A) -> R>`, stored_callables)
+            Type::TraitObject(_) | Type::ImplTrait(_) | Type::ClosureTrait { .. } | Type::FunctionPointer { .. } => true,
             Type::Vec(inner)
             | Type::Option(inner)
             | Type::Reference(inner)

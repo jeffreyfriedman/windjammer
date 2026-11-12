@@ -101,6 +101,7 @@ pub mod match_scrutinee_borrow;
 pub mod owned_string_tail_coercion;
 pub mod method_receiver_resolution;
 pub mod statement_generation;
+pub mod stored_callables;
 pub mod struct_field_coercion;
 pub mod untyped_let_value;
 pub mod statement_mut_binding_scan;

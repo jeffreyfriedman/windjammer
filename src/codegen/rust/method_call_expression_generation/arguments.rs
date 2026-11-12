@@ -1039,7 +1039,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        (self.unborrow_ref_closure_args(arguments, args_vec), prev_float_target)
+        (self.unborrow_ref_closure_args(arguments, self.box_callables_stored_through_field(object, arguments, args_vec)), prev_float_target)
     }
 }
 

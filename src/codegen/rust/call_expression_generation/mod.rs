@@ -40,6 +40,12 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{recv}.{call_method}(&mut {name})");
                 }
             }
+            // `(h.run)(x)`: the field holds a callable and the struct declares no method `run`
+            if self.calls_callable_field(call_obj, call_method) {
+                let obj = self.generate_expression(call_obj);
+                let args: Vec<String> = arguments.iter().map(|(_, a)| self.generate_expression(a)).collect();
+                return format!("({obj}.{call_method})({})", args.join(", "));
+            }
             return trait_call_generation::generate_call_on_field_access(
                 self,
                 call_obj,

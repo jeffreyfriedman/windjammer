@@ -336,7 +336,7 @@ impl<'ast> CodeGenerator<'ast> {
                 "    {}{}: {},\n",
                 pub_keyword,
                 field.name,
-                self.type_to_rust(effective_ty)
+                self.type_to_rust(&crate::codegen::rust::stored_callables::stored_field_type(effective_ty))
             ));
         }
 

@@ -56,6 +56,11 @@ impl Parser {
             Type::Associated(base, name) => format!("{}::{}", base, name),
             Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
             Type::ImplTrait(trait_name) => format!("trait {}", trait_name),
+            Type::ClosureTrait { kind, params, return_type, dynamic } => {
+                let ps: Vec<String> = params.iter().map(|t| self.type_to_string(t)).collect();
+                let ret = return_type.as_ref().map(|r| format!(" -> {}", self.type_to_string(r))).unwrap_or_default();
+                format!("{} {}({}){}", if *dynamic { "dyn" } else { "impl" }, kind, ps.join(", "), ret)
+            }
             Type::Infer => "_".to_string(),
             Type::FunctionPointer {
                 params,
@@ -221,6 +226,43 @@ impl Parser {
 
     /// Parse a type annotation
     /// A type, with the ADR-0018 `T?` suffix (`T?` is exactly `Option<T>`; `T??` is rejected).
+    /// `impl Fn(int) -> int` (a closure trait with its signature) or `impl Trait`.
+    fn parse_impl_type(&mut self) -> Result<Type, String> {
+        self.advance();
+        let Token::Ident(trait_name) = self.current_token() else {
+            return Err("Expected trait name after 'impl'".to_string());
+        };
+        let name = trait_name.clone();
+        self.advance();
+        if self.current_token() == &Token::LParen {
+            self.parse_closure_trait_signature(name, false)
+        } else {
+            Ok(Type::ImplTrait(name))
+        }
+    }
+
+    /// After `dyn Fn` / `impl FnMut`, at `(`: the parameter types and the optional `-> R`.
+    fn parse_closure_trait_signature(&mut self, kind: String, dynamic: bool) -> Result<Type, String> {
+        self.expect(Token::LParen)?;
+        let mut params = Vec::new();
+        while self.current_token() != &Token::RParen {
+            params.push(self.parse_type()?);
+            if self.current_token() == &Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.expect(Token::RParen)?;
+        let return_type = if self.current_token() == &Token::Arrow {
+            self.advance();
+            Some(Box::new(self.parse_type()?))
+        } else {
+            None
+        };
+        Ok(Type::ClosureTrait { kind, params, return_type, dynamic })
+    }
+
     pub fn parse_type(&mut self) -> Result<Type, String> {
         let ty = self.parse_type_core()?;
         if self.current_token() == &Token::QuestionQuestion {
@@ -318,20 +360,9 @@ impl Parser {
                 if let Token::Ident(trait_name) = self.current_token() {
                     let name = trait_name.clone();
                     self.advance();
-                    if name == "Fn" && self.current_token() == &Token::LParen {
-                        self.advance();
-                        while self.current_token() != &Token::RParen {
-                            self.parse_type()?;
-                            if self.current_token() == &Token::Comma {
-                                self.advance();
-                            }
-                        }
-                        self.advance();
-                        if self.current_token() == &Token::Arrow {
-                            self.advance();
-                            let _ = self.parse_type()?;
-                        }
-                        Type::TraitObject(name)
+                    if self.current_token() == &Token::LParen {
+                        // `dyn Fn(int) -> int`: the closure trait keeps its parameters and result
+                        self.parse_closure_trait_signature(name, true)?
                     } else {
                         Type::TraitObject(name)
                     }
@@ -339,6 +370,7 @@ impl Parser {
                     return Err("Expected trait name after 'dyn'".to_string());
                 }
             }
+            Token::Impl => self.parse_impl_type()?,
             Token::Trait => {
                 // Parse: trait TraitName (Windjammer syntax - compiler infers dispatch)
                 self.advance();

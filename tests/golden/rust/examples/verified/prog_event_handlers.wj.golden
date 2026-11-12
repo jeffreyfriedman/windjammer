@@ -1,13 +1,13 @@
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 
 struct Bus {
-    handlers: Vec<fn(&str) -> String>,
+    handlers: Vec<Box<dyn Fn(&str) -> String>>,
 }
 
 fn main() {
     let mut bus = Bus { handlers: vec![] };
-    { bus.handlers.push(|e| format!("log: {}", e)) };
-    { bus.handlers.push(|e| format!("log: {} 3", e)) };
+    { bus.handlers.push(Box::new(|e| format!("log: {}", e))) };
+    { bus.handlers.push(Box::new(|e| format!("log: {} 3", e))) };
     let events = vec!["started".to_string(), "clicked".to_string()];
     let mut handled = 0_i64;
     for (i, h) in bus.handlers.iter().enumerate() {

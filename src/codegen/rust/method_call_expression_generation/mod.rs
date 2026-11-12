@@ -29,6 +29,14 @@ impl<'ast> CodeGenerator<'ast> {
         if method == crate::parser::optional_chain::OPT_CHAIN {
             return self.lower_optional_chain(object, arguments);
         }
+        // `h.run(x)` / `(h.run)(x)` where `run` is a callable field and the struct declares no method `run`
+        if type_args.is_none() {
+            if self.calls_callable_field(object, method) {
+                let obj = self.generate_expression(object);
+                let args: Vec<String> = arguments.iter().map(|(_, a)| self.generate_expression(a)).collect();
+                return format!("({obj}.{method})({})", args.join(", "));
+            }
+        }
         if method == "find" && arguments.len() == 1 {}
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" {

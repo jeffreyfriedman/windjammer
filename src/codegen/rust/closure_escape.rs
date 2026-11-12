@@ -16,12 +16,36 @@ pub(crate) fn non_escaping_closure_names(body: &[&Statement<'_>]) -> HashSet<Str
     if bound.is_empty() {
         return bound;
     }
-    let mut escaped = HashSet::new();
+    let mut escaped = Escapes::default();
     for s in body {
         visit_stmt(s, &mut escaped);
     }
-    bound.retain(|n| !escaped.contains(n));
+    bound.retain(|n| !escaped.names.contains(n));
     bound
+}
+
+/// What the visitor records: every name used other than as a callee or plain call argument (`names`), and the names
+/// stored in a place that outlives the call (`stored`): a struct literal's field, an argument of a method on a field
+/// (`self.handlers.push(f)`), the value assigned to a field.
+#[derive(Default)]
+struct Escapes {
+    names: HashSet<String>,
+    stored: HashSet<String>,
+}
+
+/// Names (bare identifiers) a function body stores in a struct field, directly or through a method on a field.
+pub(crate) fn names_stored_in_fields(body: &[&Statement<'_>]) -> HashSet<String> {
+    let mut esc = Escapes::default();
+    for s in body {
+        visit_stmt(s, &mut esc);
+    }
+    esc.stored
+}
+
+fn note_stored(e: &Expression<'_>, esc: &mut Escapes) {
+    if let Expression::Identifier { name, .. } = e {
+        esc.stored.insert(name.clone());
+    }
 }
 
 fn collect_closure_lets(stmts: &[&Statement<'_>], out: &mut HashSet<String>) {
@@ -48,13 +72,13 @@ fn collect_closure_lets(stmts: &[&Statement<'_>], out: &mut HashSet<String>) {
     }
 }
 
-fn visit_stmts(stmts: &[&Statement<'_>], esc: &mut HashSet<String>) {
+fn visit_stmts(stmts: &[&Statement<'_>], esc: &mut Escapes) {
     for s in stmts {
         visit_stmt(s, esc);
     }
 }
 
-fn visit_stmt(s: &Statement<'_>, esc: &mut HashSet<String>) {
+fn visit_stmt(s: &Statement<'_>, esc: &mut Escapes) {
     match s {
         Statement::Let { value, else_block, .. } => {
             visit_expr(value, esc, false);
@@ -64,6 +88,9 @@ fn visit_stmt(s: &Statement<'_>, esc: &mut HashSet<String>) {
         }
         Statement::Const { value, .. } | Statement::Static { value, .. } => visit_expr(value, esc, false),
         Statement::Assignment { target, value, .. } => {
+            if matches!(target, Expression::FieldAccess { .. }) {
+                note_stored(value, esc);
+            }
             visit_expr(target, esc, false);
             visit_expr(value, esc, false);
         }
@@ -106,11 +133,11 @@ fn visit_stmt(s: &Statement<'_>, esc: &mut HashSet<String>) {
 }
 
 /// `allowed`: this identifier sits in a position that does not let the closure escape.
-fn visit_expr(e: &Expression<'_>, esc: &mut HashSet<String>, allowed: bool) {
+fn visit_expr(e: &Expression<'_>, esc: &mut Escapes, allowed: bool) {
     match e {
         Expression::Identifier { name, .. } => {
             if !allowed {
-                esc.insert(name.clone());
+                esc.names.insert(name.clone());
             }
         }
         Expression::Literal { .. } => {}
@@ -132,6 +159,11 @@ fn visit_expr(e: &Expression<'_>, esc: &mut HashSet<String>, allowed: bool) {
             }
         }
         Expression::MethodCall { object, arguments, .. } => {
+            if matches!(object, Expression::FieldAccess { .. }) {
+                for (_, a) in arguments {
+                    note_stored(a, esc);
+                }
+            }
             visit_expr(object, esc, false);
             for (_, a) in arguments {
                 visit_expr(a, esc, false);
@@ -140,6 +172,7 @@ fn visit_expr(e: &Expression<'_>, esc: &mut HashSet<String>, allowed: bool) {
         Expression::FieldAccess { object, .. } => visit_expr(object, esc, false),
         Expression::StructLiteral { fields, .. } => {
             for (_, v) in fields {
+                note_stored(v, esc);
                 visit_expr(v, esc, false);
             }
         }

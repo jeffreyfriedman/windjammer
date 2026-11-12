@@ -800,6 +800,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let prev_struct_assign_int = self.assignment_int_target_type.take();
                 self.assignment_int_target_type = self.struct_literal_field_int_target(field_name);
                 let mut expr_str = { let v = self.generate_expression(expr); self.copy_if_read_again_at(expr, v, super::move_at_last_use::MoveSite::Element) };
+                expr_str = self.store_into_struct_field(field_name, expr, expr_str); // stored_callables
                 self.assignment_int_target_type = prev_struct_assign_int;
                 self.in_expression_context = prev_expr_ctx;
                 self.coerce_string_literals_to_owned = prev_coerce;
@@ -1075,17 +1076,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // recursive layout fields emit as Box<T> — wrap literal values.
-                if let Some(field_ty) = self
-                    .lookup_struct_field_types(name)
-                    .and_then(|ft| ft.get(field_name).cloned())
-                {
-                    if crate::codegen::rust::recursive_struct_layout::type_is_box(&field_ty)
-                        && !expr_str.starts_with("Box::new(")
-                    {
-                        expr_str = format!("Box::new({})", expr_str);
-                    }
-                }
+                expr_str = self.box_recursive_layout_field(name, field_name, expr, expr_str);
 
                 // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
                 // Only use shorthand if the generated expression exactly matches the field name
@@ -1422,5 +1413,18 @@ impl<'ast> CodeGenerator<'ast> {
         // receivers.
 
         base_expr
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Recursive layout fields emit as `Box<T>`: wrap the literal value (a value already typed `Box<..>` stays).
+    fn box_recursive_layout_field(&self, struct_name: &str, field_name: &str, expr: &Expression<'ast>, expr_str: String) -> String {
+        let Some(field_ty) = self.lookup_struct_field_types(struct_name).and_then(|ft| ft.get(field_name).cloned()) else { return expr_str };
+        let already_boxed = self.infer_expression_type(expr).is_some_and(|t| crate::codegen::rust::recursive_struct_layout::type_is_box(&t));
+        if crate::codegen::rust::recursive_struct_layout::type_is_box(&field_ty) && !expr_str.starts_with("Box::new(") && !already_boxed {
+            format!("Box::new({})", expr_str)
+        } else {
+            expr_str
+        }
     }
 }

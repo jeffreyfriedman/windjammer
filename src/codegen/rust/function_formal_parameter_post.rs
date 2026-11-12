@@ -17,6 +17,7 @@ impl<'ast> CodeGenerator<'ast> {
         unused_params: &HashSet<String>,
     ) -> Vec<String> {
         self.idiom.non_escaping_closure_names = super::closure_escape::non_escaping_closure_names(&func.body);
+        let stored = super::closure_escape::names_stored_in_fields(&func.body);
         let raw = self.collect_additional_formal_parameter_strings(
             analyzed,
             func,
@@ -63,7 +64,9 @@ impl<'ast> CodeGenerator<'ast> {
                     let marker = format!("{}: fn(", param.name);
                     if let Some(i) = text.find(&marker) {
                         let at = i + param.name.len() + 2;
-                        return format!("{}impl Fn({}", &text[..at], &text[at + 3..]);
+                        // kept in a struct field (a `Box<dyn Fn>` owns it): the closure must not borrow
+                        let bound = if stored.contains(&param.name) { " + 'static" } else { "" };
+                        return format!("{}impl Fn({}{bound}", &text[..at], &text[at + 3..]);
                     }
                 }
                 text

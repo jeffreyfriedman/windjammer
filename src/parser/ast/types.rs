@@ -47,6 +47,14 @@ pub enum Type {
         params: Vec<Type>,
         return_type: Option<Box<Type>>,
     }, // Function pointer: fn(int, string) -> bool
+    /// A closure trait with its signature: `dyn Fn(int) -> int` (`dynamic`), `impl FnMut(string)`. `kind` is
+    /// `Fn`, `FnMut` or `FnOnce`.
+    ClosureTrait {
+        kind: String,
+        params: Vec<Type>,
+        return_type: Option<Box<Type>>,
+        dynamic: bool,
+    },
 }
 
 // Type parameter with optional trait bounds

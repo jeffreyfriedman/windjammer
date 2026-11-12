@@ -36,6 +36,11 @@ pub fn format_wj_type(ty: &Type) -> String {
         Type::Associated(base, name) => format!("{}::{}", base, name),
         Type::TraitObject(trait_name) => format!("dyn {}", trait_name),
         Type::ImplTrait(trait_name) => format!("trait {}", trait_name),
+        Type::ClosureTrait { kind, params, return_type, dynamic } => {
+            let ps: Vec<String> = params.iter().map(format_wj_type).collect();
+            let ret = return_type.as_ref().map(|r| format!(" -> {}", format_wj_type(r))).unwrap_or_default();
+            format!("{} {}({}){}", if *dynamic { "dyn" } else { "impl" }, kind, ps.join(", "), ret)
+        }
         Type::Infer => "_".to_string(),
         Type::FunctionPointer {
             params,
