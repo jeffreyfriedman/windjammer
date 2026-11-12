@@ -142,7 +142,7 @@ fn env_effect(sig: Option<&FunctionSignature>) -> Effect {
 }
 
 /// An effect constraint for the solver.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum EffectConstraint {
     /// A function directly performs this effect (leaf constraint from stdlib).
     Performs { function: String, effect: Effect },
