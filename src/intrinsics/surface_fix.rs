@@ -19,6 +19,7 @@
 use super::template::{
     rust_template_to_interpolation, template_has_placeholder, unescape_braces,
 };
+use super::vec_context::{Verdict, Verdicts};
 use super::Intrinsic;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +60,16 @@ impl FixOutput {
 
 /// Rewrite deprecated forms in `src`.
 pub fn fix_source(src: &str) -> FixOutput {
+    fix_source_with(src, &Verdicts::new())
+}
+
+/// Like `fix_source`, with the declared-type verdicts of `intrinsics::vec_context`: a `vec![..]` whose
+/// place is declared a `Vec` is rewritten in any position; one in a declared array or an undeclared
+/// place is kept with the reason.
+pub fn fix_source_with(src: &str, verdicts: &Verdicts) -> FixOutput {
     let mut rw = Rewriter::new(src);
+    rw.verdicts = verdicts.clone();
+    rw.src = src.to_string();
     let text = rw.rewrite_range(src, 0, false);
     let mut findings = rw.findings;
     findings.sort_by_key(|f| (f.offset, f.code));
@@ -99,6 +109,9 @@ pub fn lint_source(src: &str) -> Vec<Finding> {
 }
 
 struct Rewriter {
+    verdicts: Verdicts,
+    /// The whole file (verdict lookups need the token after a macro).
+    src: String,
     line_starts: Vec<usize>,
     findings: Vec<Finding>,
 }
@@ -338,9 +351,31 @@ impl Rewriter {
             }
         }
         Rewriter {
+            verdicts: Verdicts::new(),
+            src: String::new(),
             line_starts,
             findings: Vec::new(),
         }
+    }
+
+    /// 1-based (line, col) of the first token after the macro that ends at `end` (absolute offset).
+    /// The parser positions a `vec![..]` node at that token, so it is the key of its verdict.
+    fn next_token_pos(&self, end: usize) -> Option<(usize, usize)> {
+        let s = &self.src;
+        let b = s.as_bytes();
+        let mut i = end;
+        while i < b.len() {
+            if b[i].is_ascii_whitespace() {
+                i += 1;
+            } else if s[i..].starts_with("//") {
+                i = skip_line_comment(s, i);
+            } else if s[i..].starts_with("/*") {
+                i = skip_block_comment(s, i);
+            } else {
+                return Some(self.line_col(i));
+            }
+        }
+        None
     }
 
     fn line_col(&self, offset: usize) -> (usize, usize) {
@@ -565,15 +600,22 @@ impl Rewriter {
                 self.record("W0007", abs, original, Some("[]".to_string()), msg);
                 return Some(("[]".to_string(), close + 1));
             }
-            if !prefix_ok {
-                // The list type depends on the surrounding context; leave for manual migration.
-                self.record(
-                    "W0007",
-                    abs,
-                    original,
-                    None,
-                    format!("{msg} (not auto-fixable here: type-dependent position)"),
-                );
+            let verdict = self
+                .next_token_pos(abs + original.len())
+                .and_then(|k| self.verdicts.get(&k).cloned());
+            if !prefix_ok && verdict != Some(Verdict::List) {
+                // The list type depends on the surrounding context; say why it is kept and how to resolve it.
+                let why = match verdict {
+                    Some(Verdict::Array) => {
+                        "kept: this place is declared a fixed array `[T; N]`, where a bare `[..]` stays an array; \
+                         declare the place `Vec<T>` to migrate it"
+                    }
+                    _ => {
+                        "kept: no declared `Vec<T>` type reaches this position (call formal, return type, field, \
+                         typed `let` or assigned place); declare one, then run `wj fix` on the whole project"
+                    }
+                };
+                self.record("W0007", abs, original, None, format!("{msg} ({why})"));
                 return None;
             }
             let _ = has_semicolon;
