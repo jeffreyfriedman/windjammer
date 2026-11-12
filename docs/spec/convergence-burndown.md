@@ -114,6 +114,47 @@ Evaluation of the open rule "`self` is owned when it is dead after its last fiel
   reverse SELF-GETTER for exactly those shapes. Adopting it is an owner decision with the benchmark as evidence;
   until then the tests stay red and the spec rule stands.
 
+#### Benchmark (wt/ownership-8, 2026-11-12) and decision: not adopted
+
+The candidate was implemented in the IR (a post-solve step from the solved receiver mode and the body's `self`
+uses in evaluation order) behind a temporary switch, measured, and removed again. Rule as measured: `self` is
+owned when the method never writes `self` (not `&mut`, not a mutated parameter), moves at least one non-Copy field
+of `self` into a struct literal, tuple, array, `let` or assignment (not in a loop or closure, no field twice), and
+uses no moved field and not `self` whole after the first move. A first run that also counted a field returned as the
+result (`fn name(self) -> string { self.title }`) cost clones at call sites that keep the object
+(`tests/inference_corpus/returned_field_of_borrowed_receiver.wj` 2 -> 4), so getters were left to SELF-GETTER. A
+companion step made a by-value parameter owned when it receives an owned-`self` call (as an argument to an owned
+formal is).
+
+`.clone()` calls in the generated Rust, rule off -> on (the generated code of each target, counted by the benchmark
+script, `wj build --no-cargo`):
+
+| corpus | targets | off -> on |
+|---|---|---|
+| the nine receiver tests' programs | 9 | 17 -> 12 |
+| `tests/project_corpus` | 39 | 6 -> 6 |
+| `tests/inference_corpus` | 23 | 10 -> 10 |
+| `examples/verified` | 169 | 17 -> 15 |
+| ecosystem packages and apps | 74 | 839 -> 836 |
+
+Changed programs: `mid_body` 2 -> 0, `wither_push` 2 -> 0, `wither_struct_lit` 1 -> 0,
+`examples/verified/struct_default_builder.wj` 2 -> 0, `apps/wj-proxy` 18 -> 17, `apps/wj-taskflow` 51 -> 49. In
+`copy_into_new`, `nested_snapshot` and `store_threaded` the field clone moved from the callee to a whole-receiver
+clone at the call site (count unchanged). Bytes cloned were not estimated: the cloned values are `Vec` and `String`
+contents whose size the compiler does not know.
+
+Compile check: `apps/wj-proxy` builds with the rule off and fails with it on (rustc E0507:
+`apply_security(self.list_logs())` inside a `&mut self` method, where `list_logs` became `fn list_logs(self)`).
+The only correct spelling there is `self.clone().list_logs()`, a copy of the whole `ProxyApp` instead of its
+`logs` field. That is the cost SELF-GETTER avoids, and it is decided by the call site, which a callee-local rule
+cannot see.
+
+Decision: not adopted. The clone total falls (-10 of 889) but one ecosystem app stops compiling, and the
+correct repair makes that call site copy more than SELF-GETTER does. SELF-GETTER stays, and the receiver tests stay
+red as ledgered above. The next candidate is call-site gated: `self` owned only when every call site in the
+compilation owns its receiver at a last use (no call through a borrowed `self`, parameter, field or element). The
+value-formal fixed point already publishes receiver modes, so the gate can be a fixed-point fact.
+
 ## Name-based guesses (decide from declarations instead)
 
 The compiler decides from declarations, never from what a program happens to call things. Each row below guesses a

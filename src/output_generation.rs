@@ -203,20 +203,10 @@ pub(crate) fn generate_main_rust_code<'ast>(
     let run_ir_pipeline =
         !generator.ir_cutover.all_disabled() || generator.config.shadow_validate_strict;
     if run_ir_pipeline {
+        let mut ir_pipeline = crate::ir::IrPipeline::new();
         // Same registry as codegen: path-dep ABI + import aliases overwrite
-        // analyzer Owned stubs (`qs_get` → `wj_querystring::get`). Field types and the
-        // value-formal fixed point as in a library build (convergence O4).
-        let mut fields = module_compiler.global_struct_field_types.clone();
-        fields.extend(crate::type_inference::struct_field_registry::local_struct_field_table(program));
-        let experiment = module_compiler.config.experiment_self_owned_after_field_move;
-        let ir_module = crate::ir::value_formal_fixed_point::lower_program_to_fixed_point(
-            program,
-            analyzed,
-            &mut generator.signature_registry,
-            &fields,
-            &module_compiler.copy_structs_registry,
-            experiment,
-        );
+        // analyzer Owned stubs (`qs_get` → `wj_querystring::get`).
+        let ir_module = ir_pipeline.lower_to_ir(analyzed, &generator.signature_registry, None);
 
         // Shadow validation: compare solver results against legacy analyzer.
         let shadow_result = crate::ir::shadow::validate_shadow_module(&ir_module, analyzed);
