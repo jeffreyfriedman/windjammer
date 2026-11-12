@@ -242,8 +242,9 @@ not repeat use an idempotency key (`step.key()`). Journal format = the effect lo
 ### 10. Record/replay and deterministic simulation
 - **One port.** Every sink call goes through `perform(effect, op, args) -> result`. Implementations: `Live`, `Record`
   (live + append), `Replay` (answer from the log, verify the request), `Simulate` (seeded virtual world).
-- **Log format** (JSON Lines, version 1): a header `{"wj_effect_log":1, "program": <source digest>, "compiler": <version>,
-  "sched_seed": N, "sim_seed": N|null, "grant": {...}}`, then one event per line
+- **Log format** (JSON Lines, version 2; version 1 had no `grants` and is refused with a request to record again): a header
+  `{"wj_effect_log":2, "program": <source digest>, "compiler": <version>, "sched_seed": N, "sim_seed": N|null,
+  "grants": ["fs.read", "env.read=NAME", ...]}`, then one event per line
   `{"seq":N, "task":T, "effect":"net.connect", "op":"http.get", "args":{...}|{"sha256":...}, "result":{...}|{"sha256":...}, "vt_ns":N}`.
   Large payloads go to a content-addressed side directory. Canonical JSON (sorted keys) so logs diff cleanly.
 - **Replay** re-runs the program with the same scheduler seed and answers sinks from the log; a request that differs

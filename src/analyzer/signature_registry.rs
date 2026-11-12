@@ -692,23 +692,15 @@ impl SignatureRegistry {
     }
 
     fn load_stdlib_meta(registry: &mut Self) {
-        let candidates: Vec<std::path::PathBuf> =
-            crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdlibMeta)
-                .into_iter()
-                .collect();
-
-        for dir in &candidates {
-            if dir.is_dir() {
-                // Load ONLY files under stdlib_meta/. Do not use
-                // `merge_wj_meta_signatures_from_dir`, which also pulls the
-                // project `.wj-cache/` (including test fixtures like
-                // `MyRenderer::render`) and poisons unqualified consensus
-                // (`method_mutates_receiver("render")` → true).
-                crate::metadata::merge_wj_meta_signatures_from_dir_only(dir, registry);
-                Self::register_wj_runtime_name_aliases(registry);
-                return;
+        // Only the embedded `stdlib_meta/` files, read from the binary (no directory, no project `.wj-cache/`):
+        // test fixtures like `MyRenderer::render` must not poison unqualified consensus
+        // (`method_mutates_receiver("render")` -> true).
+        for (rel, bytes) in crate::embedded_assets::files(crate::embedded_assets::Asset::StdlibMeta) {
+            if rel.ends_with(".wj.meta") {
+                crate::metadata::merge_wj_meta_bytes(bytes, registry);
             }
         }
+        Self::register_wj_runtime_name_aliases(registry);
     }
 
     /// WJ std stubs whose exported name differs from the scanned runtime Rust fn.

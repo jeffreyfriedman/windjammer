@@ -38,5 +38,6 @@ pub mod update;
 pub mod verdict;
 pub mod verify;
 pub mod watch;
+pub mod silenced;
 pub mod widths_gate;
 

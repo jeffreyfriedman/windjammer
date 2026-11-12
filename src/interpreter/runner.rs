@@ -321,6 +321,15 @@ fn setup_durable(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Resul
     Ok(())
 }
 
+/// The grants a recording writes into its header: the `--allow` flags, and `--allow-network` as the two it stands for.
+fn recorded_grants(opts: &RunOptions) -> Vec<String> {
+    let mut grants = opts.allow.clone();
+    if opts.allow_network {
+        grants.extend(["net.connect=*".to_string(), "net.listen=*".to_string()]);
+    }
+    grants
+}
+
 /// `--record` / `--replay`: install the effect port. A replay takes the seeds, the time mode and the arguments from the
 /// log's header, because they are part of what the recorded run was a function of.
 pub fn setup_effect_port(it: &mut Interpreter, opts: &RunOptions, entry: &Path) -> Result<(), String> {
@@ -350,6 +359,7 @@ pub fn setup_effect_port(it: &mut Interpreter, opts: &RunOptions, entry: &Path) 
             rng_seed,
             deterministic_time: opts.deterministic_time,
             args: it.args.clone(),
+            grants: recorded_grants(opts),
         };
         it.rng = Some(rand::rngs::StdRng::seed_from_u64(rng_seed));
         it.set_port(EffectPort::record(path, header).map_err(|e| format!("cannot write {}: {e}", path.display()))?);
@@ -505,6 +515,7 @@ pub fn install_simulation(it: &mut Interpreter, cfg: &super::effect_port::sim::S
         rng_seed: cfg.seed,
         deterministic_time: true,
         args: Vec::new(),
+        grants: Vec::new(),
     };
     it.set_port(EffectPort::simulate(world, header));
 }

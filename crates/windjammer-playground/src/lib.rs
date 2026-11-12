@@ -31,26 +31,43 @@ const ROOT: &str = "/playground";
 #[cfg(target_arch = "wasm32")]
 const STACK_BUDGET: usize = 24 << 20;
 
+/// One program in one in-memory file.
 pub fn run(source: &str, opts: &Options) -> Outcome {
+    run_project(&[(FILE.to_string(), source.to_string())], opts)
+}
+
+/// A program of several files: `(path, source)` pairs, paths relative to the project (`main.wj`, `util/mod.wj`,
+/// `src/main.wj` when the files sit under a `src/` directory, as a project with a `wj.toml` does). Everything `wj run`
+/// would load from the source root is loaded; sources that are not `.wj`, test sources and `tests/` are left out, as
+/// the native loader leaves them out. The files are the whole file system the run can see: nothing is read from disk.
+pub fn run_project(files: &[(String, String)], opts: &Options) -> Outcome {
     let mut out = Outcome::default();
-    if refused(source, &mut out) {
+    let files = program_files(files);
+    if !files.iter().any(|(p, _)| p == FILE) {
+        out.stderr = format!("no {FILE} among the files: a program starts at its main.wj\n");
+        out.exit_code = 1;
         return out;
     }
-    let program = match loader::parse_source(source, FILE) {
-        Ok(p) => p,
-        Err(e) => {
-            out.stderr = format!("parse error in {FILE}: {e}\n");
-            out.exit_code = 1;
-            return out;
+    if refused(&files, &mut out) {
+        return out;
+    }
+    let mut loaded = Vec::with_capacity(files.len());
+    for (path, source) in &files {
+        match loader::parse_source(source, path) {
+            Ok(p) => loaded.push(LoadedFile {
+                module_path: windjammer::resolve::module_path_from_file(Path::new(ROOT), &Path::new(ROOT).join(path)),
+                file: PathBuf::from(path),
+                program: Box::leak(Box::new(p)),
+            }),
+            Err(e) => {
+                out.stderr = format!("parse error in {path}: {e}\n");
+                out.exit_code = 1;
+                return out;
+            }
         }
-    };
+    }
     let mut it = configured(opts);
-    let file = LoadedFile {
-        module_path: Vec::new(),
-        file: PathBuf::from(FILE),
-        program: Box::leak(Box::new(program)),
-    };
-    let (code, error) = match it.load_sources(vec![file], Vec::new(), Vec::new()) {
+    let (code, error) = match it.load_sources(loaded, Vec::new(), Vec::new()) {
         Err(e) => (runner::exit_code_for(&e), Some(e.render())),
         Ok(()) => match it.call_main() {
             Ok(v) => (runner::main_result_code(&mut it, &v), None),
@@ -72,13 +89,25 @@ pub fn run(source: &str, opts: &Options) -> Outcome {
     out
 }
 
-/// `wj check` on the source, as `wj run` does before interpreting: true (and the diagnostics rendered on stderr)
+/// The files of the program, paths relative to its source root, the entry first and the rest in path order.
+fn program_files(files: &[(String, String)]) -> Vec<(String, String)> {
+    let under_src = files.iter().any(|(p, _)| p == "src/main.wj");
+    let mut kept: Vec<(String, String)> = files
+        .iter()
+        .filter_map(|(p, s)| {
+            let rel = if under_src { p.strip_prefix("src/")? } else { p.as_str() };
+            let is_test = rel.ends_with("_test.wj") || rel.starts_with("tests/");
+            (rel.ends_with(".wj") && !is_test).then(|| (rel.to_string(), s.clone()))
+        })
+        .collect();
+    kept.sort_by(|a, b| (a.0 != FILE, &a.0).cmp(&(b.0 != FILE, &b.0)));
+    kept
+}
+
+/// `wj check` on the sources, as `wj run` does before interpreting: true (and the diagnostics rendered on stderr)
 /// when it reports an error.
-fn refused(source: &str, out: &mut Outcome) -> bool {
-    let diags = windjammer::check::check_sources(
-        Path::new(ROOT),
-        &[(FILE.to_string(), source.to_string())],
-    );
+fn refused(files: &[(String, String)], out: &mut Outcome) -> bool {
+    let diags = windjammer::check::check_sources(Path::new(ROOT), files);
     out.diagnostics = diags
         .iter()
         .filter_map(|d| serde_json::to_value(d).ok())
@@ -90,7 +119,7 @@ fn refused(source: &str, out: &mut Outcome) -> bool {
     if errors.is_empty() {
         return false;
     }
-    let source_of = |f: &str| (f == FILE).then(|| source.to_string());
+    let source_of = |f: &str| files.iter().find(|(p, _)| p == f).map(|(_, s)| s.clone());
     for d in &errors {
         out.stderr.push_str(&render::render(d, &source_of));
         out.stderr.push('\n');

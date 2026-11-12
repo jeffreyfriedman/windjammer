@@ -42,3 +42,14 @@ If the owner prefers the explicitness of B, the fix is a diagnostic ("`x` is mut
 
 ## Decision needed from: project owner
 Choose A, B or C. This is a user-visible language decision.
+
+## Addendum (2026-11): loop variables
+
+Owner decision: a `for` loop variable that is assigned or changed through is declared `mut`, over a range or a
+collection alike (`for mut qty in quantities { qty = qty + 1 }`, `for (id, mut qty) in items { .. }`), and WJ0051
+reports it otherwise. Reason: the same as for `let`. A loop over a collection writes through to its elements, and that
+write is exactly the kind of mutation that surprises a reader when nothing at the declaration says so; other languages
+make it visible too (Rust's `iter_mut` and `&mut`, Swift's `inout`), and the visible `mut` avoids the footgun. The
+iteration's borrow mode stays inferred: the compiler still picks `iter`, `iter_mut` or `into_iter` from the body, and
+`mut` on the variable is the reader's signal that the loop writes. Between phase 2 and this addendum the check
+exempted loops over collections (only loops over a range needed `for mut`); that exemption is removed.

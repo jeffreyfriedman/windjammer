@@ -5,6 +5,7 @@
 //! `docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md`.
 
 pub mod active;
+pub mod entries;
 pub mod build_profile;
 mod test_api;
 pub use test_api::enforce_size_budget_for_test;
@@ -353,6 +354,10 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
             report.freed_bytes += prune_stale_fingerprint_dirs(root, &deletable, &mut report);
         }
     }
+
+    // content-addressed entry directories shared by checkouts (analysis cache, compiled verdicts): lock-aware
+    report.freed_bytes += entries::prune(&entries::analysis_dir(), entries::ANALYSIS_MAX_ENTRIES, opts.force, &mut report);
+    report.freed_bytes += entries::prune(&entries::verdicts_dir(), 512, opts.force, &mut report);
 
     // The verify tree is ephemeral scratch: always drop it when large or when reclaiming.
     if verify.exists() && deletable(&verify, &verify) && (do_aggressive || dir_size(&verify) > VERIFY_MAX_BYTES) {

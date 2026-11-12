@@ -14,11 +14,20 @@ pub fn text(e: &Json) -> String {
     match e["event"].as_str().unwrap_or("") {
         "stopped" => {
             let mut t = format!("[step {}] {} in {}{}", e["step"], s("reason"), s("function"), at(e));
+            if let Some(w) = e["watch"].as_str() {
+                let shown = |k: &str| e[k].as_str().map_or("<unset>".to_string(), String::from);
+                t.push_str(&format!(": {w}: {} -> {}", shown("old"), shown("new")));
+            }
+            if let Some(c) = e["condition"].as_str() {
+                t.push_str(&format!(": if {c}"));
+            }
             if let Some(m) = e["message"].as_str() {
                 t.push_str(&format!(": {m}"));
             }
             t
         }
+        "returned" => format!("{} returned {}", s("function"), e["value"].as_str().unwrap_or("()")),
+        "watching" => format!("watching {} in {} (now {})", s("name"), s("function"), e["value"].as_str().unwrap_or("<unset>")),
         "value" => format!("{} = {}", s("name"), s("value")),
         "locals" => {
             let b = e["bindings"].as_array().cloned().unwrap_or_default();

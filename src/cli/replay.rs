@@ -15,6 +15,8 @@ pub struct Args {
     pub seed: u64,
     pub faults: f64,
     pub allow: Vec<String>,
+    /// `--at-effect K`: start at the statement that answers the K-th journal event.
+    pub at_effect: Option<u64>,
 }
 
 fn read_script(p: &Option<PathBuf>) -> Result<String> {
@@ -46,7 +48,7 @@ pub fn execute(a: Args) -> Result<()> {
     let cmds = script::parse(&read_script(&a.script)?).map_err(anyhow::Error::msg)?;
     // the interpreter never runs a program `wj check` rejects (as for `wj run --interpret`); lints do not stop it
     crate::cli::check::require_clean(&entry, false, crate::diagnostics::render::Format::Human)?;
-    let events = session::run(session::SessionSpec { entry, source, allow: a.allow, script: cmds }).map_err(anyhow::Error::msg)?;
+    let events = session::run(session::SessionSpec { entry, source, allow: a.allow, script: cmds, at_effect: a.at_effect }).map_err(anyhow::Error::msg)?;
     let mut out = String::new();
     for e in &events {
         out.push_str(&if a.json { e.to_string() } else { render::text(e) });

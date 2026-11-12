@@ -41,7 +41,8 @@ fn the_directory_keeps_the_newest_entries() {
         // distinct modification times order the entries
         std::thread::sleep(std::time::Duration::from_millis(30));
     }
-    assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 3);
+    // the directory also holds its lock file (writers hold it so `wj cache prune` leaves them alone)
+    assert_eq!(std::fs::read_dir(d.path()).unwrap().flatten().filter(|e| e.path().extension().is_some_and(|x| x == "json")).count(), 3);
     assert!(load_from(d.path(), &key(&inputs("4"), "c")).is_some());
     assert!(load_from(d.path(), &key(&inputs("0"), "c")).is_none());
 }

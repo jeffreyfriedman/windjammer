@@ -64,23 +64,28 @@ What the wasm build cannot do at run time, and what happens instead (all loud, n
 | files, environment, processes, network, FFI, Rust crates, MCP | denied before the call, exit status 126, the same message `wj run --sandbox` prints | the capability gate (ADR-0021) with `Grant::sandbox`: only console, time and random |
 | time | virtual clock from Unix time 1 700 000 000, moved only by sleeps | `--simulate` world (`effect_port/sim.rs`) |
 | random numbers, hash order, task schedule | functions of the seed (default 0) | `--simulate` |
-| threads, `thread {}`, `spawn` | `Unsupported` error naming the feature (exit 2) | each task is an OS thread with a baton (`sched.rs`); `std::thread::spawn` fails on wasm32-unknown-unknown |
+| threads, `thread {}`, `spawn` | run as nested calls on the one thread (`Sched::one_thread`, the default on wasm32); a schedule that would have to resume a task blocked further down the stack stops with an `Unsupported` error that says so | native tasks are OS threads with a baton (`sched.rs`); `std::thread::spawn` fails on wasm32-unknown-unknown |
 | `std::db`, `std::jwt`, host bridge | error naming the module | above |
 | a Rust panic inside the interpreter (a defect) | the Worker reports "internal error in the playground interpreter", exit 70 | `panic = "abort"` traps; the JS host catches the trap and uses a fresh instance for the next run |
 
-What the checker loses in the browser, and the refactor that restores it: the analyzer reads the standard library's
-signatures from disk (`stdlib_scanner` scans the materialized runtime crate's Rust sources; `signature_registry`
-loads `stdlib_meta/*.wj.meta`). On wasm32 it falls back to the built-in signature table. The bytes are already in the
-binary (`embedded_assets::RUNTIME_CRATE`, `STDLIB_META`, `STD_WJ`), so the fix is one module boundary: an in-memory
-asset reader in `embedded_assets` (`files(asset) -> &[(path, bytes)]`) that `stdlib_scanner::populate_runtime_signatures`
-and `SignatureRegistry::load_stdlib_meta` consume instead of a directory walk, used on every target (one code path,
-no disk). On the book's samples this made no difference (every sample the playground ran was accepted on both sides), but a
-program with an ownership mistake involving a std call could be judged differently until it lands.
+The checker's view of the standard library is the same in the browser as natively: `stdlib_scanner::populate_runtime_signatures`
+and `SignatureRegistry::load_stdlib_meta` read the runtime crate's sources, the `std/` stems and `stdlib_meta/*.wj.meta`
+from the copies baked into the binary (`embedded_assets::files`, `embedded_assets::text`), on every target; no directory is
+materialized or walked (`merge_embedded_stdlib_meta` in `metadata`). The native materialized copy is written from the same
+tables, so what the scanner sees did not change.
 
-The smallest refactor that would make threads work is a module boundary change in `sched.rs`: run tasks as
-interpreter-level continuations on one thread instead of OS threads (the scheduler is already a deterministic
-single-runner baton, so the observable semantics would not change). That is a larger, separate piece of work; it
-covers the five book samples that start threads (the listed gaps under "Staying in sync").
+Threads: the scheduler is a deterministic single-runner baton (`sched.rs`). Natively each task is an OS thread so the
+tree walker can recurse on a private stack. On wasm32 (and wherever `Interpreter::set_one_thread_tasks(true)` is called)
+a task is a nested call: when the running task blocks, the scheduler makes the same pick it always makes and, if that task
+has not started, runs it to completion on top of the blocked task's stack, swapping the interpreter state in and out the
+same way; then it re-checks. The tree walker keeps its state on the host stack, so a task that has *started* is always a
+caller further down the same stack and cannot be resumed until the tasks above it finish. When the schedule would resume
+one (three tasks that sleep for 300, 100 and 200 ms, for example: the second to start wakes first), the run stops with an
+`Unsupported` error naming the task instead of printing a different interleaving. Every thread, task, `scope` and channel
+sample in the book runs to completion or waits only on tasks that start later, and prints exactly what the native
+scheduler prints (`tests/interpreter_one_thread_tasks_test.rs` runs both modes in one process on those samples and on the
+concurrency corpus). Full coroutines for the refused shapes need a stack-switching wasm runtime (the stack-switching
+proposal, or Asyncify); revisit when one ships in the browsers the book supports.
 
 ### 2. Confinement: the existing capability model, no new mechanism
 
@@ -161,9 +166,12 @@ Result on this branch (`scripts/book/playground_check.wj`, 122 extracted samples
 book samples: 122 passed interpreted, 5 projects, 0 compiled-checked, 115 playground-checked, 5 known playground gaps, 0 failed
 ```
 
-The five gaps are the five samples that start threads (`thread {}` / `spawn`; listed with that reason in
-`scripts/book/playground_known_gaps.txt`). The list is shrink-only: a listed sample that starts agreeing fails the run
-until its line is deleted. Multi-file projects (5) are not run in the playground yet (single in-memory file). The
+The five gaps were the five samples that start threads (`thread {}` / `spawn`); they run now. Three project samples remain
+listed in `scripts/book/playground_known_gaps.txt` (one with a path dependency on a sibling project, two with a Rust crate
+dependency, which cargo builds and the browser cannot). The list stays shrink-only: a listed sample that starts agreeing
+fails the run until its line is deleted. Multi-file projects run in the playground too: `wj_run_project` takes the files as
+JSON `[{path, source}]` and loads them as an in-memory source tree through `load_sources`, and `run-node.mjs` takes a
+project directory. The
 four `ts,run` companions pass the TypeScript pass below. Both passes fail when broken: the wasm pass found the five
 thread samples before they were listed, and a stripper planted to append a line made all four TypeScript samples fail.
 
@@ -270,18 +278,19 @@ links. Wire it into the book workflow as below. Keep the playground's semantics 
 - Book samples that use files or the environment are denied in the playground (exit 126), and the parity pass expects
   exactly that, because native `--sandbox` denies them too.
 
-### Proposed CI job (not added in this slice: the workflow is the owner's to change)
+### CI job (added to `.github/workflows/book.yml`; the commands it runs)
 
 In `.github/workflows/book.yml`, after the book gates:
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo build --release --bin wj --bin wj-docs --features cli
-wj run --interpret scripts/book/playground_check.wj -- target/release/wj target/release/wj-docs /tmp/pg
-(cd docs/book/playground/tests && npm ci --ignore-scripts && node browser.test.mjs)   # Chrome is on ubuntu-latest
-mdbook build docs/book && cp -R docs/book/playground target/book/playground
-rm -rf target/book/playground/tests
+cargo build --release --features cli --bin wj --bin wj-docs
+wj run --interpret scripts/book/playground_check.wj -- target/release/wj target/release/wj-docs "$RUNNER_TEMP/playground-check"
+mdbook build docs/book
 ```
+
+(Node 22 is set up first: the hosts and the TypeScript pass use type stripping.) The browser tests
+(`docs/book/playground/tests/browser.test.mjs`, headless Chrome) are a separate job still to add.
 
 and a "Run" link on each runnable fence (an mdBook preprocessor or a small script that adds
 `playground/#lang=wj&code=...` links; the program travels in the URL fragment, which the browser never sends to a
@@ -304,15 +313,20 @@ Implemented and measured on this branch:
 - `scripts/book/book_samples.wj --wasm/--wasm-known/--ts-playground` and `scripts/book/playground_check.wj`: 115 of 120
   single-file Windjammer samples equal to native, 5 listed thread gaps; 4 of 4 TypeScript samples equal to node.
 
-Not done: the CI job and "Run" links on book fences (above), the in-memory asset reader, threads, projects.
+Added afterwards: tasks on one thread (above), multi-file programs (`run_project`, `wj_run_project`), the in-memory std
+reader, and the CI step in `.github/workflows/book.yml` that builds the wasm and runs `scripts/book/playground_check.wj`
+(every sample, files and projects, wasm against native; TypeScript against node) on every change under `src/interpreter`,
+`std`, `crates/windjammer-playground` or the book.
+
+Not done: "Run" links on book fences, an editor for several files on the page (the wasm API and the node host take them).
 
 ## Ambition ladder
 
 1. (this slice) the playground page, both languages, parity pass, escape tests.
 2. "Run" buttons on every book sample, opening the playground with the program; inline output under the fence.
 3. Diagnostics underlined in the editor from the JSON spans; `wj explain` text on hover.
-4. Threads in the browser: continuation-based tasks in `sched.rs` (one thread, same deterministic schedule).
-5. Multi-file samples (projects): an in-memory source tree through `load_sources` (already file-agnostic).
+4. (done, nested calls) Threads in the browser. Next: true continuations for the schedules that resume a blocked task.
+5. (done) Multi-file samples (projects): an in-memory source tree through `load_sources`. Next: a multi-file editor on the page.
 6. Startup: the resolved engine with fuel accounting, `wasm-opt -Oz`, streaming compilation.
 Kill criteria: if the wasm build needs more than cfg gates at module boundaries (for example a fork of the
 interpreter), or parity on the book's samples drops below 95% for a reason other than threads or denied effects,
