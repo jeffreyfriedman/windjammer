@@ -264,8 +264,14 @@ fn main() {
     let mut unlisted = 0
     let mut recorded_friction = 0
     let mut err_events = 0
-    let mut human_tok = 0
-    let mut agent_tok = 0
+    // Per-error token means, kept apart by source: diagnostics `wj check` gives (the language's own messages) and
+    // rustc errors of the compiled build (open compiler bugs). One mean over both would move with the mix alone.
+    let mut check_events = 0
+    let mut check_human_tok = 0
+    let mut check_agent_tok = 0
+    let mut build_events = 0
+    let mut build_human_tok = 0
+    let mut build_agent_tok = 0
     let mut codes: Vec<string> = Vec::new()
     let mut fixed_codes: Vec<string> = Vec::new()
     let mut sim_events = 0
@@ -312,8 +318,15 @@ fn main() {
             }
             if st.errors > 0 {
                 err_events = err_events + 1
-                human_tok = human_tok + st.human_bytes / 4 / st.errors
-                agent_tok = agent_tok + st.agent_bytes / 4 / st.errors
+                if st.status == "open-compiler-bug" {
+                    build_events = build_events + 1
+                    build_human_tok = build_human_tok + st.human_bytes / 4 / st.errors
+                    build_agent_tok = build_agent_tok + st.agent_bytes / 4 / st.errors
+                } else {
+                    check_events = check_events + 1
+                    check_human_tok = check_human_tok + st.human_bytes / 4 / st.errors
+                    check_agent_tok = check_agent_tok + st.agent_bytes / 4 / st.errors
+                }
                 let (_, a) = sh("cd " + q(work) + " && WJ_ERROR_FORMAT=agent " + q(wj) + " check main.wj 2>&1; true")
                 let mut all = error_lines(agent_lines(a))
                 if st.status == "open-compiler-bug" {
@@ -360,8 +373,12 @@ fn main() {
     m.push(("cost.friction.open_per_task", per_task))
     m.push(("cost.friction.open_compiler_bugs", open_bugs.to_string()))
     m.push(("cost.diag.error_events", err_events.to_string()))
-    m.push(("cost.diag.tokens_per_error_human", (if err_events > 0 { human_tok / err_events } else { 0 }).to_string()))
-    m.push(("cost.diag.tokens_per_error_agent", (if err_events > 0 { agent_tok / err_events } else { 0 }).to_string()))
+    m.push(("cost.diag.check_error_events", check_events.to_string()))
+    m.push(("cost.diag.check_tokens_per_error_human", (if check_events > 0 { check_human_tok / check_events } else { 0 }).to_string()))
+    m.push(("cost.diag.check_tokens_per_error_agent", (if check_events > 0 { check_agent_tok / check_events } else { 0 }).to_string()))
+    m.push(("cost.diag.build_error_events", build_events.to_string()))
+    m.push(("cost.diag.build_tokens_per_error_human", (if build_events > 0 { build_human_tok / build_events } else { 0 }).to_string()))
+    m.push(("cost.diag.build_tokens_per_error_agent", (if build_events > 0 { build_agent_tok / build_events } else { 0 }).to_string()))
     m.push(("cost.diag.error_codes_seen", codes.len().to_string()))
     m.push(("cost.diag.error_codes_with_fix", fixed_codes.len().to_string()))
     m.push(("cost.diag.fix_coverage", ratio(fixed_codes.len() as int, codes.len() as int)))

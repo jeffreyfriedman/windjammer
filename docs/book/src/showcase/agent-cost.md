@@ -68,23 +68,34 @@ Events with a recorded program, replayed on the current compiler:
 Of those, still friction today (an open compiler bug, an unhelpful message, or build noise):
 
 <!-- wj:gen name=metric key=cost.friction.events_open -->
-45
+9
 <!-- wj:end -->
 
 Compiler bugs among them, each tracked with an owner in `bench/agent-dx/friction/open-bugs.md`:
 
 <!-- wj:gen name=metric key=cost.friction.open_compiler_bugs -->
-45
+9
 <!-- wj:end -->
 
-Tokens an agent reads per error, in the default format and with `--error-format agent`:
+Tokens an agent reads per diagnostic from `wj check`, in the default format and with `--error-format agent`:
 
-<!-- wj:gen name=metric key=cost.diag.tokens_per_error_human -->
-152
+<!-- wj:gen name=metric key=cost.diag.check_tokens_per_error_human -->
+278
 <!-- wj:end -->
 
-<!-- wj:gen name=metric key=cost.diag.tokens_per_error_agent -->
-80
+<!-- wj:gen name=metric key=cost.diag.check_tokens_per_error_agent -->
+126
+<!-- wj:end -->
+
+Tokens per error from a compiled build the compiler should have accepted (the open compiler bugs), counted
+separately so that fixing bugs does not move the diagnostic number:
+
+<!-- wj:gen name=metric key=cost.diag.build_tokens_per_error_human -->
+111
+<!-- wj:end -->
+
+<!-- wj:gen name=metric key=cost.diag.build_tokens_per_error_agent -->
+76
 <!-- wj:end -->
 
 Share of error codes seen in the corpus that come with a fix a tool can apply without reading prose:
