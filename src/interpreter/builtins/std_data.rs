@@ -83,6 +83,8 @@ fn native_json(v: &Value) -> Option<serde_json::Value> {
 
 fn encoded(it: &Interpreter, v: &Value, pretty: bool) -> Value {
     let wire = |n: &str| it.structs.get(n).map(|d| d.wire.clone());
+    // test-only mutant `json` (debug builds): compact and pretty output swap
+    let pretty = pretty != it.mutant("json");
     match super::json_codec::encode(v, pretty, native_json, &wire) {
         Ok(t) => Value::ok(s(&t)),
         Err(e) => Value::err(s(&e)),

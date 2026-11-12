@@ -169,3 +169,39 @@ The ecosystem report was that the interpreter accepts a mutating method call thr
   turns every program that relies on inference into an error until `wj fix` inserts the `mut`. If the owner chooses it, the wording
   follows ADR-0033 (error in `wj check`, warning in `wj run --interpret`, stdout and exit status unchanged).
 - Owner: ownership agent (a7a9f9cae99e4cd3a), the same hand-off as section J's `test_crate_mut_receiver`.
+
+## M. Ledger burn-down and owners (wt/interp-i7)
+
+The last full gate had 90 divergent corpus cases and 16 spec-oracle divergences, all ledgered, none with an owner. Every
+line now carries `| owner: STREAM` (streams in `docs/testing/DRIFT.md`); the comparer and `tests/drift_contract_test.rs`
+fail on a line without one. Counts by stream at this change:
+
+| Stream | Corpus lines | Spec lines |
+|---|---|---|
+| `numeric-width` | see the ledger (`grep 'owner: numeric-width'`) | 1 |
+| `codegen-refs`, `codegen-types`, `codegen-ownership` | see the ledger | 12 |
+| `runtime-surface`, `parser-lexer`, `language-decision`, `gate-harness`, `interp-literal-typing` | see the ledger | 4 |
+
+Fixed here (interpreter or checker side; compiled behaviour is the reference unless the spec says otherwise):
+
+- `tests/conformance/types/enums_and_matching.wj` and its `#accepted` row: `wj check` (and so the interpreter) reported
+  WJ0010 for `match r { Result::Ok(Maybe::Some(v)) => .., Result::Ok(Maybe::None) => .., Result::Err(_) => .. }` over a
+  user-defined `Result`, because a variant matched only through refutable payload patterns counted as uncovered. The match
+  is exhaustive (SPEC-EXPR-010 asks for exhaustive enum matches; this one is), and the compiled build was right to accept
+  it. `rules::gaps` now treats a variant as covered when its payload patterns are variants of one enum that together cover
+  it (`tests/check_nested_variant_exhaustive_test.rs`). Both ledger lines are deleted.
+
+New in the gate: the seeded fuzz step (empty ledger `tests/drift_corpus/fuzz_divergences.txt`) and mutation checks for the
+integer, float, format, string, sequence, map, option, iterator and JSON builtin classes
+(`tests/interpreter_builtin_mutants_test.rs`).
+
+Baselines re-recorded and repros adopted (Linux run, values equal the Mac interpreter signatures):
+
+- Twelve recorded compiled baselines were stale: the compiled output of `literal_in_option_field_arm`, `shadow_match_binding_literal`,
+  `shadowed_option_literal_arms`, `map_get_in_sort_by_closure`, `map_get_unwrap_or_float`, `algo_matrix_multiply`,
+  `prog_game_of_life`, `result_and_option`, `closures_and_iteration`, `177_opt_chain`, `jit_packed_store` and `packed_vecs` now equals the
+  interpreter's, so their ledger lines are gone.
+- Six pilot-6 repros joined the corpus (`docs/drift/pilot6-repros/README.md` describes each). `noise_warnings_in_build_output` matches
+  and needs no ledger line. The other five are compile failures of the generated Rust (WJ0003) and are ledgered with owners:
+  `adapter_into_vec_annotation`, `closure_if_else_ordering` and `closure_map_get_if_else_ordering` (codegen-types); `map_insert_indexed_vec_string`
+  and `nested_map_unwrap_or_new` (codegen-refs).
