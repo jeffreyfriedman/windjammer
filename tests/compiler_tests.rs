@@ -13,7 +13,6 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
-use std::path::PathBuf;
 
 /// Helper to compile a test fixture and return the generated Rust code
 #[test]
@@ -138,14 +137,7 @@ fn main() {
 }
 "#;
 
-    // Write temporary fixture
-    let temp_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("temp_combined.wj");
-    std::fs::write(&temp_path, fixture).expect("Failed to write temp fixture");
-
-    let generated = test_utils::compile_fixture("temp_combined").expect("Compilation failed");
+    let generated = test_utils::compile_source("temp_combined", fixture).expect("Compilation failed");
 
     // Check that both features work together
     // int/i64 is a Copy type, so no & is inserted (literal emitted as 5_i64)
@@ -157,9 +149,6 @@ fn main() {
         generated.contains(r#"println!("Result: {}", result)"#),
         "String interpolation should work in combined test"
     );
-
-    // Clean up
-    std::fs::remove_file(temp_path).ok();
 
     println!("✓ Combined features work");
 }
@@ -179,13 +168,7 @@ fn main() {
 }
 "#;
 
-    let temp_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("temp_borrowed.wj");
-    std::fs::write(&temp_path, fixture).expect("Failed to write temp fixture");
-
-    let generated = test_utils::compile_fixture("temp_borrowed").expect("Compilation failed");
+    let generated = test_utils::compile_source("temp_borrowed", fixture).expect("Compilation failed");
 
     // Copy types are passed by value (no mut if not mutated)
     assert!(
@@ -196,9 +179,6 @@ fn main() {
         generated.contains("print_twice(42_i64)"),
         "Copy types should be passed by value at call site"
     );
-
-    // Clean up
-    std::fs::remove_file(temp_path).ok();
 
     println!("✓ Copy type handling works correctly");
 }
