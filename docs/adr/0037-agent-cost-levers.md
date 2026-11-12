@@ -123,9 +123,9 @@ prompt wording is the wrong lever: the one command should be cheap (L5), not avo
 | Gate | Status at this commit |
 |---|---|
 | Run identity: same-named projects never share a compiled binary (`docs/drift/pilot6-repros/same_dir_name_runs_other_binary.md`) | open: no fix on `next/v0.50.0` yet (the harness runs trials one at a time, which avoids it, but the gate stays) |
-| Pilot-6 compiler bugs fixed (`bench/agent-dx/friction/open-bugs.md` has no t104 entry) | see `open-bugs.md` and `cost.friction.open_compiler_bugs` |
-| Noise-free compiled runs (`cost.noise.lines_per_build` = 0) | this branch |
-| `--error-format agent` and W0017 merged | this branch |
+| Pilot-6 compiler bugs fixed (`bench/agent-dx/friction/open-bugs.md` has no t104 entry) | open: every t104 class still fails on the current compiler (closure values, ownership, adapters); owner streams in `open-bugs.md` |
+| Noise-free compiled runs (`cost.noise.lines_per_build` = 0) | met on this branch (gated by the ratchet) |
+| `--error-format agent` and W0017 merged | on this branch, awaiting merge |
 | Tasks validated (Rust features, haiku R smoke) and listed in the config | done (10 tasks; see Tasks) |
 | `pilot7 --dry-run` prints `ready` | ready (with `AGENTDX_RUSTC` set to the real rustc, as pilot 6) |
 | The `wj` used is fresh (`wj doctor` clean) and recorded per trial (`AGENTDX_WJ_VERSION`) | at launch |
