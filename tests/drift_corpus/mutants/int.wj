@@ -1,0 +1,5 @@
+fn main() {
+    let a: i32 = 2147483647
+    let b: i32 = 1
+    println("${a.checked_add(b).is_none()} ${a.wrapping_add(b)} ${a.checked_add(0).unwrap_or(-1)}")
+}

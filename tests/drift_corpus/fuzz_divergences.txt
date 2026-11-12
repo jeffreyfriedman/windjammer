@@ -1,0 +1,5 @@
+# Known divergences found by the seeded fuzz run of the drift gate (scripts/wj/drift_gate.wj, step `fuzz`).
+# Shrink-only, like known_divergences.txt: a line is `case-id | walker=A resolved=B compiled=C | reason | owner: STREAM`.
+# The fuzz run compares the tree walker with the resolved engine on generated programs (seeds 9001.. of drift_gen.wj and
+# drift_probes.wj); a divergence found there fails the gate until it is fixed or listed here with its owner stream.
+# Empty at the time of writing: no divergence on the seed set.

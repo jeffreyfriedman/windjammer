@@ -5,7 +5,7 @@
 // short-circuiting, closures, drop order, sort stability, hash-map iteration, process exit codes, stdin and
 // arguments, and threads and channels.
 //
-//   wj run scripts/wj/drift_probes.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled]
+//   wj run scripts/wj/drift_probes.wj <wj-binary> <outdir> <out.tsv> [--seeds A..B] [--run-compiled] [--no-rustc]
 //
 // Rows (id <TAB> walker <TAB> resolved <TAB> compiled) like drift_gen.wj: `probe/<family>-N` (stdout and exit
 // status of each engine), `...#rustc` (rustc's verdict on the generated Rust). `--run-compiled` also runs the
@@ -312,12 +312,15 @@ fn main() {
     let mut lo = 1
     let mut hi = 4
     let mut compiled = false
+    let mut no_rustc = false
     let mut only = ""
     let mut baseline_path = ""
     let mut record_path = ""
     let mut i = 4
     while i < args.len() {
-        if args[i] == "--seeds" {
+        if args[i] == "--no-rustc" {
+            no_rustc = true
+        } else if args[i] == "--seeds" {
             let parts = strings.split(args[i + 1], "..")
             lo = parts[0].parse::<int>().unwrap_or(1)
             hi = parts[1].parse::<int>().unwrap_or(4)
@@ -370,7 +373,7 @@ fn main() {
                 rows = rows + "${id}#runs\t${if strings.starts_with(w, "exit0:") { "runs" } else { "broken" }}\t${if strings.starts_with(r, "exit0:") { "runs" } else { "broken" }}\truns\n"
             }
             // std modules (process, thread, io...) need the runtime crate: rustc alone cannot check them
-            if !(fam == "exit_code" || fam == "stdin" || fam == "threads" || fam == "splits") {
+            if !no_rustc && !(fam == "exit_code" || fam == "stdin" || fam == "threads" || fam == "splits") {
                 rows = rows + "${id}#rustc\ttypechecks\ttypechecks\t${rustc_verdict(wj, dir, file)}\n"
             }
             seed += 1
