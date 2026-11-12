@@ -29,6 +29,9 @@ pub(crate) struct IdiomScratch {
     pub(crate) file_scope_is_open: bool,
     /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
     pub(crate) foreign_imported_types: HashSet<String>,
+    /// `use crate::m` / `use crate::m as n` / `use self::..` / `use super::..` of this file, by the name it binds: a path
+    /// call through it (`m::f(..)`) names a same-crate definition, as the imported-name form `use crate::m::f` does.
+    pub(crate) same_crate_use_paths: std::collections::HashMap<String, String>,
     /// Functions of the standard library this file imports by name or through a glob
     /// (`use std::log::*` brings `debug`): they shadow a language intrinsic of the same name (ADR-0014).
     pub(crate) imported_std_fn_names: HashSet<String>,
@@ -65,6 +68,7 @@ impl<'ast> CodeGenerator<'ast> {
         let idiom = &mut self.idiom;
         idiom.file_scope_type_names.clear();
         idiom.foreign_imported_types.clear();
+        idiom.same_crate_use_paths.clear();
         idiom.file_scope_is_open = false;
         idiom.imported_std_fn_names.clear();
         for item in &program.items {
@@ -87,6 +91,10 @@ impl<'ast> CodeGenerator<'ast> {
                     idiom.file_scope_type_names.insert(name.clone());
                 }
                 Item::Use { path, alias, .. } => {
+                    let same_crate = path.len() >= 2 && matches!(path[0].as_str(), "crate" | "self" | "super");
+                    if let Some(n) = alias.as_ref().or(path.last()).filter(|n| same_crate && n.as_str() != "*") {
+                        idiom.same_crate_use_paths.insert(n.clone(), path.join("::"));
+                    }
                     if path.last().is_some_and(|l| l == "*") {
                         idiom.file_scope_is_open = true;
                     } else if let Some(n) = alias.as_ref().or(path.last()) {

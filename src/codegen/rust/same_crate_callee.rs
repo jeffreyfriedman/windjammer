@@ -13,6 +13,17 @@ impl<'ast> CodeGenerator<'ast> {
         crate::resolve::same_crate_callee_key(&self.import_fn_alias_map, callee_name)
     }
 
+    /// True when a path call `m::f(..)` goes through this file's `use crate::m` (or `self::` / `super::`): it names
+    /// a definition of this crate, as `use crate::m::f` then `f(..)` does, even one Windjammer has no signature
+    /// for (a hand-written Rust module). Such a call is never a missing dependency boundary.
+    pub(crate) fn path_call_through_same_crate_use(&self, callee_name: &str) -> bool {
+        let Some((head, _)) = callee_name.split_once("::") else { return false };
+        self.idiom.same_crate_use_paths.get(head).is_some_and(|path| {
+            let one = std::collections::HashMap::from([(head.to_string(), path.clone())]);
+            crate::resolve::same_crate_callee_key(&one, callee_name).is_some()
+        })
+    }
+
     /// Resolve every call of `program` (recomputed per program: keys are node addresses). A module file of
     /// a multi-file build is resolved on its own, so only calls to its own definitions are recorded (paths
     /// relative to the file, as the name-based keys were); `Unresolved`/`Ambiguous` keep the name-based lookup.
