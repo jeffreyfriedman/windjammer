@@ -2,11 +2,12 @@ use std::fs
 
 fn first_line(path: string) -> string {
     let text = fs::read_to_string(path).unwrap()
+    //~@41 ERROR W0002 explicit
     text.trim()
 }
-
 fn main() {
     let a = first_line("a.txt")
     let b = first_line("b.txt")
     println("${a} ${b}")
 }
+// oracle: check
