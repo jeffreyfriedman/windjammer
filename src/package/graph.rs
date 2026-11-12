@@ -198,8 +198,15 @@ pub fn dep_path(base: &Path, raw: &str) -> PathBuf {
     if Path::new(&p).is_absolute() { PathBuf::from(p) } else { base.join(p) }
 }
 
-/// One message per `${VAR}`-parameterised path dependency whose directory is missing, naming the variable to set.
-pub fn missing_configurable_deps(root: &Path) -> Vec<String> {
+/// A `${VAR}`-parameterised path dependency whose directory is missing.
+struct MissingDep {
+    name: String,
+    why: String,
+    raw: String,
+    vars: Vec<String>,
+}
+
+fn missing_configurable(root: &Path) -> Vec<MissingDep> {
     let Ok(text) = std::fs::read_to_string(root.join("wj.toml")) else { return Vec::new() };
     let Ok(v) = text.parse::<toml::Value>() else { return Vec::new() };
     let Some(deps) = v.get("dependencies").and_then(|d| d.as_table()) else { return Vec::new() };
@@ -209,7 +216,7 @@ pub fn missing_configurable_deps(root: &Path) -> Vec<String> {
         if !raw.contains("${") {
             continue;
         }
-        let vars: Vec<&str> = raw.split("${").skip(1).filter_map(|s| s.split(['}', ':']).next()).collect();
+        let vars: Vec<String> = raw.split("${").skip(1).filter_map(|s| s.split(['}', ':']).next()).map(str::to_string).collect();
         let why = match expand_path_vars(raw) {
             Err(e) => e,
             Ok(p) => {
@@ -220,12 +227,66 @@ pub fn missing_configurable_deps(root: &Path) -> Vec<String> {
                 format!("`{}` does not exist", dir.display())
             }
         };
-        out.push(format!(
-            "dependency `{name}`: {why}; set {} to the checkout that provides it (manifest path `{raw}`)",
-            vars.join(" / ")
-        ));
+        out.push(MissingDep { name: name.clone(), why, raw: raw.to_string(), vars });
     }
     out
+}
+
+fn one_message(m: &MissingDep) -> String {
+    format!(
+        "dependency `{}`: {}; set {} to the checkout that provides it (manifest path `{}`)",
+        m.name,
+        m.why,
+        m.vars.join(" / "),
+        m.raw
+    )
+}
+
+/// One message per `${VAR}`-parameterised path dependency whose directory is missing, naming the variable to set.
+pub fn missing_configurable_deps(root: &Path) -> Vec<String> {
+    missing_configurable(root).iter().map(one_message).collect()
+}
+
+/// The `${VAR:-default}` default written in a manifest path for `var`, if any.
+fn manifest_default(raw: &str, var: &str) -> Option<String> {
+    let at = raw.find(&format!("${{{var}:-"))? + var.len() + 4;
+    raw[at..].split('}').next().map(str::to_string)
+}
+
+/// What `wj check` prints: one message per set of variables, listing every dependency that is missing because of
+/// them (a manifest with six dependencies under one variable gets one message that names the variable once).
+pub fn missing_configurable_report(root: &Path) -> Vec<String> {
+    let all = missing_configurable(root);
+    let mut groups: Vec<(String, Vec<&MissingDep>)> = Vec::new();
+    for m in &all {
+        let key = m.vars.join(" / ");
+        match groups.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, g)) => g.push(m),
+            None => groups.push((key, vec![m])),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(vars, g)| {
+            if let [only] = g.as_slice() {
+                return one_message(only);
+            }
+            let names: Vec<String> = g.iter().map(|m| format!("`{}`", m.name)).collect();
+            let mut defaults: Vec<String> = g.iter().flat_map(|m| m.vars.iter().filter_map(|v| manifest_default(&m.raw, v))).collect();
+            defaults.sort();
+            defaults.dedup();
+            let default = if defaults.is_empty() {
+                String::new()
+            } else {
+                format!(" The manifest default is `{}`.", defaults.join("`, `"))
+            };
+            format!(
+                "{} dependencies are missing: {}. Set {vars} to the checkout that provides them.{default}",
+                g.len(),
+                names.join(", ")
+            )
+        })
+        .collect()
 }
 
 /// Direct dependencies of the project at `root` (`[dependencies]`), git ones fetched and locked.
@@ -334,6 +395,24 @@ mod tests {
         assert_eq!(msgs.len(), 1, "{msgs:?}");
         assert!(msgs[0].contains("WJ_TEST_UNSET_ECO") && msgs[0].contains("`eco`"), "{msgs:?}");
         assert!(resolve(d.path()).unwrap_err().contains("WJ_TEST_UNSET_ECO"));
+    }
+
+    #[test]
+    fn many_missing_dependencies_under_one_variable_make_one_message() {
+        let d = tempfile::tempdir().unwrap();
+        let mut toml = String::from("[package]\nname = \"p\"\n\n[dependencies]\n");
+        for n in ["a", "b", "c"] {
+            toml.push_str(&format!("{n} = {{ path = \"${{WJ_TEST_UNSET_ECO:-../eco}}/packages/{n}\" }}\n"));
+        }
+        toml.push_str("d = { path = \"${WJ_TEST_UNSET_OTHER}/d\" }\n");
+        std::fs::write(d.path().join("wj.toml"), toml).unwrap();
+        let msgs = missing_configurable_report(d.path());
+        assert_eq!(msgs.len(), 2, "{msgs:?}");
+        let eco = msgs.iter().find(|m| m.contains("WJ_TEST_UNSET_ECO")).unwrap();
+        assert_eq!(eco.matches("WJ_TEST_UNSET_ECO").count(), 1, "{eco}");
+        assert!(eco.contains("`a`") && eco.contains("`b`") && eco.contains("`c`") && eco.contains("`../eco`"), "{eco}");
+        assert!(msgs.iter().any(|m| m.starts_with("dependency `d`")), "a single missing dependency keeps its own message");
+        assert_eq!(missing_configurable_deps(d.path()).len(), 4, "resolve still gets one message per dependency");
     }
 
     #[test]
