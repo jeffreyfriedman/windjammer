@@ -1,6 +1,6 @@
 ⚡ Incremental: 0/5 files changed — nothing to do (0.2s)
 Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws" (target: rust)
-Output: "~/Library/Caches/windjammer/run/0835fc9a0f9cee5c"
+Output: "{CACHE}/run/0835fc9a0f9cee5c"
 
 Success! Transpilation complete!
 

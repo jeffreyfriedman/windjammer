@@ -1,5 +1,5 @@
 Building Windjammer project from "{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.U.0/ws" (target: rust)
-Output: "~/Library/Caches/windjammer/pilot6-root/run/0835fc9a0f9cee5c"
+Output: "{CACHE}/pilot6-root/run/0835fc9a0f9cee5c"
 
 Success! Transpilation complete!
 

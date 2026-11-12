@@ -191,8 +191,8 @@ class WjCompiledRunner(Runner):
             if not diags:
                 diags = dg.parse_text("wj", out + err)
             return BuildResult(False, diags, out + err, time.time() - t0)
-        target = os.environ.get("AGENTDX_CARGO_TARGET") or os.path.expanduser(
-            "~/Library/Caches/windjammer/wt-agent-bench")
+        target = os.environ.get("AGENTDX_CARGO_TARGET") or os.path.join(
+            os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "windjammer", "wt-agent-bench")
         env = {"CARGO_TARGET_DIR": target, "CARGO_BUILD_JOBS": os.environ.get("CARGO_BUILD_JOBS", "2")}
         with _BUILD_LOCK:
             return self._cargo_and_copy(wd, gen, target, env, t0)

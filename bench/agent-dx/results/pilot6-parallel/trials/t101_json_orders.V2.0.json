@@ -6,8 +6,8 @@
  "capability_denials": 0,
  "compile_errors": 0,
  "diag_samples": [
-  "Building Windjammer project from \"{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.0/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/run/dadd237d35fb64f5\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input",
-  "Building Windjammer project from \"{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.0/ws\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/run/dadd237d35fb64f5\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input"
+  "Building Windjammer project from \"{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.0/ws\" (target: rust)\nOutput: \"{CACHE}/run/dadd237d35fb64f5\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input",
+  "Building Windjammer project from \"{REPO}/bench/agent-dx/results/pilot6/work/t101_json_orders.V2.0/ws\" (target: rust)\nOutput: \"{CACHE}/run/dadd237d35fb64f5\"\n\nSuccess! Transpilation complete!\n\nwj verify: compiled build OK; the compiled run matches (stdout 14 bytes, exit status 1)\ninvalid input"
  ],
  "diagnostic_categories": {
   "other": 2

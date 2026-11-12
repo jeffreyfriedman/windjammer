@@ -7,7 +7,7 @@
  "diag_samples": [
   "error[WJ0031]: `float` is not a reference, so it cannot be dereferenced\n  --> main.wj:8:12\n  |\n8 |     price: float,",
   "error[WJ0031]: `float` is not a reference, so it cannot be dereferenced\n  --> main.wj:8:12\n  |\n8 |     price: float,",
-  "Building Windjammer project from \"<ws>\" (target: rust)\nOutput: \"~/Library/Caches/windjammer/run/7b5491afda072679\"\n\nSuccess! Transpilation complete!\n\nwarning: unused import: `windjammer_runtime::fs::Metadata`\n --> main.rs:4:5\n  |\n4 | use windjammer_runtime::fs::Metadata;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:5:5\n  |\n5 | use windjammer_runtime::fs::DirEntry;\n  "
+  "Building Windjammer project from \"<ws>\" (target: rust)\nOutput: \"{CACHE}/run/7b5491afda072679\"\n\nSuccess! Transpilation complete!\n\nwarning: unused import: `windjammer_runtime::fs::Metadata`\n --> main.rs:4:5\n  |\n4 | use windjammer_runtime::fs::Metadata;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:5:5\n  |\n5 | use windjammer_runtime::fs::DirEntry;\n  "
  ],
  "diagnostic_categories": {
   "other": 3

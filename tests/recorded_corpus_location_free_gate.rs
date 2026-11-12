@@ -1,5 +1,5 @@
 //! Portability gate: recorded corpora (bench/ data, expected outputs and corpora under tests/) must not embed
-//! this machine's absolute paths. Use the placeholders `{REPO}`, `{TMP}`, `{RUSTUP_HOME}`, substituted when the
+//! this machine's absolute paths. Use the placeholders `{REPO}`, `{TMP}`, `{CACHE}`, `{RUSTUP_HOME}`, substituted when the
 //! data is loaded. Source files (`.rs`, `.wj`) are code, not recorded data, and are exempt.
 //! Run: `cargo test --test recorded_corpus_location_free_gate`
 
@@ -9,7 +9,7 @@ const FORBIDDEN: &[&str] = &["/Users/", "/home/", "/private/", "/var/folders/", 
 
 /// Directories under tests/ that hold hand-written prose about paths, not recorded data.
 fn exempt(rel: &str) -> bool {
-    rel.ends_with(".rs") || rel.ends_with(".wj") || rel.ends_with(".md")
+    [".rs", ".wj", ".md", ".py", ".sh"].iter().any(|e| rel.ends_with(e))
 }
 
 fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -65,7 +65,7 @@ fn recorded_corpora_hold_no_absolute_paths() {
     }
     assert!(
         bad.is_empty(),
-        "{} recorded file(s) embed an absolute path; replace it with {{REPO}}, {{TMP}} or {{RUSTUP_HOME}}:\n{}",
+        "{} recorded file(s) embed an absolute path; replace it with {{REPO}}, {{TMP}}, {{CACHE}} or {{RUSTUP_HOME}}:\n{}",
         bad.len(),
         bad.iter().take(20).cloned().collect::<Vec<_>>().join("\n")
     );
@@ -76,6 +76,6 @@ fn detector_catches_machine_paths_and_ignores_placeholders() {
     assert!(first_absolute_path("see /Users/me/src/x").is_some());
     assert!(first_absolute_path("at \"/var/folders/k8/abc/T/.tmpX\"").is_some());
     assert!(first_absolute_path("from ~/src/wj-wt/pilot6").is_some());
-    assert!(first_absolute_path("at {REPO}/bench/x and {TMP}/y and {RUSTUP_HOME}/toolchains").is_none());
+    assert!(first_absolute_path("at {REPO}/bench/x and {TMP}/y and {CACHE}/run/ab and {RUSTUP_HOME}/toolchains").is_none());
     assert!(first_absolute_path("relative bench/agent-dx/home/x").is_none());
 }
