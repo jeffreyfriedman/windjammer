@@ -75,6 +75,21 @@ exit = 1
 stdout_has = ["\"code\": \"WJ0003\""]
 
 [[case]]
+name = "check rejects a char from strings.chars compared with a string literal"
+polarity = "negative"
+files = { "m.wj" = "use std::strings\n\nfn main() {\n    for ch in strings.chars(\"a?b\") {\n        if ch == \"?\" {\n            println(\"q\")\n        }\n    }\n}\n" }
+args = ["check", "{w}/m.wj"]
+exit = 1
+output_has = ["WJ0003", "expected `char`, found `string`", "'?'"]
+
+[[case]]
+name = "check accepts a char compared with a char literal"
+polarity = "positive"
+files = { "m.wj" = "use std::strings\n\nfn main() {\n    for ch in strings.chars(\"a?b\") {\n        if ch == '?' {\n            println(\"q\")\n        }\n    }\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["0 error(s)"]
+
+[[case]]
 name = "check rejects an undefined variable (WJ0001)"
 polarity = "negative"
 files = { "m.wj" = "fn main() {\n    let y = undefined_thing + 1\n    println(\"${y}\")\n}\n" }

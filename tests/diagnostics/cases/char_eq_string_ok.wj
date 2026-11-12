@@ -1,0 +1,25 @@
+// expect: none
+// Comparing a char with a char literal, and text with text, is fine; so is a binding whose kind no declaration gives.
+use std::strings
+
+fn first_is(text: string, c: char) -> bool {
+    for ch in text.chars() {
+        return ch == c
+    }
+    false
+}
+
+fn main() {
+    for ch in strings.chars("a?b") {
+        if ch == '?' {
+            println("question")
+        }
+    }
+    let words = strings.split("a b", " ")
+    for w in words {
+        if w == "a" {
+            println("a")
+        }
+    }
+    println("${first_is("abc", 'a')}")
+}

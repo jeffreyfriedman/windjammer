@@ -203,6 +203,24 @@ impl<'a> Locator<'a> {
         None
     }
 
+    /// Last resort for a string literal inside `${..}`, which carries the sub-parser's coordinates: the first
+    /// occurrence of `"value"` that sits inside an interpolation on its line.
+    pub fn interpolated_string(&self, value: &str) -> Option<Span> {
+        let text = self.ix.text();
+        let quoted = format!("\"{value}\"");
+        let mut from = 0;
+        while let Some(i) = text[from..].find(&quoted) {
+            let s = from + i;
+            let line_start = text[..s].rfind('\n').map_or(0, |n| n + 1);
+            let before = &text[line_start..s];
+            if before.rfind("${").is_some_and(|open| !before[open..].contains('}')) {
+                return Some(self.ix.span(s, s + quoted.len()));
+            }
+            from = s + quoted.len();
+        }
+        None
+    }
+
     /// Span of a literal the AST location refers to.
     pub fn literal(&self, loc: &SourceLocation, lit: &Literal) -> Option<Span> {
         let text = self.ix.text();

@@ -39,6 +39,8 @@ pub struct Index {
     pub display: HashSet<String>,
     /// Every generic parameter / associated type name declared anywhere in the project.
     pub generic_names: HashSet<String>,
+    /// Types read from declarations (`None` in a bare index: nothing is judged by declared types then).
+    pub declared: Option<super::declared::Declared>,
 }
 
 /// Methods of std traits commonly implemented by hand, plus those every value has.
@@ -103,6 +105,10 @@ impl Index {
         for p in programs {
             idx.add_items(&p.items);
         }
+        let mut modules: Vec<String> = programs.iter().flat_map(|p| crate::check::std_calls::std_imports(&p.items).into_values()).collect();
+        modules.sort();
+        modules.dedup();
+        idx.declared = Some(super::declared::Declared::load(modules.iter().map(String::as_str)));
         idx
     }
 
