@@ -1,0 +1,17 @@
+// A closure nested in an iterator adapter's closure keeps its parameter annotation as written: only the adapter's own
+// parameter takes the element by reference (`|y: int|` stays `i64`, the outer `x` is `&i64`).
+// expect: 9
+// expect: [false, true, false]
+fn main() {
+    let v = [1, 2, 3]
+    let n = v.map(|x| {
+        let inner = |y: int| y + 1
+        inner(x)
+    }).sum::<int>()
+    println("${n}")
+    let even: Vec<bool> = v.map(|x| {
+        let is_even = |k: int| k % 2 == 0
+        is_even(x)
+    }).collect()
+    println("${even:?}")
+}
