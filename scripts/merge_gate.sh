@@ -51,6 +51,7 @@ step "eject == build" t eject_equivalence_test::
 step "installed-binary smoke" t installed_binary_smoke_test::
 WJ="${WJ:-target/release/wj}"
 step "orphan tests" "$WJ" run scripts/wj/check_orphan_tests.wj
+step "release scorecard (page and JSON match the definition)" "$WJ" run scripts/wj/release_scorecard.wj -- --check
 step "drift gate (walker == resolved == compiled; shrink-only ledger)" "$WJ" run scripts/wj/drift_gate.wj --wj "$WJ"
 if [ $full = 1 ]; then
   step "drift gate, compiled side re-run now (the default step compares with the recorded baseline)" "$WJ" run scripts/wj/drift_gate.wj --wj "$WJ" --fast --compiled live

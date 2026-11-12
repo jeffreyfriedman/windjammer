@@ -1,0 +1,27 @@
+# fixture
+r0 | x
+r1 | x
+r2 | x
+r3 | x
+r4 | x
+r5 | x
+r6 | x
+r7 | x
+r8 | x
+r9 | x
+r10 | x
+r11 | x
+r12 | x
+r13 | x
+r14 | x
+r15 | x
+r16 | x
+r17 | x
+r18 | x
+r19 | x
+r20 | x
+r21 | x
+r22 | x
+r23 | x
+r24 | x
+r25 | x

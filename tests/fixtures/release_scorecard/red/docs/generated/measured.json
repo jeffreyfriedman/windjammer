@@ -1,0 +1,6 @@
+{
+  "cost.friction.events_open": {"value": 6},
+  "book.startup.interpret_cpu_ms": {"value": 201},
+  "cost.write.ref_token_ratio_wj_over_rust": {"value": 1.4},
+  "cost.diag.fix_coverage": {"value": 0.3}
+}

@@ -1,0 +1,5 @@
+[name_matches]
+"src/a.rs" = 1300
+
+[match_arm_names]
+"src/b.rs" = 0

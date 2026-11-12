@@ -118,3 +118,11 @@ See the module comment of `tests/common/span_oracle/diag_oracle.rs` for the full
 after the node and are shared by nested nodes (the numeric inference passes key on them). Diagnostics,
 lints and source maps use the parser's span log (`Parser::enable_span_log`, `span_snapshot`;
 `src/parser/span_log.rs`). Migrating the remaining readers (gate 6c) is tracked by the ratchet.
+
+## Release scorecard
+
+`scripts/wj/release_scorecard.wj` computes the fixed release definition ([docs/RELEASE_SCORECARD.md](../RELEASE_SCORECARD.md)).
+`-- --check` (merge gate) fails when the generated page or `docs/generated/release_scorecard.json` no longer matches the
+script; `-- --selftest` (`tests/release_scorecard_script_test.rs`) runs the fixtures in `tests/fixtures/release_scorecard/`:
+a RED tree on which every criterion must be RED, a GREEN tree on which every one is GREEN, and absent or old result files
+that must show MISSING or STALE.
