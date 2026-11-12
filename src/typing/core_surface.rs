@@ -156,6 +156,11 @@ impl CoreSurface {
     pub fn method_signature(&self, receiver: &Type, method: &str, turbofish: &[Type]) -> Option<MethodSig> {
         let (name, type_args) = head(receiver)?;
         let (type_generics, method_generics, params, ret) = self.declared(name, method)?;
+        // An iterator adapter called directly on a sequence iterates it by reference (`v.filter(f)` is
+        // `v.iter().filter(f)`): its element is `&T`.
+        let by_ref = name != ITERATOR && !self.table.contains_key(&(name.to_string(), method.to_string())) && !self.enumerable.contains_key(method)
+            && self.table.contains_key(&(ITERATOR.to_string(), method.to_string()));
+        let type_args = if by_ref { type_args.into_iter().map(|t| Type::Reference(Box::new(t))).collect() } else { type_args };
         let mut names = type_generics;
         let mut args = type_args;
         args.resize(names.len(), Type::Infer);

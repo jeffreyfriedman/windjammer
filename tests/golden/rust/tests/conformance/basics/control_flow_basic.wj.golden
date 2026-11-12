@@ -1,28 +1,28 @@
 fn main() {
     let a = 5_i64;
     if a > 0_i64 {
-        let _ = println!("[if] positive");
+        println!("[if] positive");
     } else {
-        let _ = println!("[if] non-positive");
+        println!("[if] non-positive");
     }
     let b = 0_i64;
     if b > 0_i64 {
-        let _ = println!("[if] positive");
+        println!("[if] positive");
     } else {
         if b == 0_i64 {
-            let _ = println!("[if] zero");
+            println!("[if] zero");
         } else {
-            let _ = println!("[if] negative");
+            println!("[if] negative");
         }
     }
     let c = -3_i64;
     if c > 0_i64 {
-        let _ = println!("[if] positive");
+        println!("[if] positive");
     } else {
         if c == 0_i64 {
-            let _ = println!("[if] zero");
+            println!("[if] zero");
         } else {
-            let _ = println!("[if] negative");
+            println!("[if] negative");
         }
     }
     let mut i = 0_i64;

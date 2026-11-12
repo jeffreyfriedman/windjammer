@@ -2,9 +2,9 @@
 fn test_if_else() {
     let x = 10_i64;
     if x > 5_i64 {
-        let _ = println!("[if_true] branch: yes");
+        println!("[if_true] branch: yes");
     } else {
-        let _ = println!("[if_true] branch: no");
+        println!("[if_true] branch: no");
     }
     let y = 2_i64;
     if y > 5_i64 {
