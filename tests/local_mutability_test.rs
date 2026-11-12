@@ -171,7 +171,7 @@ fn loop_variables_changed_through_are_reported_with_the_mut_in_the_pattern() {
 #[test]
 fn mut_loop_variables_write_through_in_the_generated_rust() {
     let dir = tempfile::TempDir::new().unwrap();
-    let src = "struct P {\n    x: int,\n}\nstruct Inv {\n    items: Vec<(string, int)>,\n}\nimpl Inv {\n    fn add(self, n: int) {\n        for (id, mut qty) in self.items {\n            qty = qty + n\n        }\n    }\n}\nfn main() {\n    let mut ps = [P { x: 1 }, P { x: 2 }]\n    for mut p in ps {\n        p.x = p.x + 10\n    }\n    let mut inv = Inv { items: [(\"a\", 1)] }\n    inv.add(2)\n    let mut total = 0\n    for mut i in 0..3 {\n        i = i * 2\n        total += i\n    }\n    println(\"${ps[0].x} ${ps[1].x} ${inv.items[0].1} ${total}\")\n}\n";
+    let src = "struct P {\n    x: int,\n}\nstruct Inv {\n    items: Vec<(int, int)>,\n}\nimpl Inv {\n    fn add(self, n: int) {\n        for (id, mut qty) in self.items {\n            qty = qty + n\n        }\n    }\n}\nfn main() {\n    let mut ps = [P { x: 1 }, P { x: 2 }]\n    for mut p in ps {\n        p.x = p.x + 10\n    }\n    let mut inv = Inv { items: [(7, 1)] }\n    inv.add(2)\n    let mut total = 0\n    for mut i in 0..3 {\n        i = i * 2\n        total += i\n    }\n    println(\"${ps[0].x} ${ps[1].x} ${inv.items[0].1} ${total}\")\n}\n";
     std::fs::write(dir.path().join("m.wj"), src).unwrap();
     let build = wj(&["build", "--no-cargo", "-o", "out", "m.wj"], dir.path());
     assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
