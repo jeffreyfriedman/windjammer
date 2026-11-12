@@ -28,11 +28,27 @@ pub(super) fn erase_generic_struct_return(
     }
 }
 
-/// `parse_function_signature` plus the generic-struct return erasure for the file `content`.
-pub(super) fn parse_sig(line: &str, module: &str, content: &str) -> Option<FunctionSignature> {
+/// The generic struct names of one file's content, computed on first use and then reused for every signature in it.
+pub(super) struct FileGenerics<'a> {
+    content: &'a str,
+    names: std::cell::OnceCell<std::collections::HashSet<String>>,
+}
+
+impl<'a> FileGenerics<'a> {
+    pub(super) fn new(content: &'a str) -> Self {
+        FileGenerics { content, names: std::cell::OnceCell::new() }
+    }
+
+    fn names(&self) -> &std::collections::HashSet<String> {
+        self.names.get_or_init(|| generic_struct_names(self.content))
+    }
+}
+
+/// `parse_function_signature` plus the generic-struct return erasure for the file `generics` describes.
+pub(super) fn parse_sig(line: &str, module: &str, generics: &FileGenerics) -> Option<FunctionSignature> {
     let mut sig = parse_function_signature(line, module)?;
     if matches!(&sig.return_type, Some(Type::Custom(_))) {
-        erase_generic_struct_return(&mut sig, &generic_struct_names(content));
+        erase_generic_struct_return(&mut sig, generics.names());
     }
     Some(sig)
 }
