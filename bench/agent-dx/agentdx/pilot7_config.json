@@ -62,6 +62,10 @@
     "V3"
   ],
   "trials_per_cell": 2,
+  "seed": 0,
+  "_seed": "Order seed for tasks and arms inside each round (random.Random(seed)). Default 0 (the value of pilots 6 and 7 so far). Override with `pilot7 --seed N`; it is written into every trial record, final.json and the report.",
+  "rerun_timeouts": false,
+  "_rerun_timeouts": "false: a trial that hit the 1500 s agent timeout stays recorded (status timeout, excluded from grading, its cost counted) and is not re-run on resume. true: resume re-runs it (the first attempt's cost stays counted).",
   "max_turns": 25,
   "hard_cap_usd": 35.0,
   "check_after_trials_per_model": 6,

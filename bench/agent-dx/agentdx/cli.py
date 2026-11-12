@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from . import pilot6_report as P6, pilot7 as P7, pilot7_report as P7R, baseline, budget as BU, driver, gen, pilot as PL, pilot_report as PR, arms as AR, replay as R, report as RP, tasks as T, toolchains, workspace as W
+from . import pilot6_report as P6, preflight as PF, pilot7 as P7, pilot7_report as P7R, baseline, budget as BU, driver, gen, pilot as PL, pilot_report as PR, arms as AR, replay as R, report as RP, tasks as T, toolchains, workspace as W
 from .paths import LANGS
 
 
@@ -90,7 +90,15 @@ def main(argv=None):
     p7.add_argument("--out", default="results/pilot7")
     p7.add_argument("--dry-run", action="store_true")
     p7.add_argument("--prior", action="append", default=None, help="recorded trials for the decomposition demo of --dry-run (repeatable; default: pilot 6 and the pilot-7 validation smoke)")
+    p7.add_argument("--seed", type=int, default=None, help="order seed (default: config 'seed', else 0); recorded in every trial")
     p7.add_argument("--yes", action="store_true", help="launch (owner decision; never in CI)")
+    p7p = sub.add_parser("pilot7-preflight", help="launch checks (wj commit, load, memory, open events, dry run); exit 1 on any red")
+    p7p.add_argument("--config", default=P7.CONFIG)
+    p7p.add_argument("--expect-commit", required=True, help="commit (prefix) the wj binary must be built from")
+    p7p.add_argument("--accepted", default=PF.DEFAULT_ACCEPTED)
+    p7p.add_argument("--open-bugs", default=PF.DEFAULT_OPEN_BUGS)
+    p7p.add_argument("--min-free-mem-gb", type=float, default=PF.DEFAULT_MIN_MEM_GB)
+    p7p.add_argument("--prior", action="append", default=None)
     p7r = sub.add_parser("pilot7-report")
     p7r.add_argument("--config", default=P7.CONFIG)
     p7r.add_argument("--out", default="results/pilot7")
@@ -119,9 +127,17 @@ def main(argv=None):
     rp.add_argument("--md", default=None)
     rp.add_argument("--json", default=None)
     a = ap.parse_args(argv)
+    if a.cmd == "pilot7-preflight":
+        return PF.run(a)
     if a.cmd == "pilot7":
         cfg = P7.load_config(a.config)
+        if a.seed is not None:
+            cfg["seed"] = a.seed
         problems = P7.dry_run(cfg, a.prior or ["results/pilot6/trials", "results/pilot7-validation/trials"])
+        ident = toolchains.wj_identity()
+        problems += [f"wj: {x}" for x in toolchains.env_disagreements(ident)]
+        if not ident["version"]:
+            problems.append(f"wj: `{ident['path']} --version` gave nothing (set WJ_BIN or put wj on PATH)")
         for p in problems:
             print(f"PROBLEM: {p}")
         print("dry run: ready" if not problems else f"dry run: {len(problems)} problem(s)")
@@ -131,9 +147,9 @@ def main(argv=None):
             print("not started: pass --yes to launch (owner decision)", file=sys.stderr)
             return 3
         caps = {m: v["per_trial_usd_cap"] for m, v in cfg["models"].items()}
-        r = P7.run_matrix(cfg, a.out, lambda m: PL.ClaudeAgent(m, cfg["max_turns"], caps[m], stream=True))
+        r = P7.run_matrix(cfg, a.out, lambda m: PL.ClaudeAgent(m, cfg["max_turns"], caps[m], stream=True, prices=cfg["prices"][m]))
         print(json.dumps(r))
-        return 0
+        return 4 if r["stopped"] else 0
     if a.cmd == "pilot7-report":
         md = P7R.build(a.out, P7.load_config(a.config))
         if a.md:

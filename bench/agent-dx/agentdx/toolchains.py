@@ -13,6 +13,41 @@ def wj_bin():
     return os.environ.get("WJ_BIN") or shutil.which("wj")
 
 
+_IDENT = {}
+
+
+def wj_identity(wj=None):
+    """Version of the wj binary the harness will use, from `<wj> --version` itself: {"path", "version" (first line),
+    "commit", "clean", "release"}. Cached per path. An unrunnable binary gives empty fields."""
+    import re
+    wj = wj or wj_bin()
+    if wj in _IDENT:
+        return _IDENT[wj]
+    line = ""
+    try:
+        p = subprocess.run([wj, "--version"], capture_output=True, text=True, timeout=30)
+        line = ((p.stdout or p.stderr).strip().splitlines() or [""])[0]
+    except Exception:  # noqa: BLE001
+        pass
+    m = re.search(r"commit ([0-9a-f]{7,40})", line)
+    flags = [x.strip() for x in line.split("(", 1)[-1].rstrip(")").split(",")] if "(" in line else []
+    _IDENT[wj] = {"path": wj, "version": line, "commit": m.group(1) if m else "", "clean": "clean" in flags, "release": "release" in flags}
+    return _IDENT[wj]
+
+
+def env_disagreements(ident, environ=None):
+    """Problems when AGENTDX_WJ_VERSION / AGENTDX_WJ are set and disagree with the binary the harness will use."""
+    environ = os.environ if environ is None else environ
+    out = []
+    v = environ.get("AGENTDX_WJ_VERSION")
+    if v is not None and v.strip() != ident["version"]:
+        out.append(f"AGENTDX_WJ_VERSION={v!r} disagrees with `{ident['path']} --version` = {ident['version']!r}")
+    w = environ.get("AGENTDX_WJ")
+    if w and ident["path"] and os.path.realpath(w) != os.path.realpath(ident["path"]):
+        out.append(f"AGENTDX_WJ={w} is not the binary the harness uses (WJ_BIN or PATH wj: {ident['path']})")
+    return out
+
+
 def detect():
     """Return {lang: {"available": bool, "reason": str, "version": str}}."""
     res = {}
