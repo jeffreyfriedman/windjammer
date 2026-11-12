@@ -1,0 +1,82 @@
+// Fields of a Vec of structs read and written in place by machine-code loops (row views): copies
+// taken before and inside the loop keep their values, pushes and element replacements in the loop
+// are seen, negative and large ints keep their sign, and an index past the end panics as the walker does.
+struct B {
+    x: f64,
+    v: f64,
+    n: int,
+}
+
+struct Tag {
+    id: int,
+    w: f64,
+}
+
+fn drift(bs: Vec<B>, dt: f64) {
+    let mut i = 0
+    while i < bs.len() {
+        let mut j = i + 1
+        while j < bs.len() {
+            let d = bs[i].x - bs[j].x
+            bs[i].v -= d * dt
+            bs[j].v += d * dt
+            bs[j].n -= 3
+            j += 1
+        }
+        bs[i].x += bs[i].v * dt
+        bs[i].n = bs[i].n % 1000000007 * 2 - 7
+        i += 1
+    }
+}
+
+fn main() {
+    let mut bs: Vec<B> = Vec::new()
+    bs.push(B { x: 0.0, v: 1.0, n: -5 })
+    bs.push(B { x: 2.5, v: -0.5, n: 4 })
+    bs.push(B { x: -1.0, v: 0.25, n: 9000000000 })
+    let before = bs
+    let mut k = 0
+    while k < 300 {
+        drift(bs, 0.001)
+        k += 1
+    }
+    println("${bs[0].x} ${bs[0].v} ${bs[1].x} ${bs[2].v} ${before[0].x} ${before[2].n}")
+    println("${bs[0].n % 1000} ${bs[1].n % 1000} ${bs[2].n % 1000}")
+
+    // a copy of an element taken inside the loop keeps its value
+    let mut ts: Vec<Tag> = Vec::new()
+    let mut m = 0
+    while m < 5 {
+        ts.push(Tag { id: m, w: 0.5 })
+        m += 1
+    }
+    let mut kept = 0.0
+    let mut r = 0
+    while r < 200 {
+        let i = r % 5
+        ts[i].w = ts[i].w * 1.5 + 1.0
+        if r == 100 {
+            let snap = ts[i]
+            ts[i].w = 0.0
+            kept = snap.w
+        }
+        ts[i].id += i
+        if r % 50 == 0 {
+            ts.push(Tag { id: -r, w: 2.0 })
+        }
+        if r % 70 == 0 {
+            ts[0] = Tag { id: 7, w: -1.0 }
+        }
+        r += 1
+    }
+    println("${ts.len()} ${ts[0].id} ${ts[0].w} ${ts[4].w} ${ts[6].id} ${kept}")
+
+    // past the end: the walker's panic
+    let mut q = 0
+    let mut sum = 0.0
+    while q < 12 {
+        sum += ts[q].w
+        q += 1
+    }
+    println("${sum}")
+}
