@@ -1913,3 +1913,7 @@ tests/drift_corpus/repros/try_then_method_chain.wj#mainerr	none
 tests/drift_corpus/repros/try_then_method_chain.wj	exit0:4:19307120	
 tests/drift_corpus/repros/for_mut_variable_write_through.wj#mainerr	none	
 tests/drift_corpus/repros/for_mut_variable_write_through.wj	exit0:10:272371452	
+tests/drift_corpus/repros/for_mut_variable_shadowed_after_write.wj#mainerr	none	
+tests/drift_corpus/repros/for_mut_variable_shadowed_after_write.wj	exit1:0:17	
+tests/drift_corpus/repros/call_closure_field_parenthesized.wj#mainerr	none	
+tests/drift_corpus/repros/call_closure_field_parenthesized.wj	exit1:0:17	
