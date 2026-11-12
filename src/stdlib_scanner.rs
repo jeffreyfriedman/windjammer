@@ -685,6 +685,7 @@ fn parse_impl_type_name(trimmed: &str) -> Option<String> {
 }
 
 fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignature> {
+    if !line.contains("pub fn ") { return None; } // most lines: reject before the allocating collapse below
     // Collapse multi-line headers (`where F: Fn(...)`) so scanners can pass
     // accumulated `pub fn … {` spans (P3.580b Server::serve).
     let line = line
@@ -694,7 +695,6 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         .collect::<Vec<_>>()
         .join(" ");
     let line = line.trim();
-
     // Must start with "pub fn"
     if !line.starts_with("pub fn ") {
         return None;
