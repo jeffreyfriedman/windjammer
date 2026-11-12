@@ -13,7 +13,7 @@ pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: 
     let root = path.unwrap_or_else(|| Path::new("."));
     if let Some(manifest) = check::effects::manifest_path(root) {
         if let Some(dir) = manifest.parent() {
-            for m in crate::package::graph::missing_configurable_deps(dir) {
+            for m in crate::package::graph::missing_configurable_report(dir) {
                 eprintln!("wj check: {m}");
             }
         }

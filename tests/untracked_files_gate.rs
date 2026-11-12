@@ -16,6 +16,8 @@ fn git_lines(repo: &Path, args: &[&str]) -> Vec<String> {
 pub fn stray_files(repo: &Path) -> Vec<String> {
     let mut v = git_lines(repo, &["ls-files", "--others", "--exclude-standard"]);
     v.extend(git_lines(repo, &["ls-files", "--others", "--ignored", "--exclude-standard", "--", "tests"]));
+    // `.wj-cache` directories are intentional tool caches written by `wj check`/`wj run` (gitignored).
+    v.retain(|f| !f.split('/').any(|c| c == ".wj-cache"));
     v.sort();
     v.dedup();
     v
@@ -50,5 +52,12 @@ fn detector_sees_untracked_and_ignored_test_output() {
     std::fs::write(r.join("tests/generated/out.rs"), "").unwrap();
     let got = stray_files(r);
     assert!(got.contains(&"tests/temp_x.wj".to_string()), "{got:?}");
+    assert!(got.contains(&"tests/generated/out.rs".to_string()), "{got:?}");
+    // an ignored tool cache under tests/ is not a stray file, a sibling generated file still is
+    std::fs::create_dir_all(r.join("tests/sub/.wj-cache")).unwrap();
+    std::fs::write(r.join("tests/sub/.wj-cache/check-files-v2-x.json"), "{}").unwrap();
+    std::fs::write(r.join(".gitignore"), "tests/generated/\n.wj-cache/\n").unwrap();
+    let got = stray_files(r);
+    assert!(!got.iter().any(|f| f.contains(".wj-cache")), "{got:?}");
     assert!(got.contains(&"tests/generated/out.rs".to_string()), "{got:?}");
 }

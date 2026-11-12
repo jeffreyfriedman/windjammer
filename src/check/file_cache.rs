@@ -2,7 +2,8 @@
 //!
 //! That phase reads one parsed file and the stdlib only (it builds a fresh `SignatureRegistry::new()`, never the
 //! project's signatures), so its complete input set is: the file's path and text, the compiler build, and the
-//! ambient `.wj.meta` sidecars (`ambient.rs`). Entries are keyed on the path plus a SHA-256 of the text; the whole
+//! ambient `.wj.meta` sidecars (`ambient.rs`). The stored text holds the project root only as a placeholder
+//! (`cache::mask_root`), so no absolute location is written. Entries are keyed on the path plus a SHA-256 of the text; the whole
 //! memo is dropped when the build or the ambient digest differs. Whole-program phases (resolution, effects,
 //! semantic index) always run; whether a file's analysis is reported still depends on their fresh results.
 
@@ -13,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const FORMAT: u32 = 1;
+const FORMAT: u32 = 2;
 
 #[derive(Serialize, Deserialize, Default)]
 struct Stored {
@@ -24,6 +25,7 @@ struct Stored {
 
 pub struct FileMemo {
     path: PathBuf,
+    root: PathBuf,
     stored: Stored,
     dirty: bool,
     /// Content-keyed cache shared across checkouts (`shared_cache.rs`), when the driver installed one.
@@ -37,16 +39,16 @@ pub fn text_hash(text: &str) -> String {
 }
 
 impl FileMemo {
-    /// The memo for checks of `root`; `ambient` is the digest from `ambient::fingerprint`.
-    pub fn open(root: &Path, ambient: &str, ambient_portable: Option<String>) -> Self {
+    /// The memo for checks of `root`; `ambient` is the (location-free) digest from `ambient::fingerprint`.
+    pub fn open(root: &Path, ambient: &str) -> Self {
         let path = super::cache::path_for(root, "files");
         let header = format!("{}|{ambient}", super::cache::identity());
         let stored = std::fs::read_to_string(&path)
             .ok()
-            .and_then(|t| serde_json::from_str::<Stored>(&t).ok())
+            .and_then(|t| serde_json::from_str::<Stored>(&super::cache::unmask_root(root, &t)).ok())
             .filter(|s| s.format == FORMAT && s.header == header)
             .unwrap_or(Stored { format: FORMAT, header, entries: BTreeMap::new() });
-        Self { path, stored, dirty: false, shared: super::shared_cache::Shared::current(ambient_portable) }
+        Self { path, root: root.to_path_buf(), stored, dirty: false, shared: super::shared_cache::Shared::current(Some(ambient.to_string())) }
     }
 
     /// The analysis of `file`: from this checkout's memo, else from the shared content-keyed cache.
@@ -88,7 +90,7 @@ impl FileMemo {
             let _ = std::fs::create_dir_all(dir);
         }
         if let Ok(s) = serde_json::to_string(&self.stored) {
-            super::cache::write_atomically(&self.path, &s);
+            super::cache::write_atomically(&self.path, &super::cache::mask_root(&self.root, &s));
         }
     }
 }

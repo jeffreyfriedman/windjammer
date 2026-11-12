@@ -18,6 +18,7 @@ pub mod local_mut;
 mod project;
 mod rust_calls;
 mod rust_surface_health;
+mod match_variants;
 pub mod shared_cache;
 mod std_calls;
 mod semantic;
@@ -53,7 +54,7 @@ pub struct Checked {
 pub fn check_path(path: &Path, opts: &CheckOptions) -> Result<Checked> {
     let start = Instant::now();
     let (sources, keyed) = inputs(path)?;
-    let fp = cache::fingerprint(&keyed);
+    let fp = cache::fingerprint(&cache::relative_inputs(path, &keyed));
     let cached = if opts.use_cache { cache::load(path, &fp) } else { None };
     let was_cached = cached.is_some();
     let diagnostics = match cached {
@@ -185,8 +186,7 @@ fn run_with(root: &Path, sources: &[(String, String)], use_cache: bool) -> RunOu
     }
     let use_depth = ambient::use_depth(parsed.iter().map(|p| &p.program));
     let ambient = if use_cache { ambient::fingerprint(use_depth) } else { None };
-    let portable = if ambient.is_some() { ambient::fingerprint_portable(use_depth) } else { None };
-    let mut memo = ambient.as_deref().map(|a| file_cache::FileMemo::open(root, a, portable));
+    let mut memo = ambient.as_deref().map(|a| file_cache::FileMemo::open(root, a));
     project::run(root, &parsed, &mut out, memo.as_mut());
     if let Some(mut m) = memo {
         m.retain(&parsed.iter().map(|p| p.file.as_str()).collect());

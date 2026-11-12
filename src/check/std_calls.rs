@@ -23,7 +23,7 @@ pub fn run(parsed: &[&Parsed], out: &mut Vec<Diagnostic>) {
 }
 
 /// `use std::strings` -> `strings`, `use std::strings as s` -> `s`, mapped to the module.
-fn std_imports(items: &[Item<'_>]) -> HashMap<String, String> {
+pub(super) fn std_imports(items: &[Item<'_>]) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for item in items {
         let Item::Use { path, alias, .. } = item else { continue };
