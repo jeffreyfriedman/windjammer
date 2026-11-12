@@ -30,3 +30,24 @@ Diagnostics found on the way (fixed on `wt/pilot7-tasks`): compiled-build errors
 `wj run --verify` were reported at the generated Rust line number, because cargo names the file relative to the
 package (`main.rs`) while the source map records the path the compiler wrote. WJ0031 told the reader to remove a
 `*` that the source did not contain, and WJ0016 suggested ending a reference the source never wrote.
+
+The open repros also run in the drift corpus (`tests/drift_corpus/repros/`), with compiled baselines recorded live
+on 9316595e2 (all `exit1:0:17`, the build is rejected) and one ledger line each in
+`tests/drift_corpus/known_divergences.txt` naming the stream whose merge clears it (ceiling 82 -> 90).
+
+## Expectation for the pilot-7 preflight (`wj run --verify` on the references)
+
+Measured on 9316595e2 (Mac), stdin = first non-empty vector of `tasks_set3/<task>/oracle/vectors.json`. The
+interpreted stdout equals the oracle in all nine.
+
+| Task | Verdict on 9316595e2 | Compiled-build errors | Expected after |
+|---|---|---|---|
+| t301 | pass | none | pass |
+| t302 | pass (exit 1 is the program's own, the compiled run matches) | none | pass |
+| t303 | pass | none | pass |
+| t304 | compiled build fails | WJ0003 x2, WJ0017, WJ0020 | wt/width-11 merge |
+| t305 | compiled build fails | WJ0003 x2, WJ0020 | wt/width-11 and wt/ownership-9 merges |
+| t306 | pass | none | pass |
+| t307 | compiled build fails | WJ0007, WJ0016 | wt/ownership-9 merge |
+| t308 | compiled build fails | WJ0003, WJ0015 x2 | wt/ownership-9 merge |
+| t309 | compiled build fails | WJ0016 x5 | wt/ownership-9 merge |
