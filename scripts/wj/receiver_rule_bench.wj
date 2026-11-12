@@ -1,0 +1,115 @@
+// Benchmark for the C5 receiver rule (docs/spec/convergence-burndown.md): builds each target twice, with the
+// rule off and on (WJ_EXPERIMENT_SELF_FIELD_MOVE=1, a temporary switch removed before merge), counts the
+// `.clone()` calls in the generated Rust, and with `compile` also builds with cargo and, for programs with
+// a `main` whose clone count changed, compares the compiled run's output under both rules with the interpreter.
+// Usage: wj run --allow process --allow 'fs.read=**' --allow 'fs.write=**' --allow env.read --caps off \
+//          scripts/wj/receiver_rule_bench.wj <wj-binary> <outdir> <count|compile> <target>...
+// A target is a `.wj` file, a project_corpus directory (has main.wj), a package or app (has wj.toml, builds
+// `src`), or a library directory (anything else, built with --library).
+// Prints one TSV row per target: target, clones off, clones on, delta, build off, build on, behaviour.
+use std::process
+use std::env
+use std::fs
+use std::strings
+
+fn sh(cmd: string) -> string {
+    match process.run_with_output("sh", ["-c", cmd]) {
+        Ok(o) => o.stdout,
+        Err(e) => "ERR " + e,
+    }
+}
+
+fn slug(t: string) -> string {
+    strings.replace(strings.replace(t, "/", "_"), ".", "_")
+}
+
+// The build command for one target into `out`; `cargo` keeps the cargo build.
+fn build_cmd(wj: string, target: string, out: string, cargo: bool) -> string {
+    let flag = if cargo { "" } else { " --no-cargo" }
+    if strings.ends_with(target, ".wj") {
+        return "'" + wj + "' build" + flag + " '" + target + "' -o '" + out + "'"
+    }
+    if fs::exists(target + "/wj.toml") {
+        return "cd '" + target + "' && '" + wj + "' build" + flag + " src -o '" + out + "'"
+    }
+    if fs::exists(target + "/main.wj") {
+        return "'" + wj + "' build" + flag + " '" + target + "/main.wj' -o '" + out + "'"
+    }
+    "'" + wj + "' build" + flag + " --library '" + target + "' -o '" + out + "'"
+}
+
+fn main_file(target: string) -> string {
+    if strings.ends_with(target, ".wj") {
+        return target
+    }
+    if fs::exists(target + "/main.wj") {
+        return target + "/main.wj"
+    }
+    ""
+}
+
+fn env_for(mode: string, outdir: string) -> string {
+    let on = if mode == "on" { "1" } else { "0" }
+    "WJ_ALLOW_TOOLCHAIN_MISMATCH=1 WJ_EXPERIMENT_SELF_FIELD_MOVE=" + on + " CARGO_TARGET_DIR='" + outdir + "/target-" + mode + "' "
+}
+
+fn count_clones(dir: string) -> int {
+    let n = sh("grep -rho '\\.clone()' '" + dir + "' --include='*.rs' 2>/dev/null | wc -l")
+    strings.trim(n).parse::<int>().unwrap_or(0)
+}
+
+fn status(cmd: string) -> string {
+    let o = sh("(" + cmd + ") > /dev/null 2>&1; echo $?")
+    if strings.trim(o) == "0" { "ok" } else { "FAIL" }
+}
+
+fn main() {
+    let args = env::args()
+    if args.len() < 5 {
+        println("usage: receiver_rule_bench.wj <wj-binary> <outdir> <count|compile> <target>...")
+        process.exit(2)
+    }
+    let wj = args[1]
+    let outdir = args[2]
+    let compile = args[3] == "compile"
+    let mut total_off = 0
+    let mut total_on = 0
+    let mut changed = 0
+    let mut regressions = 0
+    let mut i = 4
+    while i < args.len() {
+        let target = args[i]
+        let s = slug(target)
+        let off_out = outdir + "/off/" + s
+        let on_out = outdir + "/on/" + s
+        sh("rm -rf '" + off_out + "' '" + on_out + "'")
+        sh(env_for("off", outdir) + build_cmd(wj, target, off_out, false) + " > /dev/null 2>&1")
+        sh(env_for("on", outdir) + build_cmd(wj, target, on_out, false) + " > /dev/null 2>&1")
+        let off = count_clones(off_out)
+        let on = count_clones(on_out)
+        total_off = total_off + off
+        total_on = total_on + on
+        let mut build_off = "-"
+        let mut build_on = "-"
+        let mut behaviour = "-"
+        if compile {
+            build_off = status(env_for("off", outdir) + build_cmd(wj, target, off_out + "-cargo", true))
+            build_on = status(env_for("on", outdir) + build_cmd(wj, target, on_out + "-cargo", true))
+            let m = main_file(target)
+            if off != on && m != "" {
+                let interp = sh("'" + wj + "' run --interpret '" + m + "' 2>/dev/null")
+                let run_on = sh(env_for("on", outdir) + "'" + wj + "' run --compiled '" + m + "' 2>/dev/null")
+                behaviour = if interp == run_on { "same" } else { "DIFF" }
+            }
+            if build_on == "FAIL" && build_off == "ok" || behaviour == "DIFF" {
+                regressions = regressions + 1
+            }
+        }
+        if off != on {
+            changed = changed + 1
+        }
+        println("${target}\t${off}\t${on}\t${on - off}\t${build_off}\t${build_on}\t${behaviour}")
+        i = i + 1
+    }
+    println("TOTAL\t${total_off}\t${total_on}\t${total_on - total_off}\tchanged=${changed}\tregressions=${regressions}")
+}

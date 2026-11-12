@@ -47,6 +47,9 @@ pub struct CompilerConfig {
     /// Gate self-test only (`WJ_LIVENESS_MUTATION=always-move`): a deliberately wrong liveness
     /// fact that marks every read a last use, so the convergence gates can prove they catch it.
     pub liveness_mutation_always_move: bool,
+    /// Benchmark experiment only (`WJ_EXPERIMENT_SELF_FIELD_MOVE=1`, removed before merge): the candidate
+    /// receiver rule of `ir::self_field_move`. Off by default.
+    pub experiment_self_owned_after_field_move: bool,
     /// Release builds let integer arithmetic wrap (`wj build --unchecked-arithmetic`); off by default (SPEC-NUM-002).
     pub unchecked_arithmetic: bool,
 }
@@ -70,6 +73,7 @@ impl Default for CompilerConfig {
             durable_steps: Default::default(),
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: false,
+            experiment_self_owned_after_field_move: false,
             unchecked_arithmetic: false,
         }
     }
@@ -110,6 +114,7 @@ impl CompilerConfig {
             durable_steps: Default::default(),
             durable_read_steps: Default::default(),
             liveness_mutation_always_move: get("WJ_LIVENESS_MUTATION").is_some_and(|v| v == "always-move"),
+            experiment_self_owned_after_field_move: on("WJ_EXPERIMENT_SELF_FIELD_MOVE"),
             unchecked_arithmetic: false,
         }
     }

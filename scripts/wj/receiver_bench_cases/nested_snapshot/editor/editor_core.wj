@@ -1,0 +1,33 @@
+pub struct Scene {
+    entities: Vec<i64>,
+}
+
+impl Scene {
+    pub fn new() -> Scene {
+        Scene { entities: Vec::new() }
+    }
+    pub fn snapshot(self) -> Scene {
+        Scene { entities: self.entities }
+    }
+}
+
+pub struct SceneEditorState {
+    scene: Scene,
+}
+
+impl SceneEditorState {
+    pub fn new() -> SceneEditorState {
+        SceneEditorState { scene: Scene::new() }
+    }
+}
+
+pub struct EditorState {
+    scene_editor: SceneEditorState,
+    play_mode_scene_snapshot: Option<Scene>,
+}
+
+impl EditorState {
+    pub fn enter_play_mode(&mut self) {
+        self.play_mode_scene_snapshot = Some(self.scene_editor.scene.snapshot())
+    }
+}

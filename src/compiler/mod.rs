@@ -11,7 +11,6 @@ mod declaration_stub_registry;
 mod dependency_resolution;
 pub mod incremental;
 mod library_copy_registry;
-mod value_formal_fixed_point;
 pub(crate) mod rust_surface_metadata;
 pub mod library_multipass;
 pub mod multipass_bare_pass_demotion;
@@ -227,8 +226,15 @@ fn attach_ir_module_if_missing<'ast>(
     fields.extend(crate::type_inference::struct_field_registry::local_struct_field_table(program));
     // In rounds, as a library build: callers read their callees' solved value-formal and receiver modes.
     let copy_types = codegen.copy_types_registry.clone();
-    let ir_module =
-        value_formal_fixed_point::lower_program_to_fixed_point(program, analyzed, &mut codegen.signature_registry, &fields, &copy_types);
+    let experiment = codegen.config().experiment_self_owned_after_field_move;
+    let ir_module = crate::ir::value_formal_fixed_point::lower_program_to_fixed_point(
+        program,
+        analyzed,
+        &mut codegen.signature_registry,
+        &fields,
+        &copy_types,
+        experiment,
+    );
     codegen.set_ir_module(ir_module);
 }
 

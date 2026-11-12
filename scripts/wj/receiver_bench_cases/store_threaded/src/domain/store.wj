@@ -1,0 +1,40 @@
+pub struct Store {
+    items: Vec<string>,
+}
+
+impl Store {
+    pub fn new() -> Store {
+        Store { items: Vec::new() }
+    }
+
+    pub fn add(self, title: string) -> Result<(Store, int), string> {
+        if title == "" {
+            return Err("empty")
+        }
+        let mut next = self.items
+        next.push(title)
+        let n = next.len() as int
+        Ok((Store { items: next }, n))
+    }
+
+    pub fn into_items(self) -> Vec<string> {
+        self.items
+    }
+
+    pub fn merge_from(self, imported: Vec<string>) -> (Store, int) {
+        let mut next = self.items
+        let mut added = 0
+        for x in imported {
+            if !next.contains(x) {
+                next.push(x)
+                added = added + 1
+            }
+        }
+        (Store { items: next }, added)
+    }
+
+    pub fn clear_all(self) -> Store {
+        Store { items: Vec::new() }
+    }
+}
+

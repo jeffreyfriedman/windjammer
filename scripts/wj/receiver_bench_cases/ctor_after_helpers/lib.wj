@@ -1,0 +1,43 @@
+pub struct Scene {
+    pub label: string,
+}
+
+impl Scene {
+    pub fn touch(self) {
+        // no-op
+    }
+}
+
+pub struct Vox {
+    pub scene: Scene,
+}
+
+impl Vox {
+    pub fn new(scene: Scene) -> Vox {
+        Vox { scene: scene }
+    }
+}
+
+pub struct Demo {
+    pub scene: Scene,
+    pub grid: i32,
+    pub ready: bool,
+}
+
+impl Demo {
+    pub fn setup_materials(self) {
+        self.ready = true
+    }
+
+    pub fn build_scene(self) {
+        self.scene.touch()
+    }
+
+    pub fn initialize(self) {
+        self.setup_materials()
+        self.build_scene()
+        let v = Vox::new(self.scene)
+        self.grid = 1
+        self.ready = true
+    }
+}

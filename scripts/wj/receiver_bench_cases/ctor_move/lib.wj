@@ -1,0 +1,25 @@
+pub struct Scene {
+    pub label: string,
+}
+
+pub struct Vox {
+    pub scene: Scene,
+}
+
+impl Vox {
+    pub fn new(scene: Scene) -> Vox {
+        Vox { scene: scene }
+    }
+}
+
+pub struct Demo {
+    pub scene: Scene,
+    pub grid: i32,
+}
+
+impl Demo {
+    pub fn initialize(self) {
+        let v = Vox::new(self.scene)
+        self.grid = 1
+    }
+}
