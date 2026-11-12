@@ -11,6 +11,13 @@ use crate::diagnostics::render;
 
 pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool, format: render::Format) -> Result<()> {
     let root = path.unwrap_or_else(|| Path::new("."));
+    if let Some(manifest) = check::effects::manifest_path(root) {
+        if let Some(dir) = manifest.parent() {
+            for m in crate::package::graph::missing_configurable_deps(dir) {
+                eprintln!("wj check: {m}");
+            }
+        }
+    }
     if path.is_none() && Path::new("Cargo.toml").exists() && !has_wj_files(root) {
         return cargo_check();
     }

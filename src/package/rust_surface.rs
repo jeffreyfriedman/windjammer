@@ -135,13 +135,13 @@ fn is_rust_dependency(manifest_dir: &Path, spec: &toml::Value) -> bool {
         return false;
     }
     match t.get("path").and_then(|p| p.as_str()) {
-        Some(p) => !super::graph::is_windjammer_path_dep(&manifest_dir.join(p)),
+        Some(p) => !super::graph::is_windjammer_path_dep(&super::graph::dep_path(manifest_dir, p)),
         None => true,
     }
 }
 
 fn is_windjammer_path(manifest_dir: &Path, spec: &toml::Value) -> bool {
-    spec.get("path").and_then(|p| p.as_str()).is_some_and(|p| super::graph::is_windjammer_path_dep(&manifest_dir.join(p)))
+    spec.get("path").and_then(|p| p.as_str()).is_some_and(|p| super::graph::is_windjammer_path_dep(&super::graph::dep_path(manifest_dir, p)))
 }
 
 /// Parse and validate one surface.
