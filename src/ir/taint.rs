@@ -15,7 +15,7 @@ use crate::parser::Type;
 use std::collections::HashMap;
 
 /// Identifier for a value in the taint analysis.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct TaintVar(pub String);
 
 impl TaintVar {
@@ -25,7 +25,7 @@ impl TaintVar {
 }
 
 /// A taint constraint.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum TaintConstraint {
     /// A value is a taint source (comes from untrusted input).
     IsSource {
@@ -46,7 +46,7 @@ pub enum TaintConstraint {
 
 /// Source of tainted data (canonical definition for the IR).
 /// Used by both `SafetyType.taint` and `TaintSolver`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TaintSourceKind {
     HttpRequest,
     HttpRequestBody,

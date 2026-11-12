@@ -240,7 +240,7 @@ impl EffectSet {
 }
 
 /// Individual effect capabilities (WJ-SEC-01).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Effect {
     FsRead,
     FsWrite,
